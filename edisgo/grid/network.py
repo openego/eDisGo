@@ -146,6 +146,7 @@ class ETraGoSpecs:
         Time series of active power the (virtual) battery (at Transition Point) is charged (negative)
         or discharged (positive) with
     _curtailment : :obj:`dict` of :obj:`dict` of :pandas:`pandas.Series<series>`
+        #TODO: Is this really an active power value or a ratio (%) ?
         Time series of active power curtailment of generators for technologies and sub-technologies,
         format: {tech_1: {sub-tech_1_1: timeseries_1_1, ..., sub-tech_1_n: timeseries_1_n},
                  ...,
