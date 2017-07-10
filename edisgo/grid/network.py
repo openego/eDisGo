@@ -1,3 +1,5 @@
+from edisgo.data.import_data import import_from_dingo
+
 
 class Network:
     """Defines the eDisGo Network
@@ -31,13 +33,19 @@ class Network:
         self._scenario = kwargs.get('scenario', None)
         self._mv_grid = kwargs.get('mv_grid', None)
 
-    def import_from_dingo(self):
-        """Imports grid data from DINGO
+    @classmethod
+    def import_from_dingo(cls, file):
+        """Import grid data from DINGO grid data saved as pickle
 
         This includes grid elements such as lines, transformers, branch tees, loads and generators.
 
         """
-        raise NotImplementedError
+        import_from_dingo(file)
+
+        # TODO: finalize instantiation call
+        # TODO: try to move most of the code outside this function. This is maybe not possible for the network itself (then use the cls() call
+        # return cls(id='id')
+        # raise NotImplementedError
 
     def import_generators(self):
         """Imports generators
