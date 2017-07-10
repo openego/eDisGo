@@ -1,2 +1,18 @@
 # exclude project files
 .idea/
+
+
+# exclude certain types of files
+*.doctree
+*.txt
+*.html
+*.js
+*.inv
+*.pyc
+*.ttf
+*.woff
+*.png
+*.css
+
+# exclud locally built docs
+doc/_html
