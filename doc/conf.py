@@ -52,6 +52,8 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.pngmath',
     'sphinx.ext.viewcode',
+    'sphinx.ext.napoleon',  # enable Napoleon Sphinx v>1.3
+    'sphinx.ext.extlinks'  # enables external links with a key
 ]
 
 # Add any paths that contain templates here, relative to this directory.
