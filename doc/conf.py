@@ -56,6 +56,30 @@ extensions = [
     'sphinx.ext.extlinks'  # enables external links with a key
 ]
 
+# Napoleon settings
+napoleon_google_docstring = True
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = False
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = False
+napoleon_use_admonition_for_examples = False
+napoleon_use_admonition_for_notes = False
+napoleon_use_admonition_for_references = False
+napoleon_use_ivar = False
+napoleon_use_param = True
+napoleon_use_rtype = True
+napoleon_use_keyword = False
+# Dictionary of external links
+extlinks = {'pandas':('http://pandas.pydata.org/pandas-docs/stable/api.html#%s',
+                      'pandas.'),
+            'networkx':('https://networkx.readthedocs.io/en/stable/reference/classes.graph.html%s',
+                      'NetworkX Graph Obj'),
+            'sqlalchemy':('http://docs.sqlalchemy.org/en/latest/orm/session_basics.html%s',
+                      'SQLAlchemy session object'),
+            'shapely':('http://toblerity.org/shapely/manual.html#%s',
+                      'Shapely object'),
+            }
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
