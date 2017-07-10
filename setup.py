@@ -10,6 +10,7 @@ setup(
     author_email='',
     description='A python package for distribution grid analysis and optimization',
     install_requires = [
-        'dingo>=0.1.0'
+        'dingo>=0.1.0',
+        'networkx'
     ]
 )
