@@ -1,4 +1,6 @@
 import networkx as nx
+
+
 class Grid:
     """Defines a basic grid in eDisGo
 
@@ -26,19 +28,44 @@ class Grid:
 
         self._graph = nx.Graph()
 
+    def connect_generators(self, generators):
+        """Connects generators to grid
+
+        Parameters
+        ----------
+        generators: :pandas:`pandas.DataFrame<dataframe>`
+            Generators to be connected
+
+        """
+        raise NotImplementedError
+
+
 class MVGrid(Grid):
     """Defines a medium voltage grid in eDisGo
 
     Attributes
     ----------
-    _mv_disconn_points : :obj:`list` of
+    _mv_disconn_points : :obj:`list` of #TODO: FINISH
         Medium voltage disconnecting points = points where MV rings are split under
         normal operation conditions (= switch disconnectors in DINGO).
+    _aggregates : :obj:`list` of :obj:`dict`
+        This attribute is used for DINGO-imported data only. It contains data from
+        DINGO's Aggregated Load Areas. Each list element represents one aggregated
+        Load Area.
     """
 
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
         self._mv_disconn_points = kwargs.get('mv_disconn_points', None)
+        self._aggregates = kwargs.get('aggregates', None)
 
 
-# TODO: Go on here..
+class LVGrid(Grid):
+        """Defines a low voltage grid in eDisGo
+
+        """
+
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
 
