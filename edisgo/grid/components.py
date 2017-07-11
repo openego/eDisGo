@@ -1,5 +1,4 @@
 from shapely.geometry import LineString
-import networkx as nx
 
 
 class Component:
@@ -157,22 +156,20 @@ class MVStation(Station):
         super().__init__(**kwargs)
 
 
-class Line:
+class Line(Component):
     """
     Line object
 
     Parameters
     ----------
-    _id: str
     _type: :pandas:`pandas.Series<series>`
         Equipment specification including R and X for power flow analysis
     _length: float
         Length of the line calculated in linear distance. Unit: m
-    _geom: :shapely:`shapely.Polygon<polygon>`
     """
 
     def __init__(self, **kwargs):
-        self._id = kwargs.get('id', None)
+        super().__init__(**kwargs)
         self._type = kwargs.get('type', None)
         self._length = kwargs.get('length', None)
 
