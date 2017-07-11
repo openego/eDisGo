@@ -4,6 +4,22 @@ edisgo.grid package
 Submodules
 ----------
 
+edisgo.grid.components module
+-----------------------------
+
+.. automodule:: edisgo.grid.components
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+edisgo.grid.grids module
+------------------------
+
+.. automodule:: edisgo.grid.grids
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 edisgo.grid.network module
 --------------------------
 
