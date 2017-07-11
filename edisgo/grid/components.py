@@ -9,8 +9,8 @@ class Station:
         Unique ID
     _geom : :shapely:`Shapely Point object<points>`
         Location as Shapely Point object
-    _transformers : :obj:`list` of Tran
-        Unique ID
+    _transformers : :obj:`list` of Transformer
+        Transformers located in station
     """
 
     def __init__(self, **kwargs):
@@ -71,4 +71,11 @@ class BranchTee:
         self._id = kwargs.get('id', None)
         self._geom = kwargs.get('geom', None)
 
+
+class Transformer:
+    """Electrical transformer
+
+    """
+    def __init__(self, **kwargs):
+        self._id = kwargs.get('id', None)
 
