@@ -1,5 +1,32 @@
+class Station:
+    """Station object (medium or low voltage)
+
+    Represents a station, contains transformers.
+
+    Attributes
+    ----------
+    _id : :obj:`int`
+        Unique ID
+    _geom : :shapely:`Shapely Point object<points>`
+        Location as Shapely Point object
+    _transformers : :obj:`list` of Tran
+        Unique ID
+    """
+
+    def __init__(self, **kwargs):
+        self._id = kwargs.get('id', None)
+        self._geom = kwargs.get('geom', None)
+        self._transformers = kwargs.get('transformers', None)
+
+
 class Load:
-    """Load object """
+    """Load object
+
+    Attributes
+    ----------
+    _id : :obj:`str`
+        Name of network
+    """
 
     def __init__(self, **kwargs):
         self._id = kwargs.get('id', None)
@@ -45,24 +72,3 @@ class BranchTee:
         self._geom = kwargs.get('geom', None)
 
 
-class Station:
-    """Station object"""
-
-    def __init__(self, **kwargs):
-        self._id = kwargs.get('id', None)
-        self._geom = kwargs.get('geo', None)
-        self._transformers = kwargs.get('transformers', None)
-
-
-class LVStation(Station):
-    """LV Station object"""
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-
-class MVStation(Station):
-    """MV Station object"""
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
