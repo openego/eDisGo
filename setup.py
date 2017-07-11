@@ -11,6 +11,7 @@ setup(
     description='A python package for distribution grid analysis and optimization',
     install_requires = [
         'dingo>=0.1.0',
-        'networkx'
+        'networkx >=1.11',
+        'shapely >= 1.5.12, <= 1.5.12'
     ]
 )
