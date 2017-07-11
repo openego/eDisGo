@@ -121,7 +121,10 @@ class Graph(nx.Graph):
 
         Parameters
         ----------
-        attr
+        attr_val: str
+            Value of the `attr` nodes should be selected by
+        attr: str, default: 'type'
+            Attribute key which is 'type' by default
 
         Returns
         -------
