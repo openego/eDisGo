@@ -84,7 +84,6 @@ def _build_mv_grid(dingo_grid, network):
     # TODO: Why is the attribute population == 0?
     grid = MVGrid(
         network=network,
-        graph=Graph(),
         grid_district={'geom': dingo_grid.grid_district.geo_data,
                        'population':
                            sum([_.zensus_sum

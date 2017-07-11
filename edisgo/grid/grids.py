@@ -29,7 +29,12 @@ class Grid:
         self._grid_district = kwargs.get('grid_district', None)
         self._station = kwargs.get('station', None)
 
-        self._graph = nx.Graph()
+        self._graph = Graph()
+
+    @property
+    def graph(self):
+        """Provide access to the graph"""
+        return self._graph
 
     def connect_generators(self, generators):
         """Connects generators to grid
