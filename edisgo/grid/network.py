@@ -117,7 +117,8 @@ class Scenario:
 class TimeSeries:
     """Defines an eDisGo time series
 
-    Contains time series for loads and generators (technology-specific), e.g. tech. solar, sub-tech. rooftop.
+    Contains time series for loads (sector-specific) and generators
+    (technology-specific), e.g. tech. solar, sub-tech. rooftop.
 
     Attributes
     ----------
@@ -127,8 +128,14 @@ class TimeSeries:
                  ...,
                  tech_m: {sub-tech_m_1: timeseries_m_1, ..., sub-tech_m_n: timeseries_m_n}
                  }
-    _load : :pandas:`pandas.Series<series>`
-        Time series of active power of (cumulative) loads
+    _load : :obj:`dict` of :pandas:`pandas.Series<series>`
+        Time series of active power of (cumulative) loads,
+        format: {sector_1: timeseries_1, ..., sector_n: timeseries_n}
+
+    See also
+    --------
+    edisgo.grid.components.Generator : Usage details of _generation
+    edisgo.grid.components.Load : Usage details of _load
     """
 
     def __init__(self, **kwargs):

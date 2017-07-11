@@ -60,9 +60,16 @@ class Load(Component):
 
     Attributes
     ----------
-    _timeseries : #TODO
-    _consumption : #TODO
+    _timeseries : :pandas:`pandas.Series<series>`
+        Contains time series for load
 
+    _consumption : :obj:`dict`
+        Contains annual consumption in
+        #TODO: To implement consumption, DINGO #208 has to be solved first:
+
+    Notes
+    -----
+    The
     """
 
     def __init__(self, **kwargs):
@@ -70,6 +77,21 @@ class Load(Component):
 
         self._timeseries = kwargs.get('timeseries', None)
         self._consumption = kwargs.get('consumption', None)
+
+    def timeseries(self):
+        """Return time series of load
+
+        It returns the actual time series used in power flow analysis. If `_timeseries` is not None,
+        it is returned. Otherwise, timeseries() looks for time series of the according sector in
+        `TimeSeries` object.
+
+        See also
+        --------
+        edisgo.network.TimeSeries : Details of global TimeSeries
+
+        #TODO: CHECK REFS IN TEXT -> MAKE LINKS WORK
+        """
+        raise NotImplementedError
 
 
 class Generator(Component):
@@ -83,12 +105,14 @@ class Generator(Component):
         Technology type (e.g. 'solar')
     _subtype : :obj:`str`
         Technology subtype (e.g. 'solar rooftop')
-    _timeseries : #TODO
+    _timeseries : :pandas:`pandas.Series<series>`
+        Contains time series for generator
 
     Notes
     -----
     The attributes `_type` and `_subtype` have to match the corresponding types in Timeseries to
     allow allocation of time series to generators.
+
     #TODO: CHECK REFS IN TEXT -> MAKE LINKS WORK
     """
 
@@ -99,6 +123,21 @@ class Generator(Component):
         self._type = kwargs.get('type', None)
         self._subtype = kwargs.get('subtype', None)
         self._timeseries = kwargs.get('timeseries', None)
+
+    def timeseries(self):
+        """Return time series of generator
+
+        It returns the actual time series used in power flow analysis. If `_timeseries` is not None,
+        it is returned. Otherwise, timeseries() looks for time series of the according weather and
+        type of technology in `TimeSeries` object and considers for predefined curtailment as well.
+
+        See also
+        --------
+        edisgo.network.TimeSeries : Details of global TimeSeries
+
+        #TODO: CHECK REFS IN TEXT -> MAKE LINKS WORK
+        """
+        raise NotImplementedError
 
 
 class Storage(Component):
@@ -179,3 +218,4 @@ class Line(Component):
         adj_nodes = self._grid._graph.nodes_from_line(self)
 
         return LineString(adj_nodes[0], adj_nodes[1])
+
