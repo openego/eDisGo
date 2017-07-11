@@ -12,6 +12,7 @@ setup(
     install_requires = [
         'dingo>=0.1.0',
         'networkx >=1.11',
-        'shapely >= 1.5.12, <= 1.5.12'
+        'shapely >= 1.5.12, <= 1.5.12',
+        'pandas >=0.19.2, <=0.20.1'
     ]
 )
