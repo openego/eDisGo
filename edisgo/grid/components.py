@@ -98,6 +98,18 @@ class Generator(Component):
         self._timeseries = kwargs.get('timeseries', None)
 
 
+class Storage(Component):
+    """Storage object
+
+    Attributes
+    ----------
+    TBC
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+
 class MVDisconnectingPoint(Component):
     """Location in MV grid ring where switch disconnector is placed"""
 
