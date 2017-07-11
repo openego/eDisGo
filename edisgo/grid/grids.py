@@ -17,6 +17,8 @@ class Grid:
     _grid_district : :obj:`dict`
         Contains information about grid district (supplied region) of grid,
         format: #TODO: DEFINE FORMAT
+    _station : #TODO: ADD CORRECT REF
+        The station the grid is fed by
     """
 
     def __init__(self, **kwargs):
@@ -25,6 +27,7 @@ class Grid:
         self._peak_load = kwargs.get('peak_load', None)
         self._peak_generation = kwargs.get('peak_generation', None)
         self._grid_district = kwargs.get('grid_district', None)
+        self._station = kwargs.get('station', None)
 
         self._graph = nx.Graph()
 
