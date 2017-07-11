@@ -101,3 +101,40 @@ class Graph(nx.Graph):
 
         return dict([(v, k) for k, v in
               nx.get_edge_attributes(self, 'line').items()])[line['line']]
+
+    def nodes_by_attribute(self, attr_val, attr='type'):
+        """
+        Select Graph's nodes by attribute value
+
+        Get all nodes that share the same attribute. By default, the attr 'type'
+        is used to specify the nodes type (generator, load, etc.).
+
+        Examples
+        --------
+        >>> import edisgo
+        >>> G = edisgo.grids.Graph()
+        >>> G.add_node(1, type='generator')
+        >>> G.add_node(2, type='load')
+        >>> G.add_node(3, type='generator')
+        >>> G.nodes_by_attribute('generator')
+        [1, 3]
+
+        Parameters
+        ----------
+        attr
+
+        Returns
+        -------
+        list
+            A list containing nodes elements that match the given attribute
+            value
+        """
+
+        # get all nodes that have the attribute 'type' set
+        nodes_attributes = nx.get_node_attributes(self, attr)
+
+        # extract nodes where 'type' == attr_val
+        nodes = [k for k, v in nodes_attributes.items() if v == attr_val]
+
+        return nodes
+
