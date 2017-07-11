@@ -3,7 +3,7 @@ class Component:
 
     _id : :obj:`int`
         Unique ID
-    _geom : :shapely:`Shapely Point object<points>`
+    _geom : :shapely:`Shapely Point object<points>` or `Shapely LineString object<linestrings>`
         Location as Shapely Point object
     _grid : #TODO: ADD CORRECT REF
         The MV or LV grid this component belongs to
@@ -111,7 +111,16 @@ class Storage(Component):
 
 
 class MVDisconnectingPoint(Component):
-    """Location in MV grid ring where switch disconnector is placed"""
+    """Disconnecting point object
+
+    Medium voltage disconnecting points = points where MV rings are split under
+    normal operation conditions (= switch disconnectors in DINGO).
+
+    Attributes
+    ----------
+    _state : :obj:`str`
+        State of switch ('open' or 'closed')
+    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -128,7 +137,10 @@ class MVDisconnectingPoint(Component):
 
 
 class BranchTee(Component):
-    """Branch tee for branching lines"""
+    """Branch tee object
+
+    A branch tee is used to branch off a line to connect another node (german: Abzweigmuffe)
+    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
