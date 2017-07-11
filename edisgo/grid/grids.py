@@ -69,3 +69,32 @@ class LVGrid(Grid):
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
 
+
+
+class Graph(nx.Graph):
+    """Graph object
+
+    This graph is an object subclassed from `networkX.Graph` extended by extra
+    functionality and specific methods.
+    """
+
+    def nodes_from_line(self, line):
+        """
+        Get node adjacent to line
+
+        Here, line refers to the object behind the key 'line' of the attribute
+        dict attached to each edge.
+
+        Parameters
+        ----------
+        line: edisgo.grid.components.Line
+            A eDisGo line object
+
+        Returns
+        -------
+        tuple
+            Nodes adjacent to this edge
+        """
+
+        return dict([(v, k) for k, v in
+              nx.get_edge_attributes(self, 'line').items()])[line['line']]
