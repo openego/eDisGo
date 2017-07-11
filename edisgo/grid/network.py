@@ -40,7 +40,12 @@ class Network:
         This includes grid elements such as lines, transformers, branch tees, loads and generators.
 
         """
-        import_from_dingo(file)
+
+        # create the network instance
+        network = cls()
+
+        # call the importer
+        import_from_dingo(file, network)
 
         # TODO: finalize instantiation call
         # TODO: try to move most of the code outside this function. This is maybe not possible for the network itself (then use the cls() call
