@@ -82,6 +82,7 @@ def _build_mv_grid(dingo_grid, network):
     """
 
     # TODO: Why is the attribute population == 0?
+    # Instantiate a MV grid
     grid = MVGrid(
         network=network,
         grid_district={'geom': dingo_grid.grid_district.geo_data,
@@ -91,13 +92,15 @@ def _build_mv_grid(dingo_grid, network):
                                 dingo_grid.grid_district._lv_load_areas])},
         voltage_nom=dingo_grid.v_level)
 
-
+    # Create list of load instances and add these to grid's graph
     # TODO: add `consumption` to loads
     loads = [Load(
         id=_.id_db,
         geom=_.geo_data,
         grid=grid) for _ in dingo_grid.loads()]
+    grid.graph.add_nodes_from(loads, type='load')
 
+    # Create list of generator instances and add these to grid's graph
     generators = [Generator(
         id=_.id_db,
         geom=_.geo_data,
@@ -105,16 +108,22 @@ def _build_mv_grid(dingo_grid, network):
         type=_.type,
         subtype=_.subtype,
         grid=grid) for _ in dingo_grid.generators()]
+    grid.graph.add_nodes_from(generators, type='generator')
 
+    # Create list of diconnection point instances and add these to grid's graph
     disconnecting_points = [MVDisconnectingPoint(id=_.id_db,
                                                  geom=_.geo_data,
                                                  state=_.status,
                                                  grid=grid)
                    for _ in dingo_grid._circuit_breakers]
+    grid.graph.add_nodes_from(disconnecting_points, type='disconnection_point')
 
+    # Create list of branch tee instances and add these to grid's graph
     branch_tees = [BranchTee(id=_.id_db, geom=_.geo_data, grid=grid)
                    for _ in dingo_grid._cable_distributors]
+    grid.graph.add_nodes_from(branch_tees, type='branch_tee')
 
+    # Create list of LV station instances and add these to grid's graph
     stations = [Station(id=_.id_db,
                         geom=_.geo_data,
                         grid=grid,
@@ -128,7 +137,9 @@ def _build_mv_grid(dingo_grid, network):
                         ) for t in _.transformers()])
                 for _ in dingo_grid._graph.nodes()
                 if isinstance(_, LVStationDingo)]
+    grid.graph.add_nodes_from(stations, type='station')
 
+    # Create list of line instances and add these to grid's graph
     # TODO: test if lines[0].geom() works once lines[0]._grid is set
     lines = [(_['adj_nodes'][0], _['adj_nodes'][1],
               {'line': Line(
@@ -138,9 +149,9 @@ def _build_mv_grid(dingo_grid, network):
                   grid=grid)
               })
              for _ in dingo_grid.graph_edges()]
+    grid.graph.add_edges_from(lines)
 
-    # TODO: attach above data to the MVGrid object's _graph
-
+    # Assign reference to HV-MV station to MV grid
     grid._station = Station(
         id=dingo_grid.station().id_db,
         geom=dingo_grid.station().geo_data,
@@ -152,4 +163,5 @@ def _build_mv_grid(dingo_grid, network):
             type=pd.Series(dict(
                 s=_.s_max_a, x=_.x, r=_.r)))
                       for _ in dingo_grid.station().transformers()])
+
     return grid
