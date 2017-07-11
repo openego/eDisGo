@@ -54,10 +54,10 @@ reinforce()</y:MethodLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="48.0" width="146.8213192289909" x="209.1930555555556" y="905.3269628099174"/>
+          <y:Geometry height="63.0" width="149.98435979586725" x="208.4024082879904" y="897.8269628099174"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
-          <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="bottom" visible="true" width="57.8408203125" x="44.490249458245444" y="3.0">MVGrid<y:LabelModel>
+          <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="bottom" visible="true" width="57.8408203125" x="46.071769741683624" y="3.0">MVGrid<y:LabelModel>
               <y:SmartNodeLabelModel distance="4.0"/>
             </y:LabelModel>
             <y:ModelParameter>
@@ -65,7 +65,8 @@ reinforce()</y:MethodLabel>
             </y:ModelParameter>
           </y:NodeLabel>
           <y:UML clipContent="true" constraint="" omitDetails="false" stereotype="" use3DEffect="true">
-            <y:AttributeLabel>mv_disconn_points: list</y:AttributeLabel>
+            <y:AttributeLabel>mv_disconn_points: list
+aggregates: list of dict</y:AttributeLabel>
             <y:MethodLabel/>
           </y:UML>
         </y:UMLClassNode>
@@ -328,7 +329,7 @@ pfac_lv_load: float</y:AttributeLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="83.5" width="131.0" x="217.10371517005103" y="1123.5144628099174"/>
+          <y:Geometry height="83.5" width="131.0" x="217.89458818592402" y="1123.5144628099174"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="bottom" visible="true" width="80.20361328125" x="25.398193359375" y="3.0">MVStation<y:LabelModel>
@@ -412,7 +413,7 @@ pfac_lv_load: float</y:AttributeLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="133.0" width="253.23708290242624" x="881.105411814076" y="1098.7644628099174"/>
+          <y:Geometry height="133.0" width="253.23708290242624" x="881.896284829949" y="1098.7644628099174"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="bottom" visible="true" width="99.46240234375" x="76.88734027933812" y="3.0">ETraGoSpecs<y:LabelModel>
@@ -514,14 +515,14 @@ _timeseries: pandas.Series</y:AttributeLabel>
         <y:ProxyAutoBoundsNode>
           <y:Realizers active="0">
             <y:GroupNode>
-              <y:Geometry height="132.0" width="473.00158730158734" x="378.1037151700511" y="1099.2644628099174"/>
+              <y:Geometry height="132.0" width="473.00158730158734" x="378.8945881859241" y="1099.2644628099174"/>
               <y:Fill hasColor="false" transparent="false"/>
               <y:BorderStyle hasColor="false" type="dashed" width="1.0"/>
               <y:NodeLabel alignment="right" autoSizePolicy="node_width" backgroundColor="#EBEBEB" borderDistance="0.0" fontFamily="Dialog" fontSize="15" fontStyle="plain" hasLineColor="false" height="21.4609375" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="false" width="473.00158730158734" x="0.0" y="0.0">Group 2</y:NodeLabel>
               <y:Shape type="roundrectangle"/>
               <y:State closed="false" closedHeight="50.0" closedWidth="50.0" innerGraphDisplayEnabled="false"/>
               <y:Insets bottom="15" bottomF="15.0" left="15" leftF="15.0" right="15" rightF="15.0" top="15" topF="15.0"/>
-              <y:BorderInsets bottom="0" bottomF="0.0" left="1" leftF="0.9999999999999432" right="1" rightF="1.0003968253968196" top="0" topF="0.0"/>
+              <y:BorderInsets bottom="0" bottomF="0.0" left="1" leftF="1.0" right="1" rightF="1.000396825396706" top="0" topF="0.0"/>
             </y:GroupNode>
             <y:GroupNode>
               <y:Geometry height="50.0" width="50.0" x="0.0" y="60.0"/>
@@ -543,7 +544,7 @@ _timeseries: pandas.Series</y:AttributeLabel>
 {tech: {subtech: pandas.Series}} where subtech is currently optional (has to be discuss)]]></data>
           <data key="d6">
             <y:UMLClassNode>
-              <y:Geometry height="102.0" width="215.50079365079364" x="394.10371517005103" y="1114.2644628099174"/>
+              <y:Geometry height="102.0" width="215.50079365079364" x="394.8945881859241" y="1114.2644628099174"/>
               <y:Fill color="#C0C0C0" transparent="false"/>
               <y:BorderStyle color="#000000" type="line" width="1.0"/>
               <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="bottom" visible="true" width="85.2880859375" x="65.10635385664682" y="3.0">TimeSeries<y:LabelModel>
@@ -574,7 +575,7 @@ get_ego_load_timeseries()</y:MethodLabel>
           <data key="d4"/>
           <data key="d6">
             <y:UMLNoteNode>
-              <y:Geometry height="78.0" width="195.50000000000028" x="639.6049056462413" y="1126.2644628099174"/>
+              <y:Geometry height="78.0" width="195.50000000000028" x="640.3957786621144" y="1126.2644628099174"/>
               <y:Fill color="#FFFFFF" transparent="false"/>
               <y:BorderStyle color="#000000" type="line" width="1.0"/>
               <y:NodeLabel alignment="center" autoSizePolicy="node_size" configuration="CroppingLabel" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="78.0" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="bottom" visible="true" width="195.50000000000028" x="0.0" y="0.0">Dict `generation` is of format
@@ -617,7 +618,7 @@ geom: shapely.Point</y:AttributeLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="-36.70532980724772" sy="-24.0" tx="-63.30927072560655" ty="108.91787190082647">
+          <y:Path sx="-37.49608994896681" sy="-31.5" tx="-63.30927072560655" ty="108.91787190082647">
             <y:Point x="245.89855643989227" y="481.273243801653"/>
             <y:Point x="296.19246031746036" y="481.273243801653"/>
           </y:Path>
@@ -657,7 +658,7 @@ geom: shapely.Point</y:AttributeLabel>
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="-32.75" sy="41.75" tx="40.77963536280326" ty="-43.125">
-            <y:Point x="249.85371517005103" y="1217.0144628099174"/>
+            <y:Point x="250.64458818592402" y="1217.0144628099174"/>
             <y:Point x="122.33903263036846" y="1217.0144628099174"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
@@ -708,11 +709,11 @@ geom: shapely.Point</y:AttributeLabel>
         <y:PolyLineEdge>
           <y:Path sx="42.04912597417899" sy="77.5" tx="0.0" ty="-66.5">
             <y:Point x="611.5564125728014" y="1016.8269628099174"/>
-            <y:Point x="1007.7239532652891" y="1016.8269628099174"/>
+            <y:Point x="1008.5148262811621" y="1016.8269628099174"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" verticalTextPosition="bottom" visible="true" width="141.068359375" x="325.6333770934141" y="39.960934977886154">#_etrago_specification
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" verticalTextPosition="bottom" visible="true" width="141.068359375" x="326.4242501092871" y="39.960934977886154">#_etrago_specification
 0..1<y:LabelModel>
               <y:SmartEdgeLabelModel autoRotationEnabled="false" defaultAngle="0.0" defaultDistance="10.0"/>
             </y:LabelModel>
@@ -731,11 +732,11 @@ geom: shapely.Point</y:AttributeLabel>
         <y:PolyLineEdge>
           <y:Path sx="-42.04912597417899" sy="77.5" tx="0.0" ty="-51.0">
             <y:Point x="527.4581606244434" y="1016.8269628099174"/>
-            <y:Point x="501.85411199544785" y="1016.8269628099174"/>
+            <y:Point x="502.6449850113209" y="1016.8269628099174"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" verticalTextPosition="bottom" visible="true" width="82.703125" x="-66.9556414225209" y="39.960934977886154">#_timeseries
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" verticalTextPosition="bottom" visible="true" width="82.703125" x="-66.1647684066478" y="39.960934977886154">#_timeseries
 1<y:LabelModel>
               <y:SmartEdgeLabelModel autoRotationEnabled="false" defaultAngle="0.0" defaultDistance="10.0"/>
             </y:LabelModel>
@@ -772,15 +773,15 @@ geom: shapely.Point</y:AttributeLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="24.0" tx="0.0" ty="-41.75"/>
+          <y:Path sx="0.0" sy="31.5" tx="0.0" ty="-41.75"/>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" verticalTextPosition="bottom" visible="true" width="55.3515625" x="-27.675795327995843" y="93.4584325364799">#station
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" verticalTextPosition="bottom" visible="true" width="55.3515625" x="-27.67578534923223" y="85.9602635911674">#station
 1<y:LabelModel>
               <y:SmartEdgeLabelModel autoRotationEnabled="false" defaultAngle="0.0" defaultDistance="10.0"/>
             </y:LabelModel>
             <y:ModelParameter>
-              <y:SmartEdgeLabelModelParameter angle="6.283185307179586" distance="10.0" distanceToCenter="false" position="center" ratio="0.6900584795321637" segment="-1"/>
+              <y:SmartEdgeLabelModelParameter angle="6.283185307179586" distance="10.0" distanceToCenter="false" position="center" ratio="0.6708074534161491" segment="-1"/>
             </y:ModelParameter>
             <y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
@@ -924,18 +925,18 @@ geom: shapely.Point</y:AttributeLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="-54.37284715040437" sy="90.83935950413229" tx="36.70532980724772" ty="-24.0">
+          <y:Path sx="-54.37284715040437" sy="90.83935950413229" tx="37.49608994896681" ty="-31.5">
             <y:Point x="473.08523309901176" y="764.8894628099174"/>
-            <y:Point x="319.30887390020973" y="764.8894628099174"/>
+            <y:Point x="320.89061993195577" y="764.8894628099174"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" verticalTextPosition="bottom" visible="true" width="37.556640625" x="-172.5546199192679" y="44.9999974685353">#grid
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" verticalTextPosition="bottom" visible="true" width="37.556640625" x="-170.97291366101769" y="44.99999747787638">#grid
 1<y:LabelModel>
               <y:SmartEdgeLabelModel autoRotationEnabled="false" defaultAngle="0.0" defaultDistance="10.0"/>
             </y:LabelModel>
             <y:ModelParameter>
-              <y:SmartEdgeLabelModelParameter angle="6.283185307179586" distance="10.0" distanceToCenter="false" position="center" ratio="0.4266283023020594" segment="-1"/>
+              <y:SmartEdgeLabelModelParameter angle="6.283185307179586" distance="10.0" distanceToCenter="false" position="center" ratio="0.45520513536134166" segment="-1"/>
             </y:ModelParameter>
             <y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
@@ -948,12 +949,12 @@ geom: shapely.Point</y:AttributeLabel>
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="32.75" sy="41.75" tx="0.0" ty="-24.0">
-            <y:Point x="315.35371517005103" y="1241.7644628099174"/>
+            <y:Point x="316.144588185924" y="1241.7644628099174"/>
             <y:Point x="1145.644588185924" y="1241.7644628099174"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" verticalTextPosition="bottom" visible="true" width="97.662109375" x="781.4598042503771" y="64.7161229661674">#_transformers
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" verticalTextPosition="bottom" visible="true" width="97.662109375" x="780.6689412132678" y="64.7161229661674">#_transformers
 1..*<y:LabelModel>
               <y:SmartEdgeLabelModel autoRotationEnabled="false" defaultAngle="0.0" defaultDistance="10.0"/>
             </y:LabelModel>
@@ -968,7 +969,6 @@ geom: shapely.Point</y:AttributeLabel>
     </edge>
     <edge id="e19" source="n12" target="n0">
       <data key="d8"/>
-      <data key="d9"/>
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="42.04912597417899" sy="-77.5" tx="54.37284715040437" ty="90.83935950413229">
@@ -992,7 +992,6 @@ geom: shapely.Point</y:AttributeLabel>
     </edge>
     <edge id="e20" source="n3" target="n0">
       <data key="d8"/>
-      <data key="d9"/>
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="21.10309024186887" sy="108.91787190082647" tx="0.0" ty="-90.83935950413229">
