@@ -20,6 +20,11 @@ class Component:
         self._geom = kwargs.get('geom', None)
         self._grid = kwargs.get('grid', None)
 
+    @property
+    def geom(self):
+        """Provide access to geom"""
+        return self._geom
+
 
 class Station(Component):
     """Station object (medium or low voltage)
@@ -231,5 +236,5 @@ class Line(Component):
         """Provide LineString geometry of line object"""
         adj_nodes = self._grid._graph.nodes_from_line(self)
 
-        return LineString(adj_nodes[0], adj_nodes[1])
+        return LineString([adj_nodes[0].geom, adj_nodes[1].geom])
 

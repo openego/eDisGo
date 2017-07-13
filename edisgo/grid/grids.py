@@ -29,7 +29,7 @@ class Grid:
         self._grid_district = kwargs.get('grid_district', None)
         self._station = kwargs.get('station', None)
 
-        self._graph = nx.Graph()
+        self._graph = Graph()
 
     def connect_generators(self, generators):
         """Connects generators to grid
@@ -41,6 +41,16 @@ class Grid:
 
         """
         raise NotImplementedError
+
+    @property
+    def graph(self):
+        """Provide access to the graph"""
+        return self._graph
+
+    @property
+    def station(self):
+        """Provide access to station"""
+        return self._station
 
 
 class MVGrid(Grid):
@@ -83,7 +93,7 @@ class Graph(nx.Graph):
 
     def nodes_from_line(self, line):
         """
-        Get node adjacent to line
+        Get nodes adjacent to line
 
         Here, line refers to the object behind the key 'line' of the attribute
         dict attached to each edge.
@@ -100,7 +110,7 @@ class Graph(nx.Graph):
         """
 
         return dict([(v, k) for k, v in
-              nx.get_edge_attributes(self, 'line').items()])[line['line']]
+              nx.get_edge_attributes(self, 'line').items()])[line]
 
     def nodes_by_attribute(self, attr_val, attr='type'):
         """
@@ -140,4 +150,39 @@ class Graph(nx.Graph):
         nodes = [k for k, v in nodes_attributes.items() if v == attr_val]
 
         return nodes
+
+    def graph_edges(self):
+        """ Returns a generator for iterating over graph edges
+
+        The edge of a graph is described by the two adjacent node and the branch
+        object itself. Whereas the branch object is used to hold all relevant
+        power system parameters.
+
+        Note
+        ----
+        There are generator functions for nodes (`Graph.nodes()`) and edges
+        (`Graph.edges()`) in NetworkX but unlike graph nodes, which can be
+        represented by objects, branch objects can only be accessed by using an
+        edge attribute ('branch' is used here)
+
+        To make access to attributes of the branch objects simpler and more
+        intuitive for the user, this generator yields a dictionary for each edge
+        that contains information about adjacent nodes and the branch object.
+
+        Note, the construction of the dictionary highly depends on the structure
+        of the in-going tuple (which is defined by the needs of networkX). If
+        this changes, the code will break.
+
+        Copied from https://github.com/openego/dingo/blob/
+        ee237e37d4c228081e1e246d7e6d0d431c6dda9e/dingo/core/network/__init__.py
+        """
+
+        # get edges with attributes
+        edges = nx.get_edge_attributes(self, 'line').items()
+
+        # sort them according to connected nodes
+        edges_sorted = sorted(list(edges), key=lambda _: repr(_[0]))
+
+        for edge in edges_sorted:
+            yield {'adj_nodes': edge[0], 'line': edge[1]}
 
