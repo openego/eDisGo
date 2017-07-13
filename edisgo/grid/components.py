@@ -20,6 +20,11 @@ class Component:
         self._geom = kwargs.get('geom', None)
         self._grid = kwargs.get('grid', None)
 
+    @property
+    def geom(self):
+        """Provide access to geom"""
+        return self._geom
+
 
 class Station(Component):
     """Station object (medium or low voltage)

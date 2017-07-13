@@ -31,11 +31,6 @@ class Grid:
 
         self._graph = Graph()
 
-    @property
-    def graph(self):
-        """Provide access to the graph"""
-        return self._graph
-
     def connect_generators(self, generators):
         """Connects generators to grid
 
@@ -46,6 +41,16 @@ class Grid:
 
         """
         raise NotImplementedError
+
+    @property
+    def graph(self):
+        """Provide access to the graph"""
+        return self._graph
+
+    @property
+    def station(self):
+        """Provide access to station"""
+        return self._station
 
 
 class MVGrid(Grid):
