@@ -217,5 +217,5 @@ class Line(Component):
         """Provide LineString geometry of line object"""
         adj_nodes = self._grid._graph.nodes_from_line(self)
 
-        return LineString(adj_nodes[0], adj_nodes[1])
+        return LineString([adj_nodes[0].geom, adj_nodes[1].geom])
 
