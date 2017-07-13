@@ -203,6 +203,21 @@ class Line(Component):
     ----------
     _type: :pandas:`pandas.Series<series>`
         Equipment specification including R and X for power flow analysis
+        Columns:
+        .. code-block:: python
+
+            {
+                'name': name (str),
+                'U_n': 'nominal voltage' (int),
+                'I_max_th' (A),
+                'R': resistance (ohm/km),
+                'L': inductivity (mH/km),
+                'C': capacity (uF/km),
+                'Source': data source (str)
+            }
+
+            name: str
+            ,U_n,I_max_th,R,L,C,Source
     _length: float
         Length of the line calculated in linear distance. Unit: m
     """
