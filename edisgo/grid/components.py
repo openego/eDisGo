@@ -98,6 +98,14 @@ class Load(Component):
         """
         raise NotImplementedError
 
+    @property
+    def consumption(self):
+        return self._consumption
+
+    @consumption.setter
+    def consumption(self, cons_dict):
+        self._consumption = cons_dict
+
 
 class Generator(Component):
     """Generator object

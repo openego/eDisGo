@@ -101,11 +101,11 @@ def _build_mv_grid(dingo_grid, network):
     aggregated, aggr_stations = _determine_aggregated_nodes(la_centers)
 
     # Create list of load instances and add these to grid's graph
-    # TODO: add `consumption` to loads
     loads = {_: Load(
         id=_.id_db,
         geom=_.geo_data,
-        grid=grid) for _ in dingo_grid.loads()}
+        grid=grid,
+        consumption=_.consumption) for _ in dingo_grid.loads()}
     grid.graph.add_nodes_from(loads.values(), type='load')
 
     # Create list of generator instances and add these to grid's graph
@@ -265,6 +265,37 @@ def _determine_aggregated_nodes(la_centers):
 
         return aggr
 
+    def aggregate_loads(la_center, aggr):
+        """Aggregate consumption in load area per sector
+
+        Parameters
+        ----------
+        la_center: LVLoadAreaCentreDingo
+            Load area center object from Dingo
+
+        Returns
+        -------
+
+        """
+        for s in ['retail', 'industrial', 'agricultural', 'residential']:
+            if s not in aggr['load']:
+                aggr['load'][s] = 0
+
+        aggr['load']['retail'] += sum(
+            [_.sector_consumption_retail
+             for _ in la_center.lv_load_area._lv_grid_districts])
+        aggr['load']['industrial'] += sum(
+            [_.sector_consumption_industrial
+             for _ in la_center.lv_load_area._lv_grid_districts])
+        aggr['load']['agricultural'] += sum(
+            [_.sector_consumption_agricultural
+             for _ in la_center.lv_load_area._lv_grid_districts])
+        aggr['load']['residential'] += sum(
+            [_.sector_consumption_residential
+             for _ in la_center.lv_load_area._lv_grid_districts])
+
+        return aggr
+
     aggregated = []
     aggr_stations = []
 
@@ -286,7 +317,7 @@ def _determine_aggregated_nodes(la_centers):
         # Determine aggregated load in LV grid
         # TODO: implement, when sectoral consumption per load object is available
         # TODO: and add load object to graph
-        # Note: la_center has cumulative peak load per sector
+        aggr = aggregate_loads(la_center, aggr)
 
         # Collect metadata of aggregated load areas
         aggr['aggregates'] = {
@@ -351,3 +382,10 @@ def _attach_aggregated(grid, aggregated, dingo_grid):
                          grid=grid)
                      }
                 grid.graph.add_edge(grid.station, gen, line, type='line')
+
+        load = Load(
+            geom=grid.station.geom,
+            consumption=la['load'])
+
+        grid.graph.add_node(load, type='load')
+        grid.graph.add_edge(grid.station, load, line, type='line')
