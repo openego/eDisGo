@@ -47,10 +47,7 @@ class Network:
         # call the importer
         import_from_dingo(file, network)
 
-        # TODO: finalize instantiation call
-        # TODO: try to move most of the code outside this function. This is maybe not possible for the network itself (then use the cls() call
-        # return cls(id='id')
-        # raise NotImplementedError
+        return network
 
     def import_generators(self):
         """Imports generators
@@ -75,6 +72,14 @@ class Network:
 
         """
         raise NotImplementedError
+
+    @property
+    def mv_grid(self):
+        return self._mv_grid
+
+    @mv_grid.setter
+    def mv_grid(self, mv_grid):
+        self._mv_grid = mv_grid
 
     def __repr__(self):
         return 'Network ' + self._id

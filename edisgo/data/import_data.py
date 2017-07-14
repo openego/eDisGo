@@ -46,8 +46,7 @@ def import_from_dingo(file, network):
     # TODO: consider for potentially aggregated LAs while looping
 
     # Import medium-voltage grid data
-    _build_mv_grid(dingo_mv_grid, network)
-
+    network.mv_grid =_build_mv_grid(dingo_mv_grid, network)
 
 
 def _build_lv_grid(lv_grid):
