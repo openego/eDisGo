@@ -5,6 +5,7 @@ from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
     Station, Line, Transformer
 from ..grid.grids import MVGrid, LVGrid, Graph
 import pandas as pd
+import numpy as np
 
 
 def import_from_dingo(file, network):
@@ -82,7 +83,6 @@ def _build_mv_grid(dingo_grid, network):
         MV Grid object is translated to the new grid object.
     """
 
-    # TODO: Why is the attribute population == 0?
     # Instantiate a MV grid
     grid = MVGrid(
         network=network,
@@ -90,7 +90,8 @@ def _build_mv_grid(dingo_grid, network):
                        'population':
                            sum([_.zensus_sum
                                 for _ in
-                                dingo_grid.grid_district._lv_load_areas])},
+                                dingo_grid.grid_district._lv_load_areas
+                                if not np.isnan(_.zensus_sum)])},
         voltage_nom=dingo_grid.v_level)
 
     # Special treatment of LVLoadAreaCenters see ...
@@ -314,8 +315,6 @@ def _determine_aggregated_nodes(la_centers):
         # -> Implement once laods in Dingo MV grids exist
 
         # Determine aggregated load in LV grid
-        # TODO: implement, when sectoral consumption per load object is available
-        # TODO: and add load object to graph
         aggr = aggregate_loads(la_center, aggr)
 
         # Collect metadata of aggregated load areas
