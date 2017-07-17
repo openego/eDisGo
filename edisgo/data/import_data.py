@@ -3,10 +3,9 @@ from dingo.core.network.stations import LVStationDingo
 from dingo.core.structure.regions import LVLoadAreaCentreDingo
 from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
     Station, Line, Transformer
-from ..grid.grids import MVGrid, LVGrid, Graph
+from ..grid.grids import MVGrid, LVGrid
 import pandas as pd
 import numpy as np
-import networkx as nx
 
 
 def import_from_dingo(file, network):
