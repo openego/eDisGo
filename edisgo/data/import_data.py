@@ -6,6 +6,7 @@ from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
 from ..grid.grids import MVGrid, LVGrid, Graph
 import pandas as pd
 import numpy as np
+import networkx as nx
 
 
 def import_from_dingo(file, network):
@@ -188,6 +189,9 @@ def _build_mv_grid(dingo_grid, network):
 
     # Attach aggregated to MV station
     _attach_aggregated(grid, aggregated, dingo_grid)
+
+    # check data integrity
+    data_integrity = _validate_dingo_mv_grid_import(grid, dingo_grid)
 
     return grid
 
@@ -376,7 +380,7 @@ def _attach_aggregated(grid, aggregated, dingo_grid):
                              v_level=v_level,
                              subtype=subtype),
                          type=aggr_line_type,
-                         length=1,
+                         length=.5,
                          grid=grid)
                      }
                 grid.graph.add_edge(grid.station, gen, line, type='line')
@@ -387,3 +391,87 @@ def _attach_aggregated(grid, aggregated, dingo_grid):
 
         grid.graph.add_node(load, type='load')
         grid.graph.add_edge(grid.station, load, line, type='line')
+
+
+def _validate_dingo_mv_grid_import(grid, dingo_grid):
+    """Verify imported data with original data from Dingo
+
+    Parameters
+    ----------
+    grid: MVGrid
+        MV Grid data (eDisGo)
+    dingo_grid: dingo.MVGridDingo
+        Dingo MV grid object
+
+    Notes
+    -----
+    The data validation excludes grid components located in aggregated load
+    areas as these are represented differently in eDisGo.
+
+    Returns
+    -------
+    dict
+        Dict showing data integrity for each type of grid component
+    """
+
+    integrity_checks = ['branch_tee',
+                        'disconnection_point', 'mv_transformer',
+                        'lv_station'#,'generator', 'load','line',
+                        ]
+
+    data_integrity = {}
+    data_integrity.update({_: {'dingo': None, 'edisgo': None, 'msg': None}
+                           for _ in integrity_checks})
+
+    # Check number of branch tees
+    data_integrity['branch_tee']['dingo'] = len(dingo_grid._cable_distributors)
+    data_integrity['branch_tee']['edisgo'] = len(
+        grid.graph.nodes_by_attribute('branch_tee'))
+
+    # Check number of disconnecting points
+    data_integrity['disconnection_point']['dingo'] = len(
+        dingo_grid._circuit_breakers)
+    data_integrity['disconnection_point']['edisgo'] = len(
+        grid.graph.nodes_by_attribute('disconnection_point'))
+
+    # Check number of MV transformers
+    data_integrity['mv_transformer']['dingo'] = len(
+        list(dingo_grid.station().transformers()))
+    data_integrity['mv_transformer']['edisgo'] = len(
+        grid.station.transformers)
+
+    # Check number of LV stations in MV grid (graph)
+    data_integrity['lv_station']['edisgo'] = len(grid.graph.nodes_by_attribute(
+        'lv_station'))
+    data_integrity['lv_station']['dingo'] = len(
+        [_ for _ in dingo_grid._graph.nodes()
+         if isinstance(_, LVStationDingo)])
+
+    # Check number of lines outside aggregated LA
+    # edges_w_la = grid.graph.graph_edges()
+    # data_integrity['line']['edisgo'] = len([_ for _ in edges_w_la
+    #          if not (_['adj_nodes'][0] == grid.station or
+    #                  _['adj_nodes'][1] == grid.station) and
+    #          _['line']._length > .5])
+    # data_integrity['line']['dingo'] = len(
+    #     [_ for _ in dingo_grid.graph_edges()
+    #      if not _['branch'].connects_aggregated])
+
+    # Check number of generators outside aggregated LA
+    generators = grid.graph.nodes_by_attribute('generator')
+    # TODO: compare generators and loads via cumulative capacity
+
+    # Check number of loads outside aggregated LA
+
+    # raise an error if data does not match
+    for c in integrity_checks:
+        if data_integrity[c]['edisgo'] != data_integrity[c]['dingo']:
+            raise ValueError(
+                'Unequal number of objects for {c}. '
+                '\n\tDingo:\t{dingo_no}'
+                '\n\teDisgo:\t{edisgo_no}'.format(
+                    c=c,
+                    dingo_no=data_integrity[c]['dingo'],
+                    edisgo_no=data_integrity[c]['edisgo']))
+
+    return data_integrity

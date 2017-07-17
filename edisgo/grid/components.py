@@ -42,6 +42,10 @@ class Station(Component):
 
         self._transformers = kwargs.get('transformers', None)
 
+    @property
+    def transformers(self):
+        return self._transformers
+
 
 class Transformer(Component):
     """Transformer object
