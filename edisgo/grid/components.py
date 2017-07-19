@@ -25,6 +25,9 @@ class Component:
         """Provide access to geom"""
         return self._geom
 
+    def __repr__(self):
+        return '_'.join([self.__class__.__name__, str(self._id)])
+
 
 class Station(Component):
     """Station object (medium or low voltage)

@@ -6,6 +6,8 @@ class Grid:
 
     Attributes
     ----------
+    _id: str
+        Identifier
     _network : Network #TODO: ADD CORRECT REF
         Network which this scenario is associated with
     _voltage_nom : int
@@ -22,6 +24,7 @@ class Grid:
     """
 
     def __init__(self, **kwargs):
+        self._id = kwargs.get('id', None)
         self._network = kwargs.get('network', None)
         self._voltage_nom = kwargs.get('voltage_nom', None)
         self._peak_load = kwargs.get('peak_load', None)
@@ -51,6 +54,9 @@ class Grid:
     def station(self):
         """Provide access to station"""
         return self._station
+
+    def __repr__(self):
+        return '_'.join([self.__class__.__name__, str(self._id)])
 
 
 class MVGrid(Grid):
