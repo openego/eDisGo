@@ -18,7 +18,7 @@
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="181.67871900826447" width="163.1185414512131" x="1110.9460317460318" y="387.77324380165294"/>
+          <y:Geometry height="181.67871900826447" width="163.1185414512131" x="969.3566022902666" y="332.4679752066116"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="65.90869140625" x="48.60492502248155" y="3.0">Network<y:LabelModel>
@@ -28,7 +28,7 @@
               <y:SmartNodeLabelModelParameter labelRatioX="0.0" labelRatioY="0.0" nodeRatioX="0.0" nodeRatioY="-0.03703090122767855" offsetX="0.0" offsetY="0.0" upX="0.0" upY="-1.0"/>
             </y:ModelParameter>
           </y:NodeLabel>
-          <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" hasText="false" height="4.0" modelName="custom" textColor="#000000" visible="true" width="4.0" x="79.55927072560667" y="88.83935950413223">
+          <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" hasText="false" height="4.0" modelName="custom" textColor="#000000" visible="true" width="4.0" x="79.55927072560655" y="88.83935950413223">
             <y:LabelModel>
               <y:SmartNodeLabelModel distance="4.0"/>
             </y:LabelModel>
@@ -54,7 +54,7 @@ reinforce()</y:MethodLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="63.0" width="149.98435979586725" x="896.8603447959268" y="712.3894628099174"/>
+          <y:Geometry height="63.0" width="149.98435979586725" x="1122.964962959209" y="590.1466942148761"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="57.8408203125" x="46.071769741683624" y="3.0">MVGrid<y:LabelModel>
@@ -75,7 +75,7 @@ reinforce()</y:MethodLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="28.0" width="100.0" x="557.7259373922732" y="0.0"/>
+          <y:Geometry height="28.0" width="100.0" x="881.9632936507936" y="0.0"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="53.18798828125" x="23.406005859375" y="3.0">LVGrid<y:LabelModel>
@@ -96,7 +96,7 @@ reinforce()</y:MethodLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="217.83574380165294" width="253.23708290242624" x="481.10739594106013" y="48.0"/>
+          <y:Geometry height="217.83574380165294" width="253.23708290242624" x="524.3509029932313" y="58.0"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="34.84326171875" x="109.19691059183812" y="3.0">Grid<y:LabelModel>
@@ -121,7 +121,7 @@ grid_district: dict</y:AttributeLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="114.22159090909099" width="175.1185414512131" x="0.0" y="421.5018078512397"/>
+          <y:Geometry height="114.22159090909099" width="175.1185414512131" x="181.00025308391724" y="366.1965392561983"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="39.29296875" x="67.91278635060655" y="3.0">Load<y:LabelModel>
@@ -144,7 +144,7 @@ consumption: dict</y:AttributeLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="77.37380699893981" width="155.0" x="366.11879453513035" y="439.92569980631527"/>
+          <y:Geometry height="77.37380699893981" width="155.0" x="784.3563492063493" y="384.6204312112739"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="81.8095703125" x="36.59521484375" y="3.0">BranchTee<y:LabelModel>
@@ -165,7 +165,7 @@ consumption: dict</y:AttributeLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="128.5" width="175.1185414512131" x="704.3988095238095" y="923.3269628099174"/>
+          <y:Geometry height="128.5" width="175.1185414512131" x="1315.874062607727" y="731.3966942148761"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="169.267578125" x="2.9254816631065523" y="3.0">MVDisconnectingPoint<y:LabelModel>
@@ -187,7 +187,7 @@ close()</y:MethodLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="86.25" width="163.1185414512131" x="551.1190476190476" y="435.48760330578517"/>
+          <y:Geometry height="86.25" width="163.1185414512131" x="386.1189038775681" y="380.1823347107438"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="57.2060546875" x="52.95624338185655" y="3.0">Station<y:LabelModel>
@@ -209,7 +209,7 @@ close()</y:MethodLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="102.0" width="145.2370829024262" x="1613.4931102267744" y="936.5769628099174"/>
+          <y:Geometry height="102.0" width="145.2370829024262" x="251.66122045354882" y="744.6466942148761"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="34.8115234375" x="55.212779732463105" y="3.0">Line<y:LabelModel>
@@ -231,7 +231,7 @@ length: float</y:AttributeLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="78.0" width="131.0" x="205.11879453513035" y="439.61260330578517"/>
+          <y:Geometry height="78.0" width="131.0" x="20.0" y="384.3073347107438"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="48.41455078125" x="41.292724609375" y="3.0">Graph<y:LabelModel>
@@ -257,7 +257,7 @@ graph_edges()
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="89.0" width="125.0" x="529.3985564398922" y="699.3894628099174"/>
+          <y:Geometry height="89.0" width="125.0" x="441.8984126984127" y="577.1466942148761"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="94.81591796875" x="15.092041015625" y="3.0">Transformer<y:LabelModel>
@@ -279,7 +279,7 @@ type: pandas.Series</y:AttributeLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="155.0" width="168.19650389671608" x="1150.4562568724868" y="666.3894628099174"/>
+          <y:Geometry height="155.0" width="168.19650389671608" x="924.7684147183086" y="544.1466942148761"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="67.71142578125" x="50.24253905773304" y="3.0">Scenario<y:LabelModel>
@@ -304,7 +304,7 @@ pfac_lv_load: float</y:AttributeLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="78.0" width="131.0" x="205.11879453513035" y="704.8894628099174"/>
+          <y:Geometry height="78.0" width="131.0" x="20.0" y="582.6466942148761"/>
           <y:Fill color="#808080" transparent="false"/>
           <y:BorderStyle color="#FFFFFF" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#FFFFFF" visible="true" width="122.02197265625" x="4.489013671875" y="3.0">networkx.Graph<y:LabelModel>
@@ -325,7 +325,7 @@ pfac_lv_load: float</y:AttributeLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="133.0" width="253.23708290242624" x="1330.255808639473" y="921.0769628099174"/>
+          <y:Geometry height="133.0" width="253.23708290242624" x="787.135823628152" y="729.1466942148761"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="99.46240234375" x="76.88734027933812" y="3.0">ETraGoSpecs<y:LabelModel>
@@ -351,7 +351,7 @@ curtailment: dict
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="77.3738069989398" width="145.2370829024262" x="909.5177134013775" y="948.8900593104476"/>
+          <y:Geometry height="77.3738069989398" width="145.2370829024262" x="611.8985220408504" y="756.9597907154061"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="61.814453125" x="41.711314888713105" y="3.0">Storage<y:LabelModel>
@@ -372,7 +372,7 @@ curtailment: dict
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="77.37380699893981" width="237.82164948453647" x="555.623842808735" y="1101.8269628099174"/>
+          <y:Geometry height="77.37380699893981" width="237.82164948453647" x="400.3514768450334" y="892.1466942148761"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="87.79541015625" x="75.01311966414323" y="3.0">Component<y:LabelModel>
@@ -394,7 +394,7 @@ geom: shapely.Point or shapely.Line</y:AttributeLabel>
       <data key="d4"/>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="144.94318181818176" width="175.1185414512131" x="744.2376984126984" y="406.1410123966943"/>
+          <y:Geometry height="144.94318181818176" width="175.1185414512131" x="579.2375546712188" y="350.83574380165294"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="78.29931640625" x="48.40961252248155" y="3.0">Generator<y:LabelModel>
@@ -420,7 +420,7 @@ _timeseries: pandas.Series</y:AttributeLabel>
 {tech: {subtech: pandas.Series}} where subtech is currently optional (has to be discuss)]]></data>
       <data key="d6">
         <y:UMLClassNode>
-          <y:Geometry height="102.0" width="215.50079365079364" x="1084.7549056462415" y="936.5769628099174"/>
+          <y:Geometry height="102.0" width="215.50079365079364" x="1070.373015873016" y="744.6466942148761"/>
           <y:Fill color="#C0C0C0" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="13" fontStyle="bold" hasBackgroundColor="false" hasLineColor="false" height="19.1328125" modelName="custom" textColor="#000000" visible="true" width="85.2880859375" x="65.10635385664682" y="3.0">TimeSeries<y:LabelModel>
@@ -451,9 +451,9 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="-37.49608994896687" sy="-31.5" tx="79.13658840700816" ty="108.91787190082647">
-            <y:Point x="934.3564929478288" y="285.83574380165294"/>
-            <y:Point x="686.8625257992813" y="285.83574380165294"/>
+          <y:Path sx="0.0" sy="-31.5" tx="110.7912237698115" ty="108.91787190082647">
+            <y:Point x="1197.9571428571428" y="290.83574380165294"/>
+            <y:Point x="761.7606682142559" y="290.83574380165294"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="none" target="white_delta"/>
@@ -465,7 +465,10 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="14.0" tx="0.0" ty="-108.91787190082647"/>
+          <y:Path sx="-25.0" sy="14.0" tx="0.0" ty="-108.91787190082647">
+            <y:Point x="906.9632936507936" y="43.0"/>
+            <y:Point x="650.9694444444444" y="43.0"/>
+          </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="none" target="white_delta"/>
           <y:BendStyle smoothed="false"/>
@@ -476,7 +479,7 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="38.99999999999994" tx="0.0" ty="-39.0"/>
+          <y:Path sx="0.0" sy="39.0" tx="0.0" ty="-39.0"/>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="none" target="white_delta"/>
           <y:BendStyle smoothed="false"/>
@@ -487,13 +490,13 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="42.049125974179105" sy="77.5" tx="0.0" ty="-66.5">
-            <y:Point x="1276.603634795024" y="831.3894628099174"/>
-            <y:Point x="1456.874350090686" y="831.3894628099174"/>
+          <y:Path sx="-42.04912597417902" sy="77.5" tx="0.0" ty="-66.5">
+            <y:Point x="966.8175406924876" y="714.1466942148761"/>
+            <y:Point x="913.7543650793651" y="714.1466942148761"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="141.068359375" x="109.7365327078735" y="39.960934977886154">#_etrago_specification
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="141.068359375" x="109.73651038268054" y="39.97072985940872">#_etrago_specification
 0..1<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -504,10 +507,13 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="-42.049125974179105" sy="77.5" tx="0.0" ty="-51.0"/>
+          <y:Path sx="42.04912597417902" sy="77.5" tx="0.0" ty="-51.0">
+            <y:Point x="1050.9157926408457" y="714.1466942148761"/>
+            <y:Point x="1178.1234126984127" y="714.1466942148761"/>
+          </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="82.703125" x="-41.35163112211171" y="39.971860270854904">#_timeseries
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="82.703125" x="-41.3515826649284" y="39.97072985944976">#_timeseries
 1<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -518,13 +524,13 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="-79.13658840700816" sy="108.91787190082647" tx="0.0" ty="-39.0">
-            <y:Point x="528.589348985265" y="285.83574380165294"/>
-            <y:Point x="270.61879453513035" y="285.83574380165294"/>
+          <y:Path sx="-110.79122376981148" sy="108.91787190082647" tx="0.0" ty="-39.0">
+            <y:Point x="540.1782206746329" y="290.83574380165294"/>
+            <y:Point x="85.5" y="290.83574380165294"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="49.181640625" x="-282.56138124612005" y="69.96092690712021">#graph
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="49.181640625" x="-282.56137674425173" y="69.97069253212169">#graph
 1<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -535,13 +541,13 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="-110.7912237698115" sy="108.91787190082647" tx="0.0" ty="-57.110795454545496">
-            <y:Point x="496.93471362246174" y="275.83574380165294"/>
-            <y:Point x="87.55927072560655" y="275.83574380165294"/>
+          <y:Path sx="-79.1365884070082" sy="108.91787190082647" tx="0.0" ty="-57.110795454545496">
+            <y:Point x="571.8328560374363" y="305.83574380165294"/>
+            <y:Point x="268.5595238095238" y="305.83574380165294"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="45.953125" x="-432.352014674784" y="69.96092690712157">#loads
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="45.953125" x="-432.3520351016063" y="69.97069253212157">#loads
 0..*<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -552,13 +558,10 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="47.48195304420494" sy="108.91787190082647" tx="0.0" ty="-72.47159090909088">
-            <y:Point x="655.2078904364781" y="295.83574380165294"/>
-            <y:Point x="831.7969691383049" y="295.83574380165294"/>
-          </y:Path>
+          <y:Path sx="15.827317681401638" sy="108.91787190082647" tx="0.0" ty="-72.47159090909088"/>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="79.5625" x="136.8078333961172" y="69.97069253212237">#generators
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="79.5625" x="136.8079104222826" y="69.96321934048837">#generators
 0..*<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -569,13 +572,13 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="-47.48195304420494" sy="108.91787190082647" tx="0.0" ty="-38.686903499469906">
-            <y:Point x="560.2439843480682" y="295.83574380165294"/>
-            <y:Point x="443.61879453513035" y="295.83574380165294"/>
+          <y:Path sx="47.481953044204914" sy="108.91787190082647" tx="0.0" ty="-38.686903499469906">
+            <y:Point x="698.4513974886494" y="320.83574380165294"/>
+            <y:Point x="861.8563492063493" y="320.83574380165294"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="87.490234375" x="-160.3702801719012" y="69.97069253212123">#branch_tees
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="87.490234375" x="-160.37032552741357" y="69.95604409462169">#branch_tees
 0..*<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -586,10 +589,13 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="90.83935950413223" tx="-42.049125974179105" ty="-77.5"/>
+          <y:Path sx="-54.37284715040437" sy="90.83935950413223" tx="-42.04912597417902" ty="-77.5">
+            <y:Point x="996.5430258654687" y="529.1466942148761"/>
+            <y:Point x="966.8175406924876" y="529.1466942148761"/>
+          </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="64.85546875" x="-32.42768092679921" y="44.952695231792404">#scenario
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="64.85546875" x="-32.42778884648601" y="44.97072985938644">#scenario
 1<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -600,13 +606,13 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="-54.37284715040437" sy="90.83935950413223" tx="37.49608994896687" ty="-31.5">
-            <y:Point x="1138.132455321234" y="579.4519628099174"/>
-            <y:Point x="1009.3485564398923" y="579.4519628099174"/>
+          <y:Path sx="54.37284715040437" sy="90.83935950413223" tx="-49.99478659862241" ty="-31.5">
+            <y:Point x="1105.2887201662775" y="529.1466942148761"/>
+            <y:Point x="1147.9623562585202" y="529.1466942148761"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="37.556640625" x="-147.5622101616691" y="44.96093497788911">#grid
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="37.556640625" x="-147.56219531662555" y="44.97072985941031">#grid
 1<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -617,13 +623,10 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="42.049125974179105" sy="-77.5" tx="54.37284715040437" ty="90.83935950413223">
-            <y:Point x="1276.6037151700511" y="584.4519628099174"/>
-            <y:Point x="1246.8781496220427" y="584.4519628099174"/>
-          </y:Path>
+          <y:Path sx="42.04912597417902" sy="-77.5" tx="0.0" ty="90.83935950413223"/>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="62.787109375" x="-31.393477212761354" y="-51.897463459613846">#network
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="62.787109375" x="-31.39339207255216" y="-51.908176390404265">#network
 1<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -634,13 +637,13 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="110.7912237698115" sy="108.91787190082647" tx="0.0" ty="-90.83935950413223">
-            <y:Point x="718.5171611620847" y="275.83574380165294"/>
-            <y:Point x="1192.5053024716383" y="275.83574380165294"/>
+          <y:Path sx="79.13658840700819" sy="108.91787190082647" tx="0.0" ty="-90.83935950413223">
+            <y:Point x="730.1060328514526" y="305.83574380165294"/>
+            <y:Point x="1050.915873015873" y="305.83574380165294"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="62.787109375" x="442.5945969052318" y="69.96092690712169">#network
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="62.787109375" x="442.5946014070996" y="69.97069253212169">#network
 1<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -651,10 +654,13 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="-40.77963536280333" sy="43.12499999999994" tx="0.0" ty="-44.5"/>
+          <y:Path sx="40.779635362803276" sy="43.125" tx="0.0" ty="-44.5">
+            <y:Point x="508.4578099659779" y="481.4323347107438"/>
+            <y:Point x="504.3984126984127" y="481.4323347107438"/>
+          </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="97.662109375" x="-48.83117988823278" y="92.6709569505424">#_transformers
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="97.662109375" x="-48.83111855520326" y="92.68505481064176">#_transformers
 1..*<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -665,10 +671,13 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="-15.82731768140161" sy="108.91787190082647" tx="-40.77963536280333" ty="-43.125"/>
+          <y:Path sx="-47.48195304420493" sy="108.91787190082647" tx="-40.779635362803276" ty="-43.125">
+            <y:Point x="603.4874914002395" y="320.83574380165294"/>
+            <y:Point x="426.89853924037135" y="320.83574380165294"/>
+          </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="61.3515625" x="-30.675845415576532" y="69.95857705360606">#_station
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="61.3515625" x="-30.675872975408538" y="69.95604409459213">#_station
 1<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -679,13 +688,13 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="40.77963536280333" sy="-43.125" tx="15.82731768140161" ty="108.91787190082647">
-            <y:Point x="673.4580802494161" y="305.83574380165294"/>
-            <y:Point x="623.5532550736748" y="305.83574380165294"/>
+          <y:Path sx="40.779635362803276" sy="-43.125" tx="-15.827317681401652" ty="108.91787190082647">
+            <y:Point x="508.4578099659779" y="335.83574380165294"/>
+            <y:Point x="635.1421267630428" y="335.83574380165294"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="43.556640625" x="-21.77818684042768" y="-99.62021933311269">#_grid
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="43.556640625" x="-21.77829018743512" y="-99.60856287940953">#_grid
 1<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -697,12 +706,12 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="31.5" tx="0.0" ty="-64.25">
-            <y:Point x="971.8525246938605" y="903.3269628099174"/>
-            <y:Point x="791.9580802494161" y="903.3269628099174"/>
+            <y:Point x="1197.9571428571426" y="668.1466942148761"/>
+            <y:Point x="1403.4333333333334" y="668.1466942148761"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="diamond" target="plain"/>
-          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="134.0546875" x="-67.02735811863977" y="85.96874747788615">#_mv_disconn_points
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="free" modelPosition="anywhere" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="134.0546875" x="-67.02735421317016" y="85.97072985940736">#_mv_disconn_points
 0..*<y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
           </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
@@ -713,11 +722,9 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="40.77963536280333" sy="43.12499999999994" tx="-14.863853092783529" ty="-38.68690349946996">
-            <y:Point x="673.4579537074575" y="531.7376033057851"/>
-            <y:Point x="669.3985564398922" y="531.7376033057851"/>
-            <y:Point x="669.3985564398922" y="997.5769628099174"/>
-            <y:Point x="659.6708144582198" y="997.5769628099174"/>
+          <y:Path sx="-40.779635362803276" sy="43.125" tx="-44.59155927835059" ty="-38.68690349946996">
+            <y:Point x="426.8984126984127" y="810.6466942148761"/>
+            <y:Point x="474.67074230895105" y="810.6466942148761"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="none" target="white_delta"/>
@@ -729,9 +736,11 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="57.11079545454544" tx="-104.0469716494847" ty="-38.68690349946996">
-            <y:Point x="87.55927072560655" y="1017.5769628099174"/>
-            <y:Point x="570.4876959015186" y="1017.5769628099174"/>
+          <y:Path sx="0.0" sy="57.110795454545496" tx="-74.31926546391765" ty="-38.68690349946996">
+            <y:Point x="268.5595238095238" y="495.4181301652893"/>
+            <y:Point x="411.8984126984127" y="495.4181301652893"/>
+            <y:Point x="411.8984126984127" y="825.6466942148761"/>
+            <y:Point x="444.943036123384" y="825.6466942148761"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="none" target="white_delta"/>
@@ -743,9 +752,11 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="72.47159090909093" tx="14.863853092783529" ty="-38.68690349946996">
-            <y:Point x="831.7969691383049" y="561.0841942148761"/>
-            <y:Point x="689.3985564398922" y="561.0841942148761"/>
+          <y:Path sx="0.0" sy="72.47159090909088" tx="14.863853092783529" ty="-38.68690349946996">
+            <y:Point x="666.7968253968254" y="510.7789256198347"/>
+            <y:Point x="581.8984126984127" y="510.7789256198347"/>
+            <y:Point x="581.8984126984127" y="810.6466942148761"/>
+            <y:Point x="534.1261546800852" y="810.6466942148761"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="none" target="white_delta"/>
@@ -757,9 +768,9 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="64.25" tx="44.59155927835059" ty="-38.686903499469906">
-            <y:Point x="791.9580802494161" y="1061.8269628099174"/>
-            <y:Point x="719.1262268293539" y="1061.8269628099174"/>
+          <y:Path sx="0.0" sy="64.25" tx="104.0469716494847" ty="-38.686903499469906">
+            <y:Point x="1403.4333333333334" y="877.1466942148761"/>
+            <y:Point x="623.3092732367863" y="877.1466942148761"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="none" target="white_delta"/>
@@ -771,9 +782,11 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="38.686903499469906" tx="-74.31926546391765" ty="-38.68690349946996">
-            <y:Point x="443.61879453513035" y="1007.5769628099174"/>
-            <y:Point x="600.2154020870856" y="1007.5769628099174"/>
+          <y:Path sx="0.0" sy="38.686903499469906" tx="44.59155927835059" ty="-38.68690349946996">
+            <y:Point x="861.8563492063493" y="525.7789256198347"/>
+            <y:Point x="596.8984126984127" y="525.7789256198347"/>
+            <y:Point x="596.8984126984127" y="825.6466942148761"/>
+            <y:Point x="563.8538608656522" y="825.6466942148761"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="none" target="white_delta"/>
@@ -785,10 +798,7 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="44.5" tx="-44.59155927835059" ty="-38.68690349946996">
-            <y:Point x="591.8985564398922" y="997.5769628099174"/>
-            <y:Point x="629.9431082726527" y="997.5769628099174"/>
-          </y:Path>
+          <y:Path sx="0.0" sy="44.5" tx="-14.863853092783529" ty="-38.68690349946996"/>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="none" target="white_delta"/>
           <y:BendStyle smoothed="false"/>
@@ -799,9 +809,9 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d8"/>
       <data key="d10">
         <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="51.0" tx="104.0469716494847" ty="-38.686903499469906">
-            <y:Point x="1686.1116516779875" y="1081.8269628099174"/>
-            <y:Point x="778.581639200488" y="1081.8269628099174"/>
+          <y:Path sx="0.0" sy="51.0" tx="-104.0469716494847" ty="-38.686903499469906">
+            <y:Point x="324.2797619047619" y="861.6466942148761"/>
+            <y:Point x="415.21532993781693" y="861.6466942148761"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="none" target="white_delta"/>
@@ -814,11 +824,37 @@ get_ego_load_timeseries()</y:MethodLabel>
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="38.6869034994699" tx="74.31926546391765" ty="-38.686903499469906">
-            <y:Point x="982.1362548525906" y="1071.8269628099174"/>
-            <y:Point x="748.8539330149209" y="1071.8269628099174"/>
+            <y:Point x="684.5170634920635" y="849.333597714346"/>
+            <y:Point x="593.5815670512193" y="849.333597714346"/>
           </y:Path>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="none" target="white_delta"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e25" source="n2" target="n1">
+      <data key="d8"/>
+      <data key="d9"/>
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="25.0" sy="14.0" tx="49.99478659862234" ty="-31.5">
+            <y:Point x="956.9632936507936" y="43.0"/>
+            <y:Point x="1212.9571428571428" y="43.0"/>
+            <y:Point x="1212.9571428571428" y="438.3073347107438"/>
+            <y:Point x="1247.951929455765" y="438.3073347107438"/>
+          </y:Path>
+          <y:LineStyle color="#000000" type="line" width="1.0"/>
+          <y:Arrows source="diamond" target="none"/>
+          <y:EdgeLabel alignment="center" configuration="AutoFlippingLabel" distance="2.0" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="31.9375" modelName="custom" preferredPlacement="anywhere" ratio="0.5" textColor="#000000" visible="true" width="50.189453125" x="230.89909842354905" y="154.7974076704546">lv_grids
+0..*<y:LabelModel>
+              <y:SmartEdgeLabelModel autoRotationEnabled="false" defaultAngle="0.0" defaultDistance="10.0"/>
+            </y:LabelModel>
+            <y:ModelParameter>
+              <y:SmartEdgeLabelModelParameter angle="0.0" distance="30.0" distanceToCenter="true" position="center" ratio="0.3941122282981518" segment="2"/>
+            </y:ModelParameter>
+            <y:PreferredPlacementDescriptor angle="0.0" angleOffsetOnRightSide="0" angleReference="absolute" angleRotationOnRightSide="co" distance="-1.0" frozen="true" placement="anywhere" side="anywhere" sideReference="relative_to_edge_flow"/>
+          </y:EdgeLabel>
           <y:BendStyle smoothed="false"/>
         </y:PolyLineEdge>
       </data>
