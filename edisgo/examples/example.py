@@ -9,7 +9,7 @@ print('Generators in MV grid incl. aggregated generators from MV and LV')
 print('Type\tSubtype\tCapacity in kW')
 for gen in gens:
     print("{type}\t{sub}\t{capacity}".format(
-        type=gen._type, sub=gen._subtype, capacity=gen._nominal_capacity))
+        type=gen.type, sub=gen.subtype, capacity=gen.nominal_capacity))
 
 # Load located in aggregated LAs
 print('\n\nAggregated load in LA adds up to\n')

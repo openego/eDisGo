@@ -159,6 +159,18 @@ class Generator(Component):
         """
         raise NotImplementedError
 
+    @property
+    def type(self):
+        return self._type
+
+    @property
+    def subtype(self):
+        return self._subtype
+
+    @property
+    def nominal_capacity(self):
+        return self._nominal_capacity
+
 
 class Storage(Component):
     """Storage object
