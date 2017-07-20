@@ -83,7 +83,8 @@ class MVGrid(Grid):
 
     @property
     def lv_grids(self):
-        yield self._lv_grids
+        for lv_grid in self._lv_grids:
+            yield lv_grid
 
     @lv_grids.setter
     def lv_grids(self, lv_grids):
