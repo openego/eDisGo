@@ -71,6 +71,7 @@ class MVGrid(Grid):
         This attribute is used for DINGO-imported data only. It contains data from
         DINGO's Aggregated Load Areas. Each list element represents one aggregated
         Load Area.
+    lv_grids: :obj:`list`
     """
 
     def __init__(self, **kwargs):
@@ -78,6 +79,15 @@ class MVGrid(Grid):
 
         self._mv_disconn_points = kwargs.get('mv_disconn_points', None)
         self._aggregates = kwargs.get('aggregates', None)
+        self._lv_grids = kwargs.get('aggregates', None)
+
+    @property
+    def lv_grids(self):
+        yield self._lv_grids
+
+    @lv_grids.setter
+    def lv_grids(self, lv_grids):
+        self._lv_grids = lv_grids
 
 
 class LVGrid(Grid):
