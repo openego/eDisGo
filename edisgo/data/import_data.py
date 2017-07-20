@@ -6,6 +6,7 @@ from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
 from ..grid.grids import MVGrid, LVGrid
 import pandas as pd
 import numpy as np
+import networkx as nx
 
 
 def import_from_dingo(file, network):
@@ -45,25 +46,127 @@ def import_from_dingo(file, network):
     # TODO: implement this!
     # TODO: loop over LV grids and create list of LV grid object
     # TODO: consider for potentially aggregated LAs while looping
+    lv_grids_ = _build_lv_grid(dingo_mv_grid)
 
     # Import medium-voltage grid data
     network.mv_grid =_build_mv_grid(dingo_mv_grid, network)
 
 
-def _build_lv_grid(lv_grid):
+def _build_lv_grid(dingo_grid):
     """
     Build eDisGo LV grid from Dingo data
 
     Parameters
     ----------
-    lv_grid: dingo.LVGridDingo
+    dingo_grid: dingo.MVGridDingo
+        Dingo MV grid object
 
     Returns
     -------
-    LVGrid
+    list of LVGrid
+        LV grids
+    dict
+        Dictionary containing a mapping of LV stations in Dingo to newly
+        created eDisGo LV stations. This mapping is used to use the same
+        instances of LV stations in the MV grid graph.
     """
-    #TODO: Consider that generators and loads in aggr. LAs are already included in MV
-    pass
+
+    lv_station_mapping = {}
+    lv_grids = []
+    lv_grid_mapping = {}
+
+    for la in dingo_grid.grid_district._lv_load_areas:
+        for lvgd in la._lv_grid_districts:
+            dingo_lv_grid = lvgd.lv_grid
+            if not dingo_lv_grid.grid_district.lv_load_area.is_aggregated:
+
+                # Create LV grid instance
+                lv_grid = LVGrid(
+                    id=dingo_lv_grid.id_db,
+                    geom=dingo_lv_grid.grid_district.geo_data,
+                    grid_district={
+                        'geom': dingo_lv_grid.grid_district.geo_data,
+                        'population': dingo_lv_grid.grid_district.population},
+                    voltage_nom=dingo_lv_grid.v_level)
+
+                # Create LV station instances
+                station = Station(id=dingo_lv_grid._station.id_db,
+                                  geom=dingo_lv_grid._station.geo_data,
+                                  grid=lv_grid,
+                                  transformers=[Transformer(
+                                      grid=lv_grid,
+                                      id=t.grid.id_db,
+                                      geom=dingo_lv_grid.grid_district.geo_data,
+                                      voltage_op=t.v_level,
+                                      type=pd.Series(dict(
+                                          s=t.s_max_a, x=t.x, r=t.r))
+                                  ) for t in dingo_lv_grid._station.transformers()])
+                lv_grid.graph.add_node(station, type='lv_station')
+                lv_station_mapping.update({dingo_lv_grid._station: station})
+
+                # Create list of load instances and add these to grid's graph
+                loads = {_: Load(
+                    id=_.id_db,
+                    geom=_.geo_data,
+                    grid=lv_grid,
+                    consumption=_.consumption) for _ in dingo_lv_grid.loads()}
+                lv_grid.graph.add_nodes_from(loads.values(), type='load')
+
+                # Create list of generator instances and add these to grid's graph
+                generators = {_: Generator(
+                    id=_.id_db,
+                    geom=_.geo_data,
+                    nominal_capacity=_.capacity,
+                    type=_.type,
+                    subtype=_.subtype,
+                    grid=lv_grid) for _ in dingo_lv_grid.generators()}
+                lv_grid.graph.add_nodes_from(generators.values(), type='generator')
+
+                # Create list of branch tee instances and add these to grid's graph
+                branch_tees = {
+                    _: BranchTee(id=_.id_db, geom=_.geo_data, grid=lv_grid)
+                    for _ in dingo_lv_grid._cable_distributors}
+                lv_grid.graph.add_nodes_from(branch_tees.values(),
+                                              type='branch_tee')
+
+                # Merge node above defined above to a single dict
+                nodes = {**loads,
+                         **generators,
+                         **branch_tees,
+                         **{dingo_lv_grid._station: station}}
+
+                edges = []
+                edges_raw = list(nx.get_edge_attributes(
+                    dingo_lv_grid._graph, 'branch').items())
+                for edge in edges_raw:
+                    edges.append({'adj_nodes': edge[0], 'branch': edge[1]})
+
+                # Create list of line instances and add these to grid's graph
+                lines = [(nodes[_['adj_nodes'][0]], nodes[_['adj_nodes'][1]],
+                          {'line': Line(
+                              id=_['branch'].id_db,
+                              type=_['branch'].type,
+                              length=_['branch'].length,
+                              grid=lv_grid)
+                          })
+                         for _ in edges]
+                lv_grid.graph.add_edges_from(lines, type='line')
+
+                # Add LV station as association to LV grid
+                lv_grid._station = station
+
+                # Add to lv grid mapping
+                lv_grid_mapping.update({lv_grid: dingo_lv_grid})
+
+                # Put all LV grid to a list of LV grids
+                lv_grids.append(lv_grid)
+
+
+    # Check data integrity
+    _validate_dingo_lv_grid_import(lv_grids, dingo_grid, lv_grid_mapping)
+
+    # TODO: don't forget to adapt lv stations creation in MV grid
+    return lv_grids, lv_station_mapping, lv_grid_mapping
 
 
 def _build_mv_grid(dingo_grid, network):
@@ -474,3 +577,83 @@ def _validate_dingo_mv_grid_import(grid, dingo_grid):
                     edisgo_no=data_integrity[c]['edisgo']))
 
     return data_integrity
+
+
+def _validate_dingo_lv_grid_import(grids, dingo_grid, lv_grid_mapping):
+    """Verify imported data with original data from Dingo
+
+    Parameters
+    ----------
+    grids: list of LVGrid
+        LV Grid data (eDisGo)
+    dingo_grid: dingo.MVGridDingo
+        Dingo MV grid object
+    lv_grid_mapping: dict
+        Defines relationship between Dingo and eDisGo grid objects
+
+    Notes
+    -----
+    The data validation excludes grid components located in aggregated load
+    areas as these are represented differently in eDisGo.
+
+    Returns
+    -------
+    dict
+        Dict showing data integrity for each type of grid component
+    """
+
+    integrity_checks = ['branch_tee', 'lv_transformer',
+                        'generator', 'load','line']
+
+    data_integrity = {}
+
+    for grid in grids:
+
+        data_integrity.update({grid:{_: {'dingo': None, 'edisgo': None, 'msg': None}
+                           for _ in integrity_checks}})
+
+        # TODO: check all above components
+        # Check number of branch tees
+        data_integrity[grid]['branch_tee']['dingo'] = len(
+            lv_grid_mapping[grid]._cable_distributors)
+        data_integrity[grid]['branch_tee']['edisgo'] = len(
+            grid.graph.nodes_by_attribute('branch_tee'))
+
+        # Check number of LV transformers
+        data_integrity[grid]['lv_transformer']['dingo'] = len(
+            list(lv_grid_mapping[grid].station().transformers()))
+        data_integrity[grid]['lv_transformer']['edisgo'] = len(
+            grid.station.transformers)
+
+        # Check number of generators
+        data_integrity[grid]['generator']['edisgo'] = len(
+            grid.graph.nodes_by_attribute('generator'))
+        data_integrity[grid]['generator']['dingo'] = len(
+            list(lv_grid_mapping[grid].generators()))
+
+        # Check number of loads
+        data_integrity[grid]['load']['edisgo'] = len(
+            grid.graph.nodes_by_attribute('load'))
+        data_integrity[grid]['load']['dingo'] = len(
+            list(lv_grid_mapping[grid].loads()))
+
+        # Check number of lines outside aggregated LA
+        data_integrity[grid]['line']['edisgo'] = len(
+            list(grid.graph.graph_edges()))
+        data_integrity[grid]['line']['dingo'] = len(
+            [_ for _ in lv_grid_mapping[grid].graph_edges()
+             if not _['branch'].connects_aggregated])
+
+    # raise an error if data does not match
+    for grid in grids:
+        for c in integrity_checks:
+            if data_integrity[grid][c]['edisgo'] != data_integrity[grid][c]['dingo']:
+                raise ValueError(
+                    'Unequal number of objects in grid {grid} for {c}. '
+                    '\n\tDingo:\t{dingo_no}'
+                    '\n\teDisgo:\t{edisgo_no}'.format(
+                        grid=grid,
+                        c=c,
+                        dingo_no=data_integrity[grid][c]['dingo'],
+                        edisgo_no=data_integrity[grid][c]['edisgo']))
+    # TODO: later, define check for cumulative generation and load of MV and LV
