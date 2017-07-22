@@ -7,7 +7,6 @@ Subpackages
 .. toctree::
 
     edisgo.data
-    edisgo.examples
     edisgo.grid
     edisgo.tools
 
