@@ -11,29 +11,44 @@ import networkx as nx
 
 def import_from_dingo(file, network):
     """
-    The actual code body of the Dingo data importer
+    Import a eDisGo grid topology from
+    `Dingo data <https://github.com/openego/dingo>`_.
 
-    Notes
-    -----
-    Assumes `dingo.NetworkDingo` provided by `file` contains only data of one
-    mv_grid_district.
+    This import method is specifically designed to load grid topology data in
+    the format as `Dingo <https://github.com/openego/dingo>`_ provides it via
+    pickles.
+
+    The import of the grid topology includes
+
+        * the topology itself
+        * equipment parameter
+        * generators incl. location, type, subtype and capacity
+        * loads incl. location and sectoral consumption
 
     Parameters
     ----------
-    file: str or dingo.NetworkDingo
+    file: :obj:`str` or :class:`dingo.core.NetworkDingo`
         If a str is provided it is assumed it points to a pickle with Dingo
         grid data. This file will be read.
-        If a object of the type `dingo.NetworkDingo` data will be used directly
-        from this object.
-    network: Network
+        If a object of the type :class:`dingo.core.NetworkDingo` data will be
+        used directly from this object.
+    network: :class:`~.grid.network.Network`
         The eDisGo container object
 
-    Returns
-    -------
+    Examples
+    --------
+    Assuming you the Dingo `dingo_data.pkl` in CWD
+
+    >>> from edisgo.grid.network import Network
+    >>> network = Network.import_from_dingo('dingo_data.pkl'))
+
+    Notes
+    -----
+    Assumes :class:`dingo.core.NetworkDingo` provided by `file` contains
+    only data of one mv_grid_district.
 
     """
     # when `file` is a string, it will be read by the help of pickle
-
     if isinstance(file, str):
         dingo_nd = load_nd_from_pickle(filename=file)
     # otherwise it is assumed the object is passed directly
