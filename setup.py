@@ -1,4 +1,25 @@
 from setuptools import find_packages, setup
+from setuptools.command.install import install
+import os
+
+BASEPATH='.eDisGo'
+
+
+class InstallSetup(install):
+    def run(self):
+        self.create_edisgo_path()
+        install.run(self)
+
+    @staticmethod
+    def create_edisgo_path():
+        edisgo_path = os.path.join(os.path.expanduser('~'), BASEPATH)
+        data_path = os.path.join(edisgo_path, 'data')
+
+        if not os.path.isdir(edisgo_path):
+            os.mkdir(edisgo_path)
+        if not os.path.isdir(data_path):
+            os.mkdir(data_path)
+
 
 setup(
     name='eDisGo',
@@ -10,9 +31,11 @@ setup(
     author_email='',
     description='A python package for distribution grid analysis and optimization',
     install_requires = [
-        'dingo>=0.1.0',
+        # 'dingo>=0.1.0',
         'networkx >=1.11',
         'shapely >= 1.5.12, <= 1.5.12',
         'pandas >=0.19.2, <=0.20.1'
-    ]
+    ],
+    cmdclass={
+      'install': InstallSetup}
 )
