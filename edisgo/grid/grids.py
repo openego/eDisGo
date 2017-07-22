@@ -6,10 +6,10 @@ class Grid:
 
     Attributes
     ----------
-    _id: str
+    _id : :obj:`str`
         Identifier
-    _network : Network #TODO: ADD CORRECT REF
-        Network which this scenario is associated with
+    _network : :class:`~.grid.network.Network`
+        Network which this grid is associated with
     _voltage_nom : int
         Nominal voltage
     _peak_load : :obj:`float`
@@ -19,7 +19,7 @@ class Grid:
     _grid_district : :obj:`dict`
         Contains information about grid district (supplied region) of grid,
         format: #TODO: DEFINE FORMAT
-    _station : #TODO: ADD CORRECT REF
+    _station : :class:`~.grid.components.Station`
         The station the grid is fed by
     """
 
@@ -64,14 +64,15 @@ class MVGrid(Grid):
 
     Attributes
     ----------
-    _mv_disconn_points : :obj:`list` of #TODO: FINISH
+    _mv_disconn_points : :obj:`list` of
+        :class:`~.grid.components.MVDisconnectingPoint`
+
         Medium voltage disconnecting points = points where MV rings are split under
         normal operation conditions (= switch disconnectors in DINGO).
     _aggregates : :obj:`list` of :obj:`dict`
         This attribute is used for DINGO-imported data only. It contains data from
         DINGO's Aggregated Load Areas. Each list element represents one aggregated
         Load Area.
-    lv_grids: :obj:`list`
     """
 
     def __init__(self, **kwargs):
@@ -83,6 +84,8 @@ class MVGrid(Grid):
 
     @property
     def lv_grids(self):
+        """LV grids associated to this MV grid : :obj:`list` of
+        :class:`LVGrid`"""
         for lv_grid in self._lv_grids:
             yield lv_grid
 
@@ -190,8 +193,10 @@ class Graph(nx.Graph):
         of the in-going tuple (which is defined by the needs of networkX). If
         this changes, the code will break.
 
-        Copied from https://github.com/openego/dingo/blob/
-        ee237e37d4c228081e1e246d7e6d0d431c6dda9e/dingo/core/network/__init__.py
+        Copied from `Dingo <https://github.com/openego/dingo/blob/\
+            ee237e37d4c228081e1e246d7e6d0d431c6dda9e/dingo/core/network/\
+            __init__.py>`_.
+
         """
 
         # get edges with attributes

@@ -4,7 +4,8 @@ from edisgo.data.import_data import import_from_dingo
 class Network:
     """Defines the eDisGo Network
 
-    Used as container for all data related to a single MV grid.
+    Used as container for all data related to a single
+    :class:`~.grid.grids.MVGrid`.
 
     Attributes
     ----------
@@ -18,10 +19,8 @@ class Network:
         Metadata of Network such as ?
     _data_source : :obj:`str`
         Data Source of grid data (e.g. "dingo")
-    _scenario : Scenario
+    _scenario : :class:`~.grid.grids.Scenario`
         Scenario which is used for calculations
-    _mv_grid : MVGrid
-        Medium voltage (MV) grid
     """
 
     def __init__(self, **kwargs):
@@ -35,10 +34,10 @@ class Network:
 
     @classmethod
     def import_from_dingo(cls, file):
-        """Import grid data from DINGO grid data saved as pickle
+        """Import grid data from DINGO file
 
-        This includes grid elements such as lines, transformers, branch tees, loads and generators.
-
+        For details see
+        :func:`edisgo.data.import_data.import_from_dingo`
         """
 
         # create the network instance
@@ -75,6 +74,10 @@ class Network:
 
     @property
     def mv_grid(self):
+        """:class:`~.grid.grids.MVGrid` : Medium voltage (MV) grid
+
+        Retrieve the instance of the loaded MV grid
+        """
         return self._mv_grid
 
     @mv_grid.setter
@@ -88,18 +91,20 @@ class Network:
 class Scenario:
     """Defines an eDisGo scenario
 
-    It contains parameters and links to further data that is used for calculations within eDisGo.
+    It contains parameters and links to further data that is used for
+    calculations within eDisGo.
 
     Attributes
     ----------
     _name : :obj:`str`
         Scenario name (e.g. "feedin case weather 2011")
-    _network : Network
+    _network : :class:~.grid.network.Network`
         Network which this scenario is associated with
-    _timeseries : :obj:`list` of TimeSeries
+    _timeseries : :obj:`list` of :class:`~.grid.grids.TimeSeries`
         Time series associated to a scenario
-    _etrago_specs : ETraGoSpecs
-        Specifications which are to be fulfilled at transition point (HV-MV substation)
+    _etrago_specs : :class:`~.grid.grids.ETraGoSpecs`
+        Specifications which are to be fulfilled at transition point (HV-MV
+        substation)
     _pfac_mv_gen : :obj:`float`
         Power factor for medium voltage generators
     _pfac_mv_load : :obj:`float`
@@ -133,19 +138,40 @@ class TimeSeries:
     Attributes
     ----------
     _generation : :obj:`dict` of :obj:`dict` of :pandas:`pandas.Series<series>`
-        Time series of active power of generators for technologies and sub-technologies,
-        format: {tech_1: {sub-tech_1_1: timeseries_1_1, ..., sub-tech_1_n: timeseries_1_n},
+        Time series of active power of generators for technologies and
+        sub-technologies, format:
+
+        .. code-block:: python
+
+            {tech_1: {
+                sub-tech_1_1: timeseries_1_1,
+                ...,
+                sub-tech_1_n: timeseries_1_n},
                  ...,
-                 tech_m: {sub-tech_m_1: timeseries_m_1, ..., sub-tech_m_n: timeseries_m_n}
-                 }
+            tech_m: {
+                sub-tech_m_1: timeseries_m_1,
+                ...,
+                sub-tech_m_n: timeseries_m_n}
+            }
+
     _load : :obj:`dict` of :pandas:`pandas.Series<series>`
         Time series of active power of (cumulative) loads,
-        format: {sector_1: timeseries_1, ..., sector_n: timeseries_n}
+        format:
+
+        .. code-block:: python
+
+            {
+                sector_1:
+                    timeseries_1,
+                    ...,
+                sector_n:
+                    timeseries_n
+            }
 
     See also
     --------
-    edisgo.grid.components.Generator : Usage details of _generation
-    edisgo.grid.components.Load : Usage details of _load
+    edisgo.grid.components.Generator : Usage details of :meth:`_generation`
+    edisgo.grid.components.Load : Usage details of :meth:`_load`
     """
 
     def __init__(self, **kwargs):
@@ -156,8 +182,8 @@ class TimeSeries:
 class ETraGoSpecs:
     """Defines an eTraGo object used in project open_eGo
 
-    Contains specifications which are to be fulfilled at transition point (superiorHV-MV substation)
-    for a specific scenario.
+    Contains specifications which are to be fulfilled at transition point
+    (superiorHV-MV substation) for a specific scenario.
 
     Attributes
     ----------
@@ -168,15 +194,31 @@ class ETraGoSpecs:
     _battery_capacity: :obj:`float`
         Capacity of virtual battery at Transition Point
     _battery_active_power : :pandas:`pandas.Series<series>`
-        Time series of active power the (virtual) battery (at Transition Point) is charged (negative)
-        or discharged (positive) with
+        Time series of active power the (virtual) battery (at Transition Point)
+        is charged (negative) or discharged (positive) with
     _curtailment : :obj:`dict` of :obj:`dict` of :pandas:`pandas.Series<series>`
-        #TODO: Is this really an active power value or a ratio (%) ?
-        Time series of active power curtailment of generators for technologies and sub-technologies,
-        format: {tech_1: {sub-tech_1_1: timeseries_1_1, ..., sub-tech_1_n: timeseries_1_n},
-                 ...,
-                 tech_m: {sub-tech_m_1: timeseries_m_1, ..., sub-tech_m_n: timeseries_m_n}
+        Time series of active power curtailment of generators for technologies
+        and sub-technologies, format::
+
+            {
+                tech_1: {
+                    sub-tech_1_1:
+                        timeseries_1_1,
+                        ...,
+                    sub-tech_1_n:
+                    timeseries_1_n
+                    },
+                ...,
+                tech_m: {
+                    sub-tech_m_1:
+                        timeseries_m_1,
+                        ...,
+                    sub-tech_m_n:
+                        timeseries_m_n
+                        }
                  }
+
+        .. TODO: Is this really an active power value or a ratio (%) ?
     """
 
     def __init__(self, **kwargs):
@@ -185,5 +227,3 @@ class ETraGoSpecs:
         self._battery_capacity = kwargs.get('battery_capacity', None)
         self._battery_active_power = kwargs.get('battery_active_power', None)
         self._curtailment = kwargs.get('curtailment', None)
-
-

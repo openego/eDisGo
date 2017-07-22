@@ -6,14 +6,10 @@ class Component:
 
     _id : :obj:`int`
         Unique ID
-    _geom : :shapely:`Shapely Point object<points>` or `Shapely LineString object<linestrings>`
-        Location as Shapely Point object
-    _grid : #TODO: ADD CORRECT REF
-        The MV or LV grid this component belongs to
 
     Notes
     -----
-    In case of a MV-LV voltage station, `_grid` refers to the LV grid
+    In case of a MV-LV voltage station, :attr:`grid` refers to the LV grid.
     """
     def __init__(self, **kwargs):
         self._id = kwargs.get('id', None)
@@ -22,8 +18,14 @@ class Component:
 
     @property
     def geom(self):
-        """Provide access to geom"""
+        """:shapely:`Shapely Point object<points>` or
+        :shapely:`Shapely LineString object<linestrings>` : Location of the
+        :class:`Component` as Shapely Point or LineString"""
         return self._geom
+
+    @property
+    def grid(self):
+        """:class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid` : The MV or LV grid this component belongs to"""
 
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
@@ -36,8 +38,6 @@ class Station(Component):
 
     Attributes
     ----------
-    _transformers : :obj:`list` of Transformer
-        Transformers located in station
     """
 
     def __init__(self, **kwargs):
@@ -47,6 +47,8 @@ class Station(Component):
 
     @property
     def transformers(self):
+        """:obj:`list` of :class:`Transformer` : Transformers located in
+        station"""
         return self._transformers
 
 
@@ -74,14 +76,6 @@ class Load(Component):
     ----------
     _timeseries : :pandas:`pandas.Series<series>`
         Contains time series for load
-
-    _consumption : :obj:`dict`
-        Contains annual consumption in
-        #TODO: To implement consumption, DINGO #208 has to be solved first:
-
-    Notes
-    -----
-    The
     """
 
     def __init__(self, **kwargs):
@@ -93,20 +87,34 @@ class Load(Component):
     def timeseries(self):
         """Return time series of load
 
-        It returns the actual time series used in power flow analysis. If `_timeseries` is not None,
-        it is returned. Otherwise, timeseries() looks for time series of the according sector in
-        `TimeSeries` object.
+        It returns the actual time series used in power flow analysis. If
+        :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
+        :meth:`timeseries()` looks for time series of the according sector in
+        :class:`~.grid.network.TimeSeries` object.
 
         See also
         --------
         edisgo.network.TimeSeries : Details of global TimeSeries
-
-        #TODO: CHECK REFS IN TEXT -> MAKE LINKS WORK
         """
         raise NotImplementedError
 
     @property
     def consumption(self):
+        """:obj:`dict` : Annual consumption per sector in kWh
+
+        Sectors
+
+            - retail/industrial
+            - agricultural
+            - residential
+
+        The format of the :obj:`dict` is as follows::
+
+            {
+                'residential': 453.4
+            }
+
+        """
         return self._consumption
 
     @consumption.setter
@@ -119,21 +127,19 @@ class Generator(Component):
 
     Attributes
     ----------
-    _nominal_capacity : :obj:`float`
-        Nominal generation capacity
-    _type : :obj:`str`
-        Technology type (e.g. 'solar')
-    _subtype : :obj:`str`
-        Technology subtype (e.g. 'solar rooftop')
     _timeseries : :pandas:`pandas.Series<series>`
         Contains time series for generator
 
     Notes
     -----
-    The attributes `_type` and `_subtype` have to match the corresponding types in Timeseries to
+    The attributes :attr:`_type` and :attr:`_subtype` have to match the
+    corresponding types in :class:`~.grid.network.Timeseries` to
     allow allocation of time series to generators.
 
-    #TODO: CHECK REFS IN TEXT -> MAKE LINKS WORK
+    See also
+    --------
+    edisgo.network.TimeSeries : Details of global
+        :class:`~.grid.network.TimeSeries`
     """
 
     def __init__(self, **kwargs):
@@ -147,28 +153,27 @@ class Generator(Component):
     def timeseries(self):
         """Return time series of generator
 
-        It returns the actual time series used in power flow analysis. If `_timeseries` is not None,
-        it is returned. Otherwise, timeseries() looks for time series of the according weather and
-        type of technology in `TimeSeries` object and considers for predefined curtailment as well.
-
-        See also
-        --------
-        edisgo.network.TimeSeries : Details of global TimeSeries
-
-        #TODO: CHECK REFS IN TEXT -> MAKE LINKS WORK
+        It returns the actual time series used in power flow analysis. If
+        :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
+        :meth:`timeseries` looks for time series of the according weather cell
+        and type of technology in :class:`~.grid.network.TimeSeries` object and
+        considers for predefined curtailment as well.
         """
         raise NotImplementedError
 
     @property
     def type(self):
+        """:obj:`str` : Technology type (e.g. 'solar')"""
         return self._type
 
     @property
     def subtype(self):
+        """:obj:`str` : Technology subtype (e.g. 'solar_roof_mounted')"""
         return self._subtype
 
     @property
     def nominal_capacity(self):
+        """:obj:`float` : Nominal generation capacity"""
         return self._nominal_capacity
 
 
@@ -213,7 +218,8 @@ class MVDisconnectingPoint(Component):
 class BranchTee(Component):
     """Branch tee object
 
-    A branch tee is used to branch off a line to connect another node (german: Abzweigmuffe)
+    A branch tee is used to branch off a line to connect another node
+    (german: Abzweigmuffe)
     """
 
     def __init__(self, **kwargs):
@@ -246,7 +252,7 @@ class Line(Component):
         R        Resistance         Ohm/km float
         L        Inductance         mH/km  float
         C        Capacitance        uF/km  float
-        Source': data source        -      str
+        Source   Data source        -      str
         ============================================
 
     _length: float
@@ -260,7 +266,8 @@ class Line(Component):
 
     @property
     def geom(self):
-        """Provide LineString geometry of line object"""
+        """Provide :shapely:`Shapely LineString object<linestrings>` geometry of
+        :class:`Line`"""
         adj_nodes = self._grid._graph.nodes_from_line(self)
 
         return LineString([adj_nodes[0].geom, adj_nodes[1].geom])
