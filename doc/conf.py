@@ -78,6 +78,8 @@ extlinks = {'pandas':('http://pandas.pydata.org/pandas-docs/stable/api.html#%s',
                       'SQLAlchemy session object'),
             'shapely':('http://toblerity.org/shapely/manual.html#%s',
                       'Shapely object'),
+            'dingo':('https://dingo.readthedocs.io/en/dev/api/dingo.html#%s',
+                     'Dingo')
             }
 
 # Add any paths that contain templates here, relative to this directory.
