@@ -1,2 +1,5 @@
 sphinx_rtd_theme
 networkx >= 1.11
+
+--find-links https://github.com/openego/dingo/archive/477bf49534f93aca90ba3c5231fe726972343939.zip#egg=dingo-0.1.0-pre+git.477bf495
+dingo==0.1.0-pre+git.477bf495
