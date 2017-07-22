@@ -42,14 +42,17 @@ def import_from_dingo(file, network):
 
     dingo_mv_grid = dingo_nd._mv_grid_districts[0].mv_grid
 
-    # Import low-voltage grid data
-    # TODO: implement this!
-    # TODO: loop over LV grids and create list of LV grid object
-    # TODO: consider for potentially aggregated LAs while looping
-    lv_grids_ = _build_lv_grid(dingo_mv_grid)
-
     # Import medium-voltage grid data
     network.mv_grid =_build_mv_grid(dingo_mv_grid, network)
+
+    # Import low-voltage grid data
+    lv_grids, lv_station_mapping, lv_grid_mapping  = _build_lv_grid(dingo_mv_grid)
+
+    # Assign lv_grids to network
+    network.mv_grid.lv_grids = lv_grids
+
+    # Check data integrity
+    _validate_dingo_grid_import(network.mv_grid, dingo_mv_grid, lv_grid_mapping)
 
 
 def _build_lv_grid(dingo_grid):
@@ -160,10 +163,6 @@ def _build_lv_grid(dingo_grid):
 
                 # Put all LV grid to a list of LV grids
                 lv_grids.append(lv_grid)
-
-
-    # Check data integrity
-    _validate_dingo_lv_grid_import(lv_grids, dingo_grid, lv_grid_mapping)
 
     # TODO: don't forget to adapt lv stations creation in MV grid
     return lv_grids, lv_station_mapping, lv_grid_mapping
@@ -292,9 +291,6 @@ def _build_mv_grid(dingo_grid, network):
     # Attach aggregated to MV station
     _attach_aggregated(grid, aggregated, dingo_grid)
 
-    # check data integrity
-    data_integrity = _validate_dingo_mv_grid_import(grid, dingo_grid)
-
     return grid
 
 
@@ -366,8 +362,9 @@ def _determine_aggregated_nodes(la_centers):
                      {'ids': [gen.id_db],
                       'capacity': gen.capacity,
                       'type': gen.type}})
-        aggr['generation'][gen.v_level][gen.subtype]['ids'].append(gen.id_db)
-        aggr['generation'][gen.v_level][gen.subtype]['capacity'] += gen.capacity
+        else:
+            aggr['generation'][gen.v_level][gen.subtype]['ids'].append(gen.id_db)
+            aggr['generation'][gen.v_level][gen.subtype]['capacity'] += gen.capacity
 
         return aggr
 
@@ -405,12 +402,18 @@ def _determine_aggregated_nodes(la_centers):
     aggregated = []
     aggr_stations = []
 
+    generation_aggr = {}
+    for la in la_centers[0].grid.grid_district._lv_load_areas:
+        for lvgd in la._lv_grid_districts:
+            for gen in lvgd.lv_grid.generators():
+                if la.is_aggregated:
+                    generation_aggr.setdefault(gen.type, {})
+                    generation_aggr[gen.type].setdefault(gen.subtype, {'dingo': 0})
+                    generation_aggr[gen.type][gen.subtype].setdefault('dingo', 0)
+                    generation_aggr[gen.type][gen.subtype]['dingo'] += gen.capacity
+
     for la_center in la_centers:
         aggr = {'generation': {}, 'load': {}, 'aggregates': []}
-
-        # Determine aggregated generation in MV grid
-        for gen in la_center.grid.generators():
-            aggr = aggregate_generators(gen, aggr)
 
         # Determine aggregated generation in LV grid
         for lvgd in la_center.lv_load_area._lv_grid_districts:
@@ -495,6 +498,31 @@ def _attach_aggregated(grid, aggregated, dingo_grid):
         grid.graph.add_edge(grid.station, load, line, type='line')
 
 
+def _validate_dingo_grid_import(mv_grid, dingo_mv_grid, lv_grid_mapping):
+    """Cross-check imported data with original data source
+
+    Parameters
+    ----------
+    mv_grid: MVGrid
+        eDisGo MV grid instance
+    dingo_mv_grid: MVGridDingo
+        Dingo MV grid instance
+    lv_grid_mapping: dict
+        Translates Dingo LV grids to associated, newly created eDisGo LV grids
+    """
+
+    # Check number of components in MV grid
+    _validate_dingo_mv_grid_import(mv_grid, dingo_mv_grid)
+
+    # Check number of components in LV grid
+    _validate_dingo_lv_grid_import(mv_grid.lv_grids, dingo_mv_grid,
+                                   lv_grid_mapping)
+
+    # Check cumulative load and generation in MV grid district
+    _validate_load_generation(mv_grid, dingo_mv_grid)
+
+
+
 def _validate_dingo_mv_grid_import(grid, dingo_grid):
     """Verify imported data with original data from Dingo
 
@@ -518,7 +546,7 @@ def _validate_dingo_mv_grid_import(grid, dingo_grid):
 
     integrity_checks = ['branch_tee',
                         'disconnection_point', 'mv_transformer',
-                        'lv_station'#,'generator', 'load','line',
+                        'lv_station'#,'line',
                         ]
 
     data_integrity = {}
@@ -559,19 +587,13 @@ def _validate_dingo_mv_grid_import(grid, dingo_grid):
     #     [_ for _ in dingo_grid.graph_edges()
     #      if not _['branch'].connects_aggregated])
 
-    # Check number of generators outside aggregated LA
-    generators = grid.graph.nodes_by_attribute('generator')
-    # TODO: compare generators and loads via cumulative capacity
-
-    # Check number of loads outside aggregated LA
-
     # raise an error if data does not match
     for c in integrity_checks:
         if data_integrity[c]['edisgo'] != data_integrity[c]['dingo']:
             raise ValueError(
                 'Unequal number of objects for {c}. '
                 '\n\tDingo:\t{dingo_no}'
-                '\n\teDisgo:\t{edisgo_no}'.format(
+                '\n\teDisGo:\t{edisgo_no}'.format(
                     c=c,
                     dingo_no=data_integrity[c]['dingo'],
                     edisgo_no=data_integrity[c]['edisgo']))
@@ -612,7 +634,6 @@ def _validate_dingo_lv_grid_import(grids, dingo_grid, lv_grid_mapping):
         data_integrity.update({grid:{_: {'dingo': None, 'edisgo': None, 'msg': None}
                            for _ in integrity_checks}})
 
-        # TODO: check all above components
         # Check number of branch tees
         data_integrity[grid]['branch_tee']['dingo'] = len(
             lv_grid_mapping[grid]._cable_distributors)
@@ -651,9 +672,121 @@ def _validate_dingo_lv_grid_import(grids, dingo_grid, lv_grid_mapping):
                 raise ValueError(
                     'Unequal number of objects in grid {grid} for {c}. '
                     '\n\tDingo:\t{dingo_no}'
-                    '\n\teDisgo:\t{edisgo_no}'.format(
+                    '\n\teDisGo:\t{edisgo_no}'.format(
                         grid=grid,
                         c=c,
                         dingo_no=data_integrity[grid][c]['dingo'],
                         edisgo_no=data_integrity[grid][c]['edisgo']))
-    # TODO: later, define check for cumulative generation and load of MV and LV
+
+
+def _validate_load_generation(mv_grid, dingo_mv_grid):
+    """
+
+    Parameters
+    ----------
+    mv_grid
+    dingo_mv_grid
+
+    Notes
+    -----
+    Only loads in LV grids are compared as currently Dingo does not have MV
+    connected loads
+    """
+
+    decimal_places = 6
+    tol = 10 ** -decimal_places
+
+    sectors = ['retail', 'industrial', 'agricultural', 'residential']
+    consumption = {_: {'edisgo': 0, 'dingo':0} for _ in sectors}
+
+
+    # Collect eDisGo LV loads
+    for lv_grid in mv_grid.lv_grids:
+        for load in lv_grid.graph.nodes_by_attribute('load'):
+            for s in sectors:
+                consumption[s]['edisgo'] += load.consumption.get(s, 0)
+
+    # Collect Dingo LV loads
+    for la in dingo_mv_grid.grid_district._lv_load_areas:
+        for lvgd in la._lv_grid_districts:
+            for load in lvgd.lv_grid.loads():
+                for s in sectors:
+                    consumption[s]['dingo'] += load.consumption.get(s, 0)
+
+    # Compare cumulative load
+    for k, v in consumption.items():
+            if v['edisgo'] != v['dingo']:
+                raise ValueError(
+                    'Consumption for {sector} does not match! '
+                    '\n\tDingo:\t{dingo}'
+                    '\n\teDisGo:\t{edisgo}'.format(
+                        sector=k,
+                        dingo=v['dingo'],
+                        edisgo=v['edisgo']))
+
+    # Compare cumulative generation capacity
+    mv_gens = mv_grid.graph.nodes_by_attribute('generator')
+    lv_gens = []
+    [lv_gens.extend(_.graph.nodes_by_attribute('generator'))
+                    for _ in mv_grid.lv_grids]
+
+    generation = {}
+    generation_aggr = {}
+
+    # collect eDisGo cumulative generation capacity
+    for gen in mv_gens + lv_gens:
+        if gen in mv_grid.graph.neighbors(mv_grid.station):
+            generation_aggr.setdefault(gen.type, {})
+            generation_aggr[gen.type].setdefault(gen.subtype, {'edisgo': 0})
+            generation_aggr[gen.type][gen.subtype]['edisgo'] += gen.nominal_capacity
+        generation.setdefault(gen.type, {})
+        generation[gen.type].setdefault(gen.subtype, {'edisgo': 0})
+        generation[gen.type][gen.subtype]['edisgo'] += gen.nominal_capacity
+
+    # collect Dingo MV generation capacity
+    for gen in dingo_mv_grid.generators():
+        generation.setdefault(gen.type, {})
+        generation[gen.type].setdefault(gen.subtype, {'dingo': 0})
+        generation[gen.type][gen.subtype].setdefault('dingo', 0)
+        generation[gen.type][gen.subtype]['dingo'] += gen.capacity
+
+    # Collect Dingo LV generation capacity
+    for la in dingo_mv_grid.grid_district._lv_load_areas:
+        for lvgd in la._lv_grid_districts:
+            for gen in lvgd.lv_grid.generators():
+                if la.is_aggregated:
+                    generation_aggr.setdefault(gen.type, {})
+                    generation_aggr[gen.type].setdefault(gen.subtype, {'dingo': 0})
+                    generation_aggr[gen.type][gen.subtype].setdefault('dingo', 0)
+                    generation_aggr[gen.type][gen.subtype]['dingo'] += gen.capacity
+                generation.setdefault(gen.type, {})
+                generation[gen.type].setdefault(gen.subtype, {'dingo': 0})
+                generation[gen.type][gen.subtype].setdefault('dingo', 0)
+                generation[gen.type][gen.subtype]['dingo'] += gen.capacity
+
+    # Compare cumulative generation capacity
+    for k1, v1 in generation.items():
+        for k2, v2 in v1.items():
+            if abs(v2['edisgo'] - v2['dingo']) > tol:
+                raise ValueError(
+                    'Generation capacity of {type} {subtype} does not match! '
+                    '\n\tDingo:\t{dingo}'
+                    '\n\teDisGo:\t{edisgo}'.format(
+                        type=k1,
+                        subtype=k2,
+                        dingo=v2['dingo'],
+                        edisgo=v2['edisgo']))
+
+    # Compare aggregated generation capacity
+    for k1, v1 in generation_aggr.items():
+        for k2, v2 in v1.items():
+            if abs(v2['edisgo'] - v2['dingo']) > tol:
+                raise ValueError(
+                    'Aggregated generation capacity of {type} {subtype} does '
+                    'not match! '
+                    '\n\tDingo:\t{dingo}'
+                    '\n\teDisGo:\t{edisgo}'.format(
+                        type=k1,
+                        subtype=k2,
+                        dingo=v2['dingo'],
+                        edisgo=v2['edisgo']))
