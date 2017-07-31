@@ -61,7 +61,7 @@ def import_from_dingo(file, network):
     network.mv_grid =_build_mv_grid(dingo_mv_grid, network)
 
     # Import low-voltage grid data
-    lv_grids, lv_station_mapping, lv_grid_mapping  = _build_lv_grid(dingo_mv_grid)
+    lv_grids, lv_station_mapping, lv_grid_mapping  = _build_lv_grid(dingo_mv_grid, network)
 
     # Assign lv_grids to network
     network.mv_grid.lv_grids = lv_grids
@@ -70,7 +70,7 @@ def import_from_dingo(file, network):
     _validate_dingo_grid_import(network.mv_grid, dingo_mv_grid, lv_grid_mapping)
 
 
-def _build_lv_grid(dingo_grid):
+def _build_lv_grid(dingo_grid, network):
     """
     Build eDisGo LV grid from Dingo data
 
@@ -105,7 +105,8 @@ def _build_lv_grid(dingo_grid):
                     grid_district={
                         'geom': dingo_lv_grid.grid_district.geo_data,
                         'population': dingo_lv_grid.grid_district.population},
-                    voltage_nom=dingo_lv_grid.v_level)
+                    voltage_nom=dingo_lv_grid.v_level,
+                    network=network)
 
                 # Create LV station instances
                 station = Station(id=dingo_lv_grid._station.id_db,
