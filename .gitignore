@@ -13,6 +13,10 @@
 *.woff
 *.png
 *.css
+*.pkl
 
-# exclud locally built docs
+# exclude locally built docs
 doc/_html
+
+# exclude egg-info
+eDisGo.egg-info/
