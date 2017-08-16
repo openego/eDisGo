@@ -214,107 +214,60 @@ def reinforce_branches_voltage(grid, crit_nodes):
             str(len(main_line_reinforced))))
 
 
-def reinforce_branches_current(grid, crit_branches):
+def reinforce_branches_current(crit_lines):
     """ Reinforce MV or LV grid by installing a new branch/line type
     
     Parameters
     ----------
-        grid : GridDing0
-            Grid identifier.
-        crit_branches : dict
-            Dict of critical branches with max. relative overloading.
+        crit_lines : dict
+            Dict with critical lines as keys and their max. relative
+            overloading.
 
     Returns
     -------
     type 
-        #TODO: Description of return. Change type in the previous line accordingly
+        #TODO: Description of return.
         
     Notes
     -----
-        The branch type to be installed is determined per branch using the rel. overloading. According to [2]_ 
-        only cables are installed.
-        
-    See Also
-    --------
-    ding0.flexopt.check_tech_constraints.check_load :
-    ding0.flexopt.reinforce_measures.reinforce_branches_voltage :
+        Reinforce measures:
+        1. Install parallel line of the same type as the existing line
+        2. Remove old line and install as many parallel standard lines as
+           needed
+        The branch type to be installed is determined per branch using the rel.
+        overloading. According to [2]_  only cables are installed.
+
     """
-    # # load cable data, file_names and parameter
+    # load cable data, file_names and parameter
     # branch_parameters = grid.network.static_data['MV_cables']
-    # branch_parameters = branch_parameters[branch_parameters['U_n'] == grid.v_level].sort_values('I_max_th')
-    #
-    # branch_ctr = 0
-    #
-    # for branch, rel_overload in crit_branches.items():
-    #     try:
-    #         type = branch_parameters.ix[branch_parameters[branch_parameters['I_max_th'] >=
-    #                                     branch['branch'].type['I_max_th'] * rel_overload]['I_max_th'].idxmin()]
-    #         branch['branch'].type = type
-    #         branch_ctr += 1
-    #     except:
-    #         logger.warning('Branch {} could not be reinforced (current '
-    #                        'issues) as there is no appropriate cable type '
-    #                        'available. Original type is retained.'.format(
-    #             branch))
-    #         pass
-    #
-    # if branch_ctr:
-    #     logger.info('==> {} branches were reinforced.'.format(str(branch_ctr)))
+    # branch_parameters = branch_parameters[branch_parameters['U_n'] ==
+    #                                       grid.v_level].sort_values('I_max_th')
+    # ToDo: get parameters from config
+    standard_line = pd.Series({
+        'U_n': 400, 'I_max_th': 270, 'R': 0.1, 'L': 0.28, 'C': None},
+         name='NAYY 4x150')
 
+    for crit_line, rel_overload in crit_lines.items():
+        if crit_line._type.name == standard_line.name:
+            # check how many parallel standard lines are needed
+            number_parallel_lines = math.ceil(crit_line._type['I_max_th'] *
+                                              rel_overload /
+                                              standard_line['I_max_th'])
+            # ToDo: set number of parallel lines to number_parallel_lines
+            pass
+        else:
+            # check if parallel line of the same kind is sufficient
+            if (crit_line._type['I_max_th'] * rel_overload <=
+                        crit_line._type['I_max_th'] * 2):
+                # ToDo: set number of parallel lines to two
+                pass
+            else:
+                number_parallel_lines = math.ceil(crit_line._type['I_max_th'] *
+                                                  rel_overload /
+                                                  standard_line['I_max_th'])
+                crit_line._type = standard_line.copy()
+                # ToDo: set number of parallel lines to number_parallel_lines
 
-def reinforce_lv_branches_overloading(grid, crit_branches):
-    """
-    Choose appropriate cable type for branches with line overloading
-
-    Parameters
-    ----------
-    grid : ding0.core.network.grids.LVGridDing0
-        Ding0 LV grid object
-    crit_branches : list
-        List of critical branches incl. its line loading
-
-    Notes
-    -----
-    If maximum size cable is not capable to resolve issue due to line
-    overloading largest available cable type is assigned to branch.
-
-    Returns
-    -------
-
-        unsolved_branches : :obj:`list`
-            List of braches no suitable cable could be found
-    """
-    # unsolved_branches = []
-    #
-    # cable_lf = cfg_ding0.get('assumptions',
-    #                          'load_factor_lv_cable_lc_normal')
-    #
-    # cables = grid.network.static_data['LV_cables']
-    #
-    # # resolve overloading issues for each branch segment
-    # for branch in crit_branches:
-    #     I_max_branch_load = branch['s_max'][0]
-    #     I_max_branch_gen = branch['s_max'][1]
-    #     I_max_branch = max([I_max_branch_load, I_max_branch_gen])
-    #
-    #     suitable_cables = cables[(cables['I_max_th'] * cable_lf)
-    #                       > I_max_branch]
-    #
-    #     if not suitable_cables.empty:
-    #         cable_type = suitable_cables.ix[suitable_cables['I_max_th'].idxmin()]
-    #         branch['branch'].type = cable_type
-    #         crit_branches.remove(branch)
-    #     else:
-    #         cable_type_max = cables.ix[cables['I_max_th'].idxmax()]
-    #         unsolved_branches.append(branch)
-    #         branch['branch'].type = cable_type_max
-    #         logger.error("No suitable cable type could be found for {branch} "
-    #                       "with I_th_max = {current}. "
-    #                       "Cable of type {cable} is chosen during "
-    #                       "reinforcement.".format(
-    #             branch=branch['branch'],
-    #             cable=cable_type_max.name,
-    #             current=I_max_branch
-    #         ))
-    #
-    # return unsolved_branches
+    if crit_lines:
+        logger.info('==> {} branches were reinforced.'.format(
+            str(len(crit_lines))))
