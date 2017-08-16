@@ -39,6 +39,8 @@ def reinforce_grid(network):
     ** NS: 20% Last, 85-100% Einspeisung, BM-Belastung 100%
     ** MS: 30% Last, 85-100% Einspeisung, BM-Belastung 100%
     * Spannungsbandaufteilung wie in Wuppertal Studie
+    * bei Spannungsproblemen am Trafo wird nicht Trafo ausgebaut, sondern
+      Leistung in der MS
 
     References
     ----------
@@ -48,9 +50,9 @@ def reinforce_grid(network):
 
     """
 
-
-    # STEP 1: reinforce transformers
-    # ToDo: get overlaoded stations (als dict mit maximaler Belastung? {StationXY: 640kVA})
+    # STEP 1: reinforce overloaded transformers
+    # ToDo: get overlaoded stations (als dict mit maximaler Belastung {StationXY: 640kVA})
+    # ToDo: check if MV/LV Trafo, warning if HV/MV Trafo
     # crit_branches, crit_stations = check_load(grid, mode)
     # critical_branches, critical_stations = get_critical_line_loading(grid)
 
@@ -62,106 +64,64 @@ def reinforce_grid(network):
     # reinforce substations
     extend_distribution_substation(overloaded_stations)
 
-    # # if branches or stations have been reinforced: run PF again to check
-    # # for voltage issues
-    # if crit_branches or crit_stations:
+    # if stations have been reinforced: run PF again and check if all
+    # overloading problems for all stations were solved
+    # if overloaded_stations:
     #     grid.network.run_powerflow(conn=None, method='onthefly')
-    #
-    #     # reinforcement of LV stations on voltage issues
-    #     crit_stations_voltage = [_ for _ in crit_nodes
-    #                              if isinstance(_['node'], LVStationDing0)]
-    #     if crit_stations_voltage:
-    #         extend_substation_voltage(crit_stations_voltage, grid_level='LV')
+    #     # check for overloaded stations
+    #     # give error message if any overloaded stations are left
 
-    # STEP 2: reinforce branches due to voltage problems
+    # STEP 2: reinforce branches due to overloading
 
-    # bei Spannungsproblemen am Trafo wird nicht Trafo ausgebaut, sondern
-    # Leistung in der MS
+    # ToDo: get overlaoded lines (als dict mit relativer maximaler Belastung {LineXY: 1.2})
+    # random overloaded line
+    overloaded_line = list(network.mv_grid.graph.graph_edges())[0]['line']
+    crit_lines = {overloaded_line: 2.3}
+
+    # do reinforcement
+    reinforce_branches_current(crit_lines)
+
+    # if lines have been reinforced: run PF again and check if all
+    # overloading problems for all lines were solved
+    # if crit_lines:
+    #     grid.network.run_powerflow(conn=None, method='onthefly')
+    #     # check for overloaded lines
+    #     # give error message if any overloaded lines are left
+
+
+    # STEP 3: reinforce branches due to voltage problems
 
     # crit_nodes = check_voltage(grid, mode)
     # crit_nodes_count_prev_step = len(crit_nodes)
-    #
-    # # as long as there are voltage issues, do reinforcement
-    # while crit_nodes:
-    #     # determine all branches on the way from HV-MV substation to crit. nodes
-    #     crit_branches_v = grid.find_and_union_paths(grid.station(), crit_nodes)
-    #
-    #     # do reinforcement
-    #     reinforce_branches_voltage(grid, crit_branches_v)
-    #
-    #     # run PF
-    #     grid.network.run_powerflow(conn=None, method='onthefly')
-    #
-    #     crit_nodes = check_voltage(grid, mode)
-    #
-    #     # if there are critical nodes left but no larger cable available, stop reinforcement
-    #     if len(crit_nodes) == crit_nodes_count_prev_step:
-    #         logger.warning('==> There are {0} branches that cannot be '
-    #                        'reinforced (no appropriate cable '
-    #                        'available).'.format(
-    #             len(grid.find_and_union_paths(grid.station(),
-    #                 crit_nodes))))
-    #         break
-    #
-    #     crit_nodes_count_prev_step = len(crit_nodes)
-    #
-    # if not crit_nodes:
-    #     logger.info('==> All voltage issues in {mode} grid could be '
-    #                 'solved using reinforcement.'.format(mode=mode))
 
-    # # get node with over-voltage
-    # crit_nodes = get_critical_voltage_at_nodes(grid)  # over-voltage issues
-    #
-    # crit_nodes_count_prev_step = len(crit_nodes)
-    #
-    # logger.info('{cnt_crit_branches} in {grid} have voltage issues'.format(
-    #     cnt_crit_branches=crit_nodes_count_prev_step,
-    #     grid=grid))
-    #
-    # # as long as there are voltage issues, do reinforcement
-    # while crit_nodes:
-    #     # determine all branches on the way from HV-MV substation to crit. nodes
-    #     crit_branches_v = grid.find_and_union_paths(
-    #         grid.station(),
-    #         [_['node'] for _ in crit_nodes])
-    #
-    #     # do reinforcement
-    #     reinforce_branches_voltage(grid, crit_branches_v, mode)
-    #
-    #     # get node with over-voltage
-    #     crit_nodes = get_critical_voltage_at_nodes(grid)
-    #
-    #     # if there are critical nodes left but no larger cable available, stop reinforcement
-    #     if len(crit_nodes) == crit_nodes_count_prev_step:
-    #         logger.warning('==> There are {0} branches that cannot be '
-    #                        'reinforced (no appropriate cable '
-    #                        'available).'.format(
-    #             len(crit_branches_v)))
-    #         break
-    #
-    #     crit_nodes_count_prev_step = len(crit_nodes)
-    #
-    # if not crit_nodes:
-    #     logger.info('==> All voltage issues in {mode} grid could be '
-    #                 'solved using reinforcement.'.format(mode=mode))
-    #
-    # STEP 3: reinforce branches due to overloading
-    # random overloaded line
-    # overloaded_line = list(network.mv_grid.graph.graph_edges())[0]['line']
-    # s_max_th = (3 ** 0.5 * overloaded_line._type['U_n'] *
-    #             overloaded_line._type['I_max_th'])
-    # s_max_th = s_max_th + 100  # invoke overload
-    # crit_branches = {overloaded_line: s_max_th}
+    # ToDo: get nodes with overvoltage (als dict mit grid und liste von Knoten {GridXY: [NodeA, NodeB]})
+    # ToDo: Knoten nach abfallender Spannung sortieren, damit pro Netz geprüft werden kann, ob nächster krit. Knoten schon in path enthalten ist
+    # random critical node
+    lv_grid = list(network.mv_grid.lv_grids)[0]
+    crit_nodes = {lv_grid: list(lv_grid.graph.nodes_by_attribute('load'))}
 
-    # do reinforcement
-    #reinforce_branches_current(network, crit_branches)
+    # as long as there are voltage issues, do reinforcement
+    while crit_nodes:
+        # for every grid in crit_nodes do reinforcement
+        for key in crit_nodes:
+            reinforce_branches_voltage(key, crit_nodes[key])
+        crit_nodes = {}
+        # # run PF
+        # grid.network.run_powerflow(conn=None, method='onthefly')
+        #
+        # crit_nodes = check_voltage(grid, mode) # for MV
+        # crit_nodes = get_critical_voltage_at_nodes(grid)  # for LV
+        # # if there are critical nodes left but no larger cable available, stop reinforcement
+        # if len(crit_nodes) == crit_nodes_count_prev_step:
+        #     logger.warning('==> There are {0} branches that cannot be '
+        #                    'reinforced (no appropriate cable '
+        #                    'available).'.format(
+        #         len(grid.find_and_union_paths(grid.station(),
+        #             crit_nodes))))
+        #     break
+        #
+        # crit_nodes_count_prev_step = len(crit_nodes)
 
-    # # reinforce overloaded lines by increasing size
-    # unresolved = reinforce_lv_branches_overloading(grid, critical_branches)
-    # logger.info(
-    #     "Out of {crit_branches} with overloading {unresolved} remain "
-    #     "with unresolved issues due to line overloading. "
-    #     "LV grid: {grid}".format(
-    #         crit_branches=len(critical_branches),
-    #         unresolved=len(unresolved),
-    #         grid=grid))
+    if not crit_nodes:
+        logger.info('==> All voltage issues could be '
+                    'solved using reinforcement.')
