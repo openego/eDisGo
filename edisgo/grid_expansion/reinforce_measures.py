@@ -205,8 +205,9 @@ def reinforce_branches_voltage(grid, crit_nodes):
                 crit_line._type = standard_line.copy()
 
         else:
-            logger.debug('==> {} branches were reinforced.'.format(
-                str(len(main_line_reinforced))))
+            logger.debug('==> Main line of node {} '.format(str(crit_node)) +
+                         'in LV grid {} '.format(str(crit_node._grid)) +
+                         'has already been reinforced.')
 
     if main_line_reinforced:
         logger.info('==> {} branches were reinforced.'.format(
