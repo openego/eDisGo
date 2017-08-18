@@ -263,6 +263,7 @@ def _build_mv_grid(dingo_grid, network):
                         ) for t in _.transformers()])
                 for _ in dingo_grid._graph.nodes()
                 if isinstance(_, LVStationDingo) and _ not in aggr_stations}
+
     grid.graph.add_nodes_from(stations.values(), type='lv_station')
 
     # Create HV-MV station add to graph
@@ -452,7 +453,7 @@ def _determine_aggregated_nodes(la_centers):
 
         # add elements to lists
         aggregated.append(aggr)
-        aggr_stations.append(stations)
+        aggr_stations.extend(stations)
 
 
     return aggregated, aggr_stations
@@ -592,7 +593,8 @@ def _validate_dingo_mv_grid_import(grid, dingo_grid):
         'lv_station'))
     data_integrity['lv_station']['dingo'] = len(
         [_ for _ in dingo_grid._graph.nodes()
-         if isinstance(_, LVStationDingo)])
+         if isinstance(_, LVStationDingo)
+         and not _.lv_load_area.is_aggregated])
 
     # Check number of lines outside aggregated LA
     # edges_w_la = grid.graph.graph_edges()
