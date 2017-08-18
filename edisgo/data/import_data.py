@@ -510,7 +510,9 @@ def _attach_aggregated(grid, aggregated, dingo_grid):
 
         load = Load(
             geom=grid.station.geom,
-            consumption=la['load'])
+            consumption=la['load'],
+            grid=grid,
+            id='_'.join(['Load_aggregated', repr(grid)]))
 
         grid.graph.add_node(load, type='load')
         grid.graph.add_edge(grid.station, load, line, type='line')

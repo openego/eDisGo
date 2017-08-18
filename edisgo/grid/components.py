@@ -272,3 +272,11 @@ class Line(Component):
 
         return LineString([adj_nodes[0].geom, adj_nodes[1].geom])
 
+    @property
+    def type(self):
+        return self._type
+
+    @property
+    def length(self):
+        return self._length
+
