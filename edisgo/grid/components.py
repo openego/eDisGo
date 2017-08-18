@@ -26,6 +26,7 @@ class Component:
     @property
     def grid(self):
         """:class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid` : The MV or LV grid this component belongs to"""
+        return self._grid
 
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
