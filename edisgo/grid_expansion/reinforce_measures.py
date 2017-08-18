@@ -172,8 +172,7 @@ def reinforce_branches_voltage(grid, crit_nodes):
                 # if critical line is already a standard line install one more
                 # parallel line
                 if crit_line._type.name == 'NAYY 4x150':
-                    # ToDo: increment number of parallel lines
-                    pass
+                    crit_line._quantity = crit_line._quantity + 1
 
                 # if critical line is not yet a standard line check if one or
                 # several standard lines are needed
@@ -186,6 +185,7 @@ def reinforce_branches_voltage(grid, crit_nodes):
                     else:
                         # ToDo: wie viele Standardbetriebsmittel?
                         crit_line._type = standard_line.copy()
+                        crit_line._quantity = 2
 
             # if node_2_3 is not a representative, disconnect line
             else:
@@ -253,20 +253,18 @@ def reinforce_branches_current(crit_lines):
             number_parallel_lines = math.ceil(crit_line._type['I_max_th'] *
                                               rel_overload /
                                               standard_line['I_max_th'])
-            # ToDo: set number of parallel lines to number_parallel_lines
-            pass
+            crit_line._quantity = number_parallel_lines
         else:
             # check if parallel line of the same kind is sufficient
             if (crit_line._type['I_max_th'] * rel_overload <=
                         crit_line._type['I_max_th'] * 2):
-                # ToDo: set number of parallel lines to two
-                pass
+                crit_line._quantity = 2
             else:
                 number_parallel_lines = math.ceil(crit_line._type['I_max_th'] *
                                                   rel_overload /
                                                   standard_line['I_max_th'])
                 crit_line._type = standard_line.copy()
-                # ToDo: set number of parallel lines to number_parallel_lines
+                crit_line._quantity = number_parallel_lines
 
     if crit_lines:
         logger.info('==> {} branches were reinforced.'.format(
