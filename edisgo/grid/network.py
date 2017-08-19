@@ -116,13 +116,15 @@ class Network:
             components = interfaces.combine_mv_and_lv(mv_components,
                                                       lv_components)
         elif mode is 'mv':
-            interfaces.mv_to_pypsa(self)
+            mv_components = interfaces.mv_to_pypsa(self)
+            mv_components = interfaces.attach_aggregated_lv_components(
+                self,
+                mv_components)
         elif mode is 'lv':
             interfaces.lv_to_pypsa(self)
         else:
             raise ValueError("Provide proper mode or leave it empty to export "
                              "entire grid topology.")
-
 
     def __repr__(self):
         return 'Network ' + self._id

@@ -64,9 +64,10 @@ def mv_to_pypsa(network):
 
     # create dataframes representing loads and associated buses
     for lo in loads:
-        bus_name = '_'.join(['Bus', repr(load)])
-        load['name'].append(repr(lo))
-        load['bus'].append(bus_name)
+        bus_name = '_'.join(['Bus', repr(lo)])
+        for sector, val in lo.consumption.items():
+            load['name'].append('_'.join([repr(lo), sector]))
+            load['bus'].append(bus_name)
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(lo.grid.voltage_nom)
@@ -168,17 +169,88 @@ def mv_to_pypsa(network):
     return components
 
 
-def attach_aggregated_lv_components():
+def attach_aggregated_lv_components(network, components):
     """
     This function aggregates LV load and generation at LV stations
 
-    Use this function if you aim for MV calculation only
+    Use this function if you aim for MV calculation only. The according
+    DataFrames of `components` are extended by load and generators representing
+    these aggregated repesting the technology type.
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+    components : dict of :pandas:`pandas.DataFrame<dataframe>`
+        PyPSA components in tabular format
 
     Returns
     -------
-
+    dict of :pandas:`pandas.DataFrame<dataframe>`
+        The dictionary components passed to the function is returned altered.
     """
-    pass
+    generators = {}
+
+    loads = {}
+
+    # collect aggregated generation capacity by type and subtype
+    # collect aggregated load grouped by sector
+    for lv_grid in network.mv_grid.lv_grids:
+        generators.setdefault(lv_grid, {})
+        for gen in lv_grid.graph.nodes_by_attribute('generator'):
+            generators[lv_grid].setdefault(gen.type, {})
+            generators[lv_grid][gen.type].setdefault(gen.subtype, {})
+            generators[lv_grid][gen.type][gen.subtype].setdefault(
+                'capacity', 0)
+            generators[lv_grid][gen.type][gen.subtype][
+                'capacity'] += gen.nominal_capacity
+            generators[lv_grid][gen.type][gen.subtype].setdefault(
+                'name',
+                '_'.join([gen.type,
+                          gen.subtype,
+                          'aggregated',
+                          'LV_grid',
+                          str(lv_grid.id)]))
+        loads.setdefault(lv_grid, {})
+        for lo in lv_grid.graph.nodes_by_attribute('load'):
+            for sector, val in lo.consumption.items():
+                loads[lv_grid].setdefault(sector, 0)
+                loads[lv_grid][sector] += val
+
+
+    # define dict for DataFrame creation of aggr. generation and load
+    generator = {'name': [],
+                 'bus': [],
+                 'control': [],
+                 'p_nom': [],
+                 'type': []}
+
+    load = {'name': [], 'bus': []}
+
+    # fill generators dictionary for DataFrame creation
+    for lv_grid_obj, lv_grid in generators.items():
+        for _, gen_type in lv_grid.items():
+            for _, gen_subtype in gen_type.items():
+                generator['name'].append(gen_subtype['name'])
+                generator['bus'].append(
+                    '_'.join(['Bus', 'secondary', repr(lv_grid_obj.station)]))
+                generator['control'].append('PQ')
+                generator['p_nom'].append(gen_subtype['capacity'])
+                generator['type'].append("")
+
+    # fill loads dictionary for DataFrame creation
+    for lv_grid_obj, lv_grid in loads.items():
+        for sector, val in lv_grid.items():
+            load['name'].append('_'.join(['Load', sector, repr(lv_grid_obj)]))
+            load['bus'].append(
+                '_'.join(['Bus', 'secondary', repr(lv_grid_obj.station)]))
+
+    components['Generator'] = pd.concat(
+        [components['Generator'],pd.DataFrame(generator).set_index('name')])
+    components['Load'] = pd.concat(
+        [components['Load'], pd.DataFrame(load).set_index('name')])
+
+    return components
 
 
 def lv_to_pypsa():
