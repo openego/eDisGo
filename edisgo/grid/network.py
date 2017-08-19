@@ -1,4 +1,5 @@
 from edisgo.data.import_data import import_from_dingo
+from ..utils import interfaces
 
 
 class Network:
@@ -83,6 +84,45 @@ class Network:
     @mv_grid.setter
     def mv_grid(self, mv_grid):
         self._mv_grid = mv_grid
+
+    def pypsa(self, mode=None):
+        """
+        Convert NetworkX based grid topology representation to PyPSA grid
+        representation based on :pandas:`pandas.DataFrame<dataframe>`
+
+        Parameters
+        ----------
+        mode: str
+            Allows to toggle between converting the whole grid topology
+            (MV + LV), only MV or only LV. Therefore, either specify `mode='mv'`
+            for the conversion of the MV grid topology or `mode='lv'`
+            for the conversion of the LV grid topology.
+            Defaults to None which equals converting MV + LV.
+
+        Notes
+        -----
+        Tell about
+         * How power plants are modeled, if possible use a link
+         * Recommendations for further development
+         * Where to find and adjust power flow analysis defining parameters
+
+        Returns
+        -------
+        .. TODO: describe return
+        """
+        if mode is None:
+            mv_components = interfaces.mv_to_pypsa(self)
+            lv_components = interfaces.lv_to_pypsa(self)
+            components = interfaces.combine_mv_and_lv(mv_components,
+                                                      lv_components)
+        elif mode is 'mv':
+            interfaces.mv_to_pypsa(self)
+        elif mode is 'lv':
+            interfaces.lv_to_pypsa(self)
+        else:
+            raise ValueError("Provide proper mode or leave it empty to export "
+                             "entire grid topology.")
+
 
     def __repr__(self):
         return 'Network ' + self._id

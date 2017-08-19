@@ -69,6 +69,14 @@ class Transformer(Component):
         self._voltage_op = kwargs.get('voltage_op', None)
         self._type = kwargs.get('type', None)
 
+    @property
+    def voltage_op(self):
+        return self._voltage_op
+
+    @property
+    def type(self):
+        return self._type
+
 
 class Load(Component):
     """Load object

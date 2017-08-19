@@ -3,6 +3,9 @@ import os
 
 network = Network.import_from_dingo(os.path.join('data', 'dingo_grids__3545.pkl'))
 
+# export to pypsa
+network.pypsa()
+
 # MV generators
 gens = network.mv_grid.graph.nodes_by_attribute('generator')
 print('Generators in MV grid incl. aggregated generators from MV and LV')
