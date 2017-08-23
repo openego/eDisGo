@@ -8,13 +8,14 @@ import logging
 logger = logging.getLogger('ding0')
 
 
-def reinforce_grid(network):
+def reinforce_grid(network, results):
     """ Evaluates grid reinforcement needs and performs measures. This function
         is the parent function for all grid reinforcements.
 
     Parameters
     ----------
     network: edisgo network object
+    results: edisgo results object
 
     Notes
     -----
