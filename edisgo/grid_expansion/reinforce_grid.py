@@ -1,20 +1,20 @@
-from .check_tech_constraints import check_load, check_voltage, \
-    get_critical_line_loading, get_critical_voltage_at_nodes
+from .check_tech_constraints import check_line_load, check_station_load
+    #check_voltage, get_critical_line_loading, get_critical_voltage_at_nodes
 from .reinforce_measures import reinforce_branches_current, \
-    reinforce_branches_voltage, reinforce_lv_branches_overloading, \
-    extend_distribution_substation
+    reinforce_branches_voltage, extend_distribution_substation
 import logging
 
 logger = logging.getLogger('ding0')
 
 
-def reinforce_grid(network):
+def reinforce_grid(network, results):
     """ Evaluates grid reinforcement needs and performs measures. This function
         is the parent function for all grid reinforcements.
 
     Parameters
     ----------
     network: edisgo network object
+    results: edisgo results object
 
     Notes
     -----
@@ -53,7 +53,8 @@ def reinforce_grid(network):
     # STEP 1: reinforce overloaded transformers
     # ToDo: get overlaoded stations (als dict mit maximaler Belastung {StationXY: 640kVA})
     # ToDo: check if MV/LV Trafo, warning if HV/MV Trafo
-    # crit_branches, crit_stations = check_load(grid, mode)
+    #crit_lines = check_line_load(network, results.pfa_edges)
+    #overloaded_stations = check_station_load(network, results.pfa_edges)
     # critical_branches, critical_stations = get_critical_line_loading(grid)
 
     # random overloaded station
