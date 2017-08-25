@@ -69,6 +69,9 @@ def import_from_dingo(file, network):
     # Check data integrity
     _validate_dingo_grid_import(network.mv_grid, dingo_mv_grid, lv_grid_mapping)
 
+    # Set data source
+    network.set_data_source('grid', 'dingo')
+
 
 def _build_lv_grid(dingo_grid, network):
     """
