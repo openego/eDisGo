@@ -102,8 +102,12 @@ class Network:
         Notes
         -----
         Tell about
+         * How the PyPSA interface is constructed, i.e. splitted in MV and LV
+            with combination or attachment of aggregated LV load and generation
+            to MV part
          * How power plants are modeled, if possible use a link
-         * Recommendations for further development
+         * Recommendations for further development:
+            https://github.com/openego/eDisGo/issues/18
          * Where to find and adjust power flow analysis defining parameters
 
         Returns
@@ -120,6 +124,8 @@ class Network:
             mv_components = interfaces.attach_aggregated_lv_components(
                 self,
                 mv_components)
+            timeseries_load = interfaces.pypsa_load_timeseries(self,
+                                                               'p')
         elif mode is 'lv':
             interfaces.lv_to_pypsa(self)
         else:

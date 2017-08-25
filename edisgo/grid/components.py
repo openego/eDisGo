@@ -1,4 +1,6 @@
 from shapely.geometry import LineString
+from math import acos, tan
+import pandas as pd
 
 
 class Component:
@@ -89,10 +91,34 @@ class Load(Component):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        self._timeseries = kwargs.get('timeseries', None)
+        # self._timeseries = kwargs.get('timeseries', None)
         self._consumption = kwargs.get('consumption', None)
 
+        # TODO: replace below dummy timeseries
+        hours_of_the_year = 8760
+
+        cos_phi = 0.95
+
+        q_factor = tan(acos(0.95))
+
+        avg_hourly_load = {k: v / hours_of_the_year
+                           for k, v in self.consumption.items()}
+
+        rng = pd.date_range('1/1/2011', periods=hours_of_the_year, freq='H')
+
+        ts_dict_p = {
+            (k, 'p'): [avg_hourly_load[k] * (
+            1 - q_factor)] * hours_of_the_year
+            for k in avg_hourly_load.keys()}
+        ts_dict_q = {
+            (k, 'q'): [avg_hourly_load[k] * (
+                q_factor)] * hours_of_the_year
+            for k in avg_hourly_load.keys()}
+        ts_dict = {**ts_dict_p, **ts_dict_q}
+
+        self._timeseries = pd.DataFrame(ts_dict, index=rng)
+
+    @property
     def timeseries(self):
         """Return time series of load
 
@@ -105,7 +131,25 @@ class Load(Component):
         --------
         edisgo.network.TimeSeries : Details of global TimeSeries
         """
-        raise NotImplementedError
+
+        return self._timeseries
+
+    # @property
+    def pypsa_timeseries(self, sector, attr):
+        """Return time series in PyPSA format
+
+        Parameters
+        ----------
+        sector : str
+            Sectoral load that is of interest. Valid sectors {residential,
+            retail, agricultural, industrial}
+        attr : str
+            Attribute name (PyPSA conventions). Choose from {p_set, q_set}
+        """
+
+        pypsa_component_name = '_'.join([repr(self), sector])
+
+        return self._timeseries[(sector, attr)]
 
     @property
     def consumption(self):

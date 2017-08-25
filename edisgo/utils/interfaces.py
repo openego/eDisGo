@@ -273,3 +273,59 @@ def combine_mv_and_lv():
 
     """
     pass
+
+
+def pypsa_load_timeseries(network, attr, mode=None):
+    """Timeseries in PyPSA compatible format for load instances
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+    attr : str
+        Either use 'p' or 'q'
+    mode : str, optional
+        Specifically retrieve load time series for MV or LV grid level or both.
+        Either choose 'mv' or 'lv'.
+        Defaults to None, which returns both timeseries for MV and LV in a
+        single DataFrame.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Time series table in PyPSA format
+    """
+    mv_load_timeseries_p = []
+    mv_load_timeseries_q = []
+    lv_load_timeseries_p = []
+    lv_load_timeseries_q = []
+
+    # add MV grid loads
+    if mode is 'mv' or mode is None:
+        for load in network.mv_grid.graph.nodes_by_attribute('load'):
+            for sector in list(load.consumption.keys()):
+                mv_load_timeseries_q.append(
+                    load.pypsa_timeseries(sector, 'q').rename(
+                        '_'.join([repr(load), sector])).to_frame())
+                mv_load_timeseries_p.append(
+                    load.pypsa_timeseries(sector, 'p').rename(
+                        '_'.join([repr(load), sector])).to_frame())
+
+    # add LV grid's loads
+    if mode is 'lv' or mode is None:
+        for lv_grid in network.mv_grid.lv_grids:
+            for load in lv_grid.graph.nodes_by_attribute('load'):
+                for sector in list(load.consumption.keys()):
+                    lv_load_timeseries_q.append(
+                        load.pypsa_timeseries(sector, 'q').rename(
+                            '_'.join([repr(load), sector])).to_frame())
+                    lv_load_timeseries_p.append(
+                        load.pypsa_timeseries(sector, 'p').rename(
+                            '_'.join([repr(load), sector])).to_frame())
+
+    load_df_p = pd.concat(mv_load_timeseries_p + lv_load_timeseries_p, axis=1)
+    load_df_q = pd.concat(mv_load_timeseries_q + lv_load_timeseries_q, axis=1)
+
+    # TODO: maybe names of load object have to be changed to distinguish between different grids
+
+    return load_df_p, load_df_q
