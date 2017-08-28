@@ -1,4 +1,5 @@
-from edisgo.data.import_data import import_from_dingo
+from edisgo.tools import config
+from edisgo.data.import_data import import_from_dingo, import_generators
 import pandas as pd
 
 
@@ -12,10 +13,6 @@ class Network:
     ----------
     _id : :obj:`str`
         Name of network
-    _equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
-        Electrical equipment such as lines and transformers
-    _config : ???
-        #TODO: TBD
     _metadata : :obj:`dict`
         Metadata of Network such as ?
     _data_sources : :obj:`dict` of :obj:`str`
@@ -23,18 +20,49 @@ class Network:
         Keys: 'grid', 'generators', ?
     _scenario : :class:`~.grid.grids.Scenario`
         Scenario which is used for calculations
+    _config :
+        #TODO: TBD
+    _equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+        Electrical equipment such as lines and transformers
     # TODO: Add remaining attributes
     """
 
     def __init__(self, **kwargs):
         self._id = kwargs.get('id', None)
-        self._equipment_data = kwargs.get('equipment_data', None)
-        self._config = kwargs.get('config', None)
         self._metadata = kwargs.get('metadata', None)
         self._data_sources = kwargs.get('data_sources', {})
         self._scenario = kwargs.get('scenario', None)
         self._mv_grid = kwargs.get('mv_grid', None)
         self.results = Results()
+
+        self._config = self._load_config()
+        self._equipment_data = self._load_equipment_data()
+
+    @staticmethod
+    def _load_config():
+        """Load config files
+
+        Returns
+        -------
+        config object
+        """
+
+        config.load_config('config_db_tables.cfg')
+        config.load_config('config_data.cfg')
+        config.load_config('config_scenario.cfg')
+
+        return config.cfg.sections()
+
+    @staticmethod
+    def _load_equipment_data():
+        """Load equipment data for transformers, cables etc.
+
+        Returns
+        -------
+        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+        """
+
+        raise NotImplementedError
 
     @classmethod
     def import_from_dingo(cls, file):
