@@ -49,6 +49,7 @@ class Network:
 
         config.load_config('config_db_tables.cfg')
         config.load_config('config_data.cfg')
+        config.load_config('config_misc.cfg')
         config.load_config('config_scenario.cfg')
 
         return config.cfg._sections
