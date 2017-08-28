@@ -76,17 +76,17 @@ class Network:
         network = cls()
 
         # call the importer
-        import_from_dingo(file, network)
+        import_from_dingo(file=file, network=network)
 
         return network
 
     def import_generators(self):
-        """Imports generators
+        """Import generators
 
-        TBD
-
+        For details see
+        :func:`edisgo.data.import_data.import_generators`
         """
-        raise NotImplementedError
+        return import_generators(network=self)
 
     def analyze(self):
         """Analyzes the grid
