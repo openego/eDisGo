@@ -921,21 +921,32 @@ def _import_genos_from_oedb(network):
         orm_re_generators = supply.__getattribute__(orm_re_generators_name)
 
         # set version condition
-        orm_conv_generators_version = orm_conv_generators.version == data_version
-        orm_conv_generators_version = orm_re_generators.version == data_version
+        orm_conv_generators_version = orm_conv_generators.columns.version == data_version
+        orm_conv_generators_version = orm_re_generators.columns.version == data_version
 
     # import conventional generators
 
+    # build query
     generators_sqla = session.query(
-        orm_conv_generators.id,
-        orm_conv_generators.subst_id,
-        orm_conv_generators.la_id,
-        orm_conv_generators.capacity,
-        orm_conv_generators.type,
-        orm_conv_generators.voltage_level,
-        orm_conv_generators.fuel,
+        orm_conv_generators.columns.id,
+        orm_conv_generators.columns.subst_id,
+        orm_conv_generators.columns.la_id,
+        orm_conv_generators.columns.capacity,
+        orm_conv_generators.columns.type,
+        orm_conv_generators.columns.voltage_level,
+        orm_conv_generators.columns.fuel,
         func.ST_AsText(func.ST_Transform(
-            orm_conv_generators.geom, srid))
+            orm_conv_generators.columns.geom, srid))
     ). \
-        filter(orm_conv_generators.subst_id == network.mv_grid.id). \
+        filter(orm_conv_generators.columns.subst_id == network.mv_grid.id). \
+        filter(orm_conv_generators.columns.voltage_level.in_([4, 5, 6, 7])). \
         filter(orm_conv_generators_version)
+
+
+    # read data from db
+    generators = pd.read_sql_query(generators_sqla.statement,
+                                   session.bind,
+                                   index_col='id')
+
+    for id_db, row in generators.iterrows():
+        print(row)
