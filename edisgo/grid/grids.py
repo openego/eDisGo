@@ -46,6 +46,11 @@ class Grid:
         raise NotImplementedError
 
     @property
+    def id(self):
+        """Returns id of grid"""
+        return self._id
+
+    @property
     def graph(self):
         """Provide access to the graph"""
         return self._graph
