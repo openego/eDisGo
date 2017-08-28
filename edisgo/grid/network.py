@@ -51,7 +51,7 @@ class Network:
         config.load_config('config_data.cfg')
         config.load_config('config_scenario.cfg')
 
-        return config.cfg.sections()
+        return config.cfg._sections
 
     @staticmethod
     def _load_equipment_data():
@@ -62,7 +62,7 @@ class Network:
         :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
         """
 
-        raise NotImplementedError
+        pass
 
     @classmethod
     def import_from_dingo(cls, file):
@@ -103,6 +103,11 @@ class Network:
 
         """
         raise NotImplementedError
+
+    @property
+    def config(self):
+        """Returns config object"""
+        return self._config
 
     @property
     def mv_grid(self):
