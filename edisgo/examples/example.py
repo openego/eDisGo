@@ -5,8 +5,6 @@ import pickle
 import pandas as pd
 from ast import literal_eval
 import numpy as np
-import edisgo.tools.config as config
-config.load_config('config_db_tables.cfg')
 
 network = Network.import_from_dingo('ding0_grids_example.pkl')
 #pickle.dump(network, open('test_network.pkl', 'wb'))
@@ -56,4 +54,3 @@ reinforce_grid.reinforce_grid(network, results)
 # ToDo: Parameter bei Komponenten einführen mit dem man feststellen kann, ob die Komponente bereits in einer ersten Maßnahme verstärkt oder ausgebaut wurde
 # ToDo: config mit Standardbetriebsmitteln?
 
-print(config.get('model_draft', 're_generators_nep2035'))
