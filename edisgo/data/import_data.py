@@ -1,12 +1,24 @@
 from ding0.tools.results import load_nd_from_pickle
 from ding0.core.network.stations import LVStationDing0
 from ding0.core.structure.regions import LVLoadAreaCentreDing0
+
 from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
     Station, Line, Transformer
 from ..grid.grids import MVGrid, LVGrid
+
+from egoio.db_tables import model_draft, supply
+from egoio.tools.db import connection
+
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import func
+from geoalchemy2.shape import from_shape
+
 import pandas as pd
 import numpy as np
 import networkx as nx
+
+import logging
+logger = logging.getLogger('edisgo')
 
 
 def import_from_dingo(file, network):
@@ -809,3 +821,121 @@ def _validate_load_generation(mv_grid, dingo_mv_grid):
                         subtype=k2,
                         dingo=v2['dingo'],
                         edisgo=v2['edisgo']))
+
+
+def import_generators(network, data_source):
+    """
+    Import generator data from source.
+
+    The generator data include
+
+        * nom. capacity
+        * type (TODO: specify!)
+        * timeseries
+
+    Additional data which can be processed (e.g. used in OEDB data) are
+
+        * location
+        * type
+        * subtype
+        * capacity
+
+    Parameters
+    ----------
+    network: :class:`~.grid.network.Network`
+        The eDisGo container object
+    data_source: :obj:`str`
+        Data source. Supported sources:
+
+            * 'oedb'
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        List of generators
+    """
+
+    if data_source == 'oedb':
+        return _import_genos_from_oedb(network)
+    else:
+        logger.error("Invalid data source {} provided. Please re-check the file "
+                     "`config_db_tables.cfg`".format(data_source))
+        raise ValueError('The source you specified is not supported.')
+
+
+def _import_genos_from_oedb(network):
+    """
+    Import generator data from the Open Energy Database (OEDB).
+
+    The importer uses SQLAlchemy ORM objects. These are defined in ...
+
+    Parameters
+    ----------
+    network: :class:`~.grid.network.Network`
+        The eDisGo container object
+
+    Returns
+    -------
+
+    """
+    # make DB session
+    conn = connection(section=network.config['connection']['section'])
+    Session = sessionmaker(bind=conn)
+    session = Session()
+
+    srid = network.config['geo']['srid']
+
+    oedb_data_source = network.config['data_source']['oedb_data_source']
+    scenario = network.config['scenario']['name']
+
+    if oedb_data_source == 'model_draft':
+
+        # load ORM names
+        orm_conv_generators_name = network.config['model_draft']['conv_generators_prefix'] + \
+                                   scenario + \
+                                   network.config['model_draft']['conv_generators_suffix']
+        orm_re_generators_name = network.config['model_draft']['re_generators_prefix'] + \
+                                 scenario + \
+                                 network.config['model_draft']['re_generators_suffix']
+
+        # import ORMs
+        orm_conv_generators = model_draft.__getattribute__(orm_conv_generators_name)
+        orm_re_generators = model_draft.__getattribute__(orm_re_generators_name)
+
+        # set dummy version condition (select all generators)
+        orm_conv_generators_version = 1 == 1
+        orm_conv_generators_version = 1 == 1
+
+    elif oedb_data_source == 'versioned':
+        raise NotImplementedError
+        orm_conv_generators_name = network.config['versioned']['conv_generators_prefix'] + \
+                                   scenario + \
+                                   network.config['versioned']['conv_generators_suffix']
+        orm_re_generators_name = network.config['versioned']['re_generators_prefix'] + \
+                                 scenario + \
+                                 network.config['versioned']['re_generators_suffix']
+        data_version = network.config['versioned']['version']
+
+        # import ORMs
+        orm_conv_generators = supply.__getattribute__(orm_conv_generators_name)
+        orm_re_generators = supply.__getattribute__(orm_re_generators_name)
+
+        # set version condition
+        orm_conv_generators_version = orm_conv_generators.version == data_version
+        orm_conv_generators_version = orm_re_generators.version == data_version
+
+    # import conventional generators
+
+    generators_sqla = session.query(
+        orm_conv_generators.id,
+        orm_conv_generators.subst_id,
+        orm_conv_generators.la_id,
+        orm_conv_generators.capacity,
+        orm_conv_generators.type,
+        orm_conv_generators.voltage_level,
+        orm_conv_generators.fuel,
+        func.ST_AsText(func.ST_Transform(
+            orm_conv_generators.geom, srid))
+    ). \
+        filter(orm_conv_generators.subst_id == network.mv_grid.id). \
+        filter(orm_conv_generators_version)
