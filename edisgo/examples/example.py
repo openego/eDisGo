@@ -7,6 +7,7 @@ from ast import literal_eval
 import numpy as np
 
 network = Network.import_from_dingo('ding0_grids_example.pkl')
+genos = network.import_generators()
 #pickle.dump(network, open('test_network.pkl', 'wb'))
 
 # network = pickle.load(open('test_network.pkl', 'rb'))
