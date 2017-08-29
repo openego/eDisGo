@@ -515,6 +515,14 @@ def _attach_aggregated(grid, aggregated, dingo_grid):
             id='_'.join(['Load_aggregated', repr(grid)]))
 
         grid.graph.add_node(load, type='load')
+
+        # connect aggregated load to MV station
+        line = {'line': Line(
+            id='line_aggr_load',
+            type=aggr_line_type,
+            length=.5,
+            grid=grid)
+        }
         grid.graph.add_edge(grid.station, load, line, type='line')
 
 
