@@ -208,42 +208,12 @@ def mv_to_pypsa(network):
 
             transformer_count += 1
 
-    # create dataframe for MV stations incl. primary/secondary side bus
+    # create dataframe for MV stations (only secondary side bus)
     for mv_st in mv_stations:
-        mv_transformer_count = 1
-        # add primary side bus (bus0)
-        bus0_name = '_'.join(['Bus', 'primary', repr(mv_st)])
-        bus['name'].append(bus0_name)
-        # TODO: replace hard-coded primary side nominal voltage
-        bus['v_nom'].append(110)
-
         # add secondary side bus (bus1)
         bus1_name = '_'.join(['Bus', 'secondary', repr(mv_st)])
         bus['name'].append(bus1_name)
         bus['v_nom'].append(mv_st.transformers[0].voltage_op)
-
-        for mv_tr in mv_st.transformers:
-            if mv_transformer_count <= floor(len(mv_st.transformers) / 2):
-                transformer['name'].append(
-                    '_'.join([repr(mv_st),
-                              'transformer',
-                              str(mv_transformer_count)]))
-                transformer['bus0'].append(bus0_name)
-                transformer['bus1'].append(bus1_name)
-                transformer['type'].append("")
-                transformer['model'].append('pi')
-                # TODO: once Dingo data come with correct MV transformer params replace lines below
-                transformer['r'].append(0.1)
-                transformer['x'].append(0.1)
-                # transformer['r'].append(mv_tr.type.r)
-                # transformer['x'].append(mv_tr.type.x)
-                transformer['s_nom'].append(mv_tr.type.s)
-                # TODO: MV transformers currently come with s_nom in MVA. Take commented line below once this is changend in Dingo
-                # transformer['s_nom'].append(mv_tr.type.s / 1e3)
-                # TODO: discuss with @jochenbuehler if we need a tap changer here
-                transformer['tap_ratio'].append(1)
-
-                mv_transformer_count += 1
 
     components = {
         'Generator': pd.DataFrame(generator).set_index('name'),
