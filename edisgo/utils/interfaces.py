@@ -2,6 +2,7 @@ import pandas as pd
 from math import pi, sqrt, floor
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
+from networkx import connected_component_subgraphs
 
 
 def to_pypsa(network, mode):
@@ -78,6 +79,15 @@ def to_pypsa(network, mode):
                                  timeseries_load_q,
                                  'Load',
                                  'q_set')
+
+    # check for sub-networks
+    pypsa_network.determine_network_topology()
+    subgraphs = list(connected_component_subgraphs(pypsa_network.graph()))
+
+    if len(subgraphs) > 1 or len(pypsa_network.sub_networks) > 1:
+        raise ValueError("The graph has isolated nodes or edges")
+
+
 
     return pypsa_network
 
@@ -453,5 +463,3 @@ def _check_topology(mv_components):
     if missing_buses:
         raise ValueError("Buses {buses} are not defined.".format(
             buses=missing_buses))
-
-        # TODO: add check for subgraphs
