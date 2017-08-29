@@ -1,5 +1,7 @@
 from edisgo.data.import_data import import_from_dingo
 from ..utils import interfaces
+from pypsa import Network as PyPSANetwork
+from pypsa.io import import_series_from_dataframe
 
 
 class Network:
@@ -120,6 +122,7 @@ class Network:
             components = interfaces.combine_mv_and_lv(mv_components,
                                                       lv_components)
         elif mode is 'mv':
+            # get topology and time series data
             mv_components = interfaces.mv_to_pypsa(self)
             mv_components = interfaces.attach_aggregated_lv_components(
                 self,
@@ -130,6 +133,38 @@ class Network:
             timeseries_gen_p, timeseries_gen_q = interfaces.pypsa_generator_timeseries(self,
                                                                    mode='mv')
 
+            # create power flow problem and solve it
+            network = PyPSANetwork()
+            # TODO: replace input for `set_snapshots` by DatetimeIndex constructed based on user input
+            network.set_snapshots(timeseries_gen_p.index)
+
+
+            for k, components in mv_components.items():
+                network.import_components_from_dataframe(components, k)
+
+            # for attr in ['p_set', 'q_set']:
+            import_series_from_dataframe(network,
+                                         timeseries_gen_p,
+                                         'Generator',
+                                         'p_set')
+            import_series_from_dataframe(network,
+                                         timeseries_gen_q,
+                                         'Generator',
+                                         'q_set')
+            import_series_from_dataframe(network,
+                                         timeseries_load_p,
+                                         'Load',
+                                         'p_set')
+            import_series_from_dataframe(network,
+                                         timeseries_load_q,
+                                         'Load',
+                                         'q_set')
+
+            network.export_to_csv_folder('edisgo2pypsa_export')
+            # TODO: add lines to network
+            # TODO: maybe 'v_mag_pu_set' is required for buses
+            # TODO: if missing, add slack generator
+            network.pf(network.snapshots)
         elif mode is 'lv':
             interfaces.lv_to_pypsa(self)
         else:
