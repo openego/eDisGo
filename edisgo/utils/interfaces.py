@@ -329,3 +329,51 @@ def pypsa_load_timeseries(network, attr, mode=None):
     # TODO: maybe names of load object have to be changed to distinguish between different grids
 
     return load_df_p, load_df_q
+
+def pypsa_generator_timeseries(network, mode=None):
+    """Timeseries in PyPSA compatible format for generator instances
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+    mode : str, optional
+        Specifically retrieve generator time series for MV or LV grid level or
+        both. Either choose 'mv' or 'lv'.
+        Defaults to None, which returns both timeseries for MV and LV in a
+        single DataFrame.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Time series table in PyPSA format
+    """
+
+    mv_gen_timeseries_q = []
+    mv_gen_timeseries_p = []
+    lv_gen_timeseries_q = []
+    lv_gen_timeseries_p = []
+
+    # MV generator timeseries
+    if mode is 'mv' or mode is None:
+        for gen in network.mv_grid.graph.nodes_by_attribute('generator'):
+            mv_gen_timeseries_q.append(
+                gen.pypsa_timeseries('q').rename(repr(gen)).to_frame())
+            mv_gen_timeseries_p.append(
+                gen.pypsa_timeseries('p').rename(repr(gen)).to_frame())
+
+    # LV generator timeseries
+    if mode is 'lv' or mode is None:
+        for lv_grid in network.mv_grid.lv_grids:
+            for gen in lv_grid.graph.nodes_by_attribute('generator'):
+                lv_gen_timeseries_q.append(
+                    gen.pypsa_timeseries('q').rename(repr(gen)).to_frame())
+                lv_gen_timeseries_p.append(
+                    gen.pypsa_timeseries('p').rename(repr(gen)).to_frame())
+
+    gen_df_p = pd.concat(mv_gen_timeseries_p + lv_gen_timeseries_p, axis=1)
+    gen_df_q = pd.concat(mv_gen_timeseries_q + lv_gen_timeseries_q, axis=1)
+
+    # TODO: maybe names of load object have to be changed to distinguish between different grids
+
+    return gen_df_p, gen_df_q

@@ -201,7 +201,22 @@ class Generator(Component):
         self._nominal_capacity = kwargs.get('nominal_capacity', None)
         self._type = kwargs.get('type', None)
         self._subtype = kwargs.get('subtype', None)
-        self._timeseries = kwargs.get('timeseries', None)
+
+        # TODO: replace below dummy timeseries
+        hours_of_the_year = 8760
+
+        cos_phi = 0.95
+
+        q_factor = tan(acos(0.95))
+
+        rng = pd.date_range('1/1/2011', periods=hours_of_the_year, freq='H')
+
+        ts_dict = {
+            'p': [self.nominal_capacity * (1 - q_factor)] * hours_of_the_year,
+            'q': [self.nominal_capacity * q_factor] * hours_of_the_year}
+
+        self._timeseries = pd.DataFrame(ts_dict, index=rng)
+        # self._timeseries = kwargs.get('timeseries', None)
 
     def timeseries(self):
         """Return time series of generator
@@ -212,7 +227,18 @@ class Generator(Component):
         and type of technology in :class:`~.grid.network.TimeSeries` object and
         considers for predefined curtailment as well.
         """
-        raise NotImplementedError
+        return self._timeseries
+
+    def pypsa_timeseries(self, attr):
+        """Return time series in PyPSA format
+
+        Parameters
+        ----------
+        attr : str
+            Attribute name (PyPSA conventions). Choose from {p_set, q_set}
+        """
+
+        return self._timeseries[attr]
 
     @property
     def type(self):
