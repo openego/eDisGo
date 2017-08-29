@@ -127,6 +127,29 @@ class Network:
             mv_components = interfaces.attach_aggregated_lv_components(
                 self,
                 mv_components)
+
+            # check topology
+            buses = mv_components['Bus'].index.tolist()
+            line_buses = mv_components['Line']['bus0'].tolist() + \
+                         mv_components['Line']['bus1'].tolist()
+            load_buses = mv_components['Load']['bus'].tolist()
+            generator_buses = mv_components['Generator']['bus'].tolist()
+            transformer_buses = mv_components['Transformer']['bus0'].tolist() + \
+                                mv_components['Transformer']['bus1'].tolist()
+
+            buses_to_check = line_buses + load_buses + generator_buses + \
+                             transformer_buses
+
+            missing_buses = []
+
+            missing_buses.extend([_ for _ in buses_to_check if _ not in buses])
+
+            if missing_buses:
+                raise ValueError("Buses {buses} are not defined.".format(
+                    buses=missing_buses))
+
+            # TODO: add check for subgraphs
+
             timeseries_load_p, timeseries_load_q = interfaces.pypsa_load_timeseries(self,
                                                                mode='mv')
 
