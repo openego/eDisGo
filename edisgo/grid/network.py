@@ -164,8 +164,10 @@ class Network:
                                          'Load',
                                          'q_set')
 
+            # TODO: remove export prior to merge
             network.export_to_csv_folder('edisgo2pypsa_export')
-            # TODO: add lines to network
+
+            # TODO: maybe there are lv station without load and generation at secondary side
             # TODO: maybe 'v_mag_pu_set' is required for buses
             # TODO: if missing, add slack generator
             network.pf(network.snapshots)
