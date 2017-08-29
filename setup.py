@@ -39,7 +39,7 @@ setup(
     package_data={
         'config': [
             os.path.join('config',
-                         'config_internal'),
+                         'config_system'),
             os.path.join('config',
                          '*.cfg')
         ]

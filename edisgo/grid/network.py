@@ -75,44 +75,54 @@ class Network:
                                                     'equipment_mv_parameters_trafos')
         data['MV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
                                                   equipment_mv_parameters_trafos),
-                                                  comment='#',
-                                                  delimiter=',',
-                                                  decimal='.',
-                                                  converters={'s_nom': lambda x: int(x)})
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'s_nom': lambda x: int(x)})
 
         equipment_mv_parameters_lines = config.get('equipment',
                                                    'equipment_mv_parameters_lines')
         data['MV_lines'] = pd.read_csv(path.join(package_path, equipment_dir,
                                                  equipment_mv_parameters_lines),
-                                                 comment='#',
-                                                 converters={'I_max_th': lambda x: int(x),
-                                                             'U_n': lambda x: int(x)})
+                                       comment='#',
+                                       index_col='name',
+                                       delimiter=',',
+                                       decimal='.',
+                                       converters={'I_max_th': lambda x: int(x),
+                                                   'U_n': lambda x: int(x)})
 
         equipment_mv_parameters_cables = config.get('equipment',
                                                     'equipment_mv_parameters_cables')
         data['MV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
                                                   equipment_mv_parameters_cables),
-                                                  comment='#',
-                                                  converters={'I_max_th': lambda x: int(x),
-                                                              'U_n': lambda x: int(x)})
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'I_max_th': lambda x: int(x),
+                                                    'U_n': lambda x: int(x)})
 
         equipment_lv_parameters_cables = config.get('equipment',
                                                     'equipment_lv_parameters_cables')
         data['LV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
                                                   equipment_lv_parameters_cables),
-                                                  comment='#',
-                                                  index_col='name',
-                                                  converters={'I_max_th': lambda x: int(x),
-                                                              'U_n': lambda x: int(x)})
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'I_max_th': lambda x: int(x),
+                                                    'U_n': lambda x: int(x)})
 
         equipment_lv_parameters_trafos = config.get('equipment',
                                                     'equipment_lv_parameters_trafos')
         data['LV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
                                                   equipment_lv_parameters_trafos),
-                                                  comment='#',
-                                                  delimiter=',',
-                                                  decimal='.',
-                                                  converters={'s_nom': lambda x: int(x)})
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'s_nom': lambda x: int(x)})
 
         return data
 

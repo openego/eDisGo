@@ -54,7 +54,7 @@ _loaded = False
 
 # load config dirs
 package_path = edisgo.__path__[0]
-internal_config_file = os.path.join(package_path, 'config', 'config_internal')
+internal_config_file = os.path.join(package_path, 'config', 'config_system')
 try:
     cfg.read(internal_config_file)
 except:
