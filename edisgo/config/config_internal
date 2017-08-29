@@ -17,3 +17,11 @@ data_dir = data
 log_dir = log
 output_dir = output
 
+[system]
+
+equipment_dir = equipment
+equipment_mv_parameters_trafos = equipment-parameters_MV_transformers.csv
+equipment_mv_parameters_cables = equipment-parameters_MV_cables.csv
+equipment_mv_parameters_lines = equipment-parameters_MV_overhead_lines.csv
+equipment_lv_parameters_trafos = equipment-parameters_LV_transformers.csv
+equipment_lv_parameters_cables = equipment-parameters_LV_cables.csv
