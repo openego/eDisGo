@@ -1,7 +1,5 @@
 from edisgo.data.import_data import import_from_dingo
 from ..utils import interfaces
-from pypsa import Network as PyPSANetwork
-from pypsa.io import import_series_from_dataframe
 
 
 class Network:
@@ -24,16 +22,23 @@ class Network:
         Data Source of grid data (e.g. "dingo")
     _scenario : :class:`~.grid.grids.Scenario`
         Scenario which is used for calculations
+    _pypsa : :pypsa:`pypsa.Network<network>`
+        PyPSA representation of grid topology
     """
 
     def __init__(self, **kwargs):
-        self._id = kwargs.get('id', None)
-        self._equipment_data = kwargs.get('equipment_data', None)
-        self._config = kwargs.get('config', None)
-        self._metadata = kwargs.get('metadata', None)
-        self._data_source = kwargs.get('data_source', None)
-        self._scenario = kwargs.get('scenario', None)
-        self._mv_grid = kwargs.get('mv_grid', None)
+        # TODO: sort out realistic use cases for data from PyPSA network
+        if 'pypsa' not in kwargs.keys():
+            self._id = kwargs.get('id', None)
+            self._equipment_data = kwargs.get('equipment_data', None)
+            self._config = kwargs.get('config', None)
+            self._metadata = kwargs.get('metadata', None)
+            self._data_source = kwargs.get('data_source', None)
+            self._scenario = kwargs.get('scenario', None)
+            self._mv_grid = kwargs.get('mv_grid', None)
+            self._pypsa = None
+        else:
+            self._pypsa = kwargs.get('pypsa', None)
 
     @classmethod
     def import_from_dingo(cls, file):
@@ -59,13 +64,42 @@ class Network:
         """
         raise NotImplementedError
 
-    def analyze(self):
-        """Analyzes the grid
+    def analyze(self, mode=None):
+        """Analyzes the grid by power flow analysis
 
-        TBD
+        .. TODO: explain a bunch of details and example how to use
+        * what type of power flow is performed
+        * how to select time range for analysis
+        * representation of grid in PFA
+         * No HV-MV transformer
+         * ...
+
+        Parameters
+        ----------
+        mode: str
+            Allows to toggle between power flow analysis (PFA) on the whole grid
+            topology (MV + LV), only MV or only LV. Therefore, either specify
+            `mode='mv'` for PFA of the MV grid topology or `mode='lv'`
+            for PFA of the LV grid topology.
+            Defaults to None which equals power flow analysis for MV + LV.
+
+        Notes
+        -----
+        The current implementation always translates the grid topology
+        representation to the PyPSA format and stores it to :attr:`self._pypsa`.
 
         """
-        raise NotImplementedError
+        self.pypsa = mode
+
+        # TODO: remove export prior to merge
+        self.pypsa.export_to_csv_folder('edisgo2pypsa_export')
+
+        # TODO: remove MV station from PyPSA representation (if added)
+        # TODO: maybe there are lv station without load and generation at secondary side
+        # TODO: maybe 'v_mag_pu_set' is required for buses
+        # TODO: if missing, add slack generator
+        self.pypsa.pf(self.pypsa.snapshots)
+
 
     def reinforce(self):
         """Reinforces the grid
@@ -87,6 +121,11 @@ class Network:
     def mv_grid(self, mv_grid):
         self._mv_grid = mv_grid
 
+    @property
+    def pypsa(self):
+        return self._pypsa
+
+    @pypsa.setter
     def pypsa(self, mode=None):
         """
         Convert NetworkX based grid topology representation to PyPSA grid
@@ -116,89 +155,7 @@ class Network:
         -------
         .. TODO: describe return
         """
-        if mode is None:
-            mv_components = interfaces.mv_to_pypsa(self)
-            lv_components = interfaces.lv_to_pypsa(self)
-            components = interfaces.combine_mv_and_lv(mv_components,
-                                                      lv_components)
-        elif mode is 'mv':
-            # get topology and time series data
-            mv_components = interfaces.mv_to_pypsa(self)
-            mv_components = interfaces.attach_aggregated_lv_components(
-                self,
-                mv_components)
-
-            # check topology
-            buses = mv_components['Bus'].index.tolist()
-            line_buses = mv_components['Line']['bus0'].tolist() + \
-                         mv_components['Line']['bus1'].tolist()
-            load_buses = mv_components['Load']['bus'].tolist()
-            generator_buses = mv_components['Generator']['bus'].tolist()
-            transformer_buses = mv_components['Transformer']['bus0'].tolist() + \
-                                mv_components['Transformer']['bus1'].tolist()
-
-            buses_to_check = line_buses + load_buses + generator_buses + \
-                             transformer_buses
-
-            missing_buses = []
-
-            missing_buses.extend([_ for _ in buses_to_check if _ not in buses])
-
-            if missing_buses:
-                raise ValueError("Buses {buses} are not defined.".format(
-                    buses=missing_buses))
-
-            # TODO: add check for subgraphs
-
-            timeseries_load_p, timeseries_load_q = interfaces.pypsa_load_timeseries(self,
-                                                               mode='mv')
-
-            timeseries_gen_p, timeseries_gen_q = interfaces.pypsa_generator_timeseries(self,
-                                                                   mode='mv')
-
-            # create power flow problem and solve it
-            network = PyPSANetwork()
-            # TODO: replace input for `set_snapshots` by DatetimeIndex constructed based on user input
-            network.set_snapshots(timeseries_gen_p.iloc[1743:1745].index)
-
-            # import grid topology to PyPSA network
-            # buses are created first to avoid warnings
-            network.import_components_from_dataframe(mv_components['Bus'], 'Bus')
-
-            for k, components in mv_components.items():
-                if k is not 'Bus':
-                    network.import_components_from_dataframe(components, k)
-
-            # import time series to PyPSA network
-            import_series_from_dataframe(network,
-                                         timeseries_gen_p,
-                                         'Generator',
-                                         'p_set')
-            import_series_from_dataframe(network,
-                                         timeseries_gen_q,
-                                         'Generator',
-                                         'q_set')
-            import_series_from_dataframe(network,
-                                         timeseries_load_p,
-                                         'Load',
-                                         'p_set')
-            import_series_from_dataframe(network,
-                                         timeseries_load_q,
-                                         'Load',
-                                         'q_set')
-
-            # TODO: remove export prior to merge
-            network.export_to_csv_folder('edisgo2pypsa_export')
-
-            # TODO: maybe there are lv station without load and generation at secondary side
-            # TODO: maybe 'v_mag_pu_set' is required for buses
-            # TODO: if missing, add slack generator
-            network.pf(network.snapshots)
-        elif mode is 'lv':
-            interfaces.lv_to_pypsa(self)
-        else:
-            raise ValueError("Provide proper mode or leave it empty to export "
-                             "entire grid topology.")
+        self._pypsa = interfaces.to_pypsa(self, mode)
 
     def __repr__(self):
         return 'Network ' + self._id
