@@ -136,13 +136,17 @@ class Network:
             # create power flow problem and solve it
             network = PyPSANetwork()
             # TODO: replace input for `set_snapshots` by DatetimeIndex constructed based on user input
-            network.set_snapshots(timeseries_gen_p.index)
+            network.set_snapshots(timeseries_gen_p.iloc[1743:1745].index)
 
+            # import grid topology to PyPSA network
+            # buses are created first to avoid warnings
+            network.import_components_from_dataframe(mv_components['Bus'], 'Bus')
 
             for k, components in mv_components.items():
-                network.import_components_from_dataframe(components, k)
+                if k is not 'Bus':
+                    network.import_components_from_dataframe(components, k)
 
-            # for attr in ['p_set', 'q_set']:
+            # import time series to PyPSA network
             import_series_from_dataframe(network,
                                          timeseries_gen_p,
                                          'Generator',
