@@ -52,13 +52,13 @@ class Network:
 
         config.load_config('config_db_tables.cfg')
         config.load_config('config_data.cfg')
+        config.load_config('config_flexopt.cfg')
         config.load_config('config_misc.cfg')
         config.load_config('config_scenario.cfg')
 
         return config.cfg._sections
 
-    @staticmethod
-    def _load_equipment_data():
+    def _load_equipment_data(self):
         """Load equipment data for transformers, cables etc.
 
         Returns
@@ -67,12 +67,11 @@ class Network:
         """
 
         package_path =  edisgo.__path__[0]
-        equipment_dir = config.get('system_dirs', 'equipment_dir')
+        equipment_dir = self._config['system_dirs']['equipment_dir']
 
         data = {}
 
-        equipment_mv_parameters_trafos = config.get('equipment',
-                                                    'equipment_mv_parameters_trafos')
+        equipment_mv_parameters_trafos = self._config['equipment']['equipment_mv_parameters_trafos']
         data['MV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
                                                   equipment_mv_parameters_trafos),
                                         comment='#',
@@ -81,8 +80,7 @@ class Network:
                                         decimal='.',
                                         converters={'s_nom': lambda x: int(x)})
 
-        equipment_mv_parameters_lines = config.get('equipment',
-                                                   'equipment_mv_parameters_lines')
+        equipment_mv_parameters_lines = self._config['equipment']['equipment_mv_parameters_lines']
         data['MV_lines'] = pd.read_csv(path.join(package_path, equipment_dir,
                                                  equipment_mv_parameters_lines),
                                        comment='#',
@@ -92,8 +90,7 @@ class Network:
                                        converters={'I_max_th': lambda x: int(x),
                                                    'U_n': lambda x: int(x)})
 
-        equipment_mv_parameters_cables = config.get('equipment',
-                                                    'equipment_mv_parameters_cables')
+        equipment_mv_parameters_cables = self._config['equipment']['equipment_mv_parameters_cables']
         data['MV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
                                                   equipment_mv_parameters_cables),
                                         comment='#',
@@ -103,8 +100,7 @@ class Network:
                                         converters={'I_max_th': lambda x: int(x),
                                                     'U_n': lambda x: int(x)})
 
-        equipment_lv_parameters_cables = config.get('equipment',
-                                                    'equipment_lv_parameters_cables')
+        equipment_lv_parameters_cables = self._config['equipment']['equipment_lv_parameters_cables']
         data['LV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
                                                   equipment_lv_parameters_cables),
                                         comment='#',
@@ -114,8 +110,7 @@ class Network:
                                         converters={'I_max_th': lambda x: int(x),
                                                     'U_n': lambda x: int(x)})
 
-        equipment_lv_parameters_trafos = config.get('equipment',
-                                                    'equipment_lv_parameters_trafos')
+        equipment_lv_parameters_trafos = self._config['equipment']['equipment_lv_parameters_trafos']
         data['LV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
                                                   equipment_lv_parameters_trafos),
                                         comment='#',
