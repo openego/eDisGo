@@ -82,7 +82,7 @@ def mv_to_pypsa(network):
         else:
             line['bus0'].append('_'.join(['Bus', repr(l['adj_nodes'][0])]))
 
-        if l['adj_nodes'][0] in lv_stations:
+        if l['adj_nodes'][1] in lv_stations:
             line['bus1'].append(
                 '_'.join(['Bus', 'primary', repr(l['adj_nodes'][1])]))
         else:
@@ -171,7 +171,7 @@ def mv_to_pypsa(network):
 
 def attach_aggregated_lv_components(network, components):
     """
-    This function aggregates LV load and generation at LV stations
+    Aggregates LV load and generation at LV stations
 
     Use this function if you aim for MV calculation only. The according
     DataFrames of `components` are extended by load and generators representing
@@ -275,15 +275,13 @@ def combine_mv_and_lv():
     pass
 
 
-def pypsa_load_timeseries(network, attr, mode=None):
+def pypsa_load_timeseries(network, mode=None):
     """Timeseries in PyPSA compatible format for load instances
 
     Parameters
     ----------
     network : Network
         The eDisGo grid topology model overall container
-    attr : str
-        Either use 'p' or 'q'
     mode : str, optional
         Specifically retrieve load time series for MV or LV grid level or both.
         Either choose 'mv' or 'lv'.
@@ -329,6 +327,7 @@ def pypsa_load_timeseries(network, attr, mode=None):
     # TODO: maybe names of load object have to be changed to distinguish between different grids
 
     return load_df_p, load_df_q
+
 
 def pypsa_generator_timeseries(network, mode=None):
     """Timeseries in PyPSA compatible format for generator instances

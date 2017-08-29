@@ -124,8 +124,12 @@ class Network:
             mv_components = interfaces.attach_aggregated_lv_components(
                 self,
                 mv_components)
-            timeseries_load = interfaces.pypsa_load_timeseries(self,
-                                                               'p')
+            timeseries_load_p, timeseries_load_q = interfaces.pypsa_load_timeseries(self,
+                                                               mode='mv')
+
+            timeseries_gen_p, timeseries_gen_q = interfaces.pypsa_generator_timeseries(self,
+                                                                   mode='mv')
+
         elif mode is 'lv':
             interfaces.lv_to_pypsa(self)
         else:
