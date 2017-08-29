@@ -18,10 +18,12 @@ class Network:
         #TODO: TBD
     _metadata : :obj:`dict`
         Metadata of Network such as ?
-    _data_source : :obj:`str`
-        Data Source of grid data (e.g. "dingo")
+    _data_sources : :obj:`dict` of :obj:`str`
+        Data Sources of grid, generators etc.
+        Keys: 'grid', 'generators', ?
     _scenario : :class:`~.grid.grids.Scenario`
         Scenario which is used for calculations
+    # TODO: Add remaining attributes
     """
 
     def __init__(self, **kwargs):
@@ -29,7 +31,7 @@ class Network:
         self._equipment_data = kwargs.get('equipment_data', None)
         self._config = kwargs.get('config', None)
         self._metadata = kwargs.get('metadata', None)
-        self._data_source = kwargs.get('data_source', None)
+        self._data_sources = kwargs.get('data_sources', {})
         self._scenario = kwargs.get('scenario', None)
         self._mv_grid = kwargs.get('mv_grid', None)
         self.results = Results()
@@ -85,6 +87,18 @@ class Network:
     @mv_grid.setter
     def mv_grid(self, mv_grid):
         self._mv_grid = mv_grid
+
+    @property
+    def data_sources(self):
+        """:obj:`dict` of :obj:`str` : Data Sources
+
+        """
+        return self._data_sources
+
+    def set_data_source(self, key, data_source):
+        """Set data source for key (e.g. 'grid')
+        """
+        self._data_sources[key] = data_source
 
     def __repr__(self):
         return 'Network ' + self._id

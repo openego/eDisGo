@@ -69,6 +69,9 @@ def import_from_dingo(file, network):
     # Check data integrity
     _validate_dingo_grid_import(network.mv_grid, dingo_mv_grid, lv_grid_mapping)
 
+    # Set data source
+    network.set_data_source('grid', 'dingo')
+
 
 def _build_lv_grid(dingo_grid, network):
     """
@@ -448,12 +451,11 @@ def _determine_aggregated_nodes(la_centers):
             'geom': la_center.lv_load_area.geo_area}
 
         # Determine LV grids/ stations that are aggregated
-        stations = [_.lv_grid.station()
-                    for _ in la_center.lv_load_area._lv_grid_districts]
+        for _ in la_center.lv_load_area._lv_grid_districts:
+            aggr_stations.append(_.lv_grid.station())
 
         # add elements to lists
         aggregated.append(aggr)
-        aggr_stations.append(stations)
 
 
     return aggregated, aggr_stations
@@ -591,7 +593,8 @@ def _validate_dingo_mv_grid_import(grid, dingo_grid):
         'lv_station'))
     data_integrity['lv_station']['dingo'] = len(
         [_ for _ in dingo_grid._graph.nodes()
-         if isinstance(_, LVStationDing0)])
+         if (isinstance(_, LVStationDing0) and
+             not _.grid.grid_district.lv_load_area.is_aggregated)])
 
     # Check number of lines outside aggregated LA
     # edges_w_la = grid.graph.graph_edges()
