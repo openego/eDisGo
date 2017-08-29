@@ -12,6 +12,7 @@ import numpy as np
 network = pickle.load(open('test_network.pkl', 'rb'))
 
 # for now create results object
+# ToDo: Werte in DataFrame als List oder Array?
 results = Results()
 results.pfa_edges = pd.read_csv('Exemplary_PyPSA_line_results.csv',
                                 index_col=0,
