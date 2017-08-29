@@ -9,7 +9,7 @@
 # CAUTION: This is an internal config file, do not modify unless you know what
 # you are doing!
 
-[dirs]
+[user_dirs]
 
 root_dir = .edisgo
 config_dir = config
