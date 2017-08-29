@@ -162,6 +162,11 @@ class Network:
         return self._config
 
     @property
+    def equipment_data(self):
+        """Returns equipment data object"""
+        return self._equipment_data
+
+    @property
     def mv_grid(self):
         """:class:`~.grid.grids.MVGrid` : Medium voltage (MV) grid
 
