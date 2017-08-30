@@ -1,5 +1,6 @@
 from edisgo.data.import_data import import_from_dingo
 from ..utils import interfaces
+import pandas as pd
 
 
 class Network:
@@ -41,7 +42,7 @@ class Network:
             self._pypsa = kwargs.get('pypsa', None)
 
     @classmethod
-    def import_from_dingo(cls, file):
+    def import_from_dingo(cls, file, **kwargs):
         """Import grid data from DINGO file
 
         For details see
@@ -49,7 +50,7 @@ class Network:
         """
 
         # create the network instance
-        network = cls()
+        network = cls(**kwargs)
 
         # call the importer
         import_from_dingo(file, network)
@@ -94,9 +95,9 @@ class Network:
         # TODO: remove export prior to merge
         self.pypsa.export_to_csv_folder('edisgo2pypsa_export')
 
-        # TODO: remove MV station from PyPSA representation (if added)
-        # TODO: maybe there are lv station without load and generation at secondary side
+        # TODO: check if timeseries dataframes contain all data
         # TODO: maybe 'v_mag_pu_set' is required for buses
+        # TODO: maybe there are lv station without load and generation at secondary side
         # TODO: if missing, add slack generator
         self.pypsa.pf(self.pypsa.snapshots)
 
@@ -157,6 +158,14 @@ class Network:
         """
         self._pypsa = interfaces.to_pypsa(self, mode)
 
+    @property
+    def scenario(self):
+        return self._scenario
+
+    @scenario.setter
+    def scenario(self, scenario):
+        self._scenario = scenario
+
     def __repr__(self):
         return 'Network ' + self._id
 
@@ -197,6 +206,10 @@ class Scenario:
         self._pfac_mv_load = kwargs.get('pfac_mv_load', None)
         self._pfac_lv_gen = kwargs.get('pfac_lv_gen', None)
         self._pfac_lv_load = kwargs.get('pfac_lv_load', None)
+
+    @property
+    def timeseries(self):
+        return self._timeseries
 
     def __repr__(self):
         return 'Scenario ' + self._name
@@ -250,6 +263,12 @@ class TimeSeries:
     def __init__(self, **kwargs):
         self._generation = kwargs.get('generation', None)
         self._load = kwargs.get('load', None)
+
+    @property
+    def timeindex(self):
+        # TODO: replace this dummy when time series are ready. Replace by the index of one of the DataFrames
+        hours_of_the_year = 8760
+        return pd.date_range('12/4/2011', periods=2, freq='H')
 
 
 class ETraGoSpecs:
