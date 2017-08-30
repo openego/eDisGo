@@ -297,3 +297,10 @@ class Results:
 
     def calculate_grid_expansion_costs(self):
         self.grid_expansion_costs = grid_expansion_costs(self)
+
+    def calculate_apparent_power(self):
+        """
+        Calculates apparent power from pfa_p and pfa_q
+        """
+        # return self.pfa_s
+        raise NotImplementedError
