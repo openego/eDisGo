@@ -39,6 +39,11 @@ def to_pypsa(network, mode):
         timeseries_gen_p, timeseries_gen_q = pypsa_generator_timeseries(
             network,
             mode='mv')
+
+        timeseries_bus_v_set = pypsa_bus_timeseries(
+            network,
+            components['Bus'].index.tolist())
+
     elif mode is 'lv':
         raise NotImplementedError
         lv_to_pypsa(network)
@@ -49,10 +54,9 @@ def to_pypsa(network, mode):
     # check topology
     _check_topology(components)
 
-    # create power flow problem and solve it
+    # create power flow problem
     pypsa_network = PyPSANetwork()
-    # TODO: replace input for `set_snapshots` by DatetimeIndex constructed based on user input
-    pypsa_network.set_snapshots(timeseries_gen_p.iloc[1743:1745].index)
+    pypsa_network.set_snapshots(network.scenario.timeseries.timeindex)
 
     # import grid topology to PyPSA network
     # buses are created first to avoid warnings
@@ -80,8 +84,12 @@ def to_pypsa(network, mode):
                                  'Load',
                                  'q_set')
 
+    import_series_from_dataframe(pypsa_network,
+                                 timeseries_bus_v_set,
+                                 'Bus',
+                                 'v_mag_pu_set')
 
-
+    _check_integrity_of_pypsa(pypsa_network)
 
     return pypsa_network
 
@@ -457,6 +465,37 @@ def _check_topology(mv_components):
     if missing_buses:
         raise ValueError("Buses {buses} are not defined.".format(
             buses=missing_buses))
+
+def pypsa_bus_timeseries(network, buses, mode=None):
+    """Timeseries in PyPSA compatible format for generator instances
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+    buses : list
+        Buses names
+    mode : str, optional
+        Specifically retrieve generator time series for MV or LV grid level or
+        both. Either choose 'mv' or 'lv'.
+        Defaults to None, which returns both timeseries for MV and LV in a
+        single DataFrame.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Time series table in PyPSA format
+    """
+        # TODO: replace input for `set_snapshots` by DatetimeIndex constructed based on user input
+
+    v_set_dict = {bus: [1, 1] for bus in buses}
+
+    v_set_df = pd.DataFrame(v_set_dict,
+                            index=network.scenario.timeseries.timeindex)
+
+    return v_set_df
+
+
 def _check_integrity_of_pypsa(pypsa_network):
     """"""
 
