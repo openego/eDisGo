@@ -1,6 +1,6 @@
 import edisgo
 from edisgo.tools import config
-from edisgo.data.import_data import import_from_dingo#, import_generators
+from edisgo.data.import_data import import_from_dingo, import_generators
 
 from os import path
 import pandas as pd
