@@ -44,6 +44,20 @@ def to_pypsa(network, mode):
             network,
             components['Bus'].index.tolist())
 
+        ts_gen_lv_aggr_p, \
+        ts_gen_lv_aggr_q, \
+        ts_load_lv_aggr_p, ts_load_lv_aggr_q = attach_aggregated_lv_timeseries(
+            network)
+
+        # Concat MV and LV (aggregated) time series
+        timeseries_load_p = pd.concat([timeseries_load_p, ts_load_lv_aggr_p],
+                                      axis=1)
+        timeseries_load_q = pd.concat([timeseries_load_q, ts_load_lv_aggr_q],
+                                      axis=1)
+        timeseries_gen_p = pd.concat([timeseries_gen_p, ts_gen_lv_aggr_p],
+                                     axis=1)
+        timeseries_gen_q = pd.concat([timeseries_gen_q, ts_gen_lv_aggr_q],
+                                     axis=1)
     elif mode is 'lv':
         raise NotImplementedError
         lv_to_pypsa(network)
@@ -321,6 +335,100 @@ def attach_aggregated_lv_components(network, components):
     return components
 
 
+def attach_aggregated_lv_timeseries(network):
+    """
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+
+    Returns
+    -------
+    tuple of :pandas:`pandas.DataFrame<dataframe>`
+        Altered time series DataFrames. Tuple of size for containing DataFrames
+        that represent
+
+            1. 'p_set' of aggregated Generation at each LV station
+            2. 'q_set' of aggregated Generation at each LV station
+            3. 'p_set' of aggregated Load at each LV station
+            4. 'q_set' of aggregated Load at each LV station
+
+
+    """
+
+    generation_p = []
+    generation_q = []
+    load_p = []
+    load_q = []
+
+    for lv_grid in network.mv_grid.lv_grids:
+        # Determine aggregated generation at LV stations
+        generation = {}
+        for gen in lv_grid.graph.nodes_by_attribute('generator'):
+            # for type in gen.type:
+            #     for subtype in gen.subtype:
+            gen_name = '_'.join([gen.type,
+                                 gen.subtype,
+                                 'aggregated',
+                                 'LV_grid',
+                                 str(lv_grid.id)])
+
+            generation.setdefault(gen.type, {})
+            generation[gen.type].setdefault(gen.subtype, {})
+            generation[gen.type][gen.subtype].setdefault('timeseries_p', [])
+            generation[gen.type][gen.subtype].setdefault('timeseries_q', [])
+            generation[gen.type][gen.subtype]['timeseries_p'].append(
+                gen.pypsa_timeseries('p').rename(gen_name).to_frame())
+            generation[gen.type][gen.subtype]['timeseries_q'].append(
+                gen.pypsa_timeseries('q').rename(gen_name).to_frame())
+
+        for k_type, v_type in generation.items():
+            for k_type, v_subtype in v_type.items():
+                col_name = v_subtype['timeseries_p'][0].columns[0]
+                generation_p.append(
+                    pd.concat(v_subtype['timeseries_p'],
+                              axis=1).sum(axis=1).rename(col_name).to_frame())
+                generation_q.append(
+                    pd.concat(v_subtype['timeseries_q'], axis=1).sum(
+                        axis=1).rename(col_name).to_frame())
+
+        # Determine aggregated load at LV stations
+        load = {}
+        for lo in lv_grid.graph.nodes_by_attribute('load'):
+            for sector, val in lo.consumption.items():
+                load.setdefault(sector, {})
+                load[sector].setdefault('timeseries_p', [])
+                load[sector].setdefault('timeseries_q', [])
+                # load[sector]['timeseries_p'].append(
+                #     lo.pypsa_timeseries(sector, 'p').rename(
+                #         '_'.join([repr(lo), sector])).to_frame())
+                # load[sector]['timeseries_q'].append(lo.pypsa_timeseries(sector, 'q').rename(
+                #         '_'.join([repr(lo), sector])).to_frame())
+                load[sector]['timeseries_p'].append(
+                    lo.pypsa_timeseries(sector, 'p').rename(
+                        '_'.join(
+                            [repr(lo), repr(lv_grid), sector, 'p'])).to_frame())
+                load[sector]['timeseries_q'].append(
+                    lo.pypsa_timeseries(sector, 'q').rename(
+                        '_'.join(
+                            [repr(lo), repr(lv_grid), sector, 'q'])).to_frame())
+                # TODO: now, there are single loads from eDisGo topology. Summarize these by sector and LV grid
+
+        for sector, val in load.items():
+            load_p.append(
+                pd.concat(val['timeseries_p'], axis=1).sum(axis=1).rename(
+                    '_'.join(['Load', sector, repr(lv_grid)])).to_frame())
+            load_q.append(
+                pd.concat(val['timeseries_q'], axis=1).sum(axis=1).rename(
+                    '_'.join(['Load', sector, repr(lv_grid)])).to_frame())
+
+    return pd.concat(generation_p, axis=1), \
+           pd.concat(generation_q, axis=1), \
+           pd.concat(load_p, axis=1), \
+           pd.concat(load_q, axis=1)
+
+
 def lv_to_pypsa():
     """
     Convert LV grid topology to PyPSA representation
@@ -465,6 +573,7 @@ def _check_topology(mv_components):
     if missing_buses:
         raise ValueError("Buses {buses} are not defined.".format(
             buses=missing_buses))
+
 
 def pypsa_bus_timeseries(network, buses, mode=None):
     """Timeseries in PyPSA compatible format for generator instances
