@@ -67,7 +67,7 @@ def check_line_load(network, results_lines, **kwargs):
     # MV
     for line in list(network.mv_grid.graph.graph_edges()):
         s_max_th = (3 ** 0.5 * line['line']._type['U_n'] *
-                   line['line']._type['I_max_th']) * \
+                    line['line']._type['I_max_th']) * \
                    load_factor_mv_line * line['line']._quantity
         try:
             # check if maximum s_0 from power flow analysis exceeds allowed
@@ -77,7 +77,7 @@ def check_line_load(network, results_lines, **kwargs):
                                     mw2kw / s_max_th)
         except:
             logger.debug('No results for line {} '.format(str(line)) +
-                        'to check overloading.')
+                         'to check overloading.')
     # LV
     for lv_grid in network.mv_grid.lv_grids:
         for line in list(lv_grid.graph.graph_edges()):
@@ -93,7 +93,7 @@ def check_line_load(network, results_lines, **kwargs):
                                         mw2kw / s_max_th)
             except:
                 logger.debug('No results for line {} '.format(str(line)) +
-                            'to check overloading.')
+                             'to check overloading.')
 
     if crit_lines:
         logger.info('==> {} lines have load issues.'.format(
@@ -109,7 +109,7 @@ def check_station_load(network, results_lines, **kwargs):
     ----------
     network: edisgo Network object
     results_lines: pandas.DataFrame
-        power flow analysis results (pfa_nodes) from edisgo Results object
+        power flow analysis results (pfa_edges) from edisgo Results object
     **kwargs:
         load_factor_mv_lv_transformer: float (optional)
             allowed load of MV/LV transformer in uninterrupted operation
@@ -117,7 +117,7 @@ def check_station_load(network, results_lines, **kwargs):
     Returns
     -------
     Dict of critical stations (edisgo Station objects)
-    Format: {station_1: overloading_1, ..., station_n: overloading_n},
+    Format: {station_1: overloading_1, ..., station_n: overloading_n}
 
     Notes
     -----
