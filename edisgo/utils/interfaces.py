@@ -58,9 +58,9 @@ def to_pypsa(network, mode):
     # buses are created first to avoid warnings
     pypsa_network.import_components_from_dataframe(components['Bus'], 'Bus')
 
-    for k, components in components.items():
+    for k, comps in components.items():
         if k is not 'Bus':
-            pypsa_network.import_components_from_dataframe(components, k)
+            pypsa_network.import_components_from_dataframe(comps, k)
 
     # import time series to PyPSA network
     import_series_from_dataframe(pypsa_network,
