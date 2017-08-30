@@ -84,6 +84,9 @@ def import_from_dingo(file, network):
     # Set data source
     network.set_data_source('grid', 'dingo')
 
+    # Set more params
+    network._id = network.mv_grid.id
+
 
 def _build_lv_grid(dingo_grid, network):
     """
@@ -218,6 +221,7 @@ def _build_mv_grid(dingo_grid, network):
 
     # Instantiate a MV grid
     grid = MVGrid(
+        id=dingo_grid.id_db,
         network=network,
         grid_district={'geom': dingo_grid.grid_district.geo_data,
                        'population':

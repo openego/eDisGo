@@ -164,6 +164,11 @@ class Network:
         raise NotImplementedError
 
     @property
+    def id(self):
+        """Returns id of network"""
+        return self._id
+
+    @property
     def config(self):
         """Returns config object"""
         return self._config
