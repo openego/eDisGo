@@ -1,4 +1,5 @@
 from edisgo.data.import_data import import_from_dingo
+from edisgo.grid_expansion.costs import grid_expansion_costs
 import pandas as pd
 
 
@@ -276,6 +277,9 @@ class Results:
         object if this makes more sense (has to be defined).
 
         change: {added | removed} - says if something was added or removed
+    grid_expansion_costs: float
+        Total costs of grid expansion measures in `equipment_changes`.
+        ToDo: add unit
     """
 
     # TODO: maybe add setter to alter list of measures
@@ -288,3 +292,8 @@ class Results:
         self.pfa_q = pd.DataFrame()
         self.pfa_v_mag_pu = pd.DataFrame()
         self.equipment_changes = pd.DataFrame()
+
+        self.grid_expansion_costs = None
+
+    def calculate_grid_expansion_costs(self):
+        self.grid_expansion_costs = grid_expansion_costs(self)
