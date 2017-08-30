@@ -67,7 +67,7 @@ def check_line_load(network, results_lines, **kwargs):
     # MV
     for line in list(network.mv_grid.graph.graph_edges()):
         s_max_th = (3 ** 0.5 * line['line']._type['U_n'] *
-                   line['line']._type['I_max_th']) * \
+                    line['line']._type['I_max_th']) * \
                    load_factor_mv_line * line['line']._quantity
         try:
             # check if maximum s_0 from power flow analysis exceeds allowed
@@ -77,7 +77,7 @@ def check_line_load(network, results_lines, **kwargs):
                                     mw2kw / s_max_th)
         except:
             logger.debug('No results for line {} '.format(str(line)) +
-                        'to check overloading.')
+                         'to check overloading.')
     # LV
     for lv_grid in network.mv_grid.lv_grids:
         for line in list(lv_grid.graph.graph_edges()):
@@ -93,7 +93,7 @@ def check_line_load(network, results_lines, **kwargs):
                                         mw2kw / s_max_th)
             except:
                 logger.debug('No results for line {} '.format(str(line)) +
-                            'to check overloading.')
+                             'to check overloading.')
 
     if crit_lines:
         logger.info('==> {} lines have load issues.'.format(
@@ -109,7 +109,7 @@ def check_station_load(network, results_lines, **kwargs):
     ----------
     network: edisgo Network object
     results_lines: pandas.DataFrame
-        power flow analysis results (pfa_nodes) from edisgo Results object
+        power flow analysis results (pfa_edges) from edisgo Results object
     **kwargs:
         load_factor_mv_lv_transformer: float (optional)
             allowed load of MV/LV transformer in uninterrupted operation
@@ -117,7 +117,7 @@ def check_station_load(network, results_lines, **kwargs):
     Returns
     -------
     Dict of critical stations (edisgo Station objects)
-    Format: {station_1: overloading_1, ..., station_n: overloading_n},
+    Format: {station_1: overloading_1, ..., station_n: overloading_n}
 
     Notes
     -----
@@ -171,53 +171,80 @@ def check_station_load(network, results_lines, **kwargs):
     return crit_stations
 
 
-def check_voltage(grid, mode):
-    """ Checks for voltage stability issues at all nodes for MV or LV grid
+def check_voltage(network, results_nodes, **kwargs):
+    """ Checks for voltage stability issues at all nodes for MV and LV grid
 
     Parameters
     ----------
-    grid: GridDing0 object
-    mode: String
-        kind of grid ('MV' or 'LV')
+    network: edisgo Network object
+    results_nodes: pandas.DataFrame
+        power flow analysis results (pfa_nodes) from edisgo Results object
+    **kwargs:
+        mv_max_v_deviation: float (optional)
+            allowed voltage deviation in MV grid
+        lv_max_v_deviation: float (optional)
+            allowed voltage deviation in LV grid
 
     Returns
     -------
     List of critical nodes, sorted descending by voltage difference
+    Format: {grid_1: [node_1A, node_1B, ...], ..., grid_n: [node_nA, ...]}
 
     Notes
     -----
     The voltage is checked against a max. allowed voltage deviation.
     """
 
-    # crit_nodes = {}
-    #
-    # if mode == 'MV':
-    #     # load max. voltage difference for load and feedin case
-    #     mv_max_v_level_lc_diff_normal = float(cfg_ding0.get('mv_routing_tech_constraints',
-    #                                                         'mv_max_v_level_lc_diff_normal'))
-    #     mv_max_v_level_fc_diff_normal = float(cfg_ding0.get('mv_routing_tech_constraints',
-    #                                                         'mv_max_v_level_fc_diff_normal'))
-    #
-    #     # check nodes' voltages
-    #     voltage_station = grid._station.voltage_res
-    #     for node in grid.graph_nodes_sorted():
-    #         try:
-    #             # compare node's voltage with max. allowed voltage difference for load and feedin case
-    #             if (abs(voltage_station[0] - node.voltage_res[0]) > mv_max_v_level_lc_diff_normal) or\
-    #                (abs(voltage_station[1] - node.voltage_res[1]) > mv_max_v_level_fc_diff_normal):
-    #
-    #                 crit_nodes[node] = {'node': node,
-    #                                     'v_diff': max([abs(v2-v1) for v1, v2 in zip(node.voltage_res, voltage_station)])}
-    #         except:
-    #             pass
-    #
-    # elif mode == 'LV':
-    #     raise NotImplementedError
-    #
-    # if crit_nodes:
-    #     logger.info('==> {} nodes have voltage issues.'.format(len(crit_nodes)))
-    #
-    # return [_['node'] for _ in sorted(crit_nodes.values(), key=lambda _: _['v_diff'], reverse=True)]
+    # ToDo: delta_U wird auch benötigt, deshalb crit_nodes als dict mit series
+    # ToDo: crit_nodes innerhalb einer Series sortieren
+    crit_nodes = {}
+
+    # load max. voltage deviation for load and feedin case
+    mv_max_v_deviation = kwargs.get('mv_max_v_deviation', 0.1)
+    lv_max_v_deviation = kwargs.get('lv_max_v_deviation', 0.1)
+
+    # check nodes' voltages
+    # MV
+    voltage_station = network.mv_grid.station.transformers[0]._voltage_op
+    for node in network.mv_grid.graph.nodes():
+        try:
+            # check if maximum deviation in v_mag_pu exceeds allowed deviation
+            if (max(results_nodes.loc[node, 'v_mag_pu']) >
+                    1 + mv_max_v_deviation or
+                min(results_nodes.loc[
+                    node, 'v_mag_pu']) < 1 - mv_max_v_deviation):
+                try:
+                    crit_nodes[network.mv_grid].append(node)
+                except:
+                    crit_nodes[network.mv_grid] = [node]
+        except:
+            logger.debug('No results for node {} '.format(str(node)) +
+                         'to check overvoltage.')
+
+    # LV
+    for lv_grid in network.mv_grid.lv_grids:
+        for node in lv_grid.graph.nodes():
+            try:
+                # check if maximum deviation in v_mag_pu exceeds allowed
+                # deviation
+                if (max(results_nodes.loc[node, 'v_mag_pu']) >
+                        1 + lv_max_v_deviation or
+                    min(results_nodes.loc[
+                        node, 'v_mag_pu']) < 1 - lv_max_v_deviation):
+                    try:
+                        crit_nodes[lv_grid].append(node)
+                    except:
+                        crit_nodes[lv_grid] = [node]
+            except:
+                logger.debug('No results for node {} '.format(str(node)) +
+                             'in LV grid {} '.format(str(lv_grid)) +
+                             'to check overvoltage.')
+
+    if crit_nodes:
+        logger.info(
+            '==> {} nodes have voltage issues.'.format(len(crit_nodes)))
+
+    return crit_nodes
 
 
 def get_critical_voltage_at_nodes(grid):

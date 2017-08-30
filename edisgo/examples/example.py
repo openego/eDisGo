@@ -54,4 +54,3 @@ reinforce_grid.reinforce_grid(network, results)
 # ToDo: wie halten wir fest, welche Betriebsmittel erneuert wurden, um hinterher Kosten berechnen zu können?
 # ToDo: Parameter bei Komponenten einführen mit dem man feststellen kann, ob die Komponente bereits in einer ersten Maßnahme verstärkt oder ausgebaut wurde
 # ToDo: config mit Standardbetriebsmitteln?
-

@@ -1,5 +1,5 @@
-from .check_tech_constraints import check_line_load, check_station_load
-    #check_voltage, get_critical_line_loading, get_critical_voltage_at_nodes
+from .check_tech_constraints import check_line_load, check_station_load, \
+    check_voltage #, get_critical_line_loading, get_critical_voltage_at_nodes
 from .reinforce_measures import reinforce_branches_current, \
     reinforce_branches_voltage, extend_distribution_substation
 import logging
@@ -80,6 +80,7 @@ def reinforce_grid(network, results):
     crit_lines = {overloaded_line: 2.3}
 
     # do reinforcement
+    # ToDo: erst MV dann LV
     reinforce_branches_current(crit_lines)
 
     # if lines have been reinforced: run PF again and check if all
@@ -92,7 +93,7 @@ def reinforce_grid(network, results):
 
     # STEP 3: reinforce branches due to voltage problems
 
-    # crit_nodes = check_voltage(grid, mode)
+    #crit_nodes = check_voltage(network, results.pfa_nodes)
     # crit_nodes_count_prev_step = len(crit_nodes)
 
     # ToDo: get nodes with overvoltage (als dict mit grid und liste von Knoten {GridXY: [NodeA, NodeB]})
