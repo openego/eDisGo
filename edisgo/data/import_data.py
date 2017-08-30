@@ -259,12 +259,15 @@ def _build_mv_grid(dingo_grid, network):
                         grid=grid,
                         transformers=[Transformer(
                             grid=grid,
-                            id=t.grid.id_db,
+                            id='_'.join(['LV_station',
+                                        str(_.id_db),
+                                        'transformer',
+                                        str(count)]),
                             geom=_.geo_data,
                             voltage_op=t.v_level,
                             type=pd.Series(dict(
                                 s=t.s_max_a, x=t.x, r=t.r))
-                        ) for t in _.transformers()])
+                        ) for (count, t) in enumerate(_.transformers(), 1)])
                 for _ in dingo_grid._graph.nodes()
                 if isinstance(_, LVStationDing0) and _ not in aggr_stations}
     grid.graph.add_nodes_from(stations.values(), type='lv_station')
@@ -275,12 +278,15 @@ def _build_mv_grid(dingo_grid, network):
         geom=dingo_grid.station().geo_data,
         transformers=[Transformer(
             grid=grid,
-            id=_.grid.id_db,
+            id='_'.join(['MV_station',
+                         str(dingo_grid.station().id_db),
+                         'transformer',
+                         str(count)]),
             geom=dingo_grid.station().geo_data,
             voltage_op=_.v_level,
             type=pd.Series(dict(
                 s=_.s_max_a, x=_.x, r=_.r)))
-            for _ in dingo_grid.station().transformers()])
+            for (count, _) in enumerate(dingo_grid.station().transformers())])
     grid.graph.add_node(mv_station, type='mv_station')
 
     # Merge node above defined above to a single dict
