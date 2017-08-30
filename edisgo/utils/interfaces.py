@@ -80,12 +80,6 @@ def to_pypsa(network, mode):
                                  'Load',
                                  'q_set')
 
-    # check for sub-networks
-    pypsa_network.determine_network_topology()
-    subgraphs = list(connected_component_subgraphs(pypsa_network.graph()))
-
-    if len(subgraphs) > 1 or len(pypsa_network.sub_networks) > 1:
-        raise ValueError("The graph has isolated nodes or edges")
 
 
 
@@ -463,3 +457,54 @@ def _check_topology(mv_components):
     if missing_buses:
         raise ValueError("Buses {buses} are not defined.".format(
             buses=missing_buses))
+def _check_integrity_of_pypsa(pypsa_network):
+    """"""
+
+    # check for sub-networks
+    pypsa_network.determine_network_topology()
+    subgraphs = list(connected_component_subgraphs(pypsa_network.graph()))
+
+    if len(subgraphs) > 1 or len(pypsa_network.sub_networks) > 1:
+        raise ValueError("The graph has isolated nodes or edges")
+
+    # check consistency of topology and time series data
+    generators_ts_p_missing = pypsa_network.generators.loc[
+        ~pypsa_network.generators.index.isin(
+            pypsa_network.generators_t['p_set'].columns.tolist())]
+    generators_ts_q_missing = pypsa_network.generators.loc[
+        ~pypsa_network.generators.index.isin(
+            pypsa_network.generators_t['q_set'].columns.tolist())]
+    loads_ts_p_missing = pypsa_network.loads.loc[
+        ~pypsa_network.loads.index.isin(
+            pypsa_network.loads_t['p_set'].columns.tolist())]
+    loads_ts_q_missing = pypsa_network.loads.loc[
+        ~pypsa_network.loads.index.isin(
+            pypsa_network.loads_t['q_set'].columns.tolist())]
+    bus_v_set_missing = pypsa_network.buses.loc[
+        ~pypsa_network.buses.index.isin(
+            pypsa_network.buses_t['v_mag_pu_set'].columns.tolist())]
+
+    if not generators_ts_p_missing.empty:
+        raise ValueError("Following generators have no `p_set` time series "
+                         "{generators}".format(
+            generators=generators_ts_p_missing))
+
+    if not generators_ts_q_missing.empty:
+        raise ValueError("Following generators have no `q_set` time series "
+                         "{generators}".format(
+            generators=generators_ts_q_missing))
+    
+    if not loads_ts_p_missing.empty:
+        raise ValueError("Following loads have no `p_set` time series "
+                         "{loads}".format(
+            loads=loads_ts_p_missing))
+
+    if not loads_ts_q_missing.empty:
+        raise ValueError("Following loads have no `q_set` time series "
+                         "{loads}".format(
+            loads=loads_ts_q_missing))
+
+    if not bus_v_set_missing.empty:
+        raise ValueError("Following loads have no `v_mag_pu_set` time series "
+                         "{buses}".format(
+            buses=bus_v_set_missing))
