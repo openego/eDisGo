@@ -36,6 +36,14 @@ setup(
         'shapely >= 1.5.12, <= 1.5.12',
         'pandas >=0.19.2, <=0.20.1'
     ],
+    package_data={
+        'config': [
+            os.path.join('config',
+                         'config_system'),
+            os.path.join('config',
+                         '*.cfg')
+        ]
+        },
     cmdclass={
       'install': InstallSetup}
 )

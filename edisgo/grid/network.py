@@ -1,4 +1,8 @@
-from edisgo.data.import_data import import_from_dingo
+import edisgo
+from edisgo.tools import config
+from edisgo.data.import_data import import_from_dingo#, import_generators
+
+from os import path
 import pandas as pd
 
 
@@ -12,10 +16,6 @@ class Network:
     ----------
     _id : :obj:`str`
         Name of network
-    _equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
-        Electrical equipment such as lines and transformers
-    _config : ???
-        #TODO: TBD
     _metadata : :obj:`dict`
         Metadata of Network such as ?
     _data_sources : :obj:`dict` of :obj:`str`
@@ -23,18 +23,103 @@ class Network:
         Keys: 'grid', 'generators', ?
     _scenario : :class:`~.grid.grids.Scenario`
         Scenario which is used for calculations
+    _config :
+        #TODO: TBD
+    _equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+        Electrical equipment such as lines and transformers
     # TODO: Add remaining attributes
     """
 
     def __init__(self, **kwargs):
         self._id = kwargs.get('id', None)
-        self._equipment_data = kwargs.get('equipment_data', None)
-        self._config = kwargs.get('config', None)
         self._metadata = kwargs.get('metadata', None)
         self._data_sources = kwargs.get('data_sources', {})
         self._scenario = kwargs.get('scenario', None)
         self._mv_grid = kwargs.get('mv_grid', None)
         self.results = Results()
+
+        self._config = self._load_config()
+        self._equipment_data = self._load_equipment_data()
+
+    @staticmethod
+    def _load_config():
+        """Load config files
+
+        Returns
+        -------
+        config object
+        """
+
+        config.load_config('config_db_tables.cfg')
+        config.load_config('config_data.cfg')
+        config.load_config('config_flexopt.cfg')
+        config.load_config('config_misc.cfg')
+        config.load_config('config_scenario.cfg')
+
+        return config.cfg._sections
+
+    def _load_equipment_data(self):
+        """Load equipment data for transformers, cables etc.
+
+        Returns
+        -------
+        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+        """
+
+        package_path =  edisgo.__path__[0]
+        equipment_dir = self._config['system_dirs']['equipment_dir']
+
+        data = {}
+
+        equipment_mv_parameters_trafos = self._config['equipment']['equipment_mv_parameters_trafos']
+        data['MV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_mv_parameters_trafos),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'s_nom': lambda x: int(x)})
+
+        equipment_mv_parameters_lines = self._config['equipment']['equipment_mv_parameters_lines']
+        data['MV_lines'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                 equipment_mv_parameters_lines),
+                                       comment='#',
+                                       index_col='name',
+                                       delimiter=',',
+                                       decimal='.',
+                                       converters={'I_max_th': lambda x: int(x),
+                                                   'U_n': lambda x: int(x)})
+
+        equipment_mv_parameters_cables = self._config['equipment']['equipment_mv_parameters_cables']
+        data['MV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_mv_parameters_cables),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'I_max_th': lambda x: int(x),
+                                                    'U_n': lambda x: int(x)})
+
+        equipment_lv_parameters_cables = self._config['equipment']['equipment_lv_parameters_cables']
+        data['LV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_lv_parameters_cables),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'I_max_th': lambda x: int(x),
+                                                    'U_n': lambda x: int(x)})
+
+        equipment_lv_parameters_trafos = self._config['equipment']['equipment_lv_parameters_trafos']
+        data['LV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_lv_parameters_trafos),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'s_nom': lambda x: int(x)})
+
+        return data
 
     @classmethod
     def import_from_dingo(cls, file):
@@ -75,6 +160,16 @@ class Network:
 
         """
         raise NotImplementedError
+
+    @property
+    def config(self):
+        """Returns config object"""
+        return self._config
+
+    @property
+    def equipment_data(self):
+        """Returns equipment data object"""
+        return self._equipment_data
 
     @property
     def mv_grid(self):

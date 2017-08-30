@@ -5,11 +5,13 @@ import pickle
 import pandas as pd
 from ast import literal_eval
 import numpy as np
+import edisgo.tools.config as config
+config.load_config('config_db_tables.cfg')
 
-#network = Network.import_from_dingo(os.path.join('data', 'ding0_grids_example.pkl'))
+network = Network.import_from_dingo('ding0_grids_example.pkl')
 #pickle.dump(network, open('test_network.pkl', 'wb'))
 
-network = pickle.load(open('test_network.pkl', 'rb'))
+# network = pickle.load(open('test_network.pkl', 'rb'))
 
 # for now create results object
 # ToDo: Werte in DataFrame als List oder Array?
