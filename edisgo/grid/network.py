@@ -1,5 +1,8 @@
+import edisgo
 from edisgo.tools import config
-from edisgo.data.import_data import import_from_dingo, import_generators
+from edisgo.data.import_data import import_from_dingo#, import_generators
+
+from os import path
 import pandas as pd
 
 
@@ -49,13 +52,13 @@ class Network:
 
         config.load_config('config_db_tables.cfg')
         config.load_config('config_data.cfg')
+        config.load_config('config_flexopt.cfg')
         config.load_config('config_misc.cfg')
         config.load_config('config_scenario.cfg')
 
         return config.cfg._sections
 
-    @staticmethod
-    def _load_equipment_data():
+    def _load_equipment_data(self):
         """Load equipment data for transformers, cables etc.
 
         Returns
@@ -63,7 +66,60 @@ class Network:
         :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
         """
 
-        pass
+        package_path =  edisgo.__path__[0]
+        equipment_dir = self._config['system_dirs']['equipment_dir']
+
+        data = {}
+
+        equipment_mv_parameters_trafos = self._config['equipment']['equipment_mv_parameters_trafos']
+        data['MV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_mv_parameters_trafos),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'s_nom': lambda x: int(x)})
+
+        equipment_mv_parameters_lines = self._config['equipment']['equipment_mv_parameters_lines']
+        data['MV_lines'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                 equipment_mv_parameters_lines),
+                                       comment='#',
+                                       index_col='name',
+                                       delimiter=',',
+                                       decimal='.',
+                                       converters={'I_max_th': lambda x: int(x),
+                                                   'U_n': lambda x: int(x)})
+
+        equipment_mv_parameters_cables = self._config['equipment']['equipment_mv_parameters_cables']
+        data['MV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_mv_parameters_cables),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'I_max_th': lambda x: int(x),
+                                                    'U_n': lambda x: int(x)})
+
+        equipment_lv_parameters_cables = self._config['equipment']['equipment_lv_parameters_cables']
+        data['LV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_lv_parameters_cables),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'I_max_th': lambda x: int(x),
+                                                    'U_n': lambda x: int(x)})
+
+        equipment_lv_parameters_trafos = self._config['equipment']['equipment_lv_parameters_trafos']
+        data['LV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_lv_parameters_trafos),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'s_nom': lambda x: int(x)})
+
+        return data
 
     @classmethod
     def import_from_dingo(cls, file):
@@ -111,6 +167,11 @@ class Network:
     def config(self):
         """Returns config object"""
         return self._config
+
+    @property
+    def equipment_data(self):
+        """Returns equipment data object"""
+        return self._equipment_data
 
     @property
     def mv_grid(self):

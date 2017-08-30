@@ -54,7 +54,7 @@ _loaded = False
 
 # load config dirs
 package_path = edisgo.__path__[0]
-internal_config_file = os.path.join(package_path, 'config', 'config_internal')
+internal_config_file = os.path.join(package_path, 'config', 'config_system')
 try:
     cfg.read(internal_config_file)
 except:
@@ -62,7 +62,7 @@ except:
 
 
 def load_config(filename):
-    config_dir = get('dirs', 'config_dir')
+    config_dir = get('user_dirs', 'config_dir')
     config_file = os.path.join(extend_root_path(config_dir), filename)
 
     # config file does not exist -> copy default
@@ -105,7 +105,7 @@ def get(section, key):
 def get_root_path():
     """Returns the basic edisgo path and creates it if necessary.
     """
-    root_dir = get('dirs', 'root_dir')
+    root_dir = get('user_dirs', 'root_dir')
     root_path = os.path.join(os.path.expanduser('~'), root_dir)
 
     # root dir does not exist
@@ -116,7 +116,7 @@ def get_root_path():
         os.mkdir(root_path)
 
         # copy default config files
-        config_dir = get('dirs', 'config_dir')
+        config_dir = get('user_dirs', 'config_dir')
         config_path = extend_root_path(config_dir)
         logger.info('I will create a default set of config files in {}'
                     .format(config_path))
