@@ -124,6 +124,10 @@ def reinforce_branches_voltage(grid, crit_nodes):
     References
     ----------
     .. [1] "Verteilnetzstudie für das Land Baden-Württemberg"
+    .. [2] "Technische Richtlinie Erzeugungsanlagen am Mittelspannungsnetz -
+            Richtlinie für Anschluss und Parallelbetrieb von
+            Erzeugungsanlagen am Mittelspannungsnetz, Juni 2008"
+
     """
 
     # ToDo: gilt Methodik auch für die MS?
@@ -177,15 +181,11 @@ def reinforce_branches_voltage(grid, crit_nodes):
                 # if critical line is not yet a standard line check if one or
                 # several standard lines are needed
                 else:
-                    # check if new standard line might solve the voltage
-                    # problem
-                    # ToDo: welche Kenngröße verwenden?
-                    if crit_line._type['I_max_th'] < standard_line['I_max_th']:
-                        crit_line._type = standard_line.copy()
-                    else:
-                        # ToDo: wie viele Standardbetriebsmittel?
-                        crit_line._type = standard_line.copy()
-                        crit_line._quantity = 2
+                    # number of parallel standard lines could be calculated
+                    # following [2] p.103, for now number of parallel standard
+                    # lines is iterated
+                    crit_line._type = standard_line.copy()
+                    crit_line._quantity = 1
 
             # if node_2_3 is not a representative, disconnect line
             else:
