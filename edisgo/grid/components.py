@@ -101,7 +101,7 @@ class Load(Component):
 
         q_factor = tan(acos(0.95))
 
-        avg_hourly_load = {k: v / hours_of_the_year
+        avg_hourly_load = {k: v / hours_of_the_year / 1e3
                            for k, v in self.consumption.items()}
 
         rng = pd.date_range('1/1/2011', periods=hours_of_the_year, freq='H')
@@ -212,8 +212,8 @@ class Generator(Component):
         rng = pd.date_range('1/1/2011', periods=hours_of_the_year, freq='H')
 
         ts_dict = {
-            'p': [self.nominal_capacity * (1 - q_factor)] * hours_of_the_year,
-            'q': [self.nominal_capacity * q_factor] * hours_of_the_year}
+            'p': [self.nominal_capacity / 1e3 * (1 - q_factor)] * hours_of_the_year,
+            'q': [self.nominal_capacity / 1e3 * q_factor] * hours_of_the_year}
 
         self._timeseries = pd.DataFrame(ts_dict, index=rng)
         # self._timeseries = kwargs.get('timeseries', None)
