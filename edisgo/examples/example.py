@@ -4,8 +4,8 @@ import os
 timeseries = TimeSeries()
 scenario = Scenario(timeseries=timeseries)
 
-network = Network.import_from_dingo(
-    os.path.join('data', 'dingo_grids__3545.pkl'),
+network = Network.import_from_ding0(
+    os.path.join('data', 'ding0_grids__3545.pkl'),
     id='Test grid',
     scenario=scenario
 )

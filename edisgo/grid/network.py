@@ -1,4 +1,4 @@
-from edisgo.data.import_data import import_from_dingo
+from edisgo.data.import_data import import_from_ding0
 from ..utils import interfaces
 import pandas as pd
 
@@ -20,7 +20,7 @@ class Network:
     _metadata : :obj:`dict`
         Metadata of Network such as ?
     _data_source : :obj:`str`
-        Data Source of grid data (e.g. "dingo")
+        Data Source of grid data (e.g. "ding0")
     _scenario : :class:`~.grid.grids.Scenario`
         Scenario which is used for calculations
     _pypsa : :pypsa:`pypsa.Network<network>`
@@ -42,18 +42,18 @@ class Network:
             self._pypsa = kwargs.get('pypsa', None)
 
     @classmethod
-    def import_from_dingo(cls, file, **kwargs):
+    def import_from_ding0(cls, file, **kwargs):
         """Import grid data from DINGO file
 
         For details see
-        :func:`edisgo.data.import_data.import_from_dingo`
+        :func:`edisgo.data.import_data.import_from_ding0`
         """
 
         # create the network instance
         network = cls(**kwargs)
 
         # call the importer
-        import_from_dingo(file, network)
+        import_from_ding0(file, network)
 
         return network
 
