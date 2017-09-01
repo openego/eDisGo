@@ -31,14 +31,12 @@ setup(
     author_email='',
     description='A python package for distribution grid analysis and optimization',
     install_requires = [
-        'dingo==0.1.0-pre+git.477bf495',
+        'ding0==0.1.2',
         'networkx >=1.11',
         'shapely >= 1.5.12, <= 1.5.12',
-        'pandas >=0.19.2, <=0.20.1'
+        'pandas >=0.20.3, <=0.20.3',
+        'pypsa >=0.10.0, <=0.10.0'
     ],
     cmdclass={
-      'install': InstallSetup},
-    dependency_links=['https://github.com/openego/dingo/archive/'\
-                      '477bf49534f93aca90ba3c5231fe726972343939.zip'\
-                      '#egg=dingo-0.1.0-pre+git.477bf495']
+      'install': InstallSetup}
 )
