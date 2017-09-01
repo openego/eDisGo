@@ -13,17 +13,20 @@ network = Network.import_from_ding0(
 # export to pypsa
 network.analyze(mode='mv')
 
-# # MV generators
-# gens = network.mv_grid.graph.nodes_by_attribute('generator')
-# print('Generators in MV grid incl. aggregated generators from MV and LV')
-# print('Type\tSubtype\tCapacity in kW')
-# for gen in gens:
-#     print("{type}\t{sub}\t{capacity}".format(
-#         type=gen.type, sub=gen.subtype, capacity=gen.nominal_capacity))
-#
-# # Load located in aggregated LAs
-# print('\n\nAggregated load in LA adds up to\n')
-# [print('\t{0}: {1} MWh'.format(
-#     _,
-#     network.mv_grid.graph.nodes_by_attribute('load')[0].consumption[_] / 1e3))
-#     for _ in ['retail', 'industrial', 'agricultural', 'residential']]
+# MV generators
+gens = network.mv_grid.graph.nodes_by_attribute('generator')
+print('Generators in MV grid incl. aggregated generators from MV and LV')
+print('Type\tSubtype\tCapacity in kW')
+for gen in gens:
+    print("{type}\t{sub}\t{capacity}".format(
+        type=gen.type, sub=gen.subtype, capacity=gen.nominal_capacity))
+
+# Load located in aggregated LAs
+print('\n\nAggregated load in LA adds up to\n')
+if network.mv_grid.graph.nodes_by_attribute('load'):
+    [print('\t{0}: {1} MWh'.format(
+        _,
+        network.mv_grid.graph.nodes_by_attribute('load')[0].consumption[_] / 1e3))
+        for _ in ['retail', 'industrial', 'agricultural', 'residential']]
+else:
+    print("O MWh")

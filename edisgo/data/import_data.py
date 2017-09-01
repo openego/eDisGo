@@ -215,7 +215,10 @@ def _build_mv_grid(ding0_grid, network):
     # TODO: add a reference above for explanation of how these are treated
     la_centers = [_ for _ in ding0_grid._graph.nodes()
                   if isinstance(_, LVLoadAreaCentreDing0)]
-    aggregated, aggr_stations = _determine_aggregated_nodes(la_centers)
+    if la_centers:
+        aggregated, aggr_stations = _determine_aggregated_nodes(la_centers)
+    else:
+        aggregated = aggr_stations = []
 
     # Create list of load instances and add these to grid's graph
     loads = {_: Load(
@@ -767,7 +770,8 @@ def _validate_load_generation(mv_grid, ding0_mv_grid):
 
     # collect eDisGo cumulative generation capacity
     for gen in mv_gens + lv_gens:
-        if gen in mv_grid.graph.neighbors(mv_grid.station):
+        if gen in mv_grid.graph.neighbors(mv_grid.station) and \
+            mv_grid.graph.get_edge_data(mv_grid.station,gen)['line'].length <= .5:
             generation_aggr.setdefault(gen.type, {})
             generation_aggr[gen.type].setdefault(gen.subtype, {'edisgo': 0})
             generation_aggr[gen.type][gen.subtype]['edisgo'] += gen.nominal_capacity
