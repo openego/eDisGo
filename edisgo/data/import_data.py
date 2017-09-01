@@ -1,6 +1,6 @@
-from dingo.tools.results import load_nd_from_pickle
-from dingo.core.network.stations import LVStationDingo
-from dingo.core.structure.regions import LVLoadAreaCentreDingo
+from ding0.tools.results import load_nd_from_pickle
+from ding0.core.network.stations import LVStationDing0
+from ding0.core.structure.regions import LVLoadAreaCentreDing0
 from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
     Station, Line, Transformer
 from ..grid.grids import MVGrid, LVGrid
@@ -214,7 +214,7 @@ def _build_mv_grid(dingo_grid, network):
     # Special treatment of LVLoadAreaCenters see ...
     # TODO: add a reference above for explanation of how these are treated
     la_centers = [_ for _ in dingo_grid._graph.nodes()
-                  if isinstance(_, LVLoadAreaCentreDingo)]
+                  if isinstance(_, LVLoadAreaCentreDing0)]
     aggregated, aggr_stations = _determine_aggregated_nodes(la_centers)
 
     # Create list of load instances and add these to grid's graph
@@ -303,8 +303,8 @@ def _build_mv_grid(dingo_grid, network):
                   grid=grid)
               })
              for _ in dingo_grid.graph_edges()
-             if not any([isinstance(_['adj_nodes'][0], LVLoadAreaCentreDingo),
-                        isinstance(_['adj_nodes'][1], LVLoadAreaCentreDingo)])]
+             if not any([isinstance(_['adj_nodes'][0], LVLoadAreaCentreDing0),
+                        isinstance(_['adj_nodes'][1], LVLoadAreaCentreDing0)])]
     grid.graph.add_edges_from(lines, type='line')
 
     # Assign reference to HV-MV station to MV grid
@@ -454,12 +454,11 @@ def _determine_aggregated_nodes(la_centers):
             'geom': la_center.lv_load_area.geo_area}
 
         # Determine LV grids/ stations that are aggregated
-        stations = [_.lv_grid.station()
-                    for _ in la_center.lv_load_area._lv_grid_districts]
+        for _ in la_center.lv_load_area._lv_grid_districts:
+            aggr_stations.append(_.lv_grid.station())
 
         # add elements to lists
         aggregated.append(aggr)
-        aggr_stations.extend(stations)
 
 
     return aggregated, aggr_stations
@@ -607,8 +606,8 @@ def _validate_dingo_mv_grid_import(grid, dingo_grid):
         'lv_station'))
     data_integrity['lv_station']['dingo'] = len(
         [_ for _ in dingo_grid._graph.nodes()
-         if isinstance(_, LVStationDingo)
-         and not _.lv_load_area.is_aggregated])
+         if (isinstance(_, LVStationDing0) and
+             not _.grid.grid_district.lv_load_area.is_aggregated)])
 
     # Check number of lines outside aggregated LA
     # edges_w_la = grid.graph.graph_edges()
