@@ -1,6 +1,7 @@
-from edisgo.data.import_data import import_from_ding0
-from ..utils import interfaces
 import pandas as pd
+
+from edisgo.data.import_data import import_from_ding0
+from edisgo.tools import interfaces
 
 
 class Network:
