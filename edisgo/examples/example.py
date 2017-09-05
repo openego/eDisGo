@@ -11,7 +11,7 @@ network = Network.import_from_ding0(
 )
 
 # export to pypsa
-network.analyze(mode='mv')
+# network.analyze(mode='mv')
 
 # MV generators
 gens = network.mv_grid.graph.nodes_by_attribute('generator')
