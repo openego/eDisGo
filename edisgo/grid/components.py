@@ -19,6 +19,11 @@ class Component:
         self._grid = kwargs.get('grid', None)
 
     @property
+    def id(self):
+        """Returns id of component"""
+        return self._id
+
+    @property
     def geom(self):
         """:shapely:`Shapely Point object<points>` or
         :shapely:`Shapely LineString object<linestrings>` : Location of the
