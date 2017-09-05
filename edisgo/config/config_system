@@ -1,0 +1,30 @@
+# This file is part of eDisGo, a python package for distribution grid
+# analysis and optimization.
+#
+# It is developed in the project open_eGo: https://openegoproject.wordpress.com
+#
+# eDisGo lives at github: https://github.com/openego/edisgo/
+# The documentation is available on RTD: http://edisgo.readthedocs.io
+#
+# CAUTION: This is an internal config file, do not modify unless you know what
+# you are doing!
+
+[user_dirs]
+
+root_dir = .edisgo
+config_dir = config
+data_dir = data
+log_dir = log
+output_dir = output
+
+[system_dirs]
+
+equipment_dir = equipment
+
+[equipment]
+
+equipment_mv_parameters_trafos = equipment-parameters_MV_transformers.csv
+equipment_mv_parameters_cables = equipment-parameters_MV_cables.csv
+equipment_mv_parameters_lines = equipment-parameters_MV_overhead_lines.csv
+equipment_lv_parameters_trafos = equipment-parameters_LV_transformers.csv
+equipment_lv_parameters_cables = equipment-parameters_LV_cables.csv

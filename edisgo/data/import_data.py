@@ -69,8 +69,14 @@ def import_from_ding0(file, network):
     # Check data integrity
     _validate_ding0_grid_import(network.mv_grid, ding0_mv_grid, lv_grid_mapping)
 
+    # Set data source
+    network.set_data_source('grid', 'dingo')
 
-def _build_lv_grid(ding0_grid):
+    # Set more params
+    network._id = network.mv_grid.id
+
+
+def _build_lv_grid(ding0_grid, network):
     """
     Build eDisGo LV grid from Ding0 data
 
@@ -105,7 +111,8 @@ def _build_lv_grid(ding0_grid):
                     grid_district={
                         'geom': ding0_lv_grid.grid_district.geo_data,
                         'population': ding0_lv_grid.grid_district.population},
-                    voltage_nom=ding0_lv_grid.v_level)
+                    voltage_nom=ding0_lv_grid.v_level,
+                    network=network)
 
                 # Create LV station instances
                 station = Station(id=ding0_lv_grid._station.id_db,
@@ -202,6 +209,7 @@ def _build_mv_grid(ding0_grid, network):
 
     # Instantiate a MV grid
     grid = MVGrid(
+        id=dingo_grid.id_db,
         network=network,
         grid_district={'geom': ding0_grid.grid_district.geo_data,
                        'population':
