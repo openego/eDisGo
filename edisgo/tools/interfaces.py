@@ -241,6 +241,13 @@ def mv_to_pypsa(network):
         bus['name'].append(bus1_name)
         bus['v_nom'].append(mv_st.transformers[0].voltage_op)
 
+    # Add separate slack generator at MV station secondary side bus bar
+    generator['name'].append("Generator_slack")
+    generator['bus'].append(bus1_name)
+    generator['control'].append('Slack')
+    generator['p_nom'].append(0)
+    generator['type'].append('Slack generator')
+
     components = {
         'Generator': pd.DataFrame(generator).set_index('name'),
         'Bus': pd.DataFrame(bus).set_index('name'),
@@ -632,12 +639,15 @@ def _check_integrity_of_pypsa(pypsa_network):
         ~pypsa_network.buses.index.isin(
             pypsa_network.buses_t['v_mag_pu_set'].columns.tolist())]
 
-    if not generators_ts_p_missing.empty:
+    # Comparison of generators excludes slack generators (have no time series)
+    if (not generators_ts_p_missing.empty and not all(
+                generators_ts_p_missing['control'] == 'Slack')):
         raise ValueError("Following generators have no `p_set` time series "
                          "{generators}".format(
             generators=generators_ts_p_missing))
 
-    if not generators_ts_q_missing.empty:
+    if (not generators_ts_q_missing.empty and not all(
+                generators_ts_q_missing['control'] == 'Slack')):
         raise ValueError("Following generators have no `q_set` time series "
                          "{generators}".format(
             generators=generators_ts_q_missing))
