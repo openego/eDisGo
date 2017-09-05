@@ -1,4 +1,5 @@
 from edisgo.data.import_data import import_from_ding0
+from edisgo.grid_expansion.costs import grid_expansion_costs
 import pandas as pd
 from edisgo.tools import interfaces
 
@@ -324,7 +325,7 @@ class ETraGoSpecs:
 
 class Results:
     """
-    Power flow analysis results managment
+    Power flow analysis results management
 
     Includes raw power flow analysis results, history of measures to increase
     the grid's hosting capacity and information about changes of equipment.
@@ -335,14 +336,26 @@ class Results:
         A stack that details the history of measures to increase grid's hosting
         capacity. The last item refers to the latest measure. The key `original`
         refers to the state of the grid topology as it was initially imported.
-    pfa_nodes: :pandas:`pandas.DataFrame<dataframe>`
-        Holds power flow analysis results for nodes in the grid topology from
-        several runs. Each run corresponds to and is indexed by an item of the
-        stack `measures`.
-    pfa_edges: :pandas:`pandas.DataFrame<dataframe>`
-        Holds power flow analysis results for edges in the grid topology from
-        several runs. Each run corresponds to and is indexed by an item of the
-        stack `measures`.
+    pfa_p: :pandas:`pandas.DataFrame<dataframe>`
+        Holds power flow analysis results for active power for the last
+        iteration step. Index of the DataFrame is a DatetimeIndex indicating
+        the time period the power flow analysis was conducted for; columns
+        of the DataFrame are the edges as well as stations of the grid
+        topology.
+        ToDo: add unit
+    pfa_q: :pandas:`pandas.DataFrame<dataframe>`
+        Holds power flow analysis results for reactive power for the last
+        iteration step. Index of the DataFrame is a DatetimeIndex indicating
+        the time period the power flow analysis was conducted for; columns
+        of the DataFrame are the edges as well as stations of the grid
+        topology.
+        ToDo: add unit
+    pfa_v_mag_pu: :pandas:`pandas.DataFrame<dataframe>`
+        Holds power flow analysis results for relative voltage deviation for
+        the last iteration step. Index of the DataFrame is a DatetimeIndex
+        indicating the time period the power flow analysis was conducted for;
+        columns of the DataFrame are the nodes as well as stations of the grid
+        topology.
     equipment_changes: :pandas:`pandas.DataFrame<dataframe>`
         Tracks changes in the equipment (replaced or added cable, batteries
         added, curtailment set to a generator, ...). This is indexed by the
@@ -355,6 +368,9 @@ class Results:
         object if this makes more sense (has to be defined).
 
         change: {added | removed} - says if something was added or removed
+    grid_expansion_costs: float
+        Total costs of grid expansion measures in `equipment_changes`.
+        ToDo: add unit
     """
 
     # TODO: maybe add setter to alter list of measures
@@ -363,6 +379,7 @@ class Results:
 
     def __init__(self):
         self.measures = ['original']
-        self.pfa_nodes = pd.DataFrame()
-        self.pfa_edges = pd.DataFrame()
+        self.pfa_p = pd.DataFrame()
+        self.pfa_q = pd.DataFrame()
+        self.pfa_v_mag_pu = pd.DataFrame()
         self.equipment_changes = pd.DataFrame()
