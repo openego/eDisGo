@@ -1,4 +1,6 @@
 from shapely.geometry import LineString
+from math import acos, tan
+import pandas as pd
 
 
 class Component:
@@ -74,6 +76,14 @@ class Transformer(Component):
         self._voltage_op = kwargs.get('voltage_op', None)
         self._type = kwargs.get('type', None)
 
+    @property
+    def voltage_op(self):
+        return self._voltage_op
+
+    @property
+    def type(self):
+        return self._type
+
 
 class Load(Component):
     """Load object
@@ -86,10 +96,34 @@ class Load(Component):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        self._timeseries = kwargs.get('timeseries', None)
+        # self._timeseries = kwargs.get('timeseries', None)
         self._consumption = kwargs.get('consumption', None)
 
+        # TODO: replace below dummy timeseries
+        hours_of_the_year = 8760
+
+        cos_phi = 0.95
+
+        q_factor = tan(acos(0.95))
+
+        avg_hourly_load = {k: v / hours_of_the_year / 1e3
+                           for k, v in self.consumption.items()}
+
+        rng = pd.date_range('1/1/2011', periods=hours_of_the_year, freq='H')
+
+        ts_dict_p = {
+            (k, 'p'): [avg_hourly_load[k] * (
+            1 - q_factor)] * hours_of_the_year
+            for k in avg_hourly_load.keys()}
+        ts_dict_q = {
+            (k, 'q'): [avg_hourly_load[k] * (
+                q_factor)] * hours_of_the_year
+            for k in avg_hourly_load.keys()}
+        ts_dict = {**ts_dict_p, **ts_dict_q}
+
+        self._timeseries = pd.DataFrame(ts_dict, index=rng)
+
+    @property
     def timeseries(self):
         """Return time series of load
 
@@ -102,7 +136,25 @@ class Load(Component):
         --------
         edisgo.network.TimeSeries : Details of global TimeSeries
         """
-        raise NotImplementedError
+
+        return self._timeseries
+
+    # @property
+    def pypsa_timeseries(self, sector, attr):
+        """Return time series in PyPSA format
+
+        Parameters
+        ----------
+        sector : str
+            Sectoral load that is of interest. Valid sectors {residential,
+            retail, agricultural, industrial}
+        attr : str
+            Attribute name (PyPSA conventions). Choose from {p_set, q_set}
+        """
+
+        pypsa_component_name = '_'.join([repr(self), sector])
+
+        return self._timeseries[(sector, attr)]
 
     @property
     def consumption(self):
@@ -154,7 +206,22 @@ class Generator(Component):
         self._nominal_capacity = kwargs.get('nominal_capacity', None)
         self._type = kwargs.get('type', None)
         self._subtype = kwargs.get('subtype', None)
-        self._timeseries = kwargs.get('timeseries', None)
+
+        # TODO: replace below dummy timeseries
+        hours_of_the_year = 8760
+
+        cos_phi = 0.95
+
+        q_factor = tan(acos(0.95))
+
+        rng = pd.date_range('1/1/2011', periods=hours_of_the_year, freq='H')
+
+        ts_dict = {
+            'p': [self.nominal_capacity / 1e3 * (1 - q_factor)] * hours_of_the_year,
+            'q': [self.nominal_capacity / 1e3 * q_factor] * hours_of_the_year}
+
+        self._timeseries = pd.DataFrame(ts_dict, index=rng)
+        # self._timeseries = kwargs.get('timeseries', None)
 
     def timeseries(self):
         """Return time series of generator
@@ -165,7 +232,18 @@ class Generator(Component):
         and type of technology in :class:`~.grid.network.TimeSeries` object and
         considers for predefined curtailment as well.
         """
-        raise NotImplementedError
+        return self._timeseries
+
+    def pypsa_timeseries(self, attr):
+        """Return time series in PyPSA format
+
+        Parameters
+        ----------
+        attr : str
+            Attribute name (PyPSA conventions). Choose from {p_set, q_set}
+        """
+
+        return self._timeseries[attr]
 
     @property
     def type(self):
@@ -280,4 +358,12 @@ class Line(Component):
         adj_nodes = self._grid._graph.nodes_from_line(self)
 
         return LineString([adj_nodes[0].geom, adj_nodes[1].geom])
+
+    @property
+    def type(self):
+        return self._type
+
+    @property
+    def length(self):
+        return self._length
 

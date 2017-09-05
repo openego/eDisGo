@@ -16,6 +16,16 @@ Therefore use the flag :code:`--process-dependency-links` ::
     pip3 install -e <path-to-repo> --process-dependency-links
 
 
+Code style
+~~~~~~~~~~
+
+* **Documentation of `@property` functions**: Put documentation of getter and
+    setter both in Docstring of getter, see
+    `on Stackoverflow <https://stackoverflow.com/a/16025754/6385207>`_
+* Order of public/private/protected methods, property decorators, etc. in a
+    class: TBD
+
+
 Documentation
 ~~~~~~~~~~~~~
 
