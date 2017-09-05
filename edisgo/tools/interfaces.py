@@ -201,7 +201,7 @@ def mv_to_pypsa(network):
             line['bus1'].append('_'.join(['Bus', repr(l['adj_nodes'][1])]))
 
         line['type'].append("")
-        line['x'].append(l['line'].type['L'] * omega)
+        line['x'].append(l['line'].type['L'] * omega / 1e3)
         line['r'].append(l['line'].type['R'])
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
