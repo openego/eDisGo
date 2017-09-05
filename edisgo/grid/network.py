@@ -1,6 +1,5 @@
-import pandas as pd
-
 from edisgo.data.import_data import import_from_ding0
+import pandas as pd
 from edisgo.tools import interfaces
 
 
@@ -39,6 +38,7 @@ class Network:
             self._scenario = kwargs.get('scenario', None)
             self._mv_grid = kwargs.get('mv_grid', None)
             self._pypsa = None
+            self.results = Results()
         else:
             self._pypsa = kwargs.get('pypsa', None)
 
@@ -320,3 +320,49 @@ class ETraGoSpecs:
         self._battery_capacity = kwargs.get('battery_capacity', None)
         self._battery_active_power = kwargs.get('battery_active_power', None)
         self._curtailment = kwargs.get('curtailment', None)
+
+
+class Results:
+    """
+    Power flow analysis results managment
+
+    Includes raw power flow analysis results, history of measures to increase
+    the grid's hosting capacity and information about changes of equipment.
+
+    Attributes
+    ----------
+    measures: list
+        A stack that details the history of measures to increase grid's hosting
+        capacity. The last item refers to the latest measure. The key `original`
+        refers to the state of the grid topology as it was initially imported.
+    pfa_nodes: :pandas:`pandas.DataFrame<dataframe>`
+        Holds power flow analysis results for nodes in the grid topology from
+        several runs. Each run corresponds to and is indexed by an item of the
+        stack `measures`.
+    pfa_edges: :pandas:`pandas.DataFrame<dataframe>`
+        Holds power flow analysis results for edges in the grid topology from
+        several runs. Each run corresponds to and is indexed by an item of the
+        stack `measures`.
+    equipment_changes: :pandas:`pandas.DataFrame<dataframe>`
+        Tracks changes in the equipment (replaced or added cable, batteries
+        added, curtailment set to a generator, ...). This is indexed by the
+        components (nodes or edges) and has following columns:
+
+        equipment: detailing what was changed (line, battery, curtailment). For
+        ease of referencing we take the component itself. For lines we take the
+        line-dict, for batteries the battery-object itself and for curtailment
+        either a dict providing the details of curtailment or a curtailment
+        object if this makes more sense (has to be defined).
+
+        change: {added | removed} - says if something was added or removed
+    """
+
+    # TODO: maybe add setter to alter list of measures
+
+    # TODO: maybe initialize DataFrames `pfa_nodes` different. Like with index of all components of similarly
+
+    def __init__(self):
+        self.measures = ['original']
+        self.pfa_nodes = pd.DataFrame()
+        self.pfa_edges = pd.DataFrame()
+        self.equipment_changes = pd.DataFrame()
