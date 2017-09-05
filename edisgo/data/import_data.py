@@ -61,7 +61,7 @@ def import_from_ding0(file, network):
     network.mv_grid =_build_mv_grid(ding0_mv_grid, network)
 
     # Import low-voltage grid data
-    lv_grids, lv_station_mapping, lv_grid_mapping  = _build_lv_grid(ding0_mv_grid)
+    lv_grids, lv_station_mapping, lv_grid_mapping  = _build_lv_grid(ding0_mv_grid, network)
 
     # Assign lv_grids to network
     network.mv_grid.lv_grids = lv_grids
@@ -209,7 +209,7 @@ def _build_mv_grid(ding0_grid, network):
 
     # Instantiate a MV grid
     grid = MVGrid(
-        id=dingo_grid.id_db,
+        id=ding0_grid.id_db,
         network=network,
         grid_district={'geom': ding0_grid.grid_district.geo_data,
                        'population':
