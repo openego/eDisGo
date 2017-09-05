@@ -205,7 +205,7 @@ def mv_to_pypsa(network):
         line['r'].append(l['line'].type['R'])
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
-        line['length'].append(l['line'].length)
+        line['length'].append(l['line'].length / 1e3)
 
     # create dataframe for LV stations incl. primary/secondary side bus
     for lv_st in lv_stations:
