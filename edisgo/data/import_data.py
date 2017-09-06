@@ -521,23 +521,23 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
                          grid=grid)
                      }
                 grid.graph.add_edge(grid.station, gen, line, type='line')
+        for sector, sectoral_load in la['load'].items():
+            load = Load(
+                geom=grid.station.geom,
+                consumption={sector: sectoral_load},
+                grid=grid,
+                id='_'.join(['Load_aggregated', sector, repr(grid)]))
 
-        load = Load(
-            geom=grid.station.geom,
-            consumption=la['load'],
-            grid=grid,
-            id='_'.join(['Load_aggregated', repr(grid)]))
+            grid.graph.add_node(load, type='load')
 
-        grid.graph.add_node(load, type='load')
-
-        # connect aggregated load to MV station
-        line = {'line': Line(
-            id='line_aggr_load',
-            type=aggr_line_type,
-            length=.5,
-            grid=grid)
-        }
-        grid.graph.add_edge(grid.station, load, line, type='line')
+            # connect aggregated load to MV station
+            line = {'line': Line(
+                id='_'.join(['line_aggr_load', sector]),
+                type=aggr_line_type,
+                length=.5,
+                grid=grid)
+            }
+            grid.graph.add_edge(grid.station, load, line, type='line')
 
 
 def _validate_ding0_grid_import(mv_grid, ding0_mv_grid, lv_grid_mapping):
