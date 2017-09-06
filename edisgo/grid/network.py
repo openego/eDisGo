@@ -1,5 +1,9 @@
-from edisgo.data.import_data import import_from_ding0
-from edisgo.grid_expansion.costs import grid_expansion_costs
+import edisgo
+from edisgo.tools import config
+from edisgo.data.import_data import import_from_ding0#, import_generators
+from edisgo.flex_opt.costs import grid_expansion_costs
+
+from os import path
 import pandas as pd
 from edisgo.tools import interfaces
 
@@ -20,8 +24,9 @@ class Network:
         #TODO: TBD
     _metadata : :obj:`dict`
         Metadata of Network such as ?
-    _data_source : :obj:`str`
-        Data Source of grid data (e.g. "ding0")
+    _data_sources : :obj:`dict` of :obj:`str`
+        Data Sources of grid, generators etc.
+        Keys: 'grid', 'generators', ?
     _scenario : :class:`~.grid.grids.Scenario`
         Scenario which is used for calculations
     _pypsa : :pypsa:`pypsa.Network<network>`
@@ -32,16 +37,97 @@ class Network:
         # TODO: sort out realistic use cases for data from PyPSA network
         if 'pypsa' not in kwargs.keys():
             self._id = kwargs.get('id', None)
-            self._equipment_data = kwargs.get('equipment_data', None)
-            self._config = kwargs.get('config', None)
             self._metadata = kwargs.get('metadata', None)
-            self._data_source = kwargs.get('data_source', None)
+            self._data_sources = kwargs.get('data_sources', {})
             self._scenario = kwargs.get('scenario', None)
             self._mv_grid = kwargs.get('mv_grid', None)
             self._pypsa = None
             self.results = Results()
         else:
             self._pypsa = kwargs.get('pypsa', None)
+
+        self._config = self._load_config()
+        self._equipment_data = self._load_equipment_data()
+
+    @staticmethod
+    def _load_config():
+        """Load config files
+
+        Returns
+        -------
+        config object
+        """
+
+        config.load_config('config_db_tables.cfg')
+        config.load_config('config_data.cfg')
+        config.load_config('config_flexopt.cfg')
+        config.load_config('config_misc.cfg')
+        config.load_config('config_scenario.cfg')
+
+        return config.cfg._sections
+
+    def _load_equipment_data(self):
+        """Load equipment data for transformers, cables etc.
+
+        Returns
+        -------
+        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+        """
+
+        package_path =  edisgo.__path__[0]
+        equipment_dir = self._config['system_dirs']['equipment_dir']
+
+        data = {}
+
+        equipment_mv_parameters_trafos = self._config['equipment']['equipment_mv_parameters_trafos']
+        data['MV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_mv_parameters_trafos),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'s_nom': lambda x: int(x)})
+
+        equipment_mv_parameters_lines = self._config['equipment']['equipment_mv_parameters_lines']
+        data['MV_lines'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                 equipment_mv_parameters_lines),
+                                       comment='#',
+                                       index_col='name',
+                                       delimiter=',',
+                                       decimal='.',
+                                       converters={'I_max_th': lambda x: int(x),
+                                                   'U_n': lambda x: int(x)})
+
+        equipment_mv_parameters_cables = self._config['equipment']['equipment_mv_parameters_cables']
+        data['MV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_mv_parameters_cables),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'I_max_th': lambda x: int(x),
+                                                    'U_n': lambda x: int(x)})
+
+        equipment_lv_parameters_cables = self._config['equipment']['equipment_lv_parameters_cables']
+        data['LV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_lv_parameters_cables),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'I_max_th': lambda x: int(x),
+                                                    'U_n': lambda x: int(x)})
+
+        equipment_lv_parameters_trafos = self._config['equipment']['equipment_lv_parameters_trafos']
+        data['LV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_lv_parameters_trafos),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.',
+                                        converters={'s_nom': lambda x: int(x)})
+
+        return data
 
     @classmethod
     def import_from_ding0(cls, file, **kwargs):
@@ -113,6 +199,21 @@ class Network:
         raise NotImplementedError
 
     @property
+    def id(self):
+        """Returns id of network"""
+        return self._id
+
+    @property
+    def config(self):
+        """Returns config object"""
+        return self._config
+
+    @property
+    def equipment_data(self):
+        """Returns equipment data object"""
+        return self._equipment_data
+
+    @property
     def mv_grid(self):
         """:class:`~.grid.grids.MVGrid` : Medium voltage (MV) grid
 
@@ -123,6 +224,18 @@ class Network:
     @mv_grid.setter
     def mv_grid(self, mv_grid):
         self._mv_grid = mv_grid
+
+    @property
+    def data_sources(self):
+        """:obj:`dict` of :obj:`str` : Data Sources
+
+        """
+        return self._data_sources
+
+    def set_data_source(self, key, data_source):
+        """Set data source for key (e.g. 'grid')
+        """
+        self._data_sources[key] = data_source
 
     @property
     def pypsa(self):

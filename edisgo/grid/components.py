@@ -341,12 +341,15 @@ class Line(Component):
 
     _length: float
         Length of the line calculated in linear distance. Unit: m
+    _quantity: float
+        Quantity of parallel installed lines.
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._type = kwargs.get('type', None)
         self._length = kwargs.get('length', None)
+        self._quantity = kwargs.get('quantity', 1)
 
     @property
     def geom(self):
