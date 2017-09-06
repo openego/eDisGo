@@ -184,19 +184,19 @@ def mv_to_pypsa(network):
 
         if l['adj_nodes'][0] in lv_stations:
             line['bus0'].append(
-                '_'.join(['Bus', 'primary', repr(l['adj_nodes'][0])]))
+                '_'.join(['Bus', l['adj_nodes'][0].__repr__(side='mv')]))
         elif l['adj_nodes'][0] is network.mv_grid.station:
             line['bus0'].append(
-                '_'.join(['Bus', 'secondary', repr(network.mv_grid.station)]))
+                '_'.join(['Bus', l['adj_nodes'][0].__repr__(side='lv')]))
         else:
             line['bus0'].append('_'.join(['Bus', repr(l['adj_nodes'][0])]))
 
         if l['adj_nodes'][1] in lv_stations:
             line['bus1'].append(
-                '_'.join(['Bus', 'primary', repr(l['adj_nodes'][1])]))
+                '_'.join(['Bus', l['adj_nodes'][1].__repr__(side='mv')]))
         elif l['adj_nodes'][1] is network.mv_grid.station:
             line['bus1'].append(
-                '_'.join(['Bus', 'secondary', repr(network.mv_grid.station)]))
+                '_'.join(['Bus', l['adj_nodes'][1].__repr__(side='lv')]))
         else:
             line['bus1'].append('_'.join(['Bus', repr(l['adj_nodes'][1])]))
 
@@ -212,12 +212,12 @@ def mv_to_pypsa(network):
     for lv_st in lv_stations:
         transformer_count = 1
         # add primary side bus (bus0)
-        bus0_name = '_'.join(['Bus', 'primary', repr(lv_st)])
+        bus0_name = '_'.join(['Bus', lv_st.__repr__(side='mv')])
         bus['name'].append(bus0_name)
         bus['v_nom'].append(lv_st.grid.voltage_nom)
 
         # add secondary side bus (bus1)
-        bus1_name = '_'.join(['Bus', 'secondary', repr(lv_st)])
+        bus1_name = '_'.join(['Bus', lv_st.__repr__(side='lv')])
         bus['name'].append(bus1_name)
         bus['v_nom'].append(lv_st.transformers[0].voltage_op)
 
@@ -238,7 +238,7 @@ def mv_to_pypsa(network):
     # create dataframe for MV stations (only secondary side bus)
     for mv_st in mv_stations:
         # add secondary side bus (bus1)
-        bus1_name = '_'.join(['Bus', 'secondary', repr(mv_st)])
+        bus1_name = '_'.join(['Bus', mv_st.__repr__(side='mv')])
         bus['name'].append(bus1_name)
         bus['v_nom'].append(mv_st.transformers[0].voltage_op)
 
@@ -323,7 +323,7 @@ def attach_aggregated_lv_components(network, components):
             for _, gen_subtype in gen_type.items():
                 generator['name'].append(gen_subtype['name'])
                 generator['bus'].append(
-                    '_'.join(['Bus', 'secondary', repr(lv_grid_obj.station)]))
+                    '_'.join(['Bus', lv_grid_obj.station.__repr__('lv')]))
                 generator['control'].append('PQ')
                 generator['p_nom'].append(gen_subtype['capacity'])
                 generator['type'].append("")
@@ -333,7 +333,7 @@ def attach_aggregated_lv_components(network, components):
         for sector, val in lv_grid.items():
             load['name'].append('_'.join(['Load', sector, repr(lv_grid_obj)]))
             load['bus'].append(
-                '_'.join(['Bus', 'secondary', repr(lv_grid_obj.station)]))
+                '_'.join(['Bus', lv_grid_obj.station.__repr__('lv')]))
 
     components['Generator'] = pd.concat(
         [components['Generator'],pd.DataFrame(generator).set_index('name')])
@@ -408,11 +408,7 @@ def attach_aggregated_lv_timeseries(network):
                 load.setdefault(sector, {})
                 load[sector].setdefault('timeseries_p', [])
                 load[sector].setdefault('timeseries_q', [])
-                # load[sector]['timeseries_p'].append(
-                #     lo.pypsa_timeseries(sector, 'p').rename(
-                #         '_'.join([repr(lo), sector])).to_frame())
-                # load[sector]['timeseries_q'].append(lo.pypsa_timeseries(sector, 'q').rename(
-                #         '_'.join([repr(lo), sector])).to_frame())
+
                 load[sector]['timeseries_p'].append(
                     lo.pypsa_timeseries(sector, 'p').rename(
                         '_'.join(
@@ -603,7 +599,6 @@ def pypsa_bus_timeseries(network, buses, mode=None):
     :pandas:`pandas.DataFrame<dataframe>`
         Time series table in PyPSA format
     """
-        # TODO: replace input for `set_snapshots` by DatetimeIndex constructed based on user input
 
     v_set_dict = {bus: [1, 1] for bus in buses}
 
