@@ -1,5 +1,5 @@
 from edisgo.grid.network import Network, Scenario, TimeSeries, Results
-from edisgo.grid_expansion import reinforce_grid
+from edisgo.flex_opt import reinforce_grid
 import os
 import pickle
 import pandas as pd
