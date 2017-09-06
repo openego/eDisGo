@@ -316,6 +316,20 @@ class MVStation(Station):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def __repr__(self, side=None):
+        repr_base = super().__repr__()
+
+        # As we don't consider HV-MV transformers in PFA, we don't have to care
+        # about primary side bus of MV station. Hence, the general repr()
+        # currently returned, implicitely refers to the secondary side (MV level)
+        # if side == 'hv':
+        #     return ''.join(['primary', repr_base])
+        # elif side == 'mv':
+        #     return ''.join(['secondary', repr_base])
+        # else:
+        #     return repr_base
+        return repr_base
+
 
 class LVStation(Station):
     """LV Station object"""
@@ -324,13 +338,14 @@ class LVStation(Station):
         super().__init__(**kwargs)
 
     def __repr__(self, side=None):
-        if side == 'mv':
-            return 'primary'
-        elif side == 'lv':
-            return 'secondary'
-        else:
-            return ''
+        repr_base = super().__repr__()
 
+        if side == 'mv':
+            return ''.join(['primary', repr_base])
+        elif side == 'lv':
+            return ''.join(['secondary', repr_base])
+        else:
+            return repr_base
 
 class Line(Component):
     """
