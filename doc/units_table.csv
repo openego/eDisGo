@@ -1,0 +1,11 @@
+Variable;Symbol;Unit;Comment
+Current;I;A;
+Length;l;km;
+Active Power;P;kW;
+Reactive Power;Q;kvar;
+Apparent Power;S;kVA;
+Resistance;R;Ohm or Ohm/km;Ohm/km applies to lines
+Reactance;X;Ohm or Ohm/km;Ohm/km applies to lines
+Voltage;V;kV;
+Inductance;L;mH/km;
+Capacitance;C;nF/km;
