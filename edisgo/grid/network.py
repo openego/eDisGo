@@ -86,7 +86,7 @@ class Network:
                                         index_col='name',
                                         delimiter=',',
                                         decimal='.',
-                                        converters={'s_nom': lambda x: int(x)})
+                                        converters={'s_nom': lambda x: float(x)})
 
         equipment_mv_parameters_lines = self._config['equipment']['equipment_mv_parameters_lines']
         data['MV_lines'] = pd.read_csv(path.join(package_path, equipment_dir,
@@ -95,8 +95,8 @@ class Network:
                                        index_col='name',
                                        delimiter=',',
                                        decimal='.',
-                                       converters={'I_max_th': lambda x: int(x),
-                                                   'U_n': lambda x: int(x)})
+                                       converters={'I_max_th': lambda x: float(x),
+                                                   'U_n': lambda x: float(x)})
 
         equipment_mv_parameters_cables = self._config['equipment']['equipment_mv_parameters_cables']
         data['MV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
@@ -105,8 +105,8 @@ class Network:
                                         index_col='name',
                                         delimiter=',',
                                         decimal='.',
-                                        converters={'I_max_th': lambda x: int(x),
-                                                    'U_n': lambda x: int(x)})
+                                        converters={'I_max_th': lambda x: float(x),
+                                                    'U_n': lambda x: float(x)})
 
         equipment_lv_parameters_cables = self._config['equipment']['equipment_lv_parameters_cables']
         data['LV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
@@ -115,8 +115,8 @@ class Network:
                                         index_col='name',
                                         delimiter=',',
                                         decimal='.',
-                                        converters={'I_max_th': lambda x: int(x),
-                                                    'U_n': lambda x: int(x)})
+                                        converters={'I_max_th': lambda x: float(x),
+                                                    'U_n': lambda x: float(x)})
 
         equipment_lv_parameters_trafos = self._config['equipment']['equipment_lv_parameters_trafos']
         data['LV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
@@ -125,7 +125,7 @@ class Network:
                                         index_col='name',
                                         delimiter=',',
                                         decimal='.',
-                                        converters={'s_nom': lambda x: int(x)})
+                                        converters={'s_nom': lambda x: float(x)})
 
         return data
 
