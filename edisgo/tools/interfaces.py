@@ -171,9 +171,8 @@ def mv_to_pypsa(network):
     # create dataframes representing loads and associated buses
     for lo in loads:
         bus_name = '_'.join(['Bus', repr(lo)])
-        for sector, val in lo.consumption.items():
-            load['name'].append('_'.join([repr(lo), sector]))
-            load['bus'].append(bus_name)
+        load['name'].append(repr(lo))
+        load['bus'].append(bus_name)
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(lo.grid.voltage_nom)
@@ -410,13 +409,9 @@ def attach_aggregated_lv_timeseries(network):
                 load[sector].setdefault('timeseries_q', [])
 
                 load[sector]['timeseries_p'].append(
-                    lo.pypsa_timeseries(sector, 'p').rename(
-                        '_'.join(
-                            [repr(lo), repr(lv_grid), sector, 'p'])).to_frame())
+                    lo.pypsa_timeseries('p').rename(repr(lo)).to_frame())
                 load[sector]['timeseries_q'].append(
-                    lo.pypsa_timeseries(sector, 'q').rename(
-                        '_'.join(
-                            [repr(lo), repr(lv_grid), sector, 'q'])).to_frame())
+                    lo.pypsa_timeseries('q').rename(repr(lo)).to_frame())
                 # TODO: now, there are single loads from eDisGo topology. Summarize these by sector and LV grid
 
         for sector, val in load.items():
@@ -481,13 +476,10 @@ def pypsa_load_timeseries(network, mode=None):
     # add MV grid loads
     if mode is 'mv' or mode is None:
         for load in network.mv_grid.graph.nodes_by_attribute('load'):
-            for sector in list(load.consumption.keys()):
-                mv_load_timeseries_q.append(
-                    load.pypsa_timeseries(sector, 'q').rename(
-                        '_'.join([repr(load), sector])).to_frame())
-                mv_load_timeseries_p.append(
-                    load.pypsa_timeseries(sector, 'p').rename(
-                        '_'.join([repr(load), sector])).to_frame())
+            mv_load_timeseries_q.append(
+                load.pypsa_timeseries('q').rename(repr(load)).to_frame())
+            mv_load_timeseries_p.append(
+                load.pypsa_timeseries('p').rename(repr(load)).to_frame())
 
     # add LV grid's loads
     if mode is 'lv' or mode is None:
@@ -495,11 +487,11 @@ def pypsa_load_timeseries(network, mode=None):
             for load in lv_grid.graph.nodes_by_attribute('load'):
                 for sector in list(load.consumption.keys()):
                     lv_load_timeseries_q.append(
-                        load.pypsa_timeseries(sector, 'q').rename(
-                            '_'.join([repr(load), sector])).to_frame())
+                        load.pypsa_timeseries('q').rename(
+                            repr(load)).to_frame())
                     lv_load_timeseries_p.append(
-                        load.pypsa_timeseries(sector, 'p').rename(
-                            '_'.join([repr(load), sector])).to_frame())
+                        load.pypsa_timeseries('p').rename(
+                            repr(load)).to_frame())
 
     load_df_p = pd.concat(mv_load_timeseries_p + lv_load_timeseries_p, axis=1)
     load_df_q = pd.concat(mv_load_timeseries_q + lv_load_timeseries_q, axis=1)
