@@ -678,6 +678,9 @@ def process_pfa_results(network, pypsa):
 
     """
 
+    # TODO: move level specification to appropriate location
+    level = 'mv'
+
     # line results
     q0 = abs(pypsa.lines_t['q0'])
     q1 = abs(pypsa.lines_t['q1'])
@@ -685,3 +688,43 @@ def process_pfa_results(network, pypsa):
     p1 = abs(pypsa.lines_t['p1'])
     network.results.pfa_p = p0.where(p0 > p1, p1)
     network.results.pfa_q = q0.where(q0 > q1, q1)
+
+    # results at nodes
+
+    generators_names = [repr(g) for g in
+                        network.mv_grid.graph.nodes_by_attribute('generator')]
+    generators_mapping = {v: k for k, v in
+                          pypsa.generators.loc[generators_names][
+                              'bus'].to_dict().items()}
+    branch_t_names = [repr(bt) for bt in
+                      network.mv_grid.graph.nodes_by_attribute('branch_tee')]
+    branch_t_mapping = {'_'.join(['Bus', v]): v for v in branch_t_names}
+    mv_station_names = [repr(m) for m in
+                        network.mv_grid.graph.nodes_by_attribute('mv_station')]
+    mv_station_mapping_sec = {'_'.join(['Bus', v]): v for v in mv_station_names}
+    lv_station_names = [repr(l) for l in
+                        network.mv_grid.graph.nodes_by_attribute('lv_station')]
+    lv_station_mapping_pri = {
+        '_'.join(['Bus', l.__repr__('mv')]): repr(l)
+        for l in network.mv_grid.graph.nodes_by_attribute('lv_station')}
+    lv_station_mapping_sec = {
+        '_'.join(['Bus', l.__repr__('lv')]): repr(l)
+        for l in network.mv_grid.graph.nodes_by_attribute('lv_station')}
+    loads_names = [repr(lo) for lo in
+                   network.mv_grid.graph.nodes_by_attribute('load')]
+    loads_mapping = {v: k for k, v in
+                     pypsa.loads.loc[loads_names][
+                         'bus'].to_dict().items()}
+
+    names_mapping = {
+        **generators_mapping,
+        **branch_t_mapping,
+        **mv_station_mapping_sec,
+        **lv_station_mapping_pri,
+        **lv_station_mapping_sec,
+        **loads_mapping
+    }
+
+    # example how to rename generators
+    network.results.pfa_v_mag_pu = pypsa.buses_t['v_mag_pu'].rename(
+        columns=names_mapping)

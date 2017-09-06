@@ -515,3 +515,16 @@ class Results:
     @pfa_q.setter
     def pfa_q(self, pypsa):
         self._pfa_q = pypsa
+
+    @property
+    def pfa_v_mag_pu(self):
+        return self._pfa_v_mag_pu
+
+    @pfa_v_mag_pu.setter
+    def pfa_v_mag_pu(self, pypsa):
+        if not self._pfa_v_mag_pu:
+            self._pfa_v_mag_pu = pypsa
+        else:
+            self._pfa_v_mag_pu = pd.concat([self._pfa_v_mag_pu, pypsa], axis=1)
+
+
