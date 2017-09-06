@@ -162,7 +162,7 @@ class Mock(MagicMock):
     def __getattr__(cls, name):
             return MagicMock()
 
-MOCK_MODULES = ['shapely']
+MOCK_MODULES = ['ding0', 'ding0.results', 'shapely']
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 
