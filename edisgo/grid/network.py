@@ -1,7 +1,7 @@
 import edisgo
 from edisgo.tools import config
 from edisgo.data.import_data import import_from_ding0#, import_generators
-from edisgo.grid_expansion.costs import grid_expansion_costs
+from edisgo.flex_opt.costs import grid_expansion_costs
 
 from os import path
 import pandas as pd

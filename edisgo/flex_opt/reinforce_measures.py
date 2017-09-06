@@ -7,7 +7,7 @@ from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
 
 import ding0
 from edisgo.grid.components import Transformer
-from edisgo import grid_expansion
+from edisgo import flex_opt
 # from ding0.tools import config as cfg_ding0
 # from ding0.grid.lv_grid.build_grid import select_transformers
 # from ding0.flexopt.check_tech_constraints import get_voltage_at_bus_bar
