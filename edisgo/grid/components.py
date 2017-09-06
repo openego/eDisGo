@@ -317,6 +317,21 @@ class MVStation(Station):
         super().__init__(**kwargs)
 
 
+class LVStation(Station):
+    """LV Station object"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __repr__(self, side=None):
+        if side == 'mv':
+            return 'primary'
+        elif side == 'lv':
+            return 'secondary'
+        else:
+            return ''
+
+
 class Line(Component):
     """
     Line object

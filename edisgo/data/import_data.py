@@ -2,7 +2,7 @@ from ding0.tools.results import load_nd_from_pickle
 from ding0.core.network.stations import LVStationDing0
 from ding0.core.structure.regions import LVLoadAreaCentreDing0
 from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
-    Station, Line, Transformer
+    MVStation, Line, Transformer, LVStation
 from ..grid.grids import MVGrid, LVGrid
 import pandas as pd
 import numpy as np
@@ -115,7 +115,7 @@ def _build_lv_grid(ding0_grid, network):
                     network=network)
 
                 # Create LV station instances
-                station = Station(id=ding0_lv_grid._station.id_db,
+                station = LVStation(id=ding0_lv_grid._station.id_db,
                                   geom=ding0_lv_grid._station.geo_data,
                                   grid=lv_grid,
                                   transformers=[Transformer(
@@ -261,7 +261,7 @@ def _build_mv_grid(ding0_grid, network):
     grid.graph.add_nodes_from(branch_tees.values(), type='branch_tee')
 
     # Create list of LV station instances and add these to grid's graph
-    stations = {_: Station(id=_.id_db,
+    stations = {_: LVStation(id=_.id_db,
                         geom=_.geo_data,
                         grid=grid,
                         transformers=[Transformer(
@@ -281,7 +281,7 @@ def _build_mv_grid(ding0_grid, network):
     grid.graph.add_nodes_from(stations.values(), type='lv_station')
 
     # Create HV-MV station add to graph
-    mv_station = Station(
+    mv_station = MVStation(
         id=ding0_grid.station().id_db,
         geom=ding0_grid.station().geo_data,
         transformers=[Transformer(
