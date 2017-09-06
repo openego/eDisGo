@@ -323,9 +323,9 @@ class MVStation(Station):
         # about primary side bus of MV station. Hence, the general repr()
         # currently returned, implicitely refers to the secondary side (MV level)
         # if side == 'hv':
-        #     return ''.join(['primary', repr_base])
+        #     return '_'.join(['primary', repr_base])
         # elif side == 'mv':
-        #     return ''.join(['secondary', repr_base])
+        #     return '_'.join(['secondary', repr_base])
         # else:
         #     return repr_base
         return repr_base
@@ -341,9 +341,9 @@ class LVStation(Station):
         repr_base = super().__repr__()
 
         if side == 'mv':
-            return ''.join(['primary', repr_base])
+            return '_'.join(['primary', repr_base])
         elif side == 'lv':
-            return ''.join(['secondary', repr_base])
+            return '_'.join(['secondary', repr_base])
         else:
             return repr_base
 
