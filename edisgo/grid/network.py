@@ -189,6 +189,8 @@ class Network:
         # TODO: if missing, add slack generator
         self.pypsa.pf(self.pypsa.snapshots)
 
+        interfaces.process_pfa_results(self, self.pypsa)
+
 
     def reinforce(self):
         """Reinforces the grid
@@ -491,8 +493,25 @@ class Results:
     # TODO: maybe initialize DataFrames `pfa_nodes` different. Like with index of all components of similarly
 
     def __init__(self):
-        self.measures = ['original']
-        self.pfa_p = pd.DataFrame()
-        self.pfa_q = pd.DataFrame()
-        self.pfa_v_mag_pu = pd.DataFrame()
-        self.equipment_changes = pd.DataFrame()
+        self._measures = ['original']
+        self._pfa_p = None
+        self._pfa_q = None
+        self._pfa_v_mag_pu = None
+        self._equipment_changes = pd.DataFrame()
+
+    @property
+    def pfa_p(self):
+        return self._pfa_p
+
+    @pfa_p.setter
+    def pfa_p(self, pypsa):
+        self._pfa_p = pypsa
+
+    @property
+    def pfa_q(self):
+        #tODO: return columns selected by passed grid topology components
+        return self._pfa_q
+
+    @pfa_q.setter
+    def pfa_q(self, pypsa):
+        self._pfa_q = pypsa

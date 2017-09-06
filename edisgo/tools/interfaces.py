@@ -667,3 +667,34 @@ def _check_integrity_of_pypsa(pypsa_network):
         raise ValueError("Following loads have no `v_mag_pu_set` time series "
                          "{buses}".format(
             buses=bus_v_set_missing))
+
+
+def process_pfa_results(network, pypsa):
+    """
+    Assing values from PyPSA to
+    :meth:`results <edisgo.grid.network.Network.results>`
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+    pypsa : :pypsa:`pypsa.Network<network>`
+        Network container of `PyPSA <https://pypsa.org>`_
+
+    Returns
+    -------
+
+    See Also
+    --------
+    edisgo.grid.network.Network.results : Understand how results of power flow
+        analysis are structured in eDisGo.
+
+    """
+
+    # line results
+    q0 = abs(pypsa.lines_t['q0'])
+    q1 = abs(pypsa.lines_t['q1'])
+    p0 = abs(pypsa.lines_t['p0'])
+    p1 = abs(pypsa.lines_t['p1'])
+    network.results.pfa_p = p0.where(p0 > p1, p1)
+    network.results.pfa_q = q0.where(q0 > q1, q1)
