@@ -31,7 +31,7 @@ def extend_distribution_substation(network, critical_stations):
     network : edisgo network object
     critical_stations : dict
         Dictionary with key holding the station name and values the
-        corresponding station load
+        corresponding station load.
 
     """
 
@@ -101,12 +101,13 @@ def extend_distribution_substation(network, critical_stations):
                 new_transformers.append(new_transformer)
             station.transformers = new_transformers
 
-    logger.info("{stations_cnt} have been reinforced due to overloading "
-                "issues.".format(stations_cnt=len(critical_stations)))
+    logger.info("{} have been reinforced due to overloading "
+                "issues.".format(str(len(critical_stations))))
 
 
 def reinforce_branches_voltage(network, crit_nodes):
-    """ Reinforce MV or LV grid by installing a new branch/line type
+    """
+    Reinforce MV and LV grid due to voltage issues.
 
     Parameters
     ----------
