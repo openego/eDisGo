@@ -78,8 +78,7 @@ def extend_distribution_substation(network, critical_stations):
                 type=copy.deepcopy(duplicated_transformer.type))
 
             # add transformer to station
-            # ToDo: Methode in Station hierfür einführen?
-            station._transformers.append(new_transformer)
+            station.add_transformer(new_transformer)
 
         else:
             # get any transformer to get attributes for new transformer from
@@ -90,7 +89,6 @@ def extend_distribution_substation(network, critical_stations):
                 s_max_station / standard_transformer.s_nom)
 
             # add transformer to station
-            # ToDo: Methode in Station hierfür einführen?
             new_transformers = []
             for i in range(number_transformers):
                 new_transformer = Transformer(

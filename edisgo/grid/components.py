@@ -59,6 +59,18 @@ class Station(Component):
         station"""
         return self._transformers
 
+    @transformers.setter
+    def transformers(self, transformer):
+        """
+        Parameters
+        ----------
+        transformer : :obj:`list` of :class:`Transformer`
+        """
+        self._transformers = transformer
+
+    def add_transformer(self, transformer):
+        self._transformers.append(transformer)
+
 
 class Transformer(Component):
     """Transformer object
