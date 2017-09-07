@@ -63,7 +63,7 @@ def reinforce_grid(network, results):
                             if len(_.transformers) >= 2][0]: 2000}
 
     # reinforce substations
-    extend_distribution_substation(overloaded_stations)
+    extend_distribution_substation(network, overloaded_stations)
 
     # if stations have been reinforced: run PF again and check if all
     # overloading problems for all stations were solved

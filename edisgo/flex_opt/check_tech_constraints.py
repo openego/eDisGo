@@ -13,7 +13,7 @@ import math
 logger = logging.getLogger('ding0')
 
 
-def check_line_load(network, results_lines, **kwargs):
+def check_line_load(network, results_lines):
     """ Checks for over-loading of branches and transformers for MV or LV grid
 
     Parameters
@@ -21,11 +21,6 @@ def check_line_load(network, results_lines, **kwargs):
     network: edisgo Network object
     results_lines: pandas.DataFrame
         power flow analysis results (pfa_edges) from edisgo Results object
-    **kwargs:
-        load_factor_mv_line: float (optional)
-            allowed load of MV line in uninterrupted operation
-        load_factor_lv_line: float (optional)
-            allowed load of LV line in uninterrupted operation
 
     Returns
     -------
@@ -45,13 +40,14 @@ def check_line_load(network, results_lines, **kwargs):
 
     crit_lines = {}
 
-    # ToDo: Unterscheidung cables/lines?
-    # ToDo: Unterscheidung lc/fc? Nur durch load factors, results dürfen dann nur den einen Fall beinhalten (wie ist das bei PyPsa?)
+    load_factor_mv_line = network.config['grid_expansion'][
+        'load_factor_mv_line']
+    load_factor_lv_line = network.config['grid_expansion'][
+        'load_factor_lv_line']
+
     # ToDo: Einheiten klären (results und Werte in type)
     # ToDo: generischer, sodass nicht unbedingt LV und MV gerechnet werden? + HV/MV transformer immer raus lassen?
     # ToDo: Zugriff auf Attribute mit _
-    load_factor_mv_line = kwargs.get('load_factor_mv_line', 1)
-    load_factor_lv_line = kwargs.get('load_factor_mv_line', 1)
 
     mw2kw = 1e3
 
@@ -135,8 +131,8 @@ def check_station_load(network, results_lines, **kwargs):
     # ToDo: line load an der Seite wo Station angeschlossen ist?
     crit_stations = {}
 
-    load_factor_mv_lv_transformer = kwargs.get('load_factor_mv_lv_transformer',
-                                               1)
+    load_factor_mv_lv_transformer = network.config['grid_expansion'][
+        'load_factor_mv_lv_transformer']
 
     mw2kw = 1e3
 
@@ -200,8 +196,8 @@ def check_voltage(network, results_nodes, **kwargs):
     crit_nodes = {}
 
     # load max. voltage deviation for load and feedin case
-    mv_max_v_deviation = kwargs.get('mv_max_v_deviation', 0.1)
-    lv_max_v_deviation = kwargs.get('lv_max_v_deviation', 0.1)
+    mv_max_v_deviation = network.config['grid_expansion']['mv_max_v_deviation']
+    lv_max_v_deviation = network.config['grid_expansion']['lv_max_v_deviation']
 
     # check nodes' voltages
     # MV
