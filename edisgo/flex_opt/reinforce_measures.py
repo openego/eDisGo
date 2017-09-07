@@ -85,9 +85,9 @@ def extend_distribution_substation(network, critical_stations):
             # get any transformer to get attributes for new transformer from
             station_transformer = station.transformers[0]
 
-
             # calculate how many parallel standard transformers are needed
-            number_transformers = math.ceil(s_max_gc / standard_transformer.s)
+            number_transformers = math.ceil(
+                s_max_station / standard_transformer.s_nom)
 
             # add transformer to station
             # ToDo: Methode in Station hierfür einführen?
