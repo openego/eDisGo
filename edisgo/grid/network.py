@@ -528,3 +528,38 @@ class Results:
             self._pfa_v_mag_pu = pd.concat([self._pfa_v_mag_pu, pypsa], axis=1)
 
 
+    def v_res(self, nodes, level):
+        """
+        Get resulting voltage level at node
+
+        Parameters
+        ----------
+        nodes : grid topology component or `list` grid topology components
+        level : str
+            Either 'mv' or 'lv'. Depending which grid level results you are
+            interested in. It is required to provide this argument in order
+            to distinguish voltage levels at primary and secondary side of the
+            transformer/LV station.
+
+        Notes
+        -----
+        Limitations
+         * When power flow analysis is performed for MV only (with aggregated
+         LV loads and generators) this methods only returns voltage at
+         secondary side busbar and not at load/generator
+
+        """
+
+        labels = [repr(_) for _ in nodes]
+
+        not_included = [_ for _ in labels
+                        if _ not in list(self.pfa_v_mag_pu[level].columns)]
+
+        labels_included = [_ for _ in labels if _ not in not_included]
+
+        if not_included:
+            print("Voltage levels for {nodes} are not returned from PFA".format(
+                nodes=not_included))
+
+
+        return self.pfa_v_mag_pu['lv'][labels_included]

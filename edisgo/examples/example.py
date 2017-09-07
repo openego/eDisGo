@@ -17,8 +17,15 @@ network = Network.import_from_ding0(
 # pickle.dump(network, open('test_network.pkl', 'wb'))
 # network = pickle.load(open('test_network.pkl', 'rb'))
 
-# export to pypsa
+# Do non-linear power flow analysis with PyPSA
 # network.analyze(mode='mv')
+
+# Print LV station secondary side voltage levels returned by PFA
+# print(network.results.v_res(
+#     network.mv_grid.graph.nodes_by_attribute('lv_station'), 'lv'))
+
+# Print voltage level of all nodes
+# print(network.results.pfa_v_mag_pu)
 
 # for now create results object
 # ToDo: Werte in DataFrame als List oder Array?
@@ -56,7 +63,7 @@ network = Network.import_from_ding0(
 # else:
 #     print("O MWh")
 
-# reinforce_grid.reinforce_grid(network, results)
+# from
 
 # liste aller lv grids
 # [_ for _ in network.mv_grid.lv_grids]
