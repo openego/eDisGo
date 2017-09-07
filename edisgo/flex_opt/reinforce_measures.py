@@ -5,20 +5,15 @@ import networkx as nx
 from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
     dijkstra_shortest_path_length
 
-import ding0
 from edisgo.grid.components import Transformer
-from edisgo import flex_opt
-from edisgo.grid.grids import MVGrid
-# from ding0.tools import config as cfg_ding0
-# from ding0.grid.lv_grid.build_grid import select_transformers
-# from ding0.flexopt.check_tech_constraints import get_voltage_at_bus_bar
-# import networkx as nx
+from edisgo.grid.grids import LVGrid
+
 import logging
 
-package_path = ding0.__path__[0]
 logger = logging.getLogger('ding0')
 
 
+# ToDo: Return reinforced components to results object
 def extend_distribution_substation(network, critical_stations):
     """
     Reinforce MV/LV substations.
@@ -68,7 +63,7 @@ def extend_distribution_substation(network, critical_stations):
             duplicated_transformer = min(
                 [_ for _ in station.transformers
                  if _.type.s > s_trafo_missing],
-                key=lambda i: i.type.s - s_trafo_missing)
+                key=lambda j: j.type.s - s_trafo_missing)
 
             new_transformer = Transformer(
                 id='LV_station_{}_transformer_{}'.format(
@@ -113,8 +108,9 @@ def reinforce_branches_voltage(network, crit_nodes):
     Parameters
     ----------
     network : edisgo network object
-    crit_nodes : List of nodes objects with critical voltages sorted by voltage
-                 (descending)
+    crit_nodes : pd.Series
+        pd.Series with critical nodes of one grid as index and corresponding
+        voltage deviation as values
 
     Notes
     -----
@@ -135,27 +131,29 @@ def reinforce_branches_voltage(network, crit_nodes):
     # ToDo: gilt Methodik auch für die MS?
 
     # load standard line data
-    try:
-        standard_line_lv = network.equipment_data['LV_cables'].loc[
-            network.config['grid_expansion']['std_lv_line']]
-    except KeyError:
-        print('Chosen standard LV line is not in equipment list.')
-    try:
-        standard_line_mv = network.equipment_data['MV_cables'].loc[
-            network.config['grid_expansion']['std_mv_line']]
-    except KeyError:
-        print('Chosen standard MV line is not in equipment list.')
+    grid = crit_nodes.index[0].grid
+    if isinstance(grid, LVGrid):
+        try:
+            standard_line = network.equipment_data['LV_cables'].loc[
+                network.config['grid_expansion']['std_lv_line']]
+        except KeyError:
+            print('Chosen standard LV line is not in equipment list.')
+    else:
+        try:
+            standard_line = network.equipment_data['MV_cables'].loc[
+                network.config['grid_expansion']['std_mv_line']]
+        except KeyError:
+            print('Chosen standard MV line is not in equipment list.')
 
     # find first nodes of every main line as representatives
-    rep_main_line = nx.predecessor(network.grid._graph, network.grid.station,
-                                   cutoff=1)
+    rep_main_line = nx.predecessor(grid.graph, grid.station, cutoff=1)
     # list containing all representatives of main lines that have already been
     # reinforced
     main_line_reinforced = []
 
-    for crit_node in crit_nodes:
-        path = nx.shortest_path(network.grid._graph, network.grid.station,
-                                crit_node)
+    for i in range(len(crit_nodes)):
+        path = nx.shortest_path(grid.graph, grid.station,
+                                crit_nodes.index[i])
 
         # check if representative of line is already in list
         # main_line_reinforced, if it is the main line the critical node is
@@ -164,26 +162,26 @@ def reinforce_branches_voltage(network, crit_nodes):
 
             main_line_reinforced.append(path[1])
             # get path length from station to critical node
-            get_weight = lambda u, v, data: data['line']._length
+            get_weight = lambda u, v, data: data['line'].length
             path_length = dijkstra_shortest_path_length(
-                network.grid._graph, network.grid.station, get_weight,
-                target=crit_node)
+                grid.graph, grid.station, get_weight,
+                target=crit_nodes.index[i])
             # find first node in path that exceeds 2/3 of the line length
             # from station to critical node farthest away from the station
-            node_2_3 = next(i for i in path if
-                              path_length[i] >= path_length[crit_node] * 2 / 3)
+            node_2_3 = next(j for j in path if path_length[j] >= path_length[
+                crit_nodes.index[i]] * 2 / 3)
 
             # if node_2_3 is a representative (meaning it is already directly
             # connected to the station), line cannot be disconnected and must
             # therefore be reinforced
             if node_2_3 in rep_main_line:
-                crit_line = network.grid._graph.get_edge_data(
-                    network.grid.station, node_2_3)['line']
+                crit_line = grid.graph.get_edge_data(
+                    grid.station, node_2_3)['line']
 
                 # if critical line is already a standard line install one more
                 # parallel line
-                if crit_line._type.name == 'NAYY 4x150':
-                    crit_line._quantity = crit_line._quantity + 1
+                if crit_line.type.name == standard_line.name:
+                    crit_line.quantity += 1
 
                 # if critical line is not yet a standard line check if one or
                 # several standard lines are needed
@@ -191,36 +189,34 @@ def reinforce_branches_voltage(network, crit_nodes):
                     # number of parallel standard lines could be calculated
                     # following [2] p.103, for now number of parallel standard
                     # lines is iterated
-                    #ToDo: LV or MV
-                    crit_line._type = standard_line_lv.copy()
-                    crit_line._quantity = 1
+                    crit_line.type = standard_line.copy()
+                    crit_line.quantity = 1
 
             # if node_2_3 is not a representative, disconnect line
             else:
                 # get line between node_2_3 and predecessor node (that is
                 # closer to the station)
                 pred_node = path[path.index(node_2_3) - 1]
-                crit_line = network.grid._graph.get_edge_data(
+                crit_line = grid.graph.get_edge_data(
                     node_2_3, pred_node)['line']
                 # add new edge between node_2_3 and station
                 new_line_data = {'line': crit_line,
                                  'type': 'line'}
-                network.grid._graph.add_edge(network.grid.station, node_2_3,
-                                             new_line_data)
+                grid.graph.add_edge(grid.station, node_2_3, new_line_data)
                 # remove old edge
-                network.grid._graph.remove_edge(pred_node, node_2_3)
+                grid.graph.remove_edge(pred_node, node_2_3)
                 # change line length and type
-                #ToDo: MV or LV
-                crit_line._length = path_length[node_2_3]
-                crit_line._type = standard_line_lv.copy()
+                crit_line.length = path_length[node_2_3]
+                crit_line.type = standard_line.copy()
 
         else:
-            logger.debug('==> Main line of node {} '.format(str(crit_node)) +
-                         'in LV grid {} '.format(str(crit_node._grid)) +
-                         'has already been reinforced.')
+            logger.debug(
+                '==> Main line of node {} '.format(str(crit_nodes.index[i])) +
+                'in LV grid {} '.format(str(grid)) +
+                'has already been reinforced.')
 
     if main_line_reinforced:
-        logger.info('==> {} branches were reinforced.'.format(
+        logger.info('==> {} branche(s) was/were reinforced.'.format(
             str(len(main_line_reinforced))))
 
 
@@ -265,10 +261,10 @@ def reinforce_branches_current(network, crit_lines):
 
     for crit_line, rel_overload in crit_lines.items():
         # check if line is in LV or MV and set standard line accordingly
-        if isinstance(crit_line.grid, MVGrid):
-            standard_line = standard_line_mv
-        else:
+        if isinstance(crit_line.grid, LVGrid):
             standard_line = standard_line_lv
+        else:
+            standard_line = standard_line_mv
 
         if crit_line.type.name == standard_line.name:
             # check how many parallel standard lines are needed
@@ -279,7 +275,7 @@ def reinforce_branches_current(network, crit_lines):
         else:
             # check if parallel line of the same kind is sufficient
             if (crit_line.type['I_max_th'] * rel_overload <=
-                        crit_line.type['I_max_th'] * 2):
+                    crit_line.type['I_max_th'] * 2):
                 crit_line.quantity = 2
             else:
                 number_parallel_lines = math.ceil(
