@@ -48,7 +48,7 @@ def extend_distribution_substation(network, critical_stations):
     for station in critical_stations:
 
         # list of maximum power of each transformer in the station
-        s_max_per_trafo = [_._type.s for _ in station._transformers]
+        s_max_per_trafo = [_.type.s for _ in station.transformers]
 
         # maximum station load
         s_max_station = critical_stations[station]
@@ -66,16 +66,16 @@ def extend_distribution_substation(network, critical_stations):
             # meets the missing power demand
             duplicated_transformer = min(
                 [_ for _ in station.transformers
-                 if _._type.s > s_trafo_missing],
-                key=lambda i: i._type.s - s_trafo_missing)
+                 if _.type.s > s_trafo_missing],
+                key=lambda i: i.type.s - s_trafo_missing)
 
             # ToDo: id?
             new_transformer = Transformer(
                 id=99,
                 geom=duplicated_transformer.geom,
                 grid=duplicated_transformer.grid,
-                voltage_op=duplicated_transformer._voltage_op,
-                type=copy.deepcopy(duplicated_transformer._type))
+                voltage_op=duplicated_transformer.voltage_op,
+                type=copy.deepcopy(duplicated_transformer.type))
 
             # add transformer to station
             # ToDo: Methode in Station hierfür einführen?
@@ -101,7 +101,7 @@ def extend_distribution_substation(network, critical_stations):
             new_transformers = []
             for i in range(number_transformers):
                 new_transformers.append(new_transformer)
-            station._transformers = new_transformers
+            station.transformers = new_transformers
 
     logger.info("{stations_cnt} have been reinforced due to overloading "
                 "issues.".format(stations_cnt=len(critical_stations)))
