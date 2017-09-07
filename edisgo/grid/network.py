@@ -522,7 +522,7 @@ class Results:
 
     @pfa_v_mag_pu.setter
     def pfa_v_mag_pu(self, pypsa):
-        if not self._pfa_v_mag_pu:
+        if self._pfa_v_mag_pu is None:
             self._pfa_v_mag_pu = pypsa
         else:
             self._pfa_v_mag_pu = pd.concat([self._pfa_v_mag_pu, pypsa], axis=1)

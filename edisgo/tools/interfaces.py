@@ -726,5 +726,11 @@ def process_pfa_results(network, pypsa):
     }
 
     # example how to rename generators
-    network.results.pfa_v_mag_pu = pypsa.buses_t['v_mag_pu'].rename(
-        columns=names_mapping)
+    pfa_v_mag_pu = pypsa.buses_t['v_mag_pu'].rename(columns=names_mapping)
+    network.results.pfa_v_mag_pu = pd.concat(
+        {'mv': pfa_v_mag_pu[list(generators_mapping.values()) +
+                            list(branch_t_mapping.values()) +
+                            list(mv_station_mapping_sec.values()) +
+                            list(lv_station_mapping_pri.values()) +
+                            list(loads_mapping.values())],
+         'lv': pfa_v_mag_pu[list(lv_station_mapping_sec.values())]}, axis=1)
