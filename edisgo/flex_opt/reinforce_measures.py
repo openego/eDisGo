@@ -8,6 +8,7 @@ from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
 import ding0
 from edisgo.grid.components import Transformer
 from edisgo import flex_opt
+from edisgo.grid.grids import MVGrid
 # from ding0.tools import config as cfg_ding0
 # from ding0.grid.lv_grid.build_grid import select_transformers
 # from ding0.flexopt.check_tech_constraints import get_voltage_at_bus_bar
@@ -224,7 +225,8 @@ def reinforce_branches_voltage(network, crit_nodes):
 
 
 def reinforce_branches_current(network, crit_lines):
-    """ Reinforce MV or LV grid by installing a new branch/line type
+    """
+    Reinforce MV or LV grid due to overloading.
     
     Parameters
     ----------
@@ -262,25 +264,27 @@ def reinforce_branches_current(network, crit_lines):
         print('Chosen standard MV line is not in equipment list.')
 
     for crit_line, rel_overload in crit_lines.items():
-        #ToDo: MV or LV
-        if crit_line._type.name == standard_line_lv.name:
+        # check if line is in LV or MV and set standard line accordingly
+        if isinstance(crit_line.grid, MVGrid):
+            standard_line = standard_line_mv
+        else:
+            standard_line = standard_line_lv
+
+        if crit_line.type.name == standard_line.name:
             # check how many parallel standard lines are needed
-            number_parallel_lines = math.ceil(crit_line._type['I_max_th'] *
-                                              rel_overload /
-                                              standard_line_lv['I_max_th'])
-            crit_line._quantity = number_parallel_lines
+            number_parallel_lines = math.ceil(
+                crit_line.type['I_max_th'] * rel_overload /
+                standard_line['I_max_th'])
+            crit_line.quantity = number_parallel_lines
         else:
             # check if parallel line of the same kind is sufficient
-            if (crit_line._type['I_max_th'] * rel_overload <=
-                        crit_line._type['I_max_th'] * 2):
-                crit_line._quantity = 2
+            if (crit_line.type['I_max_th'] * rel_overload <=
+                        crit_line.type['I_max_th'] * 2):
                 crit_line.quantity = 2
             else:
-                number_parallel_lines = math.ceil(crit_line._type['I_max_th'] *
-                                                  rel_overload /
-                                                  standard_line_lv['I_max_th'])
-                crit_line._type = standard_line_lv.copy()
-                crit_line._quantity = number_parallel_lines
+                number_parallel_lines = math.ceil(
+                    crit_line.type['I_max_th'] * rel_overload /
+                    standard_line['I_max_th'])
                 crit_line.type = standard_line.copy()
                 crit_line.quantity = number_parallel_lines
 
