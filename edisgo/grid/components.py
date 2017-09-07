@@ -375,7 +375,19 @@ class Line(Component):
     def type(self):
         return self._type
 
+    @type.setter
+    def type(self, new_type):
+        self._type = new_type
+
     @property
     def length(self):
         return self._length
+
+    @property
+    def quantity(self):
+        return self._quantity
+
+    @quantity.setter
+    def quantity(self, new_quantity):
+        self._quantity = new_quantity
 

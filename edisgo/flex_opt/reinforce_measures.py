@@ -274,12 +274,15 @@ def reinforce_branches_current(network, crit_lines):
             if (crit_line._type['I_max_th'] * rel_overload <=
                         crit_line._type['I_max_th'] * 2):
                 crit_line._quantity = 2
+                crit_line.quantity = 2
             else:
                 number_parallel_lines = math.ceil(crit_line._type['I_max_th'] *
                                                   rel_overload /
                                                   standard_line_lv['I_max_th'])
                 crit_line._type = standard_line_lv.copy()
                 crit_line._quantity = number_parallel_lines
+                crit_line.type = standard_line.copy()
+                crit_line.quantity = number_parallel_lines
 
     if crit_lines:
         logger.info('==> {} branches were reinforced.'.format(
