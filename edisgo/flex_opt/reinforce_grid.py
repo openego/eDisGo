@@ -105,8 +105,8 @@ def reinforce_grid(network, results):
     # as long as there are voltage issues, do reinforcement
     while crit_nodes:
         # for every grid in crit_nodes do reinforcement
-        for key in crit_nodes:
-            reinforce_branches_voltage(key, crit_nodes[key])
+        for grid in crit_nodes:
+            reinforce_branches_voltage(network, crit_nodes[grid])
         crit_nodes = {}
         # # run PF
         # grid.network.run_powerflow(conn=None, method='onthefly')
