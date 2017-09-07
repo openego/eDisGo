@@ -69,9 +69,9 @@ def extend_distribution_substation(network, critical_stations):
                  if _.type.s > s_trafo_missing],
                 key=lambda i: i.type.s - s_trafo_missing)
 
-            # ToDo: id?
             new_transformer = Transformer(
-                id=99,
+                id='LV_station_{}_transformer_{}'.format(
+                    str(station.id), str(len(station.transformers))),
                 geom=duplicated_transformer.geom,
                 grid=duplicated_transformer.grid,
                 voltage_op=duplicated_transformer.voltage_op,
@@ -85,13 +85,6 @@ def extend_distribution_substation(network, critical_stations):
             # get any transformer to get attributes for new transformer from
             station_transformer = station.transformers[0]
 
-            # ToDo: id?
-            new_transformer = Transformer(
-                id=99,
-                geom=station_transformer.geom,
-                grid=station_transformer.grid,
-                voltage_op=station_transformer._voltage_op,
-                type=copy.deepcopy(standard_transformer))
 
             # calculate how many parallel standard transformers are needed
             number_transformers = math.ceil(s_max_gc / standard_transformer.s)
@@ -100,6 +93,13 @@ def extend_distribution_substation(network, critical_stations):
             # ToDo: Methode in Station hierfür einführen?
             new_transformers = []
             for i in range(number_transformers):
+                new_transformer = Transformer(
+                    id='LV_station_{}_transformer_{}'.format(
+                        str(station.id), str(i)),
+                    geom=station_transformer.geom,
+                    grid=station_transformer.grid,
+                    voltage_op=station_transformer.voltage_op,
+                    type=copy.deepcopy(standard_transformer))
                 new_transformers.append(new_transformer)
             station.transformers = new_transformers
 
