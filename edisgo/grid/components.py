@@ -383,6 +383,10 @@ class Line(Component):
     def length(self):
         return self._length
 
+    @length.setter
+    def length(self, new_length):
+        self._length = new_length
+
     @property
     def quantity(self):
         return self._quantity
