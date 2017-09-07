@@ -81,7 +81,7 @@ def reinforce_grid(network, results):
 
     # do reinforcement
     # ToDo: erst MV dann LV
-    reinforce_branches_current(crit_lines)
+    reinforce_branches_current(network, crit_lines)
 
     # if lines have been reinforced: run PF again and check if all
     # overloading problems for all lines were solved
