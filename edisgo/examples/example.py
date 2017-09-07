@@ -10,13 +10,17 @@ import datetime
 timeseries = TimeSeries()
 scenario = Scenario(timeseries=timeseries)
 
-# network = Network.import_from_ding0(
-#     os.path.join('data', 'ding0_grids_example.pkl'),
-#     id='Test grid',
-#     scenario=scenario
-# )
-# pickle.dump(network, open('test_network.pkl', 'wb'))
-network = pickle.load(open('test_network.pkl', 'rb'))
+import_network = True
+
+if import_network:
+    network = Network.import_from_ding0(
+        os.path.join('data', 'ding0_grids_example.pkl'),
+        id='Test grid',
+        scenario=scenario
+    )
+    pickle.dump(network, open('test_network.pkl', 'wb'))
+else:
+    network = pickle.load(open('test_network.pkl', 'rb'))
 
 # export to pypsa
 # network.analyze(mode='mv')
