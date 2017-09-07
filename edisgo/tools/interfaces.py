@@ -678,9 +678,6 @@ def process_pfa_results(network, pypsa):
 
     """
 
-    # TODO: move level specification to appropriate location
-    level = 'mv'
-
     # line results
     q0 = abs(pypsa.lines_t['q0'])
     q1 = abs(pypsa.lines_t['q1'])
@@ -689,8 +686,7 @@ def process_pfa_results(network, pypsa):
     network.results.pfa_p = p0.where(p0 > p1, p1)
     network.results.pfa_q = q0.where(q0 > q1, q1)
 
-    # results at nodes
-
+    # process results at nodes
     generators_names = [repr(g) for g in
                         network.mv_grid.graph.nodes_by_attribute('generator')]
     generators_mapping = {v: k for k, v in
@@ -725,7 +721,7 @@ def process_pfa_results(network, pypsa):
         **loads_mapping
     }
 
-    # example how to rename generators
+    # write voltage levels obtained from power flow to results object
     pfa_v_mag_pu = pypsa.buses_t['v_mag_pu'].rename(columns=names_mapping)
     network.results.pfa_v_mag_pu = pd.concat(
         {'mv': pfa_v_mag_pu[list(generators_mapping.values()) +
