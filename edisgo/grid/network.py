@@ -6,6 +6,7 @@ from edisgo.flex_opt.costs import grid_expansion_costs
 from os import path
 import pandas as pd
 from edisgo.tools import interfaces
+from math import sqrt
 
 
 class Network:
@@ -525,6 +526,46 @@ class Results:
         else:
             self._pfa_v_mag_pu = pd.concat([self._pfa_v_mag_pu, pypsa], axis=1)
 
+
+
+    def s_res(self, lines=None):
+        """
+        Get resulting apparent power at line(s)
+
+        Parameters
+        ----------
+        lines : line object or list of
+
+        Returns
+        -------
+        DataFrame
+            Apparent power for `lines`
+
+        """
+        # TODO: exclud and report on lines where results are missing
+        # TODO: return all results if `lines` not given
+
+        labels_included = []
+        labels_not_included = []
+
+        labels = [repr(l) for l in lines]
+
+        if lines is not None:
+            for label in labels:
+                if label in list(self.pfa_p.columns) and label in list(self.pfa_q.columns):
+                    labels_included.append(label)
+                else:
+                    labels_not_included.append(label)
+                    print(
+                        "Apparent power for {lines} are not returned from PFA".format(
+                            lines=labels_not_included))
+        else:
+            labels_included = labels
+
+        s_res = ((self.pfa_p[labels_included] ** 2 + self.pfa_q[
+            labels_included] ** 2) * 1e3).applymap(sqrt)
+
+        return s_res
 
     def v_res(self, nodes, level):
         """

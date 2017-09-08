@@ -27,6 +27,12 @@ network = Network.import_from_ding0(
 # Print voltage level of all nodes
 # print(network.results.pfa_v_mag_pu)
 
+# Print apparent power at lines
+# print(network.results.s_res([_['line'] for _ in network.mv_grid.graph.graph_edges()]))
+
+# Print voltage levels for all lines
+# print(network.results.s_res())
+
 # for now create results object
 # ToDo: Werte in DataFrame als List oder Array?
 # results = Results()
