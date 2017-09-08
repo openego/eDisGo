@@ -6,6 +6,7 @@ from edisgo.flex_opt.costs import grid_expansion_costs
 from os import path
 import pandas as pd
 from edisgo.tools import interfaces
+from math import sqrt
 
 
 class Network:
@@ -186,6 +187,8 @@ class Network:
         # TODO: maybe there are lv station without load and generation at secondary side
         # TODO: if missing, add slack generator
         self.pypsa.pf(self.pypsa.snapshots)
+
+        interfaces.process_pfa_results(self, self.pypsa)
 
 
     def reinforce(self):
@@ -489,8 +492,113 @@ class Results:
     # TODO: maybe initialize DataFrames `pfa_nodes` different. Like with index of all components of similarly
 
     def __init__(self):
-        self.measures = ['original']
-        self.pfa_p = pd.DataFrame()
-        self.pfa_q = pd.DataFrame()
-        self.pfa_v_mag_pu = pd.DataFrame()
-        self.equipment_changes = pd.DataFrame()
+        self._measures = ['original']
+        self._pfa_p = None
+        self._pfa_q = None
+        self._pfa_v_mag_pu = None
+        self._equipment_changes = pd.DataFrame()
+
+    @property
+    def pfa_p(self):
+        return self._pfa_p
+
+    @pfa_p.setter
+    def pfa_p(self, pypsa):
+        self._pfa_p = pypsa
+
+    @property
+    def pfa_q(self):
+        #tODO: return columns selected by passed grid topology components
+        return self._pfa_q
+
+    @pfa_q.setter
+    def pfa_q(self, pypsa):
+        self._pfa_q = pypsa
+
+    @property
+    def pfa_v_mag_pu(self):
+        return self._pfa_v_mag_pu
+
+    @pfa_v_mag_pu.setter
+    def pfa_v_mag_pu(self, pypsa):
+        if self._pfa_v_mag_pu is None:
+            self._pfa_v_mag_pu = pypsa
+        else:
+            self._pfa_v_mag_pu = pd.concat([self._pfa_v_mag_pu, pypsa], axis=1)
+
+
+
+    def s_res(self, lines=None):
+        """
+        Get resulting apparent power at line(s)
+
+        Parameters
+        ----------
+        lines : line object or list of
+
+        Returns
+        -------
+        DataFrame
+            Apparent power for `lines`
+
+        """
+        # TODO: exclud and report on lines where results are missing
+        # TODO: return all results if `lines` not given
+
+        labels_included = []
+        labels_not_included = []
+
+        labels = [repr(l) for l in lines]
+
+        if lines is not None:
+            for label in labels:
+                if label in list(self.pfa_p.columns) and label in list(self.pfa_q.columns):
+                    labels_included.append(label)
+                else:
+                    labels_not_included.append(label)
+                    print(
+                        "Apparent power for {lines} are not returned from PFA".format(
+                            lines=labels_not_included))
+        else:
+            labels_included = labels
+
+        s_res = ((self.pfa_p[labels_included] ** 2 + self.pfa_q[
+            labels_included] ** 2) * 1e3).applymap(sqrt)
+
+        return s_res
+
+    def v_res(self, nodes, level):
+        """
+        Get resulting voltage level at node
+
+        Parameters
+        ----------
+        nodes : grid topology component or `list` grid topology components
+        level : str
+            Either 'mv' or 'lv'. Depending which grid level results you are
+            interested in. It is required to provide this argument in order
+            to distinguish voltage levels at primary and secondary side of the
+            transformer/LV station.
+
+        Notes
+        -----
+        Limitations
+         * When power flow analysis is performed for MV only (with aggregated
+         LV loads and generators) this methods only returns voltage at
+         secondary side busbar and not at load/generator
+
+        """
+
+        labels = [repr(_) for _ in nodes]
+
+        not_included = [_ for _ in labels
+                        if _ not in list(self.pfa_v_mag_pu[level].columns)]
+
+        labels_included = [_ for _ in labels if _ not in not_included]
+
+        if not_included:
+            print("Voltage levels for {nodes} are not returned from PFA".format(
+                nodes=not_included))
+
+
+        return self.pfa_v_mag_pu['lv'][labels_included]

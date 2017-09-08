@@ -22,19 +22,10 @@ if import_network:
 else:
     network = pickle.load(open('test_network.pkl', 'rb'))
 
-# export to pypsa
+# Do non-linear power flow analysis with PyPSA
 # network.analyze(mode='mv')
 
 # for now create results object
-# ToDo: Werte in DataFrame als List oder Array?
-results = Results()
-pfa_edges = pd.read_csv('Exemplary_PyPSA_line_results.csv',
-                        index_col=0,
-                        converters={'p0': literal_eval,
-                                    'q0': literal_eval,
-                                    'p1': literal_eval,
-                                    'q1': literal_eval})
-
 results.pfa_p['p0'] = pfa_edges['p0'].apply(
     lambda x: np.array(x)[0])
 results.pfa_p = results.pfa_p.transpose()
@@ -54,6 +45,19 @@ results.pfa_v_mag_pu['v_mag_pu'] = pfa_nodes['v_mag_pu'].apply(
 results.pfa_v_mag_pu = results.pfa_v_mag_pu.transpose()
 results.pfa_v_mag_pu['time'] = datetime.date.today()
 results.pfa_v_mag_pu = results.pfa_v_mag_pu.set_index('time')
+
+# Print LV station secondary side voltage levels returned by PFA
+# print(network.results.v_res(
+#     network.mv_grid.graph.nodes_by_attribute('lv_station'), 'lv'))
+
+# Print voltage level of all nodes
+# print(network.results.pfa_v_mag_pu)
+
+# Print apparent power at lines
+# print(network.results.s_res([_['line'] for _ in network.mv_grid.graph.graph_edges()]))
+
+# Print voltage levels for all lines
+# print(network.results.s_res())
 
 # # MV generators
 # gens = network.mv_grid.graph.nodes_by_attribute('generator')

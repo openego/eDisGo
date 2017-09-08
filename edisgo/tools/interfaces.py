@@ -171,9 +171,8 @@ def mv_to_pypsa(network):
     # create dataframes representing loads and associated buses
     for lo in loads:
         bus_name = '_'.join(['Bus', repr(lo)])
-        for sector, val in lo.consumption.items():
-            load['name'].append('_'.join([repr(lo), sector]))
-            load['bus'].append(bus_name)
+        load['name'].append(repr(lo))
+        load['bus'].append(bus_name)
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(lo.grid.voltage_nom)
@@ -184,19 +183,19 @@ def mv_to_pypsa(network):
 
         if l['adj_nodes'][0] in lv_stations:
             line['bus0'].append(
-                '_'.join(['Bus', 'primary', repr(l['adj_nodes'][0])]))
+                '_'.join(['Bus', l['adj_nodes'][0].__repr__(side='mv')]))
         elif l['adj_nodes'][0] is network.mv_grid.station:
             line['bus0'].append(
-                '_'.join(['Bus', 'secondary', repr(network.mv_grid.station)]))
+                '_'.join(['Bus', l['adj_nodes'][0].__repr__(side='lv')]))
         else:
             line['bus0'].append('_'.join(['Bus', repr(l['adj_nodes'][0])]))
 
         if l['adj_nodes'][1] in lv_stations:
             line['bus1'].append(
-                '_'.join(['Bus', 'primary', repr(l['adj_nodes'][1])]))
+                '_'.join(['Bus', l['adj_nodes'][1].__repr__(side='mv')]))
         elif l['adj_nodes'][1] is network.mv_grid.station:
             line['bus1'].append(
-                '_'.join(['Bus', 'secondary', repr(network.mv_grid.station)]))
+                '_'.join(['Bus', l['adj_nodes'][1].__repr__(side='lv')]))
         else:
             line['bus1'].append('_'.join(['Bus', repr(l['adj_nodes'][1])]))
 
@@ -212,12 +211,12 @@ def mv_to_pypsa(network):
     for lv_st in lv_stations:
         transformer_count = 1
         # add primary side bus (bus0)
-        bus0_name = '_'.join(['Bus', 'primary', repr(lv_st)])
+        bus0_name = '_'.join(['Bus', lv_st.__repr__(side='mv')])
         bus['name'].append(bus0_name)
         bus['v_nom'].append(lv_st.grid.voltage_nom)
 
         # add secondary side bus (bus1)
-        bus1_name = '_'.join(['Bus', 'secondary', repr(lv_st)])
+        bus1_name = '_'.join(['Bus', lv_st.__repr__(side='lv')])
         bus['name'].append(bus1_name)
         bus['v_nom'].append(lv_st.transformers[0].voltage_op)
 
@@ -238,7 +237,7 @@ def mv_to_pypsa(network):
     # create dataframe for MV stations (only secondary side bus)
     for mv_st in mv_stations:
         # add secondary side bus (bus1)
-        bus1_name = '_'.join(['Bus', 'secondary', repr(mv_st)])
+        bus1_name = '_'.join(['Bus', mv_st.__repr__(side='mv')])
         bus['name'].append(bus1_name)
         bus['v_nom'].append(mv_st.transformers[0].voltage_op)
 
@@ -323,7 +322,7 @@ def attach_aggregated_lv_components(network, components):
             for _, gen_subtype in gen_type.items():
                 generator['name'].append(gen_subtype['name'])
                 generator['bus'].append(
-                    '_'.join(['Bus', 'secondary', repr(lv_grid_obj.station)]))
+                    '_'.join(['Bus', lv_grid_obj.station.__repr__('lv')]))
                 generator['control'].append('PQ')
                 generator['p_nom'].append(gen_subtype['capacity'])
                 generator['type'].append("")
@@ -333,7 +332,7 @@ def attach_aggregated_lv_components(network, components):
         for sector, val in lv_grid.items():
             load['name'].append('_'.join(['Load', sector, repr(lv_grid_obj)]))
             load['bus'].append(
-                '_'.join(['Bus', 'secondary', repr(lv_grid_obj.station)]))
+                '_'.join(['Bus', lv_grid_obj.station.__repr__('lv')]))
 
     components['Generator'] = pd.concat(
         [components['Generator'],pd.DataFrame(generator).set_index('name')])
@@ -408,19 +407,11 @@ def attach_aggregated_lv_timeseries(network):
                 load.setdefault(sector, {})
                 load[sector].setdefault('timeseries_p', [])
                 load[sector].setdefault('timeseries_q', [])
-                # load[sector]['timeseries_p'].append(
-                #     lo.pypsa_timeseries(sector, 'p').rename(
-                #         '_'.join([repr(lo), sector])).to_frame())
-                # load[sector]['timeseries_q'].append(lo.pypsa_timeseries(sector, 'q').rename(
-                #         '_'.join([repr(lo), sector])).to_frame())
+
                 load[sector]['timeseries_p'].append(
-                    lo.pypsa_timeseries(sector, 'p').rename(
-                        '_'.join(
-                            [repr(lo), repr(lv_grid), sector, 'p'])).to_frame())
+                    lo.pypsa_timeseries('p').rename(repr(lo)).to_frame())
                 load[sector]['timeseries_q'].append(
-                    lo.pypsa_timeseries(sector, 'q').rename(
-                        '_'.join(
-                            [repr(lo), repr(lv_grid), sector, 'q'])).to_frame())
+                    lo.pypsa_timeseries('q').rename(repr(lo)).to_frame())
                 # TODO: now, there are single loads from eDisGo topology. Summarize these by sector and LV grid
 
         for sector, val in load.items():
@@ -485,13 +476,10 @@ def pypsa_load_timeseries(network, mode=None):
     # add MV grid loads
     if mode is 'mv' or mode is None:
         for load in network.mv_grid.graph.nodes_by_attribute('load'):
-            for sector in list(load.consumption.keys()):
-                mv_load_timeseries_q.append(
-                    load.pypsa_timeseries(sector, 'q').rename(
-                        '_'.join([repr(load), sector])).to_frame())
-                mv_load_timeseries_p.append(
-                    load.pypsa_timeseries(sector, 'p').rename(
-                        '_'.join([repr(load), sector])).to_frame())
+            mv_load_timeseries_q.append(
+                load.pypsa_timeseries('q').rename(repr(load)).to_frame())
+            mv_load_timeseries_p.append(
+                load.pypsa_timeseries('p').rename(repr(load)).to_frame())
 
     # add LV grid's loads
     if mode is 'lv' or mode is None:
@@ -499,11 +487,11 @@ def pypsa_load_timeseries(network, mode=None):
             for load in lv_grid.graph.nodes_by_attribute('load'):
                 for sector in list(load.consumption.keys()):
                     lv_load_timeseries_q.append(
-                        load.pypsa_timeseries(sector, 'q').rename(
-                            '_'.join([repr(load), sector])).to_frame())
+                        load.pypsa_timeseries('q').rename(
+                            repr(load)).to_frame())
                     lv_load_timeseries_p.append(
-                        load.pypsa_timeseries(sector, 'p').rename(
-                            '_'.join([repr(load), sector])).to_frame())
+                        load.pypsa_timeseries('p').rename(
+                            repr(load)).to_frame())
 
     load_df_p = pd.concat(mv_load_timeseries_p + lv_load_timeseries_p, axis=1)
     load_df_q = pd.concat(mv_load_timeseries_q + lv_load_timeseries_q, axis=1)
@@ -603,7 +591,6 @@ def pypsa_bus_timeseries(network, buses, mode=None):
     :pandas:`pandas.DataFrame<dataframe>`
         Time series table in PyPSA format
     """
-        # TODO: replace input for `set_snapshots` by DatetimeIndex constructed based on user input
 
     v_set_dict = {bus: [1, 1] for bus in buses}
 
@@ -667,3 +654,79 @@ def _check_integrity_of_pypsa(pypsa_network):
         raise ValueError("Following loads have no `v_mag_pu_set` time series "
                          "{buses}".format(
             buses=bus_v_set_missing))
+
+
+def process_pfa_results(network, pypsa):
+    """
+    Assing values from PyPSA to
+    :meth:`results <edisgo.grid.network.Network.results>`
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+    pypsa : :pypsa:`pypsa.Network<network>`
+        Network container of `PyPSA <https://pypsa.org>`_
+
+    Returns
+    -------
+
+    See Also
+    --------
+    edisgo.grid.network.Network.results : Understand how results of power flow
+        analysis are structured in eDisGo.
+
+    """
+
+    # line results
+    q0 = abs(pypsa.lines_t['q0'])
+    q1 = abs(pypsa.lines_t['q1'])
+    p0 = abs(pypsa.lines_t['p0'])
+    p1 = abs(pypsa.lines_t['p1'])
+    network.results.pfa_p = p0.where(p0 > p1, p1)
+    network.results.pfa_q = q0.where(q0 > q1, q1)
+
+    # process results at nodes
+    generators_names = [repr(g) for g in
+                        network.mv_grid.graph.nodes_by_attribute('generator')]
+    generators_mapping = {v: k for k, v in
+                          pypsa.generators.loc[generators_names][
+                              'bus'].to_dict().items()}
+    branch_t_names = [repr(bt) for bt in
+                      network.mv_grid.graph.nodes_by_attribute('branch_tee')]
+    branch_t_mapping = {'_'.join(['Bus', v]): v for v in branch_t_names}
+    mv_station_names = [repr(m) for m in
+                        network.mv_grid.graph.nodes_by_attribute('mv_station')]
+    mv_station_mapping_sec = {'_'.join(['Bus', v]): v for v in mv_station_names}
+    lv_station_names = [repr(l) for l in
+                        network.mv_grid.graph.nodes_by_attribute('lv_station')]
+    lv_station_mapping_pri = {
+        '_'.join(['Bus', l.__repr__('mv')]): repr(l)
+        for l in network.mv_grid.graph.nodes_by_attribute('lv_station')}
+    lv_station_mapping_sec = {
+        '_'.join(['Bus', l.__repr__('lv')]): repr(l)
+        for l in network.mv_grid.graph.nodes_by_attribute('lv_station')}
+    loads_names = [repr(lo) for lo in
+                   network.mv_grid.graph.nodes_by_attribute('load')]
+    loads_mapping = {v: k for k, v in
+                     pypsa.loads.loc[loads_names][
+                         'bus'].to_dict().items()}
+
+    names_mapping = {
+        **generators_mapping,
+        **branch_t_mapping,
+        **mv_station_mapping_sec,
+        **lv_station_mapping_pri,
+        **lv_station_mapping_sec,
+        **loads_mapping
+    }
+
+    # write voltage levels obtained from power flow to results object
+    pfa_v_mag_pu = pypsa.buses_t['v_mag_pu'].rename(columns=names_mapping)
+    network.results.pfa_v_mag_pu = pd.concat(
+        {'mv': pfa_v_mag_pu[list(generators_mapping.values()) +
+                            list(branch_t_mapping.values()) +
+                            list(mv_station_mapping_sec.values()) +
+                            list(lv_station_mapping_pri.values()) +
+                            list(loads_mapping.values())],
+         'lv': pfa_v_mag_pu[list(lv_station_mapping_sec.values())]}, axis=1)
