@@ -1,5 +1,6 @@
 from .check_tech_constraints import check_line_load, check_station_load, \
     check_voltage #, get_critical_line_loading, get_critical_voltage_at_nodes
+import pandas as pd
 from .reinforce_measures import reinforce_branches_current, \
     reinforce_branches_voltage, extend_distribution_substation
 import logging
@@ -50,6 +51,7 @@ def reinforce_grid(network, results):
 
     """
 
+    iteration_step = 1
     # STEP 1: reinforce overloaded transformers
     # ToDo: get overlaoded stations (als dict mit maximaler Belastung {StationXY: 640kVA})
     # ToDo: check if MV/LV Trafo, warning if HV/MV Trafo
@@ -63,7 +65,21 @@ def reinforce_grid(network, results):
                             if len(_.transformers) >= 2][0]: 2000}
 
     # reinforce substations
-    extend_distribution_substation(network, overloaded_stations)
+    transformer_changes = extend_distribution_substation(
+        network, overloaded_stations)
+    # write added and removed transformers to results.equipment_changes
+    results.equipment_changes = results.equipment_changes.append(
+        pd.DataFrame(
+            {'iteration_step': [iteration_step] * len(
+                transformer_changes['added']),
+             'change': ['added'] * len(transformer_changes['added'])},
+            index=transformer_changes['added']))
+    results.equipment_changes = results.equipment_changes.append(
+        pd.DataFrame(
+            {'iteration_step': [iteration_step] * len(
+                transformer_changes['removed']),
+             'change': ['added'] * len(transformer_changes['removed'])},
+            index=transformer_changes['removed']))
 
     # if stations have been reinforced: run PF again and check if all
     # overloading problems for all stations were solved

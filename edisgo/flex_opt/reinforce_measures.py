@@ -29,6 +29,10 @@ def extend_distribution_substation(network, critical_stations):
         Dictionary with key holding the station name and values the
         corresponding station load.
 
+    Returns
+    -------
+    Dictionary with lists of added and removed transformers.
+
     """
 
     # get parameters for standard transformer
@@ -41,6 +45,7 @@ def extend_distribution_substation(network, critical_stations):
     load_factor_mv_lv_transformer = float(network.config['grid_expansion'][
         'load_factor_mv_lv_transformer'])
 
+    transformers_changes = {'added': [], 'removed': []}
     for station in critical_stations:
 
         # list of maximum power of each transformer in the station
@@ -73,8 +78,9 @@ def extend_distribution_substation(network, critical_stations):
                 voltage_op=duplicated_transformer.voltage_op,
                 type=copy.deepcopy(duplicated_transformer.type))
 
-            # add transformer to station
+            # add transformer to station and return value
             station.add_transformer(new_transformer)
+            transformers_changes['added'].append(new_transformer)
 
         else:
             # get any transformer to get attributes for new transformer from
@@ -95,10 +101,14 @@ def extend_distribution_substation(network, critical_stations):
                     voltage_op=station_transformer.voltage_op,
                     type=copy.deepcopy(standard_transformer))
                 new_transformers.append(new_transformer)
+            transformers_changes['added'].extend(new_transformers)
+            transformers_changes['removed'].extend(station.transformers)
             station.transformers = new_transformers
 
     logger.info("{} have been reinforced due to overloading "
                 "issues.".format(str(len(critical_stations))))
+
+    return transformers_changes
 
 
 def reinforce_branches_voltage(network, crit_nodes):
