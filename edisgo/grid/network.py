@@ -35,7 +35,6 @@ class Network:
     """
 
     def __init__(self, **kwargs):
-        # TODO: sort out realistic use cases for data from PyPSA network
         if 'pypsa' not in kwargs.keys():
             self._id = kwargs.get('id', None)
             self._metadata = kwargs.get('metadata', None)
@@ -179,13 +178,7 @@ class Network:
         """
         self.pypsa = mode
 
-        # TODO: remove export prior to merge
-        self.pypsa.export_to_csv_folder('edisgo2pypsa_export')
-
-        # TODO: check if timeseries dataframes contain all data
-        # TODO: maybe 'v_mag_pu_set' is required for buses
-        # TODO: maybe there are lv station without load and generation at secondary side
-        # TODO: if missing, add slack generator
+        # run power flow analysis
         self.pypsa.pf(self.pypsa.snapshots)
 
         interfaces.process_pfa_results(self, self.pypsa)
@@ -508,7 +501,6 @@ class Results:
 
     @property
     def pfa_q(self):
-        #tODO: return columns selected by passed grid topology components
         return self._pfa_q
 
     @pfa_q.setter
@@ -542,8 +534,6 @@ class Results:
             Apparent power for `lines`
 
         """
-        # TODO: exclud and report on lines where results are missing
-        # TODO: return all results if `lines` not given
 
         labels_included = []
         labels_not_included = []
