@@ -176,7 +176,7 @@ class Network:
         representation to the PyPSA format and stores it to :attr:`self._pypsa`.
 
         """
-        self.pypsa = mode
+        self.pypsa = interfaces.to_pypsa(self, mode)
 
         # run power flow analysis
         self.pypsa.pf(self.pypsa.snapshots)
@@ -236,7 +236,7 @@ class Network:
         return self._pypsa
 
     @pypsa.setter
-    def pypsa(self, mode=None):
+    def pypsa(self, pypsa):
         """
         Convert NetworkX based grid topology representation to PyPSA grid
         representation based on :pandas:`pandas.DataFrame<dataframe>`
@@ -249,6 +249,8 @@ class Network:
             for the conversion of the MV grid topology or `mode='lv'`
             for the conversion of the LV grid topology.
             Defaults to None which equals converting MV + LV.
+        pypsa : :pypsa:`pypsa.Network<network>`
+            PyPSA network container
 
         Notes
         -----
@@ -261,11 +263,8 @@ class Network:
             https://github.com/openego/eDisGo/issues/18
          * Where to find and adjust power flow analysis defining parameters
 
-        Returns
-        -------
-        .. TODO: describe return
         """
-        self._pypsa = interfaces.to_pypsa(self, mode)
+        self._pypsa = pypsa
 
     @property
     def scenario(self):
