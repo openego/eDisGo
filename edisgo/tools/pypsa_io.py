@@ -173,6 +173,18 @@ def mv_to_pypsa(network):
     ----------
     network : Network
         eDisGo grid container
+
+    Returns
+    -------
+    dict of :pandas:`pandas.DataFrame<dataframe>`
+        A DataFrame for each type of PyPSA components constituting the grid
+        topology. Keys included
+
+        * 'Generator'
+        * 'Load'
+        * 'Line'
+        * 'BranchTee'
+        * 'Tranformer'
     """
 
     generators = network.mv_grid.graph.nodes_by_attribute('generator')
