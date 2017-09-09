@@ -5,7 +5,7 @@ from edisgo.flex_opt.costs import grid_expansion_costs
 
 from os import path
 import pandas as pd
-from edisgo.tools import interfaces
+from edisgo.tools import pypsa_io
 from math import sqrt
 
 
@@ -176,12 +176,12 @@ class Network:
         representation to the PyPSA format and stores it to :attr:`self._pypsa`.
 
         """
-        self.pypsa = interfaces.to_pypsa(self, mode)
+        self.pypsa = pypsa_io.to_pypsa(self, mode)
 
         # run power flow analysis
         self.pypsa.pf(self.pypsa.snapshots)
 
-        interfaces.process_pfa_results(self, self.pypsa)
+        pypsa_io.process_pfa_results(self, self.pypsa)
 
 
     def reinforce(self):
