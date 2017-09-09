@@ -14,24 +14,31 @@ class Network:
 
     Used as container for all data related to a single
     :class:`~.grid.grids.MVGrid`.
+    Provides the top-level API for invocation of data import, analysis of
+    hosting capacity, grid reinforce and flexibility measures.
+
+    Examples
+    --------
+    Assuming you the Ding0 `ding0_data.pkl` in CWD
+
+    Create eDisGo Network object by loading Ding0 file
+
+    >>> from edisgo.grid.network import Network
+    >>> network = Network.import_from_ding0('ding0_data.pkl'))
+
+    Analyze hosting capacity for MV grid level
+
+    >>> network.analyze(mode='mv')
+
+    Print LV station secondary side voltage levels returned by PFA
+
+    >>> lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
+    >>> print(network.results.v_res(lv_stations, 'lv'))
 
     Attributes
     ----------
-    _id : :obj:`str`
-        Name of network
-    _equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
-        Electrical equipment such as lines and transformers
-    _config : ???
-        #TODO: TBD
     _metadata : :obj:`dict`
         Metadata of Network such as ?
-    _data_sources : :obj:`dict` of :obj:`str`
-        Data Sources of grid, generators etc.
-        Keys: 'grid', 'generators', ?
-    _scenario : :class:`~.grid.grids.Scenario`
-        Scenario which is used for calculations
-    _pypsa : :pypsa:`pypsa.Network<network>`
-        PyPSA representation of grid topology
     """
 
     def __init__(self, **kwargs):
@@ -154,12 +161,21 @@ class Network:
     def analyze(self, mode=None):
         """Analyzes the grid by power flow analysis
 
-        .. TODO: explain a bunch of details and example how to use
-        * what type of power flow is performed
-        * how to select time range for analysis
-        * representation of grid in PFA
-         * No HV-MV transformer
-         * ...
+        Analyze the grid for violations of hosting capacity. Means, perform a
+        power flow analysis and obtain voltages at nodes (load, generator,
+        stations/transformers and branch tees) and active/reactive power at
+        lines.
+
+        The power flow analysis can be performed for both grid levels MV and LV
+        and for both of them individually. Use `mode` to choose (defaults to
+        MV + LV).
+
+        A static `non-linear power flow analysis is performed using PyPSA
+        <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
+        The high-voltage to medium-voltage transformer are not included in the
+        analysis. The slack bus is defined at secondary side of these
+        transformers assuming an ideal tap changer. Hence, potential overloading
+        of the transformers is not studied here.
 
         Parameters
         ----------
@@ -174,6 +190,11 @@ class Network:
         -----
         The current implementation always translates the grid topology
         representation to the PyPSA format and stores it to :attr:`self._pypsa`.
+
+        TODO: extend doctring by
+
+        * How power plants are modeled, if possible use a link
+        * Where to find and adjust power flow analysis defining parameters
 
         """
         self.pypsa = pypsa_io.to_pypsa(self, mode)
@@ -204,7 +225,11 @@ class Network:
 
     @property
     def equipment_data(self):
-        """Returns equipment data object"""
+        """Returns equipment data object
+
+        Electrical equipment such as lines and transformers
+        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+        """
         return self._equipment_data
 
     @property
@@ -233,37 +258,30 @@ class Network:
 
     @property
     def pypsa(self):
+        """
+        PyPSA grid representation
+
+        A grid topology representation based on
+        :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
+        this data model the
+        `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+        is assigned to this attribute.
+        This allows as well to overwrite data.
+
+        Parameters
+        ----------
+        pypsa:
+            The `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+            container
+
+        Returns
+        -------
+        PyPSA grid representation
+        """
         return self._pypsa
 
     @pypsa.setter
     def pypsa(self, pypsa):
-        """
-        Convert NetworkX based grid topology representation to PyPSA grid
-        representation based on :pandas:`pandas.DataFrame<dataframe>`
-
-        Parameters
-        ----------
-        mode: str
-            Allows to toggle between converting the whole grid topology
-            (MV + LV), only MV or only LV. Therefore, either specify `mode='mv'`
-            for the conversion of the MV grid topology or `mode='lv'`
-            for the conversion of the LV grid topology.
-            Defaults to None which equals converting MV + LV.
-        pypsa : :pypsa:`pypsa.Network<network>`
-            PyPSA network container
-
-        Notes
-        -----
-        Tell about
-         * How the PyPSA interface is constructed, i.e. splitted in MV and LV
-            with combination or attachment of aggregated LV load and generation
-            to MV part
-         * How power plants are modeled, if possible use a link
-         * Recommendations for further development:
-            https://github.com/openego/eDisGo/issues/18
-         * Where to find and adjust power flow analysis defining parameters
-
-        """
         self._pypsa = pypsa
 
     @property
@@ -562,7 +580,8 @@ class Results:
 
         Parameters
         ----------
-        nodes : grid topology component or `list` grid topology components
+        nodes : :obj:`list` of :class:`~.grid.components.Load`, :class:`~.grid.components.Generator`, ...
+            grid topology component or `list` grid topology components
         level : str
             Either 'mv' or 'lv'. Depending which grid level results you are
             interested in. It is required to provide this argument in order
