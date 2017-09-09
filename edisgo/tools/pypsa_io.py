@@ -42,6 +42,16 @@ def to_pypsa(network, mode):
       :func:`combine_mv_and_lv`. Time series are obtained at once for both grid
       levels.
 
+    This PyPSA interface is aware of translation errors and performs so checks
+    on integrity of data converted to PyPSA grid representation
+
+    * Sub-graphs/ Sub-networks: It is ensured the grid has no islanded parts
+    * Completeness of time series: It is ensured each component has a time
+      series
+    * Buses available: Each component (load, generator, line, transformer) is
+      connected to a bus. The PyPSA representation is check for completeness of
+      buses.
+
     Parameters
     ----------
     network : Network
