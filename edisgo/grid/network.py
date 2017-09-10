@@ -557,12 +557,11 @@ class Results:
 
         """
 
-        labels_included = []
-        labels_not_included = []
-
-        labels = [repr(l) for l in lines]
 
         if lines is not None:
+            labels_included = []
+            labels_not_included = []
+            labels = [repr(l) for l in lines]
             for label in labels:
                 if label in list(self.pfa_p.columns) and label in list(self.pfa_q.columns):
                     labels_included.append(label)
@@ -572,7 +571,7 @@ class Results:
                         "Apparent power for {lines} are not returned from PFA".format(
                             lines=labels_not_included))
         else:
-            labels_included = labels
+            labels_included = self.pfa_p.columns
 
         s_res = ((self.pfa_p[labels_included] ** 2 + self.pfa_q[
             labels_included] ** 2) * 1e3).applymap(sqrt)
