@@ -196,6 +196,11 @@ class Network:
         * How power plants are modeled, if possible use a link
         * Where to find and adjust power flow analysis defining parameters
 
+        See Also
+        --------
+        :func:~.tools.pypsa_io.to_pypsa
+            Translator to PyPSA data format
+
         """
         self.pypsa = pypsa_io.to_pypsa(self, mode)
 

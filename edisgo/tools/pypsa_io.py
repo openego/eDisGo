@@ -51,6 +51,8 @@ def to_pypsa(network, mode):
     * Buses available: Each component (load, generator, line, transformer) is
       connected to a bus. The PyPSA representation is check for completeness of
       buses.
+    * Duplicate labels in components DataFrames and components' time series
+      DataFrames
 
     Parameters
     ----------
@@ -727,6 +729,73 @@ def _check_integrity_of_pypsa(pypsa_network):
         raise ValueError("Following loads have no `v_mag_pu_set` time series "
                          "{buses}".format(
             buses=bus_v_set_missing))
+
+    # check for duplicate labels (of components)
+    duplicated_labels = []
+    if any(pypsa_network.buses.index.duplicated()):
+        duplicated_labels.append(pypsa_network.buses.index[
+                                     pypsa_network.buses.index.duplicated()])
+    if any(pypsa_network.generators.index.duplicated()):
+        duplicated_labels.append(pypsa_network.generators.index[
+                                     pypsa_network.generators.index.duplicated()])
+    if any(pypsa_network.loads.index.duplicated()):
+        duplicated_labels.append(pypsa_network.loads.index[
+                                     pypsa_network.loads.index.duplicated()])
+    if any(pypsa_network.transformers.index.duplicated()):
+        duplicated_labels.append(pypsa_network.transformers.index[
+                                     pypsa_network.transformers.index.duplicated()])
+    if any(pypsa_network.lines.index.duplicated()):
+        duplicated_labels.append(pypsa_network.lines.index[
+                                     pypsa_network.lines.index.duplicated()])
+    if duplicated_labels:
+        raise ValueError("{labels} have duplicate entry in "
+                         "one of the components dataframes".format(
+            labels=duplicated_labels))
+
+    # duplicate p_sets and q_set
+    duplicate_p_sets = []
+    duplicate_q_sets = []
+    if any(pypsa_network.loads_t['p_set'].columns.duplicated()):
+        duplicate_p_sets.append(pypsa_network.loads_t['p_set'].columns[
+                                    pypsa_network.loads_t[
+                                        'p_set'].columns.duplicated()])
+    if any(pypsa_network.loads_t['q_set'].columns.duplicated()):
+        duplicate_q_sets.append(pypsa_network.loads_t['q_set'].columns[
+                                    pypsa_network.loads_t[
+                                        'q_set'].columns.duplicated()])
+        
+    if any(pypsa_network.generators_t['p_set'].columns.duplicated()):
+        duplicate_p_sets.append(pypsa_network.generators_t['p_set'].columns[
+                                    pypsa_network.generators_t[
+                                        'p_set'].columns.duplicated()])
+    if any(pypsa_network.generators_t['q_set'].columns.duplicated()):
+        duplicate_q_sets.append(pypsa_network.generators_t['q_set'].columns[
+                                    pypsa_network.generators_t[
+                                        'q_set'].columns.duplicated()])
+
+    if duplicate_p_sets:
+        raise ValueError("{labels} have duplicate entry in "
+                         "generators_t['p_set']"
+                         " or loads_t['p_set']".format(
+            labels=duplicate_p_sets))
+    if duplicate_q_sets:
+        raise ValueError("{labels} have duplicate entry in "
+                         "generators_t['q_set']"
+                         " or loads_t['q_set']".format(
+            labels=duplicate_q_sets))
+    
+        
+    # find duplicate v_mag_set entries
+    duplicate_v_mag_set = []
+    if any(pypsa_network.buses_t['v_mag_pu_set'].columns.duplicated()):
+        duplicate_v_mag_set.append(pypsa_network.buses_t['v_mag_pu_set'].columns[
+                                    pypsa_network.buses_t[
+                                        'v_mag_pu_set'].columns.duplicated()])
+        
+    if duplicate_v_mag_set:
+        raise ValueError("{labels} have duplicate entry in buses_t".format(
+            labels=duplicate_v_mag_set))
+        
 
 
 def process_pfa_results(network, pypsa):
