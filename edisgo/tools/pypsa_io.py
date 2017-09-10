@@ -992,13 +992,35 @@ def process_pfa_results(network, pypsa):
                      pypsa.loads.loc[loads_names][
                          'bus'].to_dict().items()}
 
+    lv_generators_names = []
+    lv_branch_t_names = []
+    lv_loads_names = []
+    for lv_grid in network.mv_grid.lv_grids:
+        lv_generators_names.extend([repr(g) for g in
+                                    lv_grid.graph.nodes_by_attribute(
+                                        'generator')])
+        lv_branch_t_names.extend([repr(bt) for bt in
+                             lv_grid.graph.nodes_by_attribute('branch_tee')])
+        lv_loads_names.extend([repr(lo) for lo in
+                          lv_grid.graph.nodes_by_attribute('load')])
+
+    lv_generators_mapping = {v: k for k, v in
+                             pypsa.generators.loc[lv_generators_names][
+                                 'bus'].to_dict().items()}
+    lv_branch_t_mapping = {'_'.join(['Bus', v]): v for v in lv_branch_t_names}
+    lv_loads_mapping = {v: k for k, v in pypsa.loads.loc[lv_loads_names][
+        'bus'].to_dict().items()}
+
     names_mapping = {
         **generators_mapping,
         **branch_t_mapping,
         **mv_station_mapping_sec,
         **lv_station_mapping_pri,
         **lv_station_mapping_sec,
-        **loads_mapping
+        **loads_mapping,
+        **lv_generators_mapping,
+        **lv_loads_mapping,
+        **lv_branch_t_mapping
     }
 
     # write voltage levels obtained from power flow to results object
@@ -1009,4 +1031,7 @@ def process_pfa_results(network, pypsa):
                             list(mv_station_mapping_sec.values()) +
                             list(lv_station_mapping_pri.values()) +
                             list(loads_mapping.values())],
-         'lv': pfa_v_mag_pu[list(lv_station_mapping_sec.values())]}, axis=1)
+         'lv': pfa_v_mag_pu[list(lv_station_mapping_sec.values()) +
+                            list(lv_generators_mapping.values()) +
+                            list(lv_branch_t_mapping.values()) +
+                            list(lv_loads_mapping.values())]}, axis=1)
