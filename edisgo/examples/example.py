@@ -17,26 +17,48 @@ network = Network.import_from_ding0(
 # pickle.dump(network, open('test_network.pkl', 'wb'))
 # network = pickle.load(open('test_network.pkl', 'rb'))
 
-# export to pypsa
-# network.analyze(mode='mv')
+# Do non-linear power flow analysis with PyPSA (MV+LV)
+# network.analyze()
+
+# Print LV station secondary side voltage levels returned by PFA
+# print(network.results.v_res(
+#     network.mv_grid.graph.nodes_by_attribute('lv_station'), 'lv'))
+
+# Print voltage levels for entire LV grid
+# for attr in ['lv_station', 'load', 'generator', 'branch_tee']:
+#     objs = []
+#     for lv_grid in network.mv_grid.lv_grids:
+#         objs.extend(lv_grid.graph.nodes_by_attribute(attr))
+#     print("\n\n\n{}\n".format(attr))
+#     print(network.results.v_res(
+#         objs, 'lv'))
+
+# Print voltage level of all nodes
+# print(network.results.pfa_v_mag_pu)
+
+# Print apparent power at lines
+# print(network.results.s_res([_['line'] for _ in network.mv_grid.graph.graph_edges()]))
+
+# Print voltage levels for all lines
+# print(network.results.s_res())
 
 # for now create results object
 # ToDo: Werte in DataFrame als List oder Array?
-results = Results()
-results.pfa_edges = pd.read_csv('Exemplary_PyPSA_line_results.csv',
-                                index_col=0,
-                                converters={'p0': literal_eval,
-                                            'q0': literal_eval,
-                                            'p1': literal_eval,
-                                            'q1': literal_eval})
-results.pfa_edges['p0'] = results.pfa_edges['p0'].apply(lambda x: np.array(x))
-results.pfa_edges['q0'] = results.pfa_edges['q0'].apply(lambda x: np.array(x))
-results.pfa_edges['p1'] = results.pfa_edges['p1'].apply(lambda x: np.array(x))
-results.pfa_edges['q1'] = results.pfa_edges['q1'].apply(lambda x: np.array(x))
-results.pfa_nodes = pd.read_csv('Exemplary_PyPSA_bus_results.csv', index_col=0,
-                                converters={'v_mag_pu': literal_eval})
-results.pfa_nodes['v_mag_pu'] = results.pfa_nodes['v_mag_pu'].apply(
-    lambda x: np.array(x))
+# results = Results()
+# results.pfa_edges = pd.read_csv('Exemplary_PyPSA_line_results.csv',
+#                                 index_col=0,
+#                                 converters={'p0': literal_eval,
+#                                             'q0': literal_eval,
+#                                             'p1': literal_eval,
+#                                             'q1': literal_eval})
+# results.pfa_edges['p0'] = results.pfa_edges['p0'].apply(lambda x: np.array(x))
+# results.pfa_edges['q0'] = results.pfa_edges['q0'].apply(lambda x: np.array(x))
+# results.pfa_edges['p1'] = results.pfa_edges['p1'].apply(lambda x: np.array(x))
+# results.pfa_edges['q1'] = results.pfa_edges['q1'].apply(lambda x: np.array(x))
+# results.pfa_nodes = pd.read_csv('Exemplary_PyPSA_bus_results.csv', index_col=0,
+#                                 converters={'v_mag_pu': literal_eval})
+# results.pfa_nodes['v_mag_pu'] = results.pfa_nodes['v_mag_pu'].apply(
+#     lambda x: np.array(x))
 
 # # MV generators
 # gens = network.mv_grid.graph.nodes_by_attribute('generator')
@@ -56,7 +78,7 @@ results.pfa_nodes['v_mag_pu'] = results.pfa_nodes['v_mag_pu'].apply(
 # else:
 #     print("O MWh")
 
-reinforce_grid.reinforce_grid(network, results)
+# from
 
 # liste aller lv grids
 # [_ for _ in network.mv_grid.lv_grids]

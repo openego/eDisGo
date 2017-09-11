@@ -104,21 +104,18 @@ class Load(Component):
 
         cos_phi = 0.95
 
-        q_factor = tan(acos(0.95))
+        q_factor = tan(acos(cos_phi))
 
-        avg_hourly_load = {k: v / hours_of_the_year / 1e3
-                           for k, v in self.consumption.items()}
+
+        avg_hourly_load = self.consumption[list(self.consumption.keys())[0]] / \
+                                           hours_of_the_year / 1e3
 
         rng = pd.date_range('1/1/2011', periods=hours_of_the_year, freq='H')
 
         ts_dict_p = {
-            (k, 'p'): [avg_hourly_load[k] * (
-            1 - q_factor)] * hours_of_the_year
-            for k in avg_hourly_load.keys()}
+            'p': [avg_hourly_load * (1 - q_factor)] * hours_of_the_year}
         ts_dict_q = {
-            (k, 'q'): [avg_hourly_load[k] * (
-                q_factor)] * hours_of_the_year
-            for k in avg_hourly_load.keys()}
+            'q': [avg_hourly_load * (q_factor)] * hours_of_the_year}
         ts_dict = {**ts_dict_p, **ts_dict_q}
 
         self._timeseries = pd.DataFrame(ts_dict, index=rng)
@@ -139,22 +136,16 @@ class Load(Component):
 
         return self._timeseries
 
-    # @property
-    def pypsa_timeseries(self, sector, attr):
+    def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
 
         Parameters
         ----------
-        sector : str
-            Sectoral load that is of interest. Valid sectors {residential,
-            retail, agricultural, industrial}
         attr : str
             Attribute name (PyPSA conventions). Choose from {p_set, q_set}
         """
 
-        pypsa_component_name = '_'.join([repr(self), sector])
-
-        return self._timeseries[(sector, attr)]
+        return self._timeseries[attr]
 
     @property
     def consumption(self):
@@ -178,6 +169,12 @@ class Load(Component):
     @consumption.setter
     def consumption(self, cons_dict):
         self._consumption = cons_dict
+
+    def __repr__(self):
+        return '_'.join(['Load',
+                         list(self.consumption.keys())[0],
+                         repr(self.grid),
+                         str(self.id)])
 
 
 class Generator(Component):
@@ -319,6 +316,9 @@ class BranchTee(Component):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def __repr__(self):
+        return '_'.join([self.__class__.__name__, repr(self.grid), str(self._id)])
+
 
 class MVStation(Station):
     """MV Station object"""
@@ -326,6 +326,36 @@ class MVStation(Station):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def __repr__(self, side=None):
+        repr_base = super().__repr__()
+
+        # As we don't consider HV-MV transformers in PFA, we don't have to care
+        # about primary side bus of MV station. Hence, the general repr()
+        # currently returned, implicitely refers to the secondary side (MV level)
+        # if side == 'hv':
+        #     return '_'.join(['primary', repr_base])
+        # elif side == 'mv':
+        #     return '_'.join(['secondary', repr_base])
+        # else:
+        #     return repr_base
+        return repr_base
+
+
+class LVStation(Station):
+    """LV Station object"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __repr__(self, side=None):
+        repr_base = super().__repr__()
+
+        if side == 'mv':
+            return '_'.join(['primary', repr_base])
+        elif side == 'lv':
+            return '_'.join(['secondary', repr_base])
+        else:
+            return repr_base
 
 class Line(Component):
     """
