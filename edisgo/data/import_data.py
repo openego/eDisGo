@@ -235,7 +235,8 @@ def _build_mv_grid(ding0_grid, network):
     la_centers = [_ for _ in ding0_grid._graph.nodes()
                   if isinstance(_, LVLoadAreaCentreDing0)]
     if la_centers:
-        aggregated, aggr_stations = _determine_aggregated_nodes(la_centers)
+        aggregated, aggr_stations, dingo_import_data = _determine_aggregated_nodes(la_centers)
+        network.dingo_import_data = dingo_import_data
     else:
         aggregated = aggr_stations = []
 
@@ -866,7 +867,7 @@ def _validate_load_generation(mv_grid, ding0_mv_grid):
                         edisgo=v2['edisgo']))
 
 
-def import_generators(network, data_source):
+def import_generators(network, data_source=None):
     """
     Import generator data from source.
 
@@ -899,7 +900,7 @@ def import_generators(network, data_source):
     """
 
     if data_source == 'oedb':
-        return _import_genos_from_oedb(network)
+        _import_genos_from_oedb(network)
     else:
         logger.error("Invalid data source {} provided. Please re-check the file "
                      "`config_db_tables.cfg`".format(data_source))

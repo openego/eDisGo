@@ -172,8 +172,8 @@ class Network:
         :func:`edisgo.data.import_data.import_generators`
         """
         data_source = data_source=self.config['data']['data_source']
-        return import_generators(network=self,
-                                 data_source=data_source)
+        import_generators(network=self,
+                          data_source=data_source)
 
     def analyze(self, mode=None):
         """Analyzes the grid by power flow analysis
