@@ -484,8 +484,6 @@ class Results:
 
     # TODO: maybe add setter to alter list of measures
 
-    # TODO: maybe initialize DataFrames `pfa_nodes` different. Like with index of all components of similarly
-
     def __init__(self):
         self._measures = ['original']
         self._pfa_p = None

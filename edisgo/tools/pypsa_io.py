@@ -80,8 +80,6 @@ def to_pypsa(network, mode):
         lv_components = lv_to_pypsa(network)
         components = combine_mv_and_lv(mv_components,
                                        lv_components)
-        #TODO: translate voltage appropriately: in kVA
-        # TODO: check unit of nominal capacity of generators: should be MW
 
         timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
             network,
@@ -607,11 +605,12 @@ def _pypsa_load_timeseries(network, mode=None):
             for load in lv_grid.graph.nodes_by_attribute('load'):
                 for sector in list(load.consumption.keys()):
                 # for sector in list(list(load.consumption.keys())[0]):
-                    # TODO: remove consideration of only first sector
+                    # TODO: remove consideration of only industrial sector
                     # now, if a load object has consumption in multiple sectors
                     # (like currently only industrial/retail) the consumption is
                     # implicitly assigned to the industrial sector when being
                     # exported to pypsa.
+                    # TODO: resolve this in the importer
                     if sector != 'retail':
                         lv_load_timeseries_q.append(
                             load.pypsa_timeseries('q').rename(
@@ -619,13 +618,9 @@ def _pypsa_load_timeseries(network, mode=None):
                         lv_load_timeseries_p.append(
                             load.pypsa_timeseries('p').rename(
                                 repr(load)).to_frame())
-                    else:
-                        print("retail")
 
     load_df_p = pd.concat(mv_load_timeseries_p + lv_load_timeseries_p, axis=1)
     load_df_q = pd.concat(mv_load_timeseries_q + lv_load_timeseries_q, axis=1)
-
-    # TODO: maybe names of load object have to be changed to distinguish between different grids
 
     return load_df_p, load_df_q
 
@@ -674,9 +669,8 @@ def _pypsa_generator_timeseries(network, mode=None):
     gen_df_p = pd.concat(mv_gen_timeseries_p + lv_gen_timeseries_p, axis=1)
     gen_df_q = pd.concat(mv_gen_timeseries_q + lv_gen_timeseries_q, axis=1)
 
-    # TODO: maybe names of load object have to be changed to distinguish between different grids
-
     return gen_df_p, gen_df_q
+
 
 def _pypsa_bus_timeseries(network, buses, mode=None):
     """Timeseries in PyPSA compatible format for generator instances
