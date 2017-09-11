@@ -17,12 +17,21 @@ network = Network.import_from_ding0(
 # pickle.dump(network, open('test_network.pkl', 'wb'))
 # network = pickle.load(open('test_network.pkl', 'rb'))
 
-# Do non-linear power flow analysis with PyPSA
-# network.analyze(mode='mv')
+# Do non-linear power flow analysis with PyPSA (MV+LV)
+# network.analyze()
 
 # Print LV station secondary side voltage levels returned by PFA
 # print(network.results.v_res(
 #     network.mv_grid.graph.nodes_by_attribute('lv_station'), 'lv'))
+
+# Print voltage levels for entire LV grid
+# for attr in ['lv_station', 'load', 'generator', 'branch_tee']:
+#     objs = []
+#     for lv_grid in network.mv_grid.lv_grids:
+#         objs.extend(lv_grid.graph.nodes_by_attribute(attr))
+#     print("\n\n\n{}\n".format(attr))
+#     print(network.results.v_res(
+#         objs, 'lv'))
 
 # Print voltage level of all nodes
 # print(network.results.pfa_v_mag_pu)
