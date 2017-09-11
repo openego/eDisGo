@@ -548,11 +548,14 @@ class Results:
 
         Parameters
         ----------
-        lines : line object or list of
+        lines : :class:`~.grid.components.Load` or list of :class:`~.grid.components.Load`
+
+            Line objects of grid topology. If not provided (respectively None)
+            defaults to return `s_res` of all lines in the grid.
 
         Returns
         -------
-        DataFrame
+        :pandas:`pandas.DataFrame<dataframe>`
             Apparent power for `lines`
 
         """
@@ -578,30 +581,42 @@ class Results:
 
         return s_res
 
-    def v_res(self, nodes, level):
+    def v_res(self, nodes=None, level=None):
         """
         Get resulting voltage level at node
 
         Parameters
         ----------
-        nodes : :obj:`list` of :class:`~.grid.components.Load`, :class:`~.grid.components.Generator`, ...
+        nodes :  {:class:`~.grid.components.Load`, :class:`~.grid.components.Generator`, ...} or :obj:`list` of
             grid topology component or `list` grid topology components
+            If not provided defaults to column names available in grid level
+            `level`
         level : str
-            Either 'mv' or 'lv'. Depending which grid level results you are
+            Either 'mv' or 'lv' or None (default). Depending which grid level results you are
             interested in. It is required to provide this argument in order
             to distinguish voltage levels at primary and secondary side of the
             transformer/LV station.
+            If not provided (respectively None) defaults to `['mv', 'lv'].
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Resulting voltage levels obtained from power flow analysis
 
         Notes
         -----
-        Limitations
-         * When power flow analysis is performed for MV only (with aggregated
-         LV loads and generators) this methods only returns voltage at
-         secondary side busbar and not at load/generator
+        Limitation:  When power flow analysis is performed for MV only
+        (with aggregated LV loads and generators) this methods only returns
+        voltage at secondary side busbar and not at load/generator.
 
         """
+        if level is None:
+            level = ['mv', 'lv']
 
-        labels = [repr(_) for _ in nodes]
+        if nodes is None:
+            labels = list(self.pfa_v_mag_pu[level])
+        else:
+            labels = [repr(_) for _ in nodes]
 
         not_included = [_ for _ in labels
                         if _ not in list(self.pfa_v_mag_pu[level].columns)]
@@ -613,4 +628,4 @@ class Results:
                 nodes=not_included))
 
 
-        return self.pfa_v_mag_pu['lv'][labels_included]
+        return self.pfa_v_mag_pu[level][labels_included]
