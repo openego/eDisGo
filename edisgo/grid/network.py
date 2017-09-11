@@ -41,6 +41,8 @@ class Network:
         self._config = self._load_config()
         self._equipment_data = self._load_equipment_data()
 
+        self._dingo_import_data = []
+
     @staticmethod
     def _load_config():
         """Load config files
@@ -201,6 +203,14 @@ class Network:
         """Set data source for key (e.g. 'grid')
         """
         self._data_sources[key] = data_source
+
+    @property
+    def dingo_import_data(self):
+        return self._dingo_import_data
+
+    @dingo_import_data.setter
+    def dingo_import_data(self, dingo_data):
+        self._dingo_import_data = dingo_data
 
     def __repr__(self):
         return 'Network ' + self._id
