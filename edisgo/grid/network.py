@@ -602,9 +602,9 @@ class Results:
         The apparent power at a line determines from the maximum values of
         active power P and reactive power Q.
 
-        :math::
+        .. math::
 
-            S = sqrt(max(p0, p1)^2 + max(q0, q1)^2)
+            S = \sqrt(max(p0, p1)^2 + max(q0, q1)^2)
 
         Parameters
         ----------
