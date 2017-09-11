@@ -465,26 +465,6 @@ class Results:
         A stack that details the history of measures to increase grid's hosting
         capacity. The last item refers to the latest measure. The key `original`
         refers to the state of the grid topology as it was initially imported.
-    pfa_p: :pandas:`pandas.DataFrame<dataframe>`
-        Holds power flow analysis results for active power for the last
-        iteration step. Index of the DataFrame is a DatetimeIndex indicating
-        the time period the power flow analysis was conducted for; columns
-        of the DataFrame are the edges as well as stations of the grid
-        topology.
-        ToDo: add unit
-    pfa_q: :pandas:`pandas.DataFrame<dataframe>`
-        Holds power flow analysis results for reactive power for the last
-        iteration step. Index of the DataFrame is a DatetimeIndex indicating
-        the time period the power flow analysis was conducted for; columns
-        of the DataFrame are the edges as well as stations of the grid
-        topology.
-        ToDo: add unit
-    pfa_v_mag_pu: :pandas:`pandas.DataFrame<dataframe>`
-        Holds power flow analysis results for relative voltage deviation for
-        the last iteration step. Index of the DataFrame is a DatetimeIndex
-        indicating the time period the power flow analysis was conducted for;
-        columns of the DataFrame are the nodes as well as stations of the grid
-        topology.
     equipment_changes: :pandas:`pandas.DataFrame<dataframe>`
         Tracks changes in the equipment (replaced or added cable, batteries
         added, curtailment set to a generator, ...). This is indexed by the
@@ -515,6 +495,30 @@ class Results:
 
     @property
     def pfa_p(self):
+        """
+        Active power results from power flow analysis
+
+        Holds power flow analysis results for active power for the last
+        iteration step. Index of the DataFrame is a DatetimeIndex indicating
+        the time period the power flow analysis was conducted for; columns
+        of the DataFrame are the edges as well as stations of the grid
+        topology.
+        ToDo: add unit
+
+        Parameters
+        ----------
+        pypsa: `pandas.DataFrame<dataframe>`
+            Results time series of active power P from the
+            `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+
+            Provide this if you want to set values. For retrieval of data do not
+            pass an argument
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Active power results from power flow analysis
+        """
         return self._pfa_p
 
     @pfa_p.setter
@@ -523,6 +527,31 @@ class Results:
 
     @property
     def pfa_q(self):
+        """
+        Reactive power results from power flow analysis
+
+        Holds power flow analysis results for reactive power for the last
+        iteration step. Index of the DataFrame is a DatetimeIndex indicating
+        the time period the power flow analysis was conducted for; columns
+        of the DataFrame are the edges as well as stations of the grid
+        topology.
+        ToDo: add unit
+
+        Parameters
+        ----------
+        pypsa: `pandas.DataFrame<dataframe>`
+            Results time series of reactive power Q from the
+            `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+
+            Provide this if you want to set values. For retrieval of data do not
+            pass an argument
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Reactive power results from power flow analysis
+
+        """
         return self._pfa_q
 
     @pfa_q.setter
@@ -531,6 +560,30 @@ class Results:
 
     @property
     def pfa_v_mag_pu(self):
+        """
+        Voltage deviation at node in p.u.
+
+        Holds power flow analysis results for relative voltage deviation for
+        the last iteration step. Index of the DataFrame is a DatetimeIndex
+        indicating the time period the power flow analysis was conducted for;
+        columns of the DataFrame are the nodes as well as stations of the grid
+        topology.
+
+        Parameters
+        ----------
+        pypsa: `pandas.DataFrame<dataframe>`
+            Results time series of voltage deviation from the
+            `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+
+            Provide this if you want to set values. For retrieval of data do not
+            pass an argument
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Voltage level nodes of grid
+
+        """
         return self._pfa_v_mag_pu
 
     @pfa_v_mag_pu.setter
@@ -545,6 +598,13 @@ class Results:
     def s_res(self, lines=None):
         """
         Get resulting apparent power at line(s)
+
+        The apparent power at a line determines from the maximum values of
+        active power P and reactive power Q.
+
+        :math::
+
+            S = sqrt(max(p0, p1)^2 + max(q0, q1)^2)
 
         Parameters
         ----------
