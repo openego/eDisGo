@@ -155,6 +155,7 @@ class Generator(Component):
         self._type = kwargs.get('type', None)
         self._subtype = kwargs.get('subtype', None)
         self._timeseries = kwargs.get('timeseries', None)
+        self._v_level = kwargs.get('v_level', None)
 
     def timeseries(self):
         """Return time series of generator
@@ -181,6 +182,15 @@ class Generator(Component):
     def nominal_capacity(self):
         """:obj:`float` : Nominal generation capacity"""
         return self._nominal_capacity
+
+    @nominal_capacity.setter
+    def nominal_capacity(self, nominal_capacity):
+        self._nominal_capacity = nominal_capacity
+
+    @property
+    def v_level(self):
+        """:obj:`int` : Voltage level"""
+        return self._v_level
 
 
 class Storage(Component):
