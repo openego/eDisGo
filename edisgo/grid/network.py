@@ -5,7 +5,7 @@ from edisgo.flex_opt.costs import grid_expansion_costs
 
 from os import path
 import pandas as pd
-from edisgo.tools import interfaces
+from edisgo.tools import pypsa_io
 from math import sqrt
 
 
@@ -14,28 +14,34 @@ class Network:
 
     Used as container for all data related to a single
     :class:`~.grid.grids.MVGrid`.
+    Provides the top-level API for invocation of data import, analysis of
+    hosting capacity, grid reinforce and flexibility measures.
+
+    Examples
+    --------
+    Assuming you the Ding0 `ding0_data.pkl` in CWD
+
+    Create eDisGo Network object by loading Ding0 file
+
+    >>> from edisgo.grid.network import Network
+    >>> network = Network.import_from_ding0('ding0_data.pkl'))
+
+    Analyze hosting capacity for MV grid level
+
+    >>> network.analyze(mode='mv')
+
+    Print LV station secondary side voltage levels returned by PFA
+
+    >>> lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
+    >>> print(network.results.v_res(lv_stations, 'lv'))
 
     Attributes
     ----------
-    _id : :obj:`str`
-        Name of network
-    _equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
-        Electrical equipment such as lines and transformers
-    _config : ???
-        #TODO: TBD
     _metadata : :obj:`dict`
         Metadata of Network such as ?
-    _data_sources : :obj:`dict` of :obj:`str`
-        Data Sources of grid, generators etc.
-        Keys: 'grid', 'generators', ?
-    _scenario : :class:`~.grid.grids.Scenario`
-        Scenario which is used for calculations
-    _pypsa : :pypsa:`pypsa.Network<network>`
-        PyPSA representation of grid topology
     """
 
     def __init__(self, **kwargs):
-        # TODO: sort out realistic use cases for data from PyPSA network
         if 'pypsa' not in kwargs.keys():
             self._id = kwargs.get('id', None)
             self._metadata = kwargs.get('metadata', None)
@@ -155,12 +161,21 @@ class Network:
     def analyze(self, mode=None):
         """Analyzes the grid by power flow analysis
 
-        .. TODO: explain a bunch of details and example how to use
-        * what type of power flow is performed
-        * how to select time range for analysis
-        * representation of grid in PFA
-         * No HV-MV transformer
-         * ...
+        Analyze the grid for violations of hosting capacity. Means, perform a
+        power flow analysis and obtain voltages at nodes (load, generator,
+        stations/transformers and branch tees) and active/reactive power at
+        lines.
+
+        The power flow analysis can be performed for both grid levels MV and LV
+        and for both of them individually. Use `mode` to choose (defaults to
+        MV + LV).
+
+        A static `non-linear power flow analysis is performed using PyPSA
+        <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
+        The high-voltage to medium-voltage transformer are not included in the
+        analysis. The slack bus is defined at secondary side of these
+        transformers assuming an ideal tap changer. Hence, potential overloading
+        of the transformers is not studied here.
 
         Parameters
         ----------
@@ -176,19 +191,23 @@ class Network:
         The current implementation always translates the grid topology
         representation to the PyPSA format and stores it to :attr:`self._pypsa`.
 
+        TODO: extend doctring by
+
+        * How power plants are modeled, if possible use a link
+        * Where to find and adjust power flow analysis defining parameters
+
+        See Also
+        --------
+        :func:~.tools.pypsa_io.to_pypsa
+            Translator to PyPSA data format
+
         """
-        self.pypsa = mode
+        self.pypsa = pypsa_io.to_pypsa(self, mode)
 
-        # TODO: remove export prior to merge
-        self.pypsa.export_to_csv_folder('edisgo2pypsa_export')
-
-        # TODO: check if timeseries dataframes contain all data
-        # TODO: maybe 'v_mag_pu_set' is required for buses
-        # TODO: maybe there are lv station without load and generation at secondary side
-        # TODO: if missing, add slack generator
+        # run power flow analysis
         self.pypsa.pf(self.pypsa.snapshots)
 
-        interfaces.process_pfa_results(self, self.pypsa)
+        pypsa_io.process_pfa_results(self, self.pypsa)
 
 
     def reinforce(self):
@@ -211,7 +230,11 @@ class Network:
 
     @property
     def equipment_data(self):
-        """Returns equipment data object"""
+        """Returns equipment data object
+
+        Electrical equipment such as lines and transformers
+        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+        """
         return self._equipment_data
 
     @property
@@ -240,39 +263,31 @@ class Network:
 
     @property
     def pypsa(self):
-        return self._pypsa
-
-    @pypsa.setter
-    def pypsa(self, mode=None):
         """
-        Convert NetworkX based grid topology representation to PyPSA grid
-        representation based on :pandas:`pandas.DataFrame<dataframe>`
+        PyPSA grid representation
+
+        A grid topology representation based on
+        :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
+        this data model the
+        `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+        is assigned to this attribute.
+        This allows as well to overwrite data.
 
         Parameters
         ----------
-        mode: str
-            Allows to toggle between converting the whole grid topology
-            (MV + LV), only MV or only LV. Therefore, either specify `mode='mv'`
-            for the conversion of the MV grid topology or `mode='lv'`
-            for the conversion of the LV grid topology.
-            Defaults to None which equals converting MV + LV.
-
-        Notes
-        -----
-        Tell about
-         * How the PyPSA interface is constructed, i.e. splitted in MV and LV
-            with combination or attachment of aggregated LV load and generation
-            to MV part
-         * How power plants are modeled, if possible use a link
-         * Recommendations for further development:
-            https://github.com/openego/eDisGo/issues/18
-         * Where to find and adjust power flow analysis defining parameters
+        pypsa:
+            The `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+            container
 
         Returns
         -------
-        .. TODO: describe return
+        PyPSA grid representation
         """
-        self._pypsa = interfaces.to_pypsa(self, mode)
+        return self._pypsa
+
+    @pypsa.setter
+    def pypsa(self, pypsa):
+        self._pypsa = pypsa
 
     @property
     def scenario(self):
@@ -450,26 +465,6 @@ class Results:
         A stack that details the history of measures to increase grid's hosting
         capacity. The last item refers to the latest measure. The key `original`
         refers to the state of the grid topology as it was initially imported.
-    pfa_p: :pandas:`pandas.DataFrame<dataframe>`
-        Holds power flow analysis results for active power for the last
-        iteration step. Index of the DataFrame is a DatetimeIndex indicating
-        the time period the power flow analysis was conducted for; columns
-        of the DataFrame are the edges as well as stations of the grid
-        topology.
-        ToDo: add unit
-    pfa_q: :pandas:`pandas.DataFrame<dataframe>`
-        Holds power flow analysis results for reactive power for the last
-        iteration step. Index of the DataFrame is a DatetimeIndex indicating
-        the time period the power flow analysis was conducted for; columns
-        of the DataFrame are the edges as well as stations of the grid
-        topology.
-        ToDo: add unit
-    pfa_v_mag_pu: :pandas:`pandas.DataFrame<dataframe>`
-        Holds power flow analysis results for relative voltage deviation for
-        the last iteration step. Index of the DataFrame is a DatetimeIndex
-        indicating the time period the power flow analysis was conducted for;
-        columns of the DataFrame are the nodes as well as stations of the grid
-        topology.
     equipment_changes: :pandas:`pandas.DataFrame<dataframe>`
         Tracks changes in the equipment (replaced or added cable, batteries
         added, curtailment set to a generator, ...). This is indexed by the
@@ -489,8 +484,6 @@ class Results:
 
     # TODO: maybe add setter to alter list of measures
 
-    # TODO: maybe initialize DataFrames `pfa_nodes` different. Like with index of all components of similarly
-
     def __init__(self):
         self._measures = ['original']
         self._pfa_p = None
@@ -500,6 +493,30 @@ class Results:
 
     @property
     def pfa_p(self):
+        """
+        Active power results from power flow analysis
+
+        Holds power flow analysis results for active power for the last
+        iteration step. Index of the DataFrame is a DatetimeIndex indicating
+        the time period the power flow analysis was conducted for; columns
+        of the DataFrame are the edges as well as stations of the grid
+        topology.
+        ToDo: add unit
+
+        Parameters
+        ----------
+        pypsa: `pandas.DataFrame<dataframe>`
+            Results time series of active power P from the
+            `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+
+            Provide this if you want to set values. For retrieval of data do not
+            pass an argument
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Active power results from power flow analysis
+        """
         return self._pfa_p
 
     @pfa_p.setter
@@ -508,7 +525,31 @@ class Results:
 
     @property
     def pfa_q(self):
-        #tODO: return columns selected by passed grid topology components
+        """
+        Reactive power results from power flow analysis
+
+        Holds power flow analysis results for reactive power for the last
+        iteration step. Index of the DataFrame is a DatetimeIndex indicating
+        the time period the power flow analysis was conducted for; columns
+        of the DataFrame are the edges as well as stations of the grid
+        topology.
+        ToDo: add unit
+
+        Parameters
+        ----------
+        pypsa: `pandas.DataFrame<dataframe>`
+            Results time series of reactive power Q from the
+            `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+
+            Provide this if you want to set values. For retrieval of data do not
+            pass an argument
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Reactive power results from power flow analysis
+
+        """
         return self._pfa_q
 
     @pfa_q.setter
@@ -517,6 +558,30 @@ class Results:
 
     @property
     def pfa_v_mag_pu(self):
+        """
+        Voltage deviation at node in p.u.
+
+        Holds power flow analysis results for relative voltage deviation for
+        the last iteration step. Index of the DataFrame is a DatetimeIndex
+        indicating the time period the power flow analysis was conducted for;
+        columns of the DataFrame are the nodes as well as stations of the grid
+        topology.
+
+        Parameters
+        ----------
+        pypsa: `pandas.DataFrame<dataframe>`
+            Results time series of voltage deviation from the
+            `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+
+            Provide this if you want to set values. For retrieval of data do not
+            pass an argument
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Voltage level nodes of grid
+
+        """
         return self._pfa_v_mag_pu
 
     @pfa_v_mag_pu.setter
@@ -532,25 +597,32 @@ class Results:
         """
         Get resulting apparent power at line(s)
 
+        The apparent power at a line determines from the maximum values of
+        active power P and reactive power Q.
+
+        .. math::
+
+            S = \sqrt(max(p0, p1)^2 + max(q0, q1)^2)
+
         Parameters
         ----------
-        lines : line object or list of
+        lines : :class:`~.grid.components.Load` or list of :class:`~.grid.components.Load`
+
+            Line objects of grid topology. If not provided (respectively None)
+            defaults to return `s_res` of all lines in the grid.
 
         Returns
         -------
-        DataFrame
+        :pandas:`pandas.DataFrame<dataframe>`
             Apparent power for `lines`
 
         """
-        # TODO: exclud and report on lines where results are missing
-        # TODO: return all results if `lines` not given
 
-        labels_included = []
-        labels_not_included = []
-
-        labels = [repr(l) for l in lines]
 
         if lines is not None:
+            labels_included = []
+            labels_not_included = []
+            labels = [repr(l) for l in lines]
             for label in labels:
                 if label in list(self.pfa_p.columns) and label in list(self.pfa_q.columns):
                     labels_included.append(label)
@@ -560,36 +632,49 @@ class Results:
                         "Apparent power for {lines} are not returned from PFA".format(
                             lines=labels_not_included))
         else:
-            labels_included = labels
+            labels_included = self.pfa_p.columns
 
         s_res = ((self.pfa_p[labels_included] ** 2 + self.pfa_q[
             labels_included] ** 2) * 1e3).applymap(sqrt)
 
         return s_res
 
-    def v_res(self, nodes, level):
+    def v_res(self, nodes=None, level=None):
         """
         Get resulting voltage level at node
 
         Parameters
         ----------
-        nodes : grid topology component or `list` grid topology components
+        nodes :  {:class:`~.grid.components.Load`, :class:`~.grid.components.Generator`, ...} or :obj:`list` of
+            grid topology component or `list` grid topology components
+            If not provided defaults to column names available in grid level
+            `level`
         level : str
-            Either 'mv' or 'lv'. Depending which grid level results you are
+            Either 'mv' or 'lv' or None (default). Depending which grid level results you are
             interested in. It is required to provide this argument in order
             to distinguish voltage levels at primary and secondary side of the
             transformer/LV station.
+            If not provided (respectively None) defaults to `['mv', 'lv'].
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Resulting voltage levels obtained from power flow analysis
 
         Notes
         -----
-        Limitations
-         * When power flow analysis is performed for MV only (with aggregated
-         LV loads and generators) this methods only returns voltage at
-         secondary side busbar and not at load/generator
+        Limitation:  When power flow analysis is performed for MV only
+        (with aggregated LV loads and generators) this methods only returns
+        voltage at secondary side busbar and not at load/generator.
 
         """
+        if level is None:
+            level = ['mv', 'lv']
 
-        labels = [repr(_) for _ in nodes]
+        if nodes is None:
+            labels = list(self.pfa_v_mag_pu[level])
+        else:
+            labels = [repr(_) for _ in nodes]
 
         not_included = [_ for _ in labels
                         if _ not in list(self.pfa_v_mag_pu[level].columns)]
@@ -601,4 +686,4 @@ class Results:
                 nodes=not_included))
 
 
-        return self.pfa_v_mag_pu['lv'][labels_included]
+        return self.pfa_v_mag_pu[level][labels_included]

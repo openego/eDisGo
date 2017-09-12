@@ -356,3 +356,5 @@ intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
 
 # Numbered figures
 numfig = True
+
+autodoc_member_order = 'bysource'

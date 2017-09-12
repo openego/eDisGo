@@ -318,6 +318,9 @@ class BranchTee(Component):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def __repr__(self):
+        return '_'.join([self.__class__.__name__, repr(self.grid), str(self._id)])
+
 
 class MVStation(Station):
     """MV Station object"""

@@ -1,3 +1,10 @@
+"""
+This modules provides tools to convert graph based representation of the grid
+topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA grid
+container.
+"""
+
+
 import pandas as pd
 from math import pi, sqrt, floor
 from pypsa import Network as PyPSANetwork
@@ -7,17 +14,64 @@ from networkx import connected_component_subgraphs
 
 def to_pypsa(network, mode):
     """
-    See `Network.pypsa`
-    
+    Translate graph based grid representation to PyPSA Network
+
+    For details from a user perspective see API documention of
+    :meth:`~.grid.network.Network.analyze` of the grid container
+    :class:`~.grid.network.Network`.
+
+    Translating eDisGo's grid topology to PyPSA representation is structured
+    into tranlating the topology and adding time series for components of the
+    grid. In both cases translation of MV grid only (`mode='mv'`), LV grid only
+    (`mode='lv'`), MV and LV (`mode=None`) share some code. The
+    code is organized as follows
+
+    * Medium-voltage only (`mode='mv'`): All medium-voltage grid components are
+      exported by :func:`mv_to_pypsa` including the LV station. LV grid load
+      and generation is considered using :func:`add_aggregated_lv_components`.
+      Time series are collected by `_pypsa_load_timeseries` (as example
+      for loads, generators and buses) specifying `mode='mv'). Timeseries
+      for aggregated load/generation at substations are determined individually.
+    * Low-voltage only (`mode='lv'`): LV grid topology including the MV-LV
+      transformer is exported. The slack is defind at primary side of the MV-LV
+      transformer.
+    * Both level MV+LV (`mode=None`): The entire grid topology is translated to
+      PyPSA in order to perform a complete power flow analysis in both levels
+      together. First, both grid levels are translated seperately using
+      :func:`mv_to_pypsa` and :func:`lv_to_pypsa`. Those are merge by
+      :func:`combine_mv_and_lv`. Time series are obtained at once for both grid
+      levels.
+
+    This PyPSA interface is aware of translation errors and performs so checks
+    on integrity of data converted to PyPSA grid representation
+
+    * Sub-graphs/ Sub-networks: It is ensured the grid has no islanded parts
+    * Completeness of time series: It is ensured each component has a time
+      series
+    * Buses available: Each component (load, generator, line, transformer) is
+      connected to a bus. The PyPSA representation is check for completeness of
+      buses.
+    * Duplicate labels in components DataFrames and components' time series
+      DataFrames
+
     Parameters
     ----------
-    network
-    mode
+    network : Network
+        eDisGo grid container
+    mode : str
+        Determines grid levels that are translated to
+        `PyPSA grid representation
+        <https://www.pypsa.org/doc/components.html#network>`_. Specify
+
+        * 'mv' to export MV grid level only. This includes cumulative load and
+          generation from underlying LV grid aggregated at respective LV
+          station.
+        * 'lv' to export LV grid level only
 
     Returns
     -------
-    :pypsa:`pypsa.Network<network>`
-        PyPSA representation of grid topology
+
+        PyPSA Network
     """
 
     # get topology and time series data
@@ -26,27 +80,39 @@ def to_pypsa(network, mode):
         lv_components = lv_to_pypsa(network)
         components = combine_mv_and_lv(mv_components,
                                        lv_components)
+
+        timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
+            network,
+            mode=mode)
+
+        timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
+            network,
+            mode=mode)
+
+        timeseries_bus_v_set = _pypsa_bus_timeseries(
+            network,
+            components['Bus'].index.tolist())
     elif mode is 'mv':
         mv_components = mv_to_pypsa(network)
-        components = attach_aggregated_lv_components(
+        components = add_aggregated_lv_components(
             network,
             mv_components)
 
-        timeseries_load_p, timeseries_load_q = pypsa_load_timeseries(
+        timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
             network,
-            mode='mv')
+            mode=mode)
 
-        timeseries_gen_p, timeseries_gen_q = pypsa_generator_timeseries(
+        timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
             network,
-            mode='mv')
+            mode=mode)
 
-        timeseries_bus_v_set = pypsa_bus_timeseries(
+        timeseries_bus_v_set = _pypsa_bus_timeseries(
             network,
             components['Bus'].index.tolist())
 
         ts_gen_lv_aggr_p, \
         ts_gen_lv_aggr_q, \
-        ts_load_lv_aggr_p, ts_load_lv_aggr_q = attach_aggregated_lv_timeseries(
+        ts_load_lv_aggr_p, ts_load_lv_aggr_q = _pypsa_timeseries_aggregated_at_lv_station(
             network)
 
         # Concat MV and LV (aggregated) time series
@@ -109,7 +175,31 @@ def to_pypsa(network, mode):
 
 
 def mv_to_pypsa(network):
-    """Translate grid topology representation to PyPSA format"""
+    """Translate MV grid topology representation to PyPSA format
+
+    MV grid topology translated here includes
+
+    * MV station (no transformer, see :meth:`~.grid.network.Network.analyze`)
+    * Loads, Generators, Lines, Branch Tees of MV grid level as well as LV
+      stations. LV stations do not have load and generation of LV level.
+
+    Parameters
+    ----------
+    network : Network
+        eDisGo grid container
+
+    Returns
+    -------
+    dict of :pandas:`pandas.DataFrame<dataframe>`
+        A DataFrame for each type of PyPSA components constituting the grid
+        topology. Keys included
+
+        * 'Generator'
+        * 'Load'
+        * 'Line'
+        * 'BranchTee'
+        * 'Tranformer'
+    """
 
     generators = network.mv_grid.graph.nodes_by_attribute('generator')
     loads = network.mv_grid.graph.nodes_by_attribute('load')
@@ -157,7 +247,7 @@ def mv_to_pypsa(network):
         generator['bus'].append(bus_name)
         # TODO: revisit 'control' for dispatchable power plants
         generator['control'].append('PQ')
-        generator['p_nom'].append(gen.nominal_capacity)
+        generator['p_nom'].append(gen.nominal_capacity / 1e3)
         generator['type'].append('_'.join([gen.type, gen.subtype]))
 
         bus['name'].append(bus_name)
@@ -258,13 +348,149 @@ def mv_to_pypsa(network):
     return components
 
 
-def attach_aggregated_lv_components(network, components):
+def lv_to_pypsa(network):
+    """
+    Convert LV grid topology to PyPSA representation
+
+    Includes grid topology of all LV grids of :attr:`~.grid.grid.Grid.lv_grids`
+
+    Parameters
+    ----------
+    network : Network
+        eDisGo grid container
+
+    Returns
+    -------
+    dict of :pandas:`pandas.DataFrame<dataframe>`
+        A DataFrame for each type of PyPSA components constituting the grid
+        topology. Keys included
+
+        * 'Generator'
+        * 'Load'
+        * 'Line'
+        * 'BranchTee'
+    """
+
+    generators = []
+    loads = []
+    branch_tees = []
+    lines = []
+    lv_stations = []
+
+    for lv_grid in network.mv_grid.lv_grids:
+        generators.extend(lv_grid.graph.nodes_by_attribute('generator'))
+        loads.extend(lv_grid.graph.nodes_by_attribute('load'))
+        branch_tees.extend(lv_grid.graph.nodes_by_attribute('branch_tee'))
+        lines.extend(lv_grid.graph.graph_edges())
+        lv_stations.extend(lv_grid.graph.nodes_by_attribute('lv_station'))
+
+    omega = 2 * pi * 50
+
+    generator = {'name': [],
+                 'bus': [],
+                 'control': [],
+                 'p_nom': [],
+                 'type': []}
+
+    bus = {'name': [], 'v_nom': []}
+
+    load = {'name': [], 'bus': []}
+
+    line = {'name': [],
+            'bus0': [],
+            'bus1': [],
+            'type': [],
+            'x': [],
+            'r': [],
+            's_nom': [],
+            'length': []}
+
+    # create dictionary representing generators and associated buses
+    for gen in generators:
+        bus_name = '_'.join(['Bus', repr(gen)])
+        generator['name'].append(repr(gen))
+        generator['bus'].append(bus_name)
+        # TODO: revisit 'control' for dispatchable power plants
+        generator['control'].append('PQ')
+        generator['p_nom'].append(gen.nominal_capacity / 1e3)
+        generator['type'].append('_'.join([gen.type, gen.subtype]))
+
+        bus['name'].append(bus_name)
+        bus['v_nom'].append(gen.grid.voltage_nom / 1e3)
+
+    # create dictionary representing branch tees
+    for bt in branch_tees:
+        bus['name'].append('_'.join(['Bus', repr(bt)]))
+        bus['v_nom'].append(bt.grid.voltage_nom / 1e3)
+
+    # create dataframes representing loads and associated buses
+    for lo in loads:
+        bus_name = '_'.join(['Bus', repr(lo)])
+        load['name'].append(repr(lo))
+        load['bus'].append(bus_name)
+
+        bus['name'].append(bus_name)
+        bus['v_nom'].append(lo.grid.voltage_nom / 1e3)
+
+    # create dataframe for lines
+    for l in lines:
+        line['name'].append(repr(l['line']))
+
+        if l['adj_nodes'][0] in lv_stations:
+            line['bus0'].append(
+                '_'.join(['Bus', l['adj_nodes'][0].__repr__(side='lv')]))
+        else:
+            line['bus0'].append('_'.join(['Bus', repr(l['adj_nodes'][0])]))
+
+        if l['adj_nodes'][1] in lv_stations:
+            line['bus1'].append(
+                '_'.join(['Bus', l['adj_nodes'][1].__repr__(side='lv')]))
+        else:
+            line['bus1'].append('_'.join(['Bus', repr(l['adj_nodes'][1])]))
+
+        line['type'].append("")
+        line['x'].append(
+            l['line'].type['L'] * omega / 1e3 * l['line'].length / 1e3)
+        line['r'].append(l['line'].type['R'] * l['line'].length / 1e3)
+        line['s_nom'].append(
+            sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
+        line['length'].append(l['line'].length / 1e3)
+
+    lv_components = {
+        'Generator': pd.DataFrame(generator).set_index('name'),
+        'Bus': pd.DataFrame(bus).set_index('name'),
+        'Load': pd.DataFrame(load).set_index('name'),
+        'Line': pd.DataFrame(line).set_index('name')}
+
+    return lv_components
+
+
+def combine_mv_and_lv(mv, lv):
+    """Combine MV and LV grid topology in PyPSA format
+
+    Idea for implementation
+    -----------------------
+    Merge all DataFrames except for LV transformers which are already included
+    in the MV grid PyPSA representation
+
+    """
+
+    combined = {
+        c: pd.concat([mv[c], lv[c]], axis=0) for c in list(lv.keys())
+    }
+
+    combined['Transformer'] = mv['Transformer']
+
+    return combined
+
+
+def add_aggregated_lv_components(network, components):
     """
     Aggregates LV load and generation at LV stations
 
     Use this function if you aim for MV calculation only. The according
     DataFrames of `components` are extended by load and generators representing
-    these aggregated repesting the technology type.
+    these aggregated respecting the technology type.
 
     Parameters
     ----------
@@ -275,7 +501,7 @@ def attach_aggregated_lv_components(network, components):
 
     Returns
     -------
-    dict of :pandas:`pandas.DataFrame<dataframe>`
+    :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
         The dictionary components passed to the function is returned altered.
     """
     generators = {}
@@ -342,7 +568,140 @@ def attach_aggregated_lv_components(network, components):
     return components
 
 
-def attach_aggregated_lv_timeseries(network):
+def _pypsa_load_timeseries(network, mode=None):
+    """Timeseries in PyPSA compatible format for load instances
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+    mode : str, optional
+        Specifically retrieve load time series for MV or LV grid level or both.
+        Either choose 'mv' or 'lv'.
+        Defaults to None, which returns both timeseries for MV and LV in a
+        single DataFrame.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Time series table in PyPSA format
+    """
+    mv_load_timeseries_p = []
+    mv_load_timeseries_q = []
+    lv_load_timeseries_p = []
+    lv_load_timeseries_q = []
+
+    # add MV grid loads
+    if mode is 'mv' or mode is None:
+        for load in network.mv_grid.graph.nodes_by_attribute('load'):
+            mv_load_timeseries_q.append(
+                load.pypsa_timeseries('q').rename(repr(load)).to_frame())
+            mv_load_timeseries_p.append(
+                load.pypsa_timeseries('p').rename(repr(load)).to_frame())
+
+    # add LV grid's loads
+    if mode is 'lv' or mode is None:
+        for lv_grid in network.mv_grid.lv_grids:
+            for load in lv_grid.graph.nodes_by_attribute('load'):
+                for sector in list(load.consumption.keys()):
+                # for sector in list(list(load.consumption.keys())[0]):
+                    # TODO: remove consideration of only industrial sector
+                    # now, if a load object has consumption in multiple sectors
+                    # (like currently only industrial/retail) the consumption is
+                    # implicitly assigned to the industrial sector when being
+                    # exported to pypsa.
+                    # TODO: resolve this in the importer
+                    if sector != 'retail':
+                        lv_load_timeseries_q.append(
+                            load.pypsa_timeseries('q').rename(
+                                repr(load)).to_frame())
+                        lv_load_timeseries_p.append(
+                            load.pypsa_timeseries('p').rename(
+                                repr(load)).to_frame())
+
+    load_df_p = pd.concat(mv_load_timeseries_p + lv_load_timeseries_p, axis=1)
+    load_df_q = pd.concat(mv_load_timeseries_q + lv_load_timeseries_q, axis=1)
+
+    return load_df_p, load_df_q
+
+
+def _pypsa_generator_timeseries(network, mode=None):
+    """Timeseries in PyPSA compatible format for generator instances
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+    mode : str, optional
+        Specifically retrieve generator time series for MV or LV grid level or
+        both. Either choose 'mv' or 'lv'.
+        Defaults to None, which returns both timeseries for MV and LV in a
+        single DataFrame.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Time series table in PyPSA format
+    """
+
+    mv_gen_timeseries_q = []
+    mv_gen_timeseries_p = []
+    lv_gen_timeseries_q = []
+    lv_gen_timeseries_p = []
+
+    # MV generator timeseries
+    if mode is 'mv' or mode is None:
+        for gen in network.mv_grid.graph.nodes_by_attribute('generator'):
+            mv_gen_timeseries_q.append(
+                gen.pypsa_timeseries('q').rename(repr(gen)).to_frame())
+            mv_gen_timeseries_p.append(
+                gen.pypsa_timeseries('p').rename(repr(gen)).to_frame())
+
+    # LV generator timeseries
+    if mode is 'lv' or mode is None:
+        for lv_grid in network.mv_grid.lv_grids:
+            for gen in lv_grid.graph.nodes_by_attribute('generator'):
+                lv_gen_timeseries_q.append(
+                    gen.pypsa_timeseries('q').rename(repr(gen)).to_frame())
+                lv_gen_timeseries_p.append(
+                    gen.pypsa_timeseries('p').rename(repr(gen)).to_frame())
+
+    gen_df_p = pd.concat(mv_gen_timeseries_p + lv_gen_timeseries_p, axis=1)
+    gen_df_q = pd.concat(mv_gen_timeseries_q + lv_gen_timeseries_q, axis=1)
+
+    return gen_df_p, gen_df_q
+
+
+def _pypsa_bus_timeseries(network, buses, mode=None):
+    """Timeseries in PyPSA compatible format for generator instances
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+    buses : list
+        Buses names
+    mode : str, optional
+        Specifically retrieve generator time series for MV or LV grid level or
+        both. Either choose 'mv' or 'lv'.
+        Defaults to None, which returns both timeseries for MV and LV in a
+        single DataFrame.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Time series table in PyPSA format
+    """
+
+    v_set_dict = {bus: [1, 1] for bus in buses}
+
+    v_set_df = pd.DataFrame(v_set_dict,
+                            index=network.scenario.timeseries.timeindex)
+
+    return v_set_df
+
+
+def _pypsa_timeseries_aggregated_at_lv_station(network):
     """
 
     Parameters
@@ -360,8 +719,6 @@ def attach_aggregated_lv_timeseries(network):
             2. 'q_set' of aggregated Generation at each LV station
             3. 'p_set' of aggregated Load at each LV station
             4. 'q_set' of aggregated Load at each LV station
-
-
     """
 
     generation_p = []
@@ -428,128 +785,6 @@ def attach_aggregated_lv_timeseries(network):
            pd.concat(load_q, axis=1)
 
 
-def lv_to_pypsa():
-    """
-    Convert LV grid topology to PyPSA representation
-
-    Returns
-    -------
-
-    """
-
-
-def combine_mv_and_lv():
-    """Combine MV and LV grid topology in PyPSA format
-
-    Idea for implementation
-    -----------------------
-    Merge all DataFrames except for LV transformers which are already included
-    in the MV grid PyPSA representation
-
-    """
-    pass
-
-
-def pypsa_load_timeseries(network, mode=None):
-    """Timeseries in PyPSA compatible format for load instances
-
-    Parameters
-    ----------
-    network : Network
-        The eDisGo grid topology model overall container
-    mode : str, optional
-        Specifically retrieve load time series for MV or LV grid level or both.
-        Either choose 'mv' or 'lv'.
-        Defaults to None, which returns both timeseries for MV and LV in a
-        single DataFrame.
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Time series table in PyPSA format
-    """
-    mv_load_timeseries_p = []
-    mv_load_timeseries_q = []
-    lv_load_timeseries_p = []
-    lv_load_timeseries_q = []
-
-    # add MV grid loads
-    if mode is 'mv' or mode is None:
-        for load in network.mv_grid.graph.nodes_by_attribute('load'):
-            mv_load_timeseries_q.append(
-                load.pypsa_timeseries('q').rename(repr(load)).to_frame())
-            mv_load_timeseries_p.append(
-                load.pypsa_timeseries('p').rename(repr(load)).to_frame())
-
-    # add LV grid's loads
-    if mode is 'lv' or mode is None:
-        for lv_grid in network.mv_grid.lv_grids:
-            for load in lv_grid.graph.nodes_by_attribute('load'):
-                for sector in list(load.consumption.keys()):
-                    lv_load_timeseries_q.append(
-                        load.pypsa_timeseries('q').rename(
-                            repr(load)).to_frame())
-                    lv_load_timeseries_p.append(
-                        load.pypsa_timeseries('p').rename(
-                            repr(load)).to_frame())
-
-    load_df_p = pd.concat(mv_load_timeseries_p + lv_load_timeseries_p, axis=1)
-    load_df_q = pd.concat(mv_load_timeseries_q + lv_load_timeseries_q, axis=1)
-
-    # TODO: maybe names of load object have to be changed to distinguish between different grids
-
-    return load_df_p, load_df_q
-
-
-def pypsa_generator_timeseries(network, mode=None):
-    """Timeseries in PyPSA compatible format for generator instances
-
-    Parameters
-    ----------
-    network : Network
-        The eDisGo grid topology model overall container
-    mode : str, optional
-        Specifically retrieve generator time series for MV or LV grid level or
-        both. Either choose 'mv' or 'lv'.
-        Defaults to None, which returns both timeseries for MV and LV in a
-        single DataFrame.
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Time series table in PyPSA format
-    """
-
-    mv_gen_timeseries_q = []
-    mv_gen_timeseries_p = []
-    lv_gen_timeseries_q = []
-    lv_gen_timeseries_p = []
-
-    # MV generator timeseries
-    if mode is 'mv' or mode is None:
-        for gen in network.mv_grid.graph.nodes_by_attribute('generator'):
-            mv_gen_timeseries_q.append(
-                gen.pypsa_timeseries('q').rename(repr(gen)).to_frame())
-            mv_gen_timeseries_p.append(
-                gen.pypsa_timeseries('p').rename(repr(gen)).to_frame())
-
-    # LV generator timeseries
-    if mode is 'lv' or mode is None:
-        for lv_grid in network.mv_grid.lv_grids:
-            for gen in lv_grid.graph.nodes_by_attribute('generator'):
-                lv_gen_timeseries_q.append(
-                    gen.pypsa_timeseries('q').rename(repr(gen)).to_frame())
-                lv_gen_timeseries_p.append(
-                    gen.pypsa_timeseries('p').rename(repr(gen)).to_frame())
-
-    gen_df_p = pd.concat(mv_gen_timeseries_p + lv_gen_timeseries_p, axis=1)
-    gen_df_q = pd.concat(mv_gen_timeseries_q + lv_gen_timeseries_q, axis=1)
-
-    # TODO: maybe names of load object have to be changed to distinguish between different grids
-
-    return gen_df_p, gen_df_q
-
-
 def _check_topology(mv_components):
     buses = mv_components['Bus'].index.tolist()
     line_buses = mv_components['Line']['bus0'].tolist() + \
@@ -569,35 +804,6 @@ def _check_topology(mv_components):
     if missing_buses:
         raise ValueError("Buses {buses} are not defined.".format(
             buses=missing_buses))
-
-
-def pypsa_bus_timeseries(network, buses, mode=None):
-    """Timeseries in PyPSA compatible format for generator instances
-
-    Parameters
-    ----------
-    network : Network
-        The eDisGo grid topology model overall container
-    buses : list
-        Buses names
-    mode : str, optional
-        Specifically retrieve generator time series for MV or LV grid level or
-        both. Either choose 'mv' or 'lv'.
-        Defaults to None, which returns both timeseries for MV and LV in a
-        single DataFrame.
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Time series table in PyPSA format
-    """
-
-    v_set_dict = {bus: [1, 1] for bus in buses}
-
-    v_set_df = pd.DataFrame(v_set_dict,
-                            index=network.scenario.timeseries.timeindex)
-
-    return v_set_df
 
 
 def _check_integrity_of_pypsa(pypsa_network):
@@ -655,6 +861,73 @@ def _check_integrity_of_pypsa(pypsa_network):
                          "{buses}".format(
             buses=bus_v_set_missing))
 
+    # check for duplicate labels (of components)
+    duplicated_labels = []
+    if any(pypsa_network.buses.index.duplicated()):
+        duplicated_labels.append(pypsa_network.buses.index[
+                                     pypsa_network.buses.index.duplicated()])
+    if any(pypsa_network.generators.index.duplicated()):
+        duplicated_labels.append(pypsa_network.generators.index[
+                                     pypsa_network.generators.index.duplicated()])
+    if any(pypsa_network.loads.index.duplicated()):
+        duplicated_labels.append(pypsa_network.loads.index[
+                                     pypsa_network.loads.index.duplicated()])
+    if any(pypsa_network.transformers.index.duplicated()):
+        duplicated_labels.append(pypsa_network.transformers.index[
+                                     pypsa_network.transformers.index.duplicated()])
+    if any(pypsa_network.lines.index.duplicated()):
+        duplicated_labels.append(pypsa_network.lines.index[
+                                     pypsa_network.lines.index.duplicated()])
+    if duplicated_labels:
+        raise ValueError("{labels} have duplicate entry in "
+                         "one of the components dataframes".format(
+            labels=duplicated_labels))
+
+    # duplicate p_sets and q_set
+    duplicate_p_sets = []
+    duplicate_q_sets = []
+    if any(pypsa_network.loads_t['p_set'].columns.duplicated()):
+        duplicate_p_sets.append(pypsa_network.loads_t['p_set'].columns[
+                                    pypsa_network.loads_t[
+                                        'p_set'].columns.duplicated()])
+    if any(pypsa_network.loads_t['q_set'].columns.duplicated()):
+        duplicate_q_sets.append(pypsa_network.loads_t['q_set'].columns[
+                                    pypsa_network.loads_t[
+                                        'q_set'].columns.duplicated()])
+
+    if any(pypsa_network.generators_t['p_set'].columns.duplicated()):
+        duplicate_p_sets.append(pypsa_network.generators_t['p_set'].columns[
+                                    pypsa_network.generators_t[
+                                        'p_set'].columns.duplicated()])
+    if any(pypsa_network.generators_t['q_set'].columns.duplicated()):
+        duplicate_q_sets.append(pypsa_network.generators_t['q_set'].columns[
+                                    pypsa_network.generators_t[
+                                        'q_set'].columns.duplicated()])
+
+    if duplicate_p_sets:
+        raise ValueError("{labels} have duplicate entry in "
+                         "generators_t['p_set']"
+                         " or loads_t['p_set']".format(
+            labels=duplicate_p_sets))
+    if duplicate_q_sets:
+        raise ValueError("{labels} have duplicate entry in "
+                         "generators_t['q_set']"
+                         " or loads_t['q_set']".format(
+            labels=duplicate_q_sets))
+    
+        
+    # find duplicate v_mag_set entries
+    duplicate_v_mag_set = []
+    if any(pypsa_network.buses_t['v_mag_pu_set'].columns.duplicated()):
+        duplicate_v_mag_set.append(pypsa_network.buses_t['v_mag_pu_set'].columns[
+                                    pypsa_network.buses_t[
+                                        'v_mag_pu_set'].columns.duplicated()])
+        
+    if duplicate_v_mag_set:
+        raise ValueError("{labels} have duplicate entry in buses_t".format(
+            labels=duplicate_v_mag_set))
+        
+
 
 def process_pfa_results(network, pypsa):
     """
@@ -665,16 +938,17 @@ def process_pfa_results(network, pypsa):
     ----------
     network : Network
         The eDisGo grid topology model overall container
-    pypsa : :pypsa:`pypsa.Network<network>`
-        Network container of `PyPSA <https://pypsa.org>`_
+    pypsa :
+        `Network container <https://www.pypsa.org/doc/components.html#network>`_
+        of PyPSA
 
     Returns
     -------
 
     See Also
     --------
-    edisgo.grid.network.Network.results : Understand how results of power flow
-        analysis are structured in eDisGo.
+    :class:`~.grid.network.Results`
+        Understand how results of power flow analysis are structured in eDisGo.
 
     """
 
@@ -712,13 +986,35 @@ def process_pfa_results(network, pypsa):
                      pypsa.loads.loc[loads_names][
                          'bus'].to_dict().items()}
 
+    lv_generators_names = []
+    lv_branch_t_names = []
+    lv_loads_names = []
+    for lv_grid in network.mv_grid.lv_grids:
+        lv_generators_names.extend([repr(g) for g in
+                                    lv_grid.graph.nodes_by_attribute(
+                                        'generator')])
+        lv_branch_t_names.extend([repr(bt) for bt in
+                             lv_grid.graph.nodes_by_attribute('branch_tee')])
+        lv_loads_names.extend([repr(lo) for lo in
+                          lv_grid.graph.nodes_by_attribute('load')])
+
+    lv_generators_mapping = {v: k for k, v in
+                             pypsa.generators.loc[lv_generators_names][
+                                 'bus'].to_dict().items()}
+    lv_branch_t_mapping = {'_'.join(['Bus', v]): v for v in lv_branch_t_names}
+    lv_loads_mapping = {v: k for k, v in pypsa.loads.loc[lv_loads_names][
+        'bus'].to_dict().items()}
+
     names_mapping = {
         **generators_mapping,
         **branch_t_mapping,
         **mv_station_mapping_sec,
         **lv_station_mapping_pri,
         **lv_station_mapping_sec,
-        **loads_mapping
+        **loads_mapping,
+        **lv_generators_mapping,
+        **lv_loads_mapping,
+        **lv_branch_t_mapping
     }
 
     # write voltage levels obtained from power flow to results object
@@ -729,4 +1025,7 @@ def process_pfa_results(network, pypsa):
                             list(mv_station_mapping_sec.values()) +
                             list(lv_station_mapping_pri.values()) +
                             list(loads_mapping.values())],
-         'lv': pfa_v_mag_pu[list(lv_station_mapping_sec.values())]}, axis=1)
+         'lv': pfa_v_mag_pu[list(lv_station_mapping_sec.values()) +
+                            list(lv_generators_mapping.values()) +
+                            list(lv_branch_t_mapping.values()) +
+                            list(lv_loads_mapping.values())]}, axis=1)
