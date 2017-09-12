@@ -1,11 +1,7 @@
-from edisgo.grid.network import Network, Scenario, TimeSeries, Results
+from edisgo.grid.network import Network, Scenario, TimeSeries
 from edisgo.flex_opt import reinforce_grid
 import os
 import pickle
-import pandas as pd
-from ast import literal_eval
-import numpy as np
-import datetime
 
 timeseries = TimeSeries()
 scenario = Scenario(timeseries=timeseries)
@@ -18,6 +14,8 @@ if import_network:
         id='Test grid',
         scenario=scenario
     )
+    # Do non-linear power flow analysis with PyPSA
+    #network.analyze(mode='mv')
     pickle.dump(network, open('test_network.pkl', 'wb'))
 else:
     network = pickle.load(open('test_network.pkl', 'rb'))
@@ -25,47 +23,17 @@ else:
 # Do non-linear power flow analysis with PyPSA (MV+LV)
 # network.analyze()
 
-# for now create results object
-results.pfa_p['p0'] = pfa_edges['p0'].apply(
-    lambda x: np.array(x)[0])
-results.pfa_p = results.pfa_p.transpose()
-results.pfa_p['time'] = datetime.date.today()
-results.pfa_p = results.pfa_p.set_index('time')
-
-results.pfa_q['q0'] = pfa_edges['q0'].apply(
-    lambda x: np.array(x)[0])
-results.pfa_q = results.pfa_q.transpose()
-results.pfa_q['time'] = datetime.date.today()
-results.pfa_q = results.pfa_q.set_index('time')
-
-pfa_nodes = pd.read_csv('Exemplary_PyPSA_bus_results.csv', index_col=0,
-                        converters={'v_mag_pu': literal_eval})
-results.pfa_v_mag_pu['v_mag_pu'] = pfa_nodes['v_mag_pu'].apply(
-    lambda x: np.array(x)[0])
-results.pfa_v_mag_pu = results.pfa_v_mag_pu.transpose()
-results.pfa_v_mag_pu['time'] = datetime.date.today()
-results.pfa_v_mag_pu = results.pfa_v_mag_pu.set_index('time')
-
-# Print LV station secondary side voltage levels returned by PFA
+# # Print LV station secondary side voltage levels returned by PFA
 # print(network.results.v_res(
 #     network.mv_grid.graph.nodes_by_attribute('lv_station'), 'lv'))
-
-# Print voltage levels for entire LV grid
-# for attr in ['lv_station', 'load', 'generator', 'branch_tee']:
-#     objs = []
-#     for lv_grid in network.mv_grid.lv_grids:
-#         objs.extend(lv_grid.graph.nodes_by_attribute(attr))
-#     print("\n\n\n{}\n".format(attr))
-#     print(network.results.v_res(
-#         objs, 'lv'))
-
-# Print voltage level of all nodes
+#
+# # Print voltage level of all nodes
 # print(network.results.pfa_v_mag_pu)
-
-# Print apparent power at lines
+#
+# # Print apparent power at lines
 # print(network.results.s_res([_['line'] for _ in network.mv_grid.graph.graph_edges()]))
-
-# Print voltage levels for all lines
+#
+# # Print voltage levels for all lines
 # print(network.results.s_res())
 
 # # MV generators
@@ -86,7 +54,7 @@ results.pfa_v_mag_pu = results.pfa_v_mag_pu.set_index('time')
 # else:
 #     print("O MWh")
 
-reinforce_grid.reinforce_grid(network, results)
+reinforce_grid.reinforce_grid(network)
 
 # liste aller lv grids
 # [_ for _ in network.mv_grid.lv_grids]

@@ -122,6 +122,10 @@ def reinforce_branches_voltage(network, crit_nodes):
         pd.Series with critical nodes of one grid as index and corresponding
         voltage deviation as values
 
+    Returns
+    -------
+    Dictionary with lists of added and removed lines.
+
     Notes
     -----
     Reinforce measures:
@@ -161,6 +165,7 @@ def reinforce_branches_voltage(network, crit_nodes):
     # reinforced
     main_line_reinforced = []
 
+    lines_changes = {'added': [], 'removed': []}
     for i in range(len(crit_nodes)):
         path = nx.shortest_path(grid.graph, grid.station,
                                 crit_nodes.index[i])
@@ -192,15 +197,18 @@ def reinforce_branches_voltage(network, crit_nodes):
                 # parallel line
                 if crit_line.type.name == standard_line.name:
                     crit_line.quantity += 1
+                    lines_changes['added'].append(crit_line.type)
 
-                # if critical line is not yet a standard line check if one or
-                # several standard lines are needed
+                # if critical line is not yet a standard line replace old line
+                # by a standard line
                 else:
                     # number of parallel standard lines could be calculated
-                    # following [2] p.103, for now number of parallel standard
+                    # following [2] p.103; for now number of parallel standard
                     # lines is iterated
+                    lines_changes['removed'].append(crit_line.type)
                     crit_line.type = standard_line.copy()
                     crit_line.quantity = 1
+                    lines_changes['added'].append(crit_line.type)
 
             # if node_2_3 is not a representative, disconnect line
             else:
@@ -209,6 +217,7 @@ def reinforce_branches_voltage(network, crit_nodes):
                 pred_node = path[path.index(node_2_3) - 1]
                 crit_line = grid.graph.get_edge_data(
                     node_2_3, pred_node)['line']
+                lines_changes['removed'].append(crit_line.type)
                 # add new edge between node_2_3 and station
                 new_line_data = {'line': crit_line,
                                  'type': 'line'}
@@ -218,6 +227,7 @@ def reinforce_branches_voltage(network, crit_nodes):
                 # change line length and type
                 crit_line.length = path_length[node_2_3]
                 crit_line.type = standard_line.copy()
+                lines_changes['added'].append(crit_line.type)
 
         else:
             logger.debug(
@@ -228,6 +238,8 @@ def reinforce_branches_voltage(network, crit_nodes):
     if main_line_reinforced:
         logger.info('==> {} branche(s) was/were reinforced.'.format(
             str(len(main_line_reinforced))))
+
+    return lines_changes
 
 
 def reinforce_branches_current(network, crit_lines):

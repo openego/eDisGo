@@ -1,6 +1,6 @@
-from .check_tech_constraints import check_line_load, check_station_load, \
-    check_voltage #, get_critical_line_loading, get_critical_voltage_at_nodes
 import pandas as pd
+from .check_tech_constraints import check_line_load, check_station_load, \
+    check_voltage_lv #, get_critical_line_loading, get_critical_voltage_at_nodes
 from .reinforce_measures import reinforce_branches_current, \
     reinforce_branches_voltage, extend_distribution_substation
 import logging
@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger('ding0')
 
 
-def reinforce_grid(network, results):
+def reinforce_grid(network):
     """ Evaluates grid reinforcement needs and performs measures. This function
         is the parent function for all grid reinforcements.
 
@@ -48,38 +48,39 @@ def reinforce_grid(network, results):
     .. [1] dena VNS
     .. [2] Ackermann et al. (RP VNS)
 
-
     """
 
-    iteration_step = 1
     # STEP 1: reinforce overloaded transformers
-    # ToDo: get overlaoded stations (als dict mit maximaler Belastung {StationXY: 640kVA})
-    # ToDo: check if MV/LV Trafo, warning if HV/MV Trafo
-    #crit_lines = check_line_load(network, results.pfa_edges)
-    #overloaded_stations = check_station_load(network, results.pfa_edges)
-    # critical_branches, critical_stations = get_critical_line_loading(grid)
+    iteration_step = 1
 
+    # ToDo: get overlaoded stations
+    # ToDo: check if MV/LV Trafo, warning if HV/MV Trafo
+    overloaded_stations = check_station_load(network)
     # random overloaded station
     stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
     overloaded_stations = {[_ for _ in stations
-                            if len(_.transformers) >= 2][0]: 2000}
+                            if len(_.transformers) >= 2][0]: 1400}
+    station_2 = [_ for _ in stations if len(_.transformers) >= 1][1]
+    overloaded_stations[station_2] = 1000
 
     # reinforce substations
     transformer_changes = extend_distribution_substation(
         network, overloaded_stations)
     # write added and removed transformers to results.equipment_changes
-    results.equipment_changes = results.equipment_changes.append(
-        pd.DataFrame(
-            {'iteration_step': [iteration_step] * len(
-                transformer_changes['added']),
-             'change': ['added'] * len(transformer_changes['added'])},
-            index=transformer_changes['added']))
-    results.equipment_changes = results.equipment_changes.append(
-        pd.DataFrame(
-            {'iteration_step': [iteration_step] * len(
-                transformer_changes['removed']),
-             'change': ['added'] * len(transformer_changes['removed'])},
-            index=transformer_changes['removed']))
+    network.results.equipment_changes = \
+        network.results.equipment_changes.append(
+            pd.DataFrame(
+                {'iteration_step': [iteration_step] * len(
+                    transformer_changes['added']),
+                 'change': ['added'] * len(transformer_changes['added'])},
+                index=transformer_changes['added']))
+    network.results.equipment_changes = \
+        network.results.equipment_changes.append(
+            pd.DataFrame(
+                {'iteration_step': [iteration_step] * len(
+                    transformer_changes['removed']),
+                 'change': ['added'] * len(transformer_changes['removed'])},
+                index=transformer_changes['removed']))
 
     # if stations have been reinforced: run PF again and check if all
     # overloading problems for all stations were solved
@@ -89,15 +90,30 @@ def reinforce_grid(network, results):
     #     # give error message if any overloaded stations are left
 
     # STEP 2: reinforce branches due to overloading
+    iteration_step += 1
 
-    # ToDo: get overlaoded lines (als dict mit relativer maximaler Belastung {LineXY: 1.2})
+    # ToDo: get overlaoded lines
     # random overloaded line
     overloaded_line = list(network.mv_grid.graph.graph_edges())[0]['line']
     crit_lines = {overloaded_line: 2.3}
 
     # do reinforcement
-    # ToDo: erst MV dann LV
-    reinforce_branches_current(network, crit_lines)
+    lines_changes = reinforce_branches_current(network, crit_lines)
+    # write added and removed transformers to results.equipment_changes
+    network.results.equipment_changes = \
+        network.results.equipment_changes.append(
+            pd.DataFrame(
+                {'iteration_step': [iteration_step] * len(
+                    lines_changes['added']),
+                 'change': ['added'] * len(lines_changes['added'])},
+                index=lines_changes['added']))
+    network.results.equipment_changes = \
+        network.results.equipment_changes.append(
+            pd.DataFrame(
+                {'iteration_step': [iteration_step] * len(
+                    lines_changes['removed']),
+                 'change': ['added'] * len(lines_changes['removed'])},
+                index=lines_changes['removed']))
 
     # if lines have been reinforced: run PF again and check if all
     # overloading problems for all lines were solved
@@ -111,13 +127,14 @@ def reinforce_grid(network, results):
 
     #crit_nodes = check_voltage(network, results.pfa_nodes)
     # crit_nodes_count_prev_step = len(crit_nodes)
-
+    # ToDo: erst Spannungsprobleme in MV lösen, dann LV
     # ToDo: get nodes with overvoltage (als dict mit grid und liste von Knoten {GridXY: [NodeA, NodeB]})
     # ToDo: Knoten nach abfallender Spannung sortieren, damit pro Netz geprüft werden kann, ob nächster krit. Knoten schon in path enthalten ist
     # random critical node
     lv_grid = list(network.mv_grid.lv_grids)[0]
-    crit_nodes = {lv_grid: list(lv_grid.graph.nodes_by_attribute('load'))}
-
+    crit_nodes = {lv_grid: pd.Series(
+        [1.12, 1.11],
+        index=list(lv_grid.graph.nodes_by_attribute('load'))[0:2])}
     # as long as there are voltage issues, do reinforcement
     while crit_nodes:
         # for every grid in crit_nodes do reinforcement
