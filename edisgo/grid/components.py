@@ -86,6 +86,9 @@ class Transformer(Component):
     def type(self):
         return self._type
 
+    def __repr__(self):
+        return str(self._id)
+
 
 class Load(Component):
     """Load object

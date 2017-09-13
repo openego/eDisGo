@@ -24,6 +24,13 @@ network = Network.import_from_ding0(
 # print(network.results.v_res(
 #     network.mv_grid.graph.nodes_by_attribute('lv_station'), 'lv'))
 
+# Print LV station apparent power returned by PFA
+# network.mv_grid.graph.nodes_by_attribute('lv_station')
+# lv_transformers = [transformer for station in
+#                    network.mv_grid.graph.nodes_by_attribute('lv_station') for
+#                    transformer in station.transformers]
+# print(network.results.s_res(lv_transformers))
+
 # Print voltage levels for entire LV grid
 # for attr in ['lv_station', 'load', 'generator', 'branch_tee']:
 #     objs = []
@@ -38,6 +45,12 @@ network = Network.import_from_ding0(
 
 # Print apparent power at lines
 # print(network.results.s_res([_['line'] for _ in network.mv_grid.graph.graph_edges()]))
+
+# Print number of buses, generators, load and lines to study problem size
+# print('buses: ', network.pypsa.buses.shape)
+# print('generators: ', network.pypsa.generators.shape)
+# print('loads: ', network.pypsa.loads.shape)
+# print('lines: ', network.pypsa.lines.shape)
 
 # Print voltage levels for all lines
 # print(network.results.s_res())

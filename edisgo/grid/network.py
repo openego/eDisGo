@@ -594,12 +594,12 @@ class Results:
 
 
 
-    def s_res(self, lines=None):
+    def s_res(self, components=None):
         """
-        Get resulting apparent power at line(s)
+        Get resulting apparent power at line(s) and transformer(s)
 
-        The apparent power at a line determines from the maximum values of
-        active power P and reactive power Q.
+        The apparent power at a line (or transformer) determines from the
+        maximum values of active power P and reactive power Q.
 
         .. math::
 
@@ -607,31 +607,32 @@ class Results:
 
         Parameters
         ----------
-        lines : :class:`~.grid.components.Load` or list of :class:`~.grid.components.Load`
+        components : :class:`~.grid.components.Line` or :class:`~.grid.components.Transformer`
+            Could be a list of instances of these classes
 
-            Line objects of grid topology. If not provided (respectively None)
-            defaults to return `s_res` of all lines in the grid.
+            Line or Transformers objects of grid topology. If not provided
+            (respectively None)
+            defaults to return `s_res` of all lines and transformers in the grid.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Apparent power for `lines`
+            Apparent power for `lines` and/or `transformers`
 
         """
 
-
-        if lines is not None:
+        if components is not None:
             labels_included = []
             labels_not_included = []
-            labels = [repr(l) for l in lines]
+            labels = [repr(l) for l in components]
             for label in labels:
                 if label in list(self.pfa_p.columns) and label in list(self.pfa_q.columns):
                     labels_included.append(label)
                 else:
                     labels_not_included.append(label)
-                    print(
-                        "Apparent power for {lines} are not returned from PFA".format(
-                            lines=labels_not_included))
+            if labels_not_included:
+                print("Apparent power for {lines} are not returned from "
+                      "PFA".format(lines=labels_not_included))
         else:
             labels_included = self.pfa_p.columns
 
