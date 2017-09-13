@@ -157,13 +157,14 @@ todo_include_todos = True
 
 # Fix import error of modules which depend on C modules (mock out the imports for these modules)
 # see http://read-the-docs.readthedocs.io/en/latest/faq.html#i-get-import-errors-on-libraries-that-depend-on-c-modules
-class Mock(MagicMock):
-    @classmethod
-    def __getattr__(cls, name):
-            return MagicMock()
+if 'READTHEDOCS' in os.environ:
+    class Mock(MagicMock):
+        @classmethod
+        def __getattr__(cls, name):
+                return MagicMock()
 
-MOCK_MODULES = ['ding0', 'ding0.results', 'shapely']
-sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+    MOCK_MODULES = ['ding0', 'ding0.results', 'shapely']
+    sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 
 # -- Options for HTML output ----------------------------------------------
