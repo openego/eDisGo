@@ -4,7 +4,7 @@ from .reinforce_measures import reinforce_branches_current, \
     reinforce_branches_voltage, extend_distribution_substation
 import logging
 
-logger = logging.getLogger('ding0')
+logger = logging.getLogger('edisgo')
 
 
 def reinforce_grid(network, results):

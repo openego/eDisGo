@@ -3,7 +3,7 @@ import numpy as np
 import logging
 
 
-logger = logging.getLogger('ding0')
+logger = logging.getLogger('edisgo')
 
 
 def check_line_load(network, results_lines, **kwargs):
