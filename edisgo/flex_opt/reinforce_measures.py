@@ -15,7 +15,7 @@ from edisgo import flex_opt
 import logging
 
 package_path = ding0.__path__[0]
-logger = logging.getLogger('ding0')
+logger = logging.getLogger('edisgo')
 
 
 def extend_distribution_substation(critical_stations):

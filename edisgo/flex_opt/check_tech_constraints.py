@@ -10,7 +10,7 @@ import networkx as nx
 import math
 
 
-logger = logging.getLogger('ding0')
+logger = logging.getLogger('edisgo')
 
 
 def check_line_load(network, results_lines, **kwargs):
