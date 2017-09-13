@@ -4,8 +4,8 @@ import pandas as pd
 import networkx as nx
 from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
     dijkstra_shortest_path_length
-
-import ding0
+if not 'READTHEDOCS' in os.environ:
+    import ding0
 from edisgo.grid.components import Transformer
 from edisgo import flex_opt
 # from ding0.tools import config as cfg_ding0
