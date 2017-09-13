@@ -144,7 +144,8 @@ def _build_lv_grid(ding0_grid, network):
                     nominal_capacity=_.capacity,
                     type=_.type,
                     subtype=_.subtype,
-                    grid=lv_grid) for _ in ding0_lv_grid.generators()}
+                    grid=lv_grid,
+                    v_level=_.v_level) for _ in ding0_lv_grid.generators()}
                 lv_grid.graph.add_nodes_from(generators.values(), type='generator')
 
                 # Create list of branch tee instances and add these to grid's graph
@@ -243,7 +244,8 @@ def _build_mv_grid(ding0_grid, network):
         nominal_capacity=_.capacity,
         type=_.type,
         subtype=_.subtype,
-        grid=grid) for _ in ding0_grid.generators()}
+        grid=grid,
+        v_level=_.v_level) for _ in ding0_grid.generators()}
     grid.graph.add_nodes_from(generators.values(), type='generator')
 
     # Create list of diconnection point instances and add these to grid's graph
@@ -507,7 +509,8 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
                     type=val2['type'],
                     subtype=subtype,
                     geom=grid.station.geom,
-                    grid=grid)
+                    grid=grid,
+                    v_level=4)
                 grid.graph.add_node(gen, type='generator')
 
                 # connect generator to MV station
