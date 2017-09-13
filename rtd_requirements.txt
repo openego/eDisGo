@@ -1,2 +1,4 @@
 sphinx_rtd_theme
 networkx >= 1.11
+pandas >=0.20.3, <=0.20.3
+pypsa >=0.10.0, <=0.10.0
