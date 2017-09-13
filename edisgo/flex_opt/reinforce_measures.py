@@ -1,3 +1,4 @@
+import os
 import copy
 import math
 import pandas as pd
@@ -14,7 +15,7 @@ from edisgo import flex_opt
 # import networkx as nx
 import logging
 
-package_path = ding0.__path__[0]
+# package_path = ding0.__path__[0]
 logger = logging.getLogger('ding0')
 
 
