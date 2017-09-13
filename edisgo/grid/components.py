@@ -1,4 +1,6 @@
-from shapely.geometry import LineString
+import os
+if not 'READTHEDOCS' in os.environ:
+    from shapely.geometry import LineString
 
 
 class Component:

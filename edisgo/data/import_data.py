@@ -1,12 +1,14 @@
-from ding0.tools.results import load_nd_from_pickle
-from ding0.core.network.stations import LVStationDing0
-from ding0.core.structure.regions import LVLoadAreaCentreDing0
 from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
     Station, Line, Transformer
 from ..grid.grids import MVGrid, LVGrid
 import pandas as pd
 import numpy as np
 import networkx as nx
+import os
+if not 'READTHEDOCS' in os.environ:
+    from ding0.tools.results import load_nd_from_pickle
+    from ding0.core.network.stations import LVStationDing0
+    from ding0.core.structure.regions import LVLoadAreaCentreDing0
 
 
 def import_from_dingo(file, network):
