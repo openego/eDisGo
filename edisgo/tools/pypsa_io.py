@@ -957,8 +957,10 @@ def process_pfa_results(network, pypsa):
     q1 = abs(pypsa.lines_t['q1'])
     p0 = abs(pypsa.lines_t['p0'])
     p1 = abs(pypsa.lines_t['p1'])
-    network.results.pfa_p = p0.where(p0 > p1, p1)
-    network.results.pfa_q = q0.where(q0 > q1, q1)
+    s0 = (p0 ** 2 + q0 ** 2).applymap(sqrt)
+    s1 = (p1 ** 2 + q1 ** 2).applymap(sqrt)
+    network.results.pfa_p = p0.where(s0 > s1, p1)
+    network.results.pfa_q = q0.where(s0 > s1, q1)
 
     # process results at nodes
     generators_names = [repr(g) for g in
