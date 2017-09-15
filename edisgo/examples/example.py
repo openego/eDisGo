@@ -26,14 +26,38 @@ network.analyze()
 # # Print LV station secondary side voltage levels returned by PFA
 # print(network.results.v_res(
 #     network.mv_grid.graph.nodes_by_attribute('lv_station'), 'lv'))
-#
-# # Print voltage level of all nodes
+
+# Print LV station apparent power returned by PFA
+# lv_transformers = [transformer for station in
+#                    network.mv_grid.graph.nodes_by_attribute('lv_station') for
+#                    transformer in station.transformers]
+# print(network.results.s_res(lv_transformers))
+
+# Print voltage levels for entire LV grid
+# for attr in ['lv_station', 'load', 'generator', 'branch_tee']:
+#     objs = []
+#     for lv_grid in network.mv_grid.lv_grids:
+#         objs.extend(lv_grid.graph.nodes_by_attribute(attr))
+#     print("\n\n\n{}\n".format(attr))
+#     print(network.results.v_res(
+#         objs, 'lv'))
+
+# Print voltage level of all nodes
 # print(network.results.pfa_v_mag_pu)
-#
-# # Print apparent power at lines
+
+# Print current (line loading) at MV lines
+# print(network.results.i_res([_['line'] for _ in network.mv_grid.graph.graph_edges()]))
+
+# Print apparent power at lines
 # print(network.results.s_res([_['line'] for _ in network.mv_grid.graph.graph_edges()]))
-#
-# # Print voltage levels for all lines
+
+# Print number of buses, generators, load and lines to study problem size
+# print('buses: ', network.pypsa.buses.shape)
+# print('generators: ', network.pypsa.generators.shape)
+# print('loads: ', network.pypsa.loads.shape)
+# print('lines: ', network.pypsa.lines.shape)
+
+# Print voltage levels for all lines
 # print(network.results.s_res())
 
 # # MV generators
