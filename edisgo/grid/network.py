@@ -490,6 +490,7 @@ class Results:
         self._pfa_p = None
         self._pfa_q = None
         self._pfa_v_mag_pu = None
+        self._i_res = None
         self._equipment_changes = pd.DataFrame()
 
     @property
@@ -689,3 +690,34 @@ class Results:
 
 
         return self.pfa_v_mag_pu[level][labels_included]
+
+
+    def i_res(self, components):
+        """
+        Get resulting current at lines obtained from power flow analysis
+
+        .. warning::
+            Currents are not availabble for transformers
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Resulting currents obtained from power flow analysis
+        """
+
+        if components is not None:
+            labels_included = []
+            labels_not_included = []
+            labels = [repr(l) for l in components]
+            for label in labels:
+                if label in list(self._i_res.columns):
+                    labels_included.append(label)
+                else:
+                    labels_not_included.append(label)
+            if labels_not_included:
+                print("Current (line loading) for {lines} are not returned from "
+                      "PFA".format(lines=labels_not_included))
+        else:
+            labels_included = self._i_res.columns
+
+        return self._i_res

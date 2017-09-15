@@ -25,7 +25,6 @@ network = Network.import_from_ding0(
 #     network.mv_grid.graph.nodes_by_attribute('lv_station'), 'lv'))
 
 # Print LV station apparent power returned by PFA
-# network.mv_grid.graph.nodes_by_attribute('lv_station')
 # lv_transformers = [transformer for station in
 #                    network.mv_grid.graph.nodes_by_attribute('lv_station') for
 #                    transformer in station.transformers]
@@ -42,6 +41,9 @@ network = Network.import_from_ding0(
 
 # Print voltage level of all nodes
 # print(network.results.pfa_v_mag_pu)
+
+# Print current (line loading) at MV lines
+# print(network.results.i_res([_['line'] for _ in network.mv_grid.graph.graph_edges()]))
 
 # Print apparent power at lines
 # print(network.results.s_res([_['line'] for _ in network.mv_grid.graph.graph_edges()]))
