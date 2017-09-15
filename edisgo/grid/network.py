@@ -618,11 +618,6 @@ class Results:
 
         """
 
-        labels_included = []
-        labels_not_included = []
-
-        labels = [repr(l) for l in lines]
-
         if lines is not None:
             labels_included = []
             labels_not_included = []

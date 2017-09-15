@@ -21,7 +21,7 @@ else:
     network = pickle.load(open('test_network.pkl', 'rb'))
 
 # Do non-linear power flow analysis with PyPSA (MV+LV)
-# network.analyze()
+network.analyze()
 
 # # Print LV station secondary side voltage levels returned by PFA
 # print(network.results.v_res(
