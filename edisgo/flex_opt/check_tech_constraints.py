@@ -1,16 +1,9 @@
 import numpy as np
 
-from ding0.tools import config as cfg_ding0
 import logging
-from ding0.core.network.loads import LVLoadDing0
-from ding0.core.network import GeneratorDing0
-from ding0.core.network.cable_distributors import LVCableDistributorDing0
-from ding0.core.network.stations import LVStationDing0
-import networkx as nx
-import math
 
 
-logger = logging.getLogger('ding0')
+logger = logging.getLogger('edisgo')
 
 
 def check_line_load(network, results_lines):

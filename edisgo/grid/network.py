@@ -419,8 +419,9 @@ class ETraGoSpecs:
     _battery_active_power : :pandas:`pandas.Series<series>`
         Time series of active power the (virtual) battery (at Transition Point)
         is charged (negative) or discharged (positive) with
-    _curtailment : :obj:`dict` of :obj:`dict` of :pandas:`pandas.Series<series>`
-        Time series of active power curtailment of generators for technologies
+    _dispatch : :obj:`dict` of :obj:`dict` of :pandas:`pandas.Series<series>`
+        Time series of actual dispatch and a time series of power generation
+        potential (without curtailment) for technologies
         and sub-technologies, format::
 
             {
@@ -449,7 +450,7 @@ class ETraGoSpecs:
         self._reactive_power = kwargs.get('reactive_power', None)
         self._battery_capacity = kwargs.get('battery_capacity', None)
         self._battery_active_power = kwargs.get('battery_active_power', None)
-        self._curtailment = kwargs.get('curtailment', None)
+        self._dispatch = kwargs.get('dispatch', None)
 
 
 class Results:
