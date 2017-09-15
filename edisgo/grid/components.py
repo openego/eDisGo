@@ -347,6 +347,11 @@ class LVStation(Station):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._mv_grid = kwargs.get('mv_grid', None)
+
+    @property
+    def mv_grid(self):
+        return self._mv_grid
 
     def __repr__(self, side=None):
         repr_base = super().__repr__()
