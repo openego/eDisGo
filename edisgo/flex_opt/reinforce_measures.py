@@ -89,7 +89,7 @@ def extend_distribution_substation(critical_stations):
             new_transformer = Transformer(
                 id=99,
                 geom=station_transformer.geom,
-                mv_grid=duplicated_transformer.mv_grid,
+                mv_grid=station_transformer.mv_grid,
                 grid=station_transformer.grid,
                 voltage_op=station_transformer._voltage_op,
                 type=copy.deepcopy(standard_transformer))
