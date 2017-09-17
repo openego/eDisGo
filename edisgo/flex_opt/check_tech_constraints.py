@@ -106,7 +106,7 @@ def lv_line_load(network):
     return crit_lines
 
 
-def check_station_load(network):
+def mv_lv_station_load(network):
     """
     Checks for over-loading of MV/LV transformers.
 
@@ -161,7 +161,7 @@ def check_station_load(network):
     return crit_stations
 
 
-def check_voltage_mv(network):
+def mv_voltage_deviation(network):
     """
     Checks for voltage stability issues in MV grid.
 
@@ -208,7 +208,7 @@ def check_voltage_mv(network):
     return crit_nodes
 
 
-def check_voltage_lv(network):
+def lv_voltage_deviation(network):
     """
     Checks for voltage stability issues in LV grids.
 

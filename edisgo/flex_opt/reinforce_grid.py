@@ -1,7 +1,6 @@
 import sys
 import pandas as pd
-from .check_tech_constraints import check_line_load, check_station_load, \
-    check_voltage_lv, check_voltage_mv
+from edisgo.flex_opt import check_tech_constraints as checks
 from .reinforce_measures import reinforce_branches_current, \
     reinforce_branches_voltage, extend_distribution_substation
 import logging
@@ -57,7 +56,7 @@ def reinforce_grid(network):
     logger.info('==> Check LV stations')
 
     # ToDo: check overloading of HV/MV Trafo?
-    overloaded_stations = check_station_load(network)
+    overloaded_stations = checks.mv_lv_station_load(network)
 
     # ToDo: remove at some point
     # random overloaded station
@@ -103,10 +102,9 @@ def reinforce_grid(network):
     # STEP 2: reinforce branches due to overloading
     iteration_step += 1
 
-    # ToDo: get overlaoded lines
-    # random overloaded line
-    overloaded_line = list(network.mv_grid.graph.graph_edges())[0]['line']
-    crit_lines = {overloaded_line: 2.3}
+    crit_lines_lv = checks.lv_line_load(network)
+    crit_lines_mv = checks.mv_line_load(network)
+    crit_lines = {**crit_lines_lv, **crit_lines_mv}
 
     # do reinforcement
     lines_changes = reinforce_branches_current(network, crit_lines)
@@ -139,7 +137,7 @@ def reinforce_grid(network):
     iteration_step += 1
 
     # solve voltage problems in MV grid
-    crit_nodes = check_voltage_mv(network)
+    crit_nodes = checks.mv_voltage_deviation(network)
 
     # as long as there are voltage issues, do reinforcement
     while crit_nodes:
@@ -148,12 +146,12 @@ def reinforce_grid(network):
             reinforce_branches_voltage(network, crit_nodes[grid])
         network.analyze()
         iteration_step += 1
-        crit_nodes = check_voltage_mv(network)
+        crit_nodes = checks.mv_voltage_deviation(network)
 
     logger.info('==> All voltage issues in MV grid are solved.')
 
     # solve voltage problems in LV grid
-    crit_nodes = check_voltage_lv(network)
+    crit_nodes = checks.lv_voltage_deviation(network)
 
     # as long as there are voltage issues, do reinforcement
     while crit_nodes:
@@ -162,6 +160,6 @@ def reinforce_grid(network):
             reinforce_branches_voltage(network, crit_nodes[grid])
         network.analyze()
         iteration_step += 1
-        crit_nodes = check_voltage_mv(network)
+        crit_nodes = checks.lv_voltage_deviation(network)
 
     logger.info('==> All voltage issues in LV grids are solved.')
