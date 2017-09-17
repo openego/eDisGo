@@ -50,6 +50,7 @@ def reinforce_grid(network):
 
     """
 
+    # ToDo: Move appending added and removed comp. to function
     # STEP 1: reinforce overloaded transformers
     iteration_step = 1
 
@@ -156,9 +157,26 @@ def reinforce_grid(network):
 
     # as long as there are voltage issues, do reinforcement
     while crit_nodes:
-        # for every grid in crit_nodes do reinforcement
-        for grid in crit_nodes:
-            reinforce_branches_voltage(network, crit_nodes[grid])
+        lines_changes = reinforce_branches_voltage(network, crit_nodes)
+        # ToDo: what makes sense in equipment?
+        if lines_changes['added']:
+            network.results.equipment_changes = \
+                network.results.equipment_changes.append(
+                    pd.DataFrame(
+                        {'iteration_step': [iteration_step] * len(
+                            lines_changes['added']),
+                         'change': ['added'] * len(lines_changes['added']),
+                         'equipment': lines_changes['added']},
+                        index=lines_changes['added']))
+        if lines_changes['removed']:
+            network.results.equipment_changes = \
+                network.results.equipment_changes.append(
+                    pd.DataFrame(
+                        {'iteration_step': [iteration_step] * len(
+                            lines_changes['removed']),
+                         'change': ['removed'] * len(lines_changes['removed']),
+                         'equipment': lines_changes['removed']},
+                        index=lines_changes['removed']))
         network.analyze()
         iteration_step += 1
         crit_nodes = checks.mv_voltage_deviation(network)
@@ -172,7 +190,28 @@ def reinforce_grid(network):
     while crit_nodes:
         # for every grid in crit_nodes do reinforcement
         for grid in crit_nodes:
-            reinforce_branches_voltage(network, crit_nodes[grid])
+            lines_changes = reinforce_branches_voltage(
+                network, crit_nodes[grid])
+            # ToDo: what makes sense in equipment?
+            if lines_changes['added']:
+                network.results.equipment_changes = \
+                    network.results.equipment_changes.append(
+                        pd.DataFrame(
+                            {'iteration_step': [iteration_step] * len(
+                                lines_changes['added']),
+                             'change': ['added'] * len(lines_changes['added']),
+                             'equipment': lines_changes['added']},
+                            index=lines_changes['added']))
+            if lines_changes['removed']:
+                network.results.equipment_changes = \
+                    network.results.equipment_changes.append(
+                        pd.DataFrame(
+                            {'iteration_step': [iteration_step] * len(
+                                lines_changes['removed']),
+                             'change': ['removed'] * len(
+                                 lines_changes['removed']),
+                             'equipment': lines_changes['removed']},
+                            index=lines_changes['removed']))
         network.analyze()
         iteration_step += 1
         crit_nodes = checks.lv_voltage_deviation(network)

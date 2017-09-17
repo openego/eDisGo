@@ -16,7 +16,6 @@ import logging
 logger = logging.getLogger('edisgo')
 
 
-# ToDo: Return reinforced components to results object
 def extend_distribution_substation(network, critical_stations):
     """
     Reinforce MV/LV substations.
@@ -124,10 +123,10 @@ def reinforce_branches_voltage(network, crit_nodes):
 
     Parameters
     ----------
-    network : edisgo network object
-    crit_nodes : pd.Series
-        pd.Series with critical nodes of one grid as index and corresponding
-        voltage deviation as values
+    network : :class:`~.grid.network.Network`
+    crit_nodes : :pandas:`pandas.Series<series>`
+        Series with critical nodes of one grid and corresponding voltage
+        deviation, sorted descending by voltage deviation.
 
     Returns
     -------
@@ -206,7 +205,7 @@ def reinforce_branches_voltage(network, crit_nodes):
                 # parallel line
                 if crit_line.type.name == standard_line.name:
                     crit_line.quantity += 1
-                    lines_changes['added'].append(crit_line.type)
+                    lines_changes['added'].append(copy.copy(crit_line))
 
                 # if critical line is not yet a standard line replace old line
                 # by a standard line
@@ -214,10 +213,10 @@ def reinforce_branches_voltage(network, crit_nodes):
                     # number of parallel standard lines could be calculated
                     # following [2] p.103; for now number of parallel standard
                     # lines is iterated
-                    lines_changes['removed'].append(crit_line.type)
+                    lines_changes['removed'].append(copy.copy(crit_line))
                     crit_line.type = standard_line.copy()
                     crit_line.quantity = 1
-                    lines_changes['added'].append(crit_line.type)
+                    lines_changes['added'].append(copy.copy(crit_line))
 
             # if node_2_3 is not a representative, disconnect line
             else:
@@ -226,7 +225,7 @@ def reinforce_branches_voltage(network, crit_nodes):
                 pred_node = path[path.index(node_2_3) - 1]
                 crit_line = grid.graph.get_edge_data(
                     node_2_3, pred_node)['line']
-                lines_changes['removed'].append(crit_line.type)
+                lines_changes['removed'].append(copy.copy(crit_line))
                 # add new edge between node_2_3 and station
                 new_line_data = {'line': crit_line,
                                  'type': 'line'}
@@ -236,7 +235,7 @@ def reinforce_branches_voltage(network, crit_nodes):
                 # change line length and type
                 crit_line.length = path_length[node_2_3]
                 crit_line.type = standard_line.copy()
-                lines_changes['added'].append(crit_line.type)
+                lines_changes['added'].append(copy.copy(crit_line))
 
         else:
             logger.debug(
@@ -269,10 +268,10 @@ def reinforce_branches_current(network, crit_lines):
         
     Notes
     -----
-        Reinforce measures:
-        1. Install parallel line of the same type as the existing line
-        2. Remove old line and install as many parallel standard lines as
-           needed
+    Reinforce measures:
+    1. Install parallel line of the same type as the existing line
+    2. Remove old line and install as many parallel standard lines as
+       needed
 
     """
     # ToDo: Abbruchkriterium max. number of lines
