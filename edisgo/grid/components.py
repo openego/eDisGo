@@ -37,6 +37,10 @@ class Component:
         """:class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid` : The MV or LV grid this component belongs to"""
         return self._grid
 
+    @grid.setter
+    def grid(self, grid):
+        self._grid = grid
+
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
 
@@ -86,9 +90,13 @@ class Transformer(Component):
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
+        self._mv_grid = kwargs.get('mv_grid', None)
         self._voltage_op = kwargs.get('voltage_op', None)
         self._type = kwargs.get('type', None)
+
+    @property
+    def mv_grid(self):
+        return self._mv_grid
 
     @property
     def voltage_op(self):
@@ -359,6 +367,11 @@ class LVStation(Station):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._mv_grid = kwargs.get('mv_grid', None)
+
+    @property
+    def mv_grid(self):
+        return self._mv_grid
 
     def __repr__(self, side=None):
         repr_base = super().__repr__()
@@ -369,6 +382,7 @@ class LVStation(Station):
             return '_'.join(['secondary', repr_base])
         else:
             return repr_base
+
 
 class Line(Component):
     """

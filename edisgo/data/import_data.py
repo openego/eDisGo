@@ -116,18 +116,14 @@ def _build_lv_grid(ding0_grid, network):
                     voltage_nom=ding0_lv_grid.v_level,
                     network=network)
 
-                # Create LV station instances
-                station = LVStation(id=ding0_lv_grid._station.id_db,
-                                  geom=ding0_lv_grid._station.geo_data,
-                                  grid=lv_grid,
-                                  transformers=[Transformer(
-                                      grid=lv_grid,
-                                      id=t.grid.id_db,
-                                      geom=ding0_lv_grid.grid_district.geo_data,
-                                      voltage_op=t.v_level,
-                                      type=pd.Series(dict(
-                                          s=t.s_max_a, x=t.x, r=t.r))
-                                  ) for t in ding0_lv_grid._station.transformers()])
+                station = {repr(_):_
+                           for _ in network.mv_grid.graph.nodes_by_attribute('lv_station')} \
+                            ['LVStation_' + str(ding0_lv_grid._station.id_db)]
+
+                station.grid = lv_grid
+                for t in station.transformers:
+                    t.grid = lv_grid
+
                 lv_grid.graph.add_node(station, type='lv_station')
                 lv_station_mapping.update({ding0_lv_grid._station: station})
 
@@ -267,9 +263,11 @@ def _build_mv_grid(ding0_grid, network):
     # Create list of LV station instances and add these to grid's graph
     stations = {_: LVStation(id=_.id_db,
                         geom=_.geo_data,
-                        grid=grid,
+                        mv_grid=grid,
+                        grid=None,  # (this will be set during LV import)
                         transformers=[Transformer(
-                            grid=grid,
+                            mv_grid=grid,
+                            grid=None,  # (this will be set during LV import)
                             id='_'.join(['LVStation',
                                         str(_.id_db),
                                         'transformer',
@@ -289,6 +287,7 @@ def _build_mv_grid(ding0_grid, network):
         id=ding0_grid.station().id_db,
         geom=ding0_grid.station().geo_data,
         transformers=[Transformer(
+            mv_grid=grid,
             grid=grid,
             id='_'.join(['MV_station',
                          str(ding0_grid.station().id_db),

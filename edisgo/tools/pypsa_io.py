@@ -303,7 +303,7 @@ def mv_to_pypsa(network):
         # add primary side bus (bus0)
         bus0_name = '_'.join(['Bus', lv_st.__repr__(side='mv')])
         bus['name'].append(bus0_name)
-        bus['v_nom'].append(lv_st.grid.voltage_nom)
+        bus['v_nom'].append(lv_st.mv_grid.voltage_nom)
 
         # add secondary side bus (bus1)
         bus1_name = '_'.join(['Bus', lv_st.__repr__(side='lv')])
