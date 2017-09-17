@@ -172,7 +172,8 @@ def mv_voltage_deviation(network):
     Returns
     -------
     :pandas:`pandas.Series<series>`
-        Critical nodes with corresponding maximum voltage deviation.
+        Critical nodes with corresponding maximum voltage deviation, sorted
+        descending by voltage deviation.
         Format: pd.Series(data=[v_mag_pu_node_A, v_mag_pu_node_B, ...],
                           index=[node_A, node_B, ...])
 
