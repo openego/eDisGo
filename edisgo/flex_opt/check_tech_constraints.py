@@ -31,7 +31,7 @@ def mv_line_load(network):
     crit_lines = {}
 
     load_factor_mv_line = float(network.config['grid_expansion'][
-        'load_factor_mv_line'])
+                                    'load_factor_mv_line'])
 
     # ToDo: Add getter for i_res
     for line in list(network.mv_grid.graph.graph_edges()):
@@ -43,7 +43,7 @@ def mv_line_load(network):
             i_line_pfa = max(network.results._i_res[repr(line['line'])])
             if i_line_pfa > i_line_max:
                 crit_lines[line] = i_line_pfa / i_line_max
-        except:
+        except KeyError:
             logger.debug('No results for line {} '.format(str(line)) +
                          'to check overloading.')
 
@@ -82,7 +82,7 @@ def lv_line_load(network):
     crit_lines = {}
 
     load_factor_lv_line = float(network.config['grid_expansion'][
-        'load_factor_lv_line'])
+                                    'load_factor_lv_line'])
 
     # ToDo: Add getter for i_res
     for lv_grid in network.mv_grid.lv_grids:
@@ -95,7 +95,7 @@ def lv_line_load(network):
                 i_line_pfa = max(network.results._i_res[repr(line['line'])])
                 if i_line_pfa > i_line_max:
                     crit_lines[line['line']] = i_line_pfa / i_line_max
-            except:
+            except KeyError:
                 logger.debug('No results for line {} '.format(str(line)) +
                              'to check overloading.')
 
@@ -135,7 +135,7 @@ def mv_lv_station_load(network):
     crit_stations = {}
 
     load_factor_mv_lv_transformer = float(network.config['grid_expansion'][
-        'load_factor_mv_lv_transformer'])
+                                              'load_factor_mv_lv_transformer'])
 
     for lv_grid in network.mv_grid.lv_grids:
         station = lv_grid.station
@@ -150,7 +150,7 @@ def mv_lv_station_load(network):
                 station.transformers).sum(axis=1))
             if s_station_max < s_station_pfa:
                 crit_stations[station] = s_station_pfa
-        except:
+        except KeyError:
             logger.debug('No results for LV station {} '.format(str(station)) +
                          'to check overloading.')
 
