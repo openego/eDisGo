@@ -66,38 +66,39 @@ def reinforce_grid(network):
     station_2 = [_ for _ in stations if len(_.transformers) >= 1][1]
     overloaded_stations[station_2] = 3000
 
-    # reinforce substations
-    transformer_changes = extend_distribution_substation(
-        network, overloaded_stations)
-    # write added and removed transformers to results.equipment_changes
-    for station, transformer_list in transformer_changes['added'].items():
-        network.results.equipment_changes = \
-            network.results.equipment_changes.append(
-                pd.DataFrame(
-                    {'iteration_step': [iteration_step] * len(
-                        transformer_list),
-                     'change': ['added'] * len(transformer_list),
-                     'equipment': transformer_list},
-                    index=[station] * len(transformer_list)))
-    for station, transformer_list in transformer_changes['removed'].items():
-        network.results.equipment_changes = \
-            network.results.equipment_changes.append(
-                pd.DataFrame(
-                    {'iteration_step': [iteration_step] * len(
-                        transformer_list),
-                     'change': ['removed'] * len(transformer_list),
-                     'equipment': transformer_list},
-                    index=[station] * len(transformer_list)))
+    if overloaded_stations:
+        # reinforce substations
+        transformer_changes = extend_distribution_substation(
+            network, overloaded_stations)
+        # write added and removed transformers to results.equipment_changes
+        for station, transformer_list in transformer_changes['added'].items():
+            network.results.equipment_changes = \
+                network.results.equipment_changes.append(
+                    pd.DataFrame(
+                        {'iteration_step': [iteration_step] * len(
+                            transformer_list),
+                         'change': ['added'] * len(transformer_list),
+                         'equipment': transformer_list},
+                        index=[station] * len(transformer_list)))
+        for station, transformer_list in \
+                transformer_changes['removed'].items():
+            network.results.equipment_changes = \
+                network.results.equipment_changes.append(
+                    pd.DataFrame(
+                        {'iteration_step': [iteration_step] * len(
+                            transformer_list),
+                         'change': ['removed'] * len(transformer_list),
+                         'equipment': transformer_list},
+                        index=[station] * len(transformer_list)))
 
-    # # if stations have been reinforced: run PF again and check if all
-    # # overloading problems for all stations were solved
-    # if overloaded_stations:
-    #     network.analyze()
-    #     overloaded_stations = check_station_load(network)
-    #     if overloaded_stations:
-    #         logger.error("==> Overloading issues of LV stations were not "
-    #                      "solved in the first iteration step.")
-    #         sys.exit()
+        # # run power flow analysis again and check if all overloading problems
+        # # for all stations were solved
+        # network.analyze()
+        # overloaded_stations = checks.mv_lv_station_load(network)
+        # if overloaded_stations:
+        #     logger.error("==> Overloading issues of LV stations were not "
+        #                  "solved in the first iteration step.")
+        #     sys.exit()
 
     # STEP 2: reinforce branches due to overloading
     iteration_step += 1
