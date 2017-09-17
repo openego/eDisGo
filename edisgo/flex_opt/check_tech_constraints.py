@@ -97,12 +97,12 @@ def check_station_load(network):
 
     Parameters
     ----------
-    network: edisgo Network object
+    network : :class:`~.grid.network.Network`
 
     Returns
     -------
-    Dict of critical stations (edisgo Station objects)
-    Format: {station_1: overloading_1, ..., station_n: overloading_n}
+    Dictionary with critical :class:`~.grid.components.LVStation`
+    Format: {lv_station_1: overloading_1, ..., lv_station_n: overloading_n}
 
     Notes
     -----
@@ -113,41 +113,33 @@ def check_station_load(network):
 
     References
     ----------
-    .. [1] dena VNS
+    .. [1] Verteilnetzstudie für das Land Baden-Württemberg
 
     """
 
-    # ToDo: lv stations not yet in pfa_p and pfa_q
     crit_stations = {}
 
-    load_factor_mv_lv_transformer = network.config['grid_expansion'][
-        'load_factor_mv_lv_transformer']
+    load_factor_mv_lv_transformer = float(network.config['grid_expansion'][
+        'load_factor_mv_lv_transformer'])
 
-    mw2kw = 1e3
-
-    print(network.results.s_res(None))
-        #network.mv_grid.graph.nodes_by_attribute('lv_station')))
-
-    # MV/LV station
     for lv_grid in network.mv_grid.lv_grids:
         station = lv_grid.station
-        s_max_th = sum([_._type.s for _ in station.transformers])
-        # find line station is connected to
-        # ToDo: Was ist load der station? Summe der loads der lines die zur Station führen?
-        # edges_station = nx.edges(lv_grid.graph, station)
-        # max(results_lines.loc[line, 's0'])
-        # try:
-        #     # check if maximum s_0 from power flow analysis exceeds allowed
-        #     # values
-        #     if max(results_lines.loc[line, 's0']) > s_max_th:
-        #         crit_lines[line] = (max(results_lines.loc[line, 's0']) *
-        #                             mw2kw / s_max_th)
-        # except:
-        #     logger.debug('No results for line {} '.format(str(line)) +
-        #                 'to check overloading.')
+        # maximum allowed apparent power of station
+        s_station_max = sum([_.type.s for _ in station.transformers]) * \
+                        load_factor_mv_lv_transformer
+        try:
+            # check if maximum allowed apparent power of station exceeds
+            # apparent power from power flow analysis
+            s_station_pfa = max(network.results.s_res(
+                station.transformers).sum(axis=1))
+            if s_station_max < s_station_pfa:
+                crit_stations[station] = s_station_pfa
+        except:
+            logger.debug('No results for LV station {} '.format(str(station)) +
+                         'to check overloading.')
 
     if crit_stations:
-        logger.info('==> {} stations have load issues.'.format(
+        logger.info('==> {} LV stations have load issues.'.format(
             len(crit_stations)))
 
     return crit_stations
