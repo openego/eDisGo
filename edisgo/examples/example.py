@@ -6,7 +6,7 @@ import pickle
 timeseries = TimeSeries()
 scenario = Scenario(timeseries=timeseries)
 
-import_network = True
+import_network = False
 
 if import_network:
     network = Network.import_from_ding0(
@@ -15,13 +15,11 @@ if import_network:
         scenario=scenario
     )
     # Do non-linear power flow analysis with PyPSA
-    #network.analyze(mode='mv')
+    network.analyze()
+    network.pypsa = None
     pickle.dump(network, open('test_network.pkl', 'wb'))
 else:
     network = pickle.load(open('test_network.pkl', 'rb'))
-
-# Do non-linear power flow analysis with PyPSA (MV+LV)
-network.analyze()
 
 # # Print LV station secondary side voltage levels returned by PFA
 # print(network.results.v_res(
@@ -85,6 +83,7 @@ reinforce_grid.reinforce_grid(network)
 
 # nx.draw_spectral(list(network.mv_grid.lv_grids)[0].graph)
 
-# ToDo: Parameter bei Komponenten einführen mit dem man feststellen kann, ob die Komponente bereits in einer ersten Maßnahme verstärkt oder ausgebaut wurde
+# ToDo: feedin und load case auswahl
+# ToDo: Möglichkeit MV und LV getrennt zu rechnen
 # ToDo: Abbruchkriterium einführen - Anzahl paralleler lines
 
