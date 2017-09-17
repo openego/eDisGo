@@ -125,6 +125,7 @@ def check_station_load(network):
     for lv_grid in network.mv_grid.lv_grids:
         station = lv_grid.station
         # maximum allowed apparent power of station
+        # ToDo: change s to S
         s_station_max = sum([_.type.s for _ in station.transformers]) * \
                         load_factor_mv_lv_transformer
         try:
