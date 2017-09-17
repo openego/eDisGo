@@ -13,7 +13,7 @@ from edisgo.grid.grids import LVGrid
 import logging
 
 # package_path = ding0.__path__[0]
-logger = logging.getLogger('ding0')
+logger = logging.getLogger('edisgo')
 
 
 # ToDo: Return reinforced components to results object
@@ -27,10 +27,10 @@ def extend_distribution_substation(network, critical_stations):
 
     Parameters
     ----------
-    network : edisgo network object
+    network : :class:`~.grid.network.Network`
     critical_stations : dict
-        Dictionary with key holding the station name and values the
-        corresponding station load.
+        Dictionary with critical :class:`~.grid.components.LVStation`
+        Format: {lv_station_1: overloading_1, ..., lv_station_n: overloading_n}
 
     Returns
     -------
@@ -48,17 +48,17 @@ def extend_distribution_substation(network, critical_stations):
     load_factor_mv_lv_transformer = float(network.config['grid_expansion'][
         'load_factor_mv_lv_transformer'])
 
-    transformers_changes = {'added': [], 'removed': []}
+    transformers_changes = {'added': {}, 'removed': {}}
     for station in critical_stations:
 
         # list of maximum power of each transformer in the station
         s_max_per_trafo = [_.type.s for _ in station.transformers]
 
-        # maximum station load
-        s_max_station = critical_stations[station]
+        # maximum station load from power flow analysis
+        s_station_pfa = critical_stations[station]
 
-        # determine missing trafo power to solve overloading issue
-        s_trafo_missing = s_max_station - (
+        # determine missing transformer power to solve overloading issue
+        s_trafo_missing = s_station_pfa - (
             sum(s_max_per_trafo) * load_factor_mv_lv_transformer)
 
         # check if second transformer of the same kind is sufficient
@@ -74,7 +74,7 @@ def extend_distribution_substation(network, critical_stations):
                 key=lambda j: j.type.s - s_trafo_missing)
 
             new_transformer = Transformer(
-                id='LV_station_{}_transformer_{}'.format(
+                id='LVStation_{}_transformer_{}'.format(
                     str(station.id), str(len(station.transformers) + 1)),
                 geom=duplicated_transformer.geom,
                 mv_grid=duplicated_transformer.mv_grid,
@@ -84,7 +84,7 @@ def extend_distribution_substation(network, critical_stations):
 
             # add transformer to station and return value
             station.add_transformer(new_transformer)
-            transformers_changes['added'].append(new_transformer)
+            transformers_changes['added'][station] = [new_transformer]
 
         else:
             # get any transformer to get attributes for new transformer from
@@ -92,13 +92,13 @@ def extend_distribution_substation(network, critical_stations):
 
             # calculate how many parallel standard transformers are needed
             number_transformers = math.ceil(
-                s_max_station / standard_transformer.s_nom)
+                s_station_pfa / standard_transformer.s_nom)
 
             # add transformer to station
             new_transformers = []
             for i in range(number_transformers):
                 new_transformer = Transformer(
-                    id='LV_station_{}_transformer_{}'.format(
+                    id='LVStation_{}_transformer_{}'.format(
                         str(station.id), str(i)),
                     geom=station_transformer.geom,
                     mv_grid=station_transformer.mv_grid,
@@ -106,12 +106,14 @@ def extend_distribution_substation(network, critical_stations):
                     voltage_op=station_transformer.voltage_op,
                     type=copy.deepcopy(standard_transformer))
                 new_transformers.append(new_transformer)
-            transformers_changes['added'].extend(new_transformers)
-            transformers_changes['removed'].extend(station.transformers)
+            transformers_changes['added'][station] = new_transformers
+            transformers_changes['removed'][station] = station.transformers
             station.transformers = new_transformers
 
-    logger.info("{} have been reinforced due to overloading "
-                "issues.".format(str(len(critical_stations))))
+    if transformers_changes['added']:
+        logger.info("==> {} LV stations have been reinforced ".format(
+            str(len(transformers_changes['added']))) +
+                    "due to overloading issues.")
 
     return transformers_changes
 
