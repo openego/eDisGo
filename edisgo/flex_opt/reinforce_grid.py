@@ -107,31 +107,45 @@ def reinforce_grid(network):
     crit_lines_mv = checks.mv_line_load(network)
     crit_lines = {**crit_lines_lv, **crit_lines_mv}
 
+    # # ToDo: remove at some point
+    # # random overloaded line
+    # overloaded_line = list(network.mv_grid.graph.graph_edges())[0]['line']
+    # crit_lines = {overloaded_line: 2.3}
+
     # do reinforcement
-    lines_changes = reinforce_branches_current(network, crit_lines)
-    # write added and removed transformers to results.equipment_changes
-    network.results.equipment_changes = \
-        network.results.equipment_changes.append(
-            pd.DataFrame(
-                {'iteration_step': [iteration_step] * len(
-                    lines_changes['added']),
-                 'change': ['added'] * len(lines_changes['added'])},
-                index=lines_changes['added']))
-    network.results.equipment_changes = \
-        network.results.equipment_changes.append(
-            pd.DataFrame(
-                {'iteration_step': [iteration_step] * len(
-                    lines_changes['removed']),
-                 'change': ['added'] * len(lines_changes['removed'])},
-                index=lines_changes['removed']))
+    if crit_lines:
+        lines_changes = reinforce_branches_current(network, crit_lines)
+        # write added and removed lines to results.equipment_changes
+        # ToDo: what makes sense in equipment?
+        if lines_changes['added']:
+            network.results.equipment_changes = \
+                network.results.equipment_changes.append(
+                    pd.DataFrame(
+                        {'iteration_step': [iteration_step] * len(
+                            lines_changes['added']),
+                         'change': ['added'] * len(lines_changes['added']),
+                         'equipment': lines_changes['added']},
+                        index=lines_changes['added']))
+        if lines_changes['removed']:
+            network.results.equipment_changes = \
+                network.results.equipment_changes.append(
+                    pd.DataFrame(
+                        {'iteration_step': [iteration_step] * len(
+                            lines_changes['removed']),
+                         'change': ['removed'] * len(lines_changes['removed']),
+                         'equipment': lines_changes['removed']},
+                        index=lines_changes['removed']))
 
-    # if lines have been reinforced: run PF again and check if all
-    # overloading problems for all lines were solved
-    # if crit_lines:
-    #     grid.network.run_powerflow(conn=None, method='onthefly')
-    #     # check for overloaded lines
-    #     # give error message if any overloaded lines are left
-
+        # # run power flow analysis again and check if all overloading problems
+        # # for all stations were solved
+        # network.analyze()
+        # crit_lines_lv = checks.lv_line_load(network)
+        # crit_lines_mv = checks.mv_line_load(network)
+        # crit_lines = {**crit_lines_lv, **crit_lines_mv}
+        # if crit_lines:
+        #     logger.error("==> Overloading issues of lines were not "
+        #                  "solved in the first iteration step.")
+        #     sys.exit()
 
     # STEP 3: reinforce branches due to voltage problems
 

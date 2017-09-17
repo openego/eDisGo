@@ -150,6 +150,8 @@ def reinforce_branches_voltage(network, crit_nodes):
     """
 
     # ToDo: gilt Methodik auch für die MS?
+    # ToDo: Abbruchkriterium max. number of lines
+    # ToDo: Checken ob bereits zwei parallele lines wenn keine standard line
 
     # load standard line data
     grid = crit_nodes.index[0].grid
@@ -255,15 +257,15 @@ def reinforce_branches_current(network, crit_lines):
     
     Parameters
     ----------
-    network : edisgo network object
+    network : :class:`~.grid.network.Network`
     crit_lines : dict
-        Dict with critical lines as keys and their max. relative
-        overloading.
+        Dictionary of critical :class:`~.grid.components.Line` with max.
+        relative overloading
+        Format: {line_1: rel_overloading_1, ..., line_n: rel_overloading_n}
 
     Returns
     -------
-    type 
-        #TODO: Description of return.
+    Dictionary with lists of added and removed lines.
         
     Notes
     -----
@@ -271,11 +273,9 @@ def reinforce_branches_current(network, crit_lines):
         1. Install parallel line of the same type as the existing line
         2. Remove old line and install as many parallel standard lines as
            needed
-        The branch type to be installed is determined per branch using the rel.
-        overloading. According to [2]_  only cables are installed.
 
     """
-
+    # ToDo: Abbruchkriterium max. number of lines
     # load standard line data
     try:
         standard_line_lv = network.equipment_data['LV_cables'].loc[
@@ -288,6 +288,7 @@ def reinforce_branches_current(network, crit_lines):
     except KeyError:
         print('Chosen standard MV line is not in equipment list.')
 
+    lines_changes = {'added': [], 'removed': []}
     for crit_line, rel_overload in crit_lines.items():
         # check if line is in LV or MV and set standard line accordingly
         if isinstance(crit_line.grid, LVGrid):
@@ -301,18 +302,27 @@ def reinforce_branches_current(network, crit_lines):
                 crit_line.type['I_max_th'] * rel_overload /
                 standard_line['I_max_th'])
             crit_line.quantity = number_parallel_lines
+            lines_changes['added'].extend(
+                [copy.copy(crit_line)] *
+                (number_parallel_lines - crit_line.quantity))
         else:
             # check if parallel line of the same kind is sufficient
-            if (crit_line.type['I_max_th'] * rel_overload <=
-                    crit_line.type['I_max_th'] * 2):
+            if crit_line.quantity == 1 and rel_overload <= 2:
                 crit_line.quantity = 2
+                lines_changes['added'].append(copy.copy(crit_line))
             else:
                 number_parallel_lines = math.ceil(
                     crit_line.type['I_max_th'] * rel_overload /
                     standard_line['I_max_th'])
+                lines_changes['removed'].extend([copy.copy(crit_line)] *
+                                                crit_line.quantity)
                 crit_line.type = standard_line.copy()
                 crit_line.quantity = number_parallel_lines
+                lines_changes['added'].extend(
+                    [copy.copy(crit_line)] * number_parallel_lines)
 
     if crit_lines:
         logger.info('==> {} branches were reinforced.'.format(
             str(len(crit_lines))))
+
+    return lines_changes
