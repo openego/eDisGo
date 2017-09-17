@@ -1,7 +1,7 @@
 import sys
 import pandas as pd
 from .check_tech_constraints import check_line_load, check_station_load, \
-    check_voltage_lv #, get_critical_line_loading, get_critical_voltage_at_nodes
+    check_voltage_lv, check_voltage_mv
 from .reinforce_measures import reinforce_branches_current, \
     reinforce_branches_voltage, extend_distribution_substation
 import logging
@@ -136,38 +136,32 @@ def reinforce_grid(network):
 
     # STEP 3: reinforce branches due to voltage problems
 
-    #crit_nodes = check_voltage(network, results.pfa_nodes)
-    # crit_nodes_count_prev_step = len(crit_nodes)
-    # ToDo: erst Spannungsprobleme in MV lösen, dann LV
-    # ToDo: get nodes with overvoltage (als dict mit grid und liste von Knoten {GridXY: [NodeA, NodeB]})
-    # ToDo: Knoten nach abfallender Spannung sortieren, damit pro Netz geprüft werden kann, ob nächster krit. Knoten schon in path enthalten ist
-    # random critical node
-    lv_grid = list(network.mv_grid.lv_grids)[0]
-    crit_nodes = {lv_grid: pd.Series(
-        [1.12, 1.11],
-        index=list(lv_grid.graph.nodes_by_attribute('load'))[0:2])}
+    iteration_step += 1
+
+    # solve voltage problems in MV grid
+    crit_nodes = check_voltage_mv(network)
+
     # as long as there are voltage issues, do reinforcement
     while crit_nodes:
         # for every grid in crit_nodes do reinforcement
         for grid in crit_nodes:
             reinforce_branches_voltage(network, crit_nodes[grid])
-        crit_nodes = {}
-        # # run PF
-        # grid.network.run_powerflow(conn=None, method='onthefly')
-        #
-        # crit_nodes = check_voltage(grid, mode) # for MV
-        # crit_nodes = get_critical_voltage_at_nodes(grid)  # for LV
-        # # if there are critical nodes left but no larger cable available, stop reinforcement
-        # if len(crit_nodes) == crit_nodes_count_prev_step:
-        #     logger.warning('==> There are {0} branches that cannot be '
-        #                    'reinforced (no appropriate cable '
-        #                    'available).'.format(
-        #         len(grid.find_and_union_paths(grid.station(),
-        #             crit_nodes))))
-        #     break
-        #
-        # crit_nodes_count_prev_step = len(crit_nodes)
+        network.analyze()
+        iteration_step += 1
+        crit_nodes = check_voltage_mv(network)
 
-    if not crit_nodes:
-        logger.info('==> All voltage issues could be '
-                    'solved using reinforcement.')
+    logger.info('==> All voltage issues in MV grid are solved.')
+
+    # solve voltage problems in LV grid
+    crit_nodes = check_voltage_lv(network)
+
+    # as long as there are voltage issues, do reinforcement
+    while crit_nodes:
+        # for every grid in crit_nodes do reinforcement
+        for grid in crit_nodes:
+            reinforce_branches_voltage(network, crit_nodes[grid])
+        network.analyze()
+        iteration_step += 1
+        crit_nodes = check_voltage_mv(network)
+
+    logger.info('==> All voltage issues in LV grids are solved.')
