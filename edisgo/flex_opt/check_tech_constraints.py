@@ -1,91 +1,106 @@
-import numpy as np
-
 import logging
-
 
 logger = logging.getLogger('edisgo')
 
 
-def check_line_load(network, results_lines):
-    """ Checks for over-loading of branches and transformers for MV or LV grid
+def mv_line_load(network):
+    """
+    Checks for over-loading issues in MV grid.
 
     Parameters
     ----------
-    network: edisgo Network object
-    results_lines: pandas.DataFrame
-        power flow analysis results (pfa_edges) from edisgo Results object
+    network : :class:`~.grid.network.Network`
 
     Returns
     -------
-    Dict of critical lines (edisgo Line objects) with max. relative overloading
+    Dictionary of critical :class:`~.grid.components.Line` with max. relative
+    overloading
     Format: {line_1: rel_overloading_1, ..., line_n: rel_overloading_n}
 
     Notes
     -----
-    According to [1]_ load factors in feed-in case of all equipment in MV and
-    LV is set to 1.
+    According to [1]_ load factors in feed-in case of all cables and lines in
+    MV grids are set to 1.
 
     References
     ----------
-    .. [1] dena VNS
+    .. [1] Verteilnetzstudie für das Land Baden-Württemberg
 
     """
 
     crit_lines = {}
 
-    load_factor_mv_line = network.config['grid_expansion'][
-        'load_factor_mv_line']
-    load_factor_lv_line = network.config['grid_expansion'][
-        'load_factor_lv_line']
+    load_factor_mv_line = float(network.config['grid_expansion'][
+        'load_factor_mv_line'])
 
-    # ToDo: Einheiten klären (results und Werte in type)
-    # ToDo: generischer, sodass nicht unbedingt LV und MV gerechnet werden? + HV/MV transformer immer raus lassen?
-    # ToDo: Zugriff auf Attribute mit _
-
-    mw2kw = 1e3
-
-    # ToDo: p0 und p1 Ergebnisse am Anfang und Ende einer Line?
-    # ToDo: Wo soll S berechnet werden? In results objekt schon s_max berechnen?
-    # ToDo: mit Skalar testen
-    results_lines['s0'] = (results_lines['p0'].apply(lambda x: x ** 2) +
-                           results_lines['q0'].apply(lambda x: x ** 2)).apply(
-                               lambda x: np.sqrt(x))
-    # results_lines['s0'] = results_lines['p0'].apply(
-    #     lambda x: [i ** 2 for i in x])
-
-    # MV
+    # ToDo: Add getter for i_res
     for line in list(network.mv_grid.graph.graph_edges()):
-        s_max_th = (3 ** 0.5 * line['line']._type['U_n'] *
-                    line['line']._type['I_max_th']) * \
-                   load_factor_mv_line * line['line']._quantity
+        i_line_max = line['line'].type['I_max_th'] * \
+                     load_factor_mv_line * line['line'].quantity
         try:
-            # check if maximum s_0 from power flow analysis exceeds allowed
-            # values
-            if max(results_lines.loc[line, 's0']) > s_max_th:
-                crit_lines[line] = (max(results_lines.loc[line, 's0']) *
-                                    mw2kw / s_max_th)
+            # check if maximum current from power flow analysis exceeds
+            # allowed maximum current
+            i_line_pfa = max(network.results._i_res[repr(line['line'])])
+            if i_line_pfa > i_line_max:
+                crit_lines[line] = i_line_pfa / i_line_max
         except:
             logger.debug('No results for line {} '.format(str(line)) +
                          'to check overloading.')
-    # LV
+
+    if crit_lines:
+        logger.info('==> {} lines in MV grid have load issues.'.format(
+            len(crit_lines)))
+
+    return crit_lines
+
+
+def lv_line_load(network):
+    """
+    Checks for over-loading issues in LV grids.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+
+    Returns
+    -------
+    Dictionary of critical :class:`~.grid.components.Line` with max. relative
+    overloading
+    Format: {line_1: rel_overloading_1, ..., line_n: rel_overloading_n}
+
+    Notes
+    -----
+    According to [1]_ load factors in feed-in case of all cables and lines in
+    LV grids are set to 1.
+
+    References
+    ----------
+    .. [1] Verteilnetzstudie für das Land Baden-Württemberg
+
+    """
+
+    crit_lines = {}
+
+    load_factor_lv_line = float(network.config['grid_expansion'][
+        'load_factor_lv_line'])
+
+    # ToDo: Add getter for i_res
     for lv_grid in network.mv_grid.lv_grids:
         for line in list(lv_grid.graph.graph_edges()):
-            line['line']._quantity = 1
-            s_max_th = (3 ** 0.5 * line['line']._type['U_n'] *
-                        line['line']._type['I_max_th']) * \
-                       load_factor_lv_line * line['line']._quantity
+            i_line_max = line['line'].type['I_max_th'] * \
+                         load_factor_lv_line * line['line'].quantity
             try:
-                # check if maximum s_0 from power flow analysis exceeds allowed
-                # values
-                if max(results_lines.loc[line, 's0']) > s_max_th:
-                    crit_lines[line] = (max(results_lines.loc[line, 's0']) *
-                                        mw2kw / s_max_th)
+                # check if maximum current from power flow analysis exceeds
+                # allowed maximum current
+                i_line_pfa = max(network.results._i_res[repr(line['line'])])
+                if i_line_pfa > i_line_max:
+                    crit_lines[line['line']] = i_line_pfa / i_line_max
             except:
                 logger.debug('No results for line {} '.format(str(line)) +
                              'to check overloading.')
 
     if crit_lines:
-        logger.info('==> {} lines have load issues.'.format(
+        logger.info('==> {} lines in LV grids have load issues.'.format(
             len(crit_lines)))
 
     return crit_lines
