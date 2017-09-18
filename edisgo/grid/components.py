@@ -1,4 +1,8 @@
-from shapely.geometry import LineString
+import os
+if not 'READTHEDOCS' in os.environ:
+    from shapely.geometry import LineString
+from math import acos, tan
+import pandas as pd
 
 
 class Component:
@@ -17,6 +21,11 @@ class Component:
         self._grid = kwargs.get('grid', None)
 
     @property
+    def id(self):
+        """Returns id of component"""
+        return self._id
+
+    @property
     def geom(self):
         """:shapely:`Shapely Point object<points>` or
         :shapely:`Shapely LineString object<linestrings>` : Location of the
@@ -27,6 +36,10 @@ class Component:
     def grid(self):
         """:class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid` : The MV or LV grid this component belongs to"""
         return self._grid
+
+    @grid.setter
+    def grid(self, grid):
+        self._grid = grid
 
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
@@ -52,6 +65,18 @@ class Station(Component):
         station"""
         return self._transformers
 
+    @transformers.setter
+    def transformers(self, transformer):
+        """
+        Parameters
+        ----------
+        transformer : :obj:`list` of :class:`Transformer`
+        """
+        self._transformers = transformer
+
+    def add_transformer(self, transformer):
+        self._transformers.append(transformer)
+
 
 class Transformer(Component):
     """Transformer object
@@ -65,9 +90,24 @@ class Transformer(Component):
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
+        self._mv_grid = kwargs.get('mv_grid', None)
         self._voltage_op = kwargs.get('voltage_op', None)
         self._type = kwargs.get('type', None)
+
+    @property
+    def mv_grid(self):
+        return self._mv_grid
+
+    @property
+    def voltage_op(self):
+        return self._voltage_op
+
+    @property
+    def type(self):
+        return self._type
+
+    def __repr__(self):
+        return str(self._id)
 
 
 class Load(Component):
@@ -81,10 +121,31 @@ class Load(Component):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        self._timeseries = kwargs.get('timeseries', None)
+        # self._timeseries = kwargs.get('timeseries', None)
         self._consumption = kwargs.get('consumption', None)
 
+        # TODO: replace below dummy timeseries
+        hours_of_the_year = 8760
+
+        cos_phi = 0.95
+
+        q_factor = tan(acos(cos_phi))
+
+
+        avg_hourly_load = self.consumption[list(self.consumption.keys())[0]] / \
+                                           hours_of_the_year / 1e3
+
+        rng = pd.date_range('1/1/2011', periods=hours_of_the_year, freq='H')
+
+        ts_dict_p = {
+            'p': [avg_hourly_load * (1 - q_factor)] * hours_of_the_year}
+        ts_dict_q = {
+            'q': [avg_hourly_load * (q_factor)] * hours_of_the_year}
+        ts_dict = {**ts_dict_p, **ts_dict_q}
+
+        self._timeseries = pd.DataFrame(ts_dict, index=rng)
+
+    @property
     def timeseries(self):
         """Return time series of load
 
@@ -97,7 +158,19 @@ class Load(Component):
         --------
         edisgo.network.TimeSeries : Details of global TimeSeries
         """
-        raise NotImplementedError
+
+        return self._timeseries
+
+    def pypsa_timeseries(self, attr):
+        """Return time series in PyPSA format
+
+        Parameters
+        ----------
+        attr : str
+            Attribute name (PyPSA conventions). Choose from {p_set, q_set}
+        """
+
+        return self._timeseries[attr]
 
     @property
     def consumption(self):
@@ -121,6 +194,12 @@ class Load(Component):
     @consumption.setter
     def consumption(self, cons_dict):
         self._consumption = cons_dict
+
+    def __repr__(self):
+        return '_'.join(['Load',
+                         list(self.consumption.keys())[0],
+                         repr(self.grid),
+                         str(self.id)])
 
 
 class Generator(Component):
@@ -149,7 +228,23 @@ class Generator(Component):
         self._nominal_capacity = kwargs.get('nominal_capacity', None)
         self._type = kwargs.get('type', None)
         self._subtype = kwargs.get('subtype', None)
-        self._timeseries = kwargs.get('timeseries', None)
+        self._v_level = kwargs.get('v_level', None)
+
+        # TODO: replace below dummy timeseries
+        hours_of_the_year = 8760
+
+        cos_phi = 0.95
+
+        q_factor = tan(acos(0.95))
+
+        rng = pd.date_range('1/1/2011', periods=hours_of_the_year, freq='H')
+
+        ts_dict = {
+            'p': [self.nominal_capacity / 1e3 * (1 - q_factor)] * hours_of_the_year,
+            'q': [self.nominal_capacity / 1e3 * q_factor] * hours_of_the_year}
+
+        self._timeseries = pd.DataFrame(ts_dict, index=rng)
+        # self._timeseries = kwargs.get('timeseries', None)
 
     def timeseries(self):
         """Return time series of generator
@@ -160,7 +255,18 @@ class Generator(Component):
         and type of technology in :class:`~.grid.network.TimeSeries` object and
         considers for predefined curtailment as well.
         """
-        raise NotImplementedError
+        return self._timeseries
+
+    def pypsa_timeseries(self, attr):
+        """Return time series in PyPSA format
+
+        Parameters
+        ----------
+        attr : str
+            Attribute name (PyPSA conventions). Choose from {p_set, q_set}
+        """
+
+        return self._timeseries[attr]
 
     @property
     def type(self):
@@ -176,6 +282,11 @@ class Generator(Component):
     def nominal_capacity(self):
         """:obj:`float` : Nominal generation capacity"""
         return self._nominal_capacity
+
+    @property
+    def v_level(self):
+        """:obj:`int` : Voltage level"""
+        return self._v_level
 
 
 class Storage(Component):
@@ -226,12 +337,51 @@ class BranchTee(Component):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def __repr__(self):
+        return '_'.join([self.__class__.__name__, repr(self.grid), str(self._id)])
+
 
 class MVStation(Station):
     """MV Station object"""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    def __repr__(self, side=None):
+        repr_base = super().__repr__()
+
+        # As we don't consider HV-MV transformers in PFA, we don't have to care
+        # about primary side bus of MV station. Hence, the general repr()
+        # currently returned, implicitely refers to the secondary side (MV level)
+        # if side == 'hv':
+        #     return '_'.join(['primary', repr_base])
+        # elif side == 'mv':
+        #     return '_'.join(['secondary', repr_base])
+        # else:
+        #     return repr_base
+        return repr_base
+
+
+class LVStation(Station):
+    """LV Station object"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._mv_grid = kwargs.get('mv_grid', None)
+
+    @property
+    def mv_grid(self):
+        return self._mv_grid
+
+    def __repr__(self, side=None):
+        repr_base = super().__repr__()
+
+        if side == 'mv':
+            return '_'.join(['primary', repr_base])
+        elif side == 'lv':
+            return '_'.join(['secondary', repr_base])
+        else:
+            return repr_base
 
 
 class Line(Component):
@@ -275,4 +425,28 @@ class Line(Component):
         adj_nodes = self._grid._graph.nodes_from_line(self)
 
         return LineString([adj_nodes[0].geom, adj_nodes[1].geom])
+
+    @property
+    def type(self):
+        return self._type
+
+    @type.setter
+    def type(self, new_type):
+        self._type = new_type
+
+    @property
+    def length(self):
+        return self._length
+
+    @length.setter
+    def length(self, new_length):
+        self._length = new_length
+
+    @property
+    def quantity(self):
+        return self._quantity
+
+    @quantity.setter
+    def quantity(self, new_quantity):
+        self._quantity = new_quantity
 

@@ -55,6 +55,15 @@ class Grid:
         """Provide access to station"""
         return self._station
 
+    @property
+    def voltage_nom(self):
+        """Provide access to nominal voltage"""
+        return self._voltage_nom
+
+    @property
+    def id(self):
+        return self._id
+
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
 
