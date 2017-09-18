@@ -153,6 +153,7 @@ def reinforce_grid(network):
     iteration_step += 1
 
     # solve voltage problems in MV grid
+    # ToDo: crit_nodes needs to be list or dict
     crit_nodes = checks.mv_voltage_deviation(network)
 
     # as long as there are voltage issues, do reinforcement

@@ -153,6 +153,7 @@ def reinforce_branches_voltage(network, crit_nodes):
     # ToDo: Checken ob bereits zwei parallele lines wenn keine standard line
 
     # load standard line data
+    # ToDo: crit_nodes ist string!
     grid = crit_nodes.index[0].grid
     if isinstance(grid, LVGrid):
         try:
