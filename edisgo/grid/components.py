@@ -35,6 +35,10 @@ class Component:
         """:class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid` : The MV or LV grid this component belongs to"""
         return self._grid
 
+    @grid.setter
+    def grid(self, grid):
+        self._grid = grid
+
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
 
@@ -59,6 +63,18 @@ class Station(Component):
         station"""
         return self._transformers
 
+    @transformers.setter
+    def transformers(self, transformer):
+        """
+        Parameters
+        ----------
+        transformer : :obj:`list` of :class:`Transformer`
+        """
+        self._transformers = transformer
+
+    def add_transformer(self, transformer):
+        self._transformers.append(transformer)
+
 
 class Transformer(Component):
     """Transformer object
@@ -72,9 +88,13 @@ class Transformer(Component):
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
+        self._mv_grid = kwargs.get('mv_grid', None)
         self._voltage_op = kwargs.get('voltage_op', None)
         self._type = kwargs.get('type', None)
+
+    @property
+    def mv_grid(self):
+        return self._mv_grid
 
     @property
     def voltage_op(self):
@@ -83,6 +103,9 @@ class Transformer(Component):
     @property
     def type(self):
         return self._type
+
+    def __repr__(self):
+        return str(self._id)
 
 
 class Load(Component):
@@ -346,6 +369,11 @@ class LVStation(Station):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._mv_grid = kwargs.get('mv_grid', None)
+
+    @property
+    def mv_grid(self):
+        return self._mv_grid
 
     def __repr__(self, side=None):
         repr_base = super().__repr__()
@@ -356,6 +384,7 @@ class LVStation(Station):
             return '_'.join(['secondary', repr_base])
         else:
             return repr_base
+
 
 class Line(Component):
     """
@@ -403,7 +432,23 @@ class Line(Component):
     def type(self):
         return self._type
 
+    @type.setter
+    def type(self, new_type):
+        self._type = new_type
+
     @property
     def length(self):
         return self._length
+
+    @length.setter
+    def length(self, new_length):
+        self._length = new_length
+
+    @property
+    def quantity(self):
+        return self._quantity
+
+    @quantity.setter
+    def quantity(self, new_quantity):
+        self._quantity = new_quantity
 

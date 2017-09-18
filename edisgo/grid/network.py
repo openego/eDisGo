@@ -491,18 +491,6 @@ class Results:
         A stack that details the history of measures to increase grid's hosting
         capacity. The last item refers to the latest measure. The key `original`
         refers to the state of the grid topology as it was initially imported.
-    equipment_changes: :pandas:`pandas.DataFrame<dataframe>`
-        Tracks changes in the equipment (replaced or added cable, batteries
-        added, curtailment set to a generator, ...). This is indexed by the
-        components (nodes or edges) and has following columns:
-
-        equipment: detailing what was changed (line, battery, curtailment). For
-        ease of referencing we take the component itself. For lines we take the
-        line-dict, for batteries the battery-object itself and for curtailment
-        either a dict providing the details of curtailment or a curtailment
-        object if this makes more sense (has to be defined).
-
-        change: {added | removed} - says if something was added or removed
     grid_expansion_costs: float
         Total costs of grid expansion measures in `equipment_changes`.
         ToDo: add unit
@@ -515,6 +503,7 @@ class Results:
         self._pfa_p = None
         self._pfa_q = None
         self._pfa_v_mag_pu = None
+        self._i_res = None
         self._equipment_changes = pd.DataFrame()
 
     @property
@@ -617,14 +606,47 @@ class Results:
         else:
             self._pfa_v_mag_pu = pd.concat([self._pfa_v_mag_pu, pypsa], axis=1)
 
-
-
-    def s_res(self, lines=None):
+    @property
+    def equipment_changes(self):
         """
-        Get resulting apparent power at line(s)
+        Tracks changes in the equipment (e.g. replaced or added cable, etc.)
 
-        The apparent power at a line determines from the maximum values of
-        active power P and reactive power Q.
+        The DataFrame is indexed by the components (nodes or edges) and has
+        the following columns:
+
+        equipment: detailing what was changed (line, battery, curtailment). For
+        ease of referencing we take the component itself. For lines we take the
+        line-dict, for batteries the battery-object itself and for curtailment
+        either a dict providing the details of curtailment or a curtailment
+        object if this makes more sense (has to be defined).
+
+        change: {added | removed} - says if something was added or removed
+
+        iteration_step: grid expansion step
+
+        Parameters
+        ----------
+        changes: `pandas.DataFrame<dataframe>`
+            Provide this if you want to set values. For retrieval of data do
+            not pass an argument.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Equipment changes
+        """
+        return self._equipment_changes
+
+    @equipment_changes.setter
+    def equipment_changes(self, changes):
+        self._equipment_changes = changes
+
+    def s_res(self, components=None):
+        """
+        Get resulting apparent power at line(s) and transformer(s)
+
+        The apparent power at a line (or transformer) determines from the
+        maximum values of active power P and reactive power Q.
 
         .. math::
 
@@ -632,31 +654,32 @@ class Results:
 
         Parameters
         ----------
-        lines : :class:`~.grid.components.Load` or list of :class:`~.grid.components.Load`
+        components : :class:`~.grid.components.Line` or :class:`~.grid.components.Transformer`
+            Could be a list of instances of these classes
 
-            Line objects of grid topology. If not provided (respectively None)
-            defaults to return `s_res` of all lines in the grid.
+            Line or Transformers objects of grid topology. If not provided
+            (respectively None)
+            defaults to return `s_res` of all lines and transformers in the grid.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Apparent power for `lines`
+            Apparent power for `lines` and/or `transformers`
 
         """
 
-
-        if lines is not None:
+        if components is not None:
             labels_included = []
             labels_not_included = []
-            labels = [repr(l) for l in lines]
+            labels = [repr(l) for l in components]
             for label in labels:
                 if label in list(self.pfa_p.columns) and label in list(self.pfa_q.columns):
                     labels_included.append(label)
                 else:
                     labels_not_included.append(label)
-                    print(
-                        "Apparent power for {lines} are not returned from PFA".format(
-                            lines=labels_not_included))
+            if labels_not_included:
+                print("Apparent power for {lines} are not returned from "
+                      "PFA".format(lines=labels_not_included))
         else:
             labels_included = self.pfa_p.columns
 

@@ -1,24 +1,22 @@
+import os
 import copy
 import math
 import pandas as pd
 import networkx as nx
 from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
     dijkstra_shortest_path_length
-
-import ding0
+if not 'READTHEDOCS' in os.environ:
+    import ding0
 from edisgo.grid.components import Transformer
-from edisgo import flex_opt
-# from ding0.tools import config as cfg_ding0
-# from ding0.grid.lv_grid.build_grid import select_transformers
-# from ding0.flexopt.check_tech_constraints import get_voltage_at_bus_bar
-# import networkx as nx
+from edisgo.grid.grids import LVGrid
+
 import logging
 
-package_path = ding0.__path__[0]
-logger = logging.getLogger('ding0')
+# package_path = ding0.__path__[0]
+logger = logging.getLogger('edisgo')
 
 
-def extend_distribution_substation(critical_stations):
+def extend_distribution_substation(network, critical_stations):
     """
     Reinforce MV/LV substations.
 
@@ -28,32 +26,39 @@ def extend_distribution_substation(critical_stations):
 
     Parameters
     ----------
-        critical_stations : list
-            List of stations with overloading
+    network : :class:`~.grid.network.Network`
+    critical_stations : dict
+        Dictionary with critical :class:`~.grid.components.LVStation`
+        Format: {lv_station_1: overloading_1, ..., lv_station_n: overloading_n}
+
+    Returns
+    -------
+    Dictionary with lists of added and removed transformers.
 
     """
 
-    # ToDo: get parameters from config
-    # ToDo: Einheiten klären
-    # trafo_params = grid.network._static_data['{grid_level}_trafos'.format(
-    #     grid_level=grid_level)]
     # get parameters for standard transformer
-    standard_transformer = pd.Series({'r': 0.01, 's': 630, 'x': 0.04})
-    lf_lv_trans_normal = 1
+    try:
+        standard_transformer = network.equipment_data['LV_trafos'].loc[
+            network.config['grid_expansion']['std_mv_lv_transformer']]
+    except KeyError:
+        print('Standard MV/LV transformer is not in equipment list.')
 
+    load_factor_mv_lv_transformer = float(network.config['grid_expansion'][
+        'load_factor_mv_lv_transformer'])
+
+    transformers_changes = {'added': {}, 'removed': {}}
     for station in critical_stations:
 
         # list of maximum power of each transformer in the station
-        s_max_per_trafo = [_._type.s for _ in station._transformers]
+        s_max_per_trafo = [_.type.s for _ in station.transformers]
 
-        # maximum power in generation case
-        # ToDo: critical_stations[station] anpassen wenn Datenstruktur geändert
-        # werden sollte
-        s_max_gc = critical_stations[station]
+        # maximum station load from power flow analysis
+        s_station_pfa = critical_stations[station]
 
-        # determine missing trafo power to solve overloading issue
-        s_trafo_missing = s_max_gc - (
-            sum(s_max_per_trafo) * lf_lv_trans_normal)
+        # determine missing transformer power to solve overloading issue
+        s_trafo_missing = s_station_pfa - (
+            sum(s_max_per_trafo) * load_factor_mv_lv_transformer)
 
         # check if second transformer of the same kind is sufficient
         # if true install second transformer, otherwise install as many
@@ -64,55 +69,68 @@ def extend_distribution_substation(critical_stations):
             # meets the missing power demand
             duplicated_transformer = min(
                 [_ for _ in station.transformers
-                 if _._type.s > s_trafo_missing],
-                key=lambda i: i._type.s - s_trafo_missing)
+                 if _.type.s > s_trafo_missing],
+                key=lambda j: j.type.s - s_trafo_missing)
 
-            # ToDo: id?
             new_transformer = Transformer(
-                id=99,
+                id='LVStation_{}_transformer_{}'.format(
+                    str(station.id), str(len(station.transformers) + 1)),
                 geom=duplicated_transformer.geom,
+                mv_grid=duplicated_transformer.mv_grid,
                 grid=duplicated_transformer.grid,
-                voltage_op=duplicated_transformer._voltage_op,
-                type=copy.deepcopy(duplicated_transformer._type))
+                voltage_op=duplicated_transformer.voltage_op,
+                type=copy.deepcopy(duplicated_transformer.type))
 
-            # add transformer to station
-            # ToDo: Methode in Station hierfür einführen?
-            station._transformers.append(new_transformer)
+            # add transformer to station and return value
+            station.add_transformer(new_transformer)
+            transformers_changes['added'][station] = [new_transformer]
 
         else:
             # get any transformer to get attributes for new transformer from
             station_transformer = station.transformers[0]
 
-            # ToDo: id?
-            new_transformer = Transformer(
-                id=99,
-                geom=station_transformer.geom,
-                grid=station_transformer.grid,
-                voltage_op=station_transformer._voltage_op,
-                type=copy.deepcopy(standard_transformer))
-
             # calculate how many parallel standard transformers are needed
-            number_transformers = math.ceil(s_max_gc / standard_transformer.s)
+            number_transformers = math.ceil(
+                s_station_pfa / standard_transformer.s_nom)
 
             # add transformer to station
-            # ToDo: Methode in Station hierfür einführen?
             new_transformers = []
             for i in range(number_transformers):
+                new_transformer = Transformer(
+                    id='LVStation_{}_transformer_{}'.format(
+                        str(station.id), str(i)),
+                    geom=station_transformer.geom,
+                    mv_grid=station_transformer.mv_grid,
+                    grid=station_transformer.grid,
+                    voltage_op=station_transformer.voltage_op,
+                    type=copy.deepcopy(standard_transformer))
                 new_transformers.append(new_transformer)
-            station._transformers = new_transformers
+            transformers_changes['added'][station] = new_transformers
+            transformers_changes['removed'][station] = station.transformers
+            station.transformers = new_transformers
 
-    logger.info("{stations_cnt} have been reinforced due to overloading "
-                "issues.".format(stations_cnt=len(critical_stations)))
+    if transformers_changes['added']:
+        logger.info("==> {} LV stations have been reinforced ".format(
+            str(len(transformers_changes['added']))) +
+                    "due to overloading issues.")
+
+    return transformers_changes
 
 
-def reinforce_branches_voltage(grid, crit_nodes):
-    """ Reinforce MV or LV grid by installing a new branch/line type
+def reinforce_branches_voltage(network, crit_nodes):
+    """
+    Reinforce MV and LV grid due to voltage issues.
 
     Parameters
     ----------
-    grid: Grid object
-    crit_nodes: List of nodes objects with critical voltages sorted by voltage
-                (descending)
+    network : :class:`~.grid.network.Network`
+    crit_nodes : :pandas:`pandas.Series<series>`
+        Series with critical nodes of one grid and corresponding voltage
+        deviation, sorted descending by voltage deviation.
+
+    Returns
+    -------
+    Dictionary with lists of added and removed lines.
 
     Notes
     -----
@@ -131,25 +149,34 @@ def reinforce_branches_voltage(grid, crit_nodes):
     """
 
     # ToDo: gilt Methodik auch für die MS?
+    # ToDo: Abbruchkriterium max. number of lines
+    # ToDo: Checken ob bereits zwei parallele lines wenn keine standard line
 
-    # load cable data, file_names and parameter
-    # branch_parameters = grid.network.static_data['{gridlevel}_cables'.format(
-    #     gridlevel=grid_level)]
-    # branch_parameters = branch_parameters[
-    #     branch_parameters['U_n'] == grid.v_level].sort_values('I_max_th')
-    # ToDo: get parameters from config
-    standard_line = pd.Series({
-        'U_n': 400, 'I_max_th': 270, 'R': 0.1, 'L': 0.28, 'C': None},
-         name='NAYY 4x150')
+    # load standard line data
+    grid = crit_nodes.index[0].grid
+    if isinstance(grid, LVGrid):
+        try:
+            standard_line = network.equipment_data['LV_cables'].loc[
+                network.config['grid_expansion']['std_lv_line']]
+        except KeyError:
+            print('Chosen standard LV line is not in equipment list.')
+    else:
+        try:
+            standard_line = network.equipment_data['MV_cables'].loc[
+                network.config['grid_expansion']['std_mv_line']]
+        except KeyError:
+            print('Chosen standard MV line is not in equipment list.')
 
     # find first nodes of every main line as representatives
-    rep_main_line = nx.predecessor(grid._graph, grid.station, cutoff=1)
+    rep_main_line = nx.predecessor(grid.graph, grid.station, cutoff=1)
     # list containing all representatives of main lines that have already been
     # reinforced
     main_line_reinforced = []
 
-    for crit_node in crit_nodes:
-        path = nx.shortest_path(grid._graph, grid.station, crit_node)
+    lines_changes = {'added': [], 'removed': []}
+    for i in range(len(crit_nodes)):
+        path = nx.shortest_path(grid.graph, grid.station,
+                                crit_nodes.index[i])
 
         # check if representative of line is already in list
         # main_line_reinforced, if it is the main line the critical node is
@@ -158,114 +185,143 @@ def reinforce_branches_voltage(grid, crit_nodes):
 
             main_line_reinforced.append(path[1])
             # get path length from station to critical node
-            get_weight = lambda u, v, data: data['line']._length
+            get_weight = lambda u, v, data: data['line'].length
             path_length = dijkstra_shortest_path_length(
-                grid._graph, grid.station, get_weight, target=crit_node)
+                grid.graph, grid.station, get_weight,
+                target=crit_nodes.index[i])
             # find first node in path that exceeds 2/3 of the line length
             # from station to critical node farthest away from the station
-            node_2_3 = next(i for i in path if
-                              path_length[i] >= path_length[crit_node] * 2 / 3)
+            node_2_3 = next(j for j in path if path_length[j] >= path_length[
+                crit_nodes.index[i]] * 2 / 3)
 
             # if node_2_3 is a representative (meaning it is already directly
             # connected to the station), line cannot be disconnected and must
             # therefore be reinforced
             if node_2_3 in rep_main_line:
-                crit_line = grid._graph.get_edge_data(
+                crit_line = grid.graph.get_edge_data(
                     grid.station, node_2_3)['line']
 
                 # if critical line is already a standard line install one more
                 # parallel line
-                if crit_line._type.name == 'NAYY 4x150':
-                    crit_line._quantity = crit_line._quantity + 1
+                if crit_line.type.name == standard_line.name:
+                    crit_line.quantity += 1
+                    lines_changes['added'].append(copy.copy(crit_line))
 
-                # if critical line is not yet a standard line check if one or
-                # several standard lines are needed
+                # if critical line is not yet a standard line replace old line
+                # by a standard line
                 else:
                     # number of parallel standard lines could be calculated
-                    # following [2] p.103, for now number of parallel standard
+                    # following [2] p.103; for now number of parallel standard
                     # lines is iterated
-                    crit_line._type = standard_line.copy()
-                    crit_line._quantity = 1
+                    lines_changes['removed'].append(copy.copy(crit_line))
+                    crit_line.type = standard_line.copy()
+                    crit_line.quantity = 1
+                    lines_changes['added'].append(copy.copy(crit_line))
 
             # if node_2_3 is not a representative, disconnect line
             else:
                 # get line between node_2_3 and predecessor node (that is
                 # closer to the station)
                 pred_node = path[path.index(node_2_3) - 1]
-                crit_line = grid._graph.get_edge_data(
+                crit_line = grid.graph.get_edge_data(
                     node_2_3, pred_node)['line']
+                lines_changes['removed'].append(copy.copy(crit_line))
                 # add new edge between node_2_3 and station
                 new_line_data = {'line': crit_line,
                                  'type': 'line'}
-                grid._graph.add_edge(grid.station, node_2_3, new_line_data)
+                grid.graph.add_edge(grid.station, node_2_3, new_line_data)
                 # remove old edge
-                grid._graph.remove_edge(pred_node, node_2_3)
+                grid.graph.remove_edge(pred_node, node_2_3)
                 # change line length and type
-                crit_line._length = path_length[node_2_3]
-                crit_line._type = standard_line.copy()
+                crit_line.length = path_length[node_2_3]
+                crit_line.type = standard_line.copy()
+                lines_changes['added'].append(copy.copy(crit_line))
 
         else:
-            logger.debug('==> Main line of node {} '.format(str(crit_node)) +
-                         'in LV grid {} '.format(str(crit_node._grid)) +
-                         'has already been reinforced.')
+            logger.debug(
+                '==> Main line of node {} '.format(str(crit_nodes.index[i])) +
+                'in LV grid {} '.format(str(grid)) +
+                'has already been reinforced.')
 
     if main_line_reinforced:
-        logger.info('==> {} branches were reinforced.'.format(
+        logger.info('==> {} branche(s) was/were reinforced.'.format(
             str(len(main_line_reinforced))))
 
+    return lines_changes
 
-def reinforce_branches_current(crit_lines):
-    """ Reinforce MV or LV grid by installing a new branch/line type
+
+def reinforce_branches_current(network, crit_lines):
+    """
+    Reinforce MV or LV grid due to overloading.
     
     Parameters
     ----------
-        crit_lines : dict
-            Dict with critical lines as keys and their max. relative
-            overloading.
+    network : :class:`~.grid.network.Network`
+    crit_lines : dict
+        Dictionary of critical :class:`~.grid.components.Line` with max.
+        relative overloading
+        Format: {line_1: rel_overloading_1, ..., line_n: rel_overloading_n}
 
     Returns
     -------
-    type 
-        #TODO: Description of return.
+    Dictionary with lists of added and removed lines.
         
     Notes
     -----
-        Reinforce measures:
-        1. Install parallel line of the same type as the existing line
-        2. Remove old line and install as many parallel standard lines as
-           needed
-        The branch type to be installed is determined per branch using the rel.
-        overloading. According to [2]_  only cables are installed.
+    Reinforce measures:
+    1. Install parallel line of the same type as the existing line
+    2. Remove old line and install as many parallel standard lines as
+       needed
 
     """
-    # load cable data, file_names and parameter
-    # branch_parameters = grid.network.static_data['MV_cables']
-    # branch_parameters = branch_parameters[branch_parameters['U_n'] ==
-    #                                       grid.v_level].sort_values('I_max_th')
-    # ToDo: get parameters from config
-    standard_line = pd.Series({
-        'U_n': 400, 'I_max_th': 270, 'R': 0.1, 'L': 0.28, 'C': None},
-         name='NAYY 4x150')
+    # ToDo: Abbruchkriterium max. number of lines
+    # load standard line data
+    try:
+        standard_line_lv = network.equipment_data['LV_cables'].loc[
+            network.config['grid_expansion']['std_lv_line']]
+    except KeyError:
+        print('Chosen standard LV line is not in equipment list.')
+    try:
+        standard_line_mv = network.equipment_data['MV_cables'].loc[
+            network.config['grid_expansion']['std_mv_line']]
+    except KeyError:
+        print('Chosen standard MV line is not in equipment list.')
 
+    lines_changes = {'added': [], 'removed': []}
     for crit_line, rel_overload in crit_lines.items():
-        if crit_line._type.name == standard_line.name:
+        # check if line is in LV or MV and set standard line accordingly
+        if isinstance(crit_line.grid, LVGrid):
+            standard_line = standard_line_lv
+        else:
+            standard_line = standard_line_mv
+
+        if crit_line.type.name == standard_line.name:
             # check how many parallel standard lines are needed
-            number_parallel_lines = math.ceil(crit_line._type['I_max_th'] *
-                                              rel_overload /
-                                              standard_line['I_max_th'])
-            crit_line._quantity = number_parallel_lines
+            number_parallel_lines = math.ceil(
+                crit_line.type['I_max_th'] * rel_overload /
+                standard_line['I_max_th'])
+            crit_line.quantity = number_parallel_lines
+            lines_changes['added'].extend(
+                [copy.copy(crit_line)] *
+                (number_parallel_lines - crit_line.quantity))
         else:
             # check if parallel line of the same kind is sufficient
-            if (crit_line._type['I_max_th'] * rel_overload <=
-                        crit_line._type['I_max_th'] * 2):
-                crit_line._quantity = 2
+            if crit_line.quantity == 1 and rel_overload <= 2:
+                crit_line.quantity = 2
+                lines_changes['added'].append(copy.copy(crit_line))
             else:
-                number_parallel_lines = math.ceil(crit_line._type['I_max_th'] *
-                                                  rel_overload /
-                                                  standard_line['I_max_th'])
-                crit_line._type = standard_line.copy()
-                crit_line._quantity = number_parallel_lines
+                number_parallel_lines = math.ceil(
+                    crit_line.type['I_max_th'] * rel_overload /
+                    standard_line['I_max_th'])
+                lines_changes['removed'].extend([copy.copy(crit_line)] *
+                                                crit_line.quantity)
+                crit_line.type = standard_line.copy()
+                crit_line.quantity = number_parallel_lines
+                lines_changes['added'].extend(
+                    [copy.copy(crit_line)] * number_parallel_lines)
 
     if crit_lines:
         logger.info('==> {} branches were reinforced.'.format(
             str(len(crit_lines))))
+
+    return lines_changes

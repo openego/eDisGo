@@ -1,28 +1,35 @@
-from edisgo.grid.network import Network, Scenario, TimeSeries, Results
+from edisgo.grid.network import Network, Scenario, TimeSeries
 from edisgo.flex_opt import reinforce_grid
 import os
 import pickle
-import pandas as pd
-from ast import literal_eval
-import numpy as np
 
 timeseries = TimeSeries()
 scenario = Scenario(timeseries=timeseries)
 
-network = Network.import_from_ding0(
-    os.path.join('data', 'ding0_grids__3545.pkl'),
-    id='Test grid',
-    scenario=scenario
-)
-# pickle.dump(network, open('test_network.pkl', 'wb'))
-# network = pickle.load(open('test_network.pkl', 'rb'))
+import_network = False
 
-# Do non-linear power flow analysis with PyPSA (MV+LV)
-# network.analyze()
+if import_network:
+    network = Network.import_from_ding0(
+        os.path.join('data', 'ding0_grids_example.pkl'),
+        id='Test grid',
+        scenario=scenario
+    )
+    # Do non-linear power flow analysis with PyPSA
+    network.analyze()
+    network.pypsa = None
+    pickle.dump(network, open('test_network.pkl', 'wb'))
+else:
+    network = pickle.load(open('test_network.pkl', 'rb'))
 
-# Print LV station secondary side voltage levels returned by PFA
+# # Print LV station secondary side voltage levels returned by PFA
 # print(network.results.v_res(
 #     network.mv_grid.graph.nodes_by_attribute('lv_station'), 'lv'))
+
+# Print LV station apparent power returned by PFA
+# lv_transformers = [transformer for station in
+#                    network.mv_grid.graph.nodes_by_attribute('lv_station') for
+#                    transformer in station.transformers]
+# print(network.results.s_res(lv_transformers))
 
 # Print voltage levels for entire LV grid
 # for attr in ['lv_station', 'load', 'generator', 'branch_tee']:
@@ -36,29 +43,20 @@ network = Network.import_from_ding0(
 # Print voltage level of all nodes
 # print(network.results.pfa_v_mag_pu)
 
+# Print current (line loading) at MV lines
+# print(network.results.i_res([_['line'] for _ in network.mv_grid.graph.graph_edges()]))
+
 # Print apparent power at lines
 # print(network.results.s_res([_['line'] for _ in network.mv_grid.graph.graph_edges()]))
 
+# Print number of buses, generators, load and lines to study problem size
+# print('buses: ', network.pypsa.buses.shape)
+# print('generators: ', network.pypsa.generators.shape)
+# print('loads: ', network.pypsa.loads.shape)
+# print('lines: ', network.pypsa.lines.shape)
+
 # Print voltage levels for all lines
 # print(network.results.s_res())
-
-# for now create results object
-# ToDo: Werte in DataFrame als List oder Array?
-# results = Results()
-# results.pfa_edges = pd.read_csv('Exemplary_PyPSA_line_results.csv',
-#                                 index_col=0,
-#                                 converters={'p0': literal_eval,
-#                                             'q0': literal_eval,
-#                                             'p1': literal_eval,
-#                                             'q1': literal_eval})
-# results.pfa_edges['p0'] = results.pfa_edges['p0'].apply(lambda x: np.array(x))
-# results.pfa_edges['q0'] = results.pfa_edges['q0'].apply(lambda x: np.array(x))
-# results.pfa_edges['p1'] = results.pfa_edges['p1'].apply(lambda x: np.array(x))
-# results.pfa_edges['q1'] = results.pfa_edges['q1'].apply(lambda x: np.array(x))
-# results.pfa_nodes = pd.read_csv('Exemplary_PyPSA_bus_results.csv', index_col=0,
-#                                 converters={'v_mag_pu': literal_eval})
-# results.pfa_nodes['v_mag_pu'] = results.pfa_nodes['v_mag_pu'].apply(
-#     lambda x: np.array(x))
 
 # # MV generators
 # gens = network.mv_grid.graph.nodes_by_attribute('generator')
@@ -78,14 +76,13 @@ network = Network.import_from_ding0(
 # else:
 #     print("O MWh")
 
-# from
+reinforce_grid.reinforce_grid(network)
 
 # liste aller lv grids
 # [_ for _ in network.mv_grid.lv_grids]
 
 # nx.draw_spectral(list(network.mv_grid.lv_grids)[0].graph)
 
-# ToDo: wie halten wir fest, welche Betriebsmittel erneuert wurden, um hinterher Kosten berechnen zu können?
-# ToDo: Parameter bei Komponenten einführen mit dem man feststellen kann, ob die Komponente bereits in einer ersten Maßnahme verstärkt oder ausgebaut wurde
-# ToDo: config mit Standardbetriebsmitteln?
+# ToDo: feedin und load case auswahl
+# ToDo: Möglichkeit MV und LV getrennt zu rechnen
 # ToDo: Abbruchkriterium einführen - Anzahl paralleler lines

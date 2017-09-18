@@ -22,3 +22,6 @@ doc/_html
 eDisGo.egg-info/
 /edisgo/examples/Exemplary_PyPSA_bus_results.csv
 /edisgo/examples/Exemplary_PyPSA_line_results.csv
+
+# exclude directories
+/edisgo/examples/edisgo2pypsa_export/*

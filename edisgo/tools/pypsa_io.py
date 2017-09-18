@@ -303,7 +303,7 @@ def mv_to_pypsa(network):
         # add primary side bus (bus0)
         bus0_name = '_'.join(['Bus', lv_st.__repr__(side='mv')])
         bus['name'].append(bus0_name)
-        bus['v_nom'].append(lv_st.grid.voltage_nom)
+        bus['v_nom'].append(lv_st.mv_grid.voltage_nom)
 
         # add secondary side bus (bus1)
         bus1_name = '_'.join(['Bus', lv_st.__repr__(side='lv')])
@@ -317,9 +317,9 @@ def mv_to_pypsa(network):
             transformer['bus1'].append(bus1_name)
             transformer['type'].append("")
             transformer['model'].append('pi')
-            transformer['r'].append(tr.type.r)
-            transformer['x'].append(tr.type.x)
-            transformer['s_nom'].append(tr.type.s / 1e3)
+            transformer['r'].append(tr.type.R)
+            transformer['x'].append(tr.type.X)
+            transformer['s_nom'].append(tr.type.S / 1e3)
             transformer['tap_ratio'].append(1)
 
             transformer_count += 1
@@ -942,8 +942,15 @@ def process_pfa_results(network, pypsa):
         `Network container <https://www.pypsa.org/doc/components.html#network>`_
         of PyPSA
 
-    Returns
-    -------
+    Notes
+    -----
+    P and Q (and respectively later S) are returned from the line ending/
+    transformer side with highest apparent power S, exemplary written as
+
+    .. math::
+        S_{max} = max(\sqrt{P0^2 + Q0^2}, \sqrt{P1^2 + Q1^2})
+        P = P0P1(S_{max})
+        Q = Q0Q1(S_{max})
 
     See Also
     --------
@@ -952,16 +959,27 @@ def process_pfa_results(network, pypsa):
 
     """
 
-    # line results
-    q0 = abs(pypsa.lines_t['q0'])
-    q1 = abs(pypsa.lines_t['q1'])
-    p0 = abs(pypsa.lines_t['p0'])
-    p1 = abs(pypsa.lines_t['p1'])
+    # get p and q of lines and transformers in absolute values
+    q0 = abs(
+        pd.concat([pypsa.lines_t['q0'], pypsa.transformers_t['q0']], axis=1))
+    q1 = abs(
+        pd.concat([pypsa.lines_t['q1'], pypsa.transformers_t['q1']], axis=1))
+    p0 = abs(
+        pd.concat([pypsa.lines_t['p0'], pypsa.transformers_t['p0']], axis=1))
+    p1 = abs(
+        pd.concat([pypsa.lines_t['p1'], pypsa.transformers_t['p1']], axis=1))
+
+    # determine apparent power and line endings/transformers' side
     s0 = (p0 ** 2 + q0 ** 2).applymap(sqrt)
     s1 = (p1 ** 2 + q1 ** 2).applymap(sqrt)
+
+    # choose p and q from line ending with max(s0,s1)
     network.results.pfa_p = p0.where(s0 > s1, p1)
     network.results.pfa_q = q0.where(s0 > s1, q1)
 
+    # Get voltage levels at line (avg. of buses at both sides)
+    network.results._i_res = s0[pypsa.lines_t['q0'].columns].truediv(
+        pypsa.lines['v_nom'], axis='columns') * 1e3
     # process results at nodes
     generators_names = [repr(g) for g in
                         network.mv_grid.graph.nodes_by_attribute('generator')]
