@@ -51,7 +51,7 @@ def extend_distribution_substation(network, critical_stations):
     for station in critical_stations:
 
         # list of maximum power of each transformer in the station
-        s_max_per_trafo = [_.type.s for _ in station.transformers]
+        s_max_per_trafo = [_.type.S_nom for _ in station.transformers]
 
         # maximum station load from power flow analysis
         s_station_pfa = critical_stations[station]
@@ -69,8 +69,8 @@ def extend_distribution_substation(network, critical_stations):
             # meets the missing power demand
             duplicated_transformer = min(
                 [_ for _ in station.transformers
-                 if _.type.s > s_trafo_missing],
-                key=lambda j: j.type.s - s_trafo_missing)
+                 if _.type.S_nom > s_trafo_missing],
+                key=lambda j: j.type.S_nom - s_trafo_missing)
 
             new_transformer = Transformer(
                 id='LVStation_{}_transformer_{}'.format(
@@ -91,7 +91,7 @@ def extend_distribution_substation(network, critical_stations):
 
             # calculate how many parallel standard transformers are needed
             number_transformers = math.ceil(
-                s_station_pfa / standard_transformer.s_nom)
+                s_station_pfa / standard_transformer.S_nom)
 
             # add transformer to station
             new_transformers = []
@@ -153,6 +153,7 @@ def reinforce_branches_voltage(network, crit_nodes):
     # ToDo: Checken ob bereits zwei parallele lines wenn keine standard line
 
     # load standard line data
+    # ToDo: crit_nodes ist string!
     grid = crit_nodes.index[0].grid
     if isinstance(grid, LVGrid):
         try:

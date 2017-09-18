@@ -319,7 +319,7 @@ def mv_to_pypsa(network):
             transformer['model'].append('pi')
             transformer['r'].append(tr.type.R)
             transformer['x'].append(tr.type.X)
-            transformer['s_nom'].append(tr.type.S / 1e3)
+            transformer['s_nom'].append(tr.type.S_nom / 1e3)
             transformer['tap_ratio'].append(1)
 
             transformer_count += 1

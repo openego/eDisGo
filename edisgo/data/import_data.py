@@ -275,7 +275,7 @@ def _build_mv_grid(ding0_grid, network):
                             geom=_.geo_data,
                             voltage_op=t.v_level,
                             type=pd.Series(dict(
-                                S=t.s_max_a, X=t.x, R=t.r))
+                                S_nom=t.s_max_a, X=t.x, R=t.r))
                         ) for (count, t) in enumerate(_.transformers(), 1)])
                 for _ in ding0_grid._graph.nodes()
                 if isinstance(_, LVStationDing0) and _ not in aggr_stations}
