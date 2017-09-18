@@ -317,9 +317,9 @@ def mv_to_pypsa(network):
             transformer['bus1'].append(bus1_name)
             transformer['type'].append("")
             transformer['model'].append('pi')
-            transformer['r'].append(tr.type.r)
-            transformer['x'].append(tr.type.x)
-            transformer['s_nom'].append(tr.type.s / 1e3)
+            transformer['r'].append(tr.type.R)
+            transformer['x'].append(tr.type.X)
+            transformer['s_nom'].append(tr.type.S / 1e3)
             transformer['tap_ratio'].append(1)
 
             transformer_count += 1
