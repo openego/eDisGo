@@ -171,6 +171,7 @@ def _build_lv_grid(ding0_grid, network):
                               id=_['branch'].id_db,
                               type=_['branch'].type,
                               length=_['branch'].length,
+                              kind=_['branch'].kind,
                               grid=lv_grid)
                           })
                          for _ in edges]
