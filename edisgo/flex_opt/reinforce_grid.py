@@ -92,15 +92,6 @@ def reinforce_grid(network):
                          'equipment': transformer_list},
                         index=[station] * len(transformer_list)))
 
-        # # run power flow analysis again and check if all overloading problems
-        # # for all stations were solved
-        # network.analyze()
-        # overloaded_stations = checks.mv_lv_station_load(network)
-        # if overloaded_stations:
-        #     logger.error("==> Overloading issues of LV stations were not "
-        #                  "solved in the first iteration step.")
-        #     sys.exit()
-
     # STEP 2: reinforce branches due to overloading
     iteration_step += 1
 
@@ -137,16 +128,22 @@ def reinforce_grid(network):
                          'equipment': lines_changes['removed']},
                         index=lines_changes['removed']))
 
-        # # run power flow analysis again and check if all overloading problems
-        # # for all stations were solved
-        # network.analyze()
-        # crit_lines_lv = checks.lv_line_load(network)
-        # crit_lines_mv = checks.mv_line_load(network)
-        # crit_lines = {**crit_lines_lv, **crit_lines_mv}
-        # if crit_lines:
-        #     logger.error("==> Overloading issues of lines were not "
-        #                  "solved in the first iteration step.")
-        #     sys.exit()
+    # run power flow analysis again and check if all overloading
+    # problems were solved
+    network.analyze()
+    overloaded_stations = checks.mv_lv_station_load(network)
+    if overloaded_stations:
+        logger.error("==> Overloading issues of LV stations were not "
+                     "solved in the first iteration step.")
+        sys.exit()
+
+    crit_lines_lv = checks.lv_line_load(network)
+    crit_lines_mv = checks.mv_line_load(network)
+    crit_lines = {**crit_lines_lv, **crit_lines_mv}
+    if crit_lines:
+        logger.error("==> Overloading issues of lines were not "
+                     "solved in the first iteration step.")
+        sys.exit()
 
     # STEP 3: reinforce branches due to voltage problems
 

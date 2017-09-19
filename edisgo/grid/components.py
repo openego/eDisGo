@@ -410,6 +410,9 @@ class Line(Component):
         Length of the line calculated in linear distance. Unit: m
     _quantity: float
         Quantity of parallel installed lines.
+    _kind: String
+        Specifies whether the line is an underground cable ('cable') or an
+        overhead line ('line').
     """
 
     def __init__(self, **kwargs):
@@ -417,6 +420,7 @@ class Line(Component):
         self._type = kwargs.get('type', None)
         self._length = kwargs.get('length', None)
         self._quantity = kwargs.get('quantity', 1)
+        self._kind = kwargs.get('kind', None)
 
     @property
     def geom(self):
@@ -449,4 +453,12 @@ class Line(Component):
     @quantity.setter
     def quantity(self, new_quantity):
         self._quantity = new_quantity
+
+    @property
+    def kind(self):
+        return self._kind
+
+    @kind.setter
+    def kind(self, new_kind):
+        self._kind = new_kind
 

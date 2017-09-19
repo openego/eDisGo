@@ -276,6 +276,7 @@ def reinforce_branches_current(network, crit_lines):
 
     """
     # ToDo: Abbruchkriterium max. number of lines
+    # ToDo: Wenn überlastete Freileitung, sofort Kabel installieren
     # load standard line data
     try:
         standard_line_lv = network.equipment_data['LV_cables'].loc[
