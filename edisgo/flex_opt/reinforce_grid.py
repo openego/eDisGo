@@ -61,14 +61,6 @@ def reinforce_grid(network, while_counter_max=10):
     # ToDo: check overloading of HV/MV Trafo?
     overloaded_stations = checks.mv_lv_station_load(network)
 
-    # ToDo: remove at some point
-    # random overloaded station
-    stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
-    overloaded_stations = {[_ for _ in stations
-                            if len(_.transformers) >= 2][0]: 1400}
-    station_2 = [_ for _ in stations if len(_.transformers) >= 1][1]
-    overloaded_stations[station_2] = 3000
-
     if overloaded_stations:
         # reinforce substations
         transformer_changes = extend_distribution_substation(
@@ -101,10 +93,6 @@ def reinforce_grid(network, while_counter_max=10):
     crit_lines_mv = checks.mv_line_load(network)
     crit_lines = {**crit_lines_lv, **crit_lines_mv}
 
-    # # ToDo: remove at some point
-    # # random overloaded line
-    # overloaded_line = list(network.mv_grid.graph.graph_edges())[0]['line']
-    # crit_lines = {overloaded_line: 2.3}
 
     # do reinforcement
     if crit_lines:
