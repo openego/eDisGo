@@ -308,7 +308,8 @@ def reinforce_branches_current(network, crit_lines):
                 (number_parallel_lines - crit_line.quantity))
         else:
             # check if parallel line of the same kind is sufficient
-            if crit_line.quantity == 1 and rel_overload <= 2:
+            if (crit_line.quantity == 1 and rel_overload <= 2
+                    and crit_line.kind == 'cable'):
                 crit_line.quantity = 2
                 lines_changes['added'].append(copy.copy(crit_line))
             else:
