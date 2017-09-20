@@ -85,5 +85,4 @@ reinforce_grid.reinforce_grid(network)
 
 # ToDo: feedin und load case auswahl
 # ToDo: Möglichkeit MV und LV getrennt zu rechnen
-# ToDo: Abbruchkriterium einführen - Anzahl paralleler lines
 

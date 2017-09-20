@@ -8,14 +8,16 @@ import logging
 logger = logging.getLogger('edisgo')
 
 
-def reinforce_grid(network):
+def reinforce_grid(network, while_counter_max=10):
     """ Evaluates grid reinforcement needs and performs measures. This function
         is the parent function for all grid reinforcements.
 
     Parameters
     ----------
-    network: edisgo network object
-    results: edisgo results object
+    network : :class:`~.grid.network.Network`
+    while_counter_max : int
+        Maximum number of iterations when solving overvoltage problems, to
+        prevent infinite grid expansion.
 
     Notes
     -----
@@ -154,7 +156,8 @@ def reinforce_grid(network):
     crit_nodes = checks.mv_voltage_deviation(network)
 
     # as long as there are voltage issues, do reinforcement
-    while crit_nodes:
+    while_counter = 0
+    while crit_nodes and while_counter < while_counter_max:
         lines_changes = reinforce_branches_voltage(network, crit_nodes)
         # ToDo: what makes sense in equipment?
         if lines_changes['added']:
@@ -178,6 +181,7 @@ def reinforce_grid(network):
         network.analyze()
         iteration_step += 1
         crit_nodes = checks.mv_voltage_deviation(network)
+        while_counter += 1
 
     logger.info('==> All voltage issues in MV grid are solved.')
 
@@ -185,7 +189,8 @@ def reinforce_grid(network):
     crit_nodes = checks.lv_voltage_deviation(network)
 
     # as long as there are voltage issues, do reinforcement
-    while crit_nodes:
+    while_counter = 0
+    while crit_nodes and while_counter < while_counter_max:
         # for every grid in crit_nodes do reinforcement
         for grid in crit_nodes:
             lines_changes = reinforce_branches_voltage(
@@ -213,5 +218,6 @@ def reinforce_grid(network):
         network.analyze()
         iteration_step += 1
         crit_nodes = checks.lv_voltage_deviation(network)
+        while_counter += 1
 
     logger.info('==> All voltage issues in LV grids are solved.')
