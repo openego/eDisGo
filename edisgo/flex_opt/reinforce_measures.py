@@ -98,7 +98,7 @@ def extend_distribution_substation(network, critical_stations):
             for i in range(number_transformers):
                 new_transformer = Transformer(
                     id='LVStation_{}_transformer_{}'.format(
-                        str(station.id), str(i)),
+                        str(station.id), str(i + 1)),
                     geom=station_transformer.geom,
                     mv_grid=station_transformer.mv_grid,
                     grid=station_transformer.grid,

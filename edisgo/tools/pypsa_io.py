@@ -974,8 +974,8 @@ def process_pfa_results(network, pypsa):
     s1 = (p1 ** 2 + q1 ** 2).applymap(sqrt)
 
     # choose p and q from line ending with max(s0,s1)
-    network.results.pfa_p = p0.where(s0 > s1, p1)
-    network.results.pfa_q = q0.where(s0 > s1, q1)
+    network.results.pfa_p = p0.where(s0 > s1, p1) * 1e3
+    network.results.pfa_q = q0.where(s0 > s1, q1) * 1e3
 
     # Get voltage levels at line (avg. of buses at both sides)
     network.results._i_res = s0[pypsa.lines_t['q0'].columns].truediv(
