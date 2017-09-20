@@ -277,7 +277,6 @@ def reinforce_branches_current(network, crit_lines):
        needed
 
     """
-    # ToDo: Abbruchkriterium max. number of lines
     # ToDo: Wenn überlastete Freileitung, sofort Kabel installieren
     # load standard line data
     try:
