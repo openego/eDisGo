@@ -217,6 +217,7 @@ def reinforce_branches_voltage(network, crit_nodes):
                     lines_changes['removed'].append(copy.copy(crit_line))
                     crit_line.type = standard_line.copy()
                     crit_line.quantity = 1
+                    crit_line.kind = 'cable'
                     lines_changes['added'].append(copy.copy(crit_line))
 
             # if node_2_3 is not a representative, disconnect line
@@ -236,6 +237,7 @@ def reinforce_branches_voltage(network, crit_nodes):
                 # change line length and type
                 crit_line.length = path_length[node_2_3]
                 crit_line.type = standard_line.copy()
+                crit_line.kind = 'cable'
                 lines_changes['added'].append(copy.copy(crit_line))
 
         else:
@@ -320,6 +322,7 @@ def reinforce_branches_current(network, crit_lines):
                                                 crit_line.quantity)
                 crit_line.type = standard_line.copy()
                 crit_line.quantity = number_parallel_lines
+                crit_line.kind = 'cable'
                 lines_changes['added'].extend(
                     [copy.copy(crit_line)] * number_parallel_lines)
 
