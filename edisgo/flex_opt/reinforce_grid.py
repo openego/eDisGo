@@ -145,7 +145,8 @@ def reinforce_grid(network, while_counter_max=10):
     # as long as there are voltage issues, do reinforcement
     while_counter = 0
     while crit_nodes and while_counter < while_counter_max:
-        lines_changes = reinforce_branches_voltage(network, crit_nodes)
+        lines_changes = reinforce_branches_voltage(
+            network, crit_nodes[network.mv_grid])
         # ToDo: what makes sense in equipment?
         if lines_changes['added']:
             network.results.equipment_changes = \
