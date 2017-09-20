@@ -156,7 +156,7 @@ def reinforce_grid(network, while_counter_max=10):
                                index=[node])])
                 break
         lines_changes = reinforce_branches_voltage(
-            network, network.mv_grid, crit_nodes_objects)
+            network, crit_nodes_objects)
         # ToDo: what makes sense in equipment?
         if lines_changes['added']:
             network.results.equipment_changes = \
@@ -201,7 +201,7 @@ def reinforce_grid(network, while_counter_max=10):
                                    index=[node])])
                     break
             lines_changes = reinforce_branches_voltage(
-                network, grid, crit_nodes_objects)
+                network, crit_nodes_objects)
             # ToDo: what makes sense in equipment?
             if lines_changes['added']:
                 network.results.equipment_changes = \
