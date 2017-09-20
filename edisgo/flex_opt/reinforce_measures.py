@@ -300,9 +300,7 @@ def reinforce_branches_current(network, crit_lines):
 
         if crit_line.type.name == standard_line.name:
             # check how many parallel standard lines are needed
-            number_parallel_lines = math.ceil(
-                crit_line.type['I_max_th'] * rel_overload /
-                standard_line['I_max_th'])
+            number_parallel_lines = math.ceil(rel_overload)
             crit_line.quantity = number_parallel_lines
             lines_changes['added'].extend(
                 [copy.copy(crit_line)] *
