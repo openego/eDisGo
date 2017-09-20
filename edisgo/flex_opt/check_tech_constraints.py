@@ -170,11 +170,10 @@ def mv_voltage_deviation(network):
 
     Returns
     -------
-    :pandas:`pandas.Series<series>`
-        Critical nodes with corresponding maximum voltage deviation, sorted
-        descending by voltage deviation.
-        Format: pd.Series(data=[v_mag_pu_node_A, v_mag_pu_node_B, ...],
-                          index=[node_A, node_B, ...])
+    Dict with :class:`~.grid.grids.MVGrid` with critical nodes as
+    :pandas:`pandas.Series<series>`, sorted descending by voltage deviation.
+    Format: {MV_grid: pd.Series(data=[v_mag_pu_node_A, v_mag_pu_node_B, ...],
+                                index=[node_A, node_B, ...])}
 
     Notes
     -----
@@ -182,26 +181,29 @@ def mv_voltage_deviation(network):
 
     """
 
+    crit_nodes = {}
+
     # load max. voltage deviation
     mv_max_v_deviation = float(
         network.config['grid_expansion']['mv_max_v_deviation'])
 
     v_mag_pu_pfa = network.results.v_res(nodes=network.mv_grid.graph.nodes(),
                                          level='mv')
-    # check for overvoltage
+    # check for over-voltage
     v_max = v_mag_pu_pfa.max()
     crit_nodes_max = v_max[(v_max > (1 + mv_max_v_deviation))] - 1
-    # check for undervoltage
+    # check for under-voltage
     v_min = v_mag_pu_pfa.min()
     crit_nodes_min = 1 - v_min[(v_min < (1 - mv_max_v_deviation))]
     # combine critical nodes and keep highest voltage deviation at each
     # node
-    crit_nodes = crit_nodes_max.append(crit_nodes_min).max(level=0)
-    if len(crit_nodes) > 0:
-        crit_nodes.sort_values(ascending=False, inplace=True)
+    crit_nodes_grid = crit_nodes_max.append(crit_nodes_min).max(level=0)
+    if len(crit_nodes_grid) > 0:
+        crit_nodes[network.mv_grid] = crit_nodes_grid.sort_values(
+            ascending=False)
         logger.info(
             '==> {} nodes in MV grid have voltage issues.'.format(
-                len(crit_nodes)))
+                len(crit_nodes[network.mv_grid])))
     else:
         crit_nodes = None
 
@@ -218,8 +220,8 @@ def lv_voltage_deviation(network):
 
     Returns
     -------
-    Dict of LV grids with critical nodes as :pandas:`pandas.Series<series>`,
-    sorted descending by voltage deviation.
+    Dict of :class:`~.grid.grids.LVGrid` with critical nodes as
+    :pandas:`pandas.Series<series>`, sorted descending by voltage deviation.
     Format: {grid_1: pd.Series(data=[v_mag_pu_node_1A, v_mag_pu_node_1B],
                                index=[node_1A, node_1B]), ...}
 
@@ -253,7 +255,7 @@ def lv_voltage_deviation(network):
 
     if crit_nodes:
         logger.info(
-            '==> {} nodes in LV grids have voltage issues.'.format(
+            '==> {} LV grids have voltage issues.'.format(
                 len(crit_nodes)))
 
     return crit_nodes
