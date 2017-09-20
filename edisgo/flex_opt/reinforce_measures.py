@@ -149,11 +149,9 @@ def reinforce_branches_voltage(network, crit_nodes):
     """
 
     # ToDo: gilt Methodik auch für die MS?
-    # ToDo: Abbruchkriterium max. number of lines
     # ToDo: Checken ob bereits zwei parallele lines wenn keine standard line
 
     # load standard line data
-    # ToDo: crit_nodes ist string!
     grid = crit_nodes.index[0].grid
     if isinstance(grid, LVGrid):
         try:
@@ -272,9 +270,11 @@ def reinforce_branches_current(network, crit_lines):
     Notes
     -----
     Reinforce measures:
-    1. Install parallel line of the same type as the existing line
+    1. Install parallel line of the same type as the existing line (Only if
+       line is a cable, not an overhead line. Otherwise a standard equipment
+       cable is installed right away.)
     2. Remove old line and install as many parallel standard lines as
-       needed
+       needed.
 
     """
     # ToDo: Wenn überlastete Freileitung, sofort Kabel installieren
