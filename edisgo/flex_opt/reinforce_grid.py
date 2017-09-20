@@ -145,8 +145,18 @@ def reinforce_grid(network, while_counter_max=10):
     # as long as there are voltage issues, do reinforcement
     while_counter = 0
     while crit_nodes and while_counter < while_counter_max:
+        # ToDo: get crit_nodes as objects instead of string
+        # for now iterate through grid to find node for repr
+        crit_nodes_objects = pd.Series()
+        for node in network.mv_grid.graph.nodes():
+            if repr(node) in crit_nodes[network.mv_grid].index:
+                crit_nodes_objects = pd.concat(
+                    [crit_nodes_objects,
+                     pd.Series(crit_nodes[network.mv_grid].loc[repr(node)],
+                               index=[node])])
+                break
         lines_changes = reinforce_branches_voltage(
-            network, crit_nodes[network.mv_grid])
+            network, network.mv_grid, crit_nodes_objects)
         # ToDo: what makes sense in equipment?
         if lines_changes['added']:
             network.results.equipment_changes = \
@@ -181,8 +191,17 @@ def reinforce_grid(network, while_counter_max=10):
     while crit_nodes and while_counter < while_counter_max:
         # for every grid in crit_nodes do reinforcement
         for grid in crit_nodes:
+            # for now iterate through grid to find node for repr
+            crit_nodes_objects = pd.Series()
+            for node in grid.graph.nodes():
+                if repr(node) in crit_nodes[grid].index:
+                    crit_nodes_objects = pd.concat(
+                        [crit_nodes_objects,
+                         pd.Series(crit_nodes[grid].loc[repr(node)],
+                                   index=[node])])
+                    break
             lines_changes = reinforce_branches_voltage(
-                network, crit_nodes[grid])
+                network, grid, crit_nodes_objects)
             # ToDo: what makes sense in equipment?
             if lines_changes['added']:
                 network.results.equipment_changes = \
