@@ -466,9 +466,6 @@ class Results:
         A stack that details the history of measures to increase grid's hosting
         capacity. The last item refers to the latest measure. The key `original`
         refers to the state of the grid topology as it was initially imported.
-    grid_expansion_costs: float
-        Total costs of grid expansion measures in `equipment_changes`.
-        ToDo: add unit
     """
 
     # TODO: maybe add setter to alter list of measures
@@ -480,6 +477,7 @@ class Results:
         self._pfa_v_mag_pu = None
         self._i_res = None
         self._equipment_changes = pd.DataFrame()
+        self._grid_expansion_costs = None
 
     @property
     def pfa_p(self):
@@ -615,6 +613,30 @@ class Results:
     @equipment_changes.setter
     def equipment_changes(self, changes):
         self._equipment_changes = changes
+
+    @property
+    def grid_expansion_costs(self):
+        """
+        Holds grid expansion costs in MEUR due to grid expansion measures
+        tracked in self.equipment_changes.
+
+        Parameters
+        ----------
+        total_costs: float
+            Provide this if you want to set grid_expansion_costs. For
+            retrieval of costs do not pass an argument.
+
+        Returns
+        -------
+        float
+        """
+        if not self._grid_expansion_costs:
+            grid_expansion_costs(self)
+        return self._grid_expansion_costs
+
+    @grid_expansion_costs.setter
+    def grid_expansion_costs(self, total_costs):
+        self._grid_expansion_costs = total_costs
 
     def s_res(self, components=None):
         """

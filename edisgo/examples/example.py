@@ -77,6 +77,7 @@ else:
 #     print("O MWh")
 
 reinforce_grid.reinforce_grid(network)
+#print(network.results.grid_expansion_costs)
 
 # liste aller lv grids
 # [_ for _ in network.mv_grid.lv_grids]
