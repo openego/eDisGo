@@ -52,6 +52,17 @@ def reinforce_grid(network, while_counter_max=10):
 
     """
 
+    def _add_lines_changes_to_equipment_changes(mode):
+        if lines_changes[mode]:
+            network.results.equipment_changes = \
+                network.results.equipment_changes.append(
+                    pd.DataFrame(
+                        {'iteration_step': [iteration_step] * len(
+                            lines_changes[mode]),
+                         'change': [mode] * len(lines_changes[mode]),
+                         'equipment': lines_changes[mode]},
+                        index=lines_changes[mode]))
+
     # ToDo: Move appending added and removed comp. to function
     # STEP 1: reinforce overloaded transformers
     iteration_step = 1
@@ -97,26 +108,8 @@ def reinforce_grid(network, while_counter_max=10):
     # do reinforcement
     if crit_lines:
         lines_changes = reinforce_branches_current(network, crit_lines)
-        # write added and removed lines to results.equipment_changes
-        # ToDo: what makes sense in equipment?
-        if lines_changes['added']:
-            network.results.equipment_changes = \
-                network.results.equipment_changes.append(
-                    pd.DataFrame(
-                        {'iteration_step': [iteration_step] * len(
-                            lines_changes['added']),
-                         'change': ['added'] * len(lines_changes['added']),
-                         'equipment': lines_changes['added']},
-                        index=lines_changes['added']))
-        if lines_changes['removed']:
-            network.results.equipment_changes = \
-                network.results.equipment_changes.append(
-                    pd.DataFrame(
-                        {'iteration_step': [iteration_step] * len(
-                            lines_changes['removed']),
-                         'change': ['removed'] * len(lines_changes['removed']),
-                         'equipment': lines_changes['removed']},
-                        index=lines_changes['removed']))
+        # write changed lines to results.equipment_changes
+        _add_lines_changes_to_equipment_changes('changed')
 
     # run power flow analysis again and check if all overloading
     # problems were solved
@@ -157,25 +150,8 @@ def reinforce_grid(network, while_counter_max=10):
                 break
         lines_changes = reinforce_branches_voltage(
             network, crit_nodes_objects)
-        # ToDo: what makes sense in equipment?
-        if lines_changes['added']:
-            network.results.equipment_changes = \
-                network.results.equipment_changes.append(
-                    pd.DataFrame(
-                        {'iteration_step': [iteration_step] * len(
-                            lines_changes['added']),
-                         'change': ['added'] * len(lines_changes['added']),
-                         'equipment': lines_changes['added']},
-                        index=lines_changes['added']))
-        if lines_changes['removed']:
-            network.results.equipment_changes = \
-                network.results.equipment_changes.append(
-                    pd.DataFrame(
-                        {'iteration_step': [iteration_step] * len(
-                            lines_changes['removed']),
-                         'change': ['removed'] * len(lines_changes['removed']),
-                         'equipment': lines_changes['removed']},
-                        index=lines_changes['removed']))
+        # write changed lines to results.equipment_changes
+        _add_lines_changes_to_equipment_changes('changed')
         network.analyze()
         iteration_step += 1
         crit_nodes = checks.mv_voltage_deviation(network)
@@ -202,26 +178,8 @@ def reinforce_grid(network, while_counter_max=10):
                     break
             lines_changes = reinforce_branches_voltage(
                 network, crit_nodes_objects)
-            # ToDo: what makes sense in equipment?
-            if lines_changes['added']:
-                network.results.equipment_changes = \
-                    network.results.equipment_changes.append(
-                        pd.DataFrame(
-                            {'iteration_step': [iteration_step] * len(
-                                lines_changes['added']),
-                             'change': ['added'] * len(lines_changes['added']),
-                             'equipment': lines_changes['added']},
-                            index=lines_changes['added']))
-            if lines_changes['removed']:
-                network.results.equipment_changes = \
-                    network.results.equipment_changes.append(
-                        pd.DataFrame(
-                            {'iteration_step': [iteration_step] * len(
-                                lines_changes['removed']),
-                             'change': ['removed'] * len(
-                                 lines_changes['removed']),
-                             'equipment': lines_changes['removed']},
-                            index=lines_changes['removed']))
+            # write changed lines to results.equipment_changes
+            _add_lines_changes_to_equipment_changes('changed')
         network.analyze()
         iteration_step += 1
         crit_nodes = checks.lv_voltage_deviation(network)
