@@ -98,18 +98,17 @@ def reinforce_grid(network, while_counter_max=10):
                         index=[station] * len(transformer_list)))
 
     # STEP 2: reinforce branches due to overloading
-    iteration_step += 1
 
     crit_lines_lv = checks.lv_line_load(network)
     crit_lines_mv = checks.mv_line_load(network)
     crit_lines = {**crit_lines_lv, **crit_lines_mv}
-
 
     # do reinforcement
     if crit_lines:
         lines_changes = reinforce_branches_current(network, crit_lines)
         # write changed lines to results.equipment_changes
         _add_lines_changes_to_equipment_changes('changed')
+
 
     # run power flow analysis again and check if all overloading
     # problems were solved
@@ -186,3 +185,5 @@ def reinforce_grid(network, while_counter_max=10):
         while_counter += 1
 
     logger.info('==> All voltage issues in LV grids are solved.')
+
+
