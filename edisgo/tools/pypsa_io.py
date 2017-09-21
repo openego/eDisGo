@@ -1056,10 +1056,16 @@ def update_pypsa(network):
     """
     Update equipment data of lines and transformers
 
-    During grid reinforcement (see ...) lines and transformers are replaced or
-    extended. The PyPSA grid topology representation is updated by this function
-    accordingly.
-    The equipment changes are recorded as 'added' and 'removed' components.
+    During grid reinforcement (cf.
+    :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`) grid topology and
+    equipment of lines and transformers are changed.
+    In order to save time and not do a full translation of eDisGo's grid
+    topology to the PyPSA format, this function provides an updater for data
+    that may change during grid reinforcement.
+
+    The PyPSA grid topology :meth:`edisgo.grid.network.Network.pypsa` is update
+    by changed equipment stored in
+    :attr:`edisgo.grid.network.Network.equipment_changes`.
 
     Parameters
     ----------
