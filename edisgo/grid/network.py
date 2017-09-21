@@ -584,18 +584,28 @@ class Results:
         """
         Tracks changes in the equipment (e.g. replaced or added cable, etc.)
 
-        The DataFrame is indexed by the components (nodes or edges) and has
-        the following columns:
+        The DataFrame is indexed by the component(
+        :class:`~.grid.components.Line`, :class:`~.grid.components.Station`,
+        etc.) and has the following columns:
 
-        equipment: detailing what was changed (line, battery, curtailment). For
-        ease of referencing we take the component itself. For lines we take the
-        line-dict, for batteries the battery-object itself and for curtailment
+        equipment: detailing what was changed (line, station, battery,
+        curtailment). For ease of referencing we take the component itself.
+        For lines we take the line-dict, for stations the transformers, for
+        batteries the battery-object itself and for curtailment
         either a dict providing the details of curtailment or a curtailment
         object if this makes more sense (has to be defined).
 
-        change: {added | removed} - says if something was added or removed
+        change: string {'added' | 'removed'}
+            says if something was added or removed
 
-        iteration_step: grid expansion step
+        iteration_step: int
+            Used for the update of the pypsa network to only consider changes
+            since the last power flow analysis.
+
+        quantity: int
+            Number of components added or removed. Only relevant for
+            calculation of grid expansion costs to keep track of how many
+            new standard lines were added.
 
         Parameters
         ----------
