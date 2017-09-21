@@ -149,7 +149,7 @@ def reinforce_grid(network, while_counter_max=10):
                                index=[node])])
                 break
         lines_changes = reinforce_branches_voltage(
-            network, crit_nodes_objects)
+            network, network.mv_grid, crit_nodes_objects)
         # write changed lines to results.equipment_changes
         _add_lines_changes_to_equipment_changes('changed')
         network.analyze()
@@ -177,7 +177,7 @@ def reinforce_grid(network, while_counter_max=10):
                                    index=[node])])
                     break
             lines_changes = reinforce_branches_voltage(
-                network, crit_nodes_objects)
+                network, grid, crit_nodes_objects)
             # write changed lines to results.equipment_changes
             _add_lines_changes_to_equipment_changes('changed')
         network.analyze()

@@ -117,13 +117,14 @@ def extend_distribution_substation(network, critical_stations):
     return transformers_changes
 
 
-def reinforce_branches_voltage(network, crit_nodes):
+def reinforce_branches_voltage(network, grid, crit_nodes):
     """
     Reinforce MV and LV grid due to voltage issues.
 
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
+    grid : :class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid`
     crit_nodes : :pandas:`pandas.Series<series>`
         Series with critical nodes of one grid and corresponding voltage
         deviation, sorted descending by voltage deviation.
@@ -152,7 +153,6 @@ def reinforce_branches_voltage(network, crit_nodes):
     # ToDo: Checken ob bereits zwei parallele lines wenn keine standard line
 
     # load standard line data
-    grid = crit_nodes.index[0].grid
     if isinstance(grid, LVGrid):
         try:
             standard_line = network.equipment_data['LV_cables'].loc[
