@@ -150,7 +150,6 @@ def reinforce_branches_voltage(network, grid, crit_nodes):
     """
 
     # ToDo: gilt Methodik auch für die MS?
-    # ToDo: Checken ob bereits zwei parallele lines wenn keine standard line
 
     # load standard line data
     if isinstance(grid, LVGrid):
@@ -275,7 +274,7 @@ def reinforce_branches_current(network, crit_lines):
        needed.
 
     """
-    # ToDo: Wenn überlastete Freileitung, sofort Kabel installieren
+
     # load standard line data
     try:
         standard_line_lv = network.equipment_data['LV_cables'].loc[
