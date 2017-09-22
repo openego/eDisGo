@@ -210,9 +210,12 @@ class Network:
             pypsa_io.update_pypsa(self)
 
         # run power flow analysis
-        self.pypsa.pf(self.pypsa.snapshots)
+        pf_results = self.pypsa.pf(self.pypsa.snapshots)
 
-        pypsa_io.process_pfa_results(self, self.pypsa)
+        if all(pf_results['converged']['0'].tolist()) == True:
+            pypsa_io.process_pfa_results(self, self.pypsa)
+        else:
+            raise ValueError("Power flow analysis did not converge.")
 
 
     def reinforce(self):
