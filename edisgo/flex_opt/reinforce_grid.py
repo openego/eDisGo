@@ -154,6 +154,12 @@ def reinforce_grid(network, while_counter_max=10):
         crit_nodes = checks.mv_voltage_deviation(network)
         while_counter += 1
 
+    # check if all voltage problems were solved after maximum number of
+    # iterations allowed
+    if while_counter == while_counter_max and crit_nodes:
+        logger.error("==> Voltage issues in MV grid were not solved.")
+        sys.exit()
+
     logger.info('==> All voltage issues in MV grid are solved.')
 
     # solve voltage problems in LV grid
@@ -181,6 +187,12 @@ def reinforce_grid(network, while_counter_max=10):
         iteration_step += 1
         crit_nodes = checks.lv_voltage_deviation(network)
         while_counter += 1
+
+    # check if all voltage problems were solved after maximum number of
+    # iterations allowed
+    if while_counter == while_counter_max and crit_nodes:
+        logger.error("==> Voltage issues in LV grids were not solved.")
+        sys.exit()
 
     logger.info('==> All voltage issues in LV grids are solved.')
 
