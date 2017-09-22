@@ -67,15 +67,18 @@ def reinforce_grid(network, while_counter_max=10):
                      'equipment': equipment,
                      'quantity': quantity},
                     index=index))
+
+    def _add_transformer_changes_to_equipment_changes(mode):
+        for station, transformer_list in transformer_changes[mode].items():
             network.results.equipment_changes = \
                 network.results.equipment_changes.append(
                     pd.DataFrame(
                         {'iteration_step': [iteration_step] * len(
-                            lines_changes),
-                         'change': ['changed'] * len(lines_changes),
-                         'equipment': equipment,
-                         'quantity': quantity},
-                        index=index))
+                            transformer_list),
+                         'change': [mode] * len(transformer_list),
+                         'equipment': transformer_list,
+                         'quantity': [1] * len(transformer_list)},
+                        index=[station] * len(transformer_list)))
 
     # STEP 1: reinforce overloaded transformers
     iteration_step = 1
@@ -90,25 +93,8 @@ def reinforce_grid(network, while_counter_max=10):
         transformer_changes = extend_distribution_substation(
             network, overloaded_stations)
         # write added and removed transformers to results.equipment_changes
-        for station, transformer_list in transformer_changes['added'].items():
-            network.results.equipment_changes = \
-                network.results.equipment_changes.append(
-                    pd.DataFrame(
-                        {'iteration_step': [iteration_step] * len(
-                            transformer_list),
-                         'change': ['added'] * len(transformer_list),
-                         'equipment': transformer_list},
-                        index=[station] * len(transformer_list)))
-        for station, transformer_list in \
-                transformer_changes['removed'].items():
-            network.results.equipment_changes = \
-                network.results.equipment_changes.append(
-                    pd.DataFrame(
-                        {'iteration_step': [iteration_step] * len(
-                            transformer_list),
-                         'change': ['removed'] * len(transformer_list),
-                         'equipment': transformer_list},
-                        index=[station] * len(transformer_list)))
+        _add_transformer_changes_to_equipment_changes('added')
+        _add_transformer_changes_to_equipment_changes('removed')
 
     # STEP 2: reinforce branches due to overloading
 
