@@ -202,7 +202,12 @@ class Network:
             Translator to PyPSA data format
 
         """
-        self.pypsa = pypsa_io.to_pypsa(self, mode)
+        if self.results.equipment_changes.empty:
+            # Translate eDisGo grid topology representation to PyPSA format
+            self.pypsa = pypsa_io.to_pypsa(self, mode)
+        else:
+            # Update PyPSA data with equipment changes
+            pypsa_io.update_pypsa(self)
 
         # run power flow analysis
         self.pypsa.pf(self.pypsa.snapshots)

@@ -4,6 +4,7 @@ topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA grid
 container.
 """
 
+from edisgo.grid.components import Transformer, Line
 
 import pandas as pd
 from math import pi, sqrt, floor
@@ -1049,3 +1050,112 @@ def process_pfa_results(network, pypsa):
                             list(lv_generators_mapping.values()) +
                             list(lv_branch_t_mapping.values()) +
                             list(lv_loads_mapping.values())]}, axis=1)
+
+
+def update_pypsa(network):
+    """
+    Update equipment data of lines and transformers
+
+    During grid reinforcement (cf.
+    :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`) grid topology and
+    equipment of lines and transformers are changed.
+    In order to save time and not do a full translation of eDisGo's grid
+    topology to the PyPSA format, this function provides an updater for data
+    that may change during grid reinforcement.
+
+    The PyPSA grid topology :meth:`edisgo.grid.network.Network.pypsa` is update
+    by changed equipment stored in
+    :attr:`edisgo.grid.network.Network.equipment_changes`.
+
+    Parameters
+    ----------
+    network : Network
+        eDisGo grid container
+    """
+
+    # Filter equipment changes: take only last iteration step
+    equipment_changes = network.results.equipment_changes[
+        network.results.equipment_changes['iteration_step'] ==
+        network.results.equipment_changes['iteration_step'].max()]
+
+    # Step 1: Update transformers
+    transformers = equipment_changes[
+        equipment_changes['equipment'].apply(isinstance, args=(Transformer,))]
+    removed_transformers = [repr(_) for _ in
+                            transformers[transformers['change'] == 'removed'][
+                                'equipment'].tolist()]
+    added_transformers = transformers[transformers['change'] == 'added']
+
+    transformer = {'name': [],
+                   'bus0': [],
+                   'bus1': [],
+                   'type': [],
+                   'model': [],
+                   'x': [],
+                   'r': [],
+                   's_nom': [],
+                   'tap_ratio': []}
+
+    for idx, row in added_transformers.iterrows():
+        transformer['bus0'].append('_'.join(['Bus', idx.__repr__(side='mv')]))
+        transformer['bus1'].append('_'.join(['Bus', idx.__repr__(side='lv')]))
+        transformer['name'].append(repr(row['equipment']))
+        transformer['type'].append("")
+        transformer['model'].append('pi')
+        transformer['r'].append(row['equipment'].type.R)
+        transformer['x'].append(row['equipment'].type.X)
+        transformer['s_nom'].append(row['equipment'].type.S_nom / 1e3)
+        transformer['tap_ratio'].append(1)
+
+    network.pypsa.transformers.drop(removed_transformers, inplace=True)
+    network.pypsa.transformers = pd.concat([
+        network.pypsa.transformers,
+        pd.DataFrame(transformer).set_index('name')], axis=0)
+
+    # Step 2: Update lines
+    lines = equipment_changes[
+        equipment_changes['equipment'].apply(isinstance, args=(Line,))]
+    changed_lines = lines[lines['change'] == 'changed']
+
+    line = {'name': [],
+            'bus0': [],
+            'bus1': [],
+            'type': [],
+            'x': [],
+            'r': [],
+            's_nom': [],
+            'length': []}
+
+    lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
+
+    omega = 2 * pi * 50
+
+    for idx, row in changed_lines.iterrows():
+        # Update line parameters
+        network.pypsa.lines.loc[repr(idx), 'r'] = (
+            idx.type['R'] / idx.quantity * idx.length / 1e3)
+        network.pypsa.lines.loc[repr(idx), 'x'] = (
+            idx.type['L'] / 1e3 * omega / idx.quantity * idx.length / 1e3)
+        network.pypsa.lines.loc[repr(idx), 's_nom'] = (
+            sqrt(3) * idx.type['I_max_th'] * idx.type[
+                'U_n'] * idx.quantity / 1e3)
+
+        # Update buses line is connected to
+        adj_nodes = idx.grid.graph.nodes_from_line(idx)
+
+        if adj_nodes[0] in lv_stations:
+            bus0 = '_'.join(['Bus', adj_nodes[0].__repr__(side='mv')])
+        elif adj_nodes[0] is network.mv_grid.station:
+            bus0 = '_'.join(['Bus', adj_nodes[0].__repr__(side='lv')])
+        else:
+            bus0 = '_'.join(['Bus', repr(adj_nodes[0])])
+
+        if adj_nodes[1] in lv_stations:
+            bus1 = '_'.join(['Bus', adj_nodes[1].__repr__(side='mv')])
+        elif adj_nodes[1] is network.mv_grid.station:
+            bus1 = '_'.join(['Bus', adj_nodes[1].__repr__(side='lv')])
+        else:
+            bus1 = '_'.join(['Bus', repr(adj_nodes[1])])
+
+        network.pypsa.lines.loc[repr(idx), 'bus0'] = bus0
+        network.pypsa.lines.loc[repr(idx), 'bus1'] = bus1
