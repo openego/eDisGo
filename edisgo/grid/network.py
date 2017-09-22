@@ -303,7 +303,7 @@ class Network:
         self._scenario = scenario
 
     def __repr__(self):
-        return 'Network ' + self._id
+        return 'Network ' + str(self._id)
 
 
 class Scenario:
