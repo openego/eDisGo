@@ -70,6 +70,7 @@ class Network:
         config.load_config('config_flexopt.cfg')
         config.load_config('config_misc.cfg')
         config.load_config('config_scenario.cfg')
+        config.load_config('config_costs.cfg')
 
         return config.cfg._sections
 
