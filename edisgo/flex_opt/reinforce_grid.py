@@ -1,8 +1,7 @@
 import sys
 import pandas as pd
 from edisgo.flex_opt import check_tech_constraints as checks
-from .reinforce_measures import reinforce_branches_current, \
-    reinforce_branches_voltage, extend_distribution_substation
+from edisgo.flex_opt import reinforce_measures
 import logging
 
 logger = logging.getLogger('edisgo')
@@ -90,8 +89,9 @@ def reinforce_grid(network, while_counter_max=10):
 
     if overloaded_stations:
         # reinforce substations
-        transformer_changes = extend_distribution_substation(
-            network, overloaded_stations)
+        transformer_changes = \
+            reinforce_measures.extend_distribution_substation(
+                network, overloaded_stations)
         # write added and removed transformers to results.equipment_changes
         _add_transformer_changes_to_equipment_changes('added')
         _add_transformer_changes_to_equipment_changes('removed')
@@ -104,7 +104,8 @@ def reinforce_grid(network, while_counter_max=10):
 
     # do reinforcement
     if crit_lines:
-        lines_changes = reinforce_branches_current(network, crit_lines)
+        lines_changes = reinforce_measures.reinforce_branches_overloading(
+            network, crit_lines)
         # write changed lines to results.equipment_changes
         _add_lines_changes_to_equipment_changes()
 
@@ -146,7 +147,7 @@ def reinforce_grid(network, while_counter_max=10):
                                index=[node])])
                 break
 
-        lines_changes = reinforce_branches_voltage(
+        lines_changes = reinforce_measures.reinforce_branches_overvoltage(
             network, network.mv_grid, crit_nodes_objects)
         # write changed lines to results.equipment_changes
         _add_lines_changes_to_equipment_changes()
@@ -181,7 +182,7 @@ def reinforce_grid(network, while_counter_max=10):
                                    index=[node])])
                     break
 
-            lines_changes = reinforce_branches_voltage(
+            lines_changes = reinforce_measures.reinforce_branches_overvoltage(
                 network, grid, crit_nodes_objects)
             # write changed lines to results.equipment_changes
             _add_lines_changes_to_equipment_changes()
@@ -205,7 +206,8 @@ def reinforce_grid(network, while_counter_max=10):
 
     # do reinforcement
     if crit_lines:
-        lines_changes = reinforce_branches_current(network, crit_lines)
+        lines_changes = reinforce_measures.reinforce_branches_overloading(
+            network, crit_lines)
         # write changed lines to results.equipment_changes
         _add_lines_changes_to_equipment_changes()
 

@@ -117,7 +117,7 @@ def extend_distribution_substation(network, critical_stations):
     return transformers_changes
 
 
-def reinforce_branches_voltage(network, grid, crit_nodes):
+def reinforce_branches_overvoltage(network, grid, crit_nodes):
     """
     Reinforce MV and LV grid due to voltage issues.
 
@@ -249,7 +249,7 @@ def reinforce_branches_voltage(network, grid, crit_nodes):
     return lines_changes
 
 
-def reinforce_branches_current(network, crit_lines):
+def reinforce_branches_overloading(network, crit_lines):
     """
     Reinforce MV or LV grid due to overloading.
     
