@@ -1108,9 +1108,11 @@ def update_pypsa(network):
         transformer['tap_ratio'].append(1)
 
     network.pypsa.transformers.drop(removed_transformers, inplace=True)
-    network.pypsa.transformers = pd.concat([
-        network.pypsa.transformers,
-        pd.DataFrame(transformer).set_index('name')], axis=0)
+
+    if transformer['name']:
+        network.pypsa.import_components_from_dataframe(
+            pd.DataFrame(transformer).set_index('name'), 'Transformer')
+
 
     # Step 2: Update lines
     lines = equipment_changes[
