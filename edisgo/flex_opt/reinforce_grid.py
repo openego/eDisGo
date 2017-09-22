@@ -150,8 +150,8 @@ def reinforce_grid(network, while_counter_max=10):
         # write changed lines to results.equipment_changes
         _add_lines_changes_to_equipment_changes()
         network.analyze()
-        iteration_step += 1
         crit_nodes = checks.mv_voltage_deviation(network)
+        iteration_step += 1
         while_counter += 1
 
     # check if all voltage problems were solved after maximum number of
@@ -179,13 +179,14 @@ def reinforce_grid(network, while_counter_max=10):
                          pd.Series(crit_nodes[grid].loc[repr(node)],
                                    index=[node])])
                     break
+
             lines_changes = reinforce_branches_voltage(
                 network, grid, crit_nodes_objects)
             # write changed lines to results.equipment_changes
             _add_lines_changes_to_equipment_changes()
         network.analyze()
-        iteration_step += 1
         crit_nodes = checks.lv_voltage_deviation(network)
+        iteration_step += 1
         while_counter += 1
 
     # check if all voltage problems were solved after maximum number of
