@@ -145,6 +145,7 @@ def reinforce_grid(network, while_counter_max=10):
                      pd.Series(crit_nodes[network.mv_grid].loc[repr(node)],
                                index=[node])])
                 break
+
         lines_changes = reinforce_branches_voltage(
             network, network.mv_grid, crit_nodes_objects)
         # write changed lines to results.equipment_changes
@@ -197,6 +198,14 @@ def reinforce_grid(network, while_counter_max=10):
 
     logger.info('==> All voltage issues in LV grids are solved.')
 
-    # ToDo: recheck overloading problems of lines
+    # recheck over-loading of lines
+    crit_lines_lv = checks.lv_line_load(network)
+    crit_lines_mv = checks.mv_line_load(network)
+    crit_lines = {**crit_lines_lv, **crit_lines_mv}
 
+    # do reinforcement
+    if crit_lines:
+        lines_changes = reinforce_branches_current(network, crit_lines)
+        # write changed lines to results.equipment_changes
+        _add_lines_changes_to_equipment_changes()
 
