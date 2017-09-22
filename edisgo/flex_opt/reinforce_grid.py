@@ -53,12 +53,20 @@ def reinforce_grid(network, while_counter_max=10):
     """
 
     def _add_lines_changes_to_equipment_changes():
-        if lines_changes:
-            equipment, index, quantity = [], [], []
-            for line, number_of_lines in lines_changes.items():
-                equipment.append(line.type.name)
-                index.append(line)
-                quantity.append(number_of_lines)
+        equipment, index, quantity = [], [], []
+        for line, number_of_lines in lines_changes.items():
+            equipment.append(line.type.name)
+            index.append(line)
+            quantity.append(number_of_lines)
+        network.results.equipment_changes = \
+            network.results.equipment_changes.append(
+                pd.DataFrame(
+                    {'iteration_step': [iteration_step] * len(
+                        lines_changes),
+                     'change': ['changed'] * len(lines_changes),
+                     'equipment': equipment,
+                     'quantity': quantity},
+                    index=index))
             network.results.equipment_changes = \
                 network.results.equipment_changes.append(
                     pd.DataFrame(
