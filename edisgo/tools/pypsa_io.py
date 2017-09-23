@@ -811,8 +811,8 @@ def _check_integrity_of_pypsa(pypsa_network):
     """"""
 
     # check for sub-networks
-    pypsa_network.determine_network_topology()
     subgraphs = list(connected_component_subgraphs(pypsa_network.graph()))
+    pypsa_network.determine_network_topology()
 
     if len(subgraphs) > 1 or len(pypsa_network.sub_networks) > 1:
         raise ValueError("The graph has isolated nodes or edges")
