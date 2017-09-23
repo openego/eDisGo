@@ -436,7 +436,7 @@ def _determine_aggregated_nodes(la_centers):
 
         return aggr
 
-    aggregated = []
+    aggregated = {}
     aggr_stations = []
 
     generation_aggr = {}
@@ -473,7 +473,7 @@ def _determine_aggregated_nodes(la_centers):
             aggr_stations.append(_.lv_grid.station())
 
         # add elements to lists
-        aggregated.append(aggr)
+        aggregated.update({repr(la_center): aggr})
 
 
     return aggregated, aggr_stations
@@ -501,7 +501,7 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
     aggr_line_type = ding0_grid.network._static_data['MV_cables'].iloc[
         ding0_grid.network._static_data['MV_cables']['I_max_th'].idxmax()]
 
-    for la in aggregated:
+    for la_id, la in aggregated.items():
         # add aggregated generators
         for v_level, val in la['generation'].items():
             for subtype, val2 in val.items():
@@ -531,13 +531,13 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
                 geom=grid.station.geom,
                 consumption={sector: sectoral_load},
                 grid=grid,
-                id='_'.join(['Load_aggregated', sector, repr(grid)]))
+                id='_'.join(['Load_aggregated', sector, repr(grid), la_id]))
 
             grid.graph.add_node(load, type='load')
 
             # connect aggregated load to MV station
             line = {'line': Line(
-                id='_'.join(['line_aggr_load', sector]),
+                id='_'.join(['line_aggr_load', sector, la_id]),
                 type=aggr_line_type,
                 length=.5,
                 grid=grid)
