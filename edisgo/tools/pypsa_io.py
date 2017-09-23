@@ -82,34 +82,40 @@ def to_pypsa(network, mode):
         components = combine_mv_and_lv(mv_components,
                                        lv_components)
 
-        timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
-            network,
-            mode=mode)
+        if list(components['Load'].index.values):
+            timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
+                network,
+                mode=mode)
 
-        timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
-            network,
-            mode=mode)
+        if len(list(components['Generator'].index.values)) > 1:
+            timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
+                network,
+                mode=mode)
 
-        timeseries_bus_v_set = _pypsa_bus_timeseries(
-            network,
-            components['Bus'].index.tolist())
+        if list(components['Bus'].index.values):
+            timeseries_bus_v_set = _pypsa_bus_timeseries(
+                network,
+                components['Bus'].index.tolist())
     elif mode is 'mv':
         mv_components = mv_to_pypsa(network)
         components = add_aggregated_lv_components(
             network,
             mv_components)
 
-        timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
-            network,
-            mode=mode)
+        if list(components['Load'].index.values):
+            timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
+                network,
+                mode=mode)
 
-        timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
-            network,
-            mode=mode)
+        if len(list(components['Generator'].index.values)) > 1:
+            timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
+                network,
+                mode=mode)
 
-        timeseries_bus_v_set = _pypsa_bus_timeseries(
-            network,
-            components['Bus'].index.tolist())
+        if list(components['Bus'].index.values):
+            timeseries_bus_v_set = _pypsa_bus_timeseries(
+                network,
+                components['Bus'].index.tolist())
 
         ts_gen_lv_aggr_p, \
         ts_gen_lv_aggr_q, \
@@ -117,14 +123,16 @@ def to_pypsa(network, mode):
             network)
 
         # Concat MV and LV (aggregated) time series
-        timeseries_load_p = pd.concat([timeseries_load_p, ts_load_lv_aggr_p],
-                                      axis=1)
-        timeseries_load_q = pd.concat([timeseries_load_q, ts_load_lv_aggr_q],
-                                      axis=1)
-        timeseries_gen_p = pd.concat([timeseries_gen_p, ts_gen_lv_aggr_p],
-                                     axis=1)
-        timeseries_gen_q = pd.concat([timeseries_gen_q, ts_gen_lv_aggr_q],
-                                     axis=1)
+        if list(components['Load'].index.values):
+            timeseries_load_p = pd.concat([timeseries_load_p, ts_load_lv_aggr_p],
+                                          axis=1)
+            timeseries_load_q = pd.concat([timeseries_load_q, ts_load_lv_aggr_q],
+                                          axis=1)
+        if len(list(components['Generator'].index.values)) > 1:
+            timeseries_gen_p = pd.concat([timeseries_gen_p, ts_gen_lv_aggr_p],
+                                         axis=1)
+            timeseries_gen_q = pd.concat([timeseries_gen_q, ts_gen_lv_aggr_q],
+                                         axis=1)
     elif mode is 'lv':
         raise NotImplementedError
         lv_to_pypsa(network)
@@ -148,27 +156,31 @@ def to_pypsa(network, mode):
             pypsa_network.import_components_from_dataframe(comps, k)
 
     # import time series to PyPSA network
-    import_series_from_dataframe(pypsa_network,
-                                 timeseries_gen_p,
-                                 'Generator',
-                                 'p_set')
-    import_series_from_dataframe(pypsa_network,
-                                 timeseries_gen_q,
-                                 'Generator',
-                                 'q_set')
-    import_series_from_dataframe(pypsa_network,
-                                 timeseries_load_p,
-                                 'Load',
-                                 'p_set')
-    import_series_from_dataframe(pypsa_network,
-                                 timeseries_load_q,
-                                 'Load',
-                                 'q_set')
+    if len(list(components['Generator'].index.values)) > 1:
+        import_series_from_dataframe(pypsa_network,
+                                     timeseries_gen_p,
+                                     'Generator',
+                                     'p_set')
+        import_series_from_dataframe(pypsa_network,
+                                     timeseries_gen_q,
+                                     'Generator',
+                                     'q_set')
 
-    import_series_from_dataframe(pypsa_network,
-                                 timeseries_bus_v_set,
-                                 'Bus',
-                                 'v_mag_pu_set')
+    if list(components['Load'].index.values):
+        import_series_from_dataframe(pypsa_network,
+                                     timeseries_load_p,
+                                     'Load',
+                                     'p_set')
+        import_series_from_dataframe(pypsa_network,
+                                     timeseries_load_q,
+                                     'Load',
+                                     'q_set')
+
+    if list(components['Bus'].index.values):
+        import_series_from_dataframe(pypsa_network,
+                                     timeseries_bus_v_set,
+                                     'Bus',
+                                     'v_mag_pu_set')
 
     _check_integrity_of_pypsa(pypsa_network)
 

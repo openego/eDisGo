@@ -440,6 +440,7 @@ def _determine_aggregated_nodes(la_centers):
     aggregated = {}
     aggr_stations = []
 
+    # TODO: The variable generation_aggr is further used -> delete this code
     generation_aggr = {}
     for la in la_centers[0].grid.grid_district._lv_load_areas:
         for lvgd in la._lv_grid_districts:
