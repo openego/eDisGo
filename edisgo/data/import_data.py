@@ -226,7 +226,8 @@ def _build_mv_grid(ding0_grid, network):
     if la_centers:
         aggregated, aggr_stations = _determine_aggregated_nodes(la_centers)
     else:
-        aggregated = aggr_stations = []
+        aggregated = {}
+        aggr_stations = []
 
     # Create list of load instances and add these to grid's graph
     loads = {_: Load(
@@ -506,7 +507,7 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
         for v_level, val in la['generation'].items():
             for subtype, val2 in val.items():
                 gen = Generator(
-                    id='_'.join(str(_) for _ in val2['ids']),
+                    id='_'.join([la_id] + [str(_) for _ in val2['ids']]),
                     nominal_capacity=val2['capacity'],
                     type=val2['type'],
                     subtype=subtype,
@@ -517,10 +518,11 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
 
                 # connect generator to MV station
                 line = {'line': Line(
-                         id='line_aggr_generator_vlevel_{v_level}_'
+                         id='line_aggr_generator_{LA}_vlevel_{v_level}_'
                             '{subtype}'.format(
                              v_level=v_level,
-                             subtype=subtype),
+                             subtype=subtype,
+                             LA=la_id),
                          type=aggr_line_type,
                          length=.5,
                          grid=grid)
