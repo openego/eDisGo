@@ -3,7 +3,6 @@ if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString
 from .grids import LVGrid, MVGrid
 from math import acos, tan
-import pandas as pd
 
 
 class Component:
@@ -156,12 +155,17 @@ class Load(Component):
                                       'scale_factor_lv_load'])
 
         sector = list(self.consumption.keys())[0]
+        # TODO: remove this if, once Ding0 data changed to single sector consumption
+        if len(list(self.consumption.keys())) > 1:
+            consumption = sum([v for k,v in self.consumption.items()])
+        else:
+            consumption = self.consumption[sector]
 
         timeseries = (self.grid.network.scenario.timeseries.load[sector] *
-                      self.consumption[sector] *
+                      consumption *
                       peak_load_consumption_ratio[sector]).to_frame('p')
         timeseries['q'] = (self.grid.network.scenario.timeseries.load[sector] *
-                           self.consumption[sector] *
+                           consumption *
                            peak_load_consumption_ratio[sector] *
                            q_factor)
 
