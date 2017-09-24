@@ -47,6 +47,10 @@ class Network:
             self._metadata = kwargs.get('metadata', None)
             self._data_sources = kwargs.get('data_sources', {})
             self._scenario = kwargs.get('scenario', None)
+
+            if self._scenario is not None:
+                self._scenario.network = self
+
             self._mv_grid = kwargs.get('mv_grid', None)
             self._pypsa = None
             self.results = Results()
@@ -353,26 +357,10 @@ class Scenario:
         self._network = kwargs.get('network', None)
         self._timeseries = kwargs.get('timeseries', None)
         self._etrago_specs = kwargs.get('etrago_specs', None)
-
-        if 'pfac_mv_gen' in self.network['scenario']:
-            self._pfac_mv_gen = self.network['scenario']['pfac_mv_gen']
-        else:
-            self._pfac_mv_gen = kwargs.get('pfac_mv_gen', None)
-
-        if 'pfac_mv_load' in self.network['scenario']:
-            self._pfac_mv_load = self.network['scenario']['pfac_mv_load']
-        else:
-            self._pfac_mv_load = kwargs.get('pfac_mv_load', None)
-
-        if 'pfac_lv_gen' in self.network['scenario']:
-            self._pfac_lv_gen = self.network['scenario']['pfac_lv_gen']
-        else:
-            self._pfac_lv_gen = kwargs.get('pfac_lv_gen', None)
-
-        if 'pfac_lv_load' in self.network['scenario']:
-            self._pfac_lv_load = self.network['scenario']['pfac_lv_load']
-        else:
-            self._pfac_lv_load = kwargs.get('pfac_lv_load', None)
+        self._pfac_mv_gen = kwargs.get('pfac_mv_gen', None)
+        self._pfac_mv_load = kwargs.get('pfac_mv_load', None)
+        self._pfac_lv_gen = kwargs.get('pfac_lv_gen', None)
+        self._pfac_lv_load = kwargs.get('pfac_lv_load', None)
 
         if isinstance(power_flow, str):
             if power_flow != 'worst-case':
@@ -393,8 +381,48 @@ class Scenario:
         return self._timeseries
 
     @property
+    def pfac_mv_gen(self):
+
+        if 'pfac_mv_gen' in self.network.config['scenario']:
+            self._pfac_mv_gen = float(
+                self.network.config['scenario']['pfac_mv_gen'])
+
+        return self._pfac_mv_gen
+    
+    @property
+    def pfac_mv_load(self):
+
+        if 'pfac_mv_load' in self.network.config['scenario']:
+            self._pfac_mv_load = float(
+                self.network.config['scenario']['pfac_mv_load'])
+
+        return self._pfac_mv_load
+    
+    @property
+    def pfac_lv_gen(self):
+
+        if 'pfac_lv_gen' in self.network.config['scenario']:
+            self._pfac_lv_gen = float(
+                self.network.config['scenario']['pfac_lv_gen'])
+
+        return self._pfac_lv_gen
+    
+    @property
+    def pfac_lv_load(self):
+
+        if 'pfac_lv_load' in self.network.config['scenario']:
+            self._pfac_lv_load = float(
+                self.network.config['scenario']['pfac_lv_load'])
+
+        return self._pfac_lv_load
+
+    @property
     def network(self):
         return self._network
+
+    @network.setter
+    def network(self, network):
+        self._network = network
 
     def __repr__(self):
         return 'Scenario ' + self._name
