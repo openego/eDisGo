@@ -112,11 +112,6 @@ class Transformer(Component):
 
 class Load(Component):
     """Load object
-
-    Attributes
-    ----------
-    _timeseries : :pandas:`pandas.Series<series>`
-        Contains time series for load
     """
 
     def __init__(self, **kwargs):
@@ -137,39 +132,40 @@ class Load(Component):
         --------
         edisgo.network.TimeSeries : Details of global TimeSeries
         """
+        if self._timeseries is None:
+            # TODO: replace by correct values (see OEDB) and put to config
+            peak_load_consumption_ratio = {
+                'residential': 0.0025,
+                'retail': 0.0025,
+                'industrial': 0.0025,
+                'agricultural': 0.0025}
 
-        # TODO: replace by correct values (see OEDB) and put to config
-        peak_load_consumption_ratio = {
-            'residential': 0.0025,
-            'retail': 0.0025,
-            'industrial': 0.0025,
-            'agricultural': 0.0025}
+            if isinstance(self.grid, MVGrid):
+                q_factor = tan(acos(self.grid.network.scenario.pfac_mv_load))
+                power_scaling = float(self.grid.network.config['scenario'][
+                                          'scale_factor_mv_load'])
+            elif isinstance(self.grid, LVGrid):
+                q_factor = tan(acos(self.grid.network.scenario.pfac_lv_load))
+                power_scaling = float(self.grid.network.config['scenario'][
+                                          'scale_factor_lv_load'])
 
-        if isinstance(self.grid, MVGrid):
-            q_factor = tan(acos(self.grid.network.scenario.pfac_mv_load))
-            power_scaling = float(self.grid.network.config['scenario'][
-                                      'scale_factor_mv_load'])
-        elif isinstance(self.grid, LVGrid):
-            q_factor = tan(acos(self.grid.network.scenario.pfac_lv_load))
-            power_scaling = float(self.grid.network.config['scenario'][
-                                      'scale_factor_lv_load'])
+            sector = list(self.consumption.keys())[0]
+            # TODO: remove this if, once Ding0 data changed to single sector consumption
+            if len(list(self.consumption.keys())) > 1:
+                consumption = sum([v for k,v in self.consumption.items()])
+            else:
+                consumption = self.consumption[sector]
 
-        sector = list(self.consumption.keys())[0]
-        # TODO: remove this if, once Ding0 data changed to single sector consumption
-        if len(list(self.consumption.keys())) > 1:
-            consumption = sum([v for k,v in self.consumption.items()])
-        else:
-            consumption = self.consumption[sector]
+            timeseries = (self.grid.network.scenario.timeseries.load[sector] *
+                          consumption *
+                          peak_load_consumption_ratio[sector]).to_frame('p')
+            timeseries['q'] = (self.grid.network.scenario.timeseries.load[sector] *
+                               consumption *
+                               peak_load_consumption_ratio[sector] *
+                               q_factor)
+            self._timeseries = timeseries * power_scaling
 
-        timeseries = (self.grid.network.scenario.timeseries.load[sector] *
-                      consumption *
-                      peak_load_consumption_ratio[sector]).to_frame('p')
-        timeseries['q'] = (self.grid.network.scenario.timeseries.load[sector] *
-                           consumption *
-                           peak_load_consumption_ratio[sector] *
-                           q_factor)
-
-        return timeseries * power_scaling
+        return self._timeseries
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -251,30 +247,35 @@ class Generator(Component):
         and type of technology in :class:`~.grid.network.TimeSeries` object and
         considers for predefined curtailment as well.
         """
+        if self._timeseries is None:
+            if isinstance(self.grid, MVGrid):
+                q_factor = tan(acos(self.grid.network.scenario.pfac_mv_gen))
+            elif isinstance(self.grid, LVGrid):
+                q_factor = tan(acos(self.grid.network.scenario.pfac_lv_gen))
 
-        if isinstance(self.grid, MVGrid):
-            q_factor = tan(acos(self.grid.network.scenario.pfac_mv_gen))
-        elif isinstance(self.grid, LVGrid):
-            q_factor = tan(acos(self.grid.network.scenario.pfac_lv_gen))
+            timeseries = self.grid.network.scenario.timeseries.generation
+            timeseries['q'] = (
+                self.grid.network.scenario.timeseries.generation * q_factor)
 
-        timeseries = self.grid.network.scenario.timeseries.generation
-        timeseries['q'] = (
-            self.grid.network.scenario.timeseries.generation * q_factor)
-
-        # scale feedin/load
-        if self.type == 'solar':
-            power_scaling = float(self.grid.network.config['scenario'][
-                'scale_factor_feedin_pv'])
-        else:
-            power_scaling = float(self.grid.network.config['scenario'][
-                'scale_factor_feedin_other'])
-
-        return (self.grid.network.scenario.timeseries.generation
+            # scale feedin/load
+            if self.type == 'solar':
+                power_scaling = float(self.grid.network.config['scenario'][
+                    'scale_factor_feedin_pv'])
+            else:
+                power_scaling = float(self.grid.network.config['scenario'][
+                    'scale_factor_feedin_other'])
+            self._timeseries = (
+                self.grid.network.scenario.timeseries.generation
                 * self.nominal_capacity
                 * power_scaling)
 
+
+        return self._timeseries
+
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
+
+        Convert from kV, kVA to MW, MVA
 
         Parameters
         ----------

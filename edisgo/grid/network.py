@@ -382,7 +382,6 @@ class Scenario:
 
     @property
     def pfac_mv_gen(self):
-
         if 'pfac_mv_gen' in self.network.config['scenario']:
             self._pfac_mv_gen = float(
                 self.network.config['scenario']['pfac_mv_gen'])
@@ -391,7 +390,6 @@ class Scenario:
     
     @property
     def pfac_mv_load(self):
-
         if 'pfac_mv_load' in self.network.config['scenario']:
             self._pfac_mv_load = float(
                 self.network.config['scenario']['pfac_mv_load'])
@@ -400,7 +398,6 @@ class Scenario:
     
     @property
     def pfac_lv_gen(self):
-
         if 'pfac_lv_gen' in self.network.config['scenario']:
             self._pfac_lv_gen = float(
                 self.network.config['scenario']['pfac_lv_gen'])
@@ -409,7 +406,6 @@ class Scenario:
     
     @property
     def pfac_lv_load(self):
-
         if 'pfac_lv_load' in self.network.config['scenario']:
             self._pfac_lv_load = float(
                 self.network.config['scenario']['pfac_lv_load'])
@@ -453,19 +449,13 @@ class TimeSeries:
                 sub-tech_m_n: timeseries_m_n}
             }
 
-    _load : :obj:`dict` of :pandas:`pandas.Series<series>`
-        Time series of active power of (cumulative) loads,
-        format:
-
-        .. code-block:: python
-
-            {
-                sector_1:
-                    timeseries_1,
-                    ...,
-                sector_n:
-                    timeseries_n
-            }
+    _load : :pandas:`pandas.DataFrame<dataframe>`
+        Time series of active power of (cumulative) loads. This index is given
+        by :meth:`timeindex`. Columns represent load sectors:
+         * 'residential'
+         * 'retail'
+         * 'industrial'
+         * 'agricultural'
 
     See also
     --------
@@ -495,7 +485,19 @@ class TimeSeries:
 
     def _set_generation(self, mode=None):
         """
-        Assigne generation data according to provided case
+        Assign generation data according to provided case
+
+        Parameters
+        ----------
+        mode : str or tuple
+            Create time series for worst-case analysis ('worst-case') or
+            retrieve generation data from OEDB for each covered weather cell.
+
+            .. code-block:: python
+
+                timeseries._set_generation(mode=(
+                    datetime(2012, 3, 24, 13),
+                    datetime(2012, 3, 24, 21)))
         """
 
         if mode == 'worst-case':
