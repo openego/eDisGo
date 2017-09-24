@@ -226,7 +226,8 @@ def _build_mv_grid(ding0_grid, network):
     if la_centers:
         aggregated, aggr_stations = _determine_aggregated_nodes(la_centers)
     else:
-        aggregated = aggr_stations = []
+        aggregated = {}
+        aggr_stations = []
 
     # Create list of load instances and add these to grid's graph
     loads = {_: Load(
@@ -436,9 +437,10 @@ def _determine_aggregated_nodes(la_centers):
 
         return aggr
 
-    aggregated = []
+    aggregated = {}
     aggr_stations = []
 
+    # TODO: The variable generation_aggr is further used -> delete this code
     generation_aggr = {}
     for la in la_centers[0].grid.grid_district._lv_load_areas:
         for lvgd in la._lv_grid_districts:
@@ -473,7 +475,7 @@ def _determine_aggregated_nodes(la_centers):
             aggr_stations.append(_.lv_grid.station())
 
         # add elements to lists
-        aggregated.append(aggr)
+        aggregated.update({repr(la_center): aggr})
 
 
     return aggregated, aggr_stations
@@ -501,12 +503,12 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
     aggr_line_type = ding0_grid.network._static_data['MV_cables'].iloc[
         ding0_grid.network._static_data['MV_cables']['I_max_th'].idxmax()]
 
-    for la in aggregated:
+    for la_id, la in aggregated.items():
         # add aggregated generators
         for v_level, val in la['generation'].items():
             for subtype, val2 in val.items():
                 gen = Generator(
-                    id='_'.join(str(_) for _ in val2['ids']),
+                    id='_'.join([la_id] + [str(_) for _ in val2['ids']]),
                     nominal_capacity=val2['capacity'],
                     type=val2['type'],
                     subtype=subtype,
@@ -517,10 +519,11 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
 
                 # connect generator to MV station
                 line = {'line': Line(
-                         id='line_aggr_generator_vlevel_{v_level}_'
+                         id='line_aggr_generator_{LA}_vlevel_{v_level}_'
                             '{subtype}'.format(
                              v_level=v_level,
-                             subtype=subtype),
+                             subtype=subtype,
+                             LA=la_id),
                          type=aggr_line_type,
                          length=.5,
                          grid=grid)
@@ -531,13 +534,13 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
                 geom=grid.station.geom,
                 consumption={sector: sectoral_load},
                 grid=grid,
-                id='_'.join(['Load_aggregated', sector, repr(grid)]))
+                id='_'.join(['Load_aggregated', sector, repr(grid), la_id]))
 
             grid.graph.add_node(load, type='load')
 
             # connect aggregated load to MV station
             line = {'line': Line(
-                id='_'.join(['line_aggr_load', sector]),
+                id='_'.join(['line_aggr_load', sector, la_id]),
                 type=aggr_line_type,
                 length=.5,
                 grid=grid)
