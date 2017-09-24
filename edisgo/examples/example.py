@@ -3,8 +3,10 @@ from edisgo.flex_opt import reinforce_grid
 import os
 import pickle
 
+
 timeseries = TimeSeries()
-scenario = Scenario(timeseries=timeseries)
+scenario = Scenario(timeseries=timeseries,
+                    power_flow='worst-case')
 
 import_network = False
 

@@ -6,7 +6,7 @@ from edisgo.flex_opt.costs import grid_expansion_costs
 from os import path
 import pandas as pd
 from edisgo.tools import pypsa_io
-from math import sqrt
+from math import sqrt, acos, tan
 
 
 class Network:
@@ -316,6 +316,17 @@ class Scenario:
     It contains parameters and links to further data that is used for
     calculations within eDisGo.
 
+    Parameters
+    ----------
+    power_flow : str or tuple of two :obj:`datetime` objects.
+        Define time range of power flow analysis. Either choose 'worst-case' to
+        analyze feedin worst-case. Or analyze a timerange based on actual power
+        generation and demand data.
+
+        For input of type str only 'worst-case' is a valid input.
+        To specify the time range for a power flow analysis provide the start
+        and end time as 2-tuple of :obj:`datetime`
+
     Attributes
     ----------
     _name : :obj:`str`
@@ -337,7 +348,7 @@ class Scenario:
         Power factor for low voltage loads
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, power_flow, **kwargs):
         self._name = kwargs.get('name', None)
         self._network = kwargs.get('network', None)
         self._timeseries = kwargs.get('timeseries', None)
@@ -363,6 +374,19 @@ class Scenario:
         else:
             self._pfac_lv_load = kwargs.get('pfac_lv_load', None)
 
+        if isinstance(power_flow, str):
+            if power_flow != 'worst-case':
+                raise ValueError("{} is not a valid specification for type of "
+                                 "power flow analysis .Try 'worst-case'".format(
+                    power_flow))
+            else:
+                timeindex = pd.date_range('12/4/2011', periods=1, freq='H')
+        elif isinstance(power_flow, tuple):
+            raise NotImplementedError("Time range analyze will be implemented "
+                                      "in near future.")
+
+        # Set timeindex of Timeseries()
+        self.timeseries.timeindex = timeindex
 
     @property
     def timeseries(self):
@@ -424,12 +448,27 @@ class TimeSeries:
     def __init__(self, **kwargs):
         self._generation = kwargs.get('generation', None)
         self._load = kwargs.get('load', None)
+        self._timeindex = kwargs.get('timeindex', None)
+
 
     @property
     def timeindex(self):
-        # TODO: replace this dummy when time series are ready. Replace by the index of one of the DataFrames
-        hours_of_the_year = 8760
-        return pd.date_range('12/4/2011', periods=2, freq='H')
+        """
+        Parameters
+        ----------
+        timerange : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+            Time range of power flow analysis
+
+        Returns
+        -------
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`
+            Time range of power flow analysis
+        """
+        return self._timeindex
+
+    @timeindex.setter
+    def timeindex(self, time_range):
+        self._timeindex = time_range
 
 
 class ETraGoSpecs:
