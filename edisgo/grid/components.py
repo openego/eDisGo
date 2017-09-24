@@ -122,29 +122,8 @@ class Load(Component):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # self._timeseries = kwargs.get('timeseries', None)
+        self._timeseries = kwargs.get('timeseries', None)
         self._consumption = kwargs.get('consumption', None)
-
-        # TODO: replace below dummy timeseries
-        hours_of_the_year = 8760
-
-        cos_phi = 0.95
-
-        q_factor = tan(acos(cos_phi))
-
-
-        avg_hourly_load = self.consumption[list(self.consumption.keys())[0]] / \
-                                           hours_of_the_year / 1e3
-
-        rng = pd.date_range('1/1/2011', periods=hours_of_the_year, freq='H')
-
-        ts_dict_p = {
-            'p': [avg_hourly_load * (1 - q_factor)] * hours_of_the_year}
-        ts_dict_q = {
-            'q': [avg_hourly_load * (q_factor)] * hours_of_the_year}
-        ts_dict = {**ts_dict_p, **ts_dict_q}
-
-        self._timeseries = pd.DataFrame(ts_dict, index=rng)
 
     @property
     def timeseries(self):
@@ -160,7 +139,33 @@ class Load(Component):
         edisgo.network.TimeSeries : Details of global TimeSeries
         """
 
-        return self._timeseries
+        # TODO: replace by correct values (see OEDB) and put to config
+        peak_load_consumption_ratio = {
+            'residential': 0.0025,
+            'retail': 0.0025,
+            'industrial': 0.0025,
+            'agricultural': 0.0025}
+
+        if isinstance(self.grid, MVGrid):
+            q_factor = tan(acos(self.grid.network.scenario.pfac_mv_load))
+            power_scaling = float(self.grid.network.config['scenario'][
+                                      'scale_factor_mv_load'])
+        elif isinstance(self.grid, LVGrid):
+            q_factor = tan(acos(self.grid.network.scenario.pfac_lv_load))
+            power_scaling = float(self.grid.network.config['scenario'][
+                                      'scale_factor_lv_load'])
+
+        sector = list(self.consumption.keys())[0]
+
+        timeseries = (self.grid.network.scenario.timeseries.load[sector] *
+                      self.consumption[sector] *
+                      peak_load_consumption_ratio[sector]).to_frame('p')
+        timeseries['q'] = (self.grid.network.scenario.timeseries.load[sector] *
+                           self.consumption[sector] *
+                           peak_load_consumption_ratio[sector] *
+                           q_factor)
+
+        return timeseries * power_scaling
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -171,7 +176,7 @@ class Load(Component):
             Attribute name (PyPSA conventions). Choose from {p_set, q_set}
         """
 
-        return self._timeseries[attr]
+        return self.timeseries[attr] / 1e3
 
     @property
     def consumption(self):

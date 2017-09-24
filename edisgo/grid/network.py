@@ -505,6 +505,37 @@ class TimeSeries:
         else:
             raise ValueError("Provide proper mode of analysis: 'worst-case | "
                              "'time-range'")
+        
+    @property
+    def load(self):
+        """
+        Get load timeseries (only active power)
+
+        Provides normalized load for each sector. Simply access sectoral load
+        time series by :code:`Timeseries.load['residential']`.
+
+        Returns
+        -------
+        dict or :pandas:`pandas.DataFrame<dataframe>`
+            See class definition for details.
+        """
+        if self._load is None:
+            self._load = self._set_load(mode='worst-case')
+
+        return self._load
+
+    def _set_load(self, mode=None):
+        """
+        Assigne load data according to provided case
+        """
+
+        if mode == 'worst-case':
+            return worst_case_load_ts(self.timeindex)
+        elif mode == 'time-range':
+            raise NotImplementedError
+        else:
+            raise ValueError("Provide proper mode of analysis: 'worst-case | "
+                             "'time-range'")
 
     @property
     def timeindex(self):
@@ -884,3 +915,23 @@ def worst_case_generation_ts(timeindex):
         Normalized active power (1 kW)
     """
     return pd.DataFrame({'p': 1}, index=timeindex)
+
+
+def worst_case_load_ts(timeindex):
+    """
+    Define worst case load time series
+
+    Parameters
+    ----------
+    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+            Time range of power flow analysis
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Normalized active power (1 kW)
+    """
+    return pd.DataFrame({'residential': 1,
+                         'retail': 1,
+                         'industrial': 1,
+                         'agricultural': 1}, index=timeindex)
