@@ -429,12 +429,12 @@ def lv_to_pypsa(network):
         generator['type'].append('_'.join([gen.type, gen.subtype]))
 
         bus['name'].append(bus_name)
-        bus['v_nom'].append(gen.grid.voltage_nom / 1e3)
+        bus['v_nom'].append(gen.grid.voltage_nom)
 
     # create dictionary representing branch tees
     for bt in branch_tees:
         bus['name'].append('_'.join(['Bus', repr(bt)]))
-        bus['v_nom'].append(bt.grid.voltage_nom / 1e3)
+        bus['v_nom'].append(bt.grid.voltage_nom)
 
     # create dataframes representing loads and associated buses
     for lo in loads:
@@ -443,7 +443,7 @@ def lv_to_pypsa(network):
         load['bus'].append(bus_name)
 
         bus['name'].append(bus_name)
-        bus['v_nom'].append(lo.grid.voltage_nom / 1e3)
+        bus['v_nom'].append(lo.grid.voltage_nom)
 
     # create dataframe for lines
     for l in lines:

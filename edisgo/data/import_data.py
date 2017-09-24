@@ -113,7 +113,7 @@ def _build_lv_grid(ding0_grid, network):
                     grid_district={
                         'geom': ding0_lv_grid.grid_district.geo_data,
                         'population': ding0_lv_grid.grid_district.population},
-                    voltage_nom=ding0_lv_grid.v_level,
+                    voltage_nom=ding0_lv_grid.v_level / 1e3,
                     network=network)
 
                 station = {repr(_):_
