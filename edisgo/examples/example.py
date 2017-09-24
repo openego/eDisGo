@@ -86,6 +86,5 @@ reinforce_grid.reinforce_grid(network)
 
 # nx.draw_spectral(list(network.mv_grid.lv_grids)[0].graph)
 
-# ToDo: feedin und load case auswahl
 # ToDo: Möglichkeit MV und LV getrennt zu rechnen
 

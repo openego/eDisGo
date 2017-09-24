@@ -48,8 +48,10 @@ def mv_line_load(network):
                          'to check overloading.')
 
     if crit_lines:
-        logger.info('==> {} lines in MV grid have load issues.'.format(
+        logger.debug('==> {} line(s) in MV grid has/have load issues.'.format(
             len(crit_lines)))
+    else:
+        logger.debug('==> No line load issues in MV grid.')
 
     return crit_lines
 
@@ -100,8 +102,10 @@ def lv_line_load(network):
                              'to check overloading.')
 
     if crit_lines:
-        logger.info('==> {} lines in LV grids have load issues.'.format(
+        logger.debug('==> {} line(s) in LV grids has/have load issues.'.format(
             len(crit_lines)))
+    else:
+        logger.debug('==> No line load issues in LV grids.')
 
     return crit_lines
 
@@ -154,8 +158,10 @@ def mv_lv_station_load(network):
                          'to check overloading.')
 
     if crit_stations:
-        logger.info('==> {} LV stations have load issues.'.format(
+        logger.debug('==> {} MV/LV station(s) has/have load issues.'.format(
             len(crit_stations)))
+    else:
+        logger.debug('==> No MV/LV station load issues.')
 
     return crit_stations
 
@@ -201,11 +207,12 @@ def mv_voltage_deviation(network):
     if len(crit_nodes_grid) > 0:
         crit_nodes[network.mv_grid] = crit_nodes_grid.sort_values(
             ascending=False)
-        logger.info(
-            '==> {} nodes in MV grid have voltage issues.'.format(
+        logger.debug(
+            '==> {} node(s) in MV grid has/have voltage issues.'.format(
                 len(crit_nodes[network.mv_grid])))
     else:
         crit_nodes = None
+        logger.debug('==> {} No voltage issues in MV grid.')
 
     return crit_nodes
 
@@ -255,7 +262,9 @@ def lv_voltage_deviation(network):
 
     if crit_nodes:
         logger.info(
-            '==> {} LV grids have voltage issues.'.format(
+            '==> {} LV grid(s) has/have voltage issues.'.format(
                 len(crit_nodes)))
+    else:
+        logger.debug('==> {} No voltage issues in LV grids.')
 
     return crit_nodes

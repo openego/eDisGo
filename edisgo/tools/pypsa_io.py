@@ -304,11 +304,11 @@ def mv_to_pypsa(network):
 
         line['type'].append("")
         line['x'].append(
-            l['line'].type['L'] * omega / 1e3 * l['line'].length / 1e3)
-        line['r'].append(l['line'].type['R'] * l['line'].length / 1e3)
+            l['line'].type['L'] * omega / 1e3 * l['line'].length)
+        line['r'].append(l['line'].type['R'] * l['line'].length)
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
-        line['length'].append(l['line'].length / 1e3)
+        line['length'].append(l['line'].length)
 
     # create dataframe for LV stations incl. primary/secondary side bus
     for lv_st in lv_stations:
@@ -429,12 +429,12 @@ def lv_to_pypsa(network):
         generator['type'].append('_'.join([gen.type, gen.subtype]))
 
         bus['name'].append(bus_name)
-        bus['v_nom'].append(gen.grid.voltage_nom / 1e3)
+        bus['v_nom'].append(gen.grid.voltage_nom)
 
     # create dictionary representing branch tees
     for bt in branch_tees:
         bus['name'].append('_'.join(['Bus', repr(bt)]))
-        bus['v_nom'].append(bt.grid.voltage_nom / 1e3)
+        bus['v_nom'].append(bt.grid.voltage_nom)
 
     # create dataframes representing loads and associated buses
     for lo in loads:
@@ -443,7 +443,7 @@ def lv_to_pypsa(network):
         load['bus'].append(bus_name)
 
         bus['name'].append(bus_name)
-        bus['v_nom'].append(lo.grid.voltage_nom / 1e3)
+        bus['v_nom'].append(lo.grid.voltage_nom)
 
     # create dataframe for lines
     for l in lines:
@@ -463,11 +463,11 @@ def lv_to_pypsa(network):
 
         line['type'].append("")
         line['x'].append(
-            l['line'].type['L'] * omega / 1e3 * l['line'].length / 1e3)
-        line['r'].append(l['line'].type['R'] * l['line'].length / 1e3)
+            l['line'].type['L'] * omega / 1e3 * l['line'].length)
+        line['r'].append(l['line'].type['R'] * l['line'].length)
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
-        line['length'].append(l['line'].length / 1e3)
+        line['length'].append(l['line'].length)
 
     lv_components = {
         'Generator': pd.DataFrame(generator).set_index('name'),
@@ -1127,8 +1127,9 @@ def update_pypsa(network):
 
 
     # Step 2: Update lines
-    lines = equipment_changes[
-        equipment_changes['equipment'].apply(isinstance, args=(Line,))]
+    lines = equipment_changes.loc[equipment_changes.index[
+        equipment_changes.reset_index()['index'].apply(
+            isinstance, args=(Line,))]]
     changed_lines = lines[lines['change'] == 'changed']
 
     line = {'name': [],
@@ -1147,9 +1148,9 @@ def update_pypsa(network):
     for idx, row in changed_lines.iterrows():
         # Update line parameters
         network.pypsa.lines.loc[repr(idx), 'r'] = (
-            idx.type['R'] / idx.quantity * idx.length / 1e3)
+            idx.type['R'] / idx.quantity * idx.length)
         network.pypsa.lines.loc[repr(idx), 'x'] = (
-            idx.type['L'] / 1e3 * omega / idx.quantity * idx.length / 1e3)
+            idx.type['L'] / 1e3 * omega / idx.quantity * idx.length)
         network.pypsa.lines.loc[repr(idx), 's_nom'] = (
             sqrt(3) * idx.type['I_max_th'] * idx.type[
                 'U_n'] * idx.quantity / 1e3)
