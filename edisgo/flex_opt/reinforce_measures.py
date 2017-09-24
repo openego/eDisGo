@@ -110,7 +110,7 @@ def extend_distribution_substation(network, critical_stations):
             station.transformers = new_transformers
 
     if transformers_changes['added']:
-        logger.info("==> {} LV stations have been reinforced ".format(
+        logger.debug("==> {} LV station(s) has/have been reinforced ".format(
             str(len(transformers_changes['added']))) +
                     "due to overloading issues.")
 
@@ -243,8 +243,8 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                 'has already been reinforced.')
 
     if main_line_reinforced:
-        logger.info('==> {} branche(s) was/were reinforced.'.format(
-            str(len(main_line_reinforced))))
+        logger.debug('==> {} branche(s) was/were reinforced.'.format(
+            str(len(main_line_reinforced))) + 'due to over-voltage issues.')
 
     return lines_changes
 
@@ -313,14 +313,13 @@ def reinforce_branches_overloading(network, crit_lines):
                 number_parallel_lines = math.ceil(
                     crit_line.type['I_max_th'] * rel_overload /
                     standard_line['I_max_th'])
-                lines_changes[crit_line] = (number_parallel_lines -
-                                            crit_line.quantity)
+                lines_changes[crit_line] = number_parallel_lines
                 crit_line.type = standard_line.copy()
                 crit_line.quantity = number_parallel_lines
                 crit_line.kind = 'cable'
 
     if crit_lines:
-        logger.info('==> {} branches were reinforced.'.format(
-            str(len(crit_lines))))
+        logger.debug('==> {} branche(s) was/were reinforced.'.format(
+            str(len(crit_lines))) + 'due to over-loading issues.')
 
     return lines_changes
