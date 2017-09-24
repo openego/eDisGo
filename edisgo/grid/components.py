@@ -229,23 +229,9 @@ class Generator(Component):
         self._type = kwargs.get('type', None)
         self._subtype = kwargs.get('subtype', None)
         self._v_level = kwargs.get('v_level', None)
+        self._timeseries = kwargs.get('timeseries', None)
 
-        # TODO: replace below dummy timeseries
-        hours_of_the_year = 8760
-
-        cos_phi = 0.95
-
-        q_factor = tan(acos(0.95))
-
-        rng = pd.date_range('1/1/2011', periods=hours_of_the_year, freq='H')
-
-        ts_dict = {
-            'p': [self.nominal_capacity / 1e3 * (1 - q_factor)] * hours_of_the_year,
-            'q': [self.nominal_capacity / 1e3 * q_factor] * hours_of_the_year}
-
-        self._timeseries = pd.DataFrame(ts_dict, index=rng)
-        # self._timeseries = kwargs.get('timeseries', None)
-
+    @property
     def timeseries(self):
         """Return time series of generator
 
@@ -255,7 +241,16 @@ class Generator(Component):
         and type of technology in :class:`~.grid.network.TimeSeries` object and
         considers for predefined curtailment as well.
         """
-        return self._timeseries
+        # TODO: replace by value from config/scenario.pfac_...
+        cos_phi = 0.95
+
+        q_factor = tan(acos(cos_phi))
+
+        timeseries = self.grid.network.scenario.timeseries.generation
+        timeseries['q'] = (
+            self.grid.network.scenario.timeseries.generation * q_factor)
+
+        return self.grid.network.scenario.timeseries.generation * self.nominal_capacity
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -265,8 +260,7 @@ class Generator(Component):
         attr : str
             Attribute name (PyPSA conventions). Choose from {p_set, q_set}
         """
-
-        return self._timeseries[attr]
+        return self.timeseries[attr] / 1e3
 
     @property
     def type(self):

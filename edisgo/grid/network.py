@@ -478,6 +478,33 @@ class TimeSeries:
         self._load = kwargs.get('load', None)
         self._timeindex = kwargs.get('timeindex', None)
 
+    @property
+    def generation(self):
+        """
+        Get generation timeseries (only active power)
+
+        Returns
+        -------
+        dict or :pandas:`pandas.Series<series>`
+            See class definition for details.
+        """
+        if self._generation is None:
+            self._generation = self._set_generation(mode='worst-case')
+
+        return self._generation
+
+    def _set_generation(self, mode=None):
+        """
+        Assigne generation data according to provided case
+        """
+
+        if mode == 'worst-case':
+            return worst_case_generation_ts(self.timeindex)
+        elif mode == 'time-range':
+            raise NotImplementedError
+        else:
+            raise ValueError("Provide proper mode of analysis: 'worst-case | "
+                             "'time-range'")
 
     @property
     def timeindex(self):
@@ -840,3 +867,20 @@ class Results:
 
 
         return self.pfa_v_mag_pu[level][labels_included]
+
+
+def worst_case_generation_ts(timeindex):
+    """
+    Define worst case generation time series
+
+    Parameters
+    ----------
+    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+            Time range of power flow analysis
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Normalized active power (1 kW)
+    """
+    return pd.DataFrame({'p': 1}, index=timeindex)
