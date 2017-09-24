@@ -1,6 +1,7 @@
 import os
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString
+from .grids import LVGrid, MVGrid
 from math import acos, tan
 import pandas as pd
 
@@ -241,16 +242,27 @@ class Generator(Component):
         and type of technology in :class:`~.grid.network.TimeSeries` object and
         considers for predefined curtailment as well.
         """
-        # TODO: replace by value from config/scenario.pfac_...
-        cos_phi = 0.95
 
-        q_factor = tan(acos(cos_phi))
+        if isinstance(self.grid, MVGrid):
+            q_factor = tan(acos(self.grid.network.scenario.pfac_mv_gen))
+        elif isinstance(self.grid, LVGrid):
+            q_factor = tan(acos(self.grid.network.scenario.pfac_lv_gen))
 
         timeseries = self.grid.network.scenario.timeseries.generation
         timeseries['q'] = (
             self.grid.network.scenario.timeseries.generation * q_factor)
 
-        return self.grid.network.scenario.timeseries.generation * self.nominal_capacity
+        # scale feedin/load
+        if self.type == 'solar':
+            power_scaling = float(self.grid.network.config['scenario'][
+                'scale_factor_feedin_pv'])
+        else:
+            power_scaling = float(self.grid.network.config['scenario'][
+                'scale_factor_feedin_other'])
+
+        return (self.grid.network.scenario.timeseries.generation
+                * self.nominal_capacity
+                * power_scaling)
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
