@@ -170,7 +170,7 @@ def _build_lv_grid(ding0_grid, network):
                           {'line': Line(
                               id=_['branch'].id_db,
                               type=_['branch'].type,
-                              length=_['branch'].length,
+                              length=_['branch'].length / 1e3,
                               kind=_['branch'].kind,
                               grid=lv_grid)
                           })
@@ -315,7 +315,7 @@ def _build_mv_grid(ding0_grid, network):
               {'line': Line(
                   id=_['branch'].id_db,
                   type=_['branch'].type,
-                  length=_['branch'].length,
+                  length=_['branch'].length / 1e3,
                   grid=grid)
               })
              for _ in ding0_grid.graph_edges()
