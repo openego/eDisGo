@@ -1,8 +1,7 @@
 import sys
 import pandas as pd
 from edisgo.flex_opt import check_tech_constraints as checks
-from .reinforce_measures import reinforce_branches_current, \
-    reinforce_branches_voltage, extend_distribution_substation
+from edisgo.flex_opt import reinforce_measures
 import logging
 
 logger = logging.getLogger('edisgo')
@@ -52,91 +51,89 @@ def reinforce_grid(network, while_counter_max=10):
 
     """
 
-    def _add_lines_changes_to_equipment_changes(mode):
-        if lines_changes[mode]:
+    def _add_lines_changes_to_equipment_changes():
+        equipment, index, quantity = [], [], []
+        for line, number_of_lines in lines_changes.items():
+            equipment.append(line.type.name)
+            index.append(line)
+            quantity.append(number_of_lines)
+        network.results.equipment_changes = \
+            network.results.equipment_changes.append(
+                pd.DataFrame(
+                    {'iteration_step': [iteration_step] * len(
+                        lines_changes),
+                     'change': ['changed'] * len(lines_changes),
+                     'equipment': equipment,
+                     'quantity': quantity},
+                    index=index))
+
+    def _add_transformer_changes_to_equipment_changes(mode):
+        for station, transformer_list in transformer_changes[mode].items():
             network.results.equipment_changes = \
                 network.results.equipment_changes.append(
                     pd.DataFrame(
                         {'iteration_step': [iteration_step] * len(
-                            lines_changes[mode]),
-                         'change': [mode] * len(lines_changes[mode]),
-                         'equipment': lines_changes[mode]},
-                        index=lines_changes[mode]))
+                            transformer_list),
+                         'change': [mode] * len(transformer_list),
+                         'equipment': transformer_list,
+                         'quantity': [1] * len(transformer_list)},
+                        index=[station] * len(transformer_list)))
 
-    # ToDo: Move appending added and removed comp. to function
-    # STEP 1: reinforce overloaded transformers
+    # REINFORCE OVERLOADED TRANSFORMERS AND LINES
     iteration_step = 1
 
-    logger.info('==> Check LV stations')
-
     # ToDo: check overloading of HV/MV Trafo?
+    logger.debug('==> Check MV/LV station load.')
     overloaded_stations = checks.mv_lv_station_load(network)
-
-    if overloaded_stations:
-        # reinforce substations
-        transformer_changes = extend_distribution_substation(
-            network, overloaded_stations)
-        # write added and removed transformers to results.equipment_changes
-        for station, transformer_list in transformer_changes['added'].items():
-            network.results.equipment_changes = \
-                network.results.equipment_changes.append(
-                    pd.DataFrame(
-                        {'iteration_step': [iteration_step] * len(
-                            transformer_list),
-                         'change': ['added'] * len(transformer_list),
-                         'equipment': transformer_list},
-                        index=[station] * len(transformer_list)))
-        for station, transformer_list in \
-                transformer_changes['removed'].items():
-            network.results.equipment_changes = \
-                network.results.equipment_changes.append(
-                    pd.DataFrame(
-                        {'iteration_step': [iteration_step] * len(
-                            transformer_list),
-                         'change': ['removed'] * len(transformer_list),
-                         'equipment': transformer_list},
-                        index=[station] * len(transformer_list)))
-
-    # STEP 2: reinforce branches due to overloading
-
+    logger.debug('==> Check line load.')
     crit_lines_lv = checks.lv_line_load(network)
     crit_lines_mv = checks.mv_line_load(network)
     crit_lines = {**crit_lines_lv, **crit_lines_mv}
 
-    # do reinforcement
-    if crit_lines:
-        lines_changes = reinforce_branches_current(network, crit_lines)
-        # write changed lines to results.equipment_changes
-        _add_lines_changes_to_equipment_changes('changed')
+    while_counter = 0
+    while ((overloaded_stations or crit_lines) and
+            while_counter < while_counter_max):
 
+        if overloaded_stations:
+            # reinforce substations
+            transformer_changes = \
+                reinforce_measures.extend_distribution_substation(
+                    network, overloaded_stations)
+            # write added and removed transformers to results.equipment_changes
+            _add_transformer_changes_to_equipment_changes('added')
+            _add_transformer_changes_to_equipment_changes('removed')
 
-    # run power flow analysis again and check if all overloading
-    # problems were solved
-    network.analyze()
-    overloaded_stations = checks.mv_lv_station_load(network)
-    if overloaded_stations:
-        logger.error("==> Overloading issues of LV stations were not "
-                     "solved in the first iteration step.")
-        sys.exit()
+        if crit_lines:
+            # reinforce lines
+            lines_changes = reinforce_measures.reinforce_branches_overloading(
+                network, crit_lines)
+            # write changed lines to results.equipment_changes
+            _add_lines_changes_to_equipment_changes()
 
-    crit_lines_lv = checks.lv_line_load(network)
-    crit_lines_mv = checks.mv_line_load(network)
-    crit_lines = {**crit_lines_lv, **crit_lines_mv}
-    if crit_lines:
-        logger.error("==> Overloading issues of lines were not "
-                     "solved in the first iteration step.")
-        sys.exit()
+        # run power flow analysis again and check if all over-loading
+        # problems were solved
+        logger.debug('==> Run power flow analysis.')
+        network.analyze()
+        logger.debug('==> Recheck MV/LV station load.')
+        overloaded_stations = checks.mv_lv_station_load(network)
+        logger.debug('==> Recheck line load.')
+        crit_lines_lv = checks.lv_line_load(network)
+        crit_lines_mv = checks.mv_line_load(network)
+        crit_lines = {**crit_lines_lv, **crit_lines_mv}
 
-    # STEP 3: reinforce branches due to voltage problems
+        iteration_step += 1
+        while_counter += 1
 
+    # REINFORCE BRANCHES DUE TO VOLTAGE ISSUES
     iteration_step += 1
 
     # solve voltage problems in MV grid
+    logger.debug('==> Check voltage in MV grid.')
     crit_nodes = checks.mv_voltage_deviation(network)
 
-    # as long as there are voltage issues, do reinforcement
     while_counter = 0
     while crit_nodes and while_counter < while_counter_max:
+
         # ToDo: get crit_nodes as objects instead of string
         # for now iterate through grid to find node for repr
         crit_nodes_objects = pd.Series()
@@ -146,26 +143,40 @@ def reinforce_grid(network, while_counter_max=10):
                     [crit_nodes_objects,
                      pd.Series(crit_nodes[network.mv_grid].loc[repr(node)],
                                index=[node])])
-                break
-        lines_changes = reinforce_branches_voltage(
+
+        # reinforce lines
+        lines_changes = reinforce_measures.reinforce_branches_overvoltage(
             network, network.mv_grid, crit_nodes_objects)
         # write changed lines to results.equipment_changes
-        _add_lines_changes_to_equipment_changes('changed')
+        _add_lines_changes_to_equipment_changes()
+
+        # run power flow analysis again and check if all over-voltage
+        # problems were solved
+        logger.debug('==> Run power flow analysis.')
         network.analyze()
-        iteration_step += 1
+        logger.debug('==> Recheck voltage in MV grid.')
         crit_nodes = checks.mv_voltage_deviation(network)
+
+        iteration_step += 1
         while_counter += 1
 
-    logger.info('==> All voltage issues in MV grid are solved.')
+    # check if all voltage problems were solved after maximum number of
+    # iterations allowed
+    if while_counter == while_counter_max and crit_nodes:
+        logger.error("==> Voltage issues in MV grid were not solved.")
+        sys.exit()
+    else:
+        logger.debug('==> All voltage issues in MV grid are solved.')
 
-    # solve voltage problems in LV grid
+    # solve voltage problems in LV grids
+    logger.debug('==> Check voltage in LV grids.')
     crit_nodes = checks.lv_voltage_deviation(network)
 
-    # as long as there are voltage issues, do reinforcement
     while_counter = 0
     while crit_nodes and while_counter < while_counter_max:
         # for every grid in crit_nodes do reinforcement
         for grid in crit_nodes:
+
             # for now iterate through grid to find node for repr
             crit_nodes_objects = pd.Series()
             for node in grid.graph.nodes():
@@ -174,16 +185,67 @@ def reinforce_grid(network, while_counter_max=10):
                         [crit_nodes_objects,
                          pd.Series(crit_nodes[grid].loc[repr(node)],
                                    index=[node])])
-                    break
-            lines_changes = reinforce_branches_voltage(
+
+            # reinforce lines
+            lines_changes = reinforce_measures.reinforce_branches_overvoltage(
                 network, grid, crit_nodes_objects)
             # write changed lines to results.equipment_changes
-            _add_lines_changes_to_equipment_changes('changed')
+            _add_lines_changes_to_equipment_changes()
+
+        logger.debug('==> Run power flow analysis.')
         network.analyze()
-        iteration_step += 1
+        logger.debug('==> Recheck voltage in LV grids.')
         crit_nodes = checks.lv_voltage_deviation(network)
+
+        iteration_step += 1
         while_counter += 1
 
-    logger.info('==> All voltage issues in LV grids are solved.')
+    # check if all voltage problems were solved after maximum number of
+    # iterations allowed
+    if while_counter == while_counter_max and crit_nodes:
+        logger.error("==> Voltage issues in LV grids were not solved.")
+        sys.exit()
+    else:
+        logger.info('==> All voltage issues in LV grids are solved.')
 
+    # RECHECK FOR OVERLOADED TRANSFORMERS AND LINES
+    logger.debug('==> Check MV/LV station load.')
+    overloaded_stations = checks.mv_lv_station_load(network)
+    logger.debug('==> Check line load.')
+    crit_lines_lv = checks.lv_line_load(network)
+    crit_lines_mv = checks.mv_line_load(network)
+    crit_lines = {**crit_lines_lv, **crit_lines_mv}
 
+    while_counter = 0
+    while ((overloaded_stations or crit_lines) and
+                   while_counter < while_counter_max):
+
+        if overloaded_stations:
+            # reinforce substations
+            transformer_changes = \
+                reinforce_measures.extend_distribution_substation(
+                    network, overloaded_stations)
+            # write added and removed transformers to results.equipment_changes
+            _add_transformer_changes_to_equipment_changes('added')
+            _add_transformer_changes_to_equipment_changes('removed')
+
+        if crit_lines:
+            # reinforce lines
+            lines_changes = reinforce_measures.reinforce_branches_overloading(
+                network, crit_lines)
+            # write changed lines to results.equipment_changes
+            _add_lines_changes_to_equipment_changes()
+
+        # run power flow analysis again and check if all over-loading
+        # problems were solved
+        logger.debug('==> Run power flow analysis.')
+        network.analyze()
+        logger.debug('==> Recheck MV/LV station load.')
+        overloaded_stations = checks.mv_lv_station_load(network)
+        logger.debug('==> Recheck line load.')
+        crit_lines_lv = checks.lv_line_load(network)
+        crit_lines_mv = checks.mv_line_load(network)
+        crit_lines = {**crit_lines_lv, **crit_lines_mv}
+
+        iteration_step += 1
+        while_counter += 1
