@@ -1115,8 +1115,9 @@ def update_pypsa(network):
 
 
     # Step 2: Update lines
-    lines = equipment_changes[
-        equipment_changes['equipment'].apply(isinstance, args=(Line,))]
+    lines = equipment_changes.loc[equipment_changes.index[
+        equipment_changes.reset_index()['index'].apply(
+            isinstance, args=(Line,))]]
     changed_lines = lines[lines['change'] == 'changed']
 
     line = {'name': [],
