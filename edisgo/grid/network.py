@@ -342,14 +342,35 @@ class Scenario:
         self._network = kwargs.get('network', None)
         self._timeseries = kwargs.get('timeseries', None)
         self._etrago_specs = kwargs.get('etrago_specs', None)
-        self._pfac_mv_gen = kwargs.get('pfac_mv_gen', None)
-        self._pfac_mv_load = kwargs.get('pfac_mv_load', None)
-        self._pfac_lv_gen = kwargs.get('pfac_lv_gen', None)
-        self._pfac_lv_load = kwargs.get('pfac_lv_load', None)
+
+        if 'pfac_mv_gen' in self.network['scenario']:
+            self._pfac_mv_gen = self.network['scenario']['pfac_mv_gen']
+        else:
+            self._pfac_mv_gen = kwargs.get('pfac_mv_gen', None)
+
+        if 'pfac_mv_load' in self.network['scenario']:
+            self._pfac_mv_load = self.network['scenario']['pfac_mv_load']
+        else:
+            self._pfac_mv_load = kwargs.get('pfac_mv_load', None)
+
+        if 'pfac_lv_gen' in self.network['scenario']:
+            self._pfac_lv_gen = self.network['scenario']['pfac_lv_gen']
+        else:
+            self._pfac_lv_gen = kwargs.get('pfac_lv_gen', None)
+
+        if 'pfac_lv_load' in self.network['scenario']:
+            self._pfac_lv_load = self.network['scenario']['pfac_lv_load']
+        else:
+            self._pfac_lv_load = kwargs.get('pfac_lv_load', None)
+
 
     @property
     def timeseries(self):
         return self._timeseries
+
+    @property
+    def network(self):
+        return self._network
 
     def __repr__(self):
         return 'Scenario ' + self._name
