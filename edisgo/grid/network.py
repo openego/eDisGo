@@ -382,7 +382,7 @@ class Scenario:
 
     @property
     def pfac_mv_gen(self):
-        if 'pfac_mv_gen' in self.network.config['scenario']:
+        if not self._pfac_mv_gen:
             self._pfac_mv_gen = float(
                 self.network.config['scenario']['pfac_mv_gen'])
 
@@ -390,7 +390,7 @@ class Scenario:
     
     @property
     def pfac_mv_load(self):
-        if 'pfac_mv_load' in self.network.config['scenario']:
+        if not self._pfac_mv_load:
             self._pfac_mv_load = float(
                 self.network.config['scenario']['pfac_mv_load'])
 
@@ -398,7 +398,7 @@ class Scenario:
     
     @property
     def pfac_lv_gen(self):
-        if 'pfac_lv_gen' in self.network.config['scenario']:
+        if not self._pfac_lv_gen:
             self._pfac_lv_gen = float(
                 self.network.config['scenario']['pfac_lv_gen'])
 
@@ -406,7 +406,7 @@ class Scenario:
     
     @property
     def pfac_lv_load(self):
-        if 'pfac_lv_load' in self.network.config['scenario']:
+        if not self._pfac_lv_load:
             self._pfac_lv_load = float(
                 self.network.config['scenario']['pfac_lv_load'])
 
