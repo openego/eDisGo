@@ -1173,6 +1173,7 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
     """
     # TODO: Add ref. for voltage levels
     # TODO: Remove decommissioned genos (especially conv.)
+    # TODO: Create type-specific agg. genos (+remove type 'various')
 
     # set capacity difference threshold
     cap_diff_threshold = 10**-4
@@ -1243,9 +1244,18 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
                         str(len(generators_mv_new)))
                 )
 
+    # remove decommissioned genos
+    # (genos which exist in grid but not in the new dataset)
     if not g_mv.empty:
-        logger.info('Your MV grid seems to have generators that are not '
-                    'included in the new dataset.')
+        log_geno_count = 0
+        for _, row in g_mv.iterrows():
+            print('TODO: Remove geno {} from grid {}'
+                  .format(repr(row['obj']),
+                          repr(row['obj'].grid)))
+            log_geno_count += 1
+        logger.info('{} of {} decommissioned generators removed.'
+                    .format(str(log_geno_count),
+                            str(len(g_mv))))
 
     # ====================================
     # Step 2: LV generators (single units)
@@ -1256,6 +1266,10 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
     g_lv_existing = g_lv[g_lv['id'].isin(list(generators_lv.index.values))]
     # get existing genos (new genos DF format)
     generators_lv_existing = generators_lv[generators_lv.index.isin(list(g_lv_existing['id']))]
+
+    # TEMP: BACKUP 1 GENO FOR TESTING
+    temp_geno = g_lv.iloc[0]
+
     # remove existing ones from grid's geno list
     g_lv = g_lv[~g_lv.isin(g_lv_existing)].dropna()
 
@@ -1278,9 +1292,21 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
                         str(len(generators_lv_existing) - log_geno_count))
                 )
 
+    # TEMP: INSERT BACKUPPED GENO IN DF FOR TESTING
+    g_lv.loc[len(g_lv)] = temp_geno
+
+    # remove decommissioned genos
+    # (genos which exist in grid but not in the new dataset)
     if not g_lv.empty:
-        logger.info('Your LV grids seem to have generators that are not '
-                    'included in the new dataset.')
+        log_geno_count = 0
+        for _, row in g_lv.iterrows():
+            print('TODO: Remove geno {} from grid {}'
+                  .format(repr(row['obj']),
+                          repr(row['obj'].grid)))
+            log_geno_count += 1
+        logger.info('{} of {} decommissioned generators (single units) removed.'
+                    .format(str(log_geno_count),
+                            str(len(g_lv))))
 
     # ========================================================================
     # Step 3: LV generators (aggregated units (originally from aggregated LA))
@@ -1288,6 +1314,10 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
     g_lv_agg = network.dingo_import_data
     g_lv_agg_existing = g_lv_agg[g_lv_agg['id'].isin(list(generators_lv.index.values))]
     generators_lv_agg_existing = generators_lv[generators_lv.index.isin(list(g_lv_agg_existing['id']))]
+
+    # TEMP: BACKUP 1 GENO FOR TESTING
+    temp_geno = g_lv_agg.iloc[0]
+
     g_lv_agg = g_lv_agg[~g_lv_agg.isin(g_lv_agg_existing)].dropna()
 
     log_geno_count = 0
@@ -1358,9 +1388,21 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
                         str(len(agg_geno_new['ids'])))
                 )
 
+    # TEMP: INSERT BACKUPPED GENO IN DF FOR TESTING
+    g_lv_agg.loc[len(g_lv_agg)] = temp_geno
+
+    # remove decommissioned genos
+    # (genos which exist in grid but not in the new dataset)
     if not g_lv_agg.empty:
-        logger.info('Your aggregated LV grids seems to have generators that are not '
-                    'included in the new dataset.')
+        log_geno_count = 0
+        for _, row in g_lv_agg.iterrows():
+            print('TODO: Remove geno {} in agg. geno in grid {}'
+                  .format(repr(row['agg_geno']),
+                          repr(row['agg_geno'].grid)))
+            log_geno_count += 1
+        logger.info('{} of {} decommissioned generators in aggregated generators removed.'
+                    .format(str(log_geno_count),
+                            str(len(g_lv_agg))))
 
 
 def _build_generator_list(network):
