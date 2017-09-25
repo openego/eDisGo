@@ -706,7 +706,7 @@ def _pypsa_bus_timeseries(network, buses, mode=None):
         Time series table in PyPSA format
     """
 
-    v_set_dict = {bus: [1, 1] for bus in buses}
+    v_set_dict = {bus: 1 for bus in buses}
 
     v_set_df = pd.DataFrame(v_set_dict,
                             index=network.scenario.timeseries.timeindex)

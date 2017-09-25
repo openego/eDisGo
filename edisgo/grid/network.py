@@ -6,7 +6,7 @@ from edisgo.flex_opt.costs import grid_expansion_costs
 from os import path
 import pandas as pd
 from edisgo.tools import pypsa_io
-from math import sqrt
+from math import sqrt, acos, tan
 
 
 class Network:
@@ -47,6 +47,10 @@ class Network:
             self._metadata = kwargs.get('metadata', None)
             self._data_sources = kwargs.get('data_sources', {})
             self._scenario = kwargs.get('scenario', None)
+
+            if self._scenario is not None:
+                self._scenario.network = self
+
             self._mv_grid = kwargs.get('mv_grid', None)
             self._pypsa = None
             self.results = Results()
@@ -316,6 +320,17 @@ class Scenario:
     It contains parameters and links to further data that is used for
     calculations within eDisGo.
 
+    Parameters
+    ----------
+    power_flow : str or tuple of two :obj:`datetime` objects.
+        Define time range of power flow analysis. Either choose 'worst-case' to
+        analyze feedin worst-case. Or analyze a timerange based on actual power
+        generation and demand data.
+
+        For input of type str only 'worst-case' is a valid input.
+        To specify the time range for a power flow analysis provide the start
+        and end time as 2-tuple of :obj:`datetime`
+
     Attributes
     ----------
     _name : :obj:`str`
@@ -337,7 +352,7 @@ class Scenario:
         Power factor for low voltage loads
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, power_flow, **kwargs):
         self._name = kwargs.get('name', None)
         self._network = kwargs.get('network', None)
         self._timeseries = kwargs.get('timeseries', None)
@@ -347,9 +362,63 @@ class Scenario:
         self._pfac_lv_gen = kwargs.get('pfac_lv_gen', None)
         self._pfac_lv_load = kwargs.get('pfac_lv_load', None)
 
+        if isinstance(power_flow, str):
+            if power_flow != 'worst-case':
+                raise ValueError("{} is not a valid specification for type of "
+                                 "power flow analysis .Try 'worst-case'".format(
+                    power_flow))
+            else:
+                timeindex = pd.date_range('12/4/2011', periods=1, freq='H')
+        elif isinstance(power_flow, tuple):
+            raise NotImplementedError("Time range analyze will be implemented "
+                                      "in near future.")
+
+        # Set timeindex of Timeseries()
+        self.timeseries.timeindex = timeindex
+
     @property
     def timeseries(self):
         return self._timeseries
+
+    @property
+    def pfac_mv_gen(self):
+        if 'pfac_mv_gen' in self.network.config['scenario']:
+            self._pfac_mv_gen = float(
+                self.network.config['scenario']['pfac_mv_gen'])
+
+        return self._pfac_mv_gen
+    
+    @property
+    def pfac_mv_load(self):
+        if 'pfac_mv_load' in self.network.config['scenario']:
+            self._pfac_mv_load = float(
+                self.network.config['scenario']['pfac_mv_load'])
+
+        return self._pfac_mv_load
+    
+    @property
+    def pfac_lv_gen(self):
+        if 'pfac_lv_gen' in self.network.config['scenario']:
+            self._pfac_lv_gen = float(
+                self.network.config['scenario']['pfac_lv_gen'])
+
+        return self._pfac_lv_gen
+    
+    @property
+    def pfac_lv_load(self):
+        if 'pfac_lv_load' in self.network.config['scenario']:
+            self._pfac_lv_load = float(
+                self.network.config['scenario']['pfac_lv_load'])
+
+        return self._pfac_lv_load
+
+    @property
+    def network(self):
+        return self._network
+
+    @network.setter
+    def network(self, network):
+        self._network = network
 
     def __repr__(self):
         return 'Scenario ' + self._name
@@ -380,19 +449,13 @@ class TimeSeries:
                 sub-tech_m_n: timeseries_m_n}
             }
 
-    _load : :obj:`dict` of :pandas:`pandas.Series<series>`
-        Time series of active power of (cumulative) loads,
-        format:
-
-        .. code-block:: python
-
-            {
-                sector_1:
-                    timeseries_1,
-                    ...,
-                sector_n:
-                    timeseries_n
-            }
+    _load : :pandas:`pandas.DataFrame<dataframe>`
+        Time series of active power of (cumulative) loads. This index is given
+        by :meth:`timeindex`. Columns represent load sectors:
+         * 'residential'
+         * 'retail'
+         * 'industrial'
+         * 'agricultural'
 
     See also
     --------
@@ -403,12 +466,97 @@ class TimeSeries:
     def __init__(self, **kwargs):
         self._generation = kwargs.get('generation', None)
         self._load = kwargs.get('load', None)
+        self._timeindex = kwargs.get('timeindex', None)
+
+    @property
+    def generation(self):
+        """
+        Get generation timeseries (only active power)
+
+        Returns
+        -------
+        dict or :pandas:`pandas.Series<series>`
+            See class definition for details.
+        """
+        if self._generation is None:
+            self._generation = self._set_generation(mode='worst-case')
+
+        return self._generation
+
+    def _set_generation(self, mode=None):
+        """
+        Assign generation data according to provided case
+
+        Parameters
+        ----------
+        mode : str or tuple
+            Create time series for worst-case analysis ('worst-case') or
+            retrieve generation data from OEDB for each covered weather cell.
+
+            .. code-block:: python
+
+                timeseries._set_generation(mode=(
+                    datetime(2012, 3, 24, 13),
+                    datetime(2012, 3, 24, 21)))
+        """
+
+        if mode == 'worst-case':
+            return worst_case_generation_ts(self.timeindex)
+        elif mode == 'time-range':
+            raise NotImplementedError
+        else:
+            raise ValueError("Provide proper mode of analysis: 'worst-case | "
+                             "'time-range'")
+        
+    @property
+    def load(self):
+        """
+        Get load timeseries (only active power)
+
+        Provides normalized load for each sector. Simply access sectoral load
+        time series by :code:`Timeseries.load['residential']`.
+
+        Returns
+        -------
+        dict or :pandas:`pandas.DataFrame<dataframe>`
+            See class definition for details.
+        """
+        if self._load is None:
+            self._load = self._set_load(mode='worst-case')
+
+        return self._load
+
+    def _set_load(self, mode=None):
+        """
+        Assigne load data according to provided case
+        """
+
+        if mode == 'worst-case':
+            return worst_case_load_ts(self.timeindex)
+        elif mode == 'time-range':
+            raise NotImplementedError
+        else:
+            raise ValueError("Provide proper mode of analysis: 'worst-case | "
+                             "'time-range'")
 
     @property
     def timeindex(self):
-        # TODO: replace this dummy when time series are ready. Replace by the index of one of the DataFrames
-        hours_of_the_year = 8760
-        return pd.date_range('12/4/2011', periods=2, freq='H')
+        """
+        Parameters
+        ----------
+        timerange : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+            Time range of power flow analysis
+
+        Returns
+        -------
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`
+            Time range of power flow analysis
+        """
+        return self._timeindex
+
+    @timeindex.setter
+    def timeindex(self, time_range):
+        self._timeindex = time_range
 
 
 class ETraGoSpecs:
@@ -752,3 +900,40 @@ class Results:
 
 
         return self.pfa_v_mag_pu[level][labels_included]
+
+
+def worst_case_generation_ts(timeindex):
+    """
+    Define worst case generation time series
+
+    Parameters
+    ----------
+    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+            Time range of power flow analysis
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Normalized active power (1 kW)
+    """
+    return pd.DataFrame({'p': 1}, index=timeindex)
+
+
+def worst_case_load_ts(timeindex):
+    """
+    Define worst case load time series
+
+    Parameters
+    ----------
+    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+            Time range of power flow analysis
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Normalized active power (1 kW)
+    """
+    return pd.DataFrame({'residential': 1,
+                         'retail': 1,
+                         'industrial': 1,
+                         'agricultural': 1}, index=timeindex)
