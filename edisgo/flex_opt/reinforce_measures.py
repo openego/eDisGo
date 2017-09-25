@@ -308,7 +308,8 @@ def reinforce_branches_overloading(network, crit_lines):
 
         if crit_line.type.name == standard_line.name:
             # check how many parallel standard lines are needed
-            number_parallel_lines = math.ceil(rel_overload)
+            number_parallel_lines = math.ceil(
+                rel_overload * crit_line.quantity)
             lines_changes[crit_line] = (number_parallel_lines -
                                         crit_line.quantity)
             crit_line.quantity = number_parallel_lines
