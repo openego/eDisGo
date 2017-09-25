@@ -72,10 +72,10 @@ def import_from_ding0(file, network):
     ding0_mv_grid = ding0_nd._mv_grid_districts[0].mv_grid
 
     # Import medium-voltage grid data
-    network.mv_grid =_build_mv_grid(ding0_mv_grid, network)
+    network.mv_grid = _build_mv_grid(ding0_mv_grid, network)
 
     # Import low-voltage grid data
-    lv_grids, lv_station_mapping, lv_grid_mapping  = _build_lv_grid(ding0_mv_grid, network)
+    lv_grids, lv_station_mapping, lv_grid_mapping = _build_lv_grid(ding0_mv_grid, network)
 
     # Assign lv_grids to network
     network.mv_grid.lv_grids = lv_grids
@@ -531,7 +531,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
         for v_level, val in la['generation'].items():
             for subtype, val2 in val.items():
                 gen = Generator(
-                    id='_'.join(str(_) for _ in val2['ids']),
+                    id='agg_' + '_'.join(str(_) for _ in val2['ids']),
                     nominal_capacity=val2['capacity'],
                     type=val2['type'],
                     subtype=subtype,
@@ -1389,10 +1389,11 @@ def _build_generator_list(network):
     for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
         ids = str(geno.id).split('_')
         # geno is really MV
-        if len(ids) == 1:
+        if ids[0] != 'agg':
             genos_mv.loc[len(genos_mv)] = [int(geno.id), geno]
         # geno was aggregated (originally from aggregated LA)
         else:
+            ids.remove('agg')
             for id in ids:
                 genos_lv_agg.loc[len(genos_lv_agg)] = [int(id), geno]
 
