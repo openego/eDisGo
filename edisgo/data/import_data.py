@@ -1390,7 +1390,7 @@ def _build_generator_list(network):
         ids = str(geno.id).split('_')
         # geno is really MV
         if len(ids) == 1:
-            genos_mv.loc[len(genos_mv)] = [geno.id, geno]
+            genos_mv.loc[len(genos_mv)] = [int(geno.id), geno]
         # geno was aggregated (originally from aggregated LA)
         else:
             for id in ids:
@@ -1399,7 +1399,7 @@ def _build_generator_list(network):
     # LV genos
     for lv_grid in network.mv_grid.lv_grids:
         for geno in lv_grid.graph.nodes_by_attribute('generator'):
-            genos_lv.loc[len(genos_lv)] = [geno.id, geno]
+            genos_lv.loc[len(genos_lv)] = [int(geno.id), geno]
 
     return genos_mv, genos_lv, genos_lv_agg
 
