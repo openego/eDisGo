@@ -8,6 +8,8 @@ logging.basicConfig(filename='example.log',
                     format='%(asctime)s %(message)s',
                     datefmt='%m/%d/%Y %I:%M:%S %p',
                     level=logging.INFO)
+logger = logging.getLogger('edisgo')
+logger.setLevel(logging.DEBUG)
 
 timeseries = TimeSeries()
 scenario = Scenario(timeseries=timeseries,
