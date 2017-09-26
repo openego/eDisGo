@@ -69,6 +69,10 @@ class Grid:
     def id(self):
         return self._id
 
+    @property
+    def network(self):
+        return self._network
+
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
 

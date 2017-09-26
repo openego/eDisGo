@@ -4,6 +4,7 @@ topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA grid
 container.
 """
 
+from edisgo.grid.components import Transformer, Line
 
 import pandas as pd
 from math import pi, sqrt, floor
@@ -81,34 +82,40 @@ def to_pypsa(network, mode):
         components = combine_mv_and_lv(mv_components,
                                        lv_components)
 
-        timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
-            network,
-            mode=mode)
+        if list(components['Load'].index.values):
+            timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
+                network,
+                mode=mode)
 
-        timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
-            network,
-            mode=mode)
+        if len(list(components['Generator'].index.values)) > 1:
+            timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
+                network,
+                mode=mode)
 
-        timeseries_bus_v_set = _pypsa_bus_timeseries(
-            network,
-            components['Bus'].index.tolist())
+        if list(components['Bus'].index.values):
+            timeseries_bus_v_set = _pypsa_bus_timeseries(
+                network,
+                components['Bus'].index.tolist())
     elif mode is 'mv':
         mv_components = mv_to_pypsa(network)
         components = add_aggregated_lv_components(
             network,
             mv_components)
 
-        timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
-            network,
-            mode=mode)
+        if list(components['Load'].index.values):
+            timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
+                network,
+                mode=mode)
 
-        timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
-            network,
-            mode=mode)
+        if len(list(components['Generator'].index.values)) > 1:
+            timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
+                network,
+                mode=mode)
 
-        timeseries_bus_v_set = _pypsa_bus_timeseries(
-            network,
-            components['Bus'].index.tolist())
+        if list(components['Bus'].index.values):
+            timeseries_bus_v_set = _pypsa_bus_timeseries(
+                network,
+                components['Bus'].index.tolist())
 
         ts_gen_lv_aggr_p, \
         ts_gen_lv_aggr_q, \
@@ -116,14 +123,16 @@ def to_pypsa(network, mode):
             network)
 
         # Concat MV and LV (aggregated) time series
-        timeseries_load_p = pd.concat([timeseries_load_p, ts_load_lv_aggr_p],
-                                      axis=1)
-        timeseries_load_q = pd.concat([timeseries_load_q, ts_load_lv_aggr_q],
-                                      axis=1)
-        timeseries_gen_p = pd.concat([timeseries_gen_p, ts_gen_lv_aggr_p],
-                                     axis=1)
-        timeseries_gen_q = pd.concat([timeseries_gen_q, ts_gen_lv_aggr_q],
-                                     axis=1)
+        if list(components['Load'].index.values):
+            timeseries_load_p = pd.concat([timeseries_load_p, ts_load_lv_aggr_p],
+                                          axis=1)
+            timeseries_load_q = pd.concat([timeseries_load_q, ts_load_lv_aggr_q],
+                                          axis=1)
+        if len(list(components['Generator'].index.values)) > 1:
+            timeseries_gen_p = pd.concat([timeseries_gen_p, ts_gen_lv_aggr_p],
+                                         axis=1)
+            timeseries_gen_q = pd.concat([timeseries_gen_q, ts_gen_lv_aggr_q],
+                                         axis=1)
     elif mode is 'lv':
         raise NotImplementedError
         lv_to_pypsa(network)
@@ -147,27 +156,31 @@ def to_pypsa(network, mode):
             pypsa_network.import_components_from_dataframe(comps, k)
 
     # import time series to PyPSA network
-    import_series_from_dataframe(pypsa_network,
-                                 timeseries_gen_p,
-                                 'Generator',
-                                 'p_set')
-    import_series_from_dataframe(pypsa_network,
-                                 timeseries_gen_q,
-                                 'Generator',
-                                 'q_set')
-    import_series_from_dataframe(pypsa_network,
-                                 timeseries_load_p,
-                                 'Load',
-                                 'p_set')
-    import_series_from_dataframe(pypsa_network,
-                                 timeseries_load_q,
-                                 'Load',
-                                 'q_set')
+    if len(list(components['Generator'].index.values)) > 1:
+        import_series_from_dataframe(pypsa_network,
+                                     timeseries_gen_p,
+                                     'Generator',
+                                     'p_set')
+        import_series_from_dataframe(pypsa_network,
+                                     timeseries_gen_q,
+                                     'Generator',
+                                     'q_set')
 
-    import_series_from_dataframe(pypsa_network,
-                                 timeseries_bus_v_set,
-                                 'Bus',
-                                 'v_mag_pu_set')
+    if list(components['Load'].index.values):
+        import_series_from_dataframe(pypsa_network,
+                                     timeseries_load_p,
+                                     'Load',
+                                     'p_set')
+        import_series_from_dataframe(pypsa_network,
+                                     timeseries_load_q,
+                                     'Load',
+                                     'q_set')
+
+    if list(components['Bus'].index.values):
+        import_series_from_dataframe(pypsa_network,
+                                     timeseries_bus_v_set,
+                                     'Bus',
+                                     'v_mag_pu_set')
 
     _check_integrity_of_pypsa(pypsa_network)
 
@@ -291,11 +304,11 @@ def mv_to_pypsa(network):
 
         line['type'].append("")
         line['x'].append(
-            l['line'].type['L'] * omega / 1e3 * l['line'].length / 1e3)
-        line['r'].append(l['line'].type['R'] * l['line'].length / 1e3)
+            l['line'].type['L'] * omega / 1e3 * l['line'].length)
+        line['r'].append(l['line'].type['R'] * l['line'].length)
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
-        line['length'].append(l['line'].length / 1e3)
+        line['length'].append(l['line'].length)
 
     # create dataframe for LV stations incl. primary/secondary side bus
     for lv_st in lv_stations:
@@ -319,7 +332,7 @@ def mv_to_pypsa(network):
             transformer['model'].append('pi')
             transformer['r'].append(tr.type.R)
             transformer['x'].append(tr.type.X)
-            transformer['s_nom'].append(tr.type.S / 1e3)
+            transformer['s_nom'].append(tr.type.S_nom / 1e3)
             transformer['tap_ratio'].append(1)
 
             transformer_count += 1
@@ -416,12 +429,12 @@ def lv_to_pypsa(network):
         generator['type'].append('_'.join([gen.type, gen.subtype]))
 
         bus['name'].append(bus_name)
-        bus['v_nom'].append(gen.grid.voltage_nom / 1e3)
+        bus['v_nom'].append(gen.grid.voltage_nom)
 
     # create dictionary representing branch tees
     for bt in branch_tees:
         bus['name'].append('_'.join(['Bus', repr(bt)]))
-        bus['v_nom'].append(bt.grid.voltage_nom / 1e3)
+        bus['v_nom'].append(bt.grid.voltage_nom)
 
     # create dataframes representing loads and associated buses
     for lo in loads:
@@ -430,7 +443,7 @@ def lv_to_pypsa(network):
         load['bus'].append(bus_name)
 
         bus['name'].append(bus_name)
-        bus['v_nom'].append(lo.grid.voltage_nom / 1e3)
+        bus['v_nom'].append(lo.grid.voltage_nom)
 
     # create dataframe for lines
     for l in lines:
@@ -450,11 +463,11 @@ def lv_to_pypsa(network):
 
         line['type'].append("")
         line['x'].append(
-            l['line'].type['L'] * omega / 1e3 * l['line'].length / 1e3)
-        line['r'].append(l['line'].type['R'] * l['line'].length / 1e3)
+            l['line'].type['L'] * omega / 1e3 * l['line'].length)
+        line['r'].append(l['line'].type['R'] * l['line'].length)
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
-        line['length'].append(l['line'].length / 1e3)
+        line['length'].append(l['line'].length)
 
     lv_components = {
         'Generator': pd.DataFrame(generator).set_index('name'),
@@ -693,7 +706,7 @@ def _pypsa_bus_timeseries(network, buses, mode=None):
         Time series table in PyPSA format
     """
 
-    v_set_dict = {bus: [1, 1] for bus in buses}
+    v_set_dict = {bus: 1 for bus in buses}
 
     v_set_df = pd.DataFrame(v_set_dict,
                             index=network.scenario.timeseries.timeindex)
@@ -810,8 +823,8 @@ def _check_integrity_of_pypsa(pypsa_network):
     """"""
 
     # check for sub-networks
-    pypsa_network.determine_network_topology()
     subgraphs = list(connected_component_subgraphs(pypsa_network.graph()))
+    pypsa_network.determine_network_topology()
 
     if len(subgraphs) > 1 or len(pypsa_network.sub_networks) > 1:
         raise ValueError("The graph has isolated nodes or edges")
@@ -974,8 +987,8 @@ def process_pfa_results(network, pypsa):
     s1 = (p1 ** 2 + q1 ** 2).applymap(sqrt)
 
     # choose p and q from line ending with max(s0,s1)
-    network.results.pfa_p = p0.where(s0 > s1, p1)
-    network.results.pfa_q = q0.where(s0 > s1, q1)
+    network.results.pfa_p = p0.where(s0 > s1, p1) * 1e3
+    network.results.pfa_q = q0.where(s0 > s1, q1) * 1e3
 
     # Get voltage levels at line (avg. of buses at both sides)
     network.results._i_res = s0[pypsa.lines_t['q0'].columns].truediv(
@@ -1049,3 +1062,115 @@ def process_pfa_results(network, pypsa):
                             list(lv_generators_mapping.values()) +
                             list(lv_branch_t_mapping.values()) +
                             list(lv_loads_mapping.values())]}, axis=1)
+
+
+def update_pypsa(network):
+    """
+    Update equipment data of lines and transformers
+
+    During grid reinforcement (cf.
+    :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`) grid topology and
+    equipment of lines and transformers are changed.
+    In order to save time and not do a full translation of eDisGo's grid
+    topology to the PyPSA format, this function provides an updater for data
+    that may change during grid reinforcement.
+
+    The PyPSA grid topology :meth:`edisgo.grid.network.Network.pypsa` is update
+    by changed equipment stored in
+    :attr:`edisgo.grid.network.Network.equipment_changes`.
+
+    Parameters
+    ----------
+    network : Network
+        eDisGo grid container
+    """
+
+    # Filter equipment changes: take only last iteration step
+    equipment_changes = network.results.equipment_changes[
+        network.results.equipment_changes['iteration_step'] ==
+        network.results.equipment_changes['iteration_step'].max()]
+
+    # Step 1: Update transformers
+    transformers = equipment_changes[
+        equipment_changes['equipment'].apply(isinstance, args=(Transformer,))]
+    removed_transformers = [repr(_) for _ in
+                            transformers[transformers['change'] == 'removed'][
+                                'equipment'].tolist()]
+    added_transformers = transformers[transformers['change'] == 'added']
+
+    transformer = {'name': [],
+                   'bus0': [],
+                   'bus1': [],
+                   'type': [],
+                   'model': [],
+                   'x': [],
+                   'r': [],
+                   's_nom': [],
+                   'tap_ratio': []}
+
+    for idx, row in added_transformers.iterrows():
+        transformer['bus0'].append('_'.join(['Bus', idx.__repr__(side='mv')]))
+        transformer['bus1'].append('_'.join(['Bus', idx.__repr__(side='lv')]))
+        transformer['name'].append(repr(row['equipment']))
+        transformer['type'].append("")
+        transformer['model'].append('pi')
+        transformer['r'].append(row['equipment'].type.R)
+        transformer['x'].append(row['equipment'].type.X)
+        transformer['s_nom'].append(row['equipment'].type.S_nom / 1e3)
+        transformer['tap_ratio'].append(1)
+
+    network.pypsa.transformers.drop(removed_transformers, inplace=True)
+
+    if transformer['name']:
+        network.pypsa.import_components_from_dataframe(
+            pd.DataFrame(transformer).set_index('name'), 'Transformer')
+
+
+    # Step 2: Update lines
+    lines = equipment_changes.loc[equipment_changes.index[
+        equipment_changes.reset_index()['index'].apply(
+            isinstance, args=(Line,))]]
+    changed_lines = lines[lines['change'] == 'changed']
+
+    line = {'name': [],
+            'bus0': [],
+            'bus1': [],
+            'type': [],
+            'x': [],
+            'r': [],
+            's_nom': [],
+            'length': []}
+
+    lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
+
+    omega = 2 * pi * 50
+
+    for idx, row in changed_lines.iterrows():
+        # Update line parameters
+        network.pypsa.lines.loc[repr(idx), 'r'] = (
+            idx.type['R'] / idx.quantity * idx.length)
+        network.pypsa.lines.loc[repr(idx), 'x'] = (
+            idx.type['L'] / 1e3 * omega / idx.quantity * idx.length)
+        network.pypsa.lines.loc[repr(idx), 's_nom'] = (
+            sqrt(3) * idx.type['I_max_th'] * idx.type[
+                'U_n'] * idx.quantity / 1e3)
+
+        # Update buses line is connected to
+        adj_nodes = idx.grid.graph.nodes_from_line(idx)
+
+        if adj_nodes[0] in lv_stations:
+            bus0 = '_'.join(['Bus', adj_nodes[0].__repr__(side='mv')])
+        elif adj_nodes[0] is network.mv_grid.station:
+            bus0 = '_'.join(['Bus', adj_nodes[0].__repr__(side='lv')])
+        else:
+            bus0 = '_'.join(['Bus', repr(adj_nodes[0])])
+
+        if adj_nodes[1] in lv_stations:
+            bus1 = '_'.join(['Bus', adj_nodes[1].__repr__(side='mv')])
+        elif adj_nodes[1] is network.mv_grid.station:
+            bus1 = '_'.join(['Bus', adj_nodes[1].__repr__(side='lv')])
+        else:
+            bus1 = '_'.join(['Bus', repr(adj_nodes[1])])
+
+        network.pypsa.lines.loc[repr(idx), 'bus0'] = bus0
+        network.pypsa.lines.loc[repr(idx), 'bus1'] = bus1

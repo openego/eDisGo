@@ -42,14 +42,16 @@ def mv_line_load(network):
             # allowed maximum current
             i_line_pfa = max(network.results._i_res[repr(line['line'])])
             if i_line_pfa > i_line_max:
-                crit_lines[line] = i_line_pfa / i_line_max
+                crit_lines[line['line']] = i_line_pfa / i_line_max
         except KeyError:
             logger.debug('No results for line {} '.format(str(line)) +
                          'to check overloading.')
 
     if crit_lines:
-        logger.info('==> {} lines in MV grid have load issues.'.format(
+        logger.debug('==> {} line(s) in MV grid has/have load issues.'.format(
             len(crit_lines)))
+    else:
+        logger.debug('==> No line load issues in MV grid.')
 
     return crit_lines
 
@@ -100,8 +102,10 @@ def lv_line_load(network):
                              'to check overloading.')
 
     if crit_lines:
-        logger.info('==> {} lines in LV grids have load issues.'.format(
+        logger.debug('==> {} line(s) in LV grids has/have load issues.'.format(
             len(crit_lines)))
+    else:
+        logger.debug('==> No line load issues in LV grids.')
 
     return crit_lines
 
@@ -140,8 +144,7 @@ def mv_lv_station_load(network):
     for lv_grid in network.mv_grid.lv_grids:
         station = lv_grid.station
         # maximum allowed apparent power of station
-        # ToDo: change s to S
-        s_station_max = sum([_.type.s for _ in station.transformers]) * \
+        s_station_max = sum([_.type.S_nom for _ in station.transformers]) * \
                         load_factor_mv_lv_transformer
         try:
             # check if maximum allowed apparent power of station exceeds
@@ -155,8 +158,10 @@ def mv_lv_station_load(network):
                          'to check overloading.')
 
     if crit_stations:
-        logger.info('==> {} LV stations have load issues.'.format(
+        logger.debug('==> {} MV/LV station(s) has/have load issues.'.format(
             len(crit_stations)))
+    else:
+        logger.debug('==> No MV/LV station load issues.')
 
     return crit_stations
 
@@ -171,11 +176,10 @@ def mv_voltage_deviation(network):
 
     Returns
     -------
-    :pandas:`pandas.Series<series>`
-        Critical nodes with corresponding maximum voltage deviation, sorted
-        descending by voltage deviation.
-        Format: pd.Series(data=[v_mag_pu_node_A, v_mag_pu_node_B, ...],
-                          index=[node_A, node_B, ...])
+    Dict with :class:`~.grid.grids.MVGrid` with critical nodes as
+    :pandas:`pandas.Series<series>`, sorted descending by voltage deviation.
+    Format: {MV_grid: pd.Series(data=[v_mag_pu_node_A, v_mag_pu_node_B, ...],
+                                index=[node_A, node_B, ...])}
 
     Notes
     -----
@@ -183,28 +187,32 @@ def mv_voltage_deviation(network):
 
     """
 
+    crit_nodes = {}
+
     # load max. voltage deviation
     mv_max_v_deviation = float(
         network.config['grid_expansion']['mv_max_v_deviation'])
 
     v_mag_pu_pfa = network.results.v_res(nodes=network.mv_grid.graph.nodes(),
                                          level='mv')
-    # check for overvoltage
+    # check for over-voltage
     v_max = v_mag_pu_pfa.max()
     crit_nodes_max = v_max[(v_max > (1 + mv_max_v_deviation))] - 1
-    # check for undervoltage
+    # check for under-voltage
     v_min = v_mag_pu_pfa.min()
     crit_nodes_min = 1 - v_min[(v_min < (1 - mv_max_v_deviation))]
     # combine critical nodes and keep highest voltage deviation at each
     # node
-    crit_nodes = crit_nodes_max.append(crit_nodes_min).max(level=0)
-    if len(crit_nodes) > 0:
-        crit_nodes.sort_values(ascending=False, inplace=True)
-        logger.info(
-            '==> {} nodes in MV grid have voltage issues.'.format(
-                len(crit_nodes)))
+    crit_nodes_grid = crit_nodes_max.append(crit_nodes_min).max(level=0)
+    if len(crit_nodes_grid) > 0:
+        crit_nodes[network.mv_grid] = crit_nodes_grid.sort_values(
+            ascending=False)
+        logger.debug(
+            '==> {} node(s) in MV grid has/have voltage issues.'.format(
+                len(crit_nodes[network.mv_grid])))
     else:
         crit_nodes = None
+        logger.debug('==> {} No voltage issues in MV grid.')
 
     return crit_nodes
 
@@ -219,8 +227,8 @@ def lv_voltage_deviation(network):
 
     Returns
     -------
-    Dict of LV grids with critical nodes as :pandas:`pandas.Series<series>`,
-    sorted descending by voltage deviation.
+    Dict of :class:`~.grid.grids.LVGrid` with critical nodes as
+    :pandas:`pandas.Series<series>`, sorted descending by voltage deviation.
     Format: {grid_1: pd.Series(data=[v_mag_pu_node_1A, v_mag_pu_node_1B],
                                index=[node_1A, node_1B]), ...}
 
@@ -253,8 +261,10 @@ def lv_voltage_deviation(network):
                 ascending=False)
 
     if crit_nodes:
-        logger.info(
-            '==> {} nodes in LV grids have voltage issues.'.format(
+        logger.debug(
+            '==> {} LV grid(s) has/have voltage issues.'.format(
                 len(crit_nodes)))
+    else:
+        logger.debug('==> No voltage issues in LV grids.')
 
     return crit_nodes

@@ -1,4 +1,7 @@
-from shapely.geometry import LineString
+import os
+if not 'READTHEDOCS' in os.environ:
+    from shapely.geometry import LineString
+from .grids import LVGrid, MVGrid
 from math import acos, tan
 import pandas as pd
 
@@ -119,29 +122,8 @@ class Load(Component):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # self._timeseries = kwargs.get('timeseries', None)
+        self._timeseries = kwargs.get('timeseries', None)
         self._consumption = kwargs.get('consumption', None)
-
-        # TODO: replace below dummy timeseries
-        hours_of_the_year = 8760
-
-        cos_phi = 0.95
-
-        q_factor = tan(acos(cos_phi))
-
-
-        avg_hourly_load = self.consumption[list(self.consumption.keys())[0]] / \
-                                           hours_of_the_year / 1e3
-
-        rng = pd.date_range('1/1/2011', periods=hours_of_the_year, freq='H')
-
-        ts_dict_p = {
-            'p': [avg_hourly_load * (1 - q_factor)] * hours_of_the_year}
-        ts_dict_q = {
-            'q': [avg_hourly_load * (q_factor)] * hours_of_the_year}
-        ts_dict = {**ts_dict_p, **ts_dict_q}
-
-        self._timeseries = pd.DataFrame(ts_dict, index=rng)
 
     @property
     def timeseries(self):
@@ -156,6 +138,38 @@ class Load(Component):
         --------
         edisgo.network.TimeSeries : Details of global TimeSeries
         """
+        if self._timeseries is None:
+            # TODO: replace by correct values (see OEDB) and put to config
+            peak_load_consumption_ratio = {
+                'residential': 0.0025,
+                'retail': 0.0025,
+                'industrial': 0.0025,
+                'agricultural': 0.0025}
+
+            if isinstance(self.grid, MVGrid):
+                q_factor = tan(acos(self.grid.network.scenario.pfac_mv_load))
+                power_scaling = float(self.grid.network.config['scenario'][
+                                          'scale_factor_mv_load'])
+            elif isinstance(self.grid, LVGrid):
+                q_factor = tan(acos(self.grid.network.scenario.pfac_lv_load))
+                power_scaling = float(self.grid.network.config['scenario'][
+                                          'scale_factor_lv_load'])
+
+            sector = list(self.consumption.keys())[0]
+            # TODO: remove this if, once Ding0 data changed to single sector consumption
+            if len(list(self.consumption.keys())) > 1:
+                consumption = sum([v for k,v in self.consumption.items()])
+            else:
+                consumption = self.consumption[sector]
+
+            timeseries = (self.grid.network.scenario.timeseries.load[sector] *
+                          consumption *
+                          peak_load_consumption_ratio[sector]).to_frame('p')
+            timeseries['q'] = (self.grid.network.scenario.timeseries.load[sector] *
+                               consumption *
+                               peak_load_consumption_ratio[sector] *
+                               q_factor)
+            self._timeseries = timeseries * power_scaling
 
         return self._timeseries
 
@@ -168,7 +182,7 @@ class Load(Component):
             Attribute name (PyPSA conventions). Choose from {p_set, q_set}
         """
 
-        return self._timeseries[attr]
+        return self.timeseries[attr] / 1e3
 
     @property
     def consumption(self):
@@ -227,23 +241,9 @@ class Generator(Component):
         self._type = kwargs.get('type', None)
         self._subtype = kwargs.get('subtype', None)
         self._v_level = kwargs.get('v_level', None)
+        self._timeseries = kwargs.get('timeseries', None)
 
-        # TODO: replace below dummy timeseries
-        hours_of_the_year = 8760
-
-        cos_phi = 0.95
-
-        q_factor = tan(acos(0.95))
-
-        rng = pd.date_range('1/1/2011', periods=hours_of_the_year, freq='H')
-
-        ts_dict = {
-            'p': [self.nominal_capacity / 1e3 * (1 - q_factor)] * hours_of_the_year,
-            'q': [self.nominal_capacity / 1e3 * q_factor] * hours_of_the_year}
-
-        self._timeseries = pd.DataFrame(ts_dict, index=rng)
-        # self._timeseries = kwargs.get('timeseries', None)
-
+    @property
     def timeseries(self):
         """Return time series of generator
 
@@ -253,18 +253,42 @@ class Generator(Component):
         and type of technology in :class:`~.grid.network.TimeSeries` object and
         considers for predefined curtailment as well.
         """
+        if self._timeseries is None:
+            if isinstance(self.grid, MVGrid):
+                q_factor = tan(acos(self.grid.network.scenario.pfac_mv_gen))
+            elif isinstance(self.grid, LVGrid):
+                q_factor = tan(acos(self.grid.network.scenario.pfac_lv_gen))
+
+            timeseries = self.grid.network.scenario.timeseries.generation
+            timeseries['q'] = (
+                self.grid.network.scenario.timeseries.generation * q_factor)
+
+            # scale feedin/load
+            if self.type == 'solar':
+                power_scaling = float(self.grid.network.config['scenario'][
+                    'scale_factor_feedin_pv'])
+            else:
+                power_scaling = float(self.grid.network.config['scenario'][
+                    'scale_factor_feedin_other'])
+            self._timeseries = (
+                self.grid.network.scenario.timeseries.generation
+                * self.nominal_capacity
+                * power_scaling)
+
+
         return self._timeseries
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
+
+        Convert from kV, kVA to MW, MVA
 
         Parameters
         ----------
         attr : str
             Attribute name (PyPSA conventions). Choose from {p_set, q_set}
         """
-
-        return self._timeseries[attr]
+        return self.timeseries[attr] / 1e3
 
     @property
     def type(self):
@@ -338,6 +362,7 @@ class BranchTee(Component):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.in_building = kwargs.get('in_building', None)
 
     def __repr__(self):
         return '_'.join([self.__class__.__name__, repr(self.grid), str(self._id)])
@@ -412,6 +437,9 @@ class Line(Component):
         Length of the line calculated in linear distance. Unit: m
     _quantity: float
         Quantity of parallel installed lines.
+    _kind: String
+        Specifies whether the line is an underground cable ('cable') or an
+        overhead line ('line').
     """
 
     def __init__(self, **kwargs):
@@ -419,6 +447,7 @@ class Line(Component):
         self._type = kwargs.get('type', None)
         self._length = kwargs.get('length', None)
         self._quantity = kwargs.get('quantity', 1)
+        self._kind = kwargs.get('kind', None)
 
     @property
     def geom(self):
@@ -451,4 +480,12 @@ class Line(Component):
     @quantity.setter
     def quantity(self, new_quantity):
         self._quantity = new_quantity
+
+    @property
+    def kind(self):
+        return self._kind
+
+    @kind.setter
+    def kind(self, new_kind):
+        self._kind = new_kind
 
