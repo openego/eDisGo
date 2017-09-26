@@ -151,6 +151,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     """
 
     # ToDo: gilt Methodik auch für die MS?
+    # ToDo: in MV muss neue line zu node_2_3 zu rep_main_line und main_line_reinforced hinzugefügt werden
 
     # load standard line data
     if isinstance(grid, LVGrid):
@@ -167,7 +168,8 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
             print('Chosen standard MV line is not in equipment list.')
 
     # find first nodes of every main line as representatives
-    rep_main_line = nx.predecessor(grid.graph, grid.station, cutoff=1)
+    rep_main_line = list(
+        nx.predecessor(grid.graph, grid.station, cutoff=1).keys())
     # list containing all representatives of main lines that have already been
     # reinforced
     main_line_reinforced = []
@@ -177,6 +179,9 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
         path = nx.shortest_path(grid.graph, grid.station,
                                 crit_nodes.index[i])
 
+        # ToDo: Remove
+        if len(path) == 1:
+            break
         # check if representative of line is already in list
         # main_line_reinforced, if it is the main line the critical node is
         # connected to has already been reinforced in this iteration step
@@ -235,6 +240,10 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                 crit_line.type = standard_line.copy()
                 crit_line.kind = 'cable'
                 lines_changes[crit_line] = 1
+                # add node_2_3 to representatives list to not further reinforce
+                # this part off the grid in this iteration step
+                rep_main_line.append(node_2_3)
+                main_line_reinforced.append(node_2_3)
 
         else:
             logger.debug(
@@ -299,7 +308,8 @@ def reinforce_branches_overloading(network, crit_lines):
 
         if crit_line.type.name == standard_line.name:
             # check how many parallel standard lines are needed
-            number_parallel_lines = math.ceil(rel_overload)
+            number_parallel_lines = math.ceil(
+                rel_overload * crit_line.quantity)
             lines_changes[crit_line] = (number_parallel_lines -
                                         crit_line.quantity)
             crit_line.quantity = number_parallel_lines

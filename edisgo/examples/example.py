@@ -3,6 +3,13 @@ from edisgo.flex_opt import reinforce_grid
 import os
 import pickle
 
+import logging
+logging.basicConfig(filename='example.log',
+                    format='%(asctime)s %(message)s',
+                    datefmt='%m/%d/%Y %I:%M:%S %p',
+                    level=logging.INFO)
+logger = logging.getLogger('edisgo')
+logger.setLevel(logging.DEBUG)
 
 timeseries = TimeSeries()
 scenario = Scenario(timeseries=timeseries,
@@ -12,16 +19,26 @@ import_network = False
 
 if import_network:
     network = Network.import_from_ding0(
-        os.path.join('data', 'ding0_grids_example.pkl'),
+        os.path.join('data', 'ding0_grids__76.pkl'),
         id='Test grid',
         scenario=scenario
     )
     # Do non-linear power flow analysis with PyPSA
     network.analyze()
-    network.pypsa = None
-    pickle.dump(network, open('test_network.pkl', 'wb'))
+    network.pypsa.export_to_csv_folder('data/pypsa_export')
+    #network.pypsa = None
+    #pickle.dump(network, open('test_network.pkl', 'wb'))
 else:
-    network = pickle.load(open('test_network.pkl', 'rb'))
+    network = None #pickle.load(open('test_network.pkl', 'rb'))
+
+# from pypsa import Network as PyPSANetwork
+# pypsa_network = PyPSANetwork(csv_folder_name='data/pypsa_export_80_stations')
+# # q unterscheidet sich
+# b1 = pypsa_network.transformers_t['q0']
+# b2 = network.pypsa.transformers_t['q0']
+# b3 = b1 - b2
+# b1 = pypsa_network.loads_t['q_set']
+# b2 = network.pypsa.loads_t['q_set']
 
 # # Print LV station secondary side voltage levels returned by PFA
 # print(network.results.v_res(
