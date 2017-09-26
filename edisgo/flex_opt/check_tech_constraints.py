@@ -261,10 +261,10 @@ def lv_voltage_deviation(network):
                 ascending=False)
 
     if crit_nodes:
-        logger.info(
+        logger.debug(
             '==> {} LV grid(s) has/have voltage issues.'.format(
                 len(crit_nodes)))
     else:
-        logger.debug('==> {} No voltage issues in LV grids.')
+        logger.debug('==> No voltage issues in LV grids.')
 
     return crit_nodes
