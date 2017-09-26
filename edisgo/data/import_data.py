@@ -148,7 +148,10 @@ def _build_lv_grid(ding0_grid, network):
 
                 # Create list of branch tee instances and add these to grid's graph
                 branch_tees = {
-                    _: BranchTee(id=_.id_db, geom=_.geo_data, grid=lv_grid)
+                    _: BranchTee(id=_.id_db,
+                                 geom=_.geo_data,
+                                 grid=lv_grid,
+                                 in_building=_.in_building)
                     for _ in ding0_lv_grid._cable_distributors}
                 lv_grid.graph.add_nodes_from(branch_tees.values(),
                                               type='branch_tee')
@@ -258,7 +261,10 @@ def _build_mv_grid(ding0_grid, network):
                               type='disconnection_point')
 
     # Create list of branch tee instances and add these to grid's graph
-    branch_tees = {_: BranchTee(id=_.id_db, geom=_.geo_data, grid=grid)
+    branch_tees = {_: BranchTee(id=_.id_db,
+                                geom=_.geo_data,
+                                grid=grid,
+                                in_building=False)
                    for _ in ding0_grid._cable_distributors}
     grid.graph.add_nodes_from(branch_tees.values(), type='branch_tee')
 
