@@ -15,11 +15,11 @@ timeseries = TimeSeries()
 scenario = Scenario(timeseries=timeseries,
                     power_flow='worst-case')
 
-import_network = False
+import_network = True
 
 if import_network:
     network = Network.import_from_ding0(
-        os.path.join('data', 'ding0_grids__76.pkl'),
+        os.path.join('data', 'ding0_grids_example_mvgd265_new-genos-dp-v0.3.pkl'),
         id='Test grid',
         scenario=scenario
     )
@@ -95,7 +95,7 @@ else:
 # else:
 #     print("O MWh")
 
-reinforce_grid.reinforce_grid(network)
+#reinforce_grid.reinforce_grid(network)
 #print(network.results.grid_expansion_costs)
 
 # liste aller lv grids
