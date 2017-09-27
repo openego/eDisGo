@@ -23,9 +23,10 @@ if import_network:
         id='Test grid',
         scenario=scenario
     )
+    network.import_generators()
     # Do non-linear power flow analysis with PyPSA
-    network.analyze()
-    network.pypsa.export_to_csv_folder('data/pypsa_export')
+    #network.analyze()
+    #network.pypsa.export_to_csv_folder('data/pypsa_export')
     #network.pypsa = None
     #pickle.dump(network, open('test_network.pkl', 'wb'))
 else:
