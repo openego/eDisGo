@@ -3,7 +3,8 @@ import math
 import networkx as nx
 from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
     dijkstra_shortest_path_length
-from edisgo.grid.components import Transformer
+
+from edisgo.grid.components import Transformer, BranchTee, Generator, Load
 from edisgo.grid.grids import LVGrid
 
 import logging
@@ -135,6 +136,9 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     farthest away from the station and install new standard line
     2. Install parallel standard line
 
+    In LV grids only lines outside buildings are reinforced; loads and
+    generators in buildings cannot be directly connected to the MV/LV station.
+
     References
     ----------
     .. [1] "Verteilnetzstudie für das Land Baden-Württemberg"
@@ -145,7 +149,6 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     """
 
     # ToDo: gilt Methodik auch für die MS?
-    # ToDo: in MV muss neue line zu node_2_3 zu rep_main_line und main_line_reinforced hinzugefügt werden
 
     # load standard line data
     if isinstance(grid, LVGrid):
@@ -191,6 +194,32 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
             # from station to critical node farthest away from the station
             node_2_3 = next(j for j in path if path_length[j] >= path_length[
                 crit_nodes.index[i]] * 2 / 3)
+
+            # if LVGrid: check if node_2_3 is outside of a house
+            # and if not find next BranchTee outside the house
+            if isinstance(grid, LVGrid):
+                if isinstance(node_2_3, BranchTee):
+                    if node_2_3.in_building:
+                        # ToDo more generic (new function)
+                        try:
+                            node_2_3 = path[path.index(node_2_3) - 1]
+                        except IndexError:
+                            print('BranchTee outside of building is not in ' +
+                                  'path.')
+                elif (isinstance(node_2_3, Generator) or
+                          isinstance(node_2_3, Load)):
+                    pred_node = path[path.index(node_2_3) - 1]
+                    if isinstance(pred_node, BranchTee):
+                        if pred_node.in_building:
+                            # ToDo more generic (new function)
+                            try:
+                                node_2_3 = path[path.index(node_2_3) - 2]
+                            except IndexError:
+                                print('BranchTee outside of building is ' +
+                                      'not in path.')
+                else:
+                    logging.error("Not implemented for {}.".format(
+                        str(type(node_2_3))))
 
             # if node_2_3 is a representative (meaning it is already directly
             # connected to the station), line cannot be disconnected and must
