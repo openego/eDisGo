@@ -203,7 +203,7 @@ class Load(Component):
 
     def __repr__(self):
         return '_'.join(['Load',
-                         list(self.consumption.keys())[0],
+                         sorted(list(self.consumption.keys()))[0],
                          repr(self.grid),
                          str(self.id)])
 
