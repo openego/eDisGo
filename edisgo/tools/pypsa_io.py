@@ -1131,7 +1131,11 @@ def update_pypsa(network):
                    's_nom': [],
                    'tap_ratio': []}
 
+
     for idx, row in added_transformers.iterrows():
+        v_base = idx.mv_grid.voltage_nom  # we choose voltage of transformers' primary side
+        z_base = v_base ** 2 / row['equipment'].type.S_nom
+
         transformer['bus0'].append('_'.join(['Bus', idx.__repr__(side='mv')]))
         transformer['bus1'].append('_'.join(['Bus', idx.__repr__(side='lv')]))
         transformer['name'].append(repr(row['equipment']))
@@ -1139,6 +1143,8 @@ def update_pypsa(network):
         transformer['model'].append('pi')
         transformer['r'].append(row['equipment'].type.R)
         transformer['x'].append(row['equipment'].type.X)
+        transformer['r'].append(row['equipment'].type.R / z_base)
+        transformer['x'].append(row['equipment'].type.X / z_base)
         transformer['s_nom'].append(row['equipment'].type.S_nom / 1e3)
         transformer['tap_ratio'].append(1)
 
