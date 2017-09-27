@@ -1094,11 +1094,6 @@ def _import_genos_from_oedb(network):
 
     #generators_mv = generators_conv_mv.append(generators_res_mv)
 
-    _update_grids(network=network,
-                  #generators_mv=generators_mv,
-                  generators_mv=generators_res_mv,
-                  generators_lv=generators_res_lv)
-
     # validate
     cap=0
     # MV genos
@@ -1112,6 +1107,25 @@ def _import_genos_from_oedb(network):
             cap += geno.nominal_capacity
     print('Geno cap sum LV (SQ):', str(cap-x))
     print('Geno cap sum (SQ):', str(cap))
+
+    _update_grids(network=network,
+                  #generators_mv=generators_mv,
+                  generators_mv=generators_res_mv,
+                  generators_lv=generators_res_lv)
+
+    # validate
+    cap=0
+    # MV genos
+    for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
+        cap += geno.nominal_capacity
+    x=cap
+    print('Geno cap sum MV (2035):', str(cap))
+    # LV genos
+    for lv_grid in network.mv_grid.lv_grids:
+        for geno in lv_grid.graph.nodes_by_attribute('generator'):
+            cap += geno.nominal_capacity
+    print('Geno cap sum LV (2035):', str(cap-x))
+    print('Geno cap sum (2035):', str(cap))
 
 
 def _import_genos_from_pypsa(network, file):
@@ -1232,10 +1246,10 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
     # iterate over new generators and create them
     for id, row in generators_mv_new.iterrows():
         # if no geom is available, skip generator
-        if not row['geom']:
-            logger.error('Generator {} has no geom entry '
-                         'and will be skipped.'.format(id))
-            continue
+        # if not row['geom']:
+        #     logger.error('Generator {} has no geom entry '
+        #                  'and will be skipped.'.format(id))
+        #     continue
 
         # create generator object and add it to MV grid's graph
         network.mv_grid.graph.add_node(
@@ -1245,7 +1259,8 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
                       type=row['generation_type'],
                       subtype=row['generation_subtype'],
                       v_level=int(row['voltage_level']),
-                      geom=wkt_loads(row['geom'])),
+                      #geom=wkt_loads(row['geom'])),
+                      geom=None),
             type='generator')
         log_geno_count += 1
 
@@ -1259,9 +1274,10 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
     if not g_mv.empty:
         log_geno_count = 0
         for _, row in g_mv.iterrows():
-            print('TODO: Remove geno {} from grid {}'
+            print('TODO: Remove geno {} from grid {} (capacity: {})'
                   .format(repr(row['obj']),
-                          repr(row['obj'].grid)))
+                          repr(row['obj'].grid),
+                          row['obj'].nominal_capacity))
             log_geno_count += 1
         logger.info('{} of {} decommissioned generators removed.'
                     .format(str(log_geno_count),
@@ -1310,9 +1326,10 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
     if not g_lv.empty:
         log_geno_count = 0
         for _, row in g_lv.iterrows():
-            print('TODO: Remove geno {} from grid {}'
+            print('TODO: Remove geno {} from grid {} (capacity: {})'
                   .format(repr(row['obj']),
-                          repr(row['obj'].grid)))
+                          repr(row['obj'].grid),
+                          row['obj'].nominal_capacity))
             log_geno_count += 1
         logger.info('{} of {} decommissioned generators (single units) removed.'
                     .format(str(log_geno_count),
@@ -1406,9 +1423,10 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
     if not g_lv_agg.empty:
         log_geno_count = 0
         for _, row in g_lv_agg.iterrows():
-            print('TODO: Remove geno {} in agg. geno in grid {}'
+            print('TODO: Remove geno {} in agg. geno in grid {} (capacity: {})'
                   .format(repr(row['agg_geno']),
-                          repr(row['agg_geno'].grid)))
+                          repr(row['agg_geno'].grid),
+                          row['agg_geno'].nominal_capacity))
             log_geno_count += 1
         logger.info('{} of {} decommissioned generators in aggregated generators removed.'
                     .format(str(log_geno_count),
