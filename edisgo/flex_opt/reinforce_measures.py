@@ -253,7 +253,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
 
     if main_line_reinforced:
         logger.debug('==> {} branche(s) was/were reinforced.'.format(
-            str(len(main_line_reinforced))) + 'due to over-voltage issues.')
+            str(len(lines_changes))) + 'due to over-voltage issues.')
 
     return lines_changes
 
@@ -329,7 +329,7 @@ def reinforce_branches_overloading(network, crit_lines):
                 crit_line.kind = 'cable'
 
     if crit_lines:
-        logger.debug('==> {} branche(s) was/were reinforced.'.format(
+        logger.debug('==> {} branche(s) was/were reinforced '.format(
             str(len(crit_lines))) + 'due to over-loading issues.')
 
     return lines_changes
