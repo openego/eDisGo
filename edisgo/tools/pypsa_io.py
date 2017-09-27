@@ -545,7 +545,6 @@ def add_aggregated_lv_components(network, components):
                 loads[lv_grid].setdefault(sector, 0)
                 loads[lv_grid][sector] += val
 
-
     # define dict for DataFrame creation of aggr. generation and load
     generator = {'name': [],
                  'bus': [],
@@ -939,7 +938,6 @@ def _check_integrity_of_pypsa(pypsa_network):
     if duplicate_v_mag_set:
         raise ValueError("{labels} have duplicate entry in buses_t".format(
             labels=duplicate_v_mag_set))
-        
 
 
 def process_pfa_results(network, pypsa):
@@ -1125,21 +1123,12 @@ def update_pypsa(network):
         network.pypsa.import_components_from_dataframe(
             pd.DataFrame(transformer).set_index('name'), 'Transformer')
 
-
     # Step 2: Update lines
     lines = equipment_changes.loc[equipment_changes.index[
         equipment_changes.reset_index()['index'].apply(
             isinstance, args=(Line,))]]
     changed_lines = lines[lines['change'] == 'changed']
 
-    line = {'name': [],
-            'bus0': [],
-            'bus1': [],
-            'type': [],
-            'x': [],
-            'r': [],
-            's_nom': [],
-            'length': []}
 
     lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
 
