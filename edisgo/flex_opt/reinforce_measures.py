@@ -1,18 +1,12 @@
-import os
 import copy
 import math
-import pandas as pd
 import networkx as nx
 from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
     dijkstra_shortest_path_length
-if not 'READTHEDOCS' in os.environ:
-    import ding0
 from edisgo.grid.components import Transformer
 from edisgo.grid.grids import LVGrid
 
 import logging
-
-# package_path = ding0.__path__[0]
 logger = logging.getLogger('edisgo')
 
 
