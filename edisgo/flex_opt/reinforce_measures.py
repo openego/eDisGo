@@ -233,6 +233,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                 crit_line.length = path_length[node_2_3]
                 crit_line.type = standard_line.copy()
                 crit_line.kind = 'cable'
+                crit_line.quantity = 1
                 lines_changes[crit_line] = 1
                 # add node_2_3 to representatives list to not further reinforce
                 # this part off the grid in this iteration step
