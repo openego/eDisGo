@@ -709,7 +709,23 @@ def _pypsa_generator_timeseries(network, mode=None):
 
 
 def _pypsa_bus_timeseries(network, buses, mode=None):
-    """Timeseries in PyPSA compatible format for generator instances
+    """Timeseries in PyPSA compatible format for bus instances
+
+    Set all buses except for the slack bus to voltage of 1 pu (it is assumed
+    this setting is entirely ingnored during solving the power flow problem).
+    This slack bus is set to an operational voltage which is typically greater
+    than nominal voltage plus a control deviation.
+    The control deviation is always added positively to the operational voltage.
+    For example, the operational voltage (offset) is set to 1.025 pu plus the
+    control deviation of 0.015 pu. This adds up to a set voltage of the slack
+    bus of 1.04 pu.
+
+    .. warning::
+    
+        Voltage settings for the slack bus defined by this function assume the
+        feedin case (reverse power flow case) as the worst-case for the power
+        system. Thus, the set point for the slack is always greater 1.
+
 
     Parameters
     ----------
@@ -729,8 +745,20 @@ def _pypsa_bus_timeseries(network, buses, mode=None):
         Time series table in PyPSA format
     """
 
-    v_set_dict = {bus: 1 for bus in buses}
+    # get slack bus label
+    slack_bus = '_'.join(
+        ['Bus', network.mv_grid.station.__repr__(side='mv')])
 
+    # set all buses (except slack bus) to nominal voltage
+    v_set_dict = {bus: 1 for bus in buses if bus != slack_bus}
+
+    # Set slack bus to operational voltage (includes offset and control deviation
+    slack_voltage_pu = 1 + \
+        float(network.config['grid_expansion']['hv_mv_trafo_offset']) + \
+        float(network.config['grid_expansion']['hv_mv_trafo_control_deviation'])
+    v_set_dict.update({slack_bus: slack_voltage_pu})
+
+    # Convert to PyPSA compatible dataframe
     v_set_df = pd.DataFrame(v_set_dict,
                             index=network.scenario.timeseries.timeindex)
 
