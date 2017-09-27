@@ -1129,7 +1129,6 @@ def update_pypsa(network):
             isinstance, args=(Line,))]]
     changed_lines = lines[lines['change'] == 'changed']
 
-
     lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
 
     omega = 2 * pi * 50
@@ -1143,6 +1142,7 @@ def update_pypsa(network):
         network.pypsa.lines.loc[repr(idx), 's_nom'] = (
             sqrt(3) * idx.type['I_max_th'] * idx.type[
                 'U_n'] * idx.quantity / 1e3)
+        network.pypsa.lines.loc[repr(idx), 'length'] = idx.length
 
         # Update buses line is connected to
         adj_nodes = idx.grid.graph.nodes_from_line(idx)
