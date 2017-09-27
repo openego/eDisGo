@@ -1,3 +1,5 @@
+.. _dev-notes:
+
 Notes to developers
 ===================
 

@@ -11,6 +11,11 @@ eDisGo -- Optimization of flexibility options and grid expansion for distributio
 .. toctree::
    :maxdepth: 2
 
+   start_page
+   quickstart
+   usage_details
+   features_in_detail
+   data_sources
    dev_notes
    definitions_and_units
    api
