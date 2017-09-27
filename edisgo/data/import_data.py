@@ -541,7 +541,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
             for type, val2 in val.items():
                 for subtype, val3 in val2.items():
                     gen = Generator(
-                        id='agg_' + '_'.join([la_id] + [str(_) for _ in val3['ids']]),
+                        id='agg-' + la_id + '-' + '_'.join([str(_) for _ in val3['ids']]),
                         nominal_capacity=val3['capacity'],
                         type=type,
                         subtype=subtype,
@@ -550,23 +550,23 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                         v_level=4)
                     grid.graph.add_node(gen, type='generator')
 
-                # backup reference of geno to LV geno list (save geno
-                # where the former LV genos are aggregated in)
-                network.dingo_import_data.set_value(network.dingo_import_data['id'].isin(val2['ids']),
-                                                    'agg_geno',
-                                                    gen)
+                    # backup reference of geno to LV geno list (save geno
+                    # where the former LV genos are aggregated in)
+                    network.dingo_import_data.set_value(network.dingo_import_data['id'].isin(val3['ids']),
+                                                        'agg_geno',
+                                                        gen)
 
-                # connect generator to MV station
-                line = {'line': Line(
-                         id='line_aggr_generator_vlevel_{v_level}_'
-                            '{subtype}'.format(
-                             v_level=v_level,
-                             subtype=subtype),
-                         type=aggr_line_type,
-                         length=.5,
-                         grid=grid)
-                     }
-                grid.graph.add_edge(grid.station, gen, line, type='line')
+                    # connect generator to MV station
+                    line = {'line': Line(
+                             id='line_aggr_generator_vlevel_{v_level}_'
+                                '{subtype}'.format(
+                                 v_level=v_level,
+                                 subtype=subtype),
+                             type=aggr_line_type,
+                             length=.5,
+                             grid=grid)
+                         }
+                    grid.graph.add_edge(grid.station, gen, line, type='line')
         for sector, sectoral_load in la['load'].items():
             load = Load(
                 geom=grid.station.geom,
@@ -1439,14 +1439,14 @@ def _build_generator_list(network):
 
     # MV genos
     for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
-        ids = str(geno.id).split('_')
+        name_comp = str(geno.id).split('-')
         # geno is really MV
-        if ids[0] != 'agg':
+        if name_comp[0] != 'agg':
             genos_mv.loc[len(genos_mv)] = [int(geno.id), geno]
         # geno was aggregated (originally from aggregated LA)
         else:
-            ids.remove('agg')
-            for id in ids:
+            #name_comp.remove('agg')
+            for id in name_comp[2].split('_'):
                 genos_lv_agg.loc[len(genos_lv_agg)] = [int(id), geno]
 
     # LV genos
