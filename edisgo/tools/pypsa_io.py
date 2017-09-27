@@ -212,6 +212,26 @@ def mv_to_pypsa(network):
         * 'Line'
         * 'BranchTee'
         * 'Tranformer'
+
+    .. warning::
+
+        PyPSA takes resistance R and reactance X in p.u. The conversion from
+        values in ohm to pu notation is performed by following equations
+
+        .. math::
+
+            r_{p.u.} = \frac{R_{\Omega}}{Z_{B}}
+
+            x_{p.u.} = \frac{X_{\Omega}}{Z_{B}}
+
+            with
+
+            Z_{B} = \frac{V_B}{S_B}
+
+        I'm quite sure, but its not 100 % clear if the base voltage V_B is
+        chosen correctly. We take the primary side voltage of transformer as
+        the transformers base voltage. See
+        `#54 <https://github.com/openego/eDisGo/issues/54>`_ for discussion.
     """
 
     generators = network.mv_grid.graph.nodes_by_attribute('generator')
@@ -323,15 +343,18 @@ def mv_to_pypsa(network):
         bus['name'].append(bus1_name)
         bus['v_nom'].append(lv_st.transformers[0].voltage_op)
 
+        v_base = lv_st.mv_grid.voltage_nom # we choose voltage of transformers' primary side
+
         for tr in lv_st.transformers:
+            z_base = v_base ** 2 / tr.type.S_nom
             transformer['name'].append(
                 '_'.join([repr(lv_st), 'transformer', str(transformer_count)]))
             transformer['bus0'].append(bus0_name)
             transformer['bus1'].append(bus1_name)
             transformer['type'].append("")
             transformer['model'].append('pi')
-            transformer['r'].append(tr.type.R)
-            transformer['x'].append(tr.type.X)
+            transformer['r'].append(tr.type.R / z_base)
+            transformer['x'].append(tr.type.X / z_base)
             transformer['s_nom'].append(tr.type.S_nom / 1e3)
             transformer['tap_ratio'].append(1)
 
