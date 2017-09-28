@@ -30,8 +30,7 @@ def mv_line_load(network):
 
     crit_lines = {}
 
-    load_factor_mv_line = float(network.config['grid_expansion'][
-                                    'load_factor_mv_line'])
+    load_factor_mv_line = network.scenario.parameters.load_factor_mv_line
 
     # ToDo: Add getter for i_res
     for line in list(network.mv_grid.graph.graph_edges()):
@@ -83,8 +82,7 @@ def lv_line_load(network):
 
     crit_lines = {}
 
-    load_factor_lv_line = float(network.config['grid_expansion'][
-                                    'load_factor_lv_line'])
+    load_factor_lv_line = network.scenario.parameters.load_factor_lv_line
 
     # ToDo: Add getter for i_res
     for lv_grid in network.mv_grid.lv_grids:
@@ -138,8 +136,8 @@ def mv_lv_station_load(network):
 
     crit_stations = {}
 
-    load_factor_mv_lv_transformer = float(network.config['grid_expansion'][
-                                              'load_factor_mv_lv_transformer'])
+    load_factor_mv_lv_transformer = \
+        network.scenario.parameters.load_factor_mv_lv_transformer
 
     for lv_grid in network.mv_grid.lv_grids:
         station = lv_grid.station
@@ -190,8 +188,7 @@ def mv_voltage_deviation(network):
     crit_nodes = {}
 
     # load max. voltage deviation
-    mv_max_v_deviation = float(
-        network.config['grid_expansion']['mv_max_v_deviation'])
+    mv_max_v_deviation = network.scenario.parameters.mv_max_v_deviation
 
     v_mag_pu_pfa = network.results.v_res(nodes=network.mv_grid.graph.nodes(),
                                          level='mv')
@@ -241,8 +238,7 @@ def lv_voltage_deviation(network):
     crit_nodes = {}
 
     # load max. voltage deviation
-    lv_max_v_deviation = float(
-        network.config['grid_expansion']['mv_lv_max_v_deviation'])
+    lv_max_v_deviation = network.scenario.parameters.lv_max_v_deviation
 
     for lv_grid in network.mv_grid.lv_grids:
         v_mag_pu_pfa = network.results.v_res(nodes=lv_grid.graph.nodes(),

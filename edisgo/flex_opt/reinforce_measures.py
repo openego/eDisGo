@@ -39,8 +39,8 @@ def extend_distribution_substation(network, critical_stations):
     except KeyError:
         print('Standard MV/LV transformer is not in equipment list.')
 
-    load_factor_mv_lv_transformer = float(network.config['grid_expansion'][
-        'load_factor_mv_lv_transformer'])
+    load_factor_mv_lv_transformer = \
+        network.scenario.parameters.load_factor_mv_lv_transformer
 
     transformers_changes = {'added': {}, 'removed': {}}
     for station in critical_stations:
