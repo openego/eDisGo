@@ -1010,6 +1010,8 @@ def _import_genos_from_oedb(network):
         -----
         You can find a full list of columns in
         :func:`edisgo.data.import_data._update_grids`
+
+        If subtype is not specified it's set to 'unknown'.
         """
 
         # build basic query
@@ -1035,12 +1037,22 @@ def _import_genos_from_oedb(network):
                                        session.bind,
                                        index_col='id')
 
+        # define generators with unknown subtype as 'unknown'
+        generators_mv.loc[generators_mv[
+                              'generation_subtype'].isnull(),
+                          'generation_subtype'] = 'unknown'
+
         # extend basic query for LV generators and read data from db
         generators_lv_sqla = generators_sqla. \
             filter(orm_re_generators.columns.voltage_level.in_([6, 7]))
         generators_lv = pd.read_sql_query(generators_lv_sqla.statement,
                                        session.bind,
                                        index_col='id')
+
+        # define generators with unknown subtype as 'unknown'
+        generators_lv.loc[generators_lv[
+                              'generation_subtype'].isnull(),
+                          'generation_subtype'] = 'unknown'
 
         return generators_mv, generators_lv
 
