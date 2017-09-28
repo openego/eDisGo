@@ -1044,7 +1044,7 @@ def _import_genos_from_oedb(network):
 
         return generators_mv, generators_lv
 
-    def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
+    def _update_grids(network, generators_mv, generators_lv, remove_missing=True):
         """Update imported status quo DINGO-grid according to new generator dataset
 
         It
@@ -1176,7 +1176,7 @@ def _import_genos_from_oedb(network):
         # remove decommissioned genos
         # (genos which exist in grid but not in the new dataset)
         cap_debug = 0
-        if not g_mv.empty:
+        if not g_mv.empty and remove_missing:
             log_geno_count = 0
             for _, row in g_mv.iterrows():
                 cap_debug += row['obj'].nominal_capacity
@@ -1234,7 +1234,7 @@ def _import_genos_from_oedb(network):
         # remove decommissioned genos
         # (genos which exist in grid but not in the new dataset)
         cap_debug = 0
-        if not g_lv.empty:
+        if not g_lv.empty and remove_missing:
             log_geno_count = 0
             for _, row in g_lv.iterrows():
                 cap_debug += row['obj'].nominal_capacity
@@ -1348,7 +1348,7 @@ def _import_genos_from_oedb(network):
         # remove decommissioned genos
         # (genos which exist in grid but not in the new dataset)
         cap_debug = 0
-        if not g_lv_agg.empty:
+        if not g_lv_agg.empty and remove_missing:
             log_geno_count = 0
             for _, row in g_lv_agg.iterrows():
                 row['agg_geno'].nominal_capacity -= row['capacity']
