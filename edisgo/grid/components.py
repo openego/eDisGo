@@ -26,6 +26,10 @@ class Component:
         """Returns id of component"""
         return self._id
 
+    @id.setter
+    def id(self, id):
+        self._id = id
+
     @property
     def geom(self):
         """:shapely:`Shapely Point object<points>` or
