@@ -1,12 +1,12 @@
-import edisgo
-from edisgo.tools import config
-from edisgo.data.import_data import import_from_ding0#, import_generators
-from edisgo.flex_opt.costs import grid_expansion_costs
-
 from os import path
 import pandas as pd
-from edisgo.tools import pypsa_io
-from math import sqrt, acos, tan
+from math import sqrt
+
+import edisgo
+from edisgo.tools import config, pypsa_io
+from edisgo.data.import_data import import_from_ding0
+from edisgo.flex_opt.costs import grid_expansion_costs
+from edisgo.flex_opt.reinforce_grid import reinforce_grid
 
 
 class Network:
