@@ -222,14 +222,10 @@ class Network:
         else:
             raise ValueError("Power flow analysis did not converge.")
 
-
-    def reinforce(self):
-        """Reinforces the grid
-
-        TBD
-
-        """
-        raise NotImplementedError
+    def reinforce(self, **kwargs):
+        """Reinforces the grid and calculates grid expansion costs"""
+        reinforce_grid(
+            self, max_while_iterations=kwargs.get('max_while_iterations', 10))
 
     @property
     def id(self):
