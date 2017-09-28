@@ -536,6 +536,7 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
                                  subtype=subtype,
                                  LA=la_id),
                              type=aggr_line_type,
+                             kind='cable',
                              length=.5,
                              grid=grid)
                          }
