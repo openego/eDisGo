@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger('edisgo')
 
 
-def reinforce_grid(network, while_counter_max=10):
+def reinforce_grid(network, max_while_iterations=10):
     """ Evaluates grid reinforcement needs and performs measures. This function
         is the parent function for all grid reinforcements.
 
@@ -142,7 +142,7 @@ def reinforce_grid(network, while_counter_max=10):
     # crit_nodes = checks.mv_voltage_deviation(network)
     #
     # while_counter = 0
-    # while crit_nodes and while_counter < while_counter_max:
+    # while crit_nodes and while_counter < max_while_iterations:
     #
     #     # ToDo: get crit_nodes as objects instead of string
     #     # for now iterate through grid to find node for repr
@@ -173,7 +173,7 @@ def reinforce_grid(network, while_counter_max=10):
     #
     # # check if all voltage problems were solved after maximum number of
     # # iterations allowed
-    # if while_counter == while_counter_max and crit_nodes:
+    # if while_counter == max_while_iterations and crit_nodes:
     #     logger.error("==> Voltage issues in MV grid were not solved.")
     #     sys.exit()
     # else:
@@ -184,7 +184,7 @@ def reinforce_grid(network, while_counter_max=10):
     crit_nodes = checks.lv_voltage_deviation(network)
 
     while_counter = 0
-    while crit_nodes and while_counter < while_counter_max:
+    while crit_nodes and while_counter < max_while_iterations:
         # for every grid in crit_nodes do reinforcement
         for grid in crit_nodes:
 
@@ -214,7 +214,7 @@ def reinforce_grid(network, while_counter_max=10):
 
     # check if all voltage problems were solved after maximum number of
     # iterations allowed
-    if while_counter == while_counter_max and crit_nodes:
+    if while_counter == max_while_iterations and crit_nodes:
         logger.error("==> Voltage issues in LV grids were not solved.")
         sys.exit()
     else:
@@ -230,7 +230,7 @@ def reinforce_grid(network, while_counter_max=10):
 
     while_counter = 0
     while ((overloaded_stations or crit_lines) and
-                   while_counter < while_counter_max):
+                   while_counter < max_while_iterations):
 
         if overloaded_stations:
             # reinforce substations
