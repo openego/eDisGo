@@ -1042,6 +1042,9 @@ def _import_genos_from_oedb(network):
 
         return generators_mv, generators_lv
 
+    def _validate_generation():
+        raise NotImplementedError
+
     # make DB session
     conn = connection(section=network.config['connection']['section'])
     Session = sessionmaker(bind=conn)
@@ -1499,7 +1502,3 @@ def _build_lv_grid_dict(network):
     for lv_grid in network.mv_grid.lv_grids:
         lv_grid_dict[lv_grid.id] = lv_grid
     return lv_grid_dict
-
-
-def _validate_generation():
-    raise NotImplementedError
