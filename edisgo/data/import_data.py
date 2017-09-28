@@ -1073,6 +1073,7 @@ def _import_genos_from_oedb(network):
                 * generation_subtype: :obj:`str` (e.g. 'solar_roof_mounted')
                 * voltage level: :obj:`int` (range: 4..7,)
                 * geom: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
+                * geom_em: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
 
         generators_lv: :pandas:`pandas.DataFrame<dataframe>`
             List of LV generators
@@ -1085,6 +1086,7 @@ def _import_genos_from_oedb(network):
                 * generation_subtype: :obj:`str` (e.g. 'solar_roof_mounted')
                 * voltage level: :obj:`int` (range: 4..7,)
                 * geom: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
+                * geom_em: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
 
         remove_missing: :obj:`bool`
             If true, remove generators from grid which are not included in the imported dataset.
