@@ -1071,7 +1071,8 @@ def _import_genos_from_oedb(network):
         orm_re_generators_version = 1 == 1
 
     elif oedb_data_source == 'versioned':
-        raise NotImplementedError
+
+        # load ORM names
         orm_conv_generators_name = network.config['versioned']['conv_generators_prefix'] + \
                                    scenario + \
                                    network.config['versioned']['conv_generators_suffix']
@@ -1081,8 +1082,11 @@ def _import_genos_from_oedb(network):
         data_version = network.config['versioned']['version']
 
         # import ORMs
-        orm_conv_generators = supply.__getattribute__(orm_conv_generators_name)
-        orm_re_generators = supply.__getattribute__(orm_re_generators_name)
+        #orm_conv_generators = supply.__getattribute__(orm_conv_generators_name)
+        #orm_re_generators = supply.__getattribute__(orm_re_generators_name)
+        # TODO: REMOVE WORKAROUND
+        orm_conv_generators = model_draft.__getattribute__(orm_conv_generators_name)
+        orm_re_generators = model_draft.__getattribute__(orm_re_generators_name)
 
         # set version condition
         orm_conv_generators_version = orm_conv_generators.columns.version == data_version
