@@ -473,13 +473,13 @@ def _determine_aggregated_nodes(la_centers):
                     generation_aggr[gen.type][gen.subtype].setdefault('ding0', 0)
                     generation_aggr[gen.type][gen.subtype]['ding0'] += gen.capacity
 
+    dingo_import_data = pd.DataFrame(columns=('id',
+                                              'capacity',
+                                              'agg_geno')
+                                     )
+
     for la_center in la_centers:
         aggr = {'generation': {}, 'load': {}, 'aggregates': []}
-
-        dingo_import_data = pd.DataFrame(columns=('id',
-                                                  'capacity',
-                                                  'agg_geno')
-                                         )
 
         # Determine aggregated generation in LV grid
         for lvgd in la_center.lv_load_area._lv_grid_districts:
