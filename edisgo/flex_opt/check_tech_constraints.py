@@ -242,7 +242,7 @@ def lv_voltage_deviation(network):
 
     # load max. voltage deviation
     lv_max_v_deviation = float(
-        network.config['grid_expansion']['lv_max_v_deviation'])
+        network.config['grid_expansion']['mv_lv_max_v_deviation'])
 
     for lv_grid in network.mv_grid.lv_grids:
         v_mag_pu_pfa = network.results.v_res(nodes=lv_grid.graph.nodes(),

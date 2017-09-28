@@ -212,6 +212,26 @@ def mv_to_pypsa(network):
         * 'Line'
         * 'BranchTee'
         * 'Tranformer'
+
+    .. warning::
+
+        PyPSA takes resistance R and reactance X in p.u. The conversion from
+        values in ohm to pu notation is performed by following equations
+
+        .. math::
+
+            r_{p.u.} = \frac{R_{\Omega}}{Z_{B}}
+
+            x_{p.u.} = \frac{X_{\Omega}}{Z_{B}}
+
+            with
+
+            Z_{B} = \frac{V_B}{S_B}
+
+        I'm quite sure, but its not 100 % clear if the base voltage V_B is
+        chosen correctly. We take the primary side voltage of transformer as
+        the transformers base voltage. See
+        `#54 <https://github.com/openego/eDisGo/issues/54>`_ for discussion.
     """
 
     generators = network.mv_grid.graph.nodes_by_attribute('generator')
@@ -323,15 +343,18 @@ def mv_to_pypsa(network):
         bus['name'].append(bus1_name)
         bus['v_nom'].append(lv_st.transformers[0].voltage_op)
 
+        v_base = lv_st.mv_grid.voltage_nom # we choose voltage of transformers' primary side
+
         for tr in lv_st.transformers:
+            z_base = v_base ** 2 / tr.type.S_nom
             transformer['name'].append(
                 '_'.join([repr(lv_st), 'transformer', str(transformer_count)]))
             transformer['bus0'].append(bus0_name)
             transformer['bus1'].append(bus1_name)
             transformer['type'].append("")
             transformer['model'].append('pi')
-            transformer['r'].append(tr.type.R)
-            transformer['x'].append(tr.type.X)
+            transformer['r'].append(tr.type.R / z_base)
+            transformer['x'].append(tr.type.X / z_base)
             transformer['s_nom'].append(tr.type.S_nom / 1e3)
             transformer['tap_ratio'].append(1)
 
@@ -685,7 +708,23 @@ def _pypsa_generator_timeseries(network, mode=None):
 
 
 def _pypsa_bus_timeseries(network, buses, mode=None):
-    """Timeseries in PyPSA compatible format for generator instances
+    """Timeseries in PyPSA compatible format for bus instances
+
+    Set all buses except for the slack bus to voltage of 1 pu (it is assumed
+    this setting is entirely ingnored during solving the power flow problem).
+    This slack bus is set to an operational voltage which is typically greater
+    than nominal voltage plus a control deviation.
+    The control deviation is always added positively to the operational voltage.
+    For example, the operational voltage (offset) is set to 1.025 pu plus the
+    control deviation of 0.015 pu. This adds up to a set voltage of the slack
+    bus of 1.04 pu.
+
+    .. warning::
+    
+        Voltage settings for the slack bus defined by this function assume the
+        feedin case (reverse power flow case) as the worst-case for the power
+        system. Thus, the set point for the slack is always greater 1.
+
 
     Parameters
     ----------
@@ -705,8 +744,20 @@ def _pypsa_bus_timeseries(network, buses, mode=None):
         Time series table in PyPSA format
     """
 
-    v_set_dict = {bus: 1 for bus in buses}
+    # get slack bus label
+    slack_bus = '_'.join(
+        ['Bus', network.mv_grid.station.__repr__(side='mv')])
 
+    # set all buses (except slack bus) to nominal voltage
+    v_set_dict = {bus: 1 for bus in buses if bus != slack_bus}
+
+    # Set slack bus to operational voltage (includes offset and control deviation
+    slack_voltage_pu = 1 + \
+        float(network.config['grid_expansion']['hv_mv_trafo_offset']) + \
+        float(network.config['grid_expansion']['hv_mv_trafo_control_deviation'])
+    v_set_dict.update({slack_bus: slack_voltage_pu})
+
+    # Convert to PyPSA compatible dataframe
     v_set_df = pd.DataFrame(v_set_dict,
                             index=network.scenario.timeseries.timeindex)
 
@@ -1106,14 +1157,18 @@ def update_pypsa(network):
                    's_nom': [],
                    'tap_ratio': []}
 
+
     for idx, row in added_transformers.iterrows():
+        v_base = idx.mv_grid.voltage_nom  # we choose voltage of transformers' primary side
+        z_base = v_base ** 2 / row['equipment'].type.S_nom
+
         transformer['bus0'].append('_'.join(['Bus', idx.__repr__(side='mv')]))
         transformer['bus1'].append('_'.join(['Bus', idx.__repr__(side='lv')]))
         transformer['name'].append(repr(row['equipment']))
         transformer['type'].append("")
         transformer['model'].append('pi')
-        transformer['r'].append(row['equipment'].type.R)
-        transformer['x'].append(row['equipment'].type.X)
+        transformer['r'].append(row['equipment'].type.R / z_base)
+        transformer['x'].append(row['equipment'].type.X / z_base)
         transformer['s_nom'].append(row['equipment'].type.S_nom / 1e3)
         transformer['tap_ratio'].append(1)
 

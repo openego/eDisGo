@@ -398,17 +398,20 @@ def _determine_aggregated_nodes(la_centers):
         -------
 
         """
+
         if gen.v_level not in aggr['generation']:
             aggr['generation'][gen.v_level] = {}
-        if gen.subtype not in aggr['generation'][gen.v_level]:
-            aggr['generation'][gen.v_level].update(
-                {gen.subtype:
-                     {'ids': [gen.id_db],
-                      'capacity': gen.capacity,
-                      'type': gen.type}})
+        if gen.type not in aggr['generation'][gen.v_level]:
+            aggr['generation'][gen.v_level][gen.type] = {}
+        if gen.subtype not in aggr['generation'][gen.v_level][gen.type]:
+            aggr['generation'][gen.v_level][gen.type].update(
+                     {gen.subtype: {'ids': [gen.id_db],
+                                'capacity': gen.capacity}})
         else:
-            aggr['generation'][gen.v_level][gen.subtype]['ids'].append(gen.id_db)
-            aggr['generation'][gen.v_level][gen.subtype]['capacity'] += gen.capacity
+            aggr['generation'][gen.v_level][gen.type][gen.subtype][
+                'ids'].append(gen.id_db)
+            aggr['generation'][gen.v_level][gen.type][gen.subtype][
+                'capacity'] += gen.capacity
 
         return aggr
 
@@ -512,29 +515,31 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
     for la_id, la in aggregated.items():
         # add aggregated generators
         for v_level, val in la['generation'].items():
-            for subtype, val2 in val.items():
-                gen = Generator(
-                    id='_'.join([la_id] + [str(_) for _ in val2['ids']]),
-                    nominal_capacity=val2['capacity'],
-                    type=val2['type'],
-                    subtype=subtype,
-                    geom=grid.station.geom,
-                    grid=grid,
-                    v_level=4)
-                grid.graph.add_node(gen, type='generator')
+            for type, val2 in val.items():
+                for subtype, val3 in val2.items():
+                    gen = Generator(
+                        id='_'.join([la_id] + [str(_) for _ in val3['ids']]),
+                        nominal_capacity=val3['capacity'],
+                        type=type,
+                        subtype=subtype,
+                        geom=grid.station.geom,
+                        grid=grid,
+                        v_level=4)
+                    grid.graph.add_node(gen, type='generator')
 
-                # connect generator to MV station
-                line = {'line': Line(
-                         id='line_aggr_generator_{LA}_vlevel_{v_level}_'
-                            '{subtype}'.format(
-                             v_level=v_level,
-                             subtype=subtype,
-                             LA=la_id),
-                         type=aggr_line_type,
-                         length=.5,
-                         grid=grid)
-                     }
-                grid.graph.add_edge(grid.station, gen, line, type='line')
+                    # connect generator to MV station
+                    line = {'line': Line(
+                             id='line_aggr_generator_{LA}_vlevel_{v_level}_'
+                                '_{type}{subtype}'.format(
+                                 v_level=v_level,
+                                 type=type,
+                                 subtype=subtype,
+                                 LA=la_id),
+                             type=aggr_line_type,
+                             length=.5,
+                             grid=grid)
+                         }
+                    grid.graph.add_edge(grid.station, gen, line, type='line')
         for sector, sectoral_load in la['load'].items():
             load = Load(
                 geom=grid.station.geom,
