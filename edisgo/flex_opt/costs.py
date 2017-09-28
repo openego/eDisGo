@@ -49,12 +49,12 @@ def grid_expansion_costs(network):
             # ToDo How to deal with those?
             try:
                 # try to get costs for transformer with same nominal power
-                cost = float(network.config['lv_transformers'][
+                cost = float(network.config['costs_lv_transformers'][
                     str(int(transformer.type.S_nom)) + ' kVA'])
             except:
                 # use costs of standard transformer
                 cost = float(
-                    network.config['lv_transformers'][
+                    network.config['costs_lv_transformers'][
                         network.config['grid_expansion'][
                             'std_mv_lv_transformer']])
         return cost
@@ -72,13 +72,13 @@ def grid_expansion_costs(network):
         try:
             # try to get costs for line
             cost = float(
-                network.config['{}_cables'.format(voltage_level)][
+                network.config['costs_{}_cables'.format(voltage_level)][
                     line.type.name])
         except:
             # ToDo How to deal with those?
             # use costs of standard line
             cost = float(
-                    network.config['{}_cables'.format(voltage_level)][
+                    network.config['costs_{}_cables'.format(voltage_level)][
                         network.config['grid_expansion'][
                             'std_{}_line'.format(voltage_level)]])
         return cost
@@ -112,6 +112,7 @@ def grid_expansion_costs(network):
             network.results.equipment_changes.reset_index()['index'].apply(
                 isinstance, args=(Line,))]]
     # calculate costs for each reinforced line
+    # ToDo: include costs for groundwork
     for line in list(lines.index.unique()):
         costs = costs.append(pd.DataFrame(
             {'type': line.type.name,
