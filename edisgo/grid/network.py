@@ -226,6 +226,7 @@ class Network:
         """Reinforces the grid and calculates grid expansion costs"""
         reinforce_grid(
             self, max_while_iterations=kwargs.get('max_while_iterations', 10))
+        self.results.grid_expansion_costs = grid_expansion_costs(self)
 
     @property
     def id(self):
@@ -777,21 +778,47 @@ class Results:
     @property
     def grid_expansion_costs(self):
         """
-        Holds grid expansion costs in MEUR due to grid expansion measures
-        tracked in self.equipment_changes.
+        Holds grid expansion costs in kEUR due to grid expansion measures
+        tracked in self.equipment_changes and calculated in
+        edisgo.flex_opt.costs.grid_expansion_costs()
 
         Parameters
         ----------
-        total_costs: float
-            Provide this if you want to set grid_expansion_costs. For
-            retrieval of costs do not pass an argument.
+        total_costs : :pandas:`pandas.DataFrame<dataframe>`
+
+            DataFrame containing type and costs plus in the case of lines the
+            line length and number of parallel lines of each reinforced
+            transformer and line. Provide this if you want to set
+            grid_expansion_costs. For retrieval of costs do not pass an
+            argument.
+
+            The DataFrame has the following columns:
+
+            type: String
+                Transformer size or cable name
+
+            total_costs: float
+                Costs of equipment in kEUR. For lines the line length and
+                number of parallel lines is already included in the total
+                costs.
+
+            quantity: int
+                Number of parallel lines.
+
+            line_length: float
+                Length of one line in km.
 
         Returns
         -------
-        float
+        :pandas:`pandas.DataFrame<dataframe>`
+            Costs of each reinforced equipment in kEUR.
+
+        Notes
+        -------
+        Total grid expansion costs can be obtained through
+        costs.total_costs.sum().
+
         """
-        if not self._grid_expansion_costs:
-            grid_expansion_costs(self)
         return self._grid_expansion_costs
 
     @grid_expansion_costs.setter
