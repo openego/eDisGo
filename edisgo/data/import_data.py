@@ -1043,7 +1043,38 @@ def _import_genos_from_oedb(network):
         return generators_mv, generators_lv
 
     def _validate_generation():
-        raise NotImplementedError
+        """Validate generators in updated grids
+
+        The validation uses the cumulative capacity of all generators.
+        """
+        # TODO: Valdate conv. genos too!
+
+        # set capacity difference threshold
+        cap_diff_threshold = 10 ** -4
+
+        capacity_imported = generators_res_mv['electrical_capacity'].sum() + \
+                            generators_res_lv['electrical_capacity'].sum() #+ \
+                            #generators_conv_mv['capacity'].sum()
+
+        capacity_grid = 0
+        # MV genos
+        for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
+            capacity_grid += geno.nominal_capacity
+
+        # LV genos
+        for lv_grid in network.mv_grid.lv_grids:
+            for geno in lv_grid.graph.nodes_by_attribute('generator'):
+                capacity_grid += geno.nominal_capacity
+
+        if abs(capacity_imported - capacity_grid) > cap_diff_threshold:
+            logger.error('Cumulative capacity of imported generators ({} kW) '
+                         'differ from cumulative capacity of generators '
+                         'in updated grid ({} kW) by {} kW.'
+                         .format(str(round(capacity_imported, 1)),
+                                 str(round(capacity_grid, 1)),
+                                 str(round(capacity_imported - capacity_grid, 1))
+                                 )
+                         )
 
     # make DB session
     conn = connection(section=network.config['connection']['section'])
