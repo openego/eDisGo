@@ -1270,9 +1270,9 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
                geno_existing.nominal_capacity) < cap_diff_threshold:
             continue
         else:
-            geno_existing.nominal_capacity = row['electrical_capacity']
             cap_debug += row['electrical_capacity'] - geno_existing.nominal_capacity
             log_geno_count += 1
+            geno_existing.nominal_capacity = row['electrical_capacity']
 
     logger.debug('Capacities of {} of {} existing generators updated (difference: {} kW).'
                  .format(str(log_geno_count),
@@ -1362,9 +1362,9 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
                geno_existing.nominal_capacity) < cap_diff_threshold:
             continue
         else:
-            geno_existing.nominal_capacity = row['electrical_capacity']
             cap_debug += row['electrical_capacity'] - geno_existing.nominal_capacity
             log_geno_count += 1
+            geno_existing.nominal_capacity = row['electrical_capacity']
 
     logger.debug('Capacities of {} of {} existing generators (single units) updated (difference: {} kW).'
                  .format(str(log_geno_count),
