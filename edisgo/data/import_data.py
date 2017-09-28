@@ -1151,6 +1151,8 @@ def _import_genos_from_oedb(network):
                   generators_mv=generators_res_mv,
                   generators_lv=generators_res_lv)
 
+    _validate_generation()
+
     # validate
     cap=0
     # MV genos
@@ -1246,8 +1248,9 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
     # =====================
     # Step 1: MV generators
     # =====================
-    logger.info('==> MV generators')
-    logger.info('{} generators imported.'.format(str(len(generators_mv))))
+    logger.debug('==> MV generators')
+    logger.debug('{} generators imported.'
+                 .format(str(len(generators_mv))))
     # get existing genos (status quo DF format)
     g_mv_existing = g_mv[g_mv['id'].isin(list(generators_mv.index.values))]
     # get existing genos (new genos DF format)
@@ -1257,6 +1260,7 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
 
     # iterate over exiting generators and check whether capacity has changed
     log_geno_count = 0
+    cap_debug = 0
     for id, row in generators_mv_existing.iterrows():
 
         geno_existing = g_mv_existing[g_mv_existing['id'] == id]['obj'].iloc[0]
@@ -1267,15 +1271,19 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
             continue
         else:
             geno_existing.nominal_capacity = row['electrical_capacity']
+            cap_debug += row['electrical_capacity'] - geno_existing.nominal_capacity
             log_geno_count += 1
 
-    logger.info('Capacities of {} of {} existing generators updated.'
-                .format(str(log_geno_count),
-                        str(len(generators_mv_existing)-log_geno_count))
-                )
+    logger.debug('Capacities of {} of {} existing generators updated (difference: {} kW).'
+                 .format(str(log_geno_count),
+                         str(len(generators_mv_existing)-log_geno_count),
+                         str(round(cap_debug, 1))
+                         )
+                 )
 
     # new genos
     log_geno_count = 0
+    cap_debug = 0
     generators_mv_new = generators_mv[~generators_mv.index.isin(list(g_mv_existing['id']))]
 
     # remove them from grid's geno list
@@ -1300,45 +1308,51 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
                       #geom=wkt_loads(row['geom'])),
                       geom=None),
             type='generator')
+        cap_debug += row['electrical_capacity']
         log_geno_count += 1
 
-    logger.info('{} of {} new generators added.'
-                .format(str(log_geno_count),
-                        str(len(generators_mv_new)))
-                )
+    logger.debug('{} of {} new generators added ({} kW).'
+                 .format(str(log_geno_count),
+                         str(len(generators_mv_new)),
+                         str(round(cap_debug, 1))
+                         )
+                 )
 
     # remove decommissioned genos
     # (genos which exist in grid but not in the new dataset)
+    cap_debug = 0
     if not g_mv.empty:
         log_geno_count = 0
         for _, row in g_mv.iterrows():
-            print('TODO: Remove geno {} from grid {} (capacity: {})'
-                  .format(repr(row['obj']),
-                          repr(row['obj'].grid),
-                          row['obj'].nominal_capacity))
+            cap_debug += row['obj'].nominal_capacity
+            row['obj'].grid.graph.remove_node(row['obj'])
             log_geno_count += 1
-        logger.info('{} of {} decommissioned generators removed.'
-                    .format(str(log_geno_count),
-                            str(len(g_mv))))
+        logger.debug('{} of {} decommissioned generators removed ({} kW).'
+                     .format(str(log_geno_count),
+                             str(len(g_mv)),
+                             str(round(cap_debug, 1))
+                             )
+                     )
 
     # ====================================
     # Step 2: LV generators (single units)
     # ====================================
-    logger.info('==> LV generators')
-    logger.info('{} generators imported.'.format(str(len(generators_lv))))
+    logger.debug('==> LV generators')
+    logger.debug('{} generators imported.'.format(str(len(generators_lv))))
     # get existing genos (status quo DF format)
     g_lv_existing = g_lv[g_lv['id'].isin(list(generators_lv.index.values))]
     # get existing genos (new genos DF format)
     generators_lv_existing = generators_lv[generators_lv.index.isin(list(g_lv_existing['id']))]
 
     # TEMP: BACKUP 1 GENO FOR TESTING
-    temp_geno = g_lv.iloc[0]
+    #temp_geno = g_lv.iloc[0]
 
     # remove existing ones from grid's geno list
     g_lv = g_lv[~g_lv.isin(g_lv_existing)].dropna()
 
     # iterate over exiting generators and check whether capacity has changed
     log_geno_count = 0
+    cap_debug = 0
     for id, row in generators_lv_existing.iterrows():
 
         geno_existing = g_lv_existing[g_lv_existing['id'] == id]['obj'].iloc[0]
@@ -1349,29 +1363,34 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
             continue
         else:
             geno_existing.nominal_capacity = row['electrical_capacity']
+            cap_debug += row['electrical_capacity'] - geno_existing.nominal_capacity
             log_geno_count += 1
 
-    logger.info('Capacities of {} of {} existing generators (single units) updated.'
-                .format(str(log_geno_count),
-                        str(len(generators_lv_existing) - log_geno_count))
-                )
+    logger.debug('Capacities of {} of {} existing generators (single units) updated (difference: {} kW).'
+                 .format(str(log_geno_count),
+                         str(len(generators_lv_existing) - log_geno_count),
+                         str(round(cap_debug, 1))
+                         )
+                 )
 
     # TEMP: INSERT BACKUPPED GENO IN DF FOR TESTING
-    g_lv.loc[len(g_lv)] = temp_geno
+    #g_lv.loc[len(g_lv)] = temp_geno
 
     # remove decommissioned genos
     # (genos which exist in grid but not in the new dataset)
+    cap_debug = 0
     if not g_lv.empty:
         log_geno_count = 0
         for _, row in g_lv.iterrows():
-            print('TODO: Remove geno {} from grid {} (capacity: {})'
-                  .format(repr(row['obj']),
-                          repr(row['obj'].grid),
-                          row['obj'].nominal_capacity))
+            cap_debug += row['obj'].nominal_capacity
+            row['obj'].grid.graph.remove_node(row['obj'])
             log_geno_count += 1
-        logger.info('{} of {} decommissioned generators (single units) removed.'
-                    .format(str(log_geno_count),
-                            str(len(g_lv))))
+        logger.debug('{} of {} decommissioned generators (single units) removed ({} kW).'
+                     .format(str(log_geno_count),
+                             str(len(g_lv)),
+                             str(round(cap_debug, 1))
+                             )
+                     )
 
     # ========================================================================
     # Step 3: LV generators (aggregated units (originally from aggregated LA))
@@ -1381,12 +1400,13 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
     generators_lv_agg_existing = generators_lv[generators_lv.index.isin(list(g_lv_agg_existing['id']))]
 
     # TEMP: BACKUP 1 GENO FOR TESTING
-    temp_geno = g_lv_agg.iloc[0]
+    #temp_geno = g_lv_agg.iloc[0]
 
     g_lv_agg = g_lv_agg[~g_lv_agg.isin(g_lv_agg_existing)].dropna()
 
     log_geno_count = 0
     log_agg_geno_list = []
+    cap_debug = 0
     for id, row in generators_lv_agg_existing.iterrows():
 
         # check if capacity equals; if not: update capacity off agg. geno
@@ -1397,16 +1417,20 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
         else:
             agg_geno = g_lv_agg_existing[g_lv_agg_existing['id'] == id]['agg_geno'].iloc[0]
             agg_geno.nominal_capacity += cap_diff
+            cap_debug += cap_diff
 
             log_geno_count += 1
             log_agg_geno_list.append(agg_geno)
 
-    logger.info('Capacities of {} of {} existing generators (in {} of {} aggregated units) updated.'
-                .format(str(log_geno_count),
-                        str(len(generators_lv_agg_existing) - log_geno_count),
-                        str(len(set(log_agg_geno_list))),
-                        str(len(g_lv_agg_existing['agg_geno'].unique())))
-                )
+    logger.debug('Capacities of {} of {} existing generators (in {} of {} aggregated units) '
+                 'updated (difference: {} kW).'
+                 .format(str(log_geno_count),
+                         str(len(generators_lv_agg_existing) - log_geno_count),
+                         str(len(set(log_agg_geno_list))),
+                         str(len(g_lv_agg_existing['agg_geno'].unique())),
+                         str(round(cap_debug, 1))
+                         )
+                 )
 
     # new genos
     log_geno_count = 0
@@ -1418,6 +1442,7 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
                     'capacity': 0}
 
     # iterate over new (single unit or part of agg. unit) generators and create them
+    cap_debug = 0
     for id, row in generators_lv_new.iterrows():
         if row['mvlv_subst_id'] not in lv_grid_dict.keys():
             agg_geno_new['ids'].append(id)
@@ -1435,6 +1460,7 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
                           geom=wkt_loads(row['geom'])),
                 type='generator')
             log_geno_count += 1
+        cap_debug += row['electrical_capacity']
 
     if len(agg_geno_new['ids']) > 0:
         gen = Generator(
@@ -1446,29 +1472,40 @@ def _update_grids(network, generators_mv, generators_lv, remove_missing=False):
             grid=network.mv_grid)
         network.mv_grid.graph.add_node(gen, type='generator')
 
-    logger.info('{} of {} new generators added ({} single units and {} units as aggregated generator).'
-                .format(str(log_geno_count + len(agg_geno_new['ids'])),
-                        str(len(generators_lv_new)),
-                        str(log_geno_count),
-                        str(len(agg_geno_new['ids'])))
-                )
+    logger.debug('{} of {} new generators added ({} single units and {} '
+                 'units as aggregated generator) ({} kW).'
+                 .format(str(log_geno_count + len(agg_geno_new['ids'])),
+                         str(len(generators_lv_new)),
+                         str(log_geno_count),
+                         str(len(agg_geno_new['ids'])),
+                         str(round(cap_debug, 1))
+                         )
+                 )
 
     # TEMP: INSERT BACKUPPED GENO IN DF FOR TESTING
-    g_lv_agg.loc[len(g_lv_agg)] = temp_geno
+    #g_lv_agg.loc[len(g_lv_agg)] = temp_geno
 
     # remove decommissioned genos
     # (genos which exist in grid but not in the new dataset)
+    cap_debug = 0
     if not g_lv_agg.empty:
         log_geno_count = 0
         for _, row in g_lv_agg.iterrows():
-            print('TODO: Remove geno {} in agg. geno in grid {} (capacity: {})'
-                  .format(repr(row['agg_geno']),
-                          repr(row['agg_geno'].grid),
-                          row['agg_geno'].nominal_capacity))
+            row['agg_geno'].nominal_capacity -= row['capacity']
+            cap_debug += row['capacity']
+            # remove LV geno id from id string of agg. geno
+            id = row['agg_geno'].id.split('-')
+            ids = id[2].split('_')
+            ids.remove(str(int(row['id'])))
+            row['agg_geno'].id = '-'.join([id[0], id[1], '_'.join(ids)])
+
             log_geno_count += 1
-        logger.info('{} of {} decommissioned generators in aggregated generators removed.'
-                    .format(str(log_geno_count),
-                            str(len(g_lv_agg))))
+        logger.debug('{} of {} decommissioned generators in aggregated generators removed ({} kW).'
+                     .format(str(log_geno_count),
+                             str(len(g_lv_agg)),
+                             str(round(cap_debug, 1))
+                             )
+                     )
 
 
 def _build_generator_list(network):
