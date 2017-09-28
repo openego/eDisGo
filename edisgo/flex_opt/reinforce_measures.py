@@ -276,7 +276,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                 'has already been reinforced.')
 
     if main_line_reinforced:
-        logger.debug('==> {} branche(s) was/were reinforced.'.format(
+        logger.debug('==> {} branche(s) was/were reinforced '.format(
             str(len(lines_changes))) + 'due to over-voltage issues.')
 
     return lines_changes
