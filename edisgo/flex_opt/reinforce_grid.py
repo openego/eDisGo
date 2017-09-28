@@ -14,9 +14,8 @@ def reinforce_grid(network, max_while_iterations=10):
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-    while_counter_max : int
-        Maximum number of iterations when solving overvoltage problems, to
-        prevent infinite grid expansion.
+    max_while_iterations : int
+        Maximum number of times each while loop is conducted.
 
     Notes
     -----
