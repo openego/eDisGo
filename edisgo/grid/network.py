@@ -52,6 +52,8 @@ class Network:
         Scenario which is used for calculations
     _pypsa : :pypsa:`pypsa.Network<network>`
         PyPSA representation of grid topology
+    _dingo_import_data :
+        Temporary data from ding0 import which are needed for OEP generator update
     """
 
     def __init__(self, **kwargs):
