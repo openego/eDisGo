@@ -122,6 +122,14 @@ def reinforce_grid(network, max_while_iterations=10):
     #
     #     iteration_step += 1
     #     while_counter += 1
+    # check if all load problems were solved after maximum number of
+    # iterations allowed
+    if (while_counter == max_while_iterations and
+            (crit_lines or overloaded_stations)):
+        logger.error("==> Load issues were not solved.")
+        sys.exit()
+    else:
+        logger.debug('==> All load issues in MV grid are solved.')
 
     # # dump network
     # import pickle
