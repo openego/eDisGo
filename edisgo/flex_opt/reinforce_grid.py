@@ -20,8 +20,8 @@ def reinforce_grid(network, max_while_iterations=10):
     Notes
     -----
     Vorgehen laut BW-Studie:
-    * getrennte oder kombinierte Betrachtung von NS und MS muss noch entschieden
-      werden, BW-Studie führt getrennte Betrachtung durch
+    * getrennte oder kombinierte Betrachtung von NS und MS muss noch
+      entschieden werden, BW-Studie führt getrennte Betrachtung durch
     * Reihenfolge der Behebung von Grenzwertverletzungen:
     ** Trafo
     ** Spannung
@@ -32,8 +32,8 @@ def reinforce_grid(network, max_while_iterations=10):
        BM ersetzt
     * Spannungsbandverletztung
     ** Strangauftrennung nach 2/3 der Distanz
-    ** danach eventuell weitere Strangauftrennung wenn sinnvoll, sonst parallele
-       BM
+    ** danach eventuell weitere Strangauftrennung wenn sinnvoll, sonst
+       parallele BM
 
     Sonstiges:
     * nur Rückspeisefall
@@ -238,7 +238,7 @@ def reinforce_grid(network, max_while_iterations=10):
 
     while_counter = 0
     while ((overloaded_stations or crit_lines) and
-                   while_counter < max_while_iterations):
+            while_counter < max_while_iterations):
 
         if overloaded_stations:
             # reinforce substations
