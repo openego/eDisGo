@@ -1,5 +1,8 @@
 import sys
 import pandas as pd
+import pyproj
+from functools import partial
+from shapely.ops import transform
 
 from edisgo.grid.components import Transformer, Line
 from edisgo.grid.grids import LVGrid, MVGrid
@@ -41,23 +44,10 @@ def grid_expansion_costs(network):
 
     """
     def _get_transformer_costs(transformer):
-        try:
-            # try to get costs for transformer
-            cost = float(
-                network.config['lv_transformers'][transformer.type.name])
-        except:
-            # ToDo How to deal with those?
-            try:
-                # try to get costs for transformer with same nominal power
-                cost = float(network.config['costs_lv_transformers'][
-                    str(int(transformer.type.S_nom)) + ' kVA'])
-            except:
-                # use costs of standard transformer
-                cost = float(
-                    network.config['costs_lv_transformers'][
-                        network.config['grid_expansion'][
-                            'std_mv_lv_transformer']])
-        return cost
+        if isinstance(transformer.grid, LVGrid):
+            return float(network.config['costs_transformers']['lv'])
+        elif isinstance(transformer.grid, MVGrid):
+            return float(network.config['costs_transformers']['mv'])
 
     def _get_line_costs(line):
         # get voltage level
@@ -68,20 +58,23 @@ def grid_expansion_costs(network):
         else:
             print("Voltage level for line must be lv or mv.")
             sys.exit()
-
-        try:
-            # try to get costs for line
-            cost = float(
-                network.config['costs_{}_cables'.format(voltage_level)][
-                    line.type.name])
-        except:
-            # ToDo How to deal with those?
-            # use costs of standard line
-            cost = float(
-                    network.config['costs_{}_cables'.format(voltage_level)][
-                        network.config['grid_expansion'][
-                            'std_{}_line'.format(voltage_level)]])
-        return cost
+        # get population density in people/km^2
+        # transform area to calculate area in km^2
+        projection = partial(
+            pyproj.transform,
+            pyproj.Proj(init='epsg:4326'),  # ToDo: leave hard coded?
+            pyproj.Proj(init='epsg:3035'))
+        sqm2sqkm = 1e6
+        population_density = (line.grid.grid_district['population'] /
+                              (transform(projection,
+                               line.grid.grid_district['geom']).area /
+                               sqm2sqkm))
+        if population_density <= 500:
+            population_density = 'rural'
+        else:
+            population_density = 'urban'
+        return (float(network.config['costs_cables']['{} {}'.format(
+            voltage_level, population_density)]))
 
     costs = pd.DataFrame()
 
@@ -102,7 +95,8 @@ def grid_expansion_costs(network):
     for transformer in added_transformers['equipment']:
         costs = costs.append(pd.DataFrame(
             {'type': transformer.type.name,
-             'total_costs': _get_transformer_costs(transformer)},
+             'total_costs': _get_transformer_costs(transformer),
+             'quantity': 1},
             index=[repr(transformer)]))
 
     # costs for lines
@@ -112,7 +106,6 @@ def grid_expansion_costs(network):
             network.results.equipment_changes.reset_index()['index'].apply(
                 isinstance, args=(Line,))]]
     # calculate costs for each reinforced line
-    # ToDo: include costs for groundwork
     for line in list(lines.index.unique()):
         costs = costs.append(pd.DataFrame(
             {'type': line.type.name,
