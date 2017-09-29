@@ -209,7 +209,7 @@ def mv_voltage_deviation(network):
                 len(crit_nodes[network.mv_grid])))
     else:
         crit_nodes = None
-        logger.debug('==> {} No voltage issues in MV grid.')
+        logger.debug('==> No voltage issues in MV grid.')
 
     return crit_nodes
 
