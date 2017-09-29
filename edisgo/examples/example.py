@@ -1,6 +1,7 @@
 from edisgo.grid.network import Network, Scenario, TimeSeries
 import os
-import pickle
+import sys
+import pandas as pd
 
 import logging
 logging.basicConfig(filename='example.log',
@@ -10,48 +11,54 @@ logging.basicConfig(filename='example.log',
 logger = logging.getLogger('edisgo')
 logger.setLevel(logging.DEBUG)
 
-timeseries = TimeSeries()
-scenario = Scenario(timeseries=timeseries,
-                    power_flow='worst-case')
-
-import_network = True
-
-if import_network:
-    network = Network.import_from_ding0(
-        os.path.join('data', 'ding0_grids__76.pkl'),
-        id='Test grid',
-        scenario=scenario
-    )
-    # Do non-linear power flow analysis with PyPSA
-    network.analyze()
-    #network.pypsa.export_to_csv_folder('data/pypsa_export')
-    #network.pypsa = None
-    #pickle.dump(network, open('test_network.pkl', 'wb'))
-else:
-    network = pickle.load(open('test_results_neu.pkl', 'rb'))
-
-# # MV generators
-# gens = network.mv_grid.graph.nodes_by_attribute('generator')
-# print('Generators in MV grid incl. aggregated generators from MV and LV')
-# print('Type\tSubtype\tCapacity in kW')
-# for gen in gens:
-#     print("{type}\t{sub}\t{capacity}".format(
-#         type=gen.type, sub=gen.subtype, capacity=gen.nominal_capacity))
-# 
-# # Load located in aggregated LAs
-# print('\n\nAggregated load in LA adds up to\n')
-# if network.mv_grid.graph.nodes_by_attribute('load'):
-#     [print('\t{0}: {1} MWh'.format(
-#         _,
-#         network.mv_grid.graph.nodes_by_attribute('load')[0].consumption[_] / 1e3))
-#         for _ in ['retail', 'industrial', 'agricultural', 'residential']]
+# import pickle
+# import_network = True
+# if import_network:
+#     network = Network.import_from_ding0(
+#         os.path.join('data', 'ding0_grids__76.pkl'),
+#         id='Test grid',
+#         scenario=scenario
+#     )
+#     # Do non-linear power flow analysis with PyPSA
+#     network.analyze()
+#     #network.pypsa.export_to_csv_folder('data/pypsa_export')
+#     #network.pypsa = None
+#     #pickle.dump(network, open('test_network.pkl', 'wb'))
 # else:
-#     print("O MWh")
+#     network = pickle.load(open('test_results_neu.pkl', 'rb'))
 
-network.reinforce()
-print(network.results.grid_expansion_costs.total_costs.sum())
+if __name__ == '__main__':
+    grids = []
+    for file in os.listdir(os.path.join(sys.path[0], "data")):
+        if file.endswith(".pkl"):
+            grids.append(file)
 
-# nx.draw_spectral(list(network.mv_grid.lv_grids)[0].graph)
+    timeseries = TimeSeries()
+    scenario = Scenario(timeseries=timeseries,
+                        power_flow='worst-case')
+    costs = pd.DataFrame()
+    faulty_grids = []
+    for dingo_grid in grids:
+        logging.info('Grid expansion for {}'.format(dingo_grid))
+        network = Network.import_from_ding0(
+            os.path.join('data', dingo_grid),
+            id='Test grid',
+            scenario=scenario)
+        # Do non-linear power flow analysis with PyPSA
+        network.analyze()
+        # Do grid reinforcement
+        try:
+            network.reinforce()
+            costs_grouped = network.results.grid_expansion_costs.groupby(
+                ['type']).sum()
+            costs = costs.append(
+                pd.DataFrame(costs_grouped.values,
+                             columns=costs_grouped.columns,
+                             index=[[network.id] * len(costs_grouped),
+                             costs_grouped.index]))
+            logging.info('SUCCESS!')
+        except:
+            faulty_grids.append(dingo_grid)
+            logging.info('Something went wrong.')
 
-# ToDo: Möglichkeit MV und LV getrennt zu rechnen
-
+    costs.to_csv('costs.csv')
