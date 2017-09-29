@@ -764,19 +764,18 @@ class Results:
     @property
     def pfa_p(self):
         """
-        Active power results from power flow analysis
+        Active power results from power flow analysis in kW.
 
         Holds power flow analysis results for active power for the last
         iteration step. Index of the DataFrame is a DatetimeIndex indicating
         the time period the power flow analysis was conducted for; columns
         of the DataFrame are the edges as well as stations of the grid
         topology.
-        ToDo: add unit
 
         Parameters
         ----------
         pypsa: `pandas.DataFrame<dataframe>`
-            Results time series of active power P from the
+            Results time series of active power P in kW from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
             Provide this if you want to set values. For retrieval of data do not
@@ -796,19 +795,18 @@ class Results:
     @property
     def pfa_q(self):
         """
-        Reactive power results from power flow analysis
+        Reactive power results from power flow analysis in kvar.
 
         Holds power flow analysis results for reactive power for the last
         iteration step. Index of the DataFrame is a DatetimeIndex indicating
         the time period the power flow analysis was conducted for; columns
         of the DataFrame are the edges as well as stations of the grid
         topology.
-        ToDo: add unit
 
         Parameters
         ----------
         pypsa: `pandas.DataFrame<dataframe>`
-            Results time series of reactive power Q from the
+            Results time series of reactive power Q in kvar from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
             Provide this if you want to set values. For retrieval of data do not
@@ -840,11 +838,11 @@ class Results:
         Parameters
         ----------
         pypsa: `pandas.DataFrame<dataframe>`
-            Results time series of voltage deviation from the
+            Results time series of voltage deviation in p.u. from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
-            Provide this if you want to set values. For retrieval of data do not
-            pass an argument
+            Provide this if you want to set values. For retrieval of data do
+            not pass an argument
 
         Returns
         -------
@@ -988,9 +986,9 @@ class Results:
 
     def s_res(self, components=None):
         """
-        Get resulting apparent power at line(s) and transformer(s)
+        Get resulting apparent power in kVA at line(s) and transformer(s).
 
-        The apparent power at a line (or transformer) determines from the
+        The apparent power at a line (or transformer) is determined from the
         maximum values of active power P and reactive power Q.
 
         .. math::
@@ -999,12 +997,13 @@ class Results:
 
         Parameters
         ----------
-        components : :class:`~.grid.components.Line` or :class:`~.grid.components.Transformer`
+        components : :class:`~.grid.components.Line` or
+            :class:`~.grid.components.Transformer`
             Could be a list of instances of these classes
 
             Line or Transformers objects of grid topology. If not provided
-            (respectively None)
-            defaults to return `s_res` of all lines and transformers in the grid.
+            (respectively None) defaults to return `s_res` of all lines and
+            transformers in the grid.
 
         Returns
         -------
@@ -1018,7 +1017,8 @@ class Results:
             labels_not_included = []
             labels = [repr(l) for l in components]
             for label in labels:
-                if label in list(self.pfa_p.columns) and label in list(self.pfa_q.columns):
+                if (label in list(self.pfa_p.columns) and
+                            label in list(self.pfa_q.columns)):
                     labels_included.append(label)
                 else:
                     labels_not_included.append(label)
