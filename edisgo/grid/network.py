@@ -1,12 +1,12 @@
-import edisgo
-from edisgo.tools import config
-from edisgo.data.import_data import import_from_ding0#, import_generators
-from edisgo.flex_opt.costs import grid_expansion_costs
-
 from os import path
 import pandas as pd
-from edisgo.tools import pypsa_io
-from math import sqrt, acos, tan
+from math import sqrt
+
+import edisgo
+from edisgo.tools import config, pypsa_io
+from edisgo.data.import_data import import_from_ding0
+from edisgo.flex_opt.costs import grid_expansion_costs
+from edisgo.flex_opt.reinforce_grid import reinforce_grid
 
 
 class Network:
@@ -222,14 +222,11 @@ class Network:
         else:
             raise ValueError("Power flow analysis did not converge.")
 
-
-    def reinforce(self):
-        """Reinforces the grid
-
-        TBD
-
-        """
-        raise NotImplementedError
+    def reinforce(self, **kwargs):
+        """Reinforces the grid and calculates grid expansion costs"""
+        reinforce_grid(
+            self, max_while_iterations=kwargs.get('max_while_iterations', 10))
+        self.results.grid_expansion_costs = grid_expansion_costs(self)
 
     @property
     def id(self):
@@ -331,6 +328,17 @@ class Scenario:
         To specify the time range for a power flow analysis provide the start
         and end time as 2-tuple of :obj:`datetime`
 
+    Optional Parameters
+    --------------------
+    pfac_mv_gen : :obj:`float`
+        Power factor for medium voltage generators
+    pfac_mv_load : :obj:`float`
+        Power factor for medium voltage loads
+    pfac_lv_gen : :obj:`float`
+        Power factor for low voltage generators
+    pfac_lv_load : :obj:`float`
+        Power factor for low voltage loads
+
     Attributes
     ----------
     _name : :obj:`str`
@@ -342,14 +350,9 @@ class Scenario:
     _etrago_specs : :class:`~.grid.grids.ETraGoSpecs`
         Specifications which are to be fulfilled at transition point (HV-MV
         substation)
-    _pfac_mv_gen : :obj:`float`
-        Power factor for medium voltage generators
-    _pfac_mv_load : :obj:`float`
-        Power factor for medium voltage loads
-    _pfac_lv_gen : :obj:`float`
-        Power factor for low voltage generators
-    _pfac_lv_load : :obj:`float`
-        Power factor for low voltage loads
+    _parameters : :class:`~.grid.network.Parameters`
+        Parameters for power flow analysis and grid expansion.
+
     """
 
     def __init__(self, power_flow, **kwargs):
@@ -357,10 +360,7 @@ class Scenario:
         self._network = kwargs.get('network', None)
         self._timeseries = kwargs.get('timeseries', None)
         self._etrago_specs = kwargs.get('etrago_specs', None)
-        self._pfac_mv_gen = kwargs.get('pfac_mv_gen', None)
-        self._pfac_mv_load = kwargs.get('pfac_mv_load', None)
-        self._pfac_lv_gen = kwargs.get('pfac_lv_gen', None)
-        self._pfac_lv_load = kwargs.get('pfac_lv_load', None)
+        self._parameters = Parameters(self, **kwargs)
 
         if isinstance(power_flow, str):
             if power_flow != 'worst-case':
@@ -381,47 +381,172 @@ class Scenario:
         return self._timeseries
 
     @property
+    def parameters(self):
+        return self._parameters
+
+    def __repr__(self):
+        return 'Scenario ' + self._name
+
+
+class Parameters:
+    """
+    Contains model parameters for power flow analysis and grid expansion.
+
+    Attributes
+    ----------
+    _pfac_mv_gen : :obj:`float`
+        Power factor for medium voltage generators
+    _pfac_mv_load : :obj:`float`
+        Power factor for medium voltage loads
+    _pfac_lv_gen : :obj:`float`
+        Power factor for low voltage generators
+    _pfac_lv_load : :obj:`float`
+        Power factor for low voltage loads
+    _hv_mv_trafo_offset : :obj:`float`
+        Offset at substation
+    _hv_mv_trafo_control_deviation : :obj:`float`
+        Voltage control deviation at substation
+    _load_factor_hv_mv_transformer : :obj:`float`
+        Allowed load of transformers at substation, retrieved from config
+        files depending on analyzed case (feed-in or load).
+    _load_factor_mv_lv_transformer : :obj:`float`
+        Allowed load of transformers at distribution substation, retrieved from
+        config files depending on analyzed case (feed-in or load).
+    _load_factor_mv_line : :obj:`float`
+        Allowed load of MV line, retrieved from config files depending on
+        analyzed case (feed-in or load).
+    _load_factor_lv_line : :obj:`float`
+        Allowed load of LV line, retrieved from config files depending on
+        analyzed case (feed-in or load).
+    _mv_max_v_deviation : :obj:`float`
+        Allowed voltage deviation in MV grid, retrieved from config files
+        depending on analyzed case (feed-in or load).
+    _lv_max_v_deviation : :obj:`float`
+        Allowed voltage deviation in LV grid, retrieved from config files
+        depending on analyzed case (feed-in or load).
+
+    """
+
+    def __init__(self, scenario_class, **kwargs):
+        self._scenario = scenario_class
+        self._pfac_mv_gen = kwargs.get('pfac_mv_gen', None)
+        self._pfac_mv_load = kwargs.get('pfac_mv_load', None)
+        self._pfac_lv_gen = kwargs.get('pfac_lv_gen', None)
+        self._pfac_lv_load = kwargs.get('pfac_lv_load', None)
+        self._hv_mv_transformer_offset = None
+        self._hv_mv_transformer_control_deviation = None
+        self._load_factor_hv_mv_transformer = None
+        self._load_factor_mv_lv_transformer = None
+        self._load_factor_mv_line = None
+        self._load_factor_lv_line = None
+        self._mv_max_v_deviation = None
+        self._lv_max_v_deviation = None
+
+    @property
+    def scenario(self):
+        return self._scenario
+
+    @property
     def pfac_mv_gen(self):
         if not self._pfac_mv_gen:
             self._pfac_mv_gen = float(
-                self.network.config['scenario']['pfac_mv_gen'])
-
+                self.scenario.network.config['scenario']['pfac_mv_gen'])
         return self._pfac_mv_gen
     
     @property
     def pfac_mv_load(self):
         if not self._pfac_mv_load:
             self._pfac_mv_load = float(
-                self.network.config['scenario']['pfac_mv_load'])
-
+                self.scenario.network.config['scenario']['pfac_mv_load'])
         return self._pfac_mv_load
     
     @property
     def pfac_lv_gen(self):
         if not self._pfac_lv_gen:
             self._pfac_lv_gen = float(
-                self.network.config['scenario']['pfac_lv_gen'])
-
+                self.scenario.network.config['scenario']['pfac_lv_gen'])
         return self._pfac_lv_gen
     
     @property
     def pfac_lv_load(self):
         if not self._pfac_lv_load:
             self._pfac_lv_load = float(
-                self.network.config['scenario']['pfac_lv_load'])
-
+                self.scenario.network.config['scenario']['pfac_lv_load'])
         return self._pfac_lv_load
 
     @property
-    def network(self):
-        return self._network
+    def hv_mv_transformer_offset(self):
+        if not self._hv_mv_transformer_offset:
+            self._hv_mv_transformer_offset = float(
+                self.scenario.network.config['grid_expansion'][
+                    'hv_mv_trafo_offset'])
+        return self._hv_mv_transformer_offset
 
-    @network.setter
-    def network(self, network):
-        self._network = network
+    @property
+    def hv_mv_transformer_control_deviation(self):
+        if not self._hv_mv_transformer_control_deviation:
+            self._hv_mv_transformer_control_deviation = float(
+                self.scenario.network.config['grid_expansion'][
+                    'hv_mv_trafo_control_deviation'])
+        return self._hv_mv_transformer_control_deviation
 
-    def __repr__(self):
-        return 'Scenario ' + self._name
+    @property
+    # ToDo: for now only feed-in case is considered
+    def load_factor_hv_mv_transformer(self):
+        if not self._load_factor_hv_mv_transformer:
+            self._load_factor_hv_mv_transformer = float(
+                self.scenario.network.config['grid_expansion'][
+                    'load_factor_hv_mv_transformer'])
+        return self._load_factor_hv_mv_transformer
+
+    @property
+    # ToDo: for now only feed-in case is considered
+    def load_factor_mv_lv_transformer(self):
+        if not self._load_factor_mv_lv_transformer:
+            self._load_factor_mv_lv_transformer = float(
+                self.scenario.network.config['grid_expansion'][
+                    'load_factor_mv_lv_transformer'])
+        return self._load_factor_mv_lv_transformer
+
+    @property
+    # ToDo: for now only feed-in case is considered
+    def load_factor_mv_line(self):
+        if not self._load_factor_mv_line:
+            self._load_factor_mv_line = float(
+                self.scenario.network.config['grid_expansion'][
+                    'load_factor_mv_line'])
+        return self._load_factor_mv_line
+
+    @property
+    # ToDo: for now only feed-in case is considered
+    def load_factor_lv_line(self):
+        if not self._load_factor_lv_line:
+            self._load_factor_lv_line = float(
+                self.scenario.network.config['grid_expansion'][
+                    'load_factor_lv_line'])
+        return self._load_factor_lv_line
+
+    @property
+    # ToDo: for now only voltage deviation for the combined calculation of MV
+    # and LV is considered (load and feed-in case for seperate consideration
+    # of MV and LV needs to be implemented)
+    def mv_max_v_deviation(self):
+        if not self._mv_max_v_deviation:
+            self._mv_max_v_deviation = float(
+                self.scenario.network.config['grid_expansion'][
+                    'mv_lv_max_v_deviation'])
+        return self._mv_max_v_deviation
+
+    @property
+    # ToDo: for now only voltage deviation for the combined calculation of MV
+    # and LV is considered (load and feed-in case for seperate consideration
+    # of MV and LV needs to be implemented)
+    def lv_max_v_deviation(self):
+        if not self._lv_max_v_deviation:
+            self._lv_max_v_deviation = float(
+                self.scenario.network.config['grid_expansion'][
+                    'mv_lv_max_v_deviation'])
+        return self._lv_max_v_deviation
 
 
 class TimeSeries:
@@ -781,21 +906,47 @@ class Results:
     @property
     def grid_expansion_costs(self):
         """
-        Holds grid expansion costs in MEUR due to grid expansion measures
-        tracked in self.equipment_changes.
+        Holds grid expansion costs in kEUR due to grid expansion measures
+        tracked in self.equipment_changes and calculated in
+        edisgo.flex_opt.costs.grid_expansion_costs()
 
         Parameters
         ----------
-        total_costs: float
-            Provide this if you want to set grid_expansion_costs. For
-            retrieval of costs do not pass an argument.
+        total_costs : :pandas:`pandas.DataFrame<dataframe>`
+
+            DataFrame containing type and costs plus in the case of lines the
+            line length and number of parallel lines of each reinforced
+            transformer and line. Provide this if you want to set
+            grid_expansion_costs. For retrieval of costs do not pass an
+            argument.
+
+            The DataFrame has the following columns:
+
+            type: String
+                Transformer size or cable name
+
+            total_costs: float
+                Costs of equipment in kEUR. For lines the line length and
+                number of parallel lines is already included in the total
+                costs.
+
+            quantity: int
+                Number of parallel lines.
+
+            line_length: float
+                Length of one line in km.
 
         Returns
         -------
-        float
+        :pandas:`pandas.DataFrame<dataframe>`
+            Costs of each reinforced equipment in kEUR.
+
+        Notes
+        -------
+        Total grid expansion costs can be obtained through
+        costs.total_costs.sum().
+
         """
-        if not self._grid_expansion_costs:
-            grid_expansion_costs(self)
         return self._grid_expansion_costs
 
     @grid_expansion_costs.setter

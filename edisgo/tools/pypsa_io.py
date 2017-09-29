@@ -568,7 +568,6 @@ def add_aggregated_lv_components(network, components):
                 loads[lv_grid].setdefault(sector, 0)
                 loads[lv_grid][sector] += val
 
-
     # define dict for DataFrame creation of aggr. generation and load
     generator = {'name': [],
                  'bus': [],
@@ -752,10 +751,11 @@ def _pypsa_bus_timeseries(network, buses, mode=None):
     # set all buses (except slack bus) to nominal voltage
     v_set_dict = {bus: 1 for bus in buses if bus != slack_bus}
 
-    # Set slack bus to operational voltage (includes offset and control deviation
+    # Set slack bus to operational voltage (includes offset and control
+    # deviation
     slack_voltage_pu = 1 + \
-        float(network.config['grid_expansion']['hv_mv_trafo_offset']) + \
-        float(network.config['grid_expansion']['hv_mv_trafo_control_deviation'])
+        network.scenario.parameters.hv_mv_transformer_offset + \
+        network.scenario.parameters.hv_mv_transformer_control_deviation
     v_set_dict.update({slack_bus: slack_voltage_pu})
 
     # Convert to PyPSA compatible dataframe
@@ -990,7 +990,6 @@ def _check_integrity_of_pypsa(pypsa_network):
     if duplicate_v_mag_set:
         raise ValueError("{labels} have duplicate entry in buses_t".format(
             labels=duplicate_v_mag_set))
-        
 
 
 def process_pfa_results(network, pypsa):
@@ -1180,21 +1179,11 @@ def update_pypsa(network):
         network.pypsa.import_components_from_dataframe(
             pd.DataFrame(transformer).set_index('name'), 'Transformer')
 
-
     # Step 2: Update lines
     lines = equipment_changes.loc[equipment_changes.index[
         equipment_changes.reset_index()['index'].apply(
             isinstance, args=(Line,))]]
     changed_lines = lines[lines['change'] == 'changed']
-
-    line = {'name': [],
-            'bus0': [],
-            'bus1': [],
-            'type': [],
-            'x': [],
-            'r': [],
-            's_nom': [],
-            'length': []}
 
     lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
 
@@ -1209,6 +1198,7 @@ def update_pypsa(network):
         network.pypsa.lines.loc[repr(idx), 's_nom'] = (
             sqrt(3) * idx.type['I_max_th'] * idx.type[
                 'U_n'] * idx.quantity / 1e3)
+        network.pypsa.lines.loc[repr(idx), 'length'] = idx.length
 
         # Update buses line is connected to
         adj_nodes = idx.grid.graph.nodes_from_line(idx)

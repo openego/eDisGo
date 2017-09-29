@@ -68,6 +68,11 @@ class Grid:
     def network(self):
         return self._network
 
+    @property
+    def grid_district(self):
+        """Provide access to the grid_district"""
+        return self._grid_district
+
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
 
