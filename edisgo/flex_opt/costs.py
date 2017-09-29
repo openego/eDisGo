@@ -32,10 +32,11 @@ def grid_expansion_costs(network):
             parallel lines is already included in the total costs.
 
         quantity: int
-            Number of parallel lines.
+            For transformers quantity is always one, for lines it specifies the
+            number of parallel lines.
 
         line_length: float
-            Length of one line in km.
+            Length of line or in case of parallel lines all lines in km.
 
     Notes
     -------
@@ -111,8 +112,8 @@ def grid_expansion_costs(network):
             {'type': line.type.name,
              'total_costs': (_get_line_costs(line) * line.length *
                              line.quantity),
-             'length': line.length,
              'quantity': line.quantity},
              index=[repr(line)]))
+             'length': line.length * line.quantity,
 
     return costs
