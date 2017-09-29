@@ -62,7 +62,7 @@ def grid_expansion_costs(network):
         # transform area to calculate area in km^2
         projection = partial(
             pyproj.transform,
-            pyproj.Proj(init='epsg:4326'),  # ToDo: leave hard coded?
+            pyproj.Proj(init='epsg:{}'.format(network.config['geo']['srid'])),
             pyproj.Proj(init='epsg:3035'))
         sqm2sqkm = 1e6
         population_density = (line.grid.grid_district['population'] /
