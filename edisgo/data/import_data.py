@@ -1162,6 +1162,9 @@ def _import_genos_from_oedb(network):
             # check if geom is available, skip otherwise
             geom = _check_geom(row)
             if not geom:
+                logger.warning('Generator {} has no geom entry at all and will not be imported!'
+                               .format(id)
+                               )
                 continue
 
             # create generator object and add it to MV grid's graph
@@ -1346,8 +1349,6 @@ def _import_genos_from_oedb(network):
             else:
                 # check if geom is available, skip otherwise
                 geom = _check_geom(row)
-                if not geom:
-                    continue
 
                 gen = Generator(id=id,
                                 grid=None,
@@ -1473,11 +1474,6 @@ def _import_genos_from_oedb(network):
                 logger.warning('Generator {} has no geom entry, EnergyMap\'s geom entry will be used.'
                                .format(id)
                                )
-            # skip geno if no geom at all
-            else:
-                logger.warning('Generator {} has no geom entry at all and will not be imported!'
-                               .format(id)
-                               )
 
         return geom
 
@@ -1509,7 +1505,16 @@ def _import_genos_from_oedb(network):
             # assume that given LA exists
             try:
                 # get LV grid
-                return lv_grid_dict[mvlv_subst_id]
+                lv_grid = lv_grid_dict[mvlv_subst_id]
+
+                # if no geom, use geom of station
+                if not generator.geom:
+                    generator.geom = lv_grid.station.geom
+                    logger.warning('Generator {} has no geom entry, stations\' geom will be used.'
+                                   .format(generator.id)
+                                   )
+
+                return lv_grid
 
             # if LA/LVGD does not exist, choose random LVGD and move generator to station of LVGD
             # this occurs due to exclusion of LA with peak load < 1kW
