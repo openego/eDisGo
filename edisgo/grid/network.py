@@ -859,6 +859,38 @@ class Results:
         self._pfa_v_mag_pu = pypsa
 
     @property
+    def i_res(self):
+        """
+        Current results from power flow analysis in A.
+
+        Holds power flow analysis results for current for the last
+        iteration step. Index of the DataFrame is a DatetimeIndex indicating
+        the time period the power flow analysis was conducted for; columns
+        of the DataFrame are the edges as well as stations of the grid
+        topology.
+        ToDo: add unit
+
+        Parameters
+        ----------
+        pypsa: `pandas.DataFrame<dataframe>`
+            Results time series of current in A from the
+            `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+
+            Provide this if you want to set values. For retrieval of data do
+            not pass an argument
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Current results from power flow analysis
+        """
+        return self._i_res
+
+    @i_res.setter
+    def i_res(self, pypsa):
+        self._i_res = pypsa
+
+    @property
     def equipment_changes(self):
         """
         Tracks changes in the equipment (e.g. replaced or added cable, etc.)
