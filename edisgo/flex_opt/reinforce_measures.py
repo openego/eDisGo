@@ -1,5 +1,6 @@
 import copy
 import math
+import sys
 import networkx as nx
 from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
     dijkstra_shortest_path_length
@@ -148,8 +149,6 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
 
     """
 
-    # ToDo: gilt Methodik auch für die MS?
-
     # load standard line data
     if isinstance(grid, LVGrid):
         try:
@@ -175,10 +174,12 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     for i in range(len(crit_nodes)):
         path = nx.shortest_path(grid.graph, grid.station,
                                 crit_nodes.index[i])
-
-        # ToDo: Remove
+        # stop execution if voltage issue occurs at station's secondary side
         if len(path) == 1:
-            break
+            logging.error("Voltage issues of station need to be solved at " +
+                          "secondary side.")
+            sys.exit()
+
         # check if representative of line is already in list
         # main_line_reinforced, if it is the main line the critical node is
         # connected to has already been reinforced in this iteration step
