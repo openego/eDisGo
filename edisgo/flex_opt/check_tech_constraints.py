@@ -32,14 +32,13 @@ def mv_line_load(network):
 
     load_factor_mv_line = network.scenario.parameters.load_factor_mv_line
 
-    # ToDo: Add getter for i_res
     for line in list(network.mv_grid.graph.graph_edges()):
         i_line_max = line['line'].type['I_max_th'] * \
                      load_factor_mv_line * line['line'].quantity
         try:
             # check if maximum current from power flow analysis exceeds
             # allowed maximum current
-            i_line_pfa = max(network.results._i_res[repr(line['line'])])
+            i_line_pfa = max(network.results.i_res[repr(line['line'])])
             if i_line_pfa > i_line_max:
                 crit_lines[line['line']] = i_line_pfa / i_line_max
         except KeyError:
@@ -84,7 +83,6 @@ def lv_line_load(network):
 
     load_factor_lv_line = network.scenario.parameters.load_factor_lv_line
 
-    # ToDo: Add getter for i_res
     for lv_grid in network.mv_grid.lv_grids:
         for line in list(lv_grid.graph.graph_edges()):
             i_line_max = line['line'].type['I_max_th'] * \
@@ -92,7 +90,7 @@ def lv_line_load(network):
             try:
                 # check if maximum current from power flow analysis exceeds
                 # allowed maximum current
-                i_line_pfa = max(network.results._i_res[repr(line['line'])])
+                i_line_pfa = max(network.results.i_res[repr(line['line'])])
                 if i_line_pfa > i_line_max:
                     crit_lines[line['line']] = i_line_pfa / i_line_max
             except KeyError:
@@ -142,8 +140,8 @@ def mv_lv_station_load(network):
     for lv_grid in network.mv_grid.lv_grids:
         station = lv_grid.station
         # maximum allowed apparent power of station
-        s_station_max = sum([_.type.S_nom for _ in station.transformers]) * \
-                        load_factor_mv_lv_transformer
+        s_station_max = (sum([_.type.S_nom for _ in station.transformers]) *
+                         load_factor_mv_lv_transformer)
         try:
             # check if maximum allowed apparent power of station exceeds
             # apparent power from power flow analysis
