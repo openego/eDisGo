@@ -20,7 +20,7 @@ def grid_expansion_costs(network):
     Returns
     -------
     `pandas.DataFrame<dataframe>`
-        Dataframe containing type and costs plus in the case of lines the
+        DataFrame containing type and costs plus in the case of lines the
         line length and number of parallel lines of each reinforced
         transformer and line. The DataFrame has the following columns:
 
@@ -93,12 +93,12 @@ def grid_expansion_costs(network):
         ~added_transformers['equipment'].isin(
             added_removed_transformers.equipment)]
     # calculate costs for each transformer
-    for transformer in added_transformers['equipment']:
+    for t in added_transformers['equipment']:
         costs = costs.append(pd.DataFrame(
-            {'type': transformer.type.name,
-             'total_costs': _get_transformer_costs(transformer),
+            {'type': t.type.name,
+             'total_costs': _get_transformer_costs(t),
              'quantity': 1},
-            index=[repr(transformer)]))
+            index=[repr(t)]))
 
     # costs for lines
     # get changed lines
@@ -107,13 +107,12 @@ def grid_expansion_costs(network):
             network.results.equipment_changes.reset_index()['index'].apply(
                 isinstance, args=(Line,))]]
     # calculate costs for each reinforced line
-    for line in list(lines.index.unique()):
+    for l in list(lines.index.unique()):
         costs = costs.append(pd.DataFrame(
-            {'type': line.type.name,
-             'total_costs': (_get_line_costs(line) * line.length *
-                             line.quantity),
-             'quantity': line.quantity},
-             index=[repr(line)]))
-             'length': line.length * line.quantity,
+            {'type': l.type.name,
+             'total_costs': _get_line_costs(l) * l.length * l.quantity,
+             'length': l.length * l.quantity,
+             'quantity': l.quantity},
+            index=[repr(l)]))
 
     return costs
