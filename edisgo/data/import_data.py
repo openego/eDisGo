@@ -1319,6 +1319,10 @@ def _import_genos_from_oedb(network):
         # get LV grid districts
         lv_grid_dict = _build_lv_grid_dict(network)
 
+        # get predefined random seed and initialize random generator
+        seed = int(network.config['random']['seed'])
+        random.seed(a=seed)
+
         # iterate over new (single unit or part of agg. unit) generators and create them
         log_geno_cap = 0
         for id, row in generators_lv_new.iterrows():
@@ -1496,10 +1500,6 @@ def _import_genos_from_oedb(network):
         :class:`~.grid.grids.LVGrid`
             LV grid of generator
         """
-
-        # get predefined random seed and initialize random generator
-        seed = int(network.config['random']['seed'])
-        random.seed(a=seed)
 
         if mvlv_subst_id and not isnan(mvlv_subst_id):
             # assume that given LA exists
