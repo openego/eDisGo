@@ -1,6 +1,7 @@
 from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
     MVStation, Line, Transformer, LVStation
 from ..grid.grids import MVGrid, LVGrid
+from ..grid.connect import connect_generators
 
 from egoio.db_tables import model_draft, supply
 from egoio.tools.db import connection
@@ -1111,7 +1112,7 @@ def _import_genos_from_oedb(network):
         cap_diff_threshold = 10 ** -4
 
         # get existing generators in MV and LV grids
-        g_mv, g_lv, _ = _build_generator_list(network=network)
+        g_mv, g_lv = _build_generator_list(network=network)
 
         # =====================
         # Step 1: MV generators
@@ -1656,6 +1657,8 @@ def _import_genos_from_oedb(network):
 
     _validate_generation()
 
+    connect_generators(network=network)
+
     # validate
     cap=0
     # MV genos
@@ -1702,37 +1705,26 @@ def _build_generator_list(network):
             A DataFrame with id of and reference to MV generators
     :pandas:`pandas.DataFrame<dataframe>`
             A DataFrame with id of and reference to LV generators
-    :pandas:`pandas.DataFrame<dataframe>`
-            A DataFrame with id of and reference to aggregated MV generators
-            (originally LV generators from aggregated Load Areas which were
-            aggregated during import from ding0.)
     """
 
     genos_mv = pd.DataFrame(columns=
                             ('id', 'obj'))
     genos_lv = pd.DataFrame(columns=
                             ('id', 'obj'))
-    genos_lv_agg = pd.DataFrame(columns=
-                                ('id', 'obj'))
 
     # MV genos
     for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
         name_comp = str(geno.id).split('-')
-        # geno is really MV
+        # geno is really MV (not aggregated (originally from aggregated LA))
         if name_comp[0] != 'agg':
             genos_mv.loc[len(genos_mv)] = [int(geno.id), geno]
-        # geno was aggregated (originally from aggregated LA)
-        else:
-            #name_comp.remove('agg')
-            for id in name_comp[2].split('_'):
-                genos_lv_agg.loc[len(genos_lv_agg)] = [int(id), geno]
 
     # LV genos
     for lv_grid in network.mv_grid.lv_grids:
         for geno in lv_grid.graph.nodes_by_attribute('generator'):
             genos_lv.loc[len(genos_lv)] = [int(geno.id), geno]
 
-    return genos_mv, genos_lv, genos_lv_agg
+    return genos_mv, genos_lv
 
 
 def _build_lv_grid_dict(network):
