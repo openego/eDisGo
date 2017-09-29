@@ -12,6 +12,8 @@ from shapely.wkt import loads as wkt_loads
 import pandas as pd
 import numpy as np
 import networkx as nx
+from math import isnan
+import random
 import os
 
 if not 'READTHEDOCS' in os.environ:
@@ -1299,8 +1301,15 @@ def _import_genos_from_oedb(network):
 
         # new genos
         log_geno_count = log_agg_geno_count = 0
+
+        # TEMP: BACKUP 1 GENO FOR TESTING
+        #temp_geno = generators_lv[generators_lv.index == g_lv_existing.iloc[0]['id']]
+
         generators_lv_new = generators_lv[~generators_lv.index.isin(list(g_lv_existing['id'])) &
                                           ~generators_lv.index.isin(list(g_lv_agg_existing['id']))]
+
+        # TEMP: INSERT BACKUPPED GENO IN DF FOR TESTING
+        #generators_lv_new = generators_lv_new.append(temp_geno)
 
         # dict for new agg. generators
         agg_geno_new = {}
@@ -1340,16 +1349,26 @@ def _import_genos_from_oedb(network):
                 if not geom:
                     continue
 
-                lv_grid = lv_grid_dict[row['mvlv_subst_id']]
-                lv_grid.graph.add_node(
-                    Generator(id=id,
-                              grid=lv_grid,
-                              nominal_capacity=row['electrical_capacity'],
-                              type=row['generation_type'],
-                              subtype=row['generation_subtype'],
-                              v_level=int(row['voltage_level']),
-                              geom=geom),
-                    type='generator')
+                gen = Generator(id=id,
+                                grid=None,
+                                nominal_capacity=row['electrical_capacity'],
+                                type=row['generation_type'],
+                                subtype=row['generation_subtype'],
+                                v_level=int(row['voltage_level']),
+                                geom=geom)
+
+                # TEMP: REMOVE MVLV SUBST ID FOR TESTING
+                #row['mvlv_subst_id'] = None
+
+                # check if MV-LV substation id exists. if not, allocate to random one
+                lv_grid = _check_mvlv_subst_id(generator=gen,
+                                               mvlv_subst_id=row['mvlv_subst_id'],
+                                               lv_grid_dict=lv_grid_dict)
+
+                gen.grid = lv_grid
+
+                lv_grid.graph.add_node(gen, type='generator')
+
                 log_geno_count += 1
             log_geno_cap += row['electrical_capacity']
 
@@ -1461,6 +1480,65 @@ def _import_genos_from_oedb(network):
                                )
 
         return geom
+
+    def _check_mvlv_subst_id(generator, mvlv_subst_id, lv_grid_dict):
+        """Checks if MV-LV substation id of single LV generator is missing or invalid.
+        If so, a random one from existing stations in LV grids will be assigned.
+
+        Parameters
+        ----------
+        generator : :class:`~.grid.components.Generator`
+            LV generator
+        mvlv_subst_id : :obj:`int`
+            MV-LV substation id
+        lv_grid_dict : :obj:`dict`
+            Dict of existing LV grids
+            Format: {:obj:`int`: :class:`~.grid.grids.LVGrid`}
+
+        Returns
+        -------
+        :class:`~.grid.grids.LVGrid`
+            LV grid of generator
+        """
+
+        # get predefined random seed and initialize random generator
+        seed = int(network.config['random']['seed'])
+        random.seed(a=seed)
+
+        if mvlv_subst_id and not isnan(mvlv_subst_id):
+            # assume that given LA exists
+            try:
+                # get LV grid
+                return lv_grid_dict[mvlv_subst_id]
+
+            # if LA/LVGD does not exist, choose random LVGD and move generator to station of LVGD
+            # this occurs due to exclusion of LA with peak load < 1kW
+            except:
+                lv_grid = random.choice(list(lv_grid_dict.values()))
+
+                generator.geom = lv_grid.station.geom
+
+                logger.warning('Generator {} cannot be assigned to '
+                               'non-existent LV Grid and was '
+                               'allocated to a random LV Grid ({}); '
+                               'geom was set to stations\' geom.'
+                               .format(repr(generator),
+                                       repr(lv_grid)))
+                pass
+                return lv_grid
+
+        else:
+            lv_grid = random.choice(list(lv_grid_dict.values()))
+
+            generator.geom = lv_grid.station.geom
+
+            logger.warning('Generator {} has no mvlv_subst_id and was '
+                           'allocated to a random LV Grid ({}); '
+                           'geom was set to stations\' geom.'
+                           .format(repr(generator),
+                                   repr(lv_grid)))
+            pass
+            return lv_grid
 
     def _validate_generation():
         """Validate generators in updated grids
