@@ -37,6 +37,10 @@ class Component:
         :class:`Component` as Shapely Point or LineString"""
         return self._geom
 
+    @geom.setter
+    def geom(self, geom):
+        self._geom = geom
+
     @property
     def grid(self):
         """:class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid` : The MV or LV grid this component belongs to"""
