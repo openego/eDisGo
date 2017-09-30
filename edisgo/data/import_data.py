@@ -979,27 +979,6 @@ def _import_genos_from_oedb(network):
 
         return generators_mv
 
-        # for id, row in generators.iterrows():
-        #
-        #     # create generator object
-        #     generator = Generator(id=id,
-        #                           name=row['name'],
-        #                           geo_data=wkt_loads(row['geom']),
-        #                           mv_grid=network.mv_grid,
-        #                           capacity=row['capacity'],
-        #                           type=row['fuel'],
-        #                           v_level=int(row['voltage_level']))
-        #
-        #     # add generators to graph
-        #     if generator.v_level in [4, 5]:
-        #         pass
-        #         #network.mv_grid
-        #         #mv_grid.add_generator(generator)
-        #     # there's only one conv. geno with v_level=6 -> connect to MV grid
-        #     elif generator.v_level in [6]:
-        #         generator.v_level = 5
-        #         #mv_grid.add_generator(generator)
-
     def _import_res_generators():
         """Import renewable (res) generators
 
