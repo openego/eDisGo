@@ -1029,7 +1029,7 @@ class Results:
             labels_included = self.pfa_p.columns
 
         s_res = ((self.pfa_p[labels_included] ** 2 + self.pfa_q[
-            labels_included] ** 2) * 1e3).applymap(sqrt)
+            labels_included] ** 2)).applymap(sqrt)
 
         return s_res
 
