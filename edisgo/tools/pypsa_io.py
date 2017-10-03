@@ -213,6 +213,7 @@ def mv_to_pypsa(network):
         * 'BranchTee'
         * 'Tranformer'
 
+
     .. warning::
 
         PyPSA takes resistance R and reactance X in p.u. The conversion from
@@ -220,13 +221,13 @@ def mv_to_pypsa(network):
 
         .. math::
 
-            r_{p.u.} = \frac{R_{\Omega}}{Z_{B}}
+            r_{p.u.} = R_{\Omega} / Z_{B}
 
-            x_{p.u.} = \frac{X_{\Omega}}{Z_{B}}
+            x_{p.u.} = X_{\Omega} / Z_{B}
 
             with
 
-            Z_{B} = \frac{V_B}{S_B}
+            Z_{B} = V_B / S_B
 
         I'm quite sure, but its not 100 % clear if the base voltage V_B is
         chosen correctly. We take the primary side voltage of transformer as
@@ -720,7 +721,7 @@ def _pypsa_bus_timeseries(network, buses, mode=None):
     bus of 1.04 pu.
 
     .. warning::
-    
+
         Voltage settings for the slack bus defined by this function assume the
         feedin case (reverse power flow case) as the worst-case for the power
         system. Thus, the set point for the slack is always greater 1.
