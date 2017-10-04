@@ -1,3 +1,5 @@
+import pyproj
+from functools import partial
 from geopy.distance import vincenty
 
 import os
@@ -8,31 +10,20 @@ if not 'READTHEDOCS' in os.environ:
 import logging
 logger = logging.getLogger('edisgo')
 
+# WGS84 (conformal) to ETRS (equidistant) projection
+proj2equidistant = partial(
+    pyproj.transform,
+    pyproj.Proj(init='epsg:4326'),  # source coordinate system
+    pyproj.Proj(init='epsg:3035'))  # destination coordinate system
 
-def calc_geo_branches_in_polygon(mv_grid, polygon, mode, proj):
-    # TODO: DOCSTRING
-
-    branches = []
-    polygon_shp = transform(proj, polygon)
-    for branch in mv_grid.graph_edges():
-        nodes = branch['adj_nodes']
-        branch_shp = transform(proj, LineString([nodes[0].geo_data, nodes[1].geo_data]))
-
-        # check if branches intersect with polygon if mode = 'intersects'
-        if mode == 'intersects':
-            if polygon_shp.intersects(branch_shp):
-                branches.append(branch)
-        # check if polygon contains branches if mode = 'contains'
-        elif mode == 'contains':
-            if polygon_shp.contains(branch_shp):
-                branches.append(branch)
-        # error
-        else:
-            raise ValueError('Mode is invalid!')
-    return branches
+# ETRS (equidistant) to WGS84 (conformal) projection
+proj2conformal = partial(
+    pyproj.transform,
+    pyproj.Proj(init='epsg:3035'),  # source coordinate system
+    pyproj.Proj(init='epsg:4326'))  # destination coordinate system
 
 
-def calc_geo_branches_in_buffer(node, mv_grid, radius, radius_inc, proj):
+def calc_geo_branches_in_buffer(node, mv_grid, radius, radius_inc):
     """ Determines branches in nodes' associated graph that are at least partly within buffer of `radius` from `node`.
         If there are no nodes, the buffer is successively extended by `radius_inc` until nodes are found.
 
@@ -41,21 +32,21 @@ def calc_geo_branches_in_buffer(node, mv_grid, radius, radius_inc, proj):
               (e.g. WGS84)
         radius: buffer radius in m
         radius_inc: radius increment in m
-        proj: pyproj projection object: nodes' CRS to equidistant CRS (e.g. WGS84 -> ETRS)
 
     Returns:
         list of branches (NetworkX branch objects)
 
     """
+    # TODO: Update docstring
 
     branches = []
 
     while not branches:
-        node_shp = transform(proj, node.geo_data)
+        node_shp = transform(proj2equidistant, node.geo_data)
         buffer_zone_shp = node_shp.buffer(radius)
         for branch in mv_grid.graph_edges():
             nodes = branch['adj_nodes']
-            branch_shp = transform(proj, LineString([nodes[0].geo_data, nodes[1].geo_data]))
+            branch_shp = transform(proj2equidistant, LineString([nodes[0].geo_data, nodes[1].geo_data]))
             if buffer_zone_shp.intersects(branch_shp):
                 branches.append(branch)
         radius += radius_inc
@@ -63,18 +54,23 @@ def calc_geo_branches_in_buffer(node, mv_grid, radius, radius_inc, proj):
     return branches
 
 
-def calc_geo_dist_vincenty(node_source, node_target):
+def calc_geo_dist_vincenty(network, node_source, node_target):
     """ Calculates the geodesic distance between `node_source` and `node_target` incorporating the detour factor in
         config_calc.cfg.
     Args:
-        node_source: source node (Ding0 object), member of _graph
-        node_target: target node (Ding0 object), member of _graph
+    network : :class:`~.grid.network.Network`
+        The eDisGo container object
+    node_source:
+        source node (Ding0 object), member of _graph
+    node_target:
+        target node (Ding0 object), member of _graph
 
     Returns:
         Distance in m
     """
+    # TODO: Update docstring
 
-    branch_detour_factor = cfg_ding0.get('assumptions', 'branch_detour_factor')
+    branch_detour_factor = network.config['connect']['branch_detour_factor']
 
     # notice: vincenty takes (lat,lon)
     branch_length = branch_detour_factor * vincenty((node_source.geo_data.y, node_source.geo_data.x),
