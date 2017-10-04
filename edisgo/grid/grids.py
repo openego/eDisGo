@@ -121,7 +121,6 @@ class LVGrid(Grid):
             super().__init__(**kwargs)
 
 
-
 class Graph(nx.Graph):
     """Graph object
 
