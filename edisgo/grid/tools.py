@@ -1,6 +1,7 @@
 import logging
 logger = logging.getLogger('edisgo')
 
+
 def select_cable(network, level, apparent_power):
     """Selects an appropriate cable type and quantity using given apparent power.
 
