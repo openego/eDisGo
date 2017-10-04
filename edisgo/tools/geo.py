@@ -10,22 +10,35 @@ if not 'READTHEDOCS' in os.environ:
 import logging
 logger = logging.getLogger('edisgo')
 
-# WGS84 (conformal) to ETRS (equidistant) projection
-proj2equidistant = partial(
-    pyproj.transform,
-    pyproj.Proj(init='epsg:4326'),  # source coordinate system
-    pyproj.Proj(init='epsg:3035'))  # destination coordinate system
 
-# ETRS (equidistant) to WGS84 (conformal) projection
-proj2conformal = partial(
-    pyproj.transform,
-    pyproj.Proj(init='epsg:3035'),  # source coordinate system
-    pyproj.Proj(init='epsg:4326'))  # destination coordinate system
+def proj2equidistant():
+    """Defines WGS84 (conformal) to ETRS (equidistant) projection
+
+    Returns
+    -------
+    :functools:`partial`
+    """
+
+    return partial(pyproj.transform,
+                   pyproj.Proj(init='epsg:4326'),  # source coordinate system
+                   pyproj.Proj(init='epsg:3035'))  # destination coordinate system
 
 
-def calc_geo_branches_in_buffer(node, mv_grid, radius, radius_inc):
-    """ Determines branches in nodes' associated graph that are at least partly within buffer of `radius` from `node`.
-        If there are no nodes, the buffer is successively extended by `radius_inc` until nodes are found.
+def proj2conformal():
+    """Defines ETRS (equidistant) to WGS84 (conformal) projection
+
+    Returns
+    -------
+    :functools:`partial`
+    """
+    return partial(pyproj.transform,
+                   pyproj.Proj(init='epsg:3035'),  # source coordinate system
+                   pyproj.Proj(init='epsg:4326'))  # destination coordinate system
+
+
+def calc_geo_lines_in_buffer(node, mv_grid, radius, radius_inc):
+    """Determines branches in nodes' associated graph that are at least partly within buffer of `radius` from `node`.
+    If there are no nodes, the buffer is successively extended by `radius_inc` until nodes are found.
 
     Args:
         node: origin node (e.g. LVStationDing0 object) with associated shapely object (attribute `geo_data`) in any CRS
@@ -34,24 +47,24 @@ def calc_geo_branches_in_buffer(node, mv_grid, radius, radius_inc):
         radius_inc: radius increment in m
 
     Returns:
-        list of branches (NetworkX branch objects)
+        Sorted list of branches (NetworkX branch objects)
 
     """
     # TODO: Update docstring
 
-    branches = []
+    lines = []
 
-    while not branches:
-        node_shp = transform(proj2equidistant, node.geo_data)
+    while not lines:
+        node_shp = transform(proj2equidistant(), node.geo_data)
         buffer_zone_shp = node_shp.buffer(radius)
-        for branch in mv_grid.graph_edges():
-            nodes = branch['adj_nodes']
-            branch_shp = transform(proj2equidistant, LineString([nodes[0].geo_data, nodes[1].geo_data]))
+        for line in mv_grid.graph_edges():
+            nodes = line['adj_nodes']
+            branch_shp = transform(proj2equidistant(), LineString([nodes[0].geo_data, nodes[1].geo_data]))
             if buffer_zone_shp.intersects(branch_shp):
-                branches.append(branch)
+                lines.append(line)
         radius += radius_inc
 
-    return branches
+    return sorted(lines, key=lambda _: repr(_))
 
 
 def calc_geo_dist_vincenty(network, node_source, node_target):
