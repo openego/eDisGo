@@ -1564,7 +1564,7 @@ def _import_genos_from_oedb(network):
     Session = sessionmaker(bind=conn)
     session = Session()
 
-    srid = network.config['geo']['srid']
+    srid = int(network.config['geo']['srid'])
 
     oedb_data_source = network.config['data_source']['oedb_data_source']
     scenario = network.config['scenario']['name']

@@ -86,6 +86,7 @@ class Network:
         config object
         """
 
+        # load config
         config.load_config('config_db_tables.cfg')
         config.load_config('config_data.cfg')
         config.load_config('config_flexopt.cfg')
@@ -93,7 +94,15 @@ class Network:
         config.load_config('config_scenario.cfg')
         config.load_config('config_costs.cfg')
 
-        return config.cfg._sections
+        confic_dict = config.cfg._sections
+
+        # convert numeric values to float
+        for sec, subsecs in confic_dict.items():
+            for subsec, val in subsecs.items():
+                if val.isdigit():
+                    confic_dict[sec][subsec] = float(val)
+
+        return confic_dict
 
     def _load_equipment_data(self):
         """Load equipment data for transformers, cables etc.
