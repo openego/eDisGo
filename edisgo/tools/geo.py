@@ -55,11 +55,11 @@ def calc_geo_lines_in_buffer(node, mv_grid, radius, radius_inc):
     lines = []
 
     while not lines:
-        node_shp = transform(proj2equidistant(), node.geo_data)
+        node_shp = transform(proj2equidistant(), node.geom)
         buffer_zone_shp = node_shp.buffer(radius)
-        for line in mv_grid.graph_edges():
+        for line in mv_grid.graph.graph_edges():
             nodes = line['adj_nodes']
-            branch_shp = transform(proj2equidistant(), LineString([nodes[0].geo_data, nodes[1].geo_data]))
+            branch_shp = transform(proj2equidistant(), LineString([nodes[0].geom, nodes[1].geom]))
             if buffer_zone_shp.intersects(branch_shp):
                 lines.append(line)
         radius += radius_inc
@@ -86,8 +86,8 @@ def calc_geo_dist_vincenty(network, node_source, node_target):
     branch_detour_factor = network.config['connect']['branch_detour_factor']
 
     # notice: vincenty takes (lat,lon)
-    branch_length = branch_detour_factor * vincenty((node_source.geo_data.y, node_source.geo_data.x),
-                                                    (node_target.geo_data.y, node_target.geo_data.x)).m
+    branch_length = branch_detour_factor * vincenty((node_source.geom.y, node_source.geom.x),
+                                                    (node_target.geom.y, node_target.geom.x)).m
 
     # ========= BUG: LINE LENGTH=0 WHEN CONNECTING GENERATORS ===========
     # When importing generators, the geom_new field is used as position. If it is empty, EnergyMap's geom
