@@ -1,6 +1,9 @@
-from ..grid.components import Line, MVStation
+from ..grid.components import Line, MVStation, MVDisconnectingPoint
 from ..grid.tools import select_cable
-from ..tools.geo import calc_geo_dist_vincenty, calc_geo_lines_in_buffer, proj2equidistant
+from ..tools.geo import calc_geo_dist_vincenty, \
+                        calc_geo_lines_in_buffer, \
+                        proj2equidistant, \
+                        proj2conformal
 
 import networkx as nx
 import random
@@ -61,14 +64,15 @@ def connect_generators(network):
             elif geno.v_level == 5:
 
                 # get branches within a the predefined radius `generator_buffer_radius`
-                branches = calc_geo_lines_in_buffer(geno,
-                                                    network.mv_grid,
-                                                    buffer_radius,
-                                                    buffer_radius_inc)
+                branches = calc_geo_lines_in_buffer(node=geno,
+                                                    mv_grid=network.mv_grid,
+                                                    radius=buffer_radius,
+                                                    radius_inc=buffer_radius_inc)
 
                 # calc distance between generator and grid's lines -> find nearest line
-                conn_objects_min_stack = _find_nearest_conn_objects(geno,
-                                                                    branches)
+                conn_objects_min_stack = _find_nearest_conn_objects(network=network,
+                                                                    node=geno,
+                                                                    branches=branches)
 
                 # connect!
                 # go through the stack (from nearest to most far connection target object)
@@ -79,14 +83,9 @@ def connect_generators(network):
                     #         the max. allowed power of the smallest possible cable/line type (3.64 MVA for overhead
                     #         line of type 48-AL1/8-ST1A) exceeds the max. allowed power of a generator (4.5 MVA (dena))
                     #         (if connected separately!)
-                    target_obj_result = connect_node(generator,
-                                                     generator_shp,
-                                                     mv_grid_district.mv_grid,
-                                                     dist_min_obj,
-                                                     proj2,
-                                                     graph,
-                                                     conn_dist_ring_mod=0,
-                                                     debug=debug)
+                    target_obj_result = _connect_node(network=network,
+                                                      node=geno,
+                                                      target_obj=dist_min_obj)
 
                     if target_obj_result is not None:
                         if debug:
@@ -130,14 +129,14 @@ def _find_nearest_conn_objects(network, node, branches):
 
     conn_objects_min_stack = []
 
-    node_shp = transform(proj2equidistant(), node.geo_data)
+    node_shp = transform(proj2equidistant(), node.geom)
 
     for branch in branches:
         stations = branch['adj_nodes']
 
         # create shapely objects for 2 stations and line between them, transform to equidistant CRS
-        station1_shp = transform(proj2equidistant(), stations[0].geo_data)
-        station2_shp = transform(proj2equidistant(), stations[1].geo_data)
+        station1_shp = transform(proj2equidistant(), stations[0].geom)
+        station2_shp = transform(proj2equidistant(), stations[1].geom)
         line_shp = LineString([station1_shp, station2_shp])
 
         # create dict with DING0 objects (line & 2 adjacent stations), shapely objects and distances
@@ -180,26 +179,23 @@ def _find_nearest_conn_objects(network, node, branches):
     return conn_objects_min_stack
 
 
-def connect_node(node, node_shp, mv_grid, target_obj, proj, graph, conn_dist_ring_mod, debug):
+def _connect_node(network, node, target_obj):
     """ Connects `node` to `target_obj`
 
     Args:
         node: origin node - Ding0 object (e.g. LVLoadAreaCentreDing0)
-        node_shp: Shapely Point object of origin node
         target_obj: object that node shall be connected to
-        proj: pyproj projection object: equidistant CRS to conformal CRS (e.g. ETRS -> WGS84)
-        graph: NetworkX graph object with nodes and newly created branches
-        conn_dist_ring_mod: Max. distance when nodes are included into route instead of creating a new line,
-                            see mv_connect() for details.
-        debug: If True, information is printed during process
 
     Returns:
         target_obj_result: object that node was connected to (instance of LVLoadAreaCentreDing0 or
                            MVCableDistributorDing0). If node is included into line instead of creating a new line (see arg
                            `conn_dist_ring_mod`), `target_obj_result` is None.
     """
+    # TODO: Update docstring
 
     target_obj_result = None
+
+    node_shp = transform(proj2equidistant(), node.geom)
 
     # MV line is nearest connection point
     if isinstance(target_obj['shp'], LineString):
@@ -209,111 +205,67 @@ def connect_node(node, node_shp, mv_grid, target_obj, proj, graph, conn_dist_rin
 
         # find nearest point on MV line
         conn_point_shp = target_obj['shp'].interpolate(target_obj['shp'].project(node_shp))
-        conn_point_shp = transform(proj, conn_point_shp)
+        conn_point_shp = transform(proj2conformal(), conn_point_shp)
 
         # target MV line does currently not connect a load area of type aggregated
         if not target_obj['obj']['branch'].connects_aggregated:
 
-            # Node is close to line
-            # -> insert node into route (change existing route)
-            if (target_obj['dist'] < conn_dist_ring_mod):
-                # backup kind and type of branch
-                branch_type = graph.edge[adj_node1][adj_node2]['branch'].type
-                branch_kind = graph.edge[adj_node1][adj_node2]['branch'].kind
-                branch_ring = graph.edge[adj_node1][adj_node2]['branch'].ring
+            # create cable distributor and add it to grid
+            cable_dist = MVDisconnectingPoint(geom=conn_point_shp,
+                                              grid=network.mv_grid)
+            network.mv_grid.add_cable_distributor(cable_dist)
 
-                # check if there's a circuit breaker on current branch,
-                # if yes set new position between first node (adj_node1) and newly inserted node
-                circ_breaker = graph.edge[adj_node1][adj_node2]['branch'].circuit_breaker
-                if circ_breaker is not None:
-                    circ_breaker.geo_data = calc_geo_centre_point(adj_node1, node)
+            # check if there's a circuit breaker on current branch,
+            # if yes set new position between first node (adj_node1) and newly created cable distributor
+            circ_breaker = network.mv_grid.graph.edge[adj_node1][adj_node2]['branch'].circuit_breaker
+            if circ_breaker is not None:
+                circ_breaker.geom = calc_geo_centre_point(adj_node1, cable_dist)
 
-                # split old ring main route into 2 segments (delete old branch and create 2 new ones
-                # along node)
-                graph.remove_edge(adj_node1, adj_node2)
+            # split old branch into 2 segments (delete old branch and create 2 new ones along cable_dist)
+            # ===========================================================================================
 
-                branch_length = calc_geo_dist_vincenty(adj_node1, node)
-                branch = BranchDing0(length=branch_length,
-                                     circuit_breaker=circ_breaker,
-                                     kind=branch_kind,
-                                     type=branch_type,
-                                     ring=branch_ring)
-                if circ_breaker is not None:
-                    circ_breaker.branch = branch
-                graph.add_edge(adj_node1, node, branch=branch)
+            # backup kind and type of branch
+            branch_kind = graph.edge[adj_node1][adj_node2]['branch'].kind
+            branch_type = graph.edge[adj_node1][adj_node2]['branch'].type
+            branch_ring = graph.edge[adj_node1][adj_node2]['branch'].ring
 
-                branch_length = calc_geo_dist_vincenty(adj_node2, node)
-                graph.add_edge(adj_node2, node, branch=BranchDing0(length=branch_length,
-                                                                   kind=branch_kind,
-                                                                   type=branch_type,
-                                                                   ring=branch_ring))
+            graph.remove_edge(adj_node1, adj_node2)
 
-                target_obj_result = 're-routed'
+            branch_length = calc_geo_dist_vincenty(adj_node1, cable_dist)
+            branch = BranchDing0(length=branch_length,
+                                 circuit_breaker=circ_breaker,
+                                 kind=branch_kind,
+                                 type=branch_type,
+                                 ring=branch_ring)
+            if circ_breaker is not None:
+                circ_breaker.branch = branch
+            graph.add_edge(adj_node1, cable_dist, branch=branch)
 
-                if debug:
-                    logger.debug('Ring main route modified to include '
-                                 'node {}'.format(node))
+            branch_length = calc_geo_dist_vincenty(adj_node2, cable_dist)
+            graph.add_edge(adj_node2, cable_dist, branch=BranchDing0(length=branch_length,
+                                                                     kind=branch_kind,
+                                                                     type=branch_type,
+                                                                     ring=branch_ring))
 
-            # Node is too far away from route
-            # => keep main route and create new line from node to (cable distributor on) route.
-            else:
+            # add new branch for satellite (station to cable distributor)
+            # ===========================================================
 
-                # create cable distributor and add it to grid
-                cable_dist = MVCableDistributorDing0(geo_data=conn_point_shp,
-                                                     grid=mv_grid)
-                mv_grid.add_cable_distributor(cable_dist)
+            # get default branch kind and type from grid to use it for new branch
+            branch_kind = mv_grid.default_branch_kind
+            branch_type = mv_grid.default_branch_type
 
-                # check if there's a circuit breaker on current branch,
-                # if yes set new position between first node (adj_node1) and newly created cable distributor
-                circ_breaker = graph.edge[adj_node1][adj_node2]['branch'].circuit_breaker
-                if circ_breaker is not None:
-                    circ_breaker.geo_data = calc_geo_centre_point(adj_node1, cable_dist)
+            branch_length = calc_geo_dist_vincenty(node, cable_dist)
+            graph.add_edge(node, cable_dist, branch=BranchDing0(length=branch_length,
+                                                                kind=branch_kind,
+                                                                type=branch_type,
+                                                                ring=branch_ring))
+            target_obj_result = cable_dist
 
-                # split old branch into 2 segments (delete old branch and create 2 new ones along cable_dist)
-                # ===========================================================================================
-
-                # backup kind and type of branch
-                branch_kind = graph.edge[adj_node1][adj_node2]['branch'].kind
-                branch_type = graph.edge[adj_node1][adj_node2]['branch'].type
-                branch_ring = graph.edge[adj_node1][adj_node2]['branch'].ring
-
-                graph.remove_edge(adj_node1, adj_node2)
-
-                branch_length = calc_geo_dist_vincenty(adj_node1, cable_dist)
-                branch = BranchDing0(length=branch_length,
-                                     circuit_breaker=circ_breaker,
-                                     kind=branch_kind,
-                                     type=branch_type,
-                                     ring=branch_ring)
-                if circ_breaker is not None:
-                    circ_breaker.branch = branch
-                graph.add_edge(adj_node1, cable_dist, branch=branch)
-
-                branch_length = calc_geo_dist_vincenty(adj_node2, cable_dist)
-                graph.add_edge(adj_node2, cable_dist, branch=BranchDing0(length=branch_length,
-                                                                         kind=branch_kind,
-                                                                         type=branch_type,
-                                                                         ring=branch_ring))
-
-                # add new branch for satellite (station to cable distributor)
-                # ===========================================================
-
-                # get default branch kind and type from grid to use it for new branch
-                branch_kind = mv_grid.default_branch_kind
-                branch_type = mv_grid.default_branch_type
-
-                branch_length = calc_geo_dist_vincenty(node, cable_dist)
-                graph.add_edge(node, cable_dist, branch=BranchDing0(length=branch_length,
-                                                                    kind=branch_kind,
-                                                                    type=branch_type,
-                                                                    ring=branch_ring))
-                target_obj_result = cable_dist
-
-                # debug info
-                if debug:
-                    logger.debug('Nearest connection point for object {0} '
-                                 'is branch {1} (distance={2} m)'.format(
-                        node, target_obj['obj']['adj_nodes'], target_obj['dist']))
+            # debug info
+            if debug:
+                logger.debug('Nearest connection point for object {0} '
+                             'is branch {1} (distance={2} m)'.format(
+                    node, target_obj['obj']['adj_nodes'], target_obj['dist']))
 
     # node ist nearest connection point
     else:
