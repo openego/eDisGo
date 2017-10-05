@@ -99,8 +99,11 @@ class Network:
         # convert numeric values to float
         for sec, subsecs in confic_dict.items():
             for subsec, val in subsecs.items():
-                if val.isdigit():
+                # try str -> float conversion
+                try:
                     confic_dict[sec][subsec] = float(val)
+                except:
+                    pass
 
         return confic_dict
 
