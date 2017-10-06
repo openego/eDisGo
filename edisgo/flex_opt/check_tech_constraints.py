@@ -32,7 +32,7 @@ def mv_line_load(network):
 
     load_factor_mv_line = network.scenario.parameters.load_factor_mv_line
 
-    for line in list(network.mv_grid.graph.graph_edges()):
+    for line in list(network.mv_grid.graph.lines()):
         i_line_max = line['line'].type['I_max_th'] * \
                      load_factor_mv_line * line['line'].quantity
         try:
@@ -84,7 +84,7 @@ def lv_line_load(network):
     load_factor_lv_line = network.scenario.parameters.load_factor_lv_line
 
     for lv_grid in network.mv_grid.lv_grids:
-        for line in list(lv_grid.graph.graph_edges()):
+        for line in list(lv_grid.graph.lines()):
             i_line_max = line['line'].type['I_max_th'] * \
                          load_factor_lv_line * line['line'].quantity
             try:

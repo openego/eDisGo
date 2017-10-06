@@ -189,40 +189,89 @@ class Graph(nx.Graph):
 
         return nodes
 
-    def graph_edges(self):
-        """ Returns a generator for iterating over graph edges
+    def lines_by_attribute(self, attr_val=None, attr='type'):
+        """ Returns a generator for iterating over Graph's lines by attribute value.
 
-        The edge of a graph is described by the two adjacent node and the branch
-        object itself. Whereas the branch object is used to hold all relevant
+        Get all lines that share the same attribute. By default, the attr 'type'
+        is used to specify the lines' type (line, agg_line, etc.).
+
+        The edge of a graph is described by the two adjacent nodes and the line
+        object itself. Whereas the line object is used to hold all relevant
         power system parameters.
 
-        Note
-        ----
+        Examples
+        --------
+        >>> import edisgo
+        >>> G = edisgo.grids.Graph()
+        >>> G.add_node(1, type='generator')
+        >>> G.add_node(2, type='load')
+        >>> G.add_edge(1, 2, type='line')
+        >>> lines = G.lines_by_attribute('line')
+        >>> list(lines)[0]
+        <class 'tuple'>: ((node1, node2), line)
+
+        Parameters
+        ----------
+        attr_val: str
+            Value of the `attr` lines should be selected by
+        attr: str, default: 'type'
+            Attribute key which is 'type' by default
+
+        Returns
+        -------
+        Generator of :obj:`dict`
+            A list containing line elements that match the given attribute
+            value
+
+        Notes
+        -----
         There are generator functions for nodes (`Graph.nodes()`) and edges
         (`Graph.edges()`) in NetworkX but unlike graph nodes, which can be
         represented by objects, branch objects can only be accessed by using an
-        edge attribute ('branch' is used here)
+        edge attribute ('line' is used here)
 
-        To make access to attributes of the branch objects simpler and more
+        To make access to attributes of the line objects simpler and more
         intuitive for the user, this generator yields a dictionary for each edge
-        that contains information about adjacent nodes and the branch object.
+        that contains information about adjacent nodes and the line object.
 
         Note, the construction of the dictionary highly depends on the structure
         of the in-going tuple (which is defined by the needs of networkX). If
         this changes, the code will break.
 
-        Copied from `Dingo <https://github.com/openego/dingo/blob/\
+        Adapted from `Dingo <https://github.com/openego/dingo/blob/\
             ee237e37d4c228081e1e246d7e6d0d431c6dda9e/dingo/core/network/\
             __init__.py>`_.
-
         """
 
-        # get edges with attributes
-        edges = nx.get_edge_attributes(self, 'line').items()
+        # get all lines that have the attribute 'type' set
+        lines_attributes = nx.get_edge_attributes(self, attr).items()
+
+        # attribute value provided?
+        if attr_val:
+            # extract lines where 'type' == attr_val
+            lines_attributes = [(k, self[k[0]][k[1]]['line'])
+                                for k, v in lines_attributes if v == attr_val]
+        else:
+            # get all lines
+            lines_attributes = [(k, self[k[0]][k[1]]['line'])
+                                for k, v in lines_attributes]
 
         # sort them according to connected nodes
-        edges_sorted = sorted(list(edges), key=lambda _: repr(_[0]))
+        lines_sorted = sorted(list(lines_attributes), key=lambda _: repr(_[1]))
 
-        for edge in edges_sorted:
-            yield {'adj_nodes': edge[0], 'line': edge[1]}
+        for line in lines_sorted:
+            yield {'adj_nodes': line[0], 'line': line[1]}
 
+    def lines(self):
+        """ Returns a generator for iterating over Graph's lines
+
+        Returns
+        -------
+        Generator of :obj:`dict`
+            A list containing line elements
+
+        Notes
+        -----
+        For a detailed description see lines_by_attribute()
+        """
+        return self.lines_by_attribute()
