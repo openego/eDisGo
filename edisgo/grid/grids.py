@@ -188,6 +188,46 @@ class Graph(nx.Graph):
 
         return nodes
 
+    def lines_by_attribute(self, attr_val, attr='type'):
+        """
+        Select Graph's lines by attribute value
+
+        Get all lines that share the same attribute. By default, the attr 'type'
+        is used to specify the nodes type (line, agg_line, etc.).
+
+        Examples
+        --------
+        >>> import edisgo
+        >>> G = edisgo.grids.Graph()
+        >>> G.add_node(1, type='generator')
+        >>> G.add_node(2, type='load')
+        >>> G.add_edge(1, 2, type='line')
+        >>> type = G.lines_by_attribute('line')
+        >>> type[(1, 2)]
+        'line'
+
+        Parameters
+        ----------
+        attr_val: str
+            Value of the `attr` lines should be selected by
+        attr: str, default: 'type'
+            Attribute key which is 'type' by default
+
+        Returns
+        -------
+        list
+            A list containing nodes elements that match the given attribute
+            value
+        """
+
+        # get all lines that have the attribute 'type' set
+        lines_attributes = nx.get_edge_attributes(self, attr)
+
+        # extract nodes where 'type' == attr_val
+        lines = [k for k, v in lines_attributes.items() if v == attr_val]
+
+        return lines
+
     def graph_edges(self):
         """ Returns a generator for iterating over graph edges
 
