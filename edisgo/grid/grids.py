@@ -229,7 +229,7 @@ class Graph(nx.Graph):
 
         return lines
 
-    def graph_edges(self):
+    def lines(self):
         """ Returns a generator for iterating over graph edges
 
         The edge of a graph is described by the two adjacent node and the branch
@@ -241,7 +241,7 @@ class Graph(nx.Graph):
         There are generator functions for nodes (`Graph.nodes()`) and edges
         (`Graph.edges()`) in NetworkX but unlike graph nodes, which can be
         represented by objects, branch objects can only be accessed by using an
-        edge attribute ('branch' is used here)
+        edge attribute ('branch' is ugraph_edgessed here)
 
         To make access to attributes of the branch objects simpler and more
         intuitive for the user, this generator yields a dictionary for each edge

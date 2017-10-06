@@ -641,13 +641,13 @@ def _validate_ding0_mv_grid_import(grid, ding0_grid):
              not _.grid.grid_district.lv_load_area.is_aggregated)])
 
     # Check number of lines outside aggregated LA
-    # edges_w_la = grid.graph.graph_edges()
+    # edges_w_la = grid.graph.lines()
     # data_integrity['line']['edisgo'] = len([_ for _ in edges_w_la
     #          if not (_['adj_nodes'][0] == grid.station or
     #                  _['adj_nodes'][1] == grid.station) and
     #          _['line']._length > .5])
     # data_integrity['line']['ding0'] = len(
-    #     [_ for _ in ding0_grid.graph_edges()
+    #     [_ for _ in ding0_grid.lines()
     #      if not _['branch'].connects_aggregated])
 
     # raise an error if data does not match
@@ -723,7 +723,7 @@ def _validate_ding0_lv_grid_import(grids, ding0_grid, lv_grid_mapping):
 
         # Check number of lines outside aggregated LA
         data_integrity[grid]['line']['edisgo'] = len(
-            list(grid.graph.graph_edges()))
+            list(grid.graph.lines()))
         data_integrity[grid]['line']['ding0'] = len(
             [_ for _ in lv_grid_mapping[grid].graph_edges()
              if not _['branch'].connects_aggregated])
