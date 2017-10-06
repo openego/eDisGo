@@ -217,7 +217,7 @@ def mv_to_pypsa(network):
     generators = network.mv_grid.graph.nodes_by_attribute('generator')
     loads = network.mv_grid.graph.nodes_by_attribute('load')
     branch_tees = network.mv_grid.graph.nodes_by_attribute('branch_tee')
-    lines = network.mv_grid.graph.graph_edges()
+    lines = network.mv_grid.graph.lines()
     lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
     mv_stations = network.mv_grid.graph.nodes_by_attribute('mv_station')
 
@@ -394,7 +394,7 @@ def lv_to_pypsa(network):
         generators.extend(lv_grid.graph.nodes_by_attribute('generator'))
         loads.extend(lv_grid.graph.nodes_by_attribute('load'))
         branch_tees.extend(lv_grid.graph.nodes_by_attribute('branch_tee'))
-        lines.extend(lv_grid.graph.graph_edges())
+        lines.extend(lv_grid.graph.lines())
         lv_stations.extend(lv_grid.graph.nodes_by_attribute('lv_station'))
 
     omega = 2 * pi * 50

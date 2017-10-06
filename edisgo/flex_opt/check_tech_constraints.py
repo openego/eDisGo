@@ -30,17 +30,15 @@ def mv_line_load(network):
 
     crit_lines = {}
 
-    load_factor_mv_line = float(network.config['grid_expansion'][
-                                    'load_factor_mv_line'])
+    load_factor_mv_line = network.scenario.parameters.load_factor_mv_line
 
-    # ToDo: Add getter for i_res
-    for line in list(network.mv_grid.graph.graph_edges()):
+    for line in list(network.mv_grid.graph.lines()):
         i_line_max = line['line'].type['I_max_th'] * \
                      load_factor_mv_line * line['line'].quantity
         try:
             # check if maximum current from power flow analysis exceeds
             # allowed maximum current
-            i_line_pfa = max(network.results._i_res[repr(line['line'])])
+            i_line_pfa = max(network.results.i_res[repr(line['line'])])
             if i_line_pfa > i_line_max:
                 crit_lines[line['line']] = i_line_pfa / i_line_max
         except KeyError:
@@ -83,18 +81,16 @@ def lv_line_load(network):
 
     crit_lines = {}
 
-    load_factor_lv_line = float(network.config['grid_expansion'][
-                                    'load_factor_lv_line'])
+    load_factor_lv_line = network.scenario.parameters.load_factor_lv_line
 
-    # ToDo: Add getter for i_res
     for lv_grid in network.mv_grid.lv_grids:
-        for line in list(lv_grid.graph.graph_edges()):
+        for line in list(lv_grid.graph.lines()):
             i_line_max = line['line'].type['I_max_th'] * \
                          load_factor_lv_line * line['line'].quantity
             try:
                 # check if maximum current from power flow analysis exceeds
                 # allowed maximum current
-                i_line_pfa = max(network.results._i_res[repr(line['line'])])
+                i_line_pfa = max(network.results.i_res[repr(line['line'])])
                 if i_line_pfa > i_line_max:
                     crit_lines[line['line']] = i_line_pfa / i_line_max
             except KeyError:
@@ -138,14 +134,14 @@ def mv_lv_station_load(network):
 
     crit_stations = {}
 
-    load_factor_mv_lv_transformer = float(network.config['grid_expansion'][
-                                              'load_factor_mv_lv_transformer'])
+    load_factor_mv_lv_transformer = \
+        network.scenario.parameters.load_factor_mv_lv_transformer
 
     for lv_grid in network.mv_grid.lv_grids:
         station = lv_grid.station
         # maximum allowed apparent power of station
-        s_station_max = sum([_.type.S_nom for _ in station.transformers]) * \
-                        load_factor_mv_lv_transformer
+        s_station_max = (sum([_.type.S_nom for _ in station.transformers]) *
+                         load_factor_mv_lv_transformer)
         try:
             # check if maximum allowed apparent power of station exceeds
             # apparent power from power flow analysis
@@ -190,8 +186,7 @@ def mv_voltage_deviation(network):
     crit_nodes = {}
 
     # load max. voltage deviation
-    mv_max_v_deviation = float(
-        network.config['grid_expansion']['mv_max_v_deviation'])
+    mv_max_v_deviation = network.scenario.parameters.mv_max_v_deviation
 
     v_mag_pu_pfa = network.results.v_res(nodes=network.mv_grid.graph.nodes(),
                                          level='mv')
@@ -212,7 +207,7 @@ def mv_voltage_deviation(network):
                 len(crit_nodes[network.mv_grid])))
     else:
         crit_nodes = None
-        logger.debug('==> {} No voltage issues in MV grid.')
+        logger.debug('==> No voltage issues in MV grid.')
 
     return crit_nodes
 
@@ -241,8 +236,7 @@ def lv_voltage_deviation(network):
     crit_nodes = {}
 
     # load max. voltage deviation
-    lv_max_v_deviation = float(
-        network.config['grid_expansion']['lv_max_v_deviation'])
+    lv_max_v_deviation = network.scenario.parameters.lv_max_v_deviation
 
     for lv_grid in network.mv_grid.lv_grids:
         v_mag_pu_pfa = network.results.v_res(nodes=lv_grid.graph.nodes(),

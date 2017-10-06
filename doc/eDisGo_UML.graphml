@@ -247,7 +247,7 @@ length: float</y:AttributeLabel>
 add_edge()
 nodes_from_line()
 nodes_by_attribute()
-graph_edges()
+lines()
 </y:MethodLabel>
           </y:UML>
         </y:UMLClassNode>
