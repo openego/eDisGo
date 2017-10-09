@@ -337,6 +337,7 @@ def _build_mv_grid(ding0_grid, network):
               {'line': Line(
                   id=_['branch'].id_db,
                   type=_['branch'].type,
+                  kind=_['branch'].kind,
                   length=_['branch'].length / 1e3,
                   grid=grid)
               })
@@ -584,6 +585,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
             line = {'line': Line(
                 id='_'.join(['line_aggr_load', sector, la_id]),
                 type=aggr_line_type,
+                kind='cable',
                 length=.5,
                 grid=grid)
             }
