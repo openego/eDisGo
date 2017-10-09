@@ -1606,8 +1606,8 @@ def _import_genos_from_oedb(network):
         orm_re_generators = model_draft.__getattribute__(orm_re_generators_name)
 
         # set version condition
-        orm_conv_generators_version = orm_conv_generators.columns.version == data_version
-        orm_re_generators_version = orm_re_generators.columns.version == data_version
+        orm_conv_generators_version = orm_conv_generators.columns.preversion == data_version
+        orm_re_generators_version = orm_re_generators.columns.preversion == data_version
 
     # get conventional and renewable generators
     #generators_conv_mv = _import_conv_generators()
