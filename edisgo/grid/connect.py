@@ -22,6 +22,10 @@ def connect_generators(network):
 
     This function searches for unconnected generators in MV and LV grids and connects them.
 
+    Steps:
+        * Step 1: Connect MV generators in MV grid
+        * Step 2: Connect LV generators in all LV grids
+
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
@@ -43,7 +47,9 @@ def connect_generators(network):
             # ===== voltage level 4: generator has to be connected to MV station =====
             if geno.v_level == 4:
 
-                line_length = calc_geo_dist_vincenty(geno, network.mv_grid.station)
+                line_length = calc_geo_dist_vincenty(network=network,
+                                                     node_source=geno,
+                                                     node_target=network.mv_grid.station)
 
                 line_type, line_count = select_cable(network=network,
                                                        level='mv',
@@ -237,7 +243,9 @@ def _connect_mv_node(network, node, target_obj):
 
             network.mv_grid.graph.remove_edge(adj_node1, adj_node2)
 
-            line_length = calc_geo_dist_vincenty(adj_node1, branch_tee)
+            line_length = calc_geo_dist_vincenty(network=network,
+                                                 node_source=adj_node1,
+                                                 node_target=branch_tee)
             line = Line(id=random.randint(10 ** 8, 10 ** 9),
                         length=line_length,
                         quantity=1,
@@ -248,7 +256,9 @@ def _connect_mv_node(network, node, target_obj):
                                            line=line,
                                            type='line')
 
-            line_length = calc_geo_dist_vincenty(adj_node2, branch_tee)
+            line_length = calc_geo_dist_vincenty(network=network,
+                                                 node_source=adj_node2,
+                                                 node_target=branch_tee)
             line = Line(id=random.randint(10 ** 8, 10 ** 9),
                         length=line_length,
                         quantity=1,
@@ -261,7 +271,9 @@ def _connect_mv_node(network, node, target_obj):
 
             # add new branch for new node (station to branch tee)
             # ===================================================
-            line_length = calc_geo_dist_vincenty(node, branch_tee)
+            line_length = calc_geo_dist_vincenty(network=network,
+                                                 node_source=node,
+                                                 node_target=branch_tee)
             line = Line(id=random.randint(10 ** 8, 10 ** 9),
                         length=line_length,
                         quantity=1,
