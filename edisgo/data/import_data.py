@@ -1392,7 +1392,7 @@ def _import_genos_from_oedb(network):
                             length=.5,
                             grid=network.mv_grid)
                         }
-                        network.mv_grid.graph.add_edge(network.mv_grid.station, gen, line, type='line')
+                        network.mv_grid.graph.add_edge(network.mv_grid.station, gen, line, type='line_aggr')
 
                         log_agg_geno_count += len(val3['ids'])
                         log_geno_cap += val3['capacity']
