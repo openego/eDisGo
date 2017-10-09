@@ -189,7 +189,7 @@ class Graph(nx.Graph):
         return nodes
 
     def lines_by_attribute(self, attr_val=None, attr='type'):
-        """ Returns a generator for iterating over Graph's lines by attribute value.
+        """Returns a generator for iterating over Graph's lines by attribute value.
 
         Get all lines that share the same attribute. By default, the attr 'type'
         is used to specify the lines' type (line, agg_line, etc.).
@@ -262,7 +262,7 @@ class Graph(nx.Graph):
             yield {'adj_nodes': line[0], 'line': line[1]}
 
     def lines(self):
-        """ Returns a generator for iterating over Graph's lines
+        """Returns a generator for iterating over Graph's lines
 
         Returns
         -------

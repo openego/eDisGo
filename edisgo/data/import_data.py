@@ -892,8 +892,7 @@ def _validate_load_generation(mv_grid, ding0_mv_grid):
 
 
 def import_generators(network, data_source=None, file=None):
-    """
-    Import generator data from source.
+    """Import generator data from source.
 
     The generator data include
 
@@ -939,7 +938,9 @@ def import_generators(network, data_source=None, file=None):
 def _import_genos_from_oedb(network):
     """Import generator data from the Open Energy Database (OEDB).
 
-    The importer uses SQLAlchemy ORM objects. These are defined in ...
+    The importer uses SQLAlchemy ORM objects.
+    These are defined in ego.io,
+    see https://github.com/openego/ego.io/tree/dev/egoio/db_tables
 
     Parameters
     ----------

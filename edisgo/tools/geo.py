@@ -68,7 +68,7 @@ def calc_geo_lines_in_buffer(node, mv_grid, radius, radius_inc):
 
 
 def calc_geo_dist_vincenty(network, node_source, node_target):
-    """ Calculates the geodesic distance between `node_source` and `node_target` incorporating the detour factor in
+    """Calculates the geodesic distance between `node_source` and `node_target` incorporating the detour factor in
         config_calc.cfg.
     Args:
     network : :class:`~.grid.network.Network`

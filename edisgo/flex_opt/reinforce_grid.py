@@ -8,7 +8,7 @@ logger = logging.getLogger('edisgo')
 
 
 def reinforce_grid(network, while_counter_max=10):
-    """ Evaluates grid reinforcement needs and performs measures. This function
+    """Evaluates grid reinforcement needs and performs measures. This function
         is the parent function for all grid reinforcements.
 
     Parameters

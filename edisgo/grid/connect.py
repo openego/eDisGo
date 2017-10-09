@@ -18,7 +18,7 @@ logger = logging.getLogger('edisgo')
 
 
 def connect_generators(network):
-    """ Connect generators to existing grids.
+    """Connect generators to existing grids.
 
     This function searches for unconnected generators in MV and LV grids and connects them.
 
@@ -101,7 +101,7 @@ def connect_generators(network):
 
 
 def _find_nearest_conn_objects(network, node, branches):
-    """ Searches all branches for the nearest possible connection object per branch
+    """Searches all branches for the nearest possible connection object per branch
 
     It picks out 1 object out of 3 possible objects: 2 branch-adjacent stations
     and 1 potentially created branch tee on the line (using perpendicular projection).
@@ -176,7 +176,7 @@ def _find_nearest_conn_objects(network, node, branches):
 
 
 def _connect_mv_node(network, node, target_obj):
-    """ Connects MV node to target object in MV grid
+    """Connects MV node to target object in MV grid
 
     If the target object is a node, a new line is created to it.
     If the target object is a line, the node is connected to a newly created branch tee
