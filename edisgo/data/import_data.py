@@ -561,16 +561,14 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                                                         gen)
 
                     # connect generator to MV station
-                    line = {'line': Line(
-                             id='line_aggr_generator_vlevel_{v_level}_'
+                    line = Line(id='line_aggr_generator_vlevel_{v_level}_'
                                 '{subtype}'.format(
                                  v_level=v_level,
                                  subtype=subtype),
-                             type=aggr_line_type,
-                             kind='cable',
-                             length=.5,
-                             grid=grid)
-                         }
+                                 type=aggr_line_type,
+                                 kind='cable',
+                                 length=.5,
+                                 grid=grid)
                     grid.graph.add_edge(grid.station,
                                         gen,
                                         line=line,
@@ -585,13 +583,12 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
             grid.graph.add_node(load, type='load')
 
             # connect aggregated load to MV station
-            line = {'line': Line(
-                id='_'.join(['line_aggr_load', sector, la_id]),
-                type=aggr_line_type,
-                kind='cable',
-                length=.5,
-                grid=grid)
-            }
+            line = Line(id='_'.join(['line_aggr_load', sector, la_id]),
+                        type=aggr_line_type,
+                        kind='cable',
+                        length=.5,
+                        grid=grid)
+
             grid.graph.add_edge(grid.station,
                                 load,
                                 line=line,
@@ -1397,16 +1394,15 @@ def _import_genos_from_oedb(network):
                         network.mv_grid.graph.add_node(gen, type='generator')
 
                         # connect generator to MV station
-                        line = {'line': Line(
-                            id='line_aggr_generator_vlevel_{v_level}_'
-                               '{subtype}'.format(
-                                v_level=v_level,
-                                subtype=subtype),
-                            type=aggr_line_type,
-                            kind='cable',
-                            length=.5,
-                            grid=network.mv_grid)
-                        }
+                        line = Line(id='line_aggr_generator_vlevel_{v_level}_'
+                                    '{subtype}'.format(
+                                     v_level=v_level,
+                                     subtype=subtype),
+                                    type=aggr_line_type,
+                                    kind='cable',
+                                    length=.5,
+                                    grid=network.mv_grid)
+
                         network.mv_grid.graph.add_edge(network.mv_grid.station,
                                                        gen,
                                                        line=line,
