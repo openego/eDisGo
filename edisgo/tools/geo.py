@@ -57,7 +57,7 @@ def calc_geo_lines_in_buffer(node, mv_grid, radius, radius_inc):
     while not lines:
         node_shp = transform(proj2equidistant(), node.geom)
         buffer_zone_shp = node_shp.buffer(radius)
-        for line in mv_grid.graph.graph_edges():
+        for line in mv_grid.graph.lines():
             nodes = line['adj_nodes']
             branch_shp = transform(proj2equidistant(), LineString([nodes[0].geom, nodes[1].geom]))
             if buffer_zone_shp.intersects(branch_shp):
