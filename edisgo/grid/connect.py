@@ -86,9 +86,9 @@ def connect_generators(network):
                     #         the max. allowed power of the smallest possible cable/line type (3.64 MVA for overhead
                     #         line of type 48-AL1/8-ST1A) exceeds the max. allowed power of a generator (4.5 MVA (dena))
                     #         (if connected separately!)
-                    target_obj_result = _connect_node(network=network,
-                                                      node=geno,
-                                                      target_obj=dist_min_obj)
+                    target_obj_result = _connect_mv_node(network=network,
+                                                         node=geno,
+                                                         target_obj=dist_min_obj)
 
                     if target_obj_result is not None:
                         generator_connected = True
@@ -166,7 +166,7 @@ def _find_nearest_conn_objects(network, node, branches):
 
         # find nearest connection point on given triple dict (2 branch-adjacent stations + cable dist. on line)
         conn_objects_min = min(conn_objects.values(), key=lambda v: v['dist'])
-        
+
         conn_objects_min_stack.append(conn_objects_min)
 
     # sort all objects by distance from node
@@ -175,7 +175,7 @@ def _find_nearest_conn_objects(network, node, branches):
     return conn_objects_min_stack
 
 
-def _connect_node(network, node, target_obj):
+def _connect_mv_node(network, node, target_obj):
     """ Connects `node` to `target_obj`
 
     Args:
