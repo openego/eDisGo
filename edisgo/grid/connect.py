@@ -18,7 +18,7 @@ logger = logging.getLogger('edisgo')
 
 
 def connect_generators(network):
-    """Connect generators to existing grids.
+    """ Connect generators to existing grids.
 
     This function searches for unconnected generators in MV and LV grids and connects them.
 
@@ -26,8 +26,6 @@ def connect_generators(network):
     ----------
     network : :class:`~.grid.network.Network`
         The eDisGo container object
-    generators : :pandas:`pandas.DataFrame<dataframe>`
-        List of generators
     """
 
     # get params from config
@@ -103,25 +101,27 @@ def connect_generators(network):
 
 
 def _find_nearest_conn_objects(network, node, branches):
-    """ Searches all `branches` for the nearest possible connection object per branch (picks out 1 object out of 3
-        possible objects: 2 branch-adjacent stations and 1 potentially created cable distributor on the line
-        (perpendicular projection)). The resulting stack (list) is sorted ascending by distance from node.
+    """ Searches all branches for the nearest possible connection object per branch
+
+    It picks out 1 object out of 3 possible objects: 2 branch-adjacent stations
+    and 1 potentially created branch tee on the line (using perpendicular projection).
+    The resulting stack (list) is sorted ascending by distance from node.
 
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
         The eDisGo container object
-
-    node: XXXXXXXXXXX
-    branches: BranchDing0 objects of MV region
+    node : :class:`~.grid.components.Component`
+        Node to connect (e.g. :class:`~.grid.components.Generator`)
+    branches :
+        List of branches (NetworkX branch objects)
 
     Returns
     -------
-    conn_objects_min_stack: List of connection objects (each object is represented by dict with Ding0 object,
-                                shapely object and distance to node.
-
+    :obj:`list` of :obj:`dict`
+        List of connection objects (each object is represented by dict with eDisGo object,
+        shapely object and distance to node.
     """
-    # TODO: Update docstring
 
     # threshold which is used to determine if 2 objects are on the same position (see below for details on usage)
     conn_diff_tolerance = network.config['connect']['conn_diff_tolerance']
@@ -176,18 +176,28 @@ def _find_nearest_conn_objects(network, node, branches):
 
 
 def _connect_mv_node(network, node, target_obj):
-    """ Connects `node` to `target_obj`
+    """ Connects MV node to target object in MV grid
 
-    Args:
-        node: origin node - Ding0 object (e.g. LVLoadAreaCentreDing0)
-        target_obj: object that node shall be connected to
+    If the target object is a node, a new line is created to it.
+    If the target object is a line, the node is connected to a newly created branch tee
+    (using perpendicular projection) on this line.
+    New lines are created using standard equipment.
 
-    Returns:
-        target_obj_result: object that node was connected to (instance of LVLoadAreaCentreDing0 or
-                           MVCableDistributorDing0). If node is included into line instead of creating a new line (see arg
-                           `conn_dist_ring_mod`), `target_obj_result` is None.
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+        The eDisGo container object
+    node : :class:`~.grid.components.Component`
+        Node to connect (e.g. :class:`~.grid.components.Generator`)
+        Node must be a member of MV grid's graph (network.mv_grid.graph)
+    target_obj : :class:`~.grid.components.Component`
+        Object that node shall be connected to
+
+    Returns
+    -------
+    :class:`~.grid.components.Component` or None
+        Node that node was connected to
     """
-    # TODO: Update docstring
 
     std_line_type = network.config['grid_expansion']['std_mv_line']
     std_line_kind = 'cable'
