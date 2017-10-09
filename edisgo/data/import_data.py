@@ -571,7 +571,10 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                              length=.5,
                              grid=grid)
                          }
-                    grid.graph.add_edge(grid.station, gen, line, type='line_aggr')
+                    grid.graph.add_edge(grid.station,
+                                        gen,
+                                        line=line,
+                                        type='line_aggr')
         for sector, sectoral_load in la['load'].items():
             load = Load(
                 geom=grid.station.geom,
@@ -589,7 +592,10 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                 length=.5,
                 grid=grid)
             }
-            grid.graph.add_edge(grid.station, load, line, type='line_aggr')
+            grid.graph.add_edge(grid.station,
+                                load,
+                                line=line,
+                                type='line_aggr')
 
 
 def _validate_ding0_grid_import(mv_grid, ding0_mv_grid, lv_grid_mapping):
@@ -1401,7 +1407,10 @@ def _import_genos_from_oedb(network):
                             length=.5,
                             grid=network.mv_grid)
                         }
-                        network.mv_grid.graph.add_edge(network.mv_grid.station, gen, line, type='line_aggr')
+                        network.mv_grid.graph.add_edge(network.mv_grid.station,
+                                                       gen,
+                                                       line=line,
+                                                       type='line_aggr')
 
                         log_agg_geno_count += len(val3['ids'])
                         log_geno_cap += val3['capacity']
