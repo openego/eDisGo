@@ -1,4 +1,4 @@
-from ..grid.components import Line, MVStation, MVDisconnectingPoint
+from ..grid.components import Line, MVStation, LVStation, MVDisconnectingPoint, Generator, Load, BranchTee
 from ..grid.tools import select_cable
 from ..tools.geo import calc_geo_dist_vincenty, \
                         calc_geo_lines_in_buffer, \
@@ -45,20 +45,23 @@ def connect_generators(network):
             # ===== voltage level 4: generator has to be connected to MV station =====
             if geno.v_level == 4:
 
-                length = calc_geo_dist_vincenty(geno, network.mv_grid.station)
+                line_length = calc_geo_dist_vincenty(geno, network.mv_grid.station)
 
-                cable_type, cable_count = select_cable(network=network,
+                line_type, line_count = select_cable(network=network,
                                                        level='mv',
                                                        apparent_power=geno.nominal_capacity / pfac_mv_gen)
 
-                line = {'line': Line(id=random.randint(10**8, 10**9),
-                                     type=cable_type,
-                                     quantity=cable_count,
-                                     length=length / 1e3,
-                                     grid=network.mv_grid)
-                        }
+                line = Line(id=random.randint(10**8, 10**9),
+                            type=line_type,
+                            kind='cable',
+                            quantity=line_count,
+                            length=line_length / 1e3,
+                            grid=network.mv_grid)
 
-                network.mv_grid.graph.add_edge(network.mv_grid.station, geno, line, type='line')
+                network.mv_grid.graph.add_edge(network.mv_grid.station,
+                                               geno,
+                                               line=line,
+                                               type='line')
 
             # ===== voltage level 5: generator has to be connected to MV grid (next-neighbor) =====
             elif geno.v_level == 5:
@@ -88,19 +91,15 @@ def connect_generators(network):
                                                       target_obj=dist_min_obj)
 
                     if target_obj_result is not None:
-                        if debug:
-                            logger.debug(
-                                'Generator {0} was connected to {1}'.format(
-                                    generator, target_obj_result))
                         generator_connected = True
                         break
 
-                if not generator_connected and debug:
+                if not generator_connected:
                     logger.debug(
                         'Generator {0} could not be connected, try to '
                         'increase the parameter `generator_buffer_radius` in '
                         'config file `config_calc.cfg` to gain more possible '
-                        'connection points.'.format(generator))
+                        'connection points.'.format(geno))
 
 
 def _find_nearest_conn_objects(network, node, branches):
@@ -167,10 +166,7 @@ def _find_nearest_conn_objects(network, node, branches):
 
         # find nearest connection point on given triple dict (2 branch-adjacent stations + cable dist. on line)
         conn_objects_min = min(conn_objects.values(), key=lambda v: v['dist'])
-        #if not branches_only:
-        #    conn_objects_min_stack.append(conn_objects_min)
-        #elif isinstance(conn_objects_min['shp'], LineString):
-        #    conn_objects_min_stack.append(conn_objects_min)
+        
         conn_objects_min_stack.append(conn_objects_min)
 
     # sort all objects by distance from node
@@ -193,6 +189,9 @@ def _connect_node(network, node, target_obj):
     """
     # TODO: Update docstring
 
+    std_line_type = network.config['grid_expansion']['std_mv_line']
+    std_line_kind = 'cable'
+
     target_obj_result = None
 
     node_shp = transform(proj2equidistant(), node.geom)
@@ -207,111 +206,108 @@ def _connect_node(network, node, target_obj):
         conn_point_shp = target_obj['shp'].interpolate(target_obj['shp'].project(node_shp))
         conn_point_shp = transform(proj2conformal(), conn_point_shp)
 
+        line = network.mv_grid.graph.edge[adj_node1][adj_node2]
+
         # target MV line does currently not connect a load area of type aggregated
-        if not target_obj['obj']['branch'].connects_aggregated:
+        if not line['type'] == 'line_aggr':
 
-            # create cable distributor and add it to grid
-            cable_dist = MVDisconnectingPoint(geom=conn_point_shp,
-                                              grid=network.mv_grid)
-            network.mv_grid.add_cable_distributor(cable_dist)
+            # create branch tee and add it to grid
+            branch_tee = BranchTee(geom=conn_point_shp,
+                                   grid=network.mv_grid)
+            network.mv_grid.graph.add_node(branch_tee,
+                                           type='branch_tee')
 
-            # check if there's a circuit breaker on current branch,
-            # if yes set new position between first node (adj_node1) and newly created cable distributor
-            circ_breaker = network.mv_grid.graph.edge[adj_node1][adj_node2]['branch'].circuit_breaker
-            if circ_breaker is not None:
-                circ_breaker.geom = calc_geo_centre_point(adj_node1, cable_dist)
-
-            # split old branch into 2 segments (delete old branch and create 2 new ones along cable_dist)
-            # ===========================================================================================
+            # split old branch into 2 segments
+            # (delete old branch and create 2 new ones along cable_dist)
+            # ==========================================================
 
             # backup kind and type of branch
-            branch_kind = graph.edge[adj_node1][adj_node2]['branch'].kind
-            branch_type = graph.edge[adj_node1][adj_node2]['branch'].type
-            branch_ring = graph.edge[adj_node1][adj_node2]['branch'].ring
+            line_kind = line['line'].kind
+            line_type = line['line'].type
 
-            graph.remove_edge(adj_node1, adj_node2)
+            network.mv_grid.graph.remove_edge(adj_node1, adj_node2)
 
-            branch_length = calc_geo_dist_vincenty(adj_node1, cable_dist)
-            branch = BranchDing0(length=branch_length,
-                                 circuit_breaker=circ_breaker,
-                                 kind=branch_kind,
-                                 type=branch_type,
-                                 ring=branch_ring)
-            if circ_breaker is not None:
-                circ_breaker.branch = branch
-            graph.add_edge(adj_node1, cable_dist, branch=branch)
+            line_length = calc_geo_dist_vincenty(adj_node1, branch_tee)
+            line = Line(id=random.randint(10 ** 8, 10 ** 9),
+                        length=line_length,
+                        quantity=1,
+                        kind=line_kind,
+                        type=line_type)
+            network.mv_grid.graph.add_edge(adj_node1,
+                                           branch_tee,
+                                           line=line,
+                                           type='line')
 
-            branch_length = calc_geo_dist_vincenty(adj_node2, cable_dist)
-            graph.add_edge(adj_node2, cable_dist, branch=BranchDing0(length=branch_length,
-                                                                     kind=branch_kind,
-                                                                     type=branch_type,
-                                                                     ring=branch_ring))
+            line_length = calc_geo_dist_vincenty(adj_node2, branch_tee)
+            line = Line(id=random.randint(10 ** 8, 10 ** 9),
+                        length=line_length,
+                        quantity=1,
+                        kind=line_kind,
+                        type=line_type)
+            network.mv_grid.graph.add_edge(adj_node2,
+                                           branch_tee,
+                                           line=line,
+                                           type='line')
 
-            # add new branch for satellite (station to cable distributor)
-            # ===========================================================
+            # add new branch for new node (station to branch tee)
+            # ===================================================
+            line_length = calc_geo_dist_vincenty(node, branch_tee)
+            line = Line(id=random.randint(10 ** 8, 10 ** 9),
+                        length=line_length,
+                        quantity=1,
+                        kind=std_line_kind,
+                        type=std_line_type)
+            network.mv_grid.graph.add_edge(node,
+                                           branch_tee,
+                                           line=line,
+                                           type='line')
 
-            # get default branch kind and type from grid to use it for new branch
-            branch_kind = mv_grid.default_branch_kind
-            branch_type = mv_grid.default_branch_type
+            # TODO: Add costs, #45
 
-            branch_length = calc_geo_dist_vincenty(node, cable_dist)
-            graph.add_edge(node, cable_dist, branch=BranchDing0(length=branch_length,
-                                                                kind=branch_kind,
-                                                                type=branch_type,
-                                                                ring=branch_ring))
-            target_obj_result = cable_dist
-
-            # debug info
-            if debug:
-                logger.debug('Nearest connection point for object {0} '
-                             'is branch {1} (distance={2} m)'.format(
-                    node, target_obj['obj']['adj_nodes'], target_obj['dist']))
+            target_obj_result = branch_tee
 
     # node ist nearest connection point
     else:
 
         # what kind of node is to be connected? (which type is node of?)
-        #   LVLoadAreaCentreDing0: Connect to LVLoadAreaCentreDing0 only
-        #   LVStationDing0: Connect to LVLoadAreaCentreDing0, LVStationDing0 or MVCableDistributorDing0
-        #   GeneratorDing0: Connect to LVLoadAreaCentreDing0, LVStationDing0, MVCableDistributorDing0 or GeneratorDing0
-        if isinstance(node, LVLoadAreaCentreDing0):
-            valid_conn_objects = LVLoadAreaCentreDing0
-        elif isinstance(node, LVStationDing0):
-            valid_conn_objects = (LVLoadAreaCentreDing0, LVStationDing0, MVCableDistributorDing0)
-        elif isinstance(node, GeneratorDing0):
-            valid_conn_objects = (LVLoadAreaCentreDing0, LVStationDing0, MVCableDistributorDing0, GeneratorDing0)
+        #   LVStation: Connect to LVStation or BranchTee
+        #   Generator: Connect to LVStation, BranchTee or Generator
+        if isinstance(node, LVStation):
+            valid_conn_objects = (LVStation, BranchTee)
+        elif isinstance(node, Generator):
+            valid_conn_objects = (LVStation, BranchTee, Generator)
         else:
             raise ValueError('Oops, the node you are trying to connect is not a valid connection object')
 
-        # if target is Load Area centre or LV station, check if it belongs to a load area of type aggregated
-        # (=> connection not allowed)
-        if isinstance(target_obj['obj'], (LVLoadAreaCentreDing0, LVStationDing0)):
-            target_is_aggregated = target_obj['obj'].lv_load_area.is_aggregated
+        # if target is generator or Load, check if it is aggregated (=> connection not allowed)
+        if isinstance(target_obj['obj'], (Generator, Load)):
+            target_is_aggregated = any([_ for _ in network.mv_grid.graph.edge[target_obj['obj']].values()
+                                        if _['type'] == 'line_aggr'])
         else:
             target_is_aggregated = False
 
         # target node is not a load area of type aggregated
         if isinstance(target_obj['obj'], valid_conn_objects) and not target_is_aggregated:
 
-            # get default branch kind and type from grid to use it for new branch
-            branch_kind = mv_grid.default_branch_kind
-            branch_type = mv_grid.default_branch_type
-
-            # get branch ring obj
-            branch_ring = mv_grid.get_ring_from_node(target_obj['obj'])
-
             # add new branch for satellite (station to station)
-            branch_length = calc_geo_dist_vincenty(node, target_obj['obj'])
-            graph.add_edge(node, target_obj['obj'], branch=BranchDing0(length=branch_length,
-                                                                       kind=branch_kind,
-                                                                       type=branch_type,
-                                                                       ring=branch_ring))
-            target_obj_result = target_obj['obj']
+            line_length = calc_geo_dist_vincenty(network=network,
+                                                 node_source=node,
+                                                 node_target=target_obj['obj'])
 
-            # debug info
-            if debug:
-                logger.debug('Nearest connection point for object {0} is station {1} '
-                      '(distance={2} m)'.format(
-                    node, target_obj['obj'], target_obj['dist']))
+            line = Line(id=random.randint(10 ** 8, 10 ** 9),
+                        type=std_line_type,
+                        kind=std_line_kind,
+                        quantity=1,
+                        length=line_length / 1e3,
+                        grid=network.mv_grid)
+
+            network.mv_grid.graph.add_edge(node,
+                                           target_obj['obj'],
+                                           line=line,
+                                           type='line')
+
+            # TODO: Add costs, #45
+
+            target_obj_result = target_obj['obj']
 
     return target_obj_result
