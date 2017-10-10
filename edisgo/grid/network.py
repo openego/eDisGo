@@ -76,6 +76,22 @@ class Network:
         config.load_config('config_scenario.cfg')
         config.load_config('config_costs.cfg')
 
+        # modify structure of config data
+        config.cfg._sections['data']['peakload_consumption_ratio'] = {
+            'residential': config.cfg._sections['data'][
+                'residential_peakload_consumption'],
+            'retail': config.cfg._sections['data'][
+                'retail_peakload_consumption'],
+            'industrial': config.cfg._sections['data'][
+                'residential_peakload_consumption'],
+            'agricultural': config.cfg._sections['data'][
+                'agricultural_peakload_consumption']}
+
+        del(config.cfg._sections['data']['residential_peakload_consumption'])
+        del(config.cfg._sections['data']['retail_peakload_consumption'])
+        del(config.cfg._sections['data']['industrial_peakload_consumption'])
+        del(config.cfg._sections['data']['agricultural_peakload_consumption'])
+
         return config.cfg._sections
 
     def _load_equipment_data(self):

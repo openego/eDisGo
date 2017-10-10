@@ -1,4 +1,6 @@
 import os
+import pandas as pd
+
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString
 from .grids import LVGrid, MVGrid
@@ -202,6 +204,17 @@ class Load(Component):
     @consumption.setter
     def consumption(self, cons_dict):
         self._consumption = cons_dict
+
+    @property
+    def peak_load(self):
+        """
+        Get sectoral peak load
+        """
+        peak_load = pd.Series(self.consumption).mul(pd.Series(
+            self.grid.network.config['data'][
+                'peakload_consumption_ratio']).astype(float), fill_value=0)
+
+        return peak_load
 
     def __repr__(self):
         return '_'.join(['Load',
