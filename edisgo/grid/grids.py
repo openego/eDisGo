@@ -73,6 +73,41 @@ class Grid:
         """Provide access to the grid_district"""
         return self._grid_district
 
+    @property
+    def peak_generation(self):
+        """
+        Cumulative peak generation capacity of generators of this grid
+
+        Returns
+        -------
+        float
+            Ad-hoc calculated of cached peak generation capacity
+        """
+        if self._peak_generation is None:
+            self._peak_generation = sum(
+                [_.nominal_capacity
+                 for _ in self.graph.nodes_by_attribute('generator')])
+
+        return self._peak_generation
+
+    @property
+    def peak_load(self):
+        """
+        Cumulative peak load capacity of generators of this grid
+
+        Returns
+        -------
+        float
+            Ad-hoc calculated of cached peak load capacity
+        """
+        if self._peak_load is None:
+            self._peak_load = sum(
+                [_.peak_load.sum()
+                 for _ in self.graph.nodes_by_attribute('load')])
+
+        return self._peak_load
+
+
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
 
