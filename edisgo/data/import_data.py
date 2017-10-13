@@ -1348,8 +1348,13 @@ def _import_genos_from_oedb(network):
         log_geno_cap = 0
         for id, row in generators_lv_new.iterrows():
 
+            # TEMP: USE RANDOM LV GRID - DELETE IF DP COL mvlv_subst_id is fixed!
+            row['mvlv_subst_id'] = random.choice(list(lv_grid_dict.keys()))
+
             # new unit is part of agg. LA -> add to dict
             if row['mvlv_subst_id'] not in lv_grid_dict.keys():
+                # TODO: A missing mvlv_subst_id does not necessarily mean that it is a new geno
+                # TODO: It might be a bug in DP! Check!
 
                 if row['voltage_level'] not in agg_geno_new:
                     agg_geno_new[row['voltage_level']] = {}
