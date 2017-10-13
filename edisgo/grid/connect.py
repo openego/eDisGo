@@ -247,7 +247,7 @@ def _connect_mv_node(network, node, target_obj):
                                                  node_source=adj_node1,
                                                  node_target=branch_tee)
             line = Line(id=random.randint(10 ** 8, 10 ** 9),
-                        length=line_length,
+                        length=line_length / 1e3,
                         quantity=1,
                         kind=line_kind,
                         type=line_type)
@@ -260,7 +260,7 @@ def _connect_mv_node(network, node, target_obj):
                                                  node_source=adj_node2,
                                                  node_target=branch_tee)
             line = Line(id=random.randint(10 ** 8, 10 ** 9),
-                        length=line_length,
+                        length=line_length / 1e3,
                         quantity=1,
                         kind=line_kind,
                         type=line_type)
@@ -275,7 +275,7 @@ def _connect_mv_node(network, node, target_obj):
                                                  node_source=node,
                                                  node_target=branch_tee)
             line = Line(id=random.randint(10 ** 8, 10 ** 9),
-                        length=line_length,
+                        length=line_length / 1e3,
                         quantity=1,
                         kind=std_line_kind,
                         type=std_line_type)
