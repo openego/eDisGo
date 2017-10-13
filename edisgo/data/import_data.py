@@ -1113,8 +1113,8 @@ def _import_genos_from_oedb(network):
         g_mv = g_mv[~g_mv.isin(g_mv_existing)].dropna()
 
         # TEMP: BACKUP 1 GENO FOR TESTING
-        temp_geno = generators_mv_existing.iloc[0]
-        temp_geno['geom_em'] = temp_geno['geom_em'].replace('10.667', '10.64')
+        #temp_geno = generators_mv_existing.iloc[0]
+        #temp_geno['geom_em'] = temp_geno['geom_em'].replace('10.667', '10.64')
 
         # iterate over exiting generators and check whether capacity has changed
         log_geno_count = 0
@@ -1148,7 +1148,7 @@ def _import_genos_from_oedb(network):
         g_mv = g_mv[~g_mv.isin(list(generators_mv_new.index.values))].dropna()
 
         # TEMP: INSERT BACKUPPED GENO IN DF FOR TESTING
-        generators_mv_new = generators_mv_new.append(temp_geno)
+        #generators_mv_new = generators_mv_new.append(temp_geno)
 
         # iterate over new generators and create them
         for id, row in generators_mv_new.iterrows():
@@ -1372,7 +1372,7 @@ def _import_genos_from_oedb(network):
 
             # new generator is a single (non-aggregated) unit
             else:
-                # check if geom is available, skip otherwise
+                # check if geom is available
                 geom = _check_geom(row)
 
                 gen = Generator(id=id,
