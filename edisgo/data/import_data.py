@@ -1088,7 +1088,16 @@ def _import_genos_from_oedb(network):
         cap_diff_threshold = 10 ** -4
 
         # get existing generators in MV and LV grids
-        g_mv, g_lv = _build_generator_list(network=network)
+        g_mv, g_lv, g_lv_agg = _build_generator_list(network=network)
+
+        # print current capacity
+        capacity_grid = 0
+        capacity_grid += sum([row['obj'].nominal_capacity for id, row in g_mv.iterrows()])
+        capacity_grid += sum([row['obj'].nominal_capacity for id, row in g_lv.iterrows()])
+        capacity_grid += sum([row['obj'].nominal_capacity for id, row in g_lv_agg.iterrows()])
+        logger.debug('Cumulative generator capacity (existing): {} kW'
+                     .format(str(round(capacity_grid, 1)))
+                     )
 
         # ======================================
         # Step 1: MV generators (existing + new)
@@ -1628,17 +1637,6 @@ def _import_genos_from_oedb(network):
 
     #generators_mv = generators_conv_mv.append(generators_res_mv)
 
-    # print current geno capacity
-    capacity_grid = 0
-    for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
-        capacity_grid += geno.nominal_capacity
-    for lv_grid in network.mv_grid.lv_grids:
-        for geno in lv_grid.graph.nodes_by_attribute('generator'):
-            capacity_grid += geno.nominal_capacity
-    logger.debug('Cumulative generator capacity (existing): {} kW'
-                 .format(str(round(capacity_grid, 1)))
-                 )
-
     _update_grids(network=network,
                   #generators_mv=generators_mv,
                   generators_mv=generators_res_mv,
@@ -1680,12 +1678,16 @@ def _build_generator_list(network):
             A DataFrame with id of and reference to MV generators
     :pandas:`pandas.DataFrame<dataframe>`
             A DataFrame with id of and reference to LV generators
+    :pandas:`pandas.DataFrame<dataframe>`
+            A DataFrame with id of and reference to aggregated LV generators
     """
 
     genos_mv = pd.DataFrame(columns=
                             ('id', 'obj'))
     genos_lv = pd.DataFrame(columns=
                             ('id', 'obj'))
+    genos_lv_agg = pd.DataFrame(columns=
+                                ('id', 'obj'))
 
     # MV genos
     for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
@@ -1693,13 +1695,15 @@ def _build_generator_list(network):
         # geno is really MV (not aggregated (originally from aggregated LA))
         if name_comp[0] != 'agg':
             genos_mv.loc[len(genos_mv)] = [int(geno.id), geno]
+        else:
+            genos_lv_agg.loc[len(genos_lv_agg)] = [geno.id, geno]
 
     # LV genos
     for lv_grid in network.mv_grid.lv_grids:
         for geno in lv_grid.graph.nodes_by_attribute('generator'):
             genos_lv.loc[len(genos_lv)] = [int(geno.id), geno]
 
-    return genos_mv, genos_lv
+    return genos_mv, genos_lv, genos_lv_agg
 
 
 def _build_lv_grid_dict(network):
