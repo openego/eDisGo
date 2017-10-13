@@ -44,6 +44,8 @@ def grid_expansion_costs(network):
     self.grid_expansion_costs.total_costs.sum().
 
     """
+    # ToDo: consider earthwork costs of parallel lines only once
+    # ToDo: only consider new lines (quantity column instead of quantity attr.)
     def _get_transformer_costs(transformer):
         if isinstance(transformer.grid, LVGrid):
             return float(network.config['costs_transformers']['lv'])
