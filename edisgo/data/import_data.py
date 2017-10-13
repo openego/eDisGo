@@ -1,7 +1,7 @@
 from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
     MVStation, Line, Transformer, LVStation
 from ..grid.grids import MVGrid, LVGrid
-from ..grid.connect import connect_generators
+from ..grid.connect import connect_mv_generators, connect_lv_generators
 
 from egoio.db_tables import model_draft, supply
 from egoio.tools.db import connection
@@ -1649,7 +1649,8 @@ def _import_genos_from_oedb(network):
 
     _validate_generation()
 
-    connect_generators(network=network)
+    connect_mv_generators(network=network)
+    connect_lv_generators(network=network)
 
 
 def _import_genos_from_pypsa(network, file):
