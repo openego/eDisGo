@@ -1558,6 +1558,10 @@ def _import_genos_from_oedb(network):
             for geno in lv_grid.graph.nodes_by_attribute('generator'):
                 capacity_grid += geno.nominal_capacity
 
+        logger.debug('Cumulative generator capacity (updated): {} kW'
+                     .format(str(round(capacity_imported, 1)))
+                     )
+
         if abs(capacity_imported - capacity_grid) > cap_diff_threshold:
             raise ValueError('Cumulative capacity of imported generators ({} kW) '
                              'differ from cumulative capacity of generators '
@@ -1624,20 +1628,17 @@ def _import_genos_from_oedb(network):
 
     #generators_mv = generators_conv_mv.append(generators_res_mv)
 
-    # validate
-    cap=0
-    # MV genos
+    # print current geno capacity
+    capacity_grid = 0
     for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
-        cap += geno.nominal_capacity
-    x=cap
-    print('Geno cap sum MV (SQ):', str(cap))
-    # LV genos
+        capacity_grid += geno.nominal_capacity
     for lv_grid in network.mv_grid.lv_grids:
         for geno in lv_grid.graph.nodes_by_attribute('generator'):
-            cap += geno.nominal_capacity
-    print('Geno cap sum LV (SQ):', str(cap-x))
-    print('Geno cap sum (SQ):', str(cap))
-
+            capacity_grid += geno.nominal_capacity
+    logger.debug('Cumulative generator capacity (existing): {} kW'
+                 .format(str(round(capacity_grid, 1)))
+                 )
+    
     _update_grids(network=network,
                   #generators_mv=generators_mv,
                   generators_mv=generators_res_mv,
