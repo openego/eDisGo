@@ -1638,7 +1638,7 @@ def _import_genos_from_oedb(network):
     logger.debug('Cumulative generator capacity (existing): {} kW'
                  .format(str(round(capacity_grid, 1)))
                  )
-    
+
     _update_grids(network=network,
                   #generators_mv=generators_mv,
                   generators_mv=generators_res_mv,
@@ -1647,20 +1647,6 @@ def _import_genos_from_oedb(network):
     _validate_generation()
 
     connect_generators(network=network)
-
-    # validate
-    cap=0
-    # MV genos
-    for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
-        cap += geno.nominal_capacity
-    x=cap
-    print('Geno cap sum MV (2035):', str(cap))
-    # LV genos
-    for lv_grid in network.mv_grid.lv_grids:
-        for geno in lv_grid.graph.nodes_by_attribute('generator'):
-            cap += geno.nominal_capacity
-    print('Geno cap sum LV (2035):', str(cap-x))
-    print('Geno cap sum (2035):', str(cap))
 
 
 def _import_genos_from_pypsa(network, file):
