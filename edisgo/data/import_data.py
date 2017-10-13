@@ -1043,10 +1043,13 @@ def _import_genos_from_oedb(network):
 
         Steps:
 
-            * Step 1: Update MV generators
-            * Step 2: Update LV generators
-            * Step 3: Update aggregated MV generators (originally LV generators from aggregated
-                Load Areas which were aggregated during import from ding0.)
+            * Step 1: MV generators: Update existing, create new, remove decommissioned
+            * Step 2: LV generators (single units): Update existing, remove decommissioned
+            * Step 3: LV generators (in aggregated MV generators): Update existing,
+                remove decommissioned
+                (aggregated MV generators = originally LV generators from aggregated Load
+                Areas which were aggregated during import from ding0.)
+            * Step 4: LV generators (single units + aggregated MV generators): Create new
 
         Parameters
         ----------
@@ -1087,9 +1090,9 @@ def _import_genos_from_oedb(network):
         # get existing generators in MV and LV grids
         g_mv, g_lv = _build_generator_list(network=network)
 
-        # =====================
-        # Step 1: MV generators
-        # =====================
+        # ======================================
+        # Step 1: MV generators (existing + new)
+        # ======================================
         logger.debug('==> MV generators')
         logger.debug('{} generators imported.'
                      .format(str(len(generators_mv))))
@@ -1185,9 +1188,9 @@ def _import_genos_from_oedb(network):
                                  )
                          )
 
-        # ====================================
-        # Step 2: LV generators (single units)
-        # ====================================
+        # =============================================
+        # Step 2: LV generators (single existing units)
+        # =============================================
         logger.debug('==> LV generators')
         logger.debug('{} generators imported.'.format(str(len(generators_lv))))
         # get existing genos (status quo DF format)
@@ -1243,9 +1246,9 @@ def _import_genos_from_oedb(network):
                                  )
                          )
 
-        # ========================================================================
-        # Step 3: LV generators (aggregated units (originally from aggregated LA))
-        # ========================================================================
+        # ====================================================================================
+        # Step 3: LV generators (existing in aggregated units (originally from aggregated LA))
+        # ====================================================================================
         g_lv_agg = network.dingo_import_data
         g_lv_agg_existing = g_lv_agg[g_lv_agg['id'].isin(list(generators_lv.index.values))]
         generators_lv_agg_existing = generators_lv[generators_lv.index.isin(list(g_lv_agg_existing['id']))]
@@ -1283,6 +1286,34 @@ def _import_genos_from_oedb(network):
                              )
                      )
 
+        # TEMP: INSERT BACKUPPED GENO IN DF FOR TESTING
+        # g_lv_agg.loc[len(g_lv_agg)] = temp_geno
+
+        # remove decommissioned genos
+        # (genos which exist in grid but not in the new dataset)
+        log_geno_cap = 0
+        if not g_lv_agg.empty and remove_missing:
+            log_geno_count = 0
+            for _, row in g_lv_agg.iterrows():
+                row['agg_geno'].nominal_capacity -= row['capacity']
+                log_geno_cap += row['capacity']
+                # remove LV geno id from id string of agg. geno
+                id = row['agg_geno'].id.split('-')
+                ids = id[2].split('_')
+                ids.remove(str(int(row['id'])))
+                row['agg_geno'].id = '-'.join([id[0], id[1], '_'.join(ids)])
+
+                log_geno_count += 1
+            logger.debug('{} of {} decommissioned generators in aggregated generators removed ({} kW).'
+                         .format(str(log_geno_count),
+                                 str(len(g_lv_agg)),
+                                 str(round(log_geno_cap, 1))
+                                 )
+                         )
+
+        # ====================================================================
+        # Step 4: LV generators (new single units + genos in aggregated units)
+        # ====================================================================
         # new genos
         log_geno_count = log_agg_geno_count = 0
 
@@ -1409,31 +1440,6 @@ def _import_genos_from_oedb(network):
                              str(round(log_geno_cap, 1))
                              )
                      )
-
-        # TEMP: INSERT BACKUPPED GENO IN DF FOR TESTING
-        # g_lv_agg.loc[len(g_lv_agg)] = temp_geno
-
-        # remove decommissioned genos
-        # (genos which exist in grid but not in the new dataset)
-        log_geno_cap = 0
-        if not g_lv_agg.empty and remove_missing:
-            log_geno_count = 0
-            for _, row in g_lv_agg.iterrows():
-                row['agg_geno'].nominal_capacity -= row['capacity']
-                log_geno_cap += row['capacity']
-                # remove LV geno id from id string of agg. geno
-                id = row['agg_geno'].id.split('-')
-                ids = id[2].split('_')
-                ids.remove(str(int(row['id'])))
-                row['agg_geno'].id = '-'.join([id[0], id[1], '_'.join(ids)])
-
-                log_geno_count += 1
-            logger.debug('{} of {} decommissioned generators in aggregated generators removed ({} kW).'
-                         .format(str(log_geno_count),
-                                 str(len(g_lv_agg)),
-                                 str(round(log_geno_cap, 1))
-                                 )
-                         )
 
     def _check_geom(row):
         """Checks if a valid geom is available in dataset
@@ -1637,7 +1643,7 @@ def _import_genos_from_oedb(network):
                   generators_mv=generators_res_mv,
                   generators_lv=generators_res_lv)
 
-    #_validate_generation()
+    _validate_generation()
 
     connect_generators(network=network)
 
