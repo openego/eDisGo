@@ -37,17 +37,17 @@ if __name__ == '__main__':
     scenario = Scenario(timeseries=timeseries,
                         power_flow='worst-case')
     costs = pd.DataFrame()
-    faulty_grids = []
+    faulty_grids = {'grid': [], 'msg': []}
     for dingo_grid in grids:
         logging.info('Grid expansion for {}'.format(dingo_grid))
         network = Network.import_from_ding0(
             os.path.join('data', dingo_grid),
             id='Test grid',
             scenario=scenario)
-        # Do non-linear power flow analysis with PyPSA
-        network.analyze()
-        # Do grid reinforcement
         try:
+            # Do non-linear power flow analysis with PyPSA
+            network.analyze()
+            # Do grid reinforcement
             network.reinforce()
             costs_grouped = network.results.grid_expansion_costs.groupby(
                 ['type']).sum()
@@ -55,10 +55,12 @@ if __name__ == '__main__':
                 pd.DataFrame(costs_grouped.values,
                              columns=costs_grouped.columns,
                              index=[[network.id] * len(costs_grouped),
-                             costs_grouped.index]))
+                                    costs_grouped.index]))
             logging.info('SUCCESS!')
-        except:
-            faulty_grids.append(dingo_grid)
+        except Exception as e:
+            faulty_grids['grid'].append(network.id)
+            faulty_grids['msg'].append(e)
             logging.info('Something went wrong.')
 
+    pd.DataFrame(faulty_grids).to_csv('faulty_grids.csv', index_label='grid')
     costs.to_csv('costs.csv')
