@@ -1,5 +1,9 @@
 import networkx as nx
-from .components import LVStation, BranchTee, Generator, Load
+import os
+if not 'READTHEDOCS' in os.environ:
+    from shapely.geometry import Point
+from .components import LVStation, BranchTee, Generator, Load, \
+    MVDisconnectingPoint, Line
 
 
 def position_switch_disconnecters(mv_grid, mode='load'):
@@ -163,3 +167,64 @@ def position_switch_disconnecters(mv_grid, mode='load'):
         node1 = ring[position - 1]
         node2 = ring[position]
 
+        implement_switch_disconnector(mv_grid, node1, node2)
+
+
+def implement_switch_disconnector(mv_grid, node1, node2):
+    """
+    Install switch disconnecter in grid topology
+
+    The graph that represents the grid's topology is altered in such way that
+    it explicitly includes a switch disconnecter.
+    The switch disconnecter is always located at ``node1``. Technically, it does
+    not make any difference. This is just an convention ensuring consistency of
+    multiple runs.
+
+    The ring is still closed after manipulations of this function.
+
+    Parameters
+    ----------
+    mv_grid : :class:`~.grid.grids.MVGrid`
+        MV grid instance
+    node1
+        A rings node
+    node2
+        Another rings node
+    """
+    # Get disconnecting point's location
+    line = mv_grid.graph.edge[node1][node2]['line']
+
+    length_sd_line = 0.0002 # in km
+
+    x_sd = node1.geom.x * (length_sd_line / line.length) * (
+        node1.geom.x - node2.geom.x)
+    y_sd = node1.geom.y * (length_sd_line / line.length) * (
+        node1.geom.y - node2.geom.y)
+
+    # Instantiate disconnecting point
+    mv_dp_number = len(mv_grid.graph.nodes_by_attribute('mv_disconneting_point'))
+    disconnecting_point = MVDisconnectingPoint(
+        id=mv_dp_number + 1,
+        geom=Point(x_sd, y_sd),
+        grid=mv_grid)
+    mv_grid.graph.add_node(disconnecting_point, type='mv_disconneting_point')
+
+    # Replace original line by a new line
+    new_line_attr = {'line': Line(
+                  id=line.id,
+                  type=line.type,
+                  length=line.length - length_sd_line,
+                  grid=mv_grid)}
+    mv_grid.graph.remove_edge(node1, node2)
+    mv_grid.graph.add_edge(disconnecting_point, node2, new_line_attr)
+
+    # Add disconnecting line segment
+    switch_disconnecter_line_attr = {
+        'line': Line(
+                  id="switch_disconnecter_line_{}".format(str(mv_dp_number + 1)),
+                  type=line.type,
+                  length=length_sd_line,
+                  grid=mv_grid)}
+
+    mv_grid.graph.add_edge(node1, disconnecting_point,
+                           switch_disconnecter_line_attr)
