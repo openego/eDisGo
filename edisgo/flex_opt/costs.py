@@ -2,7 +2,9 @@ import sys
 import pandas as pd
 import pyproj
 from functools import partial
-from shapely.ops import transform
+import os
+if not 'READTHEDOCS' in os.environ:
+    from shapely.ops import transform
 
 from edisgo.grid.components import Transformer, Line
 from edisgo.grid.grids import LVGrid, MVGrid
