@@ -1,6 +1,7 @@
 from os import path
 import pandas as pd
 from math import sqrt
+import logging
 
 import edisgo
 from edisgo.tools import config, pypsa_io
@@ -8,6 +9,8 @@ from edisgo.data.import_data import import_from_ding0
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 
+
+logger = logging.getLogger('edisgo')
 
 class Network:
     """Defines the eDisGo Network
@@ -330,6 +333,10 @@ class Scenario:
 
     Optional Parameters
     --------------------
+    timeseries : :obj:`list` of :class:`~.grid.grids.TimeSeries`
+        Time series associated with a scenario. Only specify if you don't
+        want to do a worst-case analysis and are not using etrago
+        specifications.
     pfac_mv_gen : :obj:`float`
         Power factor for medium voltage generators
     pfac_mv_load : :obj:`float`
@@ -346,12 +353,20 @@ class Scenario:
     _network : :class:~.grid.network.Network`
         Network which this scenario is associated with
     _timeseries : :obj:`list` of :class:`~.grid.grids.TimeSeries`
-        Time series associated to a scenario
+        Time series associated with a scenario.
     _etrago_specs : :class:`~.grid.grids.ETraGoSpecs`
         Specifications which are to be fulfilled at transition point (HV-MV
         substation)
     _parameters : :class:`~.grid.network.Parameters`
         Parameters for power flow analysis and grid expansion.
+
+    Notes
+    -------
+    timeseries_generation wird in der init überschrieben, wenn etrago_specs
+    vorgegeben werden oder wenn power_flow = 'worst-case' (perspektivisch
+    soll timeseries.load auch überschrieben werden)
+    wenn power_flow = 'worst-case' werden etrago_specs auch überschrieben -
+    ToDo: am besten Warnung raus geben
 
     """
 
@@ -362,16 +377,50 @@ class Scenario:
         self._etrago_specs = kwargs.get('etrago_specs', None)
         self._parameters = Parameters(self, **kwargs)
 
+        # populate timeseries attribute
         if isinstance(power_flow, str):
             if power_flow != 'worst-case':
-                raise ValueError("{} is not a valid specification for type of "
-                                 "power flow analysis .Try 'worst-case'".format(
-                    power_flow))
+                raise ValueError(
+                    "{} is not a valid specification for type of power flow "
+                    "analysis. Try 'worst-case'".format(power_flow))
             else:
+                # if etrago specifications are given give out warning that
+                # dispatch specifications are overwritten when power_flow is
+                # set to worst-case
+                if self._etrago_specs:
+                    logger.warning("Dispatch specifications from etrago are "
+                                   "overwritten when power_flow is set to "
+                                   "'worst-case'.")
+                if self._timeseries:
+                    logger.warning("Timeseries are overwritten when "
+                                   "power_flow is set to 'worst-case'.")
+                #ToDo: date?
+                self._timeseries = TimeSeries()
                 timeindex = pd.date_range('12/4/2011', periods=1, freq='H')
+                self._timeseries.timeindex = timeindex
+                self._timeseries.generation = worst_case_generation_ts(
+                    timeindex)
+                self._timeseries.load = self.set_load(mode='worst-case')
         elif isinstance(power_flow, tuple):
-            raise NotImplementedError("Time range analyze will be implemented "
-                                      "in near future.")
+            if self._etrago_specs:
+                if self._etrago_specs.dispatch:
+                    self._timeseries = TimeSeries()
+                    timeindex = pd.date_range(
+                        power_flow[0], power_flow[1], freq='H')
+                    self._timeseries.timeindex = timeindex
+                    #ToDo: evtl. anpassen wenn etrago input bekannt ist
+                    #ToDo: select time range
+                    self._timeseries.generation = self._etrago_specs.dispatch
+                    #ToDo: wo kommen load timeseries her?
+                    #self._timeseries.load = self.set_load(mode='time-range')
+                    #ToDo: prüfen, ob capacity in etrago und edisgo gleich sind
+                else:
+                    #ToDo: Wollen wir timeseries zulassen, wenn etrago specs gegeben sind? Dann müssen wir das hier noch prüfen
+                    logger.error("Etrago specifications must contain dispatch "
+                                 "timeseries. Please provide them.")
+            elif not self._timeseries:
+                logger.error("Please provide etrago specifications or time "
+                             "series for load and generation.")
 
         # Set timeindex of Timeseries()
         self.timeseries.timeindex = timeindex
@@ -603,35 +652,11 @@ class TimeSeries:
         dict or :pandas:`pandas.Series<series>`
             See class definition for details.
         """
-        if self._generation is None:
-            self._generation = self._set_generation(mode='worst-case')
-
         return self._generation
 
-    def _set_generation(self, mode=None):
-        """
-        Assign generation data according to provided case
-
-        Parameters
-        ----------
-        mode : str or tuple
-            Create time series for worst-case analysis ('worst-case') or
-            retrieve generation data from OEDB for each covered weather cell.
-
-            .. code-block:: python
-
-                timeseries._set_generation(mode=(
-                    datetime(2012, 3, 24, 13),
-                    datetime(2012, 3, 24, 21)))
-        """
-
-        if mode == 'worst-case':
-            return worst_case_generation_ts(self.timeindex)
-        elif mode == 'time-range':
-            raise NotImplementedError
-        else:
-            raise ValueError("Provide proper mode of analysis: 'worst-case | "
-                             "'time-range'")
+    @generation.setter
+    def generation(self, generation_timeseries):
+        self._generation = generation_timeseries
         
     @property
     def load(self):
@@ -651,15 +676,19 @@ class TimeSeries:
 
         return self._load
 
-    def _set_load(self, mode=None):
-        """
-        Assigne load data according to provided case
-        """
+    @load.setter
+    def load(self, load_timeseries):
+        self._load = load_timeseries
 
+    def set_load(self, mode=None):
+        """
+        Assign load data according to provided case
+        """
+        # ToDo: docstring
         if mode == 'worst-case':
             return worst_case_load_ts(self.timeindex)
         elif mode == 'time-range':
-            raise NotImplementedError
+            return
         else:
             raise ValueError("Provide proper mode of analysis: 'worst-case | "
                              "'time-range'")
@@ -733,6 +762,10 @@ class ETraGoSpecs:
         self._battery_capacity = kwargs.get('battery_capacity', None)
         self._battery_active_power = kwargs.get('battery_active_power', None)
         self._dispatch = kwargs.get('dispatch', None)
+
+    @property
+    def dispatch(self):
+        return self._dispatch
 
 
 class Results:
@@ -1097,7 +1130,7 @@ def worst_case_generation_ts(timeindex):
     :pandas:`pandas.DataFrame<dataframe>`
         Normalized active power (1 kW)
     """
-    return pd.DataFrame({'p': 1}, index=timeindex)
+    return {'all_other': pd.DataFrame({'p': 1}, index=timeindex)}
 
 
 def worst_case_load_ts(timeindex):

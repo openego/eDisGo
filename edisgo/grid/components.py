@@ -257,22 +257,21 @@ class Generator(Component):
                 q_factor = tan(acos(
                     self.grid.network.scenario.parameters.pfac_lv_gen))
 
-            timeseries = self.grid.network.scenario.timeseries.generation
-            timeseries['q'] = (
-                self.grid.network.scenario.timeseries.generation * q_factor)
+            if self.type in self.grid.network.scenario.timeseries.generation.keys():
+                ts = self.grid.network.scenario.timeseries.generation[self.type].copy()
+            else:
+                ts = self.grid.network.scenario.timeseries.generation['all_other'].copy()
+            ts['q'] = (ts['p'] * q_factor)
 
             # scale feedin/load
+            # ToDo: bei etrago specs sollte das raus?
             if self.type == 'solar':
                 power_scaling = float(self.grid.network.config['scenario'][
                     'scale_factor_feedin_pv'])
             else:
                 power_scaling = float(self.grid.network.config['scenario'][
                     'scale_factor_feedin_other'])
-            self._timeseries = (
-                self.grid.network.scenario.timeseries.generation
-                * self.nominal_capacity
-                * power_scaling)
-
+            self._timeseries = ts * self.nominal_capacity * power_scaling
 
         return self._timeseries
 

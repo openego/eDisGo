@@ -1,7 +1,8 @@
-from edisgo.grid.network import Network, Scenario, TimeSeries
+from edisgo.grid.network import Network, Scenario, TimeSeries, ETraGoSpecs
 import os
 import sys
 import pandas as pd
+from datetime import date
 
 import logging
 logging.basicConfig(filename='example.log',
@@ -33,9 +34,13 @@ if __name__ == '__main__':
         if file.endswith(".pkl"):
             grids.append(file)
 
-    timeseries = TimeSeries()
-    scenario = Scenario(timeseries=timeseries,
-                        power_flow='worst-case')
+    timeindex = pd.date_range('12/4/2011', periods=1, freq='H')
+    etrago_specs = ETraGoSpecs(
+        dispatch={'all_other': pd.DataFrame({'p': 1}, index=timeindex)})
+
+    # scenario = Scenario(power_flow='worst-case')
+    scenario = Scenario(etrago_specs=etrago_specs,
+                        power_flow=(date(2017, 10, 10), date(2017, 10, 13)))
     costs = pd.DataFrame()
     faulty_grids = []
     for dingo_grid in grids:
@@ -62,3 +67,15 @@ if __name__ == '__main__':
             logging.info('Something went wrong.')
 
     costs.to_csv('costs.csv')
+
+
+gens = network.mv_grid.graph.nodes_by_attribute('generator')
+for lv_grid in network.mv_grid.lv_grids:
+    gens.extend(lv_grid.graph.nodes_by_attribute('generator'))
+sum = 0
+for gen in gens:
+    sum += gen.timeseries['p']
+typ = []
+for gen in gens:
+    typ.append(gen.type)
+print(set(typ))
