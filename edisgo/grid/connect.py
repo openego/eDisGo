@@ -23,10 +23,27 @@ def connect_mv_generators(network):
 
     This function searches for unconnected generators in MV grids and connects them.
 
+    It connects
+
+        * generators of voltage level 4
+            * to HV-MV station
+
+        * generators of voltage level 5
+            * with a nom. capacity of <=30 kW to LV loads of type residential
+            * with a nom. capacity of >30 kW and <=100 kW to LV loads of type
+                retail, industrial or agricultural
+            * to the MV-LV station if no appropriate load is available (fallback)
+
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
         The eDisGo container object
+
+    Notes
+    -----
+    Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
+        21a52048f84ec341fe54e0204ac62228a9e8a32a/\
+        ding0/grid/mv_grid/mv_connect.py#L820>`_.
     """
 
     # get params from config
@@ -100,10 +117,27 @@ def connect_lv_generators(network):
 
     This function searches for unconnected generators in all LV grids and connects them.
 
+    It connects
+
+        * generators of voltage level 6
+            * to MV-LV station
+
+        * generators of voltage level 7
+            * with a nom. capacity of <=30 kW to LV loads of type residential
+            * with a nom. capacity of >30 kW and <=100 kW to LV loads of type
+                retail, industrial or agricultural
+            * to the MV-LV station if no appropriate load is available (fallback)
+
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
         The eDisGo container object
+
+    Notes
+    -----
+    Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
+        21a52048f84ec341fe54e0204ac62228a9e8a32a/\
+        ding0/grid/lv_grid/lv_connect.py#L27>`_.
     """
 
     # get predefined random seed and initialize random generator
@@ -143,7 +177,7 @@ def connect_lv_generators(network):
 
         # generate random list (without replacement => unique elements)
         # of loads (retail, industrial, agricultural) to connect genos
-        # (30kW <= P <= 100kW) to.
+        # (30kW < P <= 100kW) to.
         lv_loads_ria = sorted([lv_load for lv_load in lv_loads
                                if any([_ in list(lv_load.consumption.keys())
                                        for _ in ['retail', 'industrial', 'agricultural']])],
@@ -289,7 +323,7 @@ def connect_lv_generators(network):
                                                  log_geno_count_vlevel7 > len(lv_loads)]
 
     # TEMP: DEBUG STUFF
-    print('dsfsdfds')
+    print('debug breakpoint')
 
 
 def _find_nearest_conn_objects(network, node, branches):
@@ -313,6 +347,12 @@ def _find_nearest_conn_objects(network, node, branches):
     :obj:`list` of :obj:`dict`
         List of connection objects (each object is represented by dict with eDisGo object,
         shapely object and distance to node.
+
+    Notes
+    -----
+    Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
+        21a52048f84ec341fe54e0204ac62228a9e8a32a/\
+        ding0/grid/mv_grid/mv_connect.py#L38>`_.
     """
 
     # threshold which is used to determine if 2 objects are on the same position (see below for details on usage)
@@ -389,6 +429,12 @@ def _connect_mv_node(network, node, target_obj):
     -------
     :class:`~.grid.components.Component` or None
         Node that node was connected to
+
+    Notes
+    -----
+    Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
+        21a52048f84ec341fe54e0204ac62228a9e8a32a/\
+        ding0/grid/mv_grid/mv_connect.py#L311>`_.
     """
 
     # get standard equipment

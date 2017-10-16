@@ -36,28 +36,41 @@ def proj2conformal():
                    pyproj.Proj(init='epsg:4326'))  # destination coordinate system
 
 
-def calc_geo_lines_in_buffer(node, mv_grid, radius, radius_inc):
-    """Determines branches in nodes' associated graph that are at least partly within buffer of `radius` from `node`.
-    If there are no nodes, the buffer is successively extended by `radius_inc` until nodes are found.
+def calc_geo_lines_in_buffer(node, grid, radius, radius_inc):
+    """Determines lines in nodes' associated graph that are at least partly
+    within buffer of radius from node. If there are no lines, the buffer is
+    successively extended by radius_inc until lines are found.
 
-    Args:
-        node: origin node (e.g. LVStationDing0 object) with associated shapely object (attribute `geo_data`) in any CRS
-              (e.g. WGS84)
-        radius: buffer radius in m
-        radius_inc: radius increment in m
+    Parameters
+    ----------
+    node : :class:`~.grid.components.Component`
+        Origin node the buffer is created around (e.g. :class:`~.grid.components.Generator`).
+        Node must be a member of grid's graph (grid.graph)
+    grid : :class:`~.grid.grids.Grid`
+        Grid whose lines are searched
+    radius : :obj:`float`
+        Buffer radius in m
+    radius_inc : :obj:`float`
+        Buffer radius increment in m
 
-    Returns:
-        Sorted list of branches (NetworkX branch objects)
+    Returns
+    -------
+    :obj:`list` of :class:`~.grid.components.Line`
+        Sorted (by repr()) list of lines
 
+    Notes
+    -----
+    Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
+        21a52048f84ec341fe54e0204ac62228a9e8a32a/\
+        ding0/tools/geo.py#L53>`_.
     """
-    # TODO: Update docstring
 
     lines = []
 
     while not lines:
         node_shp = transform(proj2equidistant(), node.geom)
         buffer_zone_shp = node_shp.buffer(radius)
-        for line in mv_grid.graph.lines():
+        for line in grid.graph.lines():
             nodes = line['adj_nodes']
             branch_shp = transform(proj2equidistant(), LineString([nodes[0].geom, nodes[1].geom]))
             if buffer_zone_shp.intersects(branch_shp):
@@ -68,20 +81,29 @@ def calc_geo_lines_in_buffer(node, mv_grid, radius, radius_inc):
 
 
 def calc_geo_dist_vincenty(network, node_source, node_target):
-    """Calculates the geodesic distance between `node_source` and `node_target` incorporating the detour factor in
-        config_calc.cfg.
-    Args:
+    """Calculates the geodesic distance between node_source and node_target
+    incorporating the detour factor in config.
+
+    Parameters
+    ----------
     network : :class:`~.grid.network.Network`
         The eDisGo container object
-    node_source:
-        source node (Ding0 object), member of _graph
-    node_target:
-        target node (Ding0 object), member of _graph
+    node_source : :class:`~.grid.components.Component`
+        Node to connect (e.g. :class:`~.grid.components.Generator`)
+    node_target : :class:`~.grid.components.Component`
+        Target node (e.g. :class:`~.grid.components.BranchTee`)
 
-    Returns:
+    Returns
+    -------
+    :obj:`float`
         Distance in m
+
+    Notes
+    -----
+    Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
+        21a52048f84ec341fe54e0204ac62228a9e8a32a/\
+        ding0/tools/geo.py#L84>`_.
     """
-    # TODO: Update docstring
 
     branch_detour_factor = network.config['connect']['branch_detour_factor']
 

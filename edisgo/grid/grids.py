@@ -237,7 +237,7 @@ class Graph(nx.Graph):
         of the in-going tuple (which is defined by the needs of networkX). If
         this changes, the code will break.
 
-        Adapted from `Dingo <https://github.com/openego/dingo/blob/\
+        Adapted from `Ding0 <https://github.com/openego/dingo/blob/\
             ee237e37d4c228081e1e246d7e6d0d431c6dda9e/dingo/core/network/\
             __init__.py>`_.
         """
