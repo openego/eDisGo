@@ -7,6 +7,7 @@ from ..tools.geo import calc_geo_dist_vincenty, \
 
 import networkx as nx
 import random
+import pandas as pd
 
 import os
 if not 'READTHEDOCS' in os.environ:
@@ -114,10 +115,24 @@ def connect_lv_generators(network):
     seed = int(network.config['random']['seed'])
     random.seed(a=seed)
 
+    # get standard equipment
+    std_line_type = network.config['grid_expansion']['std_mv_line']
+    std_line_kind = 'cable'
+
+    # TEMP: DEBUG STUFF
+    lv_grid_stats = pd.DataFrame(columns=('lv_grid',
+                                          'load_count',
+                                          'geno_count',
+                                          'more_genos_than_loads')
+                                 )
+
     # iterate over all LV grids
     for lv_grid in network.mv_grid.lv_grids:
 
         lv_loads = lv_grid.graph.nodes_by_attribute('load')
+
+        # TEMP: DEBUG STUFF
+        geno_count_vlevel7 = 0
 
         # generate random list (without replacement => unique elements)
         # of loads (residential) to connect genos (P <= 30kW) to.
@@ -148,27 +163,31 @@ def connect_lv_generators(network):
         for geno in sorted(lv_grid.graph.nodes_by_attribute('generator'), key=lambda x: repr(x)):
             if nx.is_isolate(lv_grid.graph, geno):
 
+                lv_station = lv_grid.station
+
                 # generator is of v_level 6 -> connect to LV station
-                if generator.v_level == 6:
-                    lv_station = lv_grid_district.lv_grid.station()
+                if geno.v_level == 6:
 
-                    branch_length = calc_geo_dist_vincenty(generator, lv_station)
-                    branch_type = cable_type(
-                        generator.capacity / (cable_lf * cos_phi_gen),
-                        0.4,
-                        lv_grid_district.lv_grid.network.static_data['LV_cables'])
+                    line_length = calc_geo_dist_vincenty(network=network,
+                                                         node_source=geno,
+                                                         node_target=lv_station)
 
-                    branch = BranchDing0(length=branch_length,
-                                         kind='cable',
-                                         type=branch_type)
+                    line = Line(id=random.randint(10 ** 8, 10 ** 9),
+                                length=line_length / 1e3,
+                                quantity=1,
+                                kind=std_line_kind,
+                                type=std_line_type)
 
-                    graph.add_edge(generator, lv_station, branch=branch)
+                    lv_grid.graph.add_edge(geno,
+                                           lv_station,
+                                           line=line,
+                                           type=line)
 
                 # generator is of v_level 7 -> assign geno to load
-                elif generator.v_level == 7:
-
+                elif geno.v_level == 7:
+                    geno_count_vlevel7 += 1
                     # connect genos with P <= 30kW to residential loads, if available
-                    if (generator.capacity <= 30) and (lv_loads_res_rnd is not None):
+                    if (geno.nominal_capacity <= 30) and (lv_loads_res_rnd is not None):
                         if len(lv_loads_res_rnd) > 0:
                             lv_load = lv_loads_res_rnd.pop()
                         # if random load list is empty, create new one
@@ -179,11 +198,11 @@ def connect_lv_generators(network):
                             lv_load = lv_loads_res_rnd.pop()
 
                         # get cable distributor of building
-                        lv_conn_target = graph.neighbors(lv_load)[0]
+                        lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
 
                     # connect genos with 30kW <= P <= 100kW to residential loads
                     # to retail, industrial, agricultural loads, if available
-                    elif (generator.capacity > 30) and (lv_loads_ria_rnd is not None):
+                    elif (geno.nominal_capacity > 30) and (lv_loads_ria_rnd is not None):
                         if len(lv_loads_ria_rnd) > 0:
                             lv_load = lv_loads_ria_rnd.pop()
                         # if random load list is empty, create new one
@@ -194,31 +213,37 @@ def connect_lv_generators(network):
                             lv_load = lv_loads_ria_rnd.pop()
 
                         # get cable distributor of building
-                        lv_conn_target = graph.neighbors(lv_load)[0]
+                        lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
 
                     # fallback: connect to station
                     else:
-                        lv_conn_target = lv_grid_district.lv_grid.station()
+                        lv_conn_target = lv_grid.station
 
                         logger.warning(
                             'No valid conn. target found for {}.'
                             'Connected to {}.'.format(
-                                repr(generator),
+                                repr(geno),
                                 repr(lv_conn_target)
-                            ))
+                            )
+                        )
 
-                    # determine appropriate type of cable
-                    branch_type = cable_type(
-                        generator.capacity / (cable_lf * cos_phi_gen),
-                        0.4,
-                        lv_grid_district.lv_grid.network.static_data['LV_cables'])
+                    line = Line(id=random.randint(10 ** 8, 10 ** 9),
+                                length=1,
+                                quantity=1,
+                                kind=std_line_kind,
+                                type=std_line_type)
 
-                    # connect to cable dist. of building
-                    branch = BranchDing0(length=1,
-                                         kind='cable',
-                                         type=branch_type)
+                    lv_grid.graph.add_edge(geno,
+                                           lv_station,
+                                           line=line,
+                                           type=line)
 
-                    graph.add_edge(generator, lv_conn_target, branch=branch)
+        lv_grid_stats.loc[len(lv_grid_stats)] = [repr(lv_grid),
+                                                 len(lv_loads),
+                                                 geno_count_vlevel7,
+                                                 geno_count_vlevel7 > len(lv_loads)]
+
+    print('dsfsdfds')
 
 
 def _find_nearest_conn_objects(network, node, branches):
@@ -320,6 +345,7 @@ def _connect_mv_node(network, node, target_obj):
         Node that node was connected to
     """
 
+    # get standard equipment
     std_line_type = network.config['grid_expansion']['std_mv_line']
     std_line_kind = 'cable'
 

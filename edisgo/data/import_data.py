@@ -1386,7 +1386,7 @@ def _import_genos_from_oedb(network):
                                 type=row['generation_type'],
                                 subtype=row['generation_subtype'],
                                 v_level=int(row['voltage_level']),
-                                geom=geom)
+                                geom=wkt_loads(geom))
 
                 # TEMP: REMOVE MVLV SUBST ID FOR TESTING
                 #row['mvlv_subst_id'] = None
