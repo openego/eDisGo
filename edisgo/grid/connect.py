@@ -200,7 +200,7 @@ def connect_lv_generators(network):
                             lv_load = lv_loads_res_rnd.pop()
 
                         # check if there's an existing generator connected to the load
-                        # if, so select next load. If no load is available, connect to station.
+                        # if so, select next load. If no load is available, connect to station.
                         while any([isinstance(_, Generator)
                                    for _ in lv_grid.graph.neighbors(
                                 lv_grid.graph.neighbors(lv_load)[0])]):
@@ -234,7 +234,7 @@ def connect_lv_generators(network):
                             lv_load = lv_loads_ria_rnd.pop()
 
                         # check if there's an existing generator connected to the load
-                        # if, so select next load. If no load is available, connect to station.
+                        # if so, select next load. If no load is available, connect to station.
                         while any([isinstance(_, Generator)
                                    for _ in lv_grid.graph.neighbors(
                                 lv_grid.graph.neighbors(lv_load)[0])]):
