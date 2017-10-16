@@ -83,7 +83,7 @@ def connect_mv_generators(network):
 
                 # get branches within a the predefined radius `generator_buffer_radius`
                 branches = calc_geo_lines_in_buffer(node=geno,
-                                                    mv_grid=network.mv_grid,
+                                                    grid=network.mv_grid,
                                                     radius=buffer_radius,
                                                     radius_inc=buffer_radius_inc)
 

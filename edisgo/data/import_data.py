@@ -562,7 +562,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
 
                     # connect generator to MV station
                     line = Line(id='line_aggr_generator_vlevel_{v_level}_'
-                                '{type}_{subtype}'.format(
+                                '{subtype}'.format(
                                  v_level=v_level,
                                  subtype=subtype),
                                  type=aggr_line_type,
