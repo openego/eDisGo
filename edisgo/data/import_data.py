@@ -1132,6 +1132,14 @@ def _import_genos_from_oedb(network):
                 log_geno_count += 1
                 geno_existing.nominal_capacity = row['electrical_capacity']
 
+                # check if cap=0 (this may happen if dp is buggy)
+                if row['electrical_capacity'] <= 0:
+                    geno_existing.grid.graph.remove_node(geno_existing)
+                    logger.warning('Capacity of generator {} is 0, generator removed. '
+                                   'Check your data source.'
+                                   .format(repr(geno_existing))
+                                   )
+
         logger.debug('Capacities of {} of {} existing generators updated ({} kW).'
                      .format(str(log_geno_count),
                              str(len(generators_mv_existing) - log_geno_count),
