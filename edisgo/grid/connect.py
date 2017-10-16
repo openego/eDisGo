@@ -185,7 +185,9 @@ def connect_lv_generators(network):
 
                 # generator is of v_level 7 -> assign geno to load
                 elif geno.v_level == 7:
+                    # TEEMP: DEBUG STUFF
                     geno_count_vlevel7 += 1
+
                     # connect genos with P <= 30kW to residential loads, if available
                     if (geno.nominal_capacity <= 30) and (lv_loads_res_rnd is not None):
                         if len(lv_loads_res_rnd) > 0:
@@ -238,6 +240,7 @@ def connect_lv_generators(network):
                                            line=line,
                                            type=line)
 
+        # TEEMP: DEBUG STUFF
         lv_grid_stats.loc[len(lv_grid_stats)] = [repr(lv_grid),
                                                  len(lv_loads),
                                                  geno_count_vlevel7,
