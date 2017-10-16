@@ -1,8 +1,13 @@
 import os
+import logging
+import pandas as pd
+from math import acos, tan
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString
+
 from .grids import LVGrid, MVGrid
-from math import acos, tan
+
+logger = logging.getLogger('edisgo')
 
 
 class Component:
@@ -257,10 +262,21 @@ class Generator(Component):
                 q_factor = tan(acos(
                     self.grid.network.scenario.parameters.pfac_lv_gen))
 
-            if self.type in self.grid.network.scenario.timeseries.generation.keys():
-                ts = self.grid.network.scenario.timeseries.generation[self.type].copy()
+            #ToDo: Typ muss in dict sein
+
+            if self.grid.network.scenario.mode == 'worst-case':
+                ts = self.grid.network.scenario.timeseries.generation.copy()
             else:
-                ts = self.grid.network.scenario.timeseries.generation['all_other'].copy()
+                try:
+                    #ToDo: lieber nicht kopieren?
+                    ts = pd.DataFrame()
+                    ts['p'] = self.grid.network.scenario.timeseries.generation[
+                        self.type]#.copy()
+                except KeyError:
+                    logger.exception("No timeseries for type {} given.".format(
+                        self.type))
+                    raise
+
             ts['q'] = (ts['p'] * q_factor)
 
             # scale feedin/load

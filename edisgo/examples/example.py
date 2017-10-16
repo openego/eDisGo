@@ -34,13 +34,35 @@ if __name__ == '__main__':
         if file.endswith(".pkl"):
             grids.append(file)
 
-    timeindex = pd.date_range('12/4/2011', periods=1, freq='H')
-    etrago_specs = ETraGoSpecs(
-        dispatch={'all_other': pd.DataFrame({'p': 1}, index=timeindex)})
-
+    # worst-case scenario
     # scenario = Scenario(power_flow='worst-case')
+    # time-range empty tuple
+    # timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
+    # etrago_specs = ETraGoSpecs(
+    #     dispatch=pd.DataFrame({'biomass': 1, 'solar': 1,
+    #                            'gas': 1, 'wind': 1}, index=timeindex))
+    # scenario = Scenario(etrago_specs=etrago_specs, power_flow=())
+    # time-range non-empty tuple
+    power_flow = (date(2017, 10, 10), date(2017, 10, 13))
+    timeindex = pd.date_range(power_flow[0], power_flow[1], freq='H')
+    etrago_specs = ETraGoSpecs(
+        dispatch=pd.DataFrame({'biomass': [1] * len(timeindex),
+                               'solar': [1] * len(timeindex),
+                               'gas': [1] * len(timeindex),
+                               'wind': [1] * len(timeindex)}, index=timeindex),
+        capacity=pd.DataFrame({'biomass': 1846.5,
+                               'solar': 7131,
+                               'gas': 1564,
+                               'wind': 10}, index=['cap']),
+        load=pd.DataFrame({'residential': [1] * len(timeindex),
+                           'retail': [1] * len(timeindex),
+                           'industrial': [1] * len(timeindex),
+                           'agricultural': [1] * len(timeindex)},
+                          index=timeindex)
+    )
     scenario = Scenario(etrago_specs=etrago_specs,
                         power_flow=(date(2017, 10, 10), date(2017, 10, 13)))
+
     costs = pd.DataFrame()
     faulty_grids = []
     for dingo_grid in grids:

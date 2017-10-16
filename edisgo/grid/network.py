@@ -350,6 +350,8 @@ class Scenario:
     ----------
     _name : :obj:`str`
         Scenario name (e.g. "feedin case weather 2011")
+    _mode : :obj:`str`
+        'worst-case' or 'time-range'
     _network : :class:~.grid.network.Network`
         Network which this scenario is associated with
     _timeseries : :obj:`list` of :class:`~.grid.grids.TimeSeries`
@@ -378,15 +380,14 @@ class Scenario:
         self._parameters = Parameters(self, **kwargs)
 
         # populate timeseries attribute
+        # ToDo: als funktion auslagern
         if isinstance(power_flow, str):
             if power_flow != 'worst-case':
                 raise ValueError(
                     "{} is not a valid specification for type of power flow "
                     "analysis. Try 'worst-case'".format(power_flow))
             else:
-                # if etrago specifications are given give out warning that
-                # dispatch specifications are overwritten when power_flow is
-                # set to worst-case
+                self._mode = 'worst-case'
                 if self._etrago_specs:
                     logger.warning("Dispatch specifications from etrago are "
                                    "overwritten when power_flow is set to "
@@ -394,25 +395,31 @@ class Scenario:
                 if self._timeseries:
                     logger.warning("Timeseries are overwritten when "
                                    "power_flow is set to 'worst-case'.")
-                #ToDo: date?
                 self._timeseries = TimeSeries()
-                timeindex = pd.date_range('12/4/2011', periods=1, freq='H')
-                self._timeseries.timeindex = timeindex
-                self._timeseries.generation = worst_case_generation_ts(
-                    timeindex)
-                self._timeseries.load = self.set_load(mode='worst-case')
+                self._timeseries.generation = \
+                    self._timeseries.worst_case_generation_ts()
+                #ToDo: load funktion auch verschieben?
+                self._timeseries.load = self._timeseries.set_load(mode='worst-case')
         elif isinstance(power_flow, tuple):
             if self._etrago_specs:
-                if self._etrago_specs.dispatch:
+                if self._etrago_specs.dispatch is not None:
+                    self._mode = 'time-range'
                     self._timeseries = TimeSeries()
-                    timeindex = pd.date_range(
-                        power_flow[0], power_flow[1], freq='H')
-                    self._timeseries.timeindex = timeindex
-                    #ToDo: evtl. anpassen wenn etrago input bekannt ist
-                    #ToDo: select time range
-                    self._timeseries.generation = self._etrago_specs.dispatch
-                    #ToDo: wo kommen load timeseries her?
-                    #self._timeseries.load = self.set_load(mode='time-range')
+                    if not power_flow:
+                        self._timeseries.timeindex = \
+                            self._etrago_specs.dispatch.index
+                        self._timeseries.generation = \
+                            self._etrago_specs.dispatch
+                        self._timeseries.load = self._etrago_specs.load
+                    else:
+                        self._timeseries.timeindex = pd.date_range(
+                            power_flow[0], power_flow[1], freq='H')
+                        self._timeseries.generation = \
+                            self._etrago_specs.dispatch.loc[
+                                self._timeseries.timeindex]
+                        self._timeseries.load = self._etrago_specs.load.loc[
+                                self._timeseries.timeindex]
+
                     #ToDo: prüfen, ob capacity in etrago und edisgo gleich sind
                 else:
                     #ToDo: Wollen wir timeseries zulassen, wenn etrago specs gegeben sind? Dann müssen wir das hier noch prüfen
@@ -423,7 +430,7 @@ class Scenario:
                              "series for load and generation.")
 
         # Set timeindex of Timeseries()
-        self.timeseries.timeindex = timeindex
+        #self.timeseries.timeindex = timeindex
 
     @property
     def timeseries(self):
@@ -432,6 +439,14 @@ class Scenario:
     @property
     def parameters(self):
         return self._parameters
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @property
+    def etrago_specs(self):
+        return self._etrago_specs
 
     def __repr__(self):
         return 'Scenario ' + self._name
@@ -602,30 +617,23 @@ class TimeSeries:
     """Defines an eDisGo time series
 
     Contains time series for loads (sector-specific) and generators
-    (technology-specific), e.g. tech. solar, sub-tech. rooftop.
+    (technology-specific), e.g. tech. solar.
 
     Attributes
     ----------
-    _generation : :obj:`dict` of :obj:`dict` of :pandas:`pandas.Series<series>`
-        Time series of active power of generators for technologies and
-        sub-technologies, format:
-
-        .. code-block:: python
-
-            {tech_1: {
-                sub-tech_1_1: timeseries_1_1,
-                ...,
-                sub-tech_1_n: timeseries_1_n},
-                 ...,
-            tech_m: {
-                sub-tech_m_1: timeseries_m_1,
-                ...,
-                sub-tech_m_n: timeseries_m_n}
-            }
+    _generation : :pandas:`pandas.DataFrame<dataframe>`
+        Time series of active power of generators. Columns represent generator
+        type:
+         * 'solar'
+         * 'wind'
+         * 'coal'
+         * ...
+        In case of worst-case analysis generator type is distinguished so that
+        the DataFrame contains only one column for all generators.
 
     _load : :pandas:`pandas.DataFrame<dataframe>`
-        Time series of active power of (cumulative) loads. This index is given
-        by :meth:`timeindex`. Columns represent load sectors:
+        Time series of active power of (cumulative) loads. Columns represent
+        load sectors:
          * 'residential'
          * 'retail'
          * 'industrial'
@@ -680,19 +688,6 @@ class TimeSeries:
     def load(self, load_timeseries):
         self._load = load_timeseries
 
-    def set_load(self, mode=None):
-        """
-        Assign load data according to provided case
-        """
-        # ToDo: docstring
-        if mode == 'worst-case':
-            return worst_case_load_ts(self.timeindex)
-        elif mode == 'time-range':
-            return
-        else:
-            raise ValueError("Provide proper mode of analysis: 'worst-case | "
-                             "'time-range'")
-
     @property
     def timeindex(self):
         """
@@ -712,6 +707,36 @@ class TimeSeries:
     def timeindex(self, time_range):
         self._timeindex = time_range
 
+    def worst_case_generation_ts(self):
+        """
+        Define worst case generation time series.
+
+        Parameters
+        ----------
+        network : :class:~.grid.network.Network`
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Normalized active power (1 kW)
+        """
+        # set random timeindex
+        self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
+        return pd.DataFrame({'p': 1}, index=self.timeindex)
+
+    def set_load(self, mode=None):
+        """
+        Assign load data according to provided case
+        """
+        # ToDo: docstring
+        if mode == 'worst-case':
+            return worst_case_load_ts(self.timeindex)
+        elif mode == 'time-range':
+            return
+        else:
+            raise ValueError("Provide proper mode of analysis: 'worst-case | "
+                             "'time-range'")
+
 
 class ETraGoSpecs:
     """Defines an eTraGo object used in project open_eGo
@@ -730,30 +755,33 @@ class ETraGoSpecs:
     _battery_active_power : :pandas:`pandas.Series<series>`
         Time series of active power the (virtual) battery (at Transition Point)
         is charged (negative) or discharged (positive) with
-    _dispatch : :obj:`dict` of :obj:`dict` of :pandas:`pandas.Series<series>`
-        Time series of actual dispatch and a time series of power generation
-        potential (without curtailment) for technologies
-        and sub-technologies, format::
-
-            {
-                tech_1: {
-                    sub-tech_1_1:
-                        timeseries_1_1,
-                        ...,
-                    sub-tech_1_n:
-                    timeseries_1_n
-                    },
-                ...,
-                tech_m: {
-                    sub-tech_m_1:
-                        timeseries_m_1,
-                        ...,
-                    sub-tech_m_n:
-                        timeseries_m_n
-                        }
-                 }
-
-        .. TODO: Is this really an active power value or a ratio (%) ?
+    _dispatch : :pandas:`pandas.DataFrame<dataframe>`
+        Time series of active power for each type of generator normalized with
+        corresponding capacity given in `capacity`.
+        Columns represent generator type:
+         * 'solar'
+         * 'wind'
+         * 'coal'
+         * ...
+    _capacity : :pandas:`pandas.DataFrame<dataframe>`
+        Total capacity of each generator type in MW. Columns represent
+        generator type.
+    _load : :pandas:`pandas.DataFrame<dataframe>`
+        Time series of normalized active power of (cumulative) loads normalized
+        by corresponding annual load given in `annual_load`.
+        Columns represent load sectors:
+         * 'residential'
+         * 'retail'
+         * 'industrial'
+         * 'agricultural'
+    _annual_load : :pandas:`pandas.DataFrame<dataframe>`
+        Annual load of each sector in MWh. Columns represent load sectors.
+    _curtailment : :pandas:`pandas.DataFrame<dataframe>`
+        Time series of curtailed power for wind and solar generators
+        normalized with corresponding capacity given in `capacity`.
+        Columns represent generator type:
+         * 'solar'
+         * 'wind'
     """
 
     def __init__(self, **kwargs):
@@ -762,10 +790,25 @@ class ETraGoSpecs:
         self._battery_capacity = kwargs.get('battery_capacity', None)
         self._battery_active_power = kwargs.get('battery_active_power', None)
         self._dispatch = kwargs.get('dispatch', None)
+        self._capacity = kwargs.get('capacity', None)
+        self._load = kwargs.get('load', None)
+        self._annual_load = kwargs.get('annual_load', None)
 
     @property
     def dispatch(self):
         return self._dispatch
+
+    @property
+    def capacity(self):
+        return self._capacity
+
+    @property
+    def load(self):
+        return self._load
+
+    @property
+    def annual_load(self):
+        return self._annual_load
 
 
 class Results:
@@ -1116,23 +1159,6 @@ class Results:
         return self.pfa_v_mag_pu[level][labels_included]
 
 
-def worst_case_generation_ts(timeindex):
-    """
-    Define worst case generation time series
-
-    Parameters
-    ----------
-    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
-            Time range of power flow analysis
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Normalized active power (1 kW)
-    """
-    return {'all_other': pd.DataFrame({'p': 1}, index=timeindex)}
-
-
 def worst_case_load_ts(timeindex):
     """
     Define worst case load time series
@@ -1147,6 +1173,7 @@ def worst_case_load_ts(timeindex):
     :pandas:`pandas.DataFrame<dataframe>`
         Normalized active power (1 kW)
     """
+    #ToDo: besser auch als dictionary wie bei generation?
     return pd.DataFrame({'residential': 1,
                          'retail': 1,
                          'industrial': 1,
