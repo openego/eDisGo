@@ -181,7 +181,7 @@ class Network:
 
         # call the importer
         import_from_ding0(file=file,
-			  network=network)
+                          network=network)
 
         return network
 
