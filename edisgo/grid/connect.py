@@ -131,8 +131,8 @@ def connect_lv_generators(network):
 
         lv_loads = lv_grid.graph.nodes_by_attribute('load')
 
-        # TEMP: DEBUG STUFF
-        geno_count_vlevel7 = 0
+        # counter for genos in v_level 7
+        log_geno_count_vlevel7 = 0
 
         # generate random list (without replacement => unique elements)
         # of loads (residential) to connect genos (P <= 30kW) to.
@@ -185,8 +185,8 @@ def connect_lv_generators(network):
 
                 # generator is of v_level 7 -> assign geno to load
                 elif geno.v_level == 7:
-                    # TEEMP: DEBUG STUFF
-                    geno_count_vlevel7 += 1
+                    # counter for genos in v_level 7
+                    log_geno_count_vlevel7 += 1
 
                     # connect genos with P <= 30kW to residential loads, if available
                     if (geno.nominal_capacity <= 30) and (lv_loads_res_rnd is not None):
@@ -240,11 +240,20 @@ def connect_lv_generators(network):
                                            line=lv_conn_target,
                                            type=line)
 
-        # TEEMP: DEBUG STUFF
+        # warn if there're more genos than loads in LV grid
+        if log_geno_count_vlevel7 > len(lv_loads):
+            logger.warning('The count of newly connected generators ({}) '
+                           'exceeds the count of loads ({}) in LV grid {}.'
+                           .format(str(log_geno_count_vlevel7),
+                                   str(len(lv_loads)),
+                                   repr(lv_grid)
+                                   )
+                           )
+        # TEMP: DEBUG STUFF
         lv_grid_stats.loc[len(lv_grid_stats)] = [repr(lv_grid),
                                                  len(lv_loads),
-                                                 geno_count_vlevel7,
-                                                 geno_count_vlevel7 > len(lv_loads)]
+                                                 log_geno_count_vlevel7,
+                                                 log_geno_count_vlevel7 > len(lv_loads)]
 
     print('dsfsdfds')
 
