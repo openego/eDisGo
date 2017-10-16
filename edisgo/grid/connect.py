@@ -237,7 +237,7 @@ def connect_lv_generators(network):
 
                     lv_grid.graph.add_edge(geno,
                                            lv_station,
-                                           line=line,
+                                           line=lv_conn_target,
                                            type=line)
 
         # TEEMP: DEBUG STUFF
