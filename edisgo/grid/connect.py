@@ -199,7 +199,26 @@ def connect_lv_generators(network):
                                                    )
                             lv_load = lv_loads_res_rnd.pop()
 
-                        # get cable distributor of building
+                        # check if there's an existing generator connected to the load
+                        # if, so select next load. If no load is available, connect to station.
+                        while any([isinstance(_, Generator)
+                                   for _ in lv_grid.graph.neighbors(
+                                lv_grid.graph.neighbors(lv_load)[0])]):
+                            if len(lv_loads_res_rnd) > 0:
+                                lv_load = lv_loads_res_rnd.pop()
+                            else:
+                                lv_conn_target = lv_grid.station
+
+                                logger.warning(
+                                    'No valid conn. target found for {}. '
+                                    'Connected to {}.'.format(
+                                        repr(geno),
+                                        repr(lv_conn_target)
+                                    )
+                                )
+                                break
+
+                                # get cable distributor of building
                         lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
 
                     # connect genos with 30kW <= P <= 100kW to residential loads
@@ -214,6 +233,25 @@ def connect_lv_generators(network):
                                                    )
                             lv_load = lv_loads_ria_rnd.pop()
 
+                        # check if there's an existing generator connected to the load
+                        # if, so select next load. If no load is available, connect to station.
+                        while any([isinstance(_, Generator)
+                                   for _ in lv_grid.graph.neighbors(
+                                lv_grid.graph.neighbors(lv_load)[0])]):
+                            if len(lv_loads_ria_rnd) > 0:
+                                lv_load = lv_loads_ria_rnd.pop()
+                            else:
+                                lv_conn_target = lv_grid.station
+
+                                logger.warning(
+                                    'No valid conn. target found for {}. '
+                                    'Connected to {}.'.format(
+                                        repr(geno),
+                                        repr(lv_conn_target)
+                                    )
+                                )
+                                break
+
                         # get cable distributor of building
                         lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
 
@@ -222,7 +260,7 @@ def connect_lv_generators(network):
                         lv_conn_target = lv_grid.station
 
                         logger.warning(
-                            'No valid conn. target found for {}.'
+                            'No valid conn. target found for {}. '
                             'Connected to {}.'.format(
                                 repr(geno),
                                 repr(lv_conn_target)
@@ -242,7 +280,7 @@ def connect_lv_generators(network):
 
         # warn if there're more genos than loads in LV grid
         if log_geno_count_vlevel7 > len(lv_loads):
-            logger.warning('The count of newly connected generators ({}) '
+            logger.warning('The count of newly connected generators in voltage level 7 ({}) '
                            'exceeds the count of loads ({}) in LV grid {}.'
                            .format(str(log_geno_count_vlevel7),
                                    str(len(lv_loads)),
@@ -255,6 +293,7 @@ def connect_lv_generators(network):
                                                  log_geno_count_vlevel7,
                                                  log_geno_count_vlevel7 > len(lv_loads)]
 
+    # TEMP: DEBUG STUFF
     print('dsfsdfds')
 
 
