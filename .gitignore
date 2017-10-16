@@ -25,3 +25,8 @@ eDisGo.egg-info/
 
 # exclude directories
 /edisgo/examples/edisgo2pypsa_export/*
+/edisgo/examples/data/
+
+# exclude check scripts
+/edisgo/examples/compare_graphs.py
+/edisgo/examples/compare_pypsa_network.py

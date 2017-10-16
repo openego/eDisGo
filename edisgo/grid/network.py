@@ -1,12 +1,12 @@
-import edisgo
-from edisgo.tools import config
-from edisgo.data.import_data import import_from_ding0, import_generators
-from edisgo.flex_opt.costs import grid_expansion_costs
-
 from os import path
 import pandas as pd
-from edisgo.tools import pypsa_io
-from math import sqrt, acos, tan
+from math import sqrt
+
+import edisgo
+from edisgo.tools import config, pypsa_io
+from edisgo.data.import_data import import_from_ding0, import_generators
+from edisgo.flex_opt.costs import grid_expansion_costs
+from edisgo.flex_opt.reinforce_grid import reinforce_grid
 
 
 class Network:
@@ -180,7 +180,8 @@ class Network:
         network = cls(**kwargs)
 
         # call the importer
-        import_from_ding0(file=file, network=network)
+        import_from_ding0(file=file,
+			  network=network)
 
         return network
 
@@ -253,14 +254,11 @@ class Network:
         else:
             raise ValueError("Power flow analysis did not converge.")
 
-
-    def reinforce(self):
-        """Reinforces the grid
-
-        TBD
-
-        """
-        raise NotImplementedError
+    def reinforce(self, **kwargs):
+        """Reinforces the grid and calculates grid expansion costs"""
+        reinforce_grid(
+            self, max_while_iterations=kwargs.get('max_while_iterations', 10))
+        self.results.grid_expansion_costs = grid_expansion_costs(self)
 
     @property
     def id(self):
@@ -370,6 +368,17 @@ class Scenario:
         To specify the time range for a power flow analysis provide the start
         and end time as 2-tuple of :obj:`datetime`
 
+    Optional Parameters
+    --------------------
+    pfac_mv_gen : :obj:`float`
+        Power factor for medium voltage generators
+    pfac_mv_load : :obj:`float`
+        Power factor for medium voltage loads
+    pfac_lv_gen : :obj:`float`
+        Power factor for low voltage generators
+    pfac_lv_load : :obj:`float`
+        Power factor for low voltage loads
+
     Attributes
     ----------
     _name : :obj:`str`
@@ -381,14 +390,9 @@ class Scenario:
     _etrago_specs : :class:`~.grid.grids.ETraGoSpecs`
         Specifications which are to be fulfilled at transition point (HV-MV
         substation)
-    _pfac_mv_gen : :obj:`float`
-        Power factor for medium voltage generators
-    _pfac_mv_load : :obj:`float`
-        Power factor for medium voltage loads
-    _pfac_lv_gen : :obj:`float`
-        Power factor for low voltage generators
-    _pfac_lv_load : :obj:`float`
-        Power factor for low voltage loads
+    _parameters : :class:`~.grid.network.Parameters`
+        Parameters for power flow analysis and grid expansion.
+
     """
 
     def __init__(self, power_flow, **kwargs):
@@ -396,10 +400,7 @@ class Scenario:
         self._network = kwargs.get('network', None)
         self._timeseries = kwargs.get('timeseries', None)
         self._etrago_specs = kwargs.get('etrago_specs', None)
-        self._pfac_mv_gen = kwargs.get('pfac_mv_gen', None)
-        self._pfac_mv_load = kwargs.get('pfac_mv_load', None)
-        self._pfac_lv_gen = kwargs.get('pfac_lv_gen', None)
-        self._pfac_lv_load = kwargs.get('pfac_lv_load', None)
+        self._parameters = Parameters(self, **kwargs)
 
         if isinstance(power_flow, str):
             if power_flow != 'worst-case':
@@ -420,47 +421,172 @@ class Scenario:
         return self._timeseries
 
     @property
+    def parameters(self):
+        return self._parameters
+
+    def __repr__(self):
+        return 'Scenario ' + self._name
+
+
+class Parameters:
+    """
+    Contains model parameters for power flow analysis and grid expansion.
+
+    Attributes
+    ----------
+    _pfac_mv_gen : :obj:`float`
+        Power factor for medium voltage generators
+    _pfac_mv_load : :obj:`float`
+        Power factor for medium voltage loads
+    _pfac_lv_gen : :obj:`float`
+        Power factor for low voltage generators
+    _pfac_lv_load : :obj:`float`
+        Power factor for low voltage loads
+    _hv_mv_trafo_offset : :obj:`float`
+        Offset at substation
+    _hv_mv_trafo_control_deviation : :obj:`float`
+        Voltage control deviation at substation
+    _load_factor_hv_mv_transformer : :obj:`float`
+        Allowed load of transformers at substation, retrieved from config
+        files depending on analyzed case (feed-in or load).
+    _load_factor_mv_lv_transformer : :obj:`float`
+        Allowed load of transformers at distribution substation, retrieved from
+        config files depending on analyzed case (feed-in or load).
+    _load_factor_mv_line : :obj:`float`
+        Allowed load of MV line, retrieved from config files depending on
+        analyzed case (feed-in or load).
+    _load_factor_lv_line : :obj:`float`
+        Allowed load of LV line, retrieved from config files depending on
+        analyzed case (feed-in or load).
+    _mv_max_v_deviation : :obj:`float`
+        Allowed voltage deviation in MV grid, retrieved from config files
+        depending on analyzed case (feed-in or load).
+    _lv_max_v_deviation : :obj:`float`
+        Allowed voltage deviation in LV grid, retrieved from config files
+        depending on analyzed case (feed-in or load).
+
+    """
+
+    def __init__(self, scenario_class, **kwargs):
+        self._scenario = scenario_class
+        self._pfac_mv_gen = kwargs.get('pfac_mv_gen', None)
+        self._pfac_mv_load = kwargs.get('pfac_mv_load', None)
+        self._pfac_lv_gen = kwargs.get('pfac_lv_gen', None)
+        self._pfac_lv_load = kwargs.get('pfac_lv_load', None)
+        self._hv_mv_transformer_offset = None
+        self._hv_mv_transformer_control_deviation = None
+        self._load_factor_hv_mv_transformer = None
+        self._load_factor_mv_lv_transformer = None
+        self._load_factor_mv_line = None
+        self._load_factor_lv_line = None
+        self._mv_max_v_deviation = None
+        self._lv_max_v_deviation = None
+
+    @property
+    def scenario(self):
+        return self._scenario
+
+    @property
     def pfac_mv_gen(self):
         if not self._pfac_mv_gen:
             self._pfac_mv_gen = float(
-                self.network.config['scenario']['pfac_mv_gen'])
-
+                self.scenario.network.config['scenario']['pfac_mv_gen'])
         return self._pfac_mv_gen
     
     @property
     def pfac_mv_load(self):
         if not self._pfac_mv_load:
             self._pfac_mv_load = float(
-                self.network.config['scenario']['pfac_mv_load'])
-
+                self.scenario.network.config['scenario']['pfac_mv_load'])
         return self._pfac_mv_load
     
     @property
     def pfac_lv_gen(self):
         if not self._pfac_lv_gen:
             self._pfac_lv_gen = float(
-                self.network.config['scenario']['pfac_lv_gen'])
-
+                self.scenario.network.config['scenario']['pfac_lv_gen'])
         return self._pfac_lv_gen
     
     @property
     def pfac_lv_load(self):
         if not self._pfac_lv_load:
             self._pfac_lv_load = float(
-                self.network.config['scenario']['pfac_lv_load'])
-
+                self.scenario.network.config['scenario']['pfac_lv_load'])
         return self._pfac_lv_load
 
     @property
-    def network(self):
-        return self._network
+    def hv_mv_transformer_offset(self):
+        if not self._hv_mv_transformer_offset:
+            self._hv_mv_transformer_offset = float(
+                self.scenario.network.config['grid_expansion'][
+                    'hv_mv_trafo_offset'])
+        return self._hv_mv_transformer_offset
 
-    @network.setter
-    def network(self, network):
-        self._network = network
+    @property
+    def hv_mv_transformer_control_deviation(self):
+        if not self._hv_mv_transformer_control_deviation:
+            self._hv_mv_transformer_control_deviation = float(
+                self.scenario.network.config['grid_expansion'][
+                    'hv_mv_trafo_control_deviation'])
+        return self._hv_mv_transformer_control_deviation
 
-    def __repr__(self):
-        return 'Scenario ' + self._name
+    @property
+    # ToDo: for now only feed-in case is considered
+    def load_factor_hv_mv_transformer(self):
+        if not self._load_factor_hv_mv_transformer:
+            self._load_factor_hv_mv_transformer = float(
+                self.scenario.network.config['grid_expansion'][
+                    'load_factor_hv_mv_transformer'])
+        return self._load_factor_hv_mv_transformer
+
+    @property
+    # ToDo: for now only feed-in case is considered
+    def load_factor_mv_lv_transformer(self):
+        if not self._load_factor_mv_lv_transformer:
+            self._load_factor_mv_lv_transformer = float(
+                self.scenario.network.config['grid_expansion'][
+                    'load_factor_mv_lv_transformer'])
+        return self._load_factor_mv_lv_transformer
+
+    @property
+    # ToDo: for now only feed-in case is considered
+    def load_factor_mv_line(self):
+        if not self._load_factor_mv_line:
+            self._load_factor_mv_line = float(
+                self.scenario.network.config['grid_expansion'][
+                    'load_factor_mv_line'])
+        return self._load_factor_mv_line
+
+    @property
+    # ToDo: for now only feed-in case is considered
+    def load_factor_lv_line(self):
+        if not self._load_factor_lv_line:
+            self._load_factor_lv_line = float(
+                self.scenario.network.config['grid_expansion'][
+                    'load_factor_lv_line'])
+        return self._load_factor_lv_line
+
+    @property
+    # ToDo: for now only voltage deviation for the combined calculation of MV
+    # and LV is considered (load and feed-in case for seperate consideration
+    # of MV and LV needs to be implemented)
+    def mv_max_v_deviation(self):
+        if not self._mv_max_v_deviation:
+            self._mv_max_v_deviation = float(
+                self.scenario.network.config['grid_expansion'][
+                    'mv_lv_max_v_deviation'])
+        return self._mv_max_v_deviation
+
+    @property
+    # ToDo: for now only voltage deviation for the combined calculation of MV
+    # and LV is considered (load and feed-in case for seperate consideration
+    # of MV and LV needs to be implemented)
+    def lv_max_v_deviation(self):
+        if not self._lv_max_v_deviation:
+            self._lv_max_v_deviation = float(
+                self.scenario.network.config['grid_expansion'][
+                    'mv_lv_max_v_deviation'])
+        return self._lv_max_v_deviation
 
 
 class TimeSeries:
@@ -662,9 +788,6 @@ class Results:
         A stack that details the history of measures to increase grid's hosting
         capacity. The last item refers to the latest measure. The key `original`
         refers to the state of the grid topology as it was initially imported.
-    grid_expansion_costs: float
-        Total costs of grid expansion measures in `equipment_changes`.
-        ToDo: add unit
     """
 
     # TODO: maybe add setter to alter list of measures
@@ -681,19 +804,18 @@ class Results:
     @property
     def pfa_p(self):
         """
-        Active power results from power flow analysis
+        Active power results from power flow analysis in kW.
 
         Holds power flow analysis results for active power for the last
         iteration step. Index of the DataFrame is a DatetimeIndex indicating
         the time period the power flow analysis was conducted for; columns
         of the DataFrame are the edges as well as stations of the grid
         topology.
-        ToDo: add unit
 
         Parameters
         ----------
         pypsa: `pandas.DataFrame<dataframe>`
-            Results time series of active power P from the
+            Results time series of active power P in kW from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
             Provide this if you want to set values. For retrieval of data do not
@@ -713,19 +835,18 @@ class Results:
     @property
     def pfa_q(self):
         """
-        Reactive power results from power flow analysis
+        Reactive power results from power flow analysis in kvar.
 
         Holds power flow analysis results for reactive power for the last
         iteration step. Index of the DataFrame is a DatetimeIndex indicating
         the time period the power flow analysis was conducted for; columns
         of the DataFrame are the edges as well as stations of the grid
         topology.
-        ToDo: add unit
 
         Parameters
         ----------
         pypsa: `pandas.DataFrame<dataframe>`
-            Results time series of reactive power Q from the
+            Results time series of reactive power Q in kvar from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
             Provide this if you want to set values. For retrieval of data do not
@@ -757,11 +878,11 @@ class Results:
         Parameters
         ----------
         pypsa: `pandas.DataFrame<dataframe>`
-            Results time series of voltage deviation from the
+            Results time series of voltage deviation in p.u. from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
-            Provide this if you want to set values. For retrieval of data do not
-            pass an argument
+            Provide this if you want to set values. For retrieval of data do
+            not pass an argument
 
         Returns
         -------
@@ -774,6 +895,38 @@ class Results:
     @pfa_v_mag_pu.setter
     def pfa_v_mag_pu(self, pypsa):
         self._pfa_v_mag_pu = pypsa
+
+    @property
+    def i_res(self):
+        """
+        Current results from power flow analysis in A.
+
+        Holds power flow analysis results for current for the last
+        iteration step. Index of the DataFrame is a DatetimeIndex indicating
+        the time period the power flow analysis was conducted for; columns
+        of the DataFrame are the edges as well as stations of the grid
+        topology.
+        ToDo: add unit
+
+        Parameters
+        ----------
+        pypsa: `pandas.DataFrame<dataframe>`
+            Results time series of current in A from the
+            `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+
+            Provide this if you want to set values. For retrieval of data do
+            not pass an argument
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Current results from power flow analysis
+        """
+        return self._i_res
+
+    @i_res.setter
+    def i_res(self, pypsa):
+        self._i_res = pypsa
 
     @property
     def equipment_changes(self):
@@ -823,21 +976,48 @@ class Results:
     @property
     def grid_expansion_costs(self):
         """
-        Holds grid expansion costs in MEUR due to grid expansion measures
-        tracked in self.equipment_changes.
+        Holds grid expansion costs in kEUR due to grid expansion measures
+        tracked in self.equipment_changes and calculated in
+        edisgo.flex_opt.costs.grid_expansion_costs()
 
         Parameters
         ----------
-        total_costs: float
-            Provide this if you want to set grid_expansion_costs. For
-            retrieval of costs do not pass an argument.
+        total_costs : :pandas:`pandas.DataFrame<dataframe>`
+
+            DataFrame containing type and costs plus in the case of lines the
+            line length and number of parallel lines of each reinforced
+            transformer and line. Provide this if you want to set
+            grid_expansion_costs. For retrieval of costs do not pass an
+            argument.
+
+            The DataFrame has the following columns:
+
+            type: String
+                Transformer size or cable name
+
+            total_costs: float
+                Costs of equipment in kEUR. For lines the line length and
+                number of parallel lines is already included in the total
+                costs.
+
+            quantity: int
+                For transformers quantity is always one, for lines it specifies
+                the number of parallel lines.
+
+            line_length: float
+                Length of line or in case of parallel lines all lines in km.
 
         Returns
         -------
-        float
+        :pandas:`pandas.DataFrame<dataframe>`
+            Costs of each reinforced equipment in kEUR.
+
+        Notes
+        -------
+        Total grid expansion costs can be obtained through
+        costs.total_costs.sum().
+
         """
-        if not self._grid_expansion_costs:
-            grid_expansion_costs(self)
         return self._grid_expansion_costs
 
     @grid_expansion_costs.setter
@@ -846,9 +1026,9 @@ class Results:
 
     def s_res(self, components=None):
         """
-        Get resulting apparent power at line(s) and transformer(s)
+        Get resulting apparent power in kVA at line(s) and transformer(s).
 
-        The apparent power at a line (or transformer) determines from the
+        The apparent power at a line (or transformer) is determined from the
         maximum values of active power P and reactive power Q.
 
         .. math::
@@ -857,12 +1037,13 @@ class Results:
 
         Parameters
         ----------
-        components : :class:`~.grid.components.Line` or :class:`~.grid.components.Transformer`
+        components : :class:`~.grid.components.Line` or
+            :class:`~.grid.components.Transformer`
             Could be a list of instances of these classes
 
             Line or Transformers objects of grid topology. If not provided
-            (respectively None)
-            defaults to return `s_res` of all lines and transformers in the grid.
+            (respectively None) defaults to return `s_res` of all lines and
+            transformers in the grid.
 
         Returns
         -------
@@ -876,7 +1057,8 @@ class Results:
             labels_not_included = []
             labels = [repr(l) for l in components]
             for label in labels:
-                if label in list(self.pfa_p.columns) and label in list(self.pfa_q.columns):
+                if (label in list(self.pfa_p.columns) and
+                            label in list(self.pfa_q.columns)):
                     labels_included.append(label)
                 else:
                     labels_not_included.append(label)
@@ -887,7 +1069,7 @@ class Results:
             labels_included = self.pfa_p.columns
 
         s_res = ((self.pfa_p[labels_included] ** 2 + self.pfa_q[
-            labels_included] ** 2) * 1e3).applymap(sqrt)
+            labels_included] ** 2)).applymap(sqrt)
 
         return s_res
 

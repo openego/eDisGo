@@ -7,22 +7,21 @@ import logging
 logger = logging.getLogger('edisgo')
 
 
-def reinforce_grid(network, while_counter_max=10):
-    """Evaluates grid reinforcement needs and performs measures. This function
+def reinforce_grid(network, max_while_iterations=10):
+    """ Evaluates grid reinforcement needs and performs measures. This function
         is the parent function for all grid reinforcements.
 
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-    while_counter_max : int
-        Maximum number of iterations when solving overvoltage problems, to
-        prevent infinite grid expansion.
+    max_while_iterations : int
+        Maximum number of times each while loop is conducted.
 
     Notes
     -----
     Vorgehen laut BW-Studie:
-    * getrennte oder kombinierte Betrachtung von NS und MS muss noch entschieden
-      werden, BW-Studie führt getrennte Betrachtung durch
+    * getrennte oder kombinierte Betrachtung von NS und MS muss noch
+      entschieden werden, BW-Studie führt getrennte Betrachtung durch
     * Reihenfolge der Behebung von Grenzwertverletzungen:
     ** Trafo
     ** Spannung
@@ -33,8 +32,8 @@ def reinforce_grid(network, while_counter_max=10):
        BM ersetzt
     * Spannungsbandverletztung
     ** Strangauftrennung nach 2/3 der Distanz
-    ** danach eventuell weitere Strangauftrennung wenn sinnvoll, sonst parallele
-       BM
+    ** danach eventuell weitere Strangauftrennung wenn sinnvoll, sonst
+       parallele BM
 
     Sonstiges:
     * nur Rückspeisefall
@@ -82,47 +81,56 @@ def reinforce_grid(network, while_counter_max=10):
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
     iteration_step = 1
 
-    # # ToDo: check overloading of HV/MV Trafo?
-    # logger.debug('==> Check MV/LV station load.')
-    # overloaded_stations = checks.mv_lv_station_load(network)
-    # logger.debug('==> Check line load.')
-    # crit_lines_lv = checks.lv_line_load(network)
-    # crit_lines_mv = checks.mv_line_load(network)
-    # crit_lines = {**crit_lines_lv, **crit_lines_mv}
-    #
-    # while_counter = 0
-    # while ((overloaded_stations or crit_lines) and
-    #         while_counter < while_counter_max):
-    #
-    #     if overloaded_stations:
-    #         # reinforce substations
-    #         transformer_changes = \
-    #             reinforce_measures.extend_distribution_substation(
-    #                 network, overloaded_stations)
-    #         # write added and removed transformers to results.equipment_changes
-    #         _add_transformer_changes_to_equipment_changes('added')
-    #         _add_transformer_changes_to_equipment_changes('removed')
-    #
-    #     if crit_lines:
-    #         # reinforce lines
-    #         lines_changes = reinforce_measures.reinforce_branches_overloading(
-    #             network, crit_lines)
-    #         # write changed lines to results.equipment_changes
-    #         _add_lines_changes_to_equipment_changes()
-    #
-    #     # run power flow analysis again and check if all over-loading
-    #     # problems were solved
-    #     logger.debug('==> Run power flow analysis.')
-    #     network.analyze()
-    #     logger.debug('==> Recheck MV/LV station load.')
-    #     overloaded_stations = checks.mv_lv_station_load(network)
-    #     logger.debug('==> Recheck line load.')
-    #     crit_lines_lv = checks.lv_line_load(network)
-    #     crit_lines_mv = checks.mv_line_load(network)
-    #     crit_lines = {**crit_lines_lv, **crit_lines_mv}
-    #
-    #     iteration_step += 1
-    #     while_counter += 1
+    # ToDo: check overloading of HV/MV Trafo?
+    logger.debug('==> Check MV/LV station load.')
+    overloaded_stations = checks.mv_lv_station_load(network)
+    logger.debug('==> Check line load.')
+    crit_lines_lv = checks.lv_line_load(network)
+    crit_lines_mv = checks.mv_line_load(network)
+    crit_lines = {**crit_lines_lv, **crit_lines_mv}
+
+    while_counter = 0
+    while ((overloaded_stations or crit_lines) and
+            while_counter < max_while_iterations):
+
+        if overloaded_stations:
+            # reinforce substations
+            transformer_changes = \
+                reinforce_measures.extend_distribution_substation(
+                    network, overloaded_stations)
+            # write added and removed transformers to results.equipment_changes
+            _add_transformer_changes_to_equipment_changes('added')
+            _add_transformer_changes_to_equipment_changes('removed')
+
+        if crit_lines:
+            # reinforce lines
+            lines_changes = reinforce_measures.reinforce_branches_overloading(
+                network, crit_lines)
+            # write changed lines to results.equipment_changes
+            _add_lines_changes_to_equipment_changes()
+
+        # run power flow analysis again and check if all over-loading
+        # problems were solved
+        logger.debug('==> Run power flow analysis.')
+        network.analyze()
+        logger.debug('==> Recheck MV/LV station load.')
+        overloaded_stations = checks.mv_lv_station_load(network)
+        logger.debug('==> Recheck line load.')
+        crit_lines_lv = checks.lv_line_load(network)
+        crit_lines_mv = checks.mv_line_load(network)
+        crit_lines = {**crit_lines_lv, **crit_lines_mv}
+
+        iteration_step += 1
+        while_counter += 1
+
+    # check if all load problems were solved after maximum number of
+    # iterations allowed
+    if (while_counter == max_while_iterations and
+            (crit_lines or overloaded_stations)):
+        logger.error("==> Load issues were not solved.")
+        sys.exit()
+    else:
+        logger.debug('==> All load issues in MV grid are solved.')
 
     # # dump network
     # import pickle
@@ -137,54 +145,54 @@ def reinforce_grid(network, while_counter_max=10):
     # REINFORCE BRANCHES DUE TO VOLTAGE ISSUES
     iteration_step += 1
 
-    # # solve voltage problems in MV grid
-    # logger.debug('==> Check voltage in MV grid.')
-    # crit_nodes = checks.mv_voltage_deviation(network)
-    #
-    # while_counter = 0
-    # while crit_nodes and while_counter < while_counter_max:
-    #
-    #     # ToDo: get crit_nodes as objects instead of string
-    #     # for now iterate through grid to find node for repr
-    #     crit_nodes_objects = pd.Series()
-    #     for node in network.mv_grid.graph.nodes():
-    #         if repr(node) in crit_nodes[network.mv_grid].index:
-    #             crit_nodes_objects = pd.concat(
-    #                 [crit_nodes_objects,
-    #                  pd.Series(crit_nodes[network.mv_grid].loc[repr(node)],
-    #                            index=[node])])
-    #     crit_nodes_objects.sort_values(ascending=False, inplace=True)
-    #
-    #     # reinforce lines
-    #     lines_changes = reinforce_measures.reinforce_branches_overvoltage(
-    #         network, network.mv_grid, crit_nodes_objects)
-    #     # write changed lines to results.equipment_changes
-    #     _add_lines_changes_to_equipment_changes()
-    #
-    #     # run power flow analysis again and check if all over-voltage
-    #     # problems were solved
-    #     logger.debug('==> Run power flow analysis.')
-    #     network.analyze()
-    #     logger.debug('==> Recheck voltage in MV grid.')
-    #     crit_nodes = checks.mv_voltage_deviation(network)
-    #
-    #     iteration_step += 1
-    #     while_counter += 1
-    #
-    # # check if all voltage problems were solved after maximum number of
-    # # iterations allowed
-    # if while_counter == while_counter_max and crit_nodes:
-    #     logger.error("==> Voltage issues in MV grid were not solved.")
-    #     sys.exit()
-    # else:
-    #     logger.debug('==> All voltage issues in MV grid are solved.')
+    # solve voltage problems in MV grid
+    logger.debug('==> Check voltage in MV grid.')
+    crit_nodes = checks.mv_voltage_deviation(network)
+
+    while_counter = 0
+    while crit_nodes and while_counter < max_while_iterations:
+
+        # ToDo: get crit_nodes as objects instead of string
+        # for now iterate through grid to find node for repr
+        crit_nodes_objects = pd.Series()
+        for node in network.mv_grid.graph.nodes():
+            if repr(node) in crit_nodes[network.mv_grid].index:
+                crit_nodes_objects = pd.concat(
+                    [crit_nodes_objects,
+                     pd.Series(crit_nodes[network.mv_grid].loc[repr(node)],
+                               index=[node])])
+        crit_nodes_objects.sort_values(ascending=False, inplace=True)
+
+        # reinforce lines
+        lines_changes = reinforce_measures.reinforce_branches_overvoltage(
+            network, network.mv_grid, crit_nodes_objects)
+        # write changed lines to results.equipment_changes
+        _add_lines_changes_to_equipment_changes()
+
+        # run power flow analysis again and check if all over-voltage
+        # problems were solved
+        logger.debug('==> Run power flow analysis.')
+        network.analyze()
+        logger.debug('==> Recheck voltage in MV grid.')
+        crit_nodes = checks.mv_voltage_deviation(network)
+
+        iteration_step += 1
+        while_counter += 1
+
+    # check if all voltage problems were solved after maximum number of
+    # iterations allowed
+    if while_counter == max_while_iterations and crit_nodes:
+        logger.error("==> Voltage issues in MV grid were not solved.")
+        sys.exit()
+    else:
+        logger.debug('==> All voltage issues in MV grid are solved.')
 
     # solve voltage problems in LV grids
     logger.debug('==> Check voltage in LV grids.')
     crit_nodes = checks.lv_voltage_deviation(network)
 
     while_counter = 0
-    while crit_nodes and while_counter < while_counter_max:
+    while crit_nodes and while_counter < max_while_iterations:
         # for every grid in crit_nodes do reinforcement
         for grid in crit_nodes:
 
@@ -214,7 +222,7 @@ def reinforce_grid(network, while_counter_max=10):
 
     # check if all voltage problems were solved after maximum number of
     # iterations allowed
-    if while_counter == while_counter_max and crit_nodes:
+    if while_counter == max_while_iterations and crit_nodes:
         logger.error("==> Voltage issues in LV grids were not solved.")
         sys.exit()
     else:
@@ -230,7 +238,7 @@ def reinforce_grid(network, while_counter_max=10):
 
     while_counter = 0
     while ((overloaded_stations or crit_lines) and
-                   while_counter < while_counter_max):
+            while_counter < max_while_iterations):
 
         if overloaded_stations:
             # reinforce substations

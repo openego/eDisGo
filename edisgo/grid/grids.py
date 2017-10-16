@@ -73,6 +73,11 @@ class Grid:
     def network(self):
         return self._network
 
+    @property
+    def grid_district(self):
+        """Provide access to the grid_district"""
+        return self._grid_district
+
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
 
@@ -189,7 +194,7 @@ class Graph(nx.Graph):
         return nodes
 
     def lines_by_attribute(self, attr_val=None, attr='type'):
-        """Returns a generator for iterating over Graph's lines by attribute value.
+        """ Returns a generator for iterating over Graph's lines by attribute value.
 
         Get all lines that share the same attribute. By default, the attr 'type'
         is used to specify the lines' type (line, agg_line, etc.).
@@ -237,7 +242,7 @@ class Graph(nx.Graph):
         of the in-going tuple (which is defined by the needs of networkX). If
         this changes, the code will break.
 
-        Adapted from `Ding0 <https://github.com/openego/dingo/blob/\
+        Adapted from `Dingo <https://github.com/openego/dingo/blob/\
             ee237e37d4c228081e1e246d7e6d0d431c6dda9e/dingo/core/network/\
             __init__.py>`_.
         """
@@ -262,7 +267,7 @@ class Graph(nx.Graph):
             yield {'adj_nodes': line[0], 'line': line[1]}
 
     def lines(self):
-        """Returns a generator for iterating over Graph's lines
+        """ Returns a generator for iterating over Graph's lines
 
         Returns
         -------

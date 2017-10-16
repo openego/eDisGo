@@ -155,11 +155,13 @@ class Load(Component):
                 'agricultural': 0.0025}
 
             if isinstance(self.grid, MVGrid):
-                q_factor = tan(acos(self.grid.network.scenario.pfac_mv_load))
+                q_factor = tan(acos(
+                    self.grid.network.scenario.parameters.pfac_mv_load))
                 power_scaling = float(self.grid.network.config['scenario'][
                                           'scale_factor_mv_load'])
             elif isinstance(self.grid, LVGrid):
-                q_factor = tan(acos(self.grid.network.scenario.pfac_lv_load))
+                q_factor = tan(acos(
+                    self.grid.network.scenario.parameters.pfac_lv_load))
                 power_scaling = float(self.grid.network.config['scenario'][
                                           'scale_factor_lv_load'])
 
@@ -217,7 +219,7 @@ class Load(Component):
 
     def __repr__(self):
         return '_'.join(['Load',
-                         list(self.consumption.keys())[0],
+                         sorted(list(self.consumption.keys()))[0],
                          repr(self.grid),
                          str(self.id)])
 
@@ -263,9 +265,11 @@ class Generator(Component):
         """
         if self._timeseries is None:
             if isinstance(self.grid, MVGrid):
-                q_factor = tan(acos(self.grid.network.scenario.pfac_mv_gen))
+                q_factor = tan(acos(
+                    self.grid.network.scenario.parameters.pfac_mv_gen))
             elif isinstance(self.grid, LVGrid):
-                q_factor = tan(acos(self.grid.network.scenario.pfac_lv_gen))
+                q_factor = tan(acos(
+                    self.grid.network.scenario.parameters.pfac_lv_gen))
 
             timeseries = self.grid.network.scenario.timeseries.generation
             timeseries['q'] = (
