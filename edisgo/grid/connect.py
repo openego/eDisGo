@@ -112,7 +112,7 @@ def connect_mv_generators(network):
                         'connection points.'.format(geno))
 
 
-def connect_lv_generators(network):
+def connect_lv_generators(network, allow_multiple_genos_per_load=True):
     """Connect LV generators to existing grids.
 
     This function searches for unconnected generators in all LV grids and connects them.
@@ -132,6 +132,8 @@ def connect_lv_generators(network):
     ----------
     network : :class:`~.grid.network.Network`
         The eDisGo container object
+    allow_multiple_genos_per_load : :obj:`bool`
+        If True, more than one generator can be connected to one load
 
     Notes
     -----
@@ -230,30 +232,32 @@ def connect_lv_generators(network):
                                                                  len(lv_loads_res))
                                                    )
                             lv_load = lv_loads_res_rnd.pop()
-                            # get cable distributor of building
-                            lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
 
-                        # check if there's an existing generator connected to the load
-                        # if so, select next load. If no load is available, connect to station.
-                        while any([isinstance(_, Generator)
-                                   for _ in lv_grid.graph.neighbors(
-                                lv_grid.graph.neighbors(lv_load)[0])]):
-                            if len(lv_loads_res_rnd) > 0:
-                                lv_load = lv_loads_res_rnd.pop()
+                        # get cable distributor of building
+                        lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
 
-                                # get cable distributor of building
-                                lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
-                            else:
-                                lv_conn_target = lv_grid.station
+                        if not allow_multiple_genos_per_load:
+                            # check if there's an existing generator connected to the load
+                            # if so, select next load. If no load is available, connect to station.
+                            while any([isinstance(_, Generator)
+                                       for _ in lv_grid.graph.neighbors(
+                                    lv_grid.graph.neighbors(lv_load)[0])]):
+                                if len(lv_loads_res_rnd) > 0:
+                                    lv_load = lv_loads_res_rnd.pop()
 
-                                logger.warning(
-                                    'No valid conn. target found for {}. '
-                                    'Connected to {}.'.format(
-                                        repr(geno),
-                                        repr(lv_conn_target)
+                                    # get cable distributor of building
+                                    lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
+                                else:
+                                    lv_conn_target = lv_grid.station
+
+                                    logger.warning(
+                                        'No valid conn. target found for {}. '
+                                        'Connected to {}.'.format(
+                                            repr(geno),
+                                            repr(lv_conn_target)
+                                        )
                                     )
-                                )
-                                break
+                                    break
 
                     # connect genos with 30kW <= P <= 100kW to residential loads
                     # to retail, industrial, agricultural loads, if available
@@ -266,30 +270,32 @@ def connect_lv_generators(network):
                                                                  len(lv_loads_ria))
                                                    )
                             lv_load = lv_loads_ria_rnd.pop()
-                            # get cable distributor of building
-                            lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
 
-                        # check if there's an existing generator connected to the load
-                        # if so, select next load. If no load is available, connect to station.
-                        while any([isinstance(_, Generator)
-                                   for _ in lv_grid.graph.neighbors(
-                                lv_grid.graph.neighbors(lv_load)[0])]):
-                            if len(lv_loads_ria_rnd) > 0:
-                                lv_load = lv_loads_ria_rnd.pop()
+                        # get cable distributor of building
+                        lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
 
-                                # get cable distributor of building
-                                lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
-                            else:
-                                lv_conn_target = lv_grid.station
+                        if not allow_multiple_genos_per_load:
+                            # check if there's an existing generator connected to the load
+                            # if so, select next load. If no load is available, connect to station.
+                            while any([isinstance(_, Generator)
+                                       for _ in lv_grid.graph.neighbors(
+                                    lv_grid.graph.neighbors(lv_load)[0])]):
+                                if len(lv_loads_ria_rnd) > 0:
+                                    lv_load = lv_loads_ria_rnd.pop()
 
-                                logger.warning(
-                                    'No valid conn. target found for {}. '
-                                    'Connected to {}.'.format(
-                                        repr(geno),
-                                        repr(lv_conn_target)
+                                    # get cable distributor of building
+                                    lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
+                                else:
+                                    lv_conn_target = lv_grid.station
+
+                                    logger.warning(
+                                        'No valid conn. target found for {}. '
+                                        'Connected to {}.'.format(
+                                            repr(geno),
+                                            repr(lv_conn_target)
+                                        )
                                     )
-                                )
-                                break
+                                    break
 
                     # fallback: connect to station
                     else:
