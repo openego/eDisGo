@@ -1497,12 +1497,14 @@ def _import_genos_from_oedb(network):
         if row['geom']:
             geom = row['geom']
         else:
-            # check if original geom from Energy Map is available
-            if row['geom_em']:
-                geom = row['geom_em']
-                logger.warning('Generator {} has no geom entry, EnergyMap\'s geom entry will be used.'
-                               .format(id)
-                               )
+            # MV generators: set geom to EnergyMap's geom, if available
+            if int(row['voltage_level']) in [4,5]:
+                # check if original geom from Energy Map is available
+                if row['geom_em']:
+                    geom = row['geom_em']
+                    logger.warning('Generator {} has no geom entry, EnergyMap\'s geom entry will be used.'
+                                   .format(id)
+                                   )
 
         return geom
 
