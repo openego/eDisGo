@@ -135,6 +135,9 @@ def connect_lv_generators(network):
 
     Notes
     -----
+    For the allocation, loads are selected randomly (sector-wise) using a predefined seed
+    to ensure reproducibility.
+
     Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
         21a52048f84ec341fe54e0204ac62228a9e8a32a/\
         ding0/grid/lv_grid/lv_connect.py#L27>`_.
