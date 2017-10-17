@@ -1023,8 +1023,8 @@ def _import_genos_from_oedb(network):
         generators_mv_sqla = generators_sqla. \
             filter(orm_re_generators.columns.voltage_level.in_([4, 5]))
         generators_mv = pd.read_sql_query(generators_mv_sqla.statement,
-                                       session.bind,
-                                       index_col='id')
+                                          session.bind,
+                                          index_col='id')
 
         # define generators with unknown subtype as 'unknown'
         generators_mv.loc[generators_mv[
