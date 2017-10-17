@@ -230,6 +230,8 @@ def connect_lv_generators(network):
                                                                  len(lv_loads_res))
                                                    )
                             lv_load = lv_loads_res_rnd.pop()
+                            # get cable distributor of building
+                            lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
 
                         # check if there's an existing generator connected to the load
                         # if so, select next load. If no load is available, connect to station.
@@ -238,6 +240,9 @@ def connect_lv_generators(network):
                                 lv_grid.graph.neighbors(lv_load)[0])]):
                             if len(lv_loads_res_rnd) > 0:
                                 lv_load = lv_loads_res_rnd.pop()
+
+                                # get cable distributor of building
+                                lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
                             else:
                                 lv_conn_target = lv_grid.station
 
@@ -249,9 +254,6 @@ def connect_lv_generators(network):
                                     )
                                 )
                                 break
-
-                                # get cable distributor of building
-                        lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
 
                     # connect genos with 30kW <= P <= 100kW to residential loads
                     # to retail, industrial, agricultural loads, if available
@@ -264,6 +266,8 @@ def connect_lv_generators(network):
                                                                  len(lv_loads_ria))
                                                    )
                             lv_load = lv_loads_ria_rnd.pop()
+                            # get cable distributor of building
+                            lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
 
                         # check if there's an existing generator connected to the load
                         # if so, select next load. If no load is available, connect to station.
@@ -272,6 +276,9 @@ def connect_lv_generators(network):
                                 lv_grid.graph.neighbors(lv_load)[0])]):
                             if len(lv_loads_ria_rnd) > 0:
                                 lv_load = lv_loads_ria_rnd.pop()
+
+                                # get cable distributor of building
+                                lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
                             else:
                                 lv_conn_target = lv_grid.station
 
@@ -283,9 +290,6 @@ def connect_lv_generators(network):
                                     )
                                 )
                                 break
-
-                        # get cable distributor of building
-                        lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
 
                     # fallback: connect to station
                     else:
