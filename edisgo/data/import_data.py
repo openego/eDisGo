@@ -1478,6 +1478,9 @@ def _import_genos_from_oedb(network):
     def _check_geom(id, row):
         """Checks if a valid geom is available in dataset
 
+        If yes, this geom will be used.
+        If not, use geom from EnergyMap for MV generators
+
         Parameters
         ----------
         id : :obj:`int`
