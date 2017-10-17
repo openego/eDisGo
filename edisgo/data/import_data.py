@@ -1173,7 +1173,7 @@ def _import_genos_from_oedb(network):
         # iterate over new generators and create them
         for id, row in generators_mv_new.iterrows():
             # check if geom is available, skip otherwise
-            geom = _check_geom(row)
+            geom = _check_geom(id, row)
             if not geom:
                 logger.warning('Generator {} has no geom entry at all and will not be imported!'
                                .format(id)
@@ -1398,7 +1398,7 @@ def _import_genos_from_oedb(network):
             # new generator is a single (non-aggregated) unit
             else:
                 # check if geom is available
-                geom = _check_geom(row)
+                geom = _check_geom(id, row)
 
                 gen = Generator(id=id,
                                 grid=None,
@@ -1475,11 +1475,13 @@ def _import_genos_from_oedb(network):
                              )
                      )
 
-    def _check_geom(row):
+    def _check_geom(id, row):
         """Checks if a valid geom is available in dataset
 
         Parameters
         ----------
+        id : :obj:`int`
+            Id of generator
         row : :pandas:`pandas.Series<series>`
             Generator dataset
 
