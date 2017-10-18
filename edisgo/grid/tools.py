@@ -202,12 +202,12 @@ def implement_switch_disconnector(mv_grid, node1, node2):
         node1.geom.y - node2.geom.y)
 
     # Instantiate disconnecting point
-    mv_dp_number = len(mv_grid.graph.nodes_by_attribute('mv_disconneting_point'))
+    mv_dp_number = len(mv_grid.graph.nodes_by_attribute('mv_disconnecting_point'))
     disconnecting_point = MVDisconnectingPoint(
         id=mv_dp_number + 1,
         geom=Point(x_sd, y_sd),
         grid=mv_grid)
-    mv_grid.graph.add_node(disconnecting_point, type='mv_disconneting_point')
+    mv_grid.graph.add_node(disconnecting_point, type='mv_disconnecting_point')
 
     # Replace original line by a new line
     new_line_attr = {'line': Line(
