@@ -138,40 +138,46 @@ class Load(Component):
         edisgo.network.TimeSeries : Details of global TimeSeries
         """
         if self._timeseries is None:
-            # TODO: replace by correct values (see OEDB) and put to config
-            peak_load_consumption_ratio = {
-                'residential': 0.0025,
-                'retail': 0.0025,
-                'industrial': 0.0025,
-                'agricultural': 0.0025}
-
+            # calculate share of reactive power
             if isinstance(self.grid, MVGrid):
                 q_factor = tan(acos(
                     self.grid.network.scenario.parameters.pfac_mv_load))
-                power_scaling = float(self.grid.network.config['scenario'][
-                                          'scale_factor_mv_load'])
             elif isinstance(self.grid, LVGrid):
                 q_factor = tan(acos(
                     self.grid.network.scenario.parameters.pfac_lv_load))
-                power_scaling = float(self.grid.network.config['scenario'][
-                                          'scale_factor_lv_load'])
 
+            # work around until retail and industrial are separate sectors
+            # TODO: remove once Ding0 data changed to single sector consumption
             sector = list(self.consumption.keys())[0]
-            # TODO: remove this if, once Ding0 data changed to single sector consumption
             if len(list(self.consumption.keys())) > 1:
-                consumption = sum([v for k,v in self.consumption.items()])
+                consumption = sum([v for k, v in self.consumption.items()])
             else:
                 consumption = self.consumption[sector]
 
-            timeseries = (self.grid.network.scenario.timeseries.load[sector] *
-                          consumption *
-                          peak_load_consumption_ratio[sector]).to_frame('p')
-            timeseries['q'] = (self.grid.network.scenario.timeseries.load[sector] *
-                               consumption *
-                               peak_load_consumption_ratio[sector] *
-                               q_factor)
-            self._timeseries = timeseries * power_scaling
-
+            # set timeseries for active and reactive power
+            if self.grid.network.scenario.mode == 'worst-case':
+                if isinstance(self.grid, MVGrid):
+                    power_scaling = float(self.grid.network.config['scenario'][
+                                              'scale_factor_mv_load'])
+                elif isinstance(self.grid, LVGrid):
+                    power_scaling = float(self.grid.network.config['scenario'][
+                                              'scale_factor_lv_load'])
+                ts = (self.grid.network.scenario.timeseries.load[
+                          sector]).to_frame('p')
+                ts['q'] = (self.grid.network.scenario.timeseries.load[sector] *
+                           q_factor)
+                self._timeseries = (ts * consumption * power_scaling)
+            else:
+                try:
+                    ts = pd.DataFrame()
+                    ts['p'] = self.grid.network.scenario.timeseries.load[
+                        sector]
+                    ts['q'] = ts['p'] * q_factor
+                    self._timeseries = ts * consumption
+                except KeyError:
+                    logger.exception("No timeseries for load of type {}"
+                                     "given.".format(sector))
+                    raise
         return self._timeseries
 
     def pypsa_timeseries(self, attr):
@@ -255,40 +261,35 @@ class Generator(Component):
         considers for predefined curtailment as well.
         """
         if self._timeseries is None:
+            # calculate share of reactive power
             if isinstance(self.grid, MVGrid):
                 q_factor = tan(acos(
                     self.grid.network.scenario.parameters.pfac_mv_gen))
             elif isinstance(self.grid, LVGrid):
                 q_factor = tan(acos(
                     self.grid.network.scenario.parameters.pfac_lv_gen))
-
-            #ToDo: Typ muss in dict sein
-
+            # set timeseries for active and reactive power
             if self.grid.network.scenario.mode == 'worst-case':
                 ts = self.grid.network.scenario.timeseries.generation.copy()
+                ts['q'] = ts['p'] * q_factor
+                if self.type == 'solar':
+                    power_scaling = float(self.grid.network.config['scenario'][
+                                              'scale_factor_feedin_pv'])
+                else:
+                    power_scaling = float(self.grid.network.config['scenario'][
+                                              'scale_factor_feedin_other'])
+                self._timeseries = ts * self.nominal_capacity * power_scaling
             else:
                 try:
-                    #ToDo: lieber nicht kopieren?
                     ts = pd.DataFrame()
                     ts['p'] = self.grid.network.scenario.timeseries.generation[
-                        self.type]#.copy()
+                        self.type]
+                    ts['q'] = ts['p'] * q_factor
+                    self._timeseries = ts * self.nominal_capacity
                 except KeyError:
                     logger.exception("No timeseries for type {} given.".format(
                         self.type))
                     raise
-
-            ts['q'] = (ts['p'] * q_factor)
-
-            # scale feedin/load
-            # ToDo: bei etrago specs sollte das raus?
-            if self.type == 'solar':
-                power_scaling = float(self.grid.network.config['scenario'][
-                    'scale_factor_feedin_pv'])
-            else:
-                power_scaling = float(self.grid.network.config['scenario'][
-                    'scale_factor_feedin_other'])
-            self._timeseries = ts * self.nominal_capacity * power_scaling
-
         return self._timeseries
 
     def pypsa_timeseries(self, attr):

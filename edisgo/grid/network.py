@@ -362,14 +362,6 @@ class Scenario:
     _parameters : :class:`~.grid.network.Parameters`
         Parameters for power flow analysis and grid expansion.
 
-    Notes
-    -------
-    timeseries_generation wird in der init überschrieben, wenn etrago_specs
-    vorgegeben werden oder wenn power_flow = 'worst-case' (perspektivisch
-    soll timeseries.load auch überschrieben werden)
-    wenn power_flow = 'worst-case' werden etrago_specs auch überschrieben -
-    ToDo: am besten Warnung raus geben
-
     """
 
     def __init__(self, power_flow, **kwargs):
@@ -380,7 +372,25 @@ class Scenario:
         self._parameters = Parameters(self, **kwargs)
 
         # populate timeseries attribute
-        # ToDo: als funktion auslagern
+        self.set_timeseries(power_flow)
+
+    @property
+    def timeseries(self):
+        return self._timeseries
+
+    @property
+    def parameters(self):
+        return self._parameters
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @property
+    def etrago_specs(self):
+        return self._etrago_specs
+
+    def set_timeseries(self, power_flow):
         if isinstance(power_flow, str):
             if power_flow != 'worst-case':
                 raise ValueError(
@@ -398,8 +408,7 @@ class Scenario:
                 self._timeseries = TimeSeries()
                 self._timeseries.generation = \
                     self._timeseries.worst_case_generation_ts()
-                #ToDo: load funktion auch verschieben?
-                self._timeseries.load = self._timeseries.set_load(mode='worst-case')
+                self._timeseries.load = self._timeseries.worst_case_load_ts()
         elif isinstance(power_flow, tuple):
             if self._etrago_specs:
                 if self._etrago_specs.dispatch is not None:
@@ -418,35 +427,15 @@ class Scenario:
                             self._etrago_specs.dispatch.loc[
                                 self._timeseries.timeindex]
                         self._timeseries.load = self._etrago_specs.load.loc[
-                                self._timeseries.timeindex]
-
-                    #ToDo: prüfen, ob capacity in etrago und edisgo gleich sind
+                            self._timeseries.timeindex]
                 else:
-                    #ToDo: Wollen wir timeseries zulassen, wenn etrago specs gegeben sind? Dann müssen wir das hier noch prüfen
-                    logger.error("Etrago specifications must contain dispatch "
-                                 "timeseries. Please provide them.")
-            elif not self._timeseries:
-                logger.error("Please provide etrago specifications or time "
-                             "series for load and generation.")
-
-        # Set timeindex of Timeseries()
-        #self.timeseries.timeindex = timeindex
-
-    @property
-    def timeseries(self):
-        return self._timeseries
-
-    @property
-    def parameters(self):
-        return self._parameters
-
-    @property
-    def mode(self):
-        return self._mode
-
-    @property
-    def etrago_specs(self):
-        return self._etrago_specs
+                    raise NotImplementedError(
+                        "ETraGo specification without dispatch and load "
+                        "timeseries will be implemented in the near future.")
+            else:
+                raise NotImplementedError(
+                    "The option to provide your own timeseries "
+                    "will be implemented in the near future.")
 
     def __repr__(self):
         return 'Scenario ' + self._name
@@ -711,31 +700,40 @@ class TimeSeries:
         """
         Define worst case generation time series.
 
-        Parameters
-        ----------
-        network : :class:~.grid.network.Network`
-
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Normalized active power (1 kW)
+            Normalized active power (1 kW) in column 'p' with random time index
         """
         # set random timeindex
         self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
         return pd.DataFrame({'p': 1}, index=self.timeindex)
 
-    def set_load(self, mode=None):
+    def worst_case_load_ts(self):
         """
-        Assign load data according to provided case
+        Define worst case load time series
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Normalized active power (1 kW) for each load sector with
+            random time index
         """
-        # ToDo: docstring
-        if mode == 'worst-case':
-            return worst_case_load_ts(self.timeindex)
-        elif mode == 'time-range':
-            return
-        else:
-            raise ValueError("Provide proper mode of analysis: 'worst-case | "
-                             "'time-range'")
+        # set random timeindex
+        self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
+        #ToDo: remove hard coded sectors?
+        # TODO: replace by correct values (see OEDB) and put to config
+        peak_load_consumption_ratio = {
+            'residential': 0.0025,
+            'retail': 0.0025,
+            'industrial': 0.0025,
+            'agricultural': 0.0025}
+        return pd.DataFrame({
+            'residential': 1 * peak_load_consumption_ratio['residential'],
+            'retail': 1 * peak_load_consumption_ratio['retail'],
+            'industrial': 1 * peak_load_consumption_ratio['industrial'],
+            'agricultural': 1 * peak_load_consumption_ratio['agricultural']},
+            index=self.timeindex)
 
 
 class ETraGoSpecs:
@@ -1157,24 +1155,3 @@ class Results:
 
 
         return self.pfa_v_mag_pu[level][labels_included]
-
-
-def worst_case_load_ts(timeindex):
-    """
-    Define worst case load time series
-
-    Parameters
-    ----------
-    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
-            Time range of power flow analysis
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Normalized active power (1 kW)
-    """
-    #ToDo: besser auch als dictionary wie bei generation?
-    return pd.DataFrame({'residential': 1,
-                         'retail': 1,
-                         'industrial': 1,
-                         'agricultural': 1}, index=timeindex)

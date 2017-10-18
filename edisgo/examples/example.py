@@ -34,14 +34,9 @@ if __name__ == '__main__':
         if file.endswith(".pkl"):
             grids.append(file)
 
-    # worst-case scenario
+    # # worst-case scenario
     # scenario = Scenario(power_flow='worst-case')
-    # time-range empty tuple
-    # timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
-    # etrago_specs = ETraGoSpecs(
-    #     dispatch=pd.DataFrame({'biomass': 1, 'solar': 1,
-    #                            'gas': 1, 'wind': 1}, index=timeindex))
-    # scenario = Scenario(etrago_specs=etrago_specs, power_flow=())
+
     # time-range non-empty tuple
     power_flow = (date(2017, 10, 10), date(2017, 10, 13))
     timeindex = pd.date_range(power_flow[0], power_flow[1], freq='H')
@@ -58,10 +53,14 @@ if __name__ == '__main__':
                            'retail': [1] * len(timeindex),
                            'industrial': [1] * len(timeindex),
                            'agricultural': [1] * len(timeindex)},
+                          index=timeindex),
+        annual_load=pd.DataFrame({'residential': 1,
+                           'retail': 1,
+                           'industrial': 1,
+                           'agricultural': 1},
                           index=timeindex)
     )
-    scenario = Scenario(etrago_specs=etrago_specs,
-                        power_flow=(date(2017, 10, 10), date(2017, 10, 13)))
+    scenario = Scenario(etrago_specs=etrago_specs, power_flow=())
 
     costs = pd.DataFrame()
     faulty_grids = []
