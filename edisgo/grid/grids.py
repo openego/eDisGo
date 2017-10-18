@@ -185,6 +185,34 @@ class Graph(nx.Graph):
         return dict([(v, k) for k, v in
               nx.get_edge_attributes(self, 'line').items()])[line]
 
+    def line_from_nodes(self, u, v):
+        """
+        Get line between two nodes ``u`` and ``v``.
+
+        Parameters
+        ----------
+        u : :class:`~.grid.components.Component`
+            One adjacent node
+        v : :class:`~.grid.components.Component`
+            The other adjacent node
+
+        Returns
+        -------
+        Line
+            Line segment connecting ``u`` and ``v``.
+        """
+        try:
+            line = nx.get_edge_attributes(self, 'line')[(u, v)]
+        except:
+            try:
+                line = nx.get_edge_attributes(self, 'line')[(v, u)]
+            except:
+                raise nx.NetworkXError('Line between ``u`` and ``v`` not '
+                                       'included in the graph.')
+
+        return line
+
+
     def nodes_by_attribute(self, attr_val, attr='type'):
         """
         Select Graph's nodes by attribute value

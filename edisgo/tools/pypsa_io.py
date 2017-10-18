@@ -241,6 +241,8 @@ def mv_to_pypsa(network):
     lines = network.mv_grid.graph.graph_edges()
     lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
     mv_stations = network.mv_grid.graph.nodes_by_attribute('mv_station')
+    disconnecting_points = network.mv_grid.graph.nodes_by_attribute(
+        'mv_disconnecting_point')
 
     omega = 2 * pi * 50
 
@@ -367,6 +369,11 @@ def mv_to_pypsa(network):
         bus1_name = '_'.join(['Bus', mv_st.__repr__(side='mv')])
         bus['name'].append(bus1_name)
         bus['v_nom'].append(mv_st.transformers[0].voltage_op)
+
+    # create dataframe representing disconnecting points
+    for dp in disconnecting_points:
+        bus['name'].append('_'.join(['Bus', repr(dp)]))
+        bus['v_nom'].append(dp.grid.voltage_nom)
 
     # Add separate slack generator at MV station secondary side bus bar
     generator['name'].append("Generator_slack")

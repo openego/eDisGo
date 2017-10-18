@@ -6,7 +6,7 @@ from .components import LVStation, BranchTee, Generator, Load, \
     MVDisconnectingPoint, Line
 
 
-def position_switch_disconnecters(mv_grid, mode='load'):
+def position_switch_disconnecters(mv_grid, mode='load', status='open'):
     """
     Determine position of switch disconnecter in MV grid rings
 
@@ -22,6 +22,10 @@ def position_switch_disconnecters(mv_grid, mode='load'):
     mode : str
         Define modus switch disconnecter positioning: can be performed based of
         'load', 'generation' or both 'loadgen'. Defaults to 'load'
+    status : str
+        Either 'open' or 'closed'. Define which status is should be set
+        initially. Defaults to 'open' (which refers to conditions of normal grid
+        operation).
 
     Returns
     -------
@@ -169,6 +173,14 @@ def position_switch_disconnecters(mv_grid, mode='load'):
 
         implement_switch_disconnector(mv_grid, node1, node2)
 
+    # open all switch disconnectors
+    if status == 'open':
+        for sd in mv_grid.graph.nodes_by_attribute('mv_disconnecting_point'):
+            sd.open()
+    elif status == 'close':
+        for sd in mv_grid.graph.nodes_by_attribute('mv_disconnecting_point'):
+            sd.close()
+
 
 def implement_switch_disconnector(mv_grid, node1, node2):
     """
@@ -228,3 +240,6 @@ def implement_switch_disconnector(mv_grid, node1, node2):
 
     mv_grid.graph.add_edge(node1, disconnecting_point,
                            switch_disconnecter_line_attr)
+
+    # Set line to switch disconnecter
+    disconnecting_point.line =  mv_grid.graph.line_from_nodes(disconnecting_point, node2)
