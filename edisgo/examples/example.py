@@ -61,4 +61,6 @@ if __name__ == '__main__':
             faulty_grids.append(dingo_grid)
             logging.info('Something went wrong.')
 
-    costs.to_csv('costs.csv')
+    f = open('costs.csv', 'a')
+    f.write('# units: length in km, total_costs in kEUR\n')
+    costs.to_csv(f)
