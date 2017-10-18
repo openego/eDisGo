@@ -44,23 +44,20 @@ def grid_expansion_costs(network):
     self.grid_expansion_costs.total_costs.sum().
 
     """
-    # ToDo: consider earthwork costs of parallel lines only once
-    # ToDo: only consider new lines (quantity column instead of quantity attr.)
     def _get_transformer_costs(transformer):
         if isinstance(transformer.grid, LVGrid):
             return float(network.config['costs_transformers']['lv'])
         elif isinstance(transformer.grid, MVGrid):
             return float(network.config['costs_transformers']['mv'])
 
-    def _get_line_costs(line):
+    def _get_line_costs(line, quantity):
         # get voltage level
         if isinstance(line.grid, LVGrid):
             voltage_level = 'lv'
         elif isinstance(line.grid, MVGrid):
             voltage_level = 'mv'
         else:
-            print("Voltage level for line must be lv or mv.")
-            sys.exit()
+            raise KeyError("Grid must be LVGrid or MVGrid.")
         # get population density in people/km^2
         # transform area to calculate area in km^2
         projection = partial(
@@ -76,8 +73,15 @@ def grid_expansion_costs(network):
             population_density = 'rural'
         else:
             population_density = 'urban'
-        return (float(network.config['costs_cables']['{} {}'.format(
-            voltage_level, population_density)]))
+        # get costs from config
+        costs_cable = float(network.config['costs_cables']['{}_cable'.format(
+            voltage_level)])
+        costs_cable_earthwork = float(network.config['costs_cables'][
+                                          '{}_cable_incl_earthwork_{}'.format(
+                                              voltage_level,
+                                              population_density)])
+        return (costs_cable_earthwork * l.length +
+                costs_cable * l.length * (quantity - 1))
 
     costs = pd.DataFrame()
 
@@ -110,11 +114,12 @@ def grid_expansion_costs(network):
                 isinstance, args=(Line,))]]
     # calculate costs for each reinforced line
     for l in list(lines.index.unique()):
+        number_lines_added = network.results.equipment_changes.loc[l, 'quantity'].sum()
         costs = costs.append(pd.DataFrame(
             {'type': l.type.name,
-             'total_costs': _get_line_costs(l) * l.length * l.quantity,
-             'length': l.length * l.quantity,
-             'quantity': l.quantity},
+             'total_costs': _get_line_costs(l, number_lines_added),
+             'length': l.length * number_lines_added,
+             'quantity': number_lines_added},
             index=[repr(l)]))
 
     return costs
