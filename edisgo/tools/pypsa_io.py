@@ -1063,6 +1063,11 @@ def process_pfa_results(network, pypsa):
     mv_station_names = [repr(m) for m in
                         network.mv_grid.graph.nodes_by_attribute('mv_station')]
     mv_station_mapping_sec = {'_'.join(['Bus', v]): v for v in mv_station_names}
+    mv_switch_disconnecter_names = [repr(sd) for sd in
+                                    network.mv_grid.graph.nodes_by_attribute(
+                                        'mv_disconnecting_point')]
+    mv_switch_disconnecter_mapping = {'_'.join(['Bus', v]): v for v in
+                                      mv_switch_disconnecter_names}
     lv_station_names = [repr(l) for l in
                         network.mv_grid.graph.nodes_by_attribute('lv_station')]
     lv_station_mapping_pri = {
@@ -1102,6 +1107,7 @@ def process_pfa_results(network, pypsa):
         **mv_station_mapping_sec,
         **lv_station_mapping_pri,
         **lv_station_mapping_sec,
+        **mv_switch_disconnecter_mapping,
         **loads_mapping,
         **lv_generators_mapping,
         **lv_loads_mapping,
@@ -1114,6 +1120,7 @@ def process_pfa_results(network, pypsa):
         {'mv': pfa_v_mag_pu[list(generators_mapping.values()) +
                             list(branch_t_mapping.values()) +
                             list(mv_station_mapping_sec.values()) +
+                            list(mv_switch_disconnecter_mapping.values()) +
                             list(lv_station_mapping_pri.values()) +
                             list(loads_mapping.values())],
          'lv': pfa_v_mag_pu[list(lv_station_mapping_sec.values()) +
