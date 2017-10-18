@@ -63,4 +63,6 @@ if __name__ == '__main__':
             logging.info('Something went wrong.')
 
     pd.DataFrame(faulty_grids).to_csv('faulty_grids.csv', index_label='grid')
-    costs.to_csv('costs.csv')
+    f = open('costs.csv', 'a')
+    f.write('# units: length in km, total_costs in kEUR\n')
+    costs.to_csv(f)
