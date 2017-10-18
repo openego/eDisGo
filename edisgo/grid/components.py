@@ -1,4 +1,6 @@
 import os
+import pandas as pd
+
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString
 from .grids import LVGrid, MVGrid
@@ -203,6 +205,17 @@ class Load(Component):
     def consumption(self, cons_dict):
         self._consumption = cons_dict
 
+    @property
+    def peak_load(self):
+        """
+        Get sectoral peak load
+        """
+        peak_load = pd.Series(self.consumption).mul(pd.Series(
+            self.grid.network.config['data'][
+                'peakload_consumption_ratio']).astype(float), fill_value=0)
+
+        return peak_load
+
     def __repr__(self):
         return '_'.join(['Load',
                          sorted(list(self.consumption.keys()))[0],
@@ -329,22 +342,75 @@ class MVDisconnectingPoint(Component):
 
     Attributes
     ----------
-    _state : :obj:`str`
-        State of switch ('open' or 'closed')
+    _nodes : tuple
+        Nodes of switch disconnecter line segment
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
         self._state = kwargs.get('state', None)
+        self._line = kwargs.get('line', None)
+        self._nodes = kwargs.get('nodes', None)
 
     def open(self):
-        """Toggle state to opened switch disconnector"""
-        raise NotImplementedError
+        """Toggle state to open switch disconnector"""
+        if self._line is not None:
+            self._state = 'open'
+            self._nodes = self.grid.graph.nodes_from_line(self._line)
+            self.grid.graph.remove_edge(
+                self._nodes[0], self._nodes[1])
+        else:
+            raise ValueError('``line`` is not set')
 
     def close(self):
         """Toggle state to closed switch disconnector"""
-        raise NotImplementedError
+        self._state = 'closed'
+        self.grid.graph.add_edge(
+            self._nodes[0], self._nodes[1], {'line': self._line})
+
+    @property
+    def state(self):
+        """
+        Get state of switch disconnecter
+
+        Returns
+        -------
+        str or None
+            State of MV ring disconnecter: 'open' or 'closed'.
+
+            Returns `None` if switch disconnecter line segment is not set. This
+            refers to an open ring, but it's unknown if the grid topology was
+            built correctly.
+        """
+        return self._state
+
+    @property
+    def line(self):
+        """
+        Get or set line segment that belongs to the switch disconnecter
+
+        The setter allows only to set the respective line initially. Once the
+        line segment representing the switch disconnecter is set, it cannot be
+        changed.
+
+        Returns
+        -------
+        Line
+            Line segment that is part of the switch disconnecter model
+        """
+        return self._line
+
+    @line.setter
+    def line(self, line):
+        if self._line is None:
+            if isinstance(line, Line):
+                self._line = line
+            else:
+                raise TypeError('``line`` must be of type {}'.format(Line))
+        else:
+            raise ValueError('``line`` can only be set initially. Too late '
+                             'dude!')
 
 
 class BranchTee(Component):
