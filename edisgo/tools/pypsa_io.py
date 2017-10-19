@@ -11,6 +11,7 @@ from math import pi, sqrt, floor
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
 from networkx import connected_component_subgraphs
+import collections
 
 
 def to_pypsa(network, mode):
@@ -876,6 +877,12 @@ def _check_topology(mv_components):
     if missing_buses:
         raise ValueError("Buses {buses} are not defined.".format(
             buses=missing_buses))
+
+    # check if there are duplicate buses and print them
+    if len(buses) != len(set(buses)):
+        raise ValueError("There are duplicates in the bus list: {buses}".format(
+            buses=[item for item, count in
+               collections.Counter(buses).items() if count > 1]))
 
 
 def _check_integrity_of_pypsa(pypsa_network):
