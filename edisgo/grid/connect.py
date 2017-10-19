@@ -511,7 +511,8 @@ def _connect_mv_node(network, node, target_obj):
 
             # create branch tee and add it to grid
             branch_tee = BranchTee(geom=conn_point_shp,
-                                   grid=network.mv_grid)
+                                   grid=network.mv_grid,
+                                   in_building=False)
             network.mv_grid.graph.add_node(branch_tee,
                                            type='branch_tee')
 
