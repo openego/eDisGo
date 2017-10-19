@@ -442,6 +442,11 @@ class BranchTee(Component):
         super().__init__(**kwargs)
         self.in_building = kwargs.get('in_building', None)
 
+        # set id of BranchTee automatically if not provided
+        if not self._id:
+            self._id = max([_.id for _ in
+                            self.grid.graph.nodes_by_attribute('branch_tee')]) + 1
+
     def __repr__(self):
         return '_'.join([self.__class__.__name__, repr(self.grid), str(self._id)])
 
