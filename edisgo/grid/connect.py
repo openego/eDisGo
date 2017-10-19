@@ -164,7 +164,7 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
     #                                       'load_count',
     #                                       'geno_count',
     #                                       'more_genos_than_loads')
-                                 )
+    #                             )
 
     # iterate over all LV grids
     for lv_grid in network.mv_grid.lv_grids:
