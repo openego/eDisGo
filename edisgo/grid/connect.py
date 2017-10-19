@@ -214,7 +214,8 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                                 length=line_length / 1e3,
                                 quantity=1,
                                 kind=std_line_kind,
-                                type=std_line_type)
+                                type=std_line_type,
+                                grid=lv_grid)
 
                     lv_grid.graph.add_edge(geno,
                                            lv_station,
@@ -321,7 +322,8 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                                 length=1,
                                 quantity=1,
                                 kind=std_line_kind,
-                                type=std_line_type)
+                                type=std_line_type,
+                                grid=lv_grid)
 
                     lv_grid.graph.add_edge(geno,
                                            lv_station,
@@ -533,7 +535,8 @@ def _connect_mv_node(network, node, target_obj):
                         length=line_length / 1e3,
                         quantity=1,
                         kind=line_kind,
-                        type=line_type)
+                        type=line_type,
+                        grid=network.mv_grid)
             network.mv_grid.graph.add_edge(adj_node1,
                                            branch_tee,
                                            line=line,
@@ -546,7 +549,8 @@ def _connect_mv_node(network, node, target_obj):
                         length=line_length / 1e3,
                         quantity=1,
                         kind=line_kind,
-                        type=line_type)
+                        type=line_type,
+                        grid=network.mv_grid)
             network.mv_grid.graph.add_edge(adj_node2,
                                            branch_tee,
                                            line=line,
@@ -561,7 +565,8 @@ def _connect_mv_node(network, node, target_obj):
                         length=line_length / 1e3,
                         quantity=1,
                         kind=std_line_kind,
-                        type=std_line_type)
+                        type=std_line_type,
+                        grid=network.mv_grid)
             network.mv_grid.graph.add_edge(node,
                                            branch_tee,
                                            line=line,
