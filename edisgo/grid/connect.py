@@ -261,7 +261,7 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                                 else:
                                     lv_conn_target = lv_grid.station
 
-                                    logger.warning(
+                                    logger.debug(
                                         'No valid conn. target found for {}. '
                                         'Connected to {}.'.format(
                                             repr(geno),
@@ -299,7 +299,7 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                                 else:
                                     lv_conn_target = lv_grid.station
 
-                                    logger.warning(
+                                    logger.debug(
                                         'No valid conn. target found for {}. '
                                         'Connected to {}.'.format(
                                             repr(geno),
@@ -312,7 +312,7 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                     else:
                         lv_conn_target = lv_grid.station
 
-                        logger.warning(
+                        logger.debug(
                             'No valid conn. target found for {}. '
                             'Connected to {}.'.format(
                                 repr(geno),
@@ -338,13 +338,13 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
 
         # warn if there're more genos than loads in LV grid
         if log_geno_count_vlevel7 > len(lv_loads):
-            logger.warning('The count of newly connected generators in voltage level 7 ({}) '
-                           'exceeds the count of loads ({}) in LV grid {}.'
-                           .format(str(log_geno_count_vlevel7),
-                                   str(len(lv_loads)),
-                                   repr(lv_grid)
-                                   )
-                           )
+            logger.debug('The count of newly connected generators in voltage level 7 ({}) '
+                         'exceeds the count of loads ({}) in LV grid {}.'
+                         .format(str(log_geno_count_vlevel7),
+                                 str(len(lv_loads)),
+                                 repr(lv_grid)
+                                 )
+                         )
         # TEMP: DEBUG STUFF
         lv_grid_stats.loc[len(lv_grid_stats)] = [repr(lv_grid),
                                                  len(lv_loads),
