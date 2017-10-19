@@ -52,7 +52,8 @@ def connect_mv_generators(network):
     pfac_mv_gen = network.config['scenario']['pfac_mv_gen']
 
     # get standard equipment
-    std_line_type = network.config['grid_expansion']['std_lv_line']
+    std_line_type = network.equipment_data['MV_cables'].loc[
+        network.config['grid_expansion']['std_mv_line']]
 
     for geno in sorted(network.mv_grid.graph.nodes_by_attribute('generator'), key=lambda _: repr(_)):
         if nx.is_isolate(network.mv_grid.graph, geno):
@@ -152,7 +153,8 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
     random.seed(a=seed)
 
     # get standard equipment
-    std_line_type = network.config['grid_expansion']['std_mv_line']
+    std_line_type = network.equipment_data['LV_cables'].loc[
+        network.config['grid_expansion']['std_lv_line']]
     std_line_kind = 'cable'
 
     # TEMP: DEBUG STUFF
@@ -484,7 +486,8 @@ def _connect_mv_node(network, node, target_obj):
     """
 
     # get standard equipment
-    std_line_type = network.config['grid_expansion']['std_mv_line']
+    std_line_type = network.equipment_data['MV_cables'].loc[
+        network.config['grid_expansion']['std_mv_line']]
     std_line_kind = 'cable'
 
     target_obj_result = None
