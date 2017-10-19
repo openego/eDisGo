@@ -150,7 +150,9 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
 
     # get predefined random seed and initialize random generator
     seed = int(network.config['random']['seed'])
-    random.seed(a=seed)
+    #random.seed(a=seed)
+    random.seed(a=1234)
+    # TODO: Switch back to 'seed' as soon as line ids are finished, #58
 
     # get standard equipment
     std_line_type = network.equipment_data['LV_cables'].loc[
