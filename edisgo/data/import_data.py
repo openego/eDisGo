@@ -20,6 +20,7 @@ import os
 if not 'READTHEDOCS' in os.environ:
     from ding0.tools.results import load_nd_from_pickle
     from ding0.core.network.stations import LVStationDing0
+    from ding0.core.network.grids import CircuitBreakerDing0
     from ding0.core.structure.regions import LVLoadAreaCentreDing0
 
 import logging
@@ -73,6 +74,9 @@ def import_from_ding0(file, network):
         ding0_nd = file
 
     ding0_mv_grid = ding0_nd._mv_grid_districts[0].mv_grid
+
+    # Make sure circuit breakers (respectively the rings) are closed
+    ding0_mv_grid.close_circuit_breakers()
 
     # Import medium-voltage grid data
     network.mv_grid = _build_mv_grid(ding0_mv_grid, network)
@@ -267,15 +271,6 @@ def _build_mv_grid(ding0_grid, network):
         v_level=_.v_level) for _ in ding0_grid.generators()}
     grid.graph.add_nodes_from(generators.values(), type='generator')
 
-    # Create list of diconnection point instances and add these to grid's graph
-    disconnecting_points = {_: MVDisconnectingPoint(id=_.id_db,
-                                                 geom=_.geo_data,
-                                                 state=_.status,
-                                                 grid=grid)
-                   for _ in ding0_grid._circuit_breakers}
-    grid.graph.add_nodes_from(disconnecting_points.values(),
-                              type='disconnection_point')
-
     # Create list of branch tee instances and add these to grid's graph
     branch_tees = {_: BranchTee(id=_.id_db,
                                 geom=_.geo_data,
@@ -327,7 +322,6 @@ def _build_mv_grid(ding0_grid, network):
     # Merge node above defined above to a single dict
     nodes = {**loads,
              **generators,
-             **disconnecting_points,
              **branch_tees,
              **stations,
              **{ding0_grid.station(): mv_station}}
@@ -654,12 +648,6 @@ def _validate_ding0_mv_grid_import(grid, ding0_grid):
     data_integrity['branch_tee']['ding0'] = len(ding0_grid._cable_distributors)
     data_integrity['branch_tee']['edisgo'] = len(
         grid.graph.nodes_by_attribute('branch_tee'))
-
-    # Check number of disconnecting points
-    data_integrity['disconnection_point']['ding0'] = len(
-        ding0_grid._circuit_breakers)
-    data_integrity['disconnection_point']['edisgo'] = len(
-        grid.graph.nodes_by_attribute('disconnection_point'))
 
     # Check number of MV transformers
     data_integrity['mv_transformer']['ding0'] = len(
