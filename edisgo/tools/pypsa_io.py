@@ -858,14 +858,14 @@ def _pypsa_timeseries_aggregated_at_lv_station(network):
            pd.concat(load_q, axis=1)
 
 
-def _check_topology(mv_components):
-    buses = mv_components['Bus'].index.tolist()
-    line_buses = mv_components['Line']['bus0'].tolist() + \
-                 mv_components['Line']['bus1'].tolist()
-    load_buses = mv_components['Load']['bus'].tolist()
-    generator_buses = mv_components['Generator']['bus'].tolist()
-    transformer_buses = mv_components['Transformer']['bus0'].tolist() + \
-                        mv_components['Transformer']['bus1'].tolist()
+def _check_topology(components):
+    buses = components['Bus'].index.tolist()
+    line_buses = components['Line']['bus0'].tolist() + \
+                 components['Line']['bus1'].tolist()
+    load_buses = components['Load']['bus'].tolist()
+    generator_buses = components['Generator']['bus'].tolist()
+    transformer_buses = components['Transformer']['bus0'].tolist() + \
+                        components['Transformer']['bus1'].tolist()
 
     buses_to_check = line_buses + load_buses + generator_buses + \
                      transformer_buses
