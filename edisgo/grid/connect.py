@@ -219,7 +219,7 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                     lv_grid.graph.add_edge(geno,
                                            lv_station,
                                            line=line,
-                                           type=line)
+                                           type='line')
 
                     # add line to equipment changes to track costs
                     _add_cable_to_equipment_changes(network=network,
@@ -325,8 +325,8 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
 
                     lv_grid.graph.add_edge(geno,
                                            lv_station,
-                                           line=lv_conn_target,
-                                           type=line)
+                                           line=line,
+                                           type='line')
 
                     # add line to equipment changes to track costs
                     _add_cable_to_equipment_changes(network=network,
