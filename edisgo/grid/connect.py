@@ -159,11 +159,11 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
         network.config['grid_expansion']['std_lv_line']]
     std_line_kind = 'cable'
 
-    # TEMP: DEBUG STUFF
-    lv_grid_stats = pd.DataFrame(columns=('lv_grid',
-                                          'load_count',
-                                          'geno_count',
-                                          'more_genos_than_loads')
+    # # TEMP: DEBUG STUFF
+    # lv_grid_stats = pd.DataFrame(columns=('lv_grid',
+    #                                       'load_count',
+    #                                       'geno_count',
+    #                                       'more_genos_than_loads')
                                  )
 
     # iterate over all LV grids
@@ -345,11 +345,11 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                                  repr(lv_grid)
                                  )
                          )
-        # TEMP: DEBUG STUFF
-        lv_grid_stats.loc[len(lv_grid_stats)] = [repr(lv_grid),
-                                                 len(lv_loads),
-                                                 log_geno_count_vlevel7,
-                                                 log_geno_count_vlevel7 > len(lv_loads)]
+        # # TEMP: DEBUG STUFF
+        # lv_grid_stats.loc[len(lv_grid_stats)] = [repr(lv_grid),
+        #                                          len(lv_loads),
+        #                                          log_geno_count_vlevel7,
+        #                                          log_geno_count_vlevel7 > len(lv_loads)]
 
 
 def _add_cable_to_equipment_changes(network, line):
