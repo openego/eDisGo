@@ -51,6 +51,9 @@ def connect_mv_generators(network):
     buffer_radius_inc = int(network.config['connect']['conn_buffer_radius_inc'])
     pfac_mv_gen = network.config['scenario']['pfac_mv_gen']
 
+    # get standard equipment
+    std_line_type = network.config['grid_expansion']['std_lv_line']
+
     for geno in sorted(network.mv_grid.graph.nodes_by_attribute('generator'), key=lambda _: repr(_)):
         if nx.is_isolate(network.mv_grid.graph, geno):
 
@@ -61,15 +64,10 @@ def connect_mv_generators(network):
                                                      node_source=geno,
                                                      node_target=network.mv_grid.station)
 
-                line_type, line_count = select_cable(network=network,
-                                                       level='mv',
-                                                       apparent_power=geno.nominal_capacity / pfac_mv_gen)
-                # TODO: Replace by standard cable
-
                 line = Line(id=random.randint(10**8, 10**9),
-                            type=line_type,
+                            type=std_line_type,
                             kind='cable',
-                            quantity=line_count,
+                            quantity=1,
                             length=line_length / 1e3,
                             grid=network.mv_grid)
 
@@ -77,6 +75,10 @@ def connect_mv_generators(network):
                                                geno,
                                                line=line,
                                                type='line')
+
+                # add line to equipment changes to track costs
+                _add_cable_to_equipment_changes(network=network,
+                                                line=line)
 
             # ===== voltage level 5: generator has to be connected to MV grid (next-neighbor) =====
             elif geno.v_level == 5:
@@ -217,6 +219,10 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                                            line=line,
                                            type=line)
 
+                    # add line to equipment changes to track costs
+                    _add_cable_to_equipment_changes(network=network,
+                                                    line=line)
+
                 # generator is of v_level 7 -> assign geno to load
                 elif geno.v_level == 7:
                     # counter for genos in v_level 7
@@ -320,6 +326,10 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                                            line=lv_conn_target,
                                            type=line)
 
+                    # add line to equipment changes to track costs
+                    _add_cable_to_equipment_changes(network=network,
+                                                    line=line)
+
         # warn if there're more genos than loads in LV grid
         if log_geno_count_vlevel7 > len(lv_loads):
             logger.warning('The count of newly connected generators in voltage level 7 ({}) '
@@ -335,8 +345,31 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                                                  log_geno_count_vlevel7,
                                                  log_geno_count_vlevel7 > len(lv_loads)]
 
-    # TEMP: DEBUG STUFF
-    print('debug breakpoint')
+
+def _add_cable_to_equipment_changes(network, line):
+    """Add cable to the equipment changes
+
+    All changes of equipment are stored in network.results.equipment_changes
+    which is used later to determine grid expansion costs.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+        The eDisGo container object
+    line : class:`~.grid.components.Line`
+        Line instance which is to be added
+    """
+    network.results.equipment_changes = \
+        network.results.equipment_changes.append(
+            pd.DataFrame(
+                {'iteration_step': 1,
+                 'change': 'added',
+                 'equipment': line.type.name,
+                 'quantity': 1
+                 },
+                index=repr(line)
+            )
+        )
 
 
 def _find_nearest_conn_objects(network, node, branches):
@@ -515,8 +548,8 @@ def _connect_mv_node(network, node, target_obj):
                                            line=line,
                                            type='line')
 
-            # add new branch for new node (station to branch tee)
-            # ===================================================
+            # add new branch for new node (node to branch tee)
+            # ================================================
             line_length = calc_geo_dist_vincenty(network=network,
                                                  node_source=node,
                                                  node_target=branch_tee)
@@ -530,7 +563,9 @@ def _connect_mv_node(network, node, target_obj):
                                            line=line,
                                            type='line')
 
-            # TODO: Add costs, #45
+            # add line to equipment changes to track costs
+            _add_cable_to_equipment_changes(network=network,
+                                            line=line)
 
             target_obj_result = branch_tee
 
@@ -574,7 +609,9 @@ def _connect_mv_node(network, node, target_obj):
                                            line=line,
                                            type='line')
 
-            # TODO: Add costs, #45
+            # add line to equipment changes to track costs
+            _add_cable_to_equipment_changes(network=network,
+                                            line=line)
 
             target_obj_result = target_obj['obj']
 
