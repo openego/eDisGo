@@ -135,12 +135,9 @@ class Load(Component):
         edisgo.network.TimeSeries : Details of global TimeSeries
         """
         if self._timeseries is None:
-            # TODO: replace by correct values (see OEDB) and put to config
-            peak_load_consumption_ratio = {
-                'residential': 0.0025,
-                'retail': 0.0025,
-                'industrial': 0.0025,
-                'agricultural': 0.0025}
+            sector = list(self.consumption.keys())[0]
+            peak_load_consumption_ratio = float(self.grid.network.config['data'][
+                'peakload_consumption_ratio'][sector])
 
             if isinstance(self.grid, MVGrid):
                 q_factor = tan(acos(
@@ -153,7 +150,6 @@ class Load(Component):
                 power_scaling = float(self.grid.network.config['scenario'][
                                           'scale_factor_lv_load'])
 
-            sector = list(self.consumption.keys())[0]
             # TODO: remove this if, once Ding0 data changed to single sector consumption
             if len(list(self.consumption.keys())) > 1:
                 consumption = sum([v for k,v in self.consumption.items()])
@@ -162,10 +158,10 @@ class Load(Component):
 
             timeseries = (self.grid.network.scenario.timeseries.load[sector] *
                           consumption *
-                          peak_load_consumption_ratio[sector]).to_frame('p')
+                          peak_load_consumption_ratio).to_frame('p')
             timeseries['q'] = (self.grid.network.scenario.timeseries.load[sector] *
                                consumption *
-                               peak_load_consumption_ratio[sector] *
+                               peak_load_consumption_ratio *
                                q_factor)
             self._timeseries = timeseries * power_scaling
 
