@@ -931,7 +931,7 @@ def import_generators(network, data_source=None, file=None):
         _import_genos_from_pypsa(network=network, file=file)
     else:
         logger.error("Invalid data source {} provided. Please re-check the file "
-                     "`config_db_tables.cfg`".format(data_source))
+                     "`config_data.cfg`".format(data_source))
         raise ValueError('The source you specified is not supported.')
 
 
