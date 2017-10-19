@@ -239,7 +239,7 @@ class Network:
             Translator to PyPSA data format
 
         """
-        if self.results.equipment_changes.empty:
+        if self.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
             self.pypsa = pypsa_io.to_pypsa(self, mode)
         else:
