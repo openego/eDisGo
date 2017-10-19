@@ -11,6 +11,7 @@ from math import pi, sqrt, floor
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
 from networkx import connected_component_subgraphs
+import collections
 
 
 def to_pypsa(network, mode):
@@ -857,14 +858,14 @@ def _pypsa_timeseries_aggregated_at_lv_station(network):
            pd.concat(load_q, axis=1)
 
 
-def _check_topology(mv_components):
-    buses = mv_components['Bus'].index.tolist()
-    line_buses = mv_components['Line']['bus0'].tolist() + \
-                 mv_components['Line']['bus1'].tolist()
-    load_buses = mv_components['Load']['bus'].tolist()
-    generator_buses = mv_components['Generator']['bus'].tolist()
-    transformer_buses = mv_components['Transformer']['bus0'].tolist() + \
-                        mv_components['Transformer']['bus1'].tolist()
+def _check_topology(components):
+    buses = components['Bus'].index.tolist()
+    line_buses = components['Line']['bus0'].tolist() + \
+                 components['Line']['bus1'].tolist()
+    load_buses = components['Load']['bus'].tolist()
+    generator_buses = components['Generator']['bus'].tolist()
+    transformer_buses = components['Transformer']['bus0'].tolist() + \
+                        components['Transformer']['bus1'].tolist()
 
     buses_to_check = line_buses + load_buses + generator_buses + \
                      transformer_buses
@@ -876,6 +877,12 @@ def _check_topology(mv_components):
     if missing_buses:
         raise ValueError("Buses {buses} are not defined.".format(
             buses=missing_buses))
+
+    # check if there are duplicate buses and print them
+    if len(buses) != len(set(buses)):
+        raise ValueError("There are duplicates in the bus list: {buses}".format(
+            buses=[item for item, count in
+               collections.Counter(buses).items() if count > 1]))
 
 
 def _check_integrity_of_pypsa(pypsa_network):

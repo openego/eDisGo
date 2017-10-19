@@ -4,7 +4,7 @@ from math import sqrt
 
 import edisgo
 from edisgo.tools import config, pypsa_io
-from edisgo.data.import_data import import_from_ding0
+from edisgo.data.import_data import import_from_ding0, import_generators
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 
@@ -37,8 +37,23 @@ class Network:
 
     Attributes
     ----------
+    _id : :obj:`str`
+        Name of network
+    _equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+        Electrical equipment such as lines and transformers
+    _config : ???
+        #TODO: TBD
     _metadata : :obj:`dict`
         Metadata of Network such as ?
+    _data_sources : :obj:`dict` of :obj:`str`
+        Data Sources of grid, generators etc.
+        Keys: 'grid', 'generators', ?
+    _scenario : :class:`~.grid.grids.Scenario`
+        Scenario which is used for calculations
+    _pypsa : :pypsa:`pypsa.Network<network>`
+        PyPSA representation of grid topology
+    _dingo_import_data :
+        Temporary data from ding0 import which are needed for OEP generator update
     """
 
     def __init__(self, **kwargs):
@@ -60,6 +75,8 @@ class Network:
         self._config = self._load_config()
         self._equipment_data = self._load_equipment_data()
 
+        self._dingo_import_data = []
+
     @staticmethod
     def _load_config():
         """Load config files
@@ -69,6 +86,7 @@ class Network:
         config object
         """
 
+        # load config
         config.load_config('config_db_tables.cfg')
         config.load_config('config_data.cfg')
         config.load_config('config_flexopt.cfg')
@@ -76,23 +94,18 @@ class Network:
         config.load_config('config_scenario.cfg')
         config.load_config('config_costs.cfg')
 
-        # modify structure of config data
-        config.cfg._sections['data']['peakload_consumption_ratio'] = {
-            'residential': config.cfg._sections['data'][
-                'residential_peakload_consumption'],
-            'retail': config.cfg._sections['data'][
-                'retail_peakload_consumption'],
-            'industrial': config.cfg._sections['data'][
-                'residential_peakload_consumption'],
-            'agricultural': config.cfg._sections['data'][
-                'agricultural_peakload_consumption']}
+        confic_dict = config.cfg._sections
 
-        del(config.cfg._sections['data']['residential_peakload_consumption'])
-        del(config.cfg._sections['data']['retail_peakload_consumption'])
-        del(config.cfg._sections['data']['industrial_peakload_consumption'])
-        del(config.cfg._sections['data']['agricultural_peakload_consumption'])
+        # convert numeric values to float
+        for sec, subsecs in confic_dict.items():
+            for subsec, val in subsecs.items():
+                # try str -> float conversion
+                try:
+                    confic_dict[sec][subsec] = float(val)
+                except:
+                    pass
 
-        return config.cfg._sections
+        return confic_dict
 
     def _load_equipment_data(self):
         """Load equipment data for transformers, cables etc.
@@ -167,17 +180,20 @@ class Network:
         network = cls(**kwargs)
 
         # call the importer
-        import_from_ding0(file, network)
+        import_from_ding0(file=file,
+                          network=network)
 
         return network
 
     def import_generators(self):
-        """Imports generators
+        """Import generators
 
-        TBD
-
+        For details see
+        :func:`edisgo.data.import_data.import_generators`
         """
-        raise NotImplementedError
+        data_source = data_source=self.config['data']['data_source']
+        import_generators(network=self,
+                          data_source=data_source)
 
     def analyze(self, mode=None):
         """Analyzes the grid by power flow analysis
@@ -223,7 +239,7 @@ class Network:
             Translator to PyPSA data format
 
         """
-        if self.results.equipment_changes.empty:
+        if self.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
             self.pypsa = pypsa_io.to_pypsa(self, mode)
         else:
@@ -286,6 +302,14 @@ class Network:
         """Set data source for key (e.g. 'grid')
         """
         self._data_sources[key] = data_source
+
+    @property
+    def dingo_import_data(self):
+        return self._dingo_import_data
+
+    @dingo_import_data.setter
+    def dingo_import_data(self, dingo_data):
+        self._dingo_import_data = dingo_data
 
     @property
     def pypsa(self):
