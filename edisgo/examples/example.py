@@ -19,6 +19,8 @@ logger.setLevel(logging.DEBUG)
 #         id='Test grid',
 #         scenario=scenario
 #     )
+#     # Import generators
+#     network.import_generators()
 #     # Do non-linear power flow analysis with PyPSA
 #     network.analyze()
 #     #network.pypsa.export_to_csv_folder('data/pypsa_export')
@@ -45,6 +47,8 @@ if __name__ == '__main__':
             id='Test grid',
             scenario=scenario)
         try:
+            # Import generators
+            network.import_generators()
             # Do non-linear power flow analysis with PyPSA
             network.analyze()
             # Do grid reinforcement

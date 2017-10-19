@@ -46,6 +46,11 @@ class Grid:
         raise NotImplementedError
 
     @property
+    def id(self):
+        """Returns id of grid"""
+        return self._id
+
+    @property
     def graph(self):
         """Provide access to the graph"""
         return self._graph
@@ -154,7 +159,6 @@ class LVGrid(Grid):
 
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
-
 
 
 class Graph(nx.Graph):

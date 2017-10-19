@@ -5,6 +5,7 @@ if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString
 from .grids import LVGrid, MVGrid
 from math import acos, tan
+import pandas as pd
 
 
 class Component:
@@ -27,12 +28,20 @@ class Component:
         """Returns id of component"""
         return self._id
 
+    @id.setter
+    def id(self, id):
+        self._id = id
+
     @property
     def geom(self):
         """:shapely:`Shapely Point object<points>` or
         :shapely:`Shapely LineString object<linestrings>` : Location of the
         :class:`Component` as Shapely Point or LineString"""
         return self._geom
+
+    @geom.setter
+    def geom(self, geom):
+        self._geom = geom
 
     @property
     def grid(self):
@@ -114,6 +123,11 @@ class Transformer(Component):
 
 class Load(Component):
     """Load object
+
+    Attributes
+    ----------
+    _timeseries : :pandas:`pandas.Series<series>`
+        Contains time series for load
     """
 
     def __init__(self, **kwargs):
@@ -316,6 +330,10 @@ class Generator(Component):
         """:obj:`float` : Nominal generation capacity"""
         return self._nominal_capacity
 
+    @nominal_capacity.setter
+    def nominal_capacity(self, nominal_capacity):
+        self._nominal_capacity = nominal_capacity
+
     @property
     def v_level(self):
         """:obj:`int` : Voltage level"""
@@ -423,6 +441,11 @@ class BranchTee(Component):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.in_building = kwargs.get('in_building', None)
+
+        # set id of BranchTee automatically if not provided
+        if not self._id:
+            self._id = max([_.id for _ in
+                            self.grid.graph.nodes_by_attribute('branch_tee')]) + 1
 
     def __repr__(self):
         return '_'.join([self.__class__.__name__, repr(self.grid), str(self._id)])
