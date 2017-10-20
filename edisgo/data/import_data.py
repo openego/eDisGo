@@ -1141,7 +1141,7 @@ def _import_genos_from_oedb(network):
                 # check if cap=0 (this may happen if dp is buggy)
                 if row['electrical_capacity'] <= 0:
                     geno_existing.grid.graph.remove_node(geno_existing)
-                    logger.warning('Capacity of generator {} is 0, generator removed. '
+                    logger.warning('Capacity of generator {} is <=0, generator removed. '
                                    'Check your data source.'
                                    .format(repr(geno_existing))
                                    )
@@ -1505,9 +1505,9 @@ def _import_genos_from_oedb(network):
                 # check if original geom from Energy Map is available
                 if row['geom_em']:
                     geom = row['geom_em']
-                    logger.warning('Generator {} has no geom entry, EnergyMap\'s geom entry will be used.'
-                                   .format(id)
-                                   )
+                    logger.debug('Generator {} has no geom entry, EnergyMap\'s geom entry will be used.'
+                                 .format(id)
+                                 )
 
         return geom
 
@@ -1540,9 +1540,9 @@ def _import_genos_from_oedb(network):
                 # if no geom, use geom of station
                 if not generator.geom:
                     generator.geom = lv_grid.station.geom
-                    logger.warning('Generator {} has no geom entry, stations\' geom will be used.'
-                                   .format(generator.id)
-                                   )
+                    logger.debug('Generator {} has no geom entry, stations\' geom will be used.'
+                                 .format(generator.id)
+                                 )
 
                 return lv_grid
 
