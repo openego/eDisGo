@@ -561,7 +561,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                                                         gen)
 
                     # connect generator to MV station
-                    line = Line(id='line_aggr_generator_vlevel_{v_level}_'
+                    line = Line(id='line_aggr_generator_la_' + la_id + '_vlevel_{v_level}_'
                                 '{subtype}'.format(
                                  v_level=v_level,
                                  subtype=subtype),
@@ -583,7 +583,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
             grid.graph.add_node(load, type='load')
 
             # connect aggregated load to MV station
-            line = Line(id='_'.join(['line_aggr_load', sector, la_id]),
+            line = Line(id='_'.join(['line_aggr_load_la_' + la_id, sector, la_id]),
                         type=aggr_line_type,
                         kind='cable',
                         length=1e-3,
