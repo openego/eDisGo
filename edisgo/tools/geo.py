@@ -11,38 +11,55 @@ import logging
 logger = logging.getLogger('edisgo')
 
 
-def proj2equidistant():
-    """Defines WGS84 (conformal) to ETRS (equidistant) projection
+def proj2equidistant(network):
+    """Defines conformal (e.g. WGS84) to ETRS (equidistant) projection
+    Source CRS is loaded from Network's config.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+        The eDisGo container object
 
     Returns
     -------
     :functools:`partial`
     """
+    srid = str(int(network.config['geo']['srid']))
 
     return partial(pyproj.transform,
-                   pyproj.Proj(init='epsg:4326'),  # source coordinate system
+                   pyproj.Proj(init='epsg:'+srid),  # source coordinate system
                    pyproj.Proj(init='epsg:3035'))  # destination coordinate system
 
 
-def proj2conformal():
-    """Defines ETRS (equidistant) to WGS84 (conformal) projection
+def proj2conformal(network):
+    """Defines ETRS (equidistant) to conformal (e.g. WGS84) projection.
+    Target CRS is loaded from Network's config.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+        The eDisGo container object
 
     Returns
     -------
     :functools:`partial`
     """
+    srid = str(int(network.config['geo']['srid']))
+
     return partial(pyproj.transform,
                    pyproj.Proj(init='epsg:3035'),  # source coordinate system
-                   pyproj.Proj(init='epsg:4326'))  # destination coordinate system
+                   pyproj.Proj(init='epsg:'+srid))  # destination coordinate system
 
 
-def calc_geo_lines_in_buffer(node, grid, radius, radius_inc):
+def calc_geo_lines_in_buffer(network, node, grid, radius, radius_inc):
     """Determines lines in nodes' associated graph that are at least partly
     within buffer of radius from node. If there are no lines, the buffer is
     successively extended by radius_inc until lines are found.
 
     Parameters
     ----------
+    network : :class:`~.grid.network.Network`
+        The eDisGo container object
     node : :class:`~.grid.components.Component`
         Origin node the buffer is created around (e.g. :class:`~.grid.components.Generator`).
         Node must be a member of grid's graph (grid.graph)
@@ -68,11 +85,11 @@ def calc_geo_lines_in_buffer(node, grid, radius, radius_inc):
     lines = []
 
     while not lines:
-        node_shp = transform(proj2equidistant(), node.geom)
+        node_shp = transform(proj2equidistant(network), node.geom)
         buffer_zone_shp = node_shp.buffer(radius)
         for line in grid.graph.lines():
             nodes = line['adj_nodes']
-            branch_shp = transform(proj2equidistant(), LineString([nodes[0].geom, nodes[1].geom]))
+            branch_shp = transform(proj2equidistant(network), LineString([nodes[0].geom, nodes[1].geom]))
             if buffer_zone_shp.intersects(branch_shp):
                 lines.append(line)
         radius += radius_inc

@@ -85,7 +85,8 @@ def connect_mv_generators(network):
             elif geno.v_level == 5:
 
                 # get branches within a the predefined radius `generator_buffer_radius`
-                branches = calc_geo_lines_in_buffer(node=geno,
+                branches = calc_geo_lines_in_buffer(network=network,
+                                                    node=geno,
                                                     grid=network.mv_grid,
                                                     radius=buffer_radius,
                                                     radius_inc=buffer_radius_inc)
@@ -412,14 +413,14 @@ def _find_nearest_conn_objects(network, node, branches):
 
     conn_objects_min_stack = []
 
-    node_shp = transform(proj2equidistant(), node.geom)
+    node_shp = transform(proj2equidistant(network), node.geom)
 
     for branch in branches:
         stations = branch['adj_nodes']
 
         # create shapely objects for 2 stations and line between them, transform to equidistant CRS
-        station1_shp = transform(proj2equidistant(), stations[0].geom)
-        station2_shp = transform(proj2equidistant(), stations[1].geom)
+        station1_shp = transform(proj2equidistant(network), stations[0].geom)
+        station2_shp = transform(proj2equidistant(network), stations[1].geom)
         line_shp = LineString([station1_shp, station2_shp])
 
         # create dict with DING0 objects (line & 2 adjacent stations), shapely objects and distances
@@ -496,7 +497,7 @@ def _connect_mv_node(network, node, target_obj):
 
     target_obj_result = None
 
-    node_shp = transform(proj2equidistant(), node.geom)
+    node_shp = transform(proj2equidistant(network), node.geom)
 
     # MV line is nearest connection point
     if isinstance(target_obj['shp'], LineString):
@@ -506,7 +507,7 @@ def _connect_mv_node(network, node, target_obj):
 
         # find nearest point on MV line
         conn_point_shp = target_obj['shp'].interpolate(target_obj['shp'].project(node_shp))
-        conn_point_shp = transform(proj2conformal(), conn_point_shp)
+        conn_point_shp = transform(proj2conformal(network), conn_point_shp)
 
         line = network.mv_grid.graph.edge[adj_node1][adj_node2]
 
