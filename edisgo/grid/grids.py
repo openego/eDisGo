@@ -46,6 +46,11 @@ class Grid:
         raise NotImplementedError
 
     @property
+    def id(self):
+        """Returns id of grid"""
+        return self._id
+
+    @property
     def graph(self):
         """Provide access to the graph"""
         return self._graph
@@ -72,6 +77,41 @@ class Grid:
     def grid_district(self):
         """Provide access to the grid_district"""
         return self._grid_district
+
+    @property
+    def peak_generation(self):
+        """
+        Cumulative peak generation capacity of generators of this grid
+
+        Returns
+        -------
+        float
+            Ad-hoc calculated of cached peak generation capacity
+        """
+        if self._peak_generation is None:
+            self._peak_generation = sum(
+                [_.nominal_capacity
+                 for _ in self.graph.nodes_by_attribute('generator')])
+
+        return self._peak_generation
+
+    @property
+    def peak_load(self):
+        """
+        Cumulative peak load capacity of generators of this grid
+
+        Returns
+        -------
+        float
+            Ad-hoc calculated of cached peak load capacity
+        """
+        if self._peak_load is None:
+            self._peak_load = sum(
+                [_.peak_load.sum()
+                 for _ in self.graph.nodes_by_attribute('load')])
+
+        return self._peak_load
+
 
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
@@ -121,7 +161,6 @@ class LVGrid(Grid):
             super().__init__(**kwargs)
 
 
-
 class Graph(nx.Graph):
     """Graph object
 
@@ -149,6 +188,34 @@ class Graph(nx.Graph):
 
         return dict([(v, k) for k, v in
               nx.get_edge_attributes(self, 'line').items()])[line]
+
+    def line_from_nodes(self, u, v):
+        """
+        Get line between two nodes ``u`` and ``v``.
+
+        Parameters
+        ----------
+        u : :class:`~.grid.components.Component`
+            One adjacent node
+        v : :class:`~.grid.components.Component`
+            The other adjacent node
+
+        Returns
+        -------
+        Line
+            Line segment connecting ``u`` and ``v``.
+        """
+        try:
+            line = nx.get_edge_attributes(self, 'line')[(u, v)]
+        except:
+            try:
+                line = nx.get_edge_attributes(self, 'line')[(v, u)]
+            except:
+                raise nx.NetworkXError('Line between ``u`` and ``v`` not '
+                                       'included in the graph.')
+
+        return line
+
 
     def nodes_by_attribute(self, attr_val, attr='type'):
         """

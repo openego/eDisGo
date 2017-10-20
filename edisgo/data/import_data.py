@@ -1,14 +1,30 @@
 from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
     MVStation, Line, Transformer, LVStation
 from ..grid.grids import MVGrid, LVGrid
+from ..grid.connect import connect_mv_generators, connect_lv_generators
+
+from egoio.db_tables import model_draft, supply
+from egoio.tools.db import connection
+
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import func
+from shapely.wkt import loads as wkt_loads
+
 import pandas as pd
 import numpy as np
 import networkx as nx
+from math import isnan
+import random
 import os
+
 if not 'READTHEDOCS' in os.environ:
     from ding0.tools.results import load_nd_from_pickle
     from ding0.core.network.stations import LVStationDing0
+    from ding0.core.network.grids import CircuitBreakerDing0
     from ding0.core.structure.regions import LVLoadAreaCentreDing0
+
+import logging
+logger = logging.getLogger('edisgo')
 
 
 def import_from_ding0(file, network):
@@ -59,11 +75,14 @@ def import_from_ding0(file, network):
 
     ding0_mv_grid = ding0_nd._mv_grid_districts[0].mv_grid
 
+    # Make sure circuit breakers (respectively the rings) are closed
+    ding0_mv_grid.close_circuit_breakers()
+
     # Import medium-voltage grid data
-    network.mv_grid =_build_mv_grid(ding0_mv_grid, network)
+    network.mv_grid = _build_mv_grid(ding0_mv_grid, network)
 
     # Import low-voltage grid data
-    lv_grids, lv_station_mapping, lv_grid_mapping  = _build_lv_grid(ding0_mv_grid, network)
+    lv_grids, lv_station_mapping, lv_grid_mapping = _build_lv_grid(ding0_mv_grid, network)
 
     # Assign lv_grids to network
     network.mv_grid.lv_grids = lv_grids
@@ -227,10 +246,17 @@ def _build_mv_grid(ding0_grid, network):
     la_centers = [_ for _ in ding0_grid._graph.nodes()
                   if isinstance(_, LVLoadAreaCentreDing0)]
     if la_centers:
-        aggregated, aggr_stations = _determine_aggregated_nodes(la_centers)
+        aggregated, aggr_stations, dingo_import_data = _determine_aggregated_nodes(la_centers)
+        network.dingo_import_data = dingo_import_data
     else:
         aggregated = {}
         aggr_stations = []
+
+        # create empty DF for imported agg. generators
+        network.dingo_import_data = pd.DataFrame(columns=('id',
+                                                          'capacity',
+                                                          'agg_geno')
+                                                 )
 
     # Create list of load instances and add these to grid's graph
     loads = {_: Load(
@@ -250,15 +276,6 @@ def _build_mv_grid(ding0_grid, network):
         grid=grid,
         v_level=_.v_level) for _ in ding0_grid.generators()}
     grid.graph.add_nodes_from(generators.values(), type='generator')
-
-    # Create list of diconnection point instances and add these to grid's graph
-    disconnecting_points = {_: MVDisconnectingPoint(id=_.id_db,
-                                                 geom=_.geo_data,
-                                                 state=_.status,
-                                                 grid=grid)
-                   for _ in ding0_grid._circuit_breakers}
-    grid.graph.add_nodes_from(disconnecting_points.values(),
-                              type='disconnection_point')
 
     # Create list of branch tee instances and add these to grid's graph
     branch_tees = {_: BranchTee(id=_.id_db,
@@ -311,7 +328,6 @@ def _build_mv_grid(ding0_grid, network):
     # Merge node above defined above to a single dict
     nodes = {**loads,
              **generators,
-             **disconnecting_points,
              **branch_tees,
              **stations,
              **{ding0_grid.station(): mv_station}}
@@ -334,7 +350,7 @@ def _build_mv_grid(ding0_grid, network):
     grid._station = mv_station
 
     # Attach aggregated to MV station
-    _attach_aggregated(grid, aggregated, ding0_grid)
+    _attach_aggregated(network, grid, aggregated, ding0_grid)
 
     return grid
 
@@ -461,6 +477,11 @@ def _determine_aggregated_nodes(la_centers):
                     generation_aggr[gen.type][gen.subtype].setdefault('ding0', 0)
                     generation_aggr[gen.type][gen.subtype]['ding0'] += gen.capacity
 
+    dingo_import_data = pd.DataFrame(columns=('id',
+                                              'capacity',
+                                              'agg_geno')
+                                     )
+
     for la_center in la_centers:
         aggr = {'generation': {}, 'load': {}, 'aggregates': []}
 
@@ -468,6 +489,11 @@ def _determine_aggregated_nodes(la_centers):
         for lvgd in la_center.lv_load_area._lv_grid_districts:
             for gen in lvgd.lv_grid.generators():
                 aggr = aggregate_generators(gen, aggr)
+
+                dingo_import_data.loc[len(dingo_import_data)] = \
+                    [int(gen.id_db),
+                     gen.capacity,
+                     None]
 
         # Determine aggregated load in MV grid
         # -> Implement once laods in Ding0 MV grids exist
@@ -488,10 +514,10 @@ def _determine_aggregated_nodes(la_centers):
         aggregated.update({repr(la_center): aggr})
 
 
-    return aggregated, aggr_stations
+    return aggregated, aggr_stations, dingo_import_data
 
 
-def _attach_aggregated(grid, aggregated, ding0_grid):
+def _attach_aggregated(network, grid, aggregated, ding0_grid):
     """Add Generators and Loads to MV station representing aggregated generation
     capacity and load
 
@@ -519,7 +545,7 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
             for type, val2 in val.items():
                 for subtype, val3 in val2.items():
                     gen = Generator(
-                        id='_'.join([la_id] + [str(_) for _ in val3['ids']]),
+                        id='agg-' + la_id + '-' + '_'.join([str(_) for _ in val3['ids']]),
                         nominal_capacity=val3['capacity'],
                         type=type,
                         subtype=subtype,
@@ -528,20 +554,25 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
                         v_level=4)
                     grid.graph.add_node(gen, type='generator')
 
+                    # backup reference of geno to LV geno list (save geno
+                    # where the former LV genos are aggregated in)
+                    network.dingo_import_data.set_value(network.dingo_import_data['id'].isin(val3['ids']),
+                                                        'agg_geno',
+                                                        gen)
+
                     # connect generator to MV station
-                    line = {'line': Line(
-                             id='line_aggr_generator_{LA}_vlevel_{v_level}_'
-                                '_{type}{subtype}'.format(
+                    line = Line(id='line_aggr_generator_la_' + la_id + '_vlevel_{v_level}_'
+                                '{subtype}'.format(
                                  v_level=v_level,
-                                 type=type,
-                                 subtype=subtype,
-                                 LA=la_id),
-                             type=aggr_line_type,
-                             kind='cable',
-                             length=.5,
-                             grid=grid)
-                         }
-                    grid.graph.add_edge(grid.station, gen, line, type='line_aggr')
+                                 subtype=subtype),
+                                 type=aggr_line_type,
+                                 kind='cable',
+                                 length=1e-3,
+                                 grid=grid)
+                    grid.graph.add_edge(grid.station,
+                                        gen,
+                                        line=line,
+                                        type='line_aggr')
         for sector, sectoral_load in la['load'].items():
             load = Load(
                 geom=grid.station.geom,
@@ -552,14 +583,16 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
             grid.graph.add_node(load, type='load')
 
             # connect aggregated load to MV station
-            line = {'line': Line(
-                id='_'.join(['line_aggr_load', sector, la_id]),
-                type=aggr_line_type,
-                kind='cable',
-                length=.5,
-                grid=grid)
-            }
-            grid.graph.add_edge(grid.station, load, line, type='line_aggr')
+            line = Line(id='_'.join(['line_aggr_load_la_' + la_id, sector, la_id]),
+                        type=aggr_line_type,
+                        kind='cable',
+                        length=1e-3,
+                        grid=grid)
+
+            grid.graph.add_edge(grid.station,
+                                load,
+                                line=line,
+                                type='line_aggr')
 
 
 def _validate_ding0_grid_import(mv_grid, ding0_mv_grid, lv_grid_mapping):
@@ -621,12 +654,6 @@ def _validate_ding0_mv_grid_import(grid, ding0_grid):
     data_integrity['branch_tee']['ding0'] = len(ding0_grid._cable_distributors)
     data_integrity['branch_tee']['edisgo'] = len(
         grid.graph.nodes_by_attribute('branch_tee'))
-
-    # Check number of disconnecting points
-    data_integrity['disconnection_point']['ding0'] = len(
-        ding0_grid._circuit_breakers)
-    data_integrity['disconnection_point']['edisgo'] = len(
-        grid.graph.nodes_by_attribute('disconnection_point'))
 
     # Check number of MV transformers
     data_integrity['mv_transformer']['ding0'] = len(
@@ -856,3 +883,879 @@ def _validate_load_generation(mv_grid, ding0_mv_grid):
                         subtype=k2,
                         ding0=v2['ding0'],
                         edisgo=v2['edisgo']))
+
+
+def import_generators(network, data_source=None, file=None):
+    """Import generator data from source.
+
+    The generator data include
+
+        * nom. capacity
+        * type (TODO: specify!)
+        * timeseries
+
+    Additional data which can be processed (e.g. used in OEDB data) are
+
+        * location
+        * type
+        * subtype
+        * capacity
+
+    Parameters
+    ----------
+    network: :class:`~.grid.network.Network`
+        The eDisGo container object
+    data_source: :obj:`str`
+        Data source. Supported sources:
+
+            * 'oedb'
+
+    file: :obj:`str`
+        File to import data from, required when using file-based sources.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        List of generators
+    """
+
+    if data_source == 'oedb':
+        _import_genos_from_oedb(network=network)
+    elif data_source == 'pypsa':
+        _import_genos_from_pypsa(network=network, file=file)
+    else:
+        logger.error("Invalid data source {} provided. Please re-check the file "
+                     "`config_data.cfg`".format(data_source))
+        raise ValueError('The source you specified is not supported.')
+
+
+def _import_genos_from_oedb(network):
+    """Import generator data from the Open Energy Database (OEDB).
+
+    The importer uses SQLAlchemy ORM objects.
+    These are defined in ego.io,
+    see https://github.com/openego/ego.io/tree/dev/egoio/db_tables
+
+    Parameters
+    ----------
+    network: :class:`~.grid.network.Network`
+        The eDisGo container object
+    """
+
+    def _import_conv_generators():
+        """Import conventional (conv) generators
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            List of medium-voltage generators
+
+        Notes
+        -----
+        You can find a full list of columns in
+        :func:`edisgo.data.import_data._update_grids`
+        """
+
+        # build query
+        generators_sqla = session.query(
+            orm_conv_generators.columns.id,
+            orm_conv_generators.columns.subst_id,
+            orm_conv_generators.columns.la_id,
+            orm_conv_generators.columns.capacity,
+            orm_conv_generators.columns.type,
+            orm_conv_generators.columns.voltage_level,
+            orm_conv_generators.columns.fuel,
+            func.ST_AsText(func.ST_Transform(
+                orm_conv_generators.columns.geom, srid))
+        ). \
+            filter(orm_conv_generators.columns.subst_id == network.mv_grid.id). \
+            filter(orm_conv_generators.columns.voltage_level.in_([4, 5, 6, 7])). \
+            filter(orm_conv_generators_version)
+
+        # read data from db
+        generators_mv = pd.read_sql_query(generators_sqla.statement,
+                                          session.bind,
+                                          index_col='id')
+
+        return generators_mv
+
+    def _import_res_generators():
+        """Import renewable (res) generators
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            List of medium-voltage generators
+        :pandas:`pandas.DataFrame<dataframe>`
+            List of low-voltage generators
+
+        Notes
+        -----
+        You can find a full list of columns in
+        :func:`edisgo.data.import_data._update_grids`
+
+        If subtype is not specified it's set to 'unknown'.
+        """
+
+        # build basic query
+        generators_sqla = session.query(
+            orm_re_generators.columns.id,
+            orm_re_generators.columns.subst_id,
+            orm_re_generators.columns.mvlv_subst_id,
+            orm_re_generators.columns.electrical_capacity,
+            orm_re_generators.columns.generation_type,
+            orm_re_generators.columns.generation_subtype,
+            orm_re_generators.columns.voltage_level,
+            func.ST_AsText(func.ST_Transform(
+                orm_re_generators.columns.rea_geom_new, srid)).label('geom'),
+            func.ST_AsText(func.ST_Transform(
+            orm_re_generators.columns.geom, srid)).label('geom_em')). \
+                filter(orm_re_generators.columns.subst_id == network.mv_grid.id). \
+            filter(orm_re_generators_version)
+
+        # extend basic query for MV generators and read data from db
+        generators_mv_sqla = generators_sqla. \
+            filter(orm_re_generators.columns.voltage_level.in_([4, 5]))
+        generators_mv = pd.read_sql_query(generators_mv_sqla.statement,
+                                          session.bind,
+                                          index_col='id')
+
+        # define generators with unknown subtype as 'unknown'
+        generators_mv.loc[generators_mv[
+                              'generation_subtype'].isnull(),
+                          'generation_subtype'] = 'unknown'
+
+        # extend basic query for LV generators and read data from db
+        generators_lv_sqla = generators_sqla. \
+            filter(orm_re_generators.columns.voltage_level.in_([6, 7]))
+        generators_lv = pd.read_sql_query(generators_lv_sqla.statement,
+                                       session.bind,
+                                       index_col='id')
+
+        # define generators with unknown subtype as 'unknown'
+        generators_lv.loc[generators_lv[
+                              'generation_subtype'].isnull(),
+                          'generation_subtype'] = 'unknown'
+
+        return generators_mv, generators_lv
+
+    def _update_grids(network, generators_mv, generators_lv, remove_missing=True):
+        """Update imported status quo DINGO-grid according to new generator dataset
+
+        It
+            * adds new generators to grid if they do not exist
+            * updates existing generators if parameters have changed
+            * removes existing generators from grid which do not exist in the imported dataset
+
+        Steps:
+
+            * Step 1: MV generators: Update existing, create new, remove decommissioned
+            * Step 2: LV generators (single units): Update existing, remove decommissioned
+            * Step 3: LV generators (in aggregated MV generators): Update existing,
+                remove decommissioned
+                (aggregated MV generators = originally LV generators from aggregated Load
+                Areas which were aggregated during import from ding0.)
+            * Step 4: LV generators (single units + aggregated MV generators): Create new
+
+        Parameters
+        ----------
+        network: :class:`~.grid.network.Network`
+            The eDisGo container object
+
+        generators_mv: :pandas:`pandas.DataFrame<dataframe>`
+            List of MV generators
+            Columns:
+                * id: :obj:`int` (index column)
+                * electrical_capacity: :obj:`float` (unit: kW)
+                * generation_type: :obj:`str` (e.g. 'solar')
+                * generation_subtype: :obj:`str` (e.g. 'solar_roof_mounted')
+                * voltage level: :obj:`int` (range: 4..7,)
+                * geom: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
+                * geom_em: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
+
+        generators_lv: :pandas:`pandas.DataFrame<dataframe>`
+            List of LV generators
+            Columns:
+                * id: :obj:`int` (index column)
+                * mvlv_subst_id: :obj:`int` (id of MV-LV substation in grid
+                  = grid which the generator will be connected to)
+                * electrical_capacity: :obj:`float` (unit: kW)
+                * generation_type: :obj:`str` (e.g. 'solar')
+                * generation_subtype: :obj:`str` (e.g. 'solar_roof_mounted')
+                * voltage level: :obj:`int` (range: 4..7,)
+                * geom: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
+                * geom_em: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
+
+        remove_missing: :obj:`bool`
+            If true, remove generators from grid which are not included in the imported dataset.
+        """
+
+        # set capacity difference threshold
+        cap_diff_threshold = 10 ** -4
+
+        # get existing generators in MV and LV grids
+        g_mv, g_lv, g_lv_agg = _build_generator_list(network=network)
+
+        # print current capacity
+        capacity_grid = 0
+        capacity_grid += sum([row['obj'].nominal_capacity for id, row in g_mv.iterrows()])
+        capacity_grid += sum([row['obj'].nominal_capacity for id, row in g_lv.iterrows()])
+        capacity_grid += sum([row['obj'].nominal_capacity for id, row in g_lv_agg.iterrows()])
+        logger.debug('Cumulative generator capacity (existing): {} kW'
+                     .format(str(round(capacity_grid, 1)))
+                     )
+
+        # ======================================
+        # Step 1: MV generators (existing + new)
+        # ======================================
+        logger.debug('==> MV generators')
+        logger.debug('{} generators imported.'
+                     .format(str(len(generators_mv))))
+        # get existing genos (status quo DF format)
+        g_mv_existing = g_mv[g_mv['id'].isin(list(generators_mv.index.values))]
+        # get existing genos (new genos DF format)
+        generators_mv_existing = generators_mv[generators_mv.index.isin(list(g_mv_existing['id']))]
+        # remove existing ones from grid's geno list
+        g_mv = g_mv[~g_mv.isin(g_mv_existing)].dropna()
+
+        # TEMP: BACKUP 1 GENO FOR TESTING
+        #temp_geno = generators_mv_existing.iloc[0]
+        #temp_geno['geom_em'] = temp_geno['geom_em'].replace('10.667', '10.64')
+
+        # iterate over exiting generators and check whether capacity has changed
+        log_geno_count = 0
+        log_geno_cap = 0
+        for id, row in generators_mv_existing.iterrows():
+
+            geno_existing = g_mv_existing[g_mv_existing['id'] == id]['obj'].iloc[0]
+
+            # check if capacity equals; if not: update capacity
+            if abs(row['electrical_capacity'] - \
+                           geno_existing.nominal_capacity) < cap_diff_threshold:
+                continue
+            else:
+                log_geno_cap += row['electrical_capacity'] - geno_existing.nominal_capacity
+                log_geno_count += 1
+                geno_existing.nominal_capacity = row['electrical_capacity']
+
+                # check if cap=0 (this may happen if dp is buggy)
+                if row['electrical_capacity'] <= 0:
+                    geno_existing.grid.graph.remove_node(geno_existing)
+                    logger.warning('Capacity of generator {} is <=0, generator removed. '
+                                   'Check your data source.'
+                                   .format(repr(geno_existing))
+                                   )
+
+        logger.debug('Capacities of {} of {} existing generators updated ({} kW).'
+                     .format(str(log_geno_count),
+                             str(len(generators_mv_existing) - log_geno_count),
+                             str(round(log_geno_cap, 1))
+                             )
+                     )
+
+        # new genos
+        log_geno_count = 0
+        log_geno_cap = 0
+        generators_mv_new = generators_mv[~generators_mv.index.isin(list(g_mv_existing['id']))]
+
+        # remove them from grid's geno list
+        g_mv = g_mv[~g_mv.isin(list(generators_mv_new.index.values))].dropna()
+
+        # TEMP: INSERT BACKUPPED GENO IN DF FOR TESTING
+        #generators_mv_new = generators_mv_new.append(temp_geno)
+
+        # iterate over new generators and create them
+        for id, row in generators_mv_new.iterrows():
+            # check if geom is available, skip otherwise
+            geom = _check_geom(id, row)
+            if not geom:
+                logger.warning('Generator {} has no geom entry at all and will not be imported!'
+                               .format(id)
+                               )
+                continue
+
+            # create generator object and add it to MV grid's graph
+            network.mv_grid.graph.add_node(
+                Generator(id=id,
+                          grid=network.mv_grid,
+                          nominal_capacity=row['electrical_capacity'],
+                          type=row['generation_type'],
+                          subtype=row['generation_subtype'],
+                          v_level=int(row['voltage_level']),
+                          geom=wkt_loads(geom)
+                          ),
+                type='generator')
+            log_geno_cap += row['electrical_capacity']
+            log_geno_count += 1
+
+        logger.debug('{} of {} new generators added ({} kW).'
+                     .format(str(log_geno_count),
+                             str(len(generators_mv_new)),
+                             str(round(log_geno_cap, 1))
+                             )
+                     )
+
+        # remove decommissioned genos
+        # (genos which exist in grid but not in the new dataset)
+        log_geno_cap = 0
+        if not g_mv.empty and remove_missing:
+            log_geno_count = 0
+            for _, row in g_mv.iterrows():
+                log_geno_cap += row['obj'].nominal_capacity
+                row['obj'].grid.graph.remove_node(row['obj'])
+                log_geno_count += 1
+            logger.debug('{} of {} decommissioned generators removed ({} kW).'
+                         .format(str(log_geno_count),
+                                 str(len(g_mv)),
+                                 str(round(log_geno_cap, 1))
+                                 )
+                         )
+
+        # =============================================
+        # Step 2: LV generators (single existing units)
+        # =============================================
+        logger.debug('==> LV generators')
+        logger.debug('{} generators imported.'.format(str(len(generators_lv))))
+        # get existing genos (status quo DF format)
+        g_lv_existing = g_lv[g_lv['id'].isin(list(generators_lv.index.values))]
+        # get existing genos (new genos DF format)
+        generators_lv_existing = generators_lv[generators_lv.index.isin(list(g_lv_existing['id']))]
+
+        # TEMP: BACKUP 1 GENO FOR TESTING
+        # temp_geno = g_lv.iloc[0]
+
+        # remove existing ones from grid's geno list
+        g_lv = g_lv[~g_lv.isin(g_lv_existing)].dropna()
+
+        # iterate over exiting generators and check whether capacity has changed
+        log_geno_count = 0
+        log_geno_cap = 0
+        for id, row in generators_lv_existing.iterrows():
+
+            geno_existing = g_lv_existing[g_lv_existing['id'] == id]['obj'].iloc[0]
+
+            # check if capacity equals; if not: update capacity
+            if abs(row['electrical_capacity'] - \
+                           geno_existing.nominal_capacity) < cap_diff_threshold:
+                continue
+            else:
+                log_geno_cap += row['electrical_capacity'] - geno_existing.nominal_capacity
+                log_geno_count += 1
+                geno_existing.nominal_capacity = row['electrical_capacity']
+
+        logger.debug('Capacities of {} of {} existing generators (single units) updated ({} kW).'
+                     .format(str(log_geno_count),
+                             str(len(generators_lv_existing) - log_geno_count),
+                             str(round(log_geno_cap, 1))
+                             )
+                     )
+
+        # TEMP: INSERT BACKUPPED GENO IN DF FOR TESTING
+        # g_lv.loc[len(g_lv)] = temp_geno
+
+        # remove decommissioned genos
+        # (genos which exist in grid but not in the new dataset)
+        log_geno_cap = 0
+        if not g_lv.empty and remove_missing:
+            log_geno_count = 0
+            for _, row in g_lv.iterrows():
+                log_geno_cap += row['obj'].nominal_capacity
+                row['obj'].grid.graph.remove_node(row['obj'])
+                log_geno_count += 1
+            logger.debug('{} of {} decommissioned generators (single units) removed ({} kW).'
+                         .format(str(log_geno_count),
+                                 str(len(g_lv)),
+                                 str(round(log_geno_cap, 1))
+                                 )
+                         )
+
+        # ====================================================================================
+        # Step 3: LV generators (existing in aggregated units (originally from aggregated LA))
+        # ====================================================================================
+        g_lv_agg = network.dingo_import_data
+        g_lv_agg_existing = g_lv_agg[g_lv_agg['id'].isin(list(generators_lv.index.values))]
+        generators_lv_agg_existing = generators_lv[generators_lv.index.isin(list(g_lv_agg_existing['id']))]
+
+        # TEMP: BACKUP 1 GENO FOR TESTING
+        # temp_geno = g_lv_agg.iloc[0]
+
+        g_lv_agg = g_lv_agg[~g_lv_agg.isin(g_lv_agg_existing)].dropna()
+
+        log_geno_count = 0
+        log_agg_geno_list = []
+        log_geno_cap = 0
+        for id, row in generators_lv_agg_existing.iterrows():
+
+            # check if capacity equals; if not: update capacity off agg. geno
+            cap_diff = row['electrical_capacity'] - \
+                       g_lv_agg_existing[g_lv_agg_existing['id'] == id]['capacity'].iloc[0]
+            if abs(cap_diff) < cap_diff_threshold:
+                continue
+            else:
+                agg_geno = g_lv_agg_existing[g_lv_agg_existing['id'] == id]['agg_geno'].iloc[0]
+                agg_geno.nominal_capacity += cap_diff
+                log_geno_cap += cap_diff
+
+                log_geno_count += 1
+                log_agg_geno_list.append(agg_geno)
+
+        logger.debug('Capacities of {} of {} existing generators (in {} of {} aggregated units) '
+                     'updated ({} kW).'
+                     .format(str(log_geno_count),
+                             str(len(generators_lv_agg_existing) - log_geno_count),
+                             str(len(set(log_agg_geno_list))),
+                             str(len(g_lv_agg_existing['agg_geno'].unique())),
+                             str(round(log_geno_cap, 1))
+                             )
+                     )
+
+        # TEMP: INSERT BACKUPPED GENO IN DF FOR TESTING
+        # g_lv_agg.loc[len(g_lv_agg)] = temp_geno
+
+        # remove decommissioned genos
+        # (genos which exist in grid but not in the new dataset)
+        log_geno_cap = 0
+        if not g_lv_agg.empty and remove_missing:
+            log_geno_count = 0
+            for _, row in g_lv_agg.iterrows():
+                row['agg_geno'].nominal_capacity -= row['capacity']
+                log_geno_cap += row['capacity']
+                # remove LV geno id from id string of agg. geno
+                id = row['agg_geno'].id.split('-')
+                ids = id[2].split('_')
+                ids.remove(str(int(row['id'])))
+                row['agg_geno'].id = '-'.join([id[0], id[1], '_'.join(ids)])
+
+                log_geno_count += 1
+            logger.debug('{} of {} decommissioned generators in aggregated generators removed ({} kW).'
+                         .format(str(log_geno_count),
+                                 str(len(g_lv_agg)),
+                                 str(round(log_geno_cap, 1))
+                                 )
+                         )
+
+        # ====================================================================
+        # Step 4: LV generators (new single units + genos in aggregated units)
+        # ====================================================================
+        # new genos
+        log_geno_count = log_agg_geno_count = 0
+
+        # TEMP: BACKUP 1 GENO FOR TESTING
+        #temp_geno = generators_lv[generators_lv.index == g_lv_existing.iloc[0]['id']]
+
+        generators_lv_new = generators_lv[~generators_lv.index.isin(list(g_lv_existing['id'])) &
+                                          ~generators_lv.index.isin(list(g_lv_agg_existing['id']))]
+
+        # TEMP: INSERT BACKUPPED GENO IN DF FOR TESTING
+        #generators_lv_new = generators_lv_new.append(temp_geno)
+
+        # dict for new agg. generators
+        agg_geno_new = {}
+        # get LV grid districts
+        lv_grid_dict = _build_lv_grid_dict(network)
+
+        # get predefined random seed and initialize random generator
+        seed = int(network.config['random']['seed'])
+        random.seed(a=seed)
+
+        # iterate over new (single unit or part of agg. unit) generators and create them
+        log_geno_cap = 0
+        for id, row in generators_lv_new.iterrows():
+
+            # TEMP: USE RANDOM LV GRID - DELETE IF DP COL mvlv_subst_id is fixed!
+            row['mvlv_subst_id'] = random.choice(list(lv_grid_dict.keys()))
+
+            # new unit is part of agg. LA -> add to dict
+            if row['mvlv_subst_id'] not in lv_grid_dict.keys():
+                # TODO: A missing mvlv_subst_id does not necessarily mean that it is a new geno
+                # TODO: It might be a bug in DP! Check!
+
+                if row['voltage_level'] not in agg_geno_new:
+                    agg_geno_new[row['voltage_level']] = {}
+                if row['voltage_level'] not in agg_geno_new:
+                    agg_geno_new[row['voltage_level']] = {}
+                if row['generation_type'] not in agg_geno_new[row['voltage_level']]:
+                    agg_geno_new[row['voltage_level']][row['generation_type']] = {}
+                if row['generation_subtype'] not in agg_geno_new[row['voltage_level']][row['generation_type']]:
+                    agg_geno_new[row['voltage_level']][row['generation_type']]\
+                        .update({row['generation_subtype']: {'ids': [int(id)],
+                                                             'capacity': row['electrical_capacity']
+                                                             }
+                         }
+                    )
+                else:
+                    agg_geno_new[row['voltage_level']][row['generation_type']] \
+                        [row['generation_subtype']]['ids'].append(int(id))
+                    agg_geno_new[row['voltage_level']][row['generation_type']] \
+                        [row['generation_subtype']]['capacity'] += row['electrical_capacity']
+
+            # new generator is a single (non-aggregated) unit
+            else:
+                # check if geom is available
+                geom = _check_geom(id, row)
+
+                gen = Generator(id=id,
+                                grid=None,
+                                nominal_capacity=row['electrical_capacity'],
+                                type=row['generation_type'],
+                                subtype=row['generation_subtype'],
+                                v_level=int(row['voltage_level']),
+                                geom=wkt_loads(geom) if geom else geom)
+
+                # TEMP: REMOVE MVLV SUBST ID FOR TESTING
+                #row['mvlv_subst_id'] = None
+
+                # check if MV-LV substation id exists. if not, allocate to random one
+                lv_grid = _check_mvlv_subst_id(generator=gen,
+                                               mvlv_subst_id=row['mvlv_subst_id'],
+                                               lv_grid_dict=lv_grid_dict)
+
+                gen.grid = lv_grid
+
+                lv_grid.graph.add_node(gen, type='generator')
+
+                log_geno_count += 1
+            log_geno_cap += row['electrical_capacity']
+
+        # there are new agg. generators to be created
+        if agg_geno_new:
+
+            # get line type for agg. genos from existing geno
+            aggr_line_type = network.mv_grid.graph.get_edge_data(
+                network.dingo_import_data.iloc[0]['agg_geno'],
+                network.mv_grid.station)['line'].type
+
+            # add aggregated generators
+            for v_level, val in agg_geno_new.items():
+                for type, val2 in val.items():
+                    for subtype, val3 in val2.items():
+                        # TODO: Add la_id of real agg. LA here!
+                        # TODO: (need additional dict top level for la_id here)
+                        gen = Generator(
+                            id='agg-' + 'LA_ID' + '-' + '_'.join([str(_) for _ in val3['ids']]),
+                            nominal_capacity=val3['capacity'],
+                            type=type,
+                            subtype=subtype,
+                            geom=network.mv_grid.station.geom,
+                            grid=network.mv_grid,
+                            v_level=4)
+                        network.mv_grid.graph.add_node(gen, type='generator')
+
+                        # connect generator to MV station
+                        line = Line(id='line_aggr_generator_vlevel_{v_level}_'
+                                    '{subtype}'.format(
+                                     v_level=v_level,
+                                     subtype=subtype),
+                                    type=aggr_line_type,
+                                    kind='cable',
+                                    length=1e-3,
+                                    grid=network.mv_grid)
+
+                        network.mv_grid.graph.add_edge(network.mv_grid.station,
+                                                       gen,
+                                                       line=line,
+                                                       type='line_aggr')
+
+                        log_agg_geno_count += len(val3['ids'])
+                        log_geno_cap += val3['capacity']
+
+        logger.debug('{} of {} new generators added ({} single units and {} '
+                     'units as aggregated generators) ({} kW).'
+                     .format(str(log_geno_count + log_agg_geno_count),
+                             str(len(generators_lv_new)),
+                             str(log_geno_count),
+                             str(log_agg_geno_count),
+                             str(round(log_geno_cap, 1))
+                             )
+                     )
+
+    def _check_geom(id, row):
+        """Checks if a valid geom is available in dataset
+
+        If yes, this geom will be used.
+        If not:
+
+            * MV generators: use geom from EnergyMap.
+            * LV generators: set geom to None. It is re-set in
+                :func:`edisgo.data.import_data._check_mvlv_subst_id`
+                to MV-LV station's geom. EnergyMap's geom is not used
+                since it is more inaccurate than the station's geom.
+
+        Parameters
+        ----------
+        id : :obj:`int`
+            Id of generator
+        row : :pandas:`pandas.Series<series>`
+            Generator dataset
+
+        Returns
+        -------
+        :shapely:`Shapely Point object<points>` or None
+            Geom of generator. None, if no geom is available.
+        """
+
+        geom = None
+
+        # check if geom is available
+        if row['geom']:
+            geom = row['geom']
+        else:
+            # MV generators: set geom to EnergyMap's geom, if available
+            if int(row['voltage_level']) in [4,5]:
+                # check if original geom from Energy Map is available
+                if row['geom_em']:
+                    geom = row['geom_em']
+                    logger.debug('Generator {} has no geom entry, EnergyMap\'s geom entry will be used.'
+                                 .format(id)
+                                 )
+
+        return geom
+
+    def _check_mvlv_subst_id(generator, mvlv_subst_id, lv_grid_dict):
+        """Checks if MV-LV substation id of single LV generator is missing or invalid.
+        If so, a random one from existing stations in LV grids will be assigned.
+
+        Parameters
+        ----------
+        generator : :class:`~.grid.components.Generator`
+            LV generator
+        mvlv_subst_id : :obj:`int`
+            MV-LV substation id
+        lv_grid_dict : :obj:`dict`
+            Dict of existing LV grids
+            Format: {:obj:`int`: :class:`~.grid.grids.LVGrid`}
+
+        Returns
+        -------
+        :class:`~.grid.grids.LVGrid`
+            LV grid of generator
+        """
+
+        if mvlv_subst_id and not isnan(mvlv_subst_id):
+            # assume that given LA exists
+            try:
+                # get LV grid
+                lv_grid = lv_grid_dict[mvlv_subst_id]
+
+                # if no geom, use geom of station
+                if not generator.geom:
+                    generator.geom = lv_grid.station.geom
+                    logger.debug('Generator {} has no geom entry, stations\' geom will be used.'
+                                 .format(generator.id)
+                                 )
+
+                return lv_grid
+
+            # if LA/LVGD does not exist, choose random LVGD and move generator to station of LVGD
+            # this occurs due to exclusion of LA with peak load < 1kW
+            except:
+                lv_grid = random.choice(list(lv_grid_dict.values()))
+
+                generator.geom = lv_grid.station.geom
+
+                logger.warning('Generator {} cannot be assigned to '
+                               'non-existent LV Grid and was '
+                               'allocated to a random LV Grid ({}); '
+                               'geom was set to stations\' geom.'
+                               .format(repr(generator),
+                                       repr(lv_grid)))
+                pass
+                return lv_grid
+
+        else:
+            lv_grid = random.choice(list(lv_grid_dict.values()))
+
+            generator.geom = lv_grid.station.geom
+
+            logger.warning('Generator {} has no mvlv_subst_id and was '
+                           'allocated to a random LV Grid ({}); '
+                           'geom was set to stations\' geom.'
+                           .format(repr(generator),
+                                   repr(lv_grid)))
+            pass
+            return lv_grid
+
+    def _validate_generation():
+        """Validate generators in updated grids
+
+        The validation uses the cumulative capacity of all generators.
+        """
+        # TODO: Valdate conv. genos too!
+
+        # set capacity difference threshold
+        cap_diff_threshold = 10 ** -4
+
+        capacity_imported = generators_res_mv['electrical_capacity'].sum() + \
+                            generators_res_lv['electrical_capacity'].sum() #+ \
+                            #generators_conv_mv['capacity'].sum()
+
+        capacity_grid = 0
+        # MV genos
+        for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
+            capacity_grid += geno.nominal_capacity
+
+        # LV genos
+        for lv_grid in network.mv_grid.lv_grids:
+            for geno in lv_grid.graph.nodes_by_attribute('generator'):
+                capacity_grid += geno.nominal_capacity
+
+        logger.debug('Cumulative generator capacity (updated): {} kW'
+                     .format(str(round(capacity_imported, 1)))
+                     )
+
+        if abs(capacity_imported - capacity_grid) > cap_diff_threshold:
+            raise ValueError('Cumulative capacity of imported generators ({} kW) '
+                             'differ from cumulative capacity of generators '
+                             'in updated grid ({} kW) by {} kW.'
+                             .format(str(round(capacity_imported, 1)),
+                                     str(round(capacity_grid, 1)),
+                                     str(round(capacity_imported - capacity_grid, 1))
+                                     )
+                             )
+
+    # make DB session
+    conn = connection(section=network.config['connection']['section'])
+    Session = sessionmaker(bind=conn)
+    session = Session()
+
+    srid = int(network.config['geo']['srid'])
+
+    oedb_data_source = network.config['data_source']['oedb_data_source']
+    scenario = network.config['scenario']['name']
+
+    if oedb_data_source == 'model_draft':
+
+        # load ORM names
+        orm_conv_generators_name = network.config['model_draft']['conv_generators_prefix'] + \
+                                   scenario + \
+                                   network.config['model_draft']['conv_generators_suffix']
+        orm_re_generators_name = network.config['model_draft']['re_generators_prefix'] + \
+                                 scenario + \
+                                 network.config['model_draft']['re_generators_suffix']
+
+        # import ORMs
+        orm_conv_generators = model_draft.__getattribute__(orm_conv_generators_name)
+        orm_re_generators = model_draft.__getattribute__(orm_re_generators_name)
+
+        # set dummy version condition (select all generators)
+        orm_conv_generators_version = 1 == 1
+        orm_re_generators_version = 1 == 1
+
+    elif oedb_data_source == 'versioned':
+
+        # load ORM names
+        orm_conv_generators_name = network.config['versioned']['conv_generators_prefix'] + \
+                                   scenario + \
+                                   network.config['versioned']['conv_generators_suffix']
+        orm_re_generators_name = network.config['versioned']['re_generators_prefix'] + \
+                                 scenario + \
+                                 network.config['versioned']['re_generators_suffix']
+        data_version = network.config['versioned']['version']
+
+        # import ORMs
+        #orm_conv_generators = supply.__getattribute__(orm_conv_generators_name)
+        #orm_re_generators = supply.__getattribute__(orm_re_generators_name)
+        # TODO: REMOVE WORKAROUND
+        orm_conv_generators = model_draft.__getattribute__(orm_conv_generators_name)
+        orm_re_generators = model_draft.__getattribute__(orm_re_generators_name)
+
+        # set version condition
+        orm_conv_generators_version = orm_conv_generators.columns.preversion == data_version
+        orm_re_generators_version = orm_re_generators.columns.preversion == data_version
+
+    # get conventional and renewable generators
+    #generators_conv_mv = _import_conv_generators()
+    generators_res_mv, generators_res_lv = _import_res_generators()
+
+    #generators_mv = generators_conv_mv.append(generators_res_mv)
+
+    _update_grids(network=network,
+                  #generators_mv=generators_mv,
+                  generators_mv=generators_res_mv,
+                  generators_lv=generators_res_lv)
+
+    _validate_generation()
+
+    connect_mv_generators(network=network)
+    connect_lv_generators(network=network)
+
+
+def _import_genos_from_pypsa(network, file):
+    """Import generator data from a pyPSA file.
+
+    TBD
+
+    Parameters
+    ----------
+    network: :class:`~.grid.network.Network`
+        The eDisGo container object
+    file: :obj:`str`
+        File including path
+    """
+    raise NotImplementedError
+
+    # generators = pd.read_csv(file,
+    #                          comment='#',
+    #                          index_col='name',
+    #                          delimiter=',',
+    #                          decimal='.'
+    #                          )
+
+
+def _build_generator_list(network):
+    """Builds DataFrames with all generators in MV and LV grids
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+            A DataFrame with id of and reference to MV generators
+    :pandas:`pandas.DataFrame<dataframe>`
+            A DataFrame with id of and reference to LV generators
+    :pandas:`pandas.DataFrame<dataframe>`
+            A DataFrame with id of and reference to aggregated LV generators
+    """
+
+    genos_mv = pd.DataFrame(columns=
+                            ('id', 'obj'))
+    genos_lv = pd.DataFrame(columns=
+                            ('id', 'obj'))
+    genos_lv_agg = pd.DataFrame(columns=
+                                ('id', 'obj'))
+
+    # MV genos
+    for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
+        name_comp = str(geno.id).split('-')
+        # geno is really MV (not aggregated (originally from aggregated LA))
+        if name_comp[0] != 'agg':
+            genos_mv.loc[len(genos_mv)] = [int(geno.id), geno]
+        else:
+            genos_lv_agg.loc[len(genos_lv_agg)] = [geno.id, geno]
+
+    # LV genos
+    for lv_grid in network.mv_grid.lv_grids:
+        for geno in lv_grid.graph.nodes_by_attribute('generator'):
+            genos_lv.loc[len(genos_lv)] = [int(geno.id), geno]
+
+    return genos_mv, genos_lv, genos_lv_agg
+
+
+def _build_lv_grid_dict(network):
+    """Creates dict of LV grids
+
+    LV grid ids are used as keys, LV grid references as values.
+
+    Parameters
+    ----------
+    network: :class:`~.grid.network.Network`
+        The eDisGo container object
+
+    Returns
+    -------
+    :obj:`dict`
+        Format: {:obj:`int`: :class:`~.grid.grids.LVGrid`}
+    """
+
+    lv_grid_dict = {}
+    for lv_grid in network.mv_grid.lv_grids:
+        lv_grid_dict[lv_grid.id] = lv_grid
+    return lv_grid_dict

@@ -11,6 +11,7 @@ from math import pi, sqrt, floor
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
 from networkx import connected_component_subgraphs
+import collections
 
 
 def to_pypsa(network, mode):
@@ -241,6 +242,8 @@ def mv_to_pypsa(network):
     lines = network.mv_grid.graph.lines()
     lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
     mv_stations = network.mv_grid.graph.nodes_by_attribute('mv_station')
+    disconnecting_points = network.mv_grid.graph.nodes_by_attribute(
+        'mv_disconnecting_point')
 
     omega = 2 * pi * 50
 
@@ -367,6 +370,11 @@ def mv_to_pypsa(network):
         bus1_name = '_'.join(['Bus', mv_st.__repr__(side='mv')])
         bus['name'].append(bus1_name)
         bus['v_nom'].append(mv_st.transformers[0].voltage_op)
+
+    # create dataframe representing disconnecting points
+    for dp in disconnecting_points:
+        bus['name'].append('_'.join(['Bus', repr(dp)]))
+        bus['v_nom'].append(dp.grid.voltage_nom)
 
     # Add separate slack generator at MV station secondary side bus bar
     generator['name'].append("Generator_slack")
@@ -850,14 +858,14 @@ def _pypsa_timeseries_aggregated_at_lv_station(network):
            pd.concat(load_q, axis=1)
 
 
-def _check_topology(mv_components):
-    buses = mv_components['Bus'].index.tolist()
-    line_buses = mv_components['Line']['bus0'].tolist() + \
-                 mv_components['Line']['bus1'].tolist()
-    load_buses = mv_components['Load']['bus'].tolist()
-    generator_buses = mv_components['Generator']['bus'].tolist()
-    transformer_buses = mv_components['Transformer']['bus0'].tolist() + \
-                        mv_components['Transformer']['bus1'].tolist()
+def _check_topology(components):
+    buses = components['Bus'].index.tolist()
+    line_buses = components['Line']['bus0'].tolist() + \
+                 components['Line']['bus1'].tolist()
+    load_buses = components['Load']['bus'].tolist()
+    generator_buses = components['Generator']['bus'].tolist()
+    transformer_buses = components['Transformer']['bus0'].tolist() + \
+                        components['Transformer']['bus1'].tolist()
 
     buses_to_check = line_buses + load_buses + generator_buses + \
                      transformer_buses
@@ -869,6 +877,16 @@ def _check_topology(mv_components):
     if missing_buses:
         raise ValueError("Buses {buses} are not defined.".format(
             buses=missing_buses))
+
+    # check if there are duplicate components and print them
+    for k, comps in components.items():
+        if len(list(comps.index.values)) != len(set(comps.index.values)):
+            raise ValueError("There are duplicates in the {comp} list: {dupl}"
+                             .format(comp=k,
+                                     dupl=[item for item, count in
+                                           collections.Counter(comps.index.values).items()
+                                           if count > 1])
+                             )
 
 
 def _check_integrity_of_pypsa(pypsa_network):
@@ -1056,6 +1074,11 @@ def process_pfa_results(network, pypsa):
     mv_station_names = [repr(m) for m in
                         network.mv_grid.graph.nodes_by_attribute('mv_station')]
     mv_station_mapping_sec = {'_'.join(['Bus', v]): v for v in mv_station_names}
+    mv_switch_disconnector_names = [repr(sd) for sd in
+                                    network.mv_grid.graph.nodes_by_attribute(
+                                        'mv_disconnecting_point')]
+    mv_switch_disconnector_mapping = {'_'.join(['Bus', v]): v for v in
+                                      mv_switch_disconnector_names}
     lv_station_names = [repr(l) for l in
                         network.mv_grid.graph.nodes_by_attribute('lv_station')]
     lv_station_mapping_pri = {
@@ -1095,6 +1118,7 @@ def process_pfa_results(network, pypsa):
         **mv_station_mapping_sec,
         **lv_station_mapping_pri,
         **lv_station_mapping_sec,
+        **mv_switch_disconnector_mapping,
         **loads_mapping,
         **lv_generators_mapping,
         **lv_loads_mapping,
@@ -1107,6 +1131,7 @@ def process_pfa_results(network, pypsa):
         {'mv': pfa_v_mag_pu[list(generators_mapping.values()) +
                             list(branch_t_mapping.values()) +
                             list(mv_station_mapping_sec.values()) +
+                            list(mv_switch_disconnector_mapping.values()) +
                             list(lv_station_mapping_pri.values()) +
                             list(loads_mapping.values())],
          'lv': pfa_v_mag_pu[list(lv_station_mapping_sec.values()) +
