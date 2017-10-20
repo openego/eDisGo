@@ -1467,7 +1467,13 @@ def _import_genos_from_oedb(network):
         """Checks if a valid geom is available in dataset
 
         If yes, this geom will be used.
-        If not, use geom from EnergyMap for MV generators
+        If not:
+
+            * MV generators: use geom from EnergyMap.
+            * LV generators: set geom to None. It is re-set in
+                :func:`edisgo.data.import_data._check_mvlv_subst_id`
+                to MV-LV station's geom. EnergyMap's geom is not used
+                since it is more inaccurate than the station's geom.
 
         Parameters
         ----------
