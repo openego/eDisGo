@@ -567,7 +567,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                                  subtype=subtype),
                                  type=aggr_line_type,
                                  kind='cable',
-                                 length=.5,
+                                 length=1e-3,
                                  grid=grid)
                     grid.graph.add_edge(grid.station,
                                         gen,
@@ -586,7 +586,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
             line = Line(id='_'.join(['line_aggr_load', sector, la_id]),
                         type=aggr_line_type,
                         kind='cable',
-                        length=.5,
+                        length=1e-3,
                         grid=grid)
 
             grid.graph.add_edge(grid.station,
@@ -1448,7 +1448,7 @@ def _import_genos_from_oedb(network):
                                      subtype=subtype),
                                     type=aggr_line_type,
                                     kind='cable',
-                                    length=.5,
+                                    length=1e-3,
                                     grid=network.mv_grid)
 
                         network.mv_grid.graph.add_edge(network.mv_grid.station,

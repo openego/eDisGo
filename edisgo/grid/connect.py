@@ -322,7 +322,7 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                         )
 
                     line = Line(id=random.randint(10 ** 8, 10 ** 9),
-                                length=1,
+                                length=1e-3,
                                 quantity=1,
                                 kind=std_line_kind,
                                 type=std_line_type,
