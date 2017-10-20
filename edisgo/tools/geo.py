@@ -138,8 +138,8 @@ def calc_geo_dist_vincenty(network, node_source, node_target):
     # line is 0. See issue #76
     if branch_length == 0:
         branch_length = 1
-        logger.warning('Geo distance is zero, check objects\' positions. '
-                       'Distance is set to 1m')
+        logger.debug('Geo distance is zero, check objects\' positions. '
+                     'Distance is set to 1m')
     # ===================================================================
 
     return branch_length
