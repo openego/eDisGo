@@ -357,7 +357,7 @@ class MVDisconnectingPoint(Component):
     Attributes
     ----------
     _nodes : tuple
-        Nodes of switch disconnecter line segment
+        Nodes of switch disconnector line segment
     """
 
     def __init__(self, **kwargs):
@@ -386,14 +386,14 @@ class MVDisconnectingPoint(Component):
     @property
     def state(self):
         """
-        Get state of switch disconnecter
+        Get state of switch disconnector
 
         Returns
         -------
         str or None
-            State of MV ring disconnecter: 'open' or 'closed'.
+            State of MV ring disconnector: 'open' or 'closed'.
 
-            Returns `None` if switch disconnecter line segment is not set. This
+            Returns `None` if switch disconnector line segment is not set. This
             refers to an open ring, but it's unknown if the grid topology was
             built correctly.
         """
@@ -402,16 +402,16 @@ class MVDisconnectingPoint(Component):
     @property
     def line(self):
         """
-        Get or set line segment that belongs to the switch disconnecter
+        Get or set line segment that belongs to the switch disconnector
 
         The setter allows only to set the respective line initially. Once the
-        line segment representing the switch disconnecter is set, it cannot be
+        line segment representing the switch disconnector is set, it cannot be
         changed.
 
         Returns
         -------
         Line
-            Line segment that is part of the switch disconnecter model
+            Line segment that is part of the switch disconnector model
         """
         return self._line
 

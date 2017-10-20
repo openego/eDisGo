@@ -9,11 +9,11 @@ import logging
 logger = logging.getLogger('edisgo')
 
 
-def position_switch_disconnecters(mv_grid, mode='load', status='open'):
+def position_switch_disconnectors(mv_grid, mode='load', status='open'):
     """
-    Determine position of switch disconnecter in MV grid rings
+    Determine position of switch disconnector in MV grid rings
 
-    Determination of the switch disconnecter location is motivated by placing it
+    Determination of the switch disconnector location is motivated by placing it
     to minimized load flows in both parts of the ring (half-rings).
     Use the parameter mode
 
@@ -23,7 +23,7 @@ def position_switch_disconnecters(mv_grid, mode='load', status='open'):
     mv_grid : :class:`~.grid.grids.MVGrid`
         MV grid instance
     mode : str
-        Define modus switch disconnecter positioning: can be performed based of
+        Define modus switch disconnector positioning: can be performed based of
         'load', 'generation' or both 'loadgen'. Defaults to 'load'
     status : str
         Either 'open' or 'closed'. Define which status is should be set
@@ -34,14 +34,14 @@ def position_switch_disconnecters(mv_grid, mode='load', status='open'):
     -------
     tuple
         A tuple of size 2 specifying their pair of nodes between which the
-        switch disconnecter is located. The first node specifies the node that
-        actually includes the switch disconnecter.
+        switch disconnector is located. The first node specifies the node that
+        actually includes the switch disconnector.
 
     Notes
     -----
     This function uses `nx.algorithms.find_cycle()` to identify nodes that are
     part of the MV grid ring(s). Make sure grid topology data that is provided
-    has closed rings. Otherwise, no location for a switch disconnecter can be
+    has closed rings. Otherwise, no location for a switch disconnector can be
     identified.
     """
 
@@ -122,7 +122,7 @@ def position_switch_disconnecters(mv_grid, mode='load', status='open'):
     cos_phi_load = mv_grid.network.scenario.parameters.pfac_mv_load
     cos_phi_gen = mv_grid.network.scenario.parameters.pfac_mv_gen
 
-    # Identify position of switch disconnecter (SD)
+    # Identify position of switch disconnector (SD)
     rings = nx.algorithms.cycle_basis(mv_grid.graph, root=mv_grid.station)
 
     for ring in rings:
@@ -156,7 +156,7 @@ def position_switch_disconnecters(mv_grid, mode='load', status='open'):
         # Set start value for difference in ring halfs
         diff_min = 10e9
 
-        # Identify nodes where switch disconnecter is located in between
+        # Identify nodes where switch disconnector is located in between
         for ctr in range(len(node_peak_data)):
             # Iteratively split route and calc peak load difference
             route_data_part1 = sum(node_peak_data[0:ctr])
@@ -170,7 +170,7 @@ def position_switch_disconnecters(mv_grid, mode='load', status='open'):
             else:
                 break
 
-        # find position of switch disconnecter
+        # find position of switch disconnector
         node1 = ring[position - 1]
         node2 = ring[position]
 
@@ -187,11 +187,11 @@ def position_switch_disconnecters(mv_grid, mode='load', status='open'):
 
 def implement_switch_disconnector(mv_grid, node1, node2):
     """
-    Install switch disconnecter in grid topology
+    Install switch disconnector in grid topology
 
     The graph that represents the grid's topology is altered in such way that
-    it explicitly includes a switch disconnecter.
-    The switch disconnecter is always located at ``node1``. Technically, it does
+    it explicitly includes a switch disconnector.
+    The switch disconnector is always located at ``node1``. Technically, it does
     not make any difference. This is just an convention ensuring consistency of
     multiple runs.
 
@@ -234,17 +234,17 @@ def implement_switch_disconnector(mv_grid, node1, node2):
     mv_grid.graph.add_edge(disconnecting_point, node2, new_line_attr)
 
     # Add disconnecting line segment
-    switch_disconnecter_line_attr = {
+    switch_disconnector_line_attr = {
         'line': Line(
-                  id="switch_disconnecter_line_{}".format(str(mv_dp_number + 1)),
+                  id="switch_disconnector_line_{}".format(str(mv_dp_number + 1)),
                   type=line.type,
                   length=length_sd_line,
                   grid=mv_grid)}
 
     mv_grid.graph.add_edge(node1, disconnecting_point,
-                           switch_disconnecter_line_attr)
+                           switch_disconnector_line_attr)
 
-    # Set line to switch disconnecter
+    # Set line to switch disconnector
     disconnecting_point.line =  mv_grid.graph.line_from_nodes(disconnecting_point, node2)
 
 
