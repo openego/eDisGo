@@ -252,6 +252,12 @@ def _build_mv_grid(ding0_grid, network):
         aggregated = {}
         aggr_stations = []
 
+        # create empty DF for imported agg. generators
+        network.dingo_import_data = pd.DataFrame(columns=('id',
+                                                          'capacity',
+                                                          'agg_geno')
+                                                 )
+
     # Create list of load instances and add these to grid's graph
     loads = {_: Load(
         id=_.id_db,
