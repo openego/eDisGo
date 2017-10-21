@@ -1,7 +1,7 @@
 import sys
 import pandas as pd
 from edisgo.flex_opt import check_tech_constraints as checks
-from edisgo.flex_opt import reinforce_measures
+from edisgo.flex_opt import reinforce_measures, exceptions
 import logging
 
 logger = logging.getLogger('edisgo')
@@ -128,19 +128,11 @@ def reinforce_grid(network, max_while_iterations=10):
     if (while_counter == max_while_iterations and
             (crit_lines or overloaded_stations)):
         logger.error("==> Load issues were not solved.")
-        sys.exit()
+        # raise exceptions.MaximumIterationError(
+        #     "Overloading issues for the following lines could not be solved:"
+        #     "{}".format(crit_lines))
     else:
         logger.debug('==> All load issues in MV grid are solved.')
-
-    # # dump network
-    # import pickle
-    # # network.pypsa.export_to_csv_folder('data/pypsa_export')
-    # # network.pypsa = None
-    # # pickle.dump(network, open('test_network.pkl', 'wb'))
-    # # load network
-    # network = pickle.load(open('test_network.pkl', 'rb'))
-    # from pypsa import Network as PyPSANetwork
-    # network.pypsa = PyPSANetwork(csv_folder_name='data/pypsa_export')
 
     # REINFORCE BRANCHES DUE TO VOLTAGE ISSUES
     iteration_step += 1
@@ -183,7 +175,9 @@ def reinforce_grid(network, max_while_iterations=10):
     # iterations allowed
     if while_counter == max_while_iterations and crit_nodes:
         logger.error("==> Voltage issues in MV grid were not solved.")
-        sys.exit()
+        # raise exceptions.MaximumIterationError(
+        #     "Overvoltage issues for the following nodes in MV grid could "
+        #     "not be solved: {}".format(crit_nodes))
     else:
         logger.debug('==> All voltage issues in MV grid are solved.')
 
@@ -224,7 +218,9 @@ def reinforce_grid(network, max_while_iterations=10):
     # iterations allowed
     if while_counter == max_while_iterations and crit_nodes:
         logger.error("==> Voltage issues in LV grids were not solved.")
-        sys.exit()
+        # raise exceptions.MaximumIterationError(
+        #     "Overvoltage issues for the following nodes in LV grids could "
+        #     "not be solved: {}".format(crit_nodes))
     else:
         logger.info('==> All voltage issues in LV grids are solved.')
 
@@ -269,3 +265,14 @@ def reinforce_grid(network, max_while_iterations=10):
 
         iteration_step += 1
         while_counter += 1
+
+    # check if all load problems were solved after maximum number of
+    # iterations allowed
+    if (while_counter == max_while_iterations and
+            (crit_lines or overloaded_stations)):
+        logger.error("==> Load issues were not solved.")
+        # raise exceptions.MaximumIterationError(
+        #     "Overloading issues for the following lines could not be solved:"
+        #     "{}".format(crit_lines))
+    else:
+        logger.debug('==> All load issues in MV grid are solved.')
