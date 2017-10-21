@@ -178,6 +178,9 @@ def reinforce_grid(network, max_while_iterations=10):
         # raise exceptions.MaximumIterationError(
         #     "Overvoltage issues for the following nodes in MV grid could "
         #     "not be solved: {}".format(crit_nodes))
+        for k, v in crit_nodes.items():
+            for i, d in v.iteritems():
+                network.results.unresolved_issues.update({repr(i): d})
     else:
         logger.debug('==> All voltage issues in MV grid are solved.')
 
@@ -221,6 +224,9 @@ def reinforce_grid(network, max_while_iterations=10):
         # raise exceptions.MaximumIterationError(
         #     "Overvoltage issues for the following nodes in LV grids could "
         #     "not be solved: {}".format(crit_nodes))
+        for k, v in crit_nodes.items():
+            for i, d in v.iteritems():
+                network.results.unresolved_issues.update({repr(i): d})
     else:
         logger.info('==> All voltage issues in LV grids are solved.')
 
@@ -274,5 +280,7 @@ def reinforce_grid(network, max_while_iterations=10):
         # raise exceptions.MaximumIterationError(
         #     "Overloading issues for the following lines could not be solved:"
         #     "{}".format(crit_lines))
+        network.results.unresolved_issues.update(crit_lines)
+        network.results.unresolved_issues.update(overloaded_stations)
     else:
         logger.debug('==> All load issues in MV grid are solved.')
