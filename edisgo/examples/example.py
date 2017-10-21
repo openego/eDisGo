@@ -60,13 +60,20 @@ if __name__ == '__main__':
                              columns=costs_grouped.columns,
                              index=[[network.id] * len(costs_grouped),
                                     costs_grouped.index]))
-            logging.info('SUCCESS!')
+            if network.results.unresolved_issues:
+                faulty_grids['grid'].append(network.id)
+                faulty_grids['msg'].append(
+                    str(network.results.unresolved_issues))
+                logging.info('Unresolved issues left after grid expansion.')
+            else:
+                logging.info('SUCCESS!')
         except Exception as e:
             faulty_grids['grid'].append(network.id)
             faulty_grids['msg'].append(e)
             logging.info('Something went wrong.')
 
-    pd.DataFrame(faulty_grids).to_csv('faulty_grids.csv', index_label='grid')
+    pd.DataFrame(faulty_grids).to_csv('faulty_grids.csv', index=False)
     f = open('costs.csv', 'a')
     f.write('# units: length in km, total_costs in kEUR\n')
     costs.to_csv(f)
+    f.close()
