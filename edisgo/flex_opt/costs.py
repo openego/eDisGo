@@ -117,11 +117,15 @@ def grid_expansion_costs(network):
                     isinstance, args=(Line,))]]
         # calculate costs for each reinforced line
         for l in list(lines.index.unique()):
+            number_lines_added = network.results.equipment_changes[
+                (network.results.equipment_changes.index == l) &
+                (network.results.equipment_changes.equipment == l.type.name)][
+                'quantity'].sum()
             costs = costs.append(pd.DataFrame(
                 {'type': l.type.name,
-                 'total_costs': _get_line_costs(l) * l.length * l.quantity,
-                 'length': l.length * l.quantity,
-                 'quantity': l.quantity},
+                 'total_costs': _get_line_costs(l, number_lines_added),
+                 'length': l.length * number_lines_added,
+                 'quantity': number_lines_added},
                 index=[repr(l)]))
     else:
         costs = costs.append(pd.DataFrame(
