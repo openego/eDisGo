@@ -816,6 +816,7 @@ class Results:
         self._i_res = None
         self._equipment_changes = pd.DataFrame()
         self._grid_expansion_costs = None
+        self._unresolved_issues = {}
 
     @property
     def pfa_p(self):
@@ -1039,6 +1040,43 @@ class Results:
     @grid_expansion_costs.setter
     def grid_expansion_costs(self, total_costs):
         self._grid_expansion_costs = total_costs
+
+    @property
+    def unresolved_issues(self):
+        """
+        Holds lines and nodes where over-loading or over-voltage issues
+        could not be solved in grid reinforcement.
+
+        In case over-loading or over-voltage issues could not be solved
+        after maximum number of iterations, grid reinforcement is not
+        aborted but grid expansion costs are still calculated and unresolved
+        issues listed here.
+
+        Parameters
+        ----------
+        issues : Dictionary
+
+            Dictionary of critical lines/stations with relative over-loading
+            and critical nodes with voltage deviation in p.u.. Format:
+                {crit_line_1: rel_overloading_1, ...,
+                 crit_line_n: rel_overloading_n,
+                 crit_node_1: v_mag_pu_node_1, ...,
+                 crit_node_n: v_mag_pu_node_n}
+            Provide this if you want to set unresolved_issues. For retrieval
+            of unresolved issues do not pass an argument.
+
+        Returns
+        -------
+        Dictionary
+            Dictionary of critical lines/stations with relative over-loading
+            and critical nodes with voltage deviation in p.u.
+
+        """
+        return self._unresolved_issues
+
+    @unresolved_issues.setter
+    def unresolved_issues(self, issues):
+        self._unresolved_issues = issues
 
     def s_res(self, components=None):
         """
