@@ -178,7 +178,9 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
         if len(path) == 1:
             logging.error("Voltage issues of station need to be solved at " +
                           "secondary side.")
-            sys.exit()
+            # raise exceptions.MaximumIterationError(
+            #     "Overloading issues for the following lines could not be solved:"
+            #     "{}".format(crit_lines))
 
         # check if representative of line is already in list
         # main_line_reinforced, if it is the main line the critical node is
