@@ -129,10 +129,10 @@ def grid_expansion_costs(network):
                 index=[repr(l)]))
     else:
         costs = costs.append(pd.DataFrame(
-            {'type': [],
-             'total_costs': [],
-             'length': [],
-             'quantity': []},
-            index=[]))
+            {'type': ['N/A'],
+             'total_costs': [0],
+             'length': [0],
+             'quantity': [0]},
+            index=['No line need to be reinforced']))
 
     return costs
