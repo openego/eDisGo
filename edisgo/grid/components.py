@@ -348,6 +348,64 @@ class Storage(Component):
         super().__init__(**kwargs)
 
 
+class StorageOperation():
+    """
+    Define storage operation mode and time series for power flow analysis
+    """
+
+    def __init__(self, **kwargs):
+        self._timeseries = kwargs.get('timeseries', None)
+        self._storage = kwargs.get('storage', None)
+
+    def define_timeseries(self, mode):
+        """
+        Define time series for :class:`Storage`
+
+        Determine the actual storage time series and save it to
+        :attribute:`_timeseries`.
+
+        Parameters
+        ----------
+        mode : str
+            Choose way of time series definition. Available ``mode``'s are
+             * **'etrago-plain'** the storage operation exactly matches the
+                storage time series as defined by eTraGo
+        """
+        if mode == 'etrago-plain':
+            if self._timeseries is None:
+                self._timeseries = pd.DataFrame()
+                self._timeseries[
+                    'p'] = self.storage.grid.network.scenario.etrago_specs.battery_active_power
+                self._timeseries['q'] = self.storage.grid.network.scenario.etrago_specs.battery_active_power * 0
+        else:
+            raise ValueError('The mode {} is not know as valid storage '
+                             'operational mode'.format(mode))
+
+    @property
+    def timeseries(self):
+        """
+        Storage's operational time series
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Storage's operational time series as p and q
+        """
+        return self._timeseries
+
+    @property
+    def storage(self):
+        """
+        Reference to storage instance
+
+        Returns
+        -------
+        Storage
+            Storage instance this object is associated to
+        """
+        return self._storage
+
+
 class MVDisconnectingPoint(Component):
     """Disconnecting point object
 
