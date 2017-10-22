@@ -1,12 +1,12 @@
 import copy
 import math
-import sys
 import networkx as nx
 from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
     dijkstra_shortest_path_length
 
 from edisgo.grid.components import Transformer, BranchTee, Generator, Load
 from edisgo.grid.grids import LVGrid
+from edisgo.flex_opt import exceptions
 
 import logging
 logger = logging.getLogger('edisgo')
@@ -178,9 +178,12 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
         if len(path) == 1:
             logging.error("Voltage issues of station need to be solved at " +
                           "secondary side.")
-            # raise exceptions.MaximumIterationError(
-            #     "Overloading issues for the following lines could not be solved:"
-            #     "{}".format(crit_lines))
+            raise exceptions.MaximumIterationError(
+                "Voltage issue at nodes {nodes} at secondary side of {station} "
+                "could not be solved".format(
+                    nodes=', '.join(
+                        [repr(_) for _ in list(crit_nodes.index.values)]),
+                    station=grid.station))
 
         # check if representative of line is already in list
         # main_line_reinforced, if it is the main line the critical node is
