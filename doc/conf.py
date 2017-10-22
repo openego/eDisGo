@@ -72,7 +72,7 @@ napoleon_use_keyword = False
 # Dictionary of external links
 extlinks = {'pandas':('http://pandas.pydata.org/pandas-docs/stable/api.html#%s',
                       'pandas.'),
-            'networkx':('https://networkx.readthedocs.io/en/stable/reference/classes.graph.html%s',
+            'networkx':('https://networkx.github.io/documentation/stable/reference/classes/%s.html',
                       'NetworkX Graph Obj'),
             'sqlalchemy':('http://docs.sqlalchemy.org/en/latest/orm/session_basics.html%s',
                       'SQLAlchemy session object'),
