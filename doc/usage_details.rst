@@ -12,8 +12,13 @@ Identify grid issues
 Grid extension
 --------------
 
-.. Battery storages
-.. ----------------
+Battery storages
+----------------
+
+.. _battery-operation:
+
+Modes of storage operation
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. Curtailment
 .. -----------
