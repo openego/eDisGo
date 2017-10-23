@@ -1375,7 +1375,8 @@ def _import_genos_from_oedb(network):
                 # Normally, this case should not occur since `subtype` of new genos
                 # is set to a new value (e.g. 'solar')
                 for _, agg_row in g_mv_agg.iterrows():
-                    if agg_row['la_id'] == int(row['la_id']) and agg_row['obj']\
+                    if not isnan(row['la_id']) and \
+                            agg_row['la_id'] == int(row['la_id']) and agg_row['obj']\
                             .type == row['generation_type'] and agg_row['obj']\
                             .subtype == row['generation_subtype']:
 
