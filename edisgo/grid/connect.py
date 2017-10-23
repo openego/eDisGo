@@ -49,7 +49,6 @@ def connect_mv_generators(network):
     # get params from config
     buffer_radius = int(network.config['connect']['conn_buffer_radius'])
     buffer_radius_inc = int(network.config['connect']['conn_buffer_radius_inc'])
-    pfac_mv_gen = network.config['scenario']['pfac_mv_gen']
 
     # get standard equipment
     std_line_type = network.equipment_data['MV_cables'].loc[
