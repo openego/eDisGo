@@ -1631,6 +1631,8 @@ def _import_genos_from_oedb(network):
                                      str(round(capacity_imported - capacity_grid, 1))
                                      )
                              )
+        else:
+            logger.debug('Cumulative capacity of imported generators validated.')
 
     # make DB session
     conn = connection(section=network.config['connection']['section'])
