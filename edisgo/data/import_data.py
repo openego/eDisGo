@@ -1001,6 +1001,7 @@ def _import_genos_from_oedb(network):
         generators_sqla = session.query(
             orm_re_generators.columns.id,
             orm_re_generators.columns.subst_id,
+            orm_re_generators.columns.la_id,
             orm_re_generators.columns.mvlv_subst_id,
             orm_re_generators.columns.electrical_capacity,
             orm_re_generators.columns.generation_type,
@@ -1094,13 +1095,13 @@ def _import_genos_from_oedb(network):
         cap_diff_threshold = 10 ** -4
 
         # get existing generators in MV and LV grids
-        g_mv, g_lv, g_lv_agg = _build_generator_list(network=network)
+        g_mv, g_lv, g_mv_agg = _build_generator_list(network=network)
 
         # print current capacity
         capacity_grid = 0
         capacity_grid += sum([row['obj'].nominal_capacity for id, row in g_mv.iterrows()])
         capacity_grid += sum([row['obj'].nominal_capacity for id, row in g_lv.iterrows()])
-        capacity_grid += sum([row['obj'].nominal_capacity for id, row in g_lv_agg.iterrows()])
+        capacity_grid += sum([row['obj'].nominal_capacity for id, row in g_mv_agg.iterrows()])
         logger.debug('Cumulative generator capacity (existing): {} kW'
                      .format(str(round(capacity_grid, 1)))
                      )
@@ -1338,7 +1339,9 @@ def _import_genos_from_oedb(network):
         # Step 4: LV generators (new single units + genos in aggregated units)
         # ====================================================================
         # new genos
-        log_geno_count = log_agg_geno_count = 0
+        log_geno_count =\
+            log_agg_geno_new_count =\
+            log_agg_geno_upd_count = 0
 
         # TEMP: BACKUP 1 GENO FOR TESTING
         #temp_geno = generators_lv[generators_lv.index == g_lv_existing.iloc[0]['id']]
@@ -1361,28 +1364,45 @@ def _import_genos_from_oedb(network):
         # iterate over new (single unit or part of agg. unit) generators and create them
         log_geno_cap = 0
         for id, row in generators_lv_new.iterrows():
+            lv_geno_added_to_agg_geno = False
 
             # new unit is part of agg. LA (mvlv_subst_id is different from existing
-            # ones in LV grids of non-agg. load areas) -> add to dict
+            # ones in LV grids of non-agg. load areas)
             if row['mvlv_subst_id'] not in lv_grid_dict.keys():
-                if row['voltage_level'] not in agg_geno_new:
-                    agg_geno_new[row['voltage_level']] = {}
-                if row['voltage_level'] not in agg_geno_new:
-                    agg_geno_new[row['voltage_level']] = {}
-                if row['generation_type'] not in agg_geno_new[row['voltage_level']]:
-                    agg_geno_new[row['voltage_level']][row['generation_type']] = {}
-                if row['generation_subtype'] not in agg_geno_new[row['voltage_level']][row['generation_type']]:
-                    agg_geno_new[row['voltage_level']][row['generation_type']]\
-                        .update({row['generation_subtype']: {'ids': [int(id)],
-                                                             'capacity': row['electrical_capacity']
-                                                             }
-                         }
-                    )
-                else:
-                    agg_geno_new[row['voltage_level']][row['generation_type']] \
-                        [row['generation_subtype']]['ids'].append(int(id))
-                    agg_geno_new[row['voltage_level']][row['generation_type']] \
-                        [row['generation_subtype']]['capacity'] += row['electrical_capacity']
+
+                # check if new unit can be added to existing agg. generator
+                # (LA id, type and subtype match) -> update existing agg. generator.
+                # Normally, this case should not occur since `subtype` of new genos
+                # is set to a new value (e.g. 'solar')
+                for _, agg_row in g_mv_agg.iterrows():
+                    if agg_row['la_id'] == int(row['la_id']) and agg_row['obj']\
+                            .type == row['generation_type'] and agg_row['obj']\
+                            .subtype == row['generation_subtype']:
+
+                        agg_row['obj'].nominal_capacity += row['electrical_capacity']
+                        agg_row['obj'].id += '_{}'.format(str(id))
+                        log_agg_geno_upd_count += 1
+                        lv_geno_added_to_agg_geno = True
+
+                if not lv_geno_added_to_agg_geno:
+                    if row['voltage_level'] not in agg_geno_new:
+                        agg_geno_new[row['voltage_level']] = {}
+                    if row['voltage_level'] not in agg_geno_new:
+                        agg_geno_new[row['voltage_level']] = {}
+                    if row['generation_type'] not in agg_geno_new[row['voltage_level']]:
+                        agg_geno_new[row['voltage_level']][row['generation_type']] = {}
+                    if row['generation_subtype'] not in agg_geno_new[row['voltage_level']][row['generation_type']]:
+                        agg_geno_new[row['voltage_level']][row['generation_type']]\
+                            .update({row['generation_subtype']: {'ids': [int(id)],
+                                                                 'capacity': row['electrical_capacity']
+                                                                 }
+                             }
+                        )
+                    else:
+                        agg_geno_new[row['voltage_level']][row['generation_type']] \
+                            [row['generation_subtype']]['ids'].append(int(id))
+                        agg_geno_new[row['voltage_level']][row['generation_type']] \
+                            [row['generation_subtype']]['capacity'] += row['electrical_capacity']
 
             # new generator is a single (non-aggregated) unit
             else:
@@ -1451,15 +1471,19 @@ def _import_genos_from_oedb(network):
                                                        line=line,
                                                        type='line_aggr')
 
-                        log_agg_geno_count += len(val3['ids'])
+                        log_agg_geno_new_count += len(val3['ids'])
                         log_geno_cap += val3['capacity']
 
-        logger.debug('{} of {} new generators added ({} single units and {} '
-                     'units as aggregated generators) ({} kW).'
-                     .format(str(log_geno_count + log_agg_geno_count),
+        logger.debug('{} of {} new generators added ({} single units, {} to existing '
+                     'agg. generators and {} units as new aggregated generators) '
+                     '(total: {} kW).'
+                     .format(str(log_geno_count +
+                                 log_agg_geno_new_count +
+                                 log_agg_geno_upd_count),
                              str(len(generators_lv_new)),
                              str(log_geno_count),
-                             str(log_agg_geno_count),
+                             str(log_agg_geno_upd_count),
+                             str(log_agg_geno_new_count),
                              str(round(log_geno_cap, 1))
                              )
                      )
@@ -1715,7 +1739,7 @@ def _build_generator_list(network):
     genos_lv = pd.DataFrame(columns=
                             ('id', 'obj'))
     genos_lv_agg = pd.DataFrame(columns=
-                                ('id', 'obj'))
+                                ('la_id', 'id', 'obj'))
 
     # MV genos
     for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
@@ -1724,7 +1748,8 @@ def _build_generator_list(network):
         if name_comp[0] != 'agg':
             genos_mv.loc[len(genos_mv)] = [int(geno.id), geno]
         else:
-            genos_lv_agg.loc[len(genos_lv_agg)] = [geno.id, geno]
+            la_id = int(geno.id.split('-')[1].split('_')[-1])
+            genos_lv_agg.loc[len(genos_lv_agg)] = [la_id, geno.id, geno]
 
     # LV genos
     for lv_grid in network.mv_grid.lv_grids:
