@@ -1436,10 +1436,12 @@ def _import_genos_from_oedb(network):
         # there are new agg. generators to be created
         if agg_geno_new:
 
-            # get line type for agg. genos from existing geno
-            aggr_line_type = network.mv_grid.graph.get_edge_data(
-                network.dingo_import_data.iloc[0]['agg_geno'],
-                network.mv_grid.station)['line'].type
+            # use max available line type for agg. generators
+            mv_cables = network.equipment_data['MV_cables']
+            aggr_line_type = mv_cables[
+                mv_cables['I_max_th'] == mv_cables[
+                    mv_cables['U_n'] == network.mv_grid.voltage_nom]
+                ['I_max_th'].max()]
 
             # add aggregated generators
             for v_level, val in agg_geno_new.items():
