@@ -1,4 +1,4 @@
-from edisgo.grid.network import Network, Scenario, TimeSeries
+from edisgo.grid.network import Network, Scenario, TimeSeries, Results
 import os
 import sys
 import pandas as pd
@@ -38,6 +38,8 @@ if __name__ == '__main__':
     timeseries = TimeSeries()
     scenario = Scenario(timeseries=timeseries,
                         power_flow='worst-case')
+    costs_before_geno_import = pd.DataFrame()
+    faulty_grids_before_geno_import = {'grid': [], 'msg': []}
     costs = pd.DataFrame()
     faulty_grids = {'grid': [], 'msg': []}
     for dingo_grid in grids:
@@ -47,6 +49,31 @@ if __name__ == '__main__':
             id='Test grid',
             scenario=scenario)
         try:
+            # Calculate grid expansion costs before generator import
+
+            # Do non-linear power flow analysis with PyPSA
+            network.analyze()
+            # Do grid reinforcement
+            network.reinforce()
+            # Get costs
+            costs_grouped = network.results.grid_expansion_costs.groupby(
+                ['type']).sum()
+            costs_before_geno_import = costs.append(
+                pd.DataFrame(costs_grouped.values,
+                             columns=costs_grouped.columns,
+                             index=[[network.id] * len(costs_grouped),
+                                    costs_grouped.index]))
+            if network.results.unresolved_issues:
+                faulty_grids_before_geno_import['grid'].append(network.id)
+                faulty_grids_before_geno_import['msg'].append(
+                    str(network.results.unresolved_issues))
+            # Clear results
+            network.results = Results()
+            network.pypsa = None
+
+            # Calculate grid expansion costs after generator import
+
+            logging.info('Grid expansion after generator import.')
             # Import generators
             network.import_generators()
             # Do non-linear power flow analysis with PyPSA
@@ -71,6 +98,13 @@ if __name__ == '__main__':
             faulty_grids['grid'].append(network.id)
             faulty_grids['msg'].append(e)
             logging.info('Something went wrong.')
+
+    pd.DataFrame(faulty_grids_before_geno_import).to_csv(
+        'faulty_grids_before_geno_import.csv', index=False)
+    f = open('costs_before_geno_import.csv', 'a')
+    f.write('# units: length in km, total_costs in kEUR\n')
+    costs_before_geno_import.to_csv(f)
+    f.close()
 
     pd.DataFrame(faulty_grids).to_csv('faulty_grids.csv', index=False)
     f = open('costs.csv', 'a')
