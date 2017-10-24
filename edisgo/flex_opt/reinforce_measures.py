@@ -185,98 +185,100 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
         # check if representative of line is already in list
         # main_line_reinforced, if it is the main line the critical node is
         # connected to has already been reinforced in this iteration step
-        if not path[1] in main_line_reinforced:
+        # TODO: "if len(path) > 1:" when exception above is raised
+        if len(path) > 1:
+            if not path[1] in main_line_reinforced:
 
-            main_line_reinforced.append(path[1])
-            # get path length from station to critical node
-            get_weight = lambda u, v, data: data['line'].length
-            path_length = dijkstra_shortest_path_length(
-                grid.graph, grid.station, get_weight,
-                target=crit_nodes.index[i])
-            # find first node in path that exceeds 2/3 of the line length
-            # from station to critical node farthest away from the station
-            node_2_3 = next(j for j in path if path_length[j] >= path_length[
-                crit_nodes.index[i]] * 2 / 3)
+                main_line_reinforced.append(path[1])
+                # get path length from station to critical node
+                get_weight = lambda u, v, data: data['line'].length
+                path_length = dijkstra_shortest_path_length(
+                    grid.graph, grid.station, get_weight,
+                    target=crit_nodes.index[i])
+                # find first node in path that exceeds 2/3 of the line length
+                # from station to critical node farthest away from the station
+                node_2_3 = next(j for j in path if path_length[j] >= path_length[
+                    crit_nodes.index[i]] * 2 / 3)
 
-            # if LVGrid: check if node_2_3 is outside of a house
-            # and if not find next BranchTee outside the house
-            if isinstance(grid, LVGrid):
-                if isinstance(node_2_3, BranchTee):
-                    if node_2_3.in_building:
-                        # ToDo more generic (new function)
-                        try:
-                            node_2_3 = path[path.index(node_2_3) - 1]
-                        except IndexError:
-                            print('BranchTee outside of building is not in ' +
-                                  'path.')
-                elif (isinstance(node_2_3, Generator) or
-                          isinstance(node_2_3, Load)):
-                    pred_node = path[path.index(node_2_3) - 1]
-                    if isinstance(pred_node, BranchTee):
-                        if pred_node.in_building:
+                # if LVGrid: check if node_2_3 is outside of a house
+                # and if not find next BranchTee outside the house
+                if isinstance(grid, LVGrid):
+                    if isinstance(node_2_3, BranchTee):
+                        if node_2_3.in_building:
                             # ToDo more generic (new function)
                             try:
-                                node_2_3 = path[path.index(node_2_3) - 2]
+                                node_2_3 = path[path.index(node_2_3) - 1]
                             except IndexError:
-                                print('BranchTee outside of building is ' +
-                                      'not in path.')
+                                print('BranchTee outside of building is not in ' +
+                                      'path.')
+                    elif (isinstance(node_2_3, Generator) or
+                              isinstance(node_2_3, Load)):
+                        pred_node = path[path.index(node_2_3) - 1]
+                        if isinstance(pred_node, BranchTee):
+                            if pred_node.in_building:
+                                # ToDo more generic (new function)
+                                try:
+                                    node_2_3 = path[path.index(node_2_3) - 2]
+                                except IndexError:
+                                    print('BranchTee outside of building is ' +
+                                          'not in path.')
+                    else:
+                        logging.error("Not implemented for {}.".format(
+                            str(type(node_2_3))))
+
+                # if node_2_3 is a representative (meaning it is already directly
+                # connected to the station), line cannot be disconnected and must
+                # therefore be reinforced
+                if node_2_3 in rep_main_line:
+                    crit_line = grid.graph.get_edge_data(
+                        grid.station, node_2_3)['line']
+
+                    # if critical line is already a standard line install one more
+                    # parallel line
+                    if crit_line.type.name == standard_line.name:
+                        crit_line.quantity += 1
+                        lines_changes[crit_line] = 1
+
+                    # if critical line is not yet a standard line replace old line
+                    # by a standard line
+                    else:
+                        # number of parallel standard lines could be calculated
+                        # following [2] p.103; for now number of parallel standard
+                        # lines is iterated
+                        crit_line.type = standard_line.copy()
+                        crit_line.quantity = 1
+                        crit_line.kind = 'cable'
+                        lines_changes[crit_line] = 1
+
+                # if node_2_3 is not a representative, disconnect line
                 else:
-                    logging.error("Not implemented for {}.".format(
-                        str(type(node_2_3))))
-
-            # if node_2_3 is a representative (meaning it is already directly
-            # connected to the station), line cannot be disconnected and must
-            # therefore be reinforced
-            if node_2_3 in rep_main_line:
-                crit_line = grid.graph.get_edge_data(
-                    grid.station, node_2_3)['line']
-
-                # if critical line is already a standard line install one more
-                # parallel line
-                if crit_line.type.name == standard_line.name:
-                    crit_line.quantity += 1
-                    lines_changes[crit_line] = 1
-
-                # if critical line is not yet a standard line replace old line
-                # by a standard line
-                else:
-                    # number of parallel standard lines could be calculated
-                    # following [2] p.103; for now number of parallel standard
-                    # lines is iterated
+                    # get line between node_2_3 and predecessor node (that is
+                    # closer to the station)
+                    pred_node = path[path.index(node_2_3) - 1]
+                    crit_line = grid.graph.get_edge_data(
+                        node_2_3, pred_node)['line']
+                    # add new edge between node_2_3 and station
+                    new_line_data = {'line': crit_line,
+                                     'type': 'line'}
+                    grid.graph.add_edge(grid.station, node_2_3, new_line_data)
+                    # remove old edge
+                    grid.graph.remove_edge(pred_node, node_2_3)
+                    # change line length and type
+                    crit_line.length = path_length[node_2_3]
                     crit_line.type = standard_line.copy()
-                    crit_line.quantity = 1
                     crit_line.kind = 'cable'
+                    crit_line.quantity = 1
                     lines_changes[crit_line] = 1
+                    # add node_2_3 to representatives list to not further reinforce
+                    # this part off the grid in this iteration step
+                    rep_main_line.append(node_2_3)
+                    main_line_reinforced.append(node_2_3)
 
-            # if node_2_3 is not a representative, disconnect line
             else:
-                # get line between node_2_3 and predecessor node (that is
-                # closer to the station)
-                pred_node = path[path.index(node_2_3) - 1]
-                crit_line = grid.graph.get_edge_data(
-                    node_2_3, pred_node)['line']
-                # add new edge between node_2_3 and station
-                new_line_data = {'line': crit_line,
-                                 'type': 'line'}
-                grid.graph.add_edge(grid.station, node_2_3, new_line_data)
-                # remove old edge
-                grid.graph.remove_edge(pred_node, node_2_3)
-                # change line length and type
-                crit_line.length = path_length[node_2_3]
-                crit_line.type = standard_line.copy()
-                crit_line.kind = 'cable'
-                crit_line.quantity = 1
-                lines_changes[crit_line] = 1
-                # add node_2_3 to representatives list to not further reinforce
-                # this part off the grid in this iteration step
-                rep_main_line.append(node_2_3)
-                main_line_reinforced.append(node_2_3)
-
-        else:
-            logger.debug(
-                '==> Main line of node {} '.format(str(crit_nodes.index[i])) +
-                'in LV grid {} '.format(str(grid)) +
-                'has already been reinforced.')
+                logger.debug(
+                    '==> Main line of node {} '.format(str(crit_nodes.index[i])) +
+                    'in LV grid {} '.format(str(grid)) +
+                    'has already been reinforced.')
 
     if main_line_reinforced:
         logger.debug('==> {} branche(s) was/were reinforced '.format(
