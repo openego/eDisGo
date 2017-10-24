@@ -39,7 +39,7 @@ def mv_line_load(network):
             # check if maximum current from power flow analysis exceeds
             # allowed maximum current
             i_line_pfa = max(network.results.i_res[repr(line['line'])])
-            if i_line_pfa > i_line_max:
+            if i_line_pfa > float(i_line_max):
                 crit_lines[line['line']] = i_line_pfa / i_line_max
         except KeyError:
             logger.debug('No results for line {} '.format(str(line)) +
