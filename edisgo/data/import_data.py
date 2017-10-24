@@ -1456,10 +1456,10 @@ def _import_genos_from_oedb(network):
                         network.mv_grid.graph.add_node(gen, type='generator')
 
                         # select cable type
-                        line_type = select_cable(network=network,
-                                                 level='mv',
-                                                 apparent_power=gen.nominal_capacity /
-                                                 pfac_mv_gen)
+                        line_type, line_count = select_cable(network=network,
+                                                             level='mv',
+                                                             apparent_power=gen.nominal_capacity /
+                                                             pfac_mv_gen)
 
                         # connect generator to MV station
                         line = Line(id='line_aggr_generator_vlevel_{v_level}_'
@@ -1468,6 +1468,7 @@ def _import_genos_from_oedb(network):
                                      subtype=subtype),
                                     type=line_type,
                                     kind='cable',
+                                    quantity=line_count,
                                     length=1e-3,
                                     grid=network.mv_grid)
 
