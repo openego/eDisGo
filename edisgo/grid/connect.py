@@ -1,5 +1,4 @@
 from ..grid.components import Line, MVStation, LVStation, MVDisconnectingPoint, Generator, Load, BranchTee
-from ..grid.tools import select_cable
 from ..tools.geo import calc_geo_dist_vincenty, \
                         calc_geo_lines_in_buffer, \
                         proj2equidistant, \
