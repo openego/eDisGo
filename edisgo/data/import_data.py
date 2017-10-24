@@ -2,6 +2,7 @@ from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
     MVStation, Line, Transformer, LVStation
 from ..grid.grids import MVGrid, LVGrid
 from ..grid.connect import connect_mv_generators, connect_lv_generators
+from ..grid.tools import select_cable
 
 from egoio.db_tables import model_draft, supply
 from egoio.tools.db import connection
@@ -1436,12 +1437,7 @@ def _import_genos_from_oedb(network):
         # there are new agg. generators to be created
         if agg_geno_new:
 
-            # use max available line type for agg. generators
-            mv_cables = network.equipment_data['MV_cables']
-            aggr_line_type = mv_cables[
-                mv_cables['I_max_th'] == mv_cables[
-                    mv_cables['U_n'] == network.mv_grid.voltage_nom]
-                ['I_max_th'].max()]
+            pfac_mv_gen = network.config['scenario']['pfac_mv_gen']
 
             # add aggregated generators
             for v_level, val in agg_geno_new.items():
@@ -1459,12 +1455,18 @@ def _import_genos_from_oedb(network):
                             v_level=4)
                         network.mv_grid.graph.add_node(gen, type='generator')
 
+                        # select cable type
+                        line_type = select_cable(network=network,
+                                                 level='mv',
+                                                 apparent_power=gen.nominal_capacity /
+                                                 pfac_mv_gen)
+
                         # connect generator to MV station
                         line = Line(id='line_aggr_generator_vlevel_{v_level}_'
                                     '{subtype}'.format(
                                      v_level=v_level,
                                      subtype=subtype),
-                                    type=aggr_line_type,
+                                    type=line_type,
                                     kind='cable',
                                     length=1e-3,
                                     grid=network.mv_grid)
