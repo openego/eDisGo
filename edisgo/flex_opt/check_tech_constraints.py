@@ -106,6 +106,48 @@ def lv_line_load(network):
     return crit_lines
 
 
+def hv_mv_station_load(network):
+    """
+    Checks for over-loading of HV/MV station.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+
+    Returns
+    -------
+    Dictionary with critical :class:`~.grid.components.MVStation` and maximum
+    apparent power from power flow analysis. Format: {mv_station: S_max}
+
+    """
+
+    crit_stations = {}
+
+    load_factor = \
+        network.scenario.parameters.load_factor_hv_mv_transformer
+
+    # maximum allowed apparent power of station
+    s_station_max = (sum(
+        [_.type.S_nom for _ in network.mv_grid.station.transformers]) *
+                     load_factor)
+    try:
+        # check if maximum allowed apparent power of station exceeds
+        # apparent power from power flow analysis
+        s_station_pfa = network.results.s_res(
+            [network.mv_grid.station]).sum(axis=1).max()
+        if s_station_max < s_station_pfa:
+            crit_stations[network.mv_grid.station] = s_station_pfa
+    except KeyError:
+        logger.debug('No results for MV station to check overloading.')
+
+    if crit_stations:
+        logger.debug('==> HV/MV station has load issues.')
+    else:
+        logger.debug('==> No HV/MV station load issues.')
+
+    return crit_stations
+
+
 def mv_lv_station_load(network):
     """
     Checks for over-loading of MV/LV transformers.
