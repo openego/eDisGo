@@ -321,7 +321,7 @@ def _build_mv_grid(ding0_grid, network):
             geom=ding0_grid.station().geo_data,
             voltage_op=_.v_level,
             type=pd.Series(dict(
-                s=_.s_max_a, x=_.x, r=_.r)))
+                S_nom=_.s_max_a, X=_.x, R=_.r)))
             for (count, _) in enumerate(ding0_grid.station().transformers())])
     grid.graph.add_node(mv_station, type='mv_station')
 
