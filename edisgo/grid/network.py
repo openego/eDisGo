@@ -420,9 +420,9 @@ class Scenario:
 
         if isinstance(power_flow, str):
             if power_flow != 'worst-case':
-                raise ValueError("{} is not a valid specification for type of "
-                                 "power flow analysis .Try 'worst-case'".format(
-                    power_flow))
+                raise ValueError(
+                    "{} is not a valid specification for type of power flow"
+                    "analysis. Try 'worst-case'".format(power_flow))
             else:
                 timeindex = pd.date_range('12/4/2011', periods=1, freq='H')
         elif isinstance(power_flow, tuple):
