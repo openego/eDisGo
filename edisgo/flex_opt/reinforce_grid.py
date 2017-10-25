@@ -1,7 +1,6 @@
-import sys
 import pandas as pd
 from edisgo.flex_opt import check_tech_constraints as checks
-from edisgo.flex_opt import reinforce_measures, exceptions
+from edisgo.flex_opt import reinforce_measures
 import logging
 
 logger = logging.getLogger('edisgo')
@@ -81,8 +80,8 @@ def reinforce_grid(network, max_while_iterations=10):
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
     iteration_step = 1
 
-    # ToDo: check overloading of HV/MV Trafo?
-    logger.debug('==> Check MV/LV station load.')
+    logger.debug('==> Check station load.')
+    overloaded_mv_station = checks.hv_mv_station_load(network)
     overloaded_stations = checks.mv_lv_station_load(network)
     logger.debug('==> Check line load.')
     crit_lines_lv = checks.lv_line_load(network)
@@ -90,11 +89,20 @@ def reinforce_grid(network, max_while_iterations=10):
     crit_lines = {**crit_lines_lv, **crit_lines_mv}
 
     while_counter = 0
-    while ((overloaded_stations or crit_lines) and
+    while ((overloaded_mv_station or overloaded_stations or crit_lines) and
             while_counter < max_while_iterations):
 
-        if overloaded_stations:
+        if overloaded_mv_station:
             # reinforce substations
+            transformer_changes = \
+                reinforce_measures.extend_substation(
+                    network, overloaded_mv_station)
+            # write added and removed transformers to results.equipment_changes
+            _add_transformer_changes_to_equipment_changes('added')
+            _add_transformer_changes_to_equipment_changes('removed')
+
+        if overloaded_stations:
+            # reinforce distribution substations
             transformer_changes = \
                 reinforce_measures.extend_distribution_substation(
                     network, overloaded_stations)
@@ -113,7 +121,8 @@ def reinforce_grid(network, max_while_iterations=10):
         # problems were solved
         logger.debug('==> Run power flow analysis.')
         network.analyze()
-        logger.debug('==> Recheck MV/LV station load.')
+        logger.debug('==> Recheck station load.')
+        overloaded_mv_station = checks.hv_mv_station_load(network)
         overloaded_stations = checks.mv_lv_station_load(network)
         logger.debug('==> Recheck line load.')
         crit_lines_lv = checks.lv_line_load(network)
@@ -126,7 +135,7 @@ def reinforce_grid(network, max_while_iterations=10):
     # check if all load problems were solved after maximum number of
     # iterations allowed
     if (while_counter == max_while_iterations and
-            (crit_lines or overloaded_stations)):
+            (crit_lines or overloaded_mv_station or overloaded_stations)):
         logger.error("==> Load issues were not solved.")
         # raise exceptions.MaximumIterationError(
         #     "Overloading issues for the following lines could not be solved:"
@@ -231,16 +240,26 @@ def reinforce_grid(network, max_while_iterations=10):
         logger.info('==> All voltage issues in LV grids are solved.')
 
     # RECHECK FOR OVERLOADED TRANSFORMERS AND LINES
-    logger.debug('==> Check MV/LV station load.')
+    logger.debug('==> Recheck station load.')
+    overloaded_mv_station = checks.hv_mv_station_load(network)
     overloaded_stations = checks.mv_lv_station_load(network)
-    logger.debug('==> Check line load.')
+    logger.debug('==> Recheck line load.')
     crit_lines_lv = checks.lv_line_load(network)
     crit_lines_mv = checks.mv_line_load(network)
     crit_lines = {**crit_lines_lv, **crit_lines_mv}
 
     while_counter = 0
-    while ((overloaded_stations or crit_lines) and
+    while ((overloaded_mv_station or overloaded_stations or crit_lines) and
             while_counter < max_while_iterations):
+
+        if overloaded_mv_station:
+            # reinforce substations
+            transformer_changes = \
+                reinforce_measures.extend_substation(
+                    network, overloaded_mv_station)
+            # write added and removed transformers to results.equipment_changes
+            _add_transformer_changes_to_equipment_changes('added')
+            _add_transformer_changes_to_equipment_changes('removed')
 
         if overloaded_stations:
             # reinforce substations
@@ -262,7 +281,8 @@ def reinforce_grid(network, max_while_iterations=10):
         # problems were solved
         logger.debug('==> Run power flow analysis.')
         network.analyze()
-        logger.debug('==> Recheck MV/LV station load.')
+        logger.debug('==> Recheck station load.')
+        overloaded_mv_station = checks.hv_mv_station_load(network)
         overloaded_stations = checks.mv_lv_station_load(network)
         logger.debug('==> Recheck line load.')
         crit_lines_lv = checks.lv_line_load(network)
@@ -275,12 +295,13 @@ def reinforce_grid(network, max_while_iterations=10):
     # check if all load problems were solved after maximum number of
     # iterations allowed
     if (while_counter == max_while_iterations and
-            (crit_lines or overloaded_stations)):
+            (crit_lines or overloaded_mv_station or overloaded_stations)):
         logger.error("==> Load issues were not solved.")
         # raise exceptions.MaximumIterationError(
         #     "Overloading issues for the following lines could not be solved:"
         #     "{}".format(crit_lines))
         network.results.unresolved_issues.update(crit_lines)
         network.results.unresolved_issues.update(overloaded_stations)
+        network.results.unresolved_issues.update(overloaded_mv_station)
     else:
         logger.debug('==> All load issues in MV grid are solved.')

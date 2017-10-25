@@ -1041,15 +1041,28 @@ def process_pfa_results(network, pypsa):
 
     """
 
-    # get p and q of lines and transformers in absolute values
-    q0 = abs(
-        pd.concat([pypsa.lines_t['q0'], pypsa.transformers_t['q0']], axis=1))
-    q1 = abs(
-        pd.concat([pypsa.lines_t['q1'], pypsa.transformers_t['q1']], axis=1))
-    p0 = abs(
-        pd.concat([pypsa.lines_t['p0'], pypsa.transformers_t['p0']], axis=1))
-    p1 = abs(
-        pd.concat([pypsa.lines_t['p1'], pypsa.transformers_t['p1']], axis=1))
+    # get p and q of lines, LV transformers and MV Station (slack generator)
+    # in absolute values
+    q0 = pd.concat(
+        [abs(pypsa.lines_t['q0']),
+         abs(pypsa.transformers_t['q0']),
+         abs(pypsa.generators_t['q']['Generator_slack'].rename(
+             repr(network.mv_grid.station)))], axis=1)
+    q1 = pd.concat(
+        [abs(pypsa.lines_t['q1']),
+         abs(pypsa.transformers_t['q1']),
+         abs(pypsa.generators_t['q']['Generator_slack'].rename(
+             repr(network.mv_grid.station)))], axis=1)
+    p0 = pd.concat(
+        [abs(pypsa.lines_t['p0']),
+         abs(pypsa.transformers_t['p0']),
+         abs(pypsa.generators_t['p']['Generator_slack'].rename(
+            repr(network.mv_grid.station)))], axis=1)
+    p1 = pd.concat(
+        [abs(pypsa.lines_t['p1']),
+         abs(pypsa.transformers_t['p1']),
+         abs(pypsa.generators_t['p']['Generator_slack'].rename(
+             repr(network.mv_grid.station)))], axis=1)
 
     # determine apparent power and line endings/transformers' side
     s0 = (p0 ** 2 + q0 ** 2).applymap(sqrt)

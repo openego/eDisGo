@@ -113,6 +113,104 @@ def extend_distribution_substation(network, critical_stations):
     return transformers_changes
 
 
+def extend_substation(network, critical_stations):
+    """
+    Reinforce HV/MV station.
+
+    In a first step a parallel transformer of the same kind is installed.
+    If this is not sufficient as many standard transformers as needed are
+    installed.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+    critical_stations : dict
+        Dictionary with critical :class:`~.grid.components.MVStation` and
+        maximum apparent power from power flow analysis.
+        Format: {MVStation: S_max}
+
+    Returns
+    -------
+    Dictionary with lists of added and removed transformers.
+
+    """
+
+    # get parameters for standard transformer
+    try:
+        standard_transformer = network.equipment_data['MV_trafos'].loc[
+            network.config['grid_expansion']['std_hv_mv_transformer']]
+    except KeyError:
+        print('Standard HV/MV transformer is not in equipment list.')
+
+    load_factor = \
+        network.scenario.parameters.load_factor_hv_mv_transformer
+
+    transformers_changes = {'added': {}, 'removed': {}}
+    for station in critical_stations:
+
+        # list of maximum power of each transformer in the station
+        s_max_per_trafo = [_.type.S_nom for _ in station.transformers]
+
+        # maximum station load from power flow analysis
+        s_station_pfa = critical_stations[station]
+
+        # determine missing transformer power to solve overloading issue
+        s_trafo_missing = s_station_pfa - (sum(s_max_per_trafo) * load_factor)
+
+        # check if second transformer of the same kind is sufficient
+        # if true install second transformer, otherwise install as many
+        # standard transformers as needed
+        if max(s_max_per_trafo) >= s_trafo_missing:
+            # if station has more than one transformer install a new
+            # transformer of the same kind as the transformer that best
+            # meets the missing power demand
+            duplicated_transformer = min(
+                [_ for _ in station.transformers
+                 if _.type.S_nom > s_trafo_missing],
+                key=lambda j: j.type.S_nom - s_trafo_missing)
+
+            new_transformer = Transformer(
+                id='MVStation_{}_transformer_{}'.format(
+                    str(station.id), str(len(station.transformers) + 1)),
+                geom=duplicated_transformer.geom,
+                grid=duplicated_transformer.grid,
+                voltage_op=duplicated_transformer.voltage_op,
+                type=copy.deepcopy(duplicated_transformer.type))
+
+            # add transformer to station and return value
+            station.add_transformer(new_transformer)
+            transformers_changes['added'][station] = [new_transformer]
+
+        else:
+            # get any transformer to get attributes for new transformer from
+            station_transformer = station.transformers[0]
+
+            # calculate how many parallel standard transformers are needed
+            number_transformers = math.ceil(
+                s_station_pfa / standard_transformer.S_nom)
+
+            # add transformer to station
+            new_transformers = []
+            for i in range(number_transformers):
+                new_transformer = Transformer(
+                    id='MVStation_{}_transformer_{}'.format(
+                        str(station.id), str(i + 1)),
+                    geom=station_transformer.geom,
+                    grid=station_transformer.grid,
+                    voltage_op=station_transformer.voltage_op,
+                    type=copy.deepcopy(standard_transformer))
+                new_transformers.append(new_transformer)
+            transformers_changes['added'][station] = new_transformers
+            transformers_changes['removed'][station] = station.transformers
+            station.transformers = new_transformers
+
+    if transformers_changes['added']:
+        logger.debug("==> MV station has been reinforced due to overloading "
+                     "issues.")
+
+    return transformers_changes
+
+
 def reinforce_branches_overvoltage(network, grid, crit_nodes):
     """
     Reinforce MV and LV grid due to voltage issues.
