@@ -314,7 +314,7 @@ def _build_mv_grid(ding0_grid, network):
         transformers=[Transformer(
             mv_grid=grid,
             grid=grid,
-            id='_'.join(['MV_station',
+            id='_'.join(['MVStation',
                          str(ding0_grid.station().id_db),
                          'transformer',
                          str(count)]),
