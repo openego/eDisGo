@@ -323,7 +323,8 @@ def _build_mv_grid(ding0_grid, network):
             voltage_op=_.v_level,
             type=pd.Series(dict(
                 S_nom=_.s_max_a, X=_.x, R=_.r)))
-            for (count, _) in enumerate(ding0_grid.station().transformers())])
+            for (count, _) in enumerate(
+                ding0_grid.station().transformers(), 1)])
     grid.graph.add_node(mv_station, type='mv_station')
 
     # Merge node above defined above to a single dict
