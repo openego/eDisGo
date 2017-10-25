@@ -117,8 +117,11 @@ def grid_expansion_costs(network):
     # calculate costs for each reinforced line
     for l in list(lines.index.unique()):
         # check if line connects aggregated units
-        aggr_lines = list(l.grid.graph.lines_by_attribute('line_aggr'))
-        if not l in aggr_lines:
+        aggr_lines = []
+        aggr_lines_generator = l.grid.graph.lines_by_attribute('line_aggr')
+        for aggr_line in aggr_lines_generator:
+            aggr_lines.append(repr(aggr_line['line']))
+        if not repr(l) in aggr_lines:
             number_lines_added = network.results.equipment_changes[
                 (network.results.equipment_changes.index == l) &
                 (network.results.equipment_changes.equipment ==
