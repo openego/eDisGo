@@ -552,7 +552,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                         geom=grid.station.geom,
                         grid=grid,
                         v_level=4)
-                    grid.graph.add_node(gen, type='generator')
+                    grid.graph.add_node(gen, type='generator-aggr')
 
                     # backup reference of geno to LV geno list (save geno
                     # where the former LV genos are aggregated in)
@@ -740,7 +740,8 @@ def _validate_ding0_lv_grid_import(grids, ding0_grid, lv_grid_mapping):
 
         # Check number of generators
         data_integrity[grid]['generator']['edisgo'] = len(
-            grid.graph.nodes_by_attribute('generator'))
+            grid.graph.nodes_by_attribute('generator') +
+            grid.graph.nodes_by_attribute('generator-aggr'))
         data_integrity[grid]['generator']['ding0'] = len(
             list(lv_grid_mapping[grid].generators()))
 
@@ -821,17 +822,20 @@ def _validate_load_generation(mv_grid, ding0_mv_grid):
     lv_gens = []
     [lv_gens.extend(_.graph.nodes_by_attribute('generator'))
                     for _ in mv_grid.lv_grids]
+    gens_aggr = mv_grid.graph.nodes_by_attribute('generator-aggr')
 
     generation = {}
     generation_aggr = {}
 
     # collect eDisGo cumulative generation capacity
     for gen in mv_gens + lv_gens:
-        if gen in mv_grid.graph.neighbors(mv_grid.station) and \
-            mv_grid.graph.get_edge_data(mv_grid.station,gen)['line'].length <= .5:
-            generation_aggr.setdefault(gen.type, {})
-            generation_aggr[gen.type].setdefault(gen.subtype, {'edisgo': 0})
-            generation_aggr[gen.type][gen.subtype]['edisgo'] += gen.nominal_capacity
+        generation.setdefault(gen.type, {})
+        generation[gen.type].setdefault(gen.subtype, {'edisgo': 0})
+        generation[gen.type][gen.subtype]['edisgo'] += gen.nominal_capacity
+    for gen in gens_aggr:
+        generation_aggr.setdefault(gen.type, {})
+        generation_aggr[gen.type].setdefault(gen.subtype, {'edisgo': 0})
+        generation_aggr[gen.type][gen.subtype]['edisgo'] += gen.nominal_capacity
         generation.setdefault(gen.type, {})
         generation[gen.type].setdefault(gen.subtype, {'edisgo': 0})
         generation[gen.type][gen.subtype]['edisgo'] += gen.nominal_capacity
@@ -1613,7 +1617,8 @@ def _import_genos_from_oedb(network):
 
         capacity_grid = 0
         # MV genos
-        for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
+        for geno in network.mv_grid.graph.nodes_by_attribute('generator') +\
+            network.mv_grid.graph.nodes_by_attribute('generator-aggr'):
             capacity_grid += geno.nominal_capacity
 
         # LV genos
@@ -1748,11 +1753,8 @@ def _build_generator_list(network):
 
     # MV genos
     for geno in network.mv_grid.graph.nodes_by_attribute('generator'):
-        name_comp = str(geno.id).split('-')
-        # geno is really MV (not aggregated (originally from aggregated LA))
-        if name_comp[0] != 'agg':
             genos_mv.loc[len(genos_mv)] = [int(geno.id), geno]
-        else:
+    for geno in network.mv_grid.graph.nodes_by_attribute('generator-aggr'):
             la_id = int(geno.id.split('-')[1].split('_')[-1])
             genos_lv_agg.loc[len(genos_lv_agg)] = [la_id, geno.id, geno]
 
