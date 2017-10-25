@@ -150,7 +150,7 @@ def hv_mv_station_load(network):
 
 def mv_lv_station_load(network):
     """
-    Checks for over-loading of MV/LV transformers.
+    Checks for over-loading of MV/LV stations.
 
     Parameters
     ----------
@@ -158,15 +158,14 @@ def mv_lv_station_load(network):
 
     Returns
     -------
-    Dictionary with critical :class:`~.grid.components.LVStation`
-    Format: {lv_station_1: overloading_1, ..., lv_station_n: overloading_n}
+    Dictionary with critical :class:`~.grid.components.LVStation` and maximum
+    apparent power from power flow analysis.
+    Format: {lv_station_1: S_max_1, ..., lv_station_n: S_max_n}
 
     Notes
     -----
     According to [1]_ load factors in feed-in case of all equipment in MV and
-    LV is set to 1.
-
-    HV/MV transformers are not checked.
+    LV are set to 1.
 
     References
     ----------
