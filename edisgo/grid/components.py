@@ -440,8 +440,12 @@ class BranchTee(Component):
 
         # set id of BranchTee automatically if not provided
         if not self._id:
-            self._id = max([_.id for _ in
-                            self.grid.graph.nodes_by_attribute('branch_tee')]) + 1
+            ids = [_.id for _ in
+                            self.grid.graph.nodes_by_attribute('branch_tee')]
+            if ids:
+                self._id = max(ids) + 1
+            else:
+                self._id = 1
 
     def __repr__(self):
         return '_'.join([self.__class__.__name__, repr(self.grid), str(self._id)])
