@@ -88,50 +88,51 @@ def grid_expansion_costs(network):
     costs = pd.DataFrame()
 
     # costs for transformers
-    transformers = network.results.equipment_changes[
-        network.results.equipment_changes['equipment'].apply(
-            isinstance, args=(Transformer,))]
-    added_transformers = transformers[transformers['change'] == 'added']
-    removed_transformers = transformers[transformers['change'] == 'removed']
-    # check if any of the added transformers were later removed
-    added_removed_transformers = added_transformers.loc[
-        added_transformers['equipment'].isin(
-            removed_transformers['equipment'])]
-    added_transformers = added_transformers[
-        ~added_transformers['equipment'].isin(
-            added_removed_transformers.equipment)]
-    # calculate costs for each transformer
-    for t in added_transformers['equipment']:
-        costs = costs.append(pd.DataFrame(
-            {'type': t.type.name,
-             'total_costs': _get_transformer_costs(t),
-             'quantity': 1},
-            index=[repr(t)]))
-
-    # costs for lines
-    # get changed lines
-    lines = network.results.equipment_changes.loc[
-        network.results.equipment_changes.index[
-            network.results.equipment_changes.reset_index()['index'].apply(
-                isinstance, args=(Line,))]]
-    # calculate costs for each reinforced line
-    for l in list(lines.index.unique()):
-        # check if line connects aggregated units
-        aggr_lines = []
-        aggr_lines_generator = l.grid.graph.lines_by_attribute('line_aggr')
-        for aggr_line in aggr_lines_generator:
-            aggr_lines.append(repr(aggr_line['line']))
-        if not repr(l) in aggr_lines:
-            number_lines_added = network.results.equipment_changes[
-                (network.results.equipment_changes.index == l) &
-                (network.results.equipment_changes.equipment ==
-                 l.type.name)]['quantity'].sum()
+    if not network.results.equipment_changes.empty:
+        transformers = network.results.equipment_changes[
+            network.results.equipment_changes['equipment'].apply(
+                isinstance, args=(Transformer,))]
+        added_transformers = transformers[transformers['change'] == 'added']
+        removed_transformers = transformers[transformers['change'] == 'removed']
+        # check if any of the added transformers were later removed
+        added_removed_transformers = added_transformers.loc[
+            added_transformers['equipment'].isin(
+                removed_transformers['equipment'])]
+        added_transformers = added_transformers[
+            ~added_transformers['equipment'].isin(
+                added_removed_transformers.equipment)]
+        # calculate costs for each transformer
+        for t in added_transformers['equipment']:
             costs = costs.append(pd.DataFrame(
-                {'type': l.type.name,
-                 'total_costs': _get_line_costs(l, number_lines_added),
-                 'length': l.length * number_lines_added,
-                 'quantity': number_lines_added},
-                index=[repr(l)]))
+                {'type': t.type.name,
+                 'total_costs': _get_transformer_costs(t),
+                 'quantity': 1},
+                index=[repr(t)]))
+
+        # costs for lines
+        # get changed lines
+        lines = network.results.equipment_changes.loc[
+            network.results.equipment_changes.index[
+                network.results.equipment_changes.reset_index()['index'].apply(
+                    isinstance, args=(Line,))]]
+        # calculate costs for each reinforced line
+        for l in list(lines.index.unique()):
+            # check if line connects aggregated units
+            aggr_lines = []
+            aggr_lines_generator = l.grid.graph.lines_by_attribute('line_aggr')
+            for aggr_line in aggr_lines_generator:
+                aggr_lines.append(repr(aggr_line['line']))
+            if not repr(l) in aggr_lines:
+                number_lines_added = network.results.equipment_changes[
+                    (network.results.equipment_changes.index == l) &
+                    (network.results.equipment_changes.equipment ==
+                     l.type.name)]['quantity'].sum()
+                costs = costs.append(pd.DataFrame(
+                    {'type': l.type.name,
+                     'total_costs': _get_line_costs(l, number_lines_added),
+                     'length': l.length * number_lines_added,
+                     'quantity': number_lines_added},
+                    index=[repr(l)]))
 
     # if no costs incurred write zero costs to DataFrame
     if costs.empty:
