@@ -1072,9 +1072,15 @@ def process_pfa_results(network, pypsa):
     network.results.pfa_p = p0.where(s0 > s1, p1) * 1e3
     network.results.pfa_q = q0.where(s0 > s1, q1) * 1e3
 
+    def voltage_at_lines(row):
+        return (pypsa.buses_t['v_mag_pu'][row['bus0']] +\
+            pypsa.buses_t['v_mag_pu'][row['bus1']]) / 2
+
+    line_voltage_avg = pypsa.lines.apply(voltage_at_lines, axis=1)
+
     # Get voltage levels at line (avg. of buses at both sides)
     network.results._i_res = s0[pypsa.lines_t['q0'].columns].truediv(
-        pypsa.lines['v_nom'], axis='columns') * 1e3
+        pypsa.lines['v_nom'] * line_voltage_avg.T, axis='columns') * 1e3
     # process results at nodes
     generators_names = [repr(g) for g in
                         network.mv_grid.graph.nodes_by_attribute('generator')]
