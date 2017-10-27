@@ -288,11 +288,11 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
             #     "Overloading issues for the following lines could not be :"
             #     "solved {}".format(crit_lines))
 
-        # check if representative of line is already in list
-        # main_line_reinforced, if it is the main line the critical node is
-        # connected to has already been reinforced in this iteration step
-        # TODO: "if len(path) > 1:" when exception above is raised
-        if len(path) > 1:
+        else:
+            # check if representative of line is already in list
+            # main_line_reinforced; if it is, the main line the critical node
+            # is connected to has already been reinforced in this iteration
+            # step
             if not path[1] in main_line_reinforced:
 
                 main_line_reinforced.append(path[1])
