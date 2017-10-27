@@ -513,7 +513,7 @@ def _determine_aggregated_nodes(la_centers):
             aggr_stations.append(_.lv_grid.station())
 
         # add elements to lists
-        aggregated.update({repr(la_center): aggr})
+        aggregated.update({la_center.id_db: aggr})
 
 
     return aggregated, aggr_stations, dingo_import_data
@@ -547,7 +547,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
             for type, val2 in val.items():
                 for subtype, val3 in val2.items():
                     gen = Generator(
-                        id='agg-' + la_id + '-' + '_'.join([str(_) for _ in val3['ids']]),
+                        id='agg-' + str(la_id) + '-' + '_'.join([str(_) for _ in val3['ids']]),
                         nominal_capacity=val3['capacity'],
                         type=type,
                         subtype=subtype,
@@ -563,7 +563,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                                                         gen)
 
                     # connect generator to MV station
-                    line = Line(id='line_aggr_generator_la_' + la_id + '_vlevel_{v_level}_'
+                    line = Line(id='line_aggr_generator_la_' + str(la_id) + '_vlevel_{v_level}_'
                                 '{subtype}'.format(
                                  v_level=v_level,
                                  subtype=subtype),
@@ -575,17 +575,18 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                                         gen,
                                         line=line,
                                         type='line_aggr')
+
         for sector, sectoral_load in la['load'].items():
             load = Load(
                 geom=grid.station.geom,
                 consumption={sector: sectoral_load},
                 grid=grid,
-                id='_'.join(['Load_aggregated', sector, repr(grid), la_id]))
+                id='_'.join(['Load_aggregated', sector, repr(grid), str(la_id)]))
 
             grid.graph.add_node(load, type='load')
 
             # connect aggregated load to MV station
-            line = Line(id='_'.join(['line_aggr_load_la_' + la_id, sector, la_id]),
+            line = Line(id='_'.join(['line_aggr_load_la_' + str(la_id), sector, str(la_id)]),
                         type=aggr_line_type,
                         kind='cable',
                         length=1e-3,
