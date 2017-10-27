@@ -7,6 +7,7 @@ from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
 from edisgo.grid.components import Transformer, BranchTee, Generator, Load, \
     LVStation
 from edisgo.grid.grids import LVGrid
+from edisgo.flex_opt import exceptions
 
 import logging
 logger = logging.getLogger('edisgo')
@@ -260,12 +261,16 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
         try:
             standard_line = network.equipment_data['LV_cables'].loc[
                 network.config['grid_expansion']['std_lv_line']]
+            max_v_deviation = network.scenario.parameters.lv_max_v_deviation
+            voltage_level = 'lv'
         except KeyError:
             print('Chosen standard LV line is not in equipment list.')
     else:
         try:
             standard_line = network.equipment_data['MV_cables'].loc[
                 network.config['grid_expansion']['std_mv_line']]
+            max_v_deviation = network.scenario.parameters.mv_max_v_deviation
+            voltage_level = 'mv'
         except KeyError:
             print('Chosen standard MV line is not in equipment list.')
 
@@ -354,6 +359,41 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                 if node_2_3 in rep_main_line:
                     crit_line = grid.graph.get_edge_data(
                         grid.station, node_2_3)['line']
+
+                    # # calculated number of parallel lines
+                    # # delta U
+                    # #ToDo: remove max(axis=1) when v_res returns only wanted level
+                    # # current voltage drop of critical line
+                    # delta_U_crit_line = abs(
+                    #     network.results.v_res(
+                    #         nodes=[node_2_3], level=voltage_level).max(axis=1) -
+                    #     network.results.v_res(
+                    #         nodes=[grid.station], level=voltage_level).max(
+                    #         axis=1)
+                    # ).max()
+                    # # necessary voltage reduction at critical node
+                    # delta_U_reduction = float(
+                    #     abs(network.results.v_res(
+                    #         nodes=[crit_nodes.index[i]],
+                    #         level=voltage_level).max(axis=1) - 1) -
+                    #     max_v_deviation)
+                    # # maximum allowed voltage drop of critical line
+                    # delta_U = delta_U_crit_line - delta_U_reduction
+                    # if delta_U <= 0:
+                    #     raise exceptions.ImpossibleVoltageReduction(
+                    #         "Voltage issue in {} cannot be solved.".format(
+                    #             grid
+                    #         )
+                    #     )
+                    # # maximum allowed impedance of critical line to solve
+                    # # voltage problem
+                    # Z_allowed = delta_U / max(network.results.i_res[
+                    #                               repr(crit_line)])
+                    # omega = 2 * math.pi * 50
+                    # standard_line_Z = (standard_line.R * crit_line.length +
+                    #                    standard_line.L * omega / 1e3 *
+                    #                    crit_line.length)
+                    # #1 / standard_line_Z
 
                     # if critical line is already a standard line install one
                     # more parallel line
