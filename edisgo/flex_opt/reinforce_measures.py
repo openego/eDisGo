@@ -1,11 +1,11 @@
 import copy
 import math
-import sys
 import networkx as nx
 from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
     dijkstra_shortest_path_length
 
-from edisgo.grid.components import Transformer, BranchTee, Generator, Load
+from edisgo.grid.components import Transformer, BranchTee, Generator, Load, \
+    LVStation
 from edisgo.grid.grids import LVGrid
 
 import logging
@@ -238,6 +238,14 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     In LV grids only lines outside buildings are reinforced; loads and
     generators in buildings cannot be directly connected to the MV/LV station.
 
+    In MV grids lines can only be disconnected at LVStations because they
+    have switch disconnectors needed to operate the lines as half rings (loads
+    in MV would be suitable as well because they have a switch bay (Schaltfeld)
+    but loads in dingo are only connected to MV busbar). If there is no
+    suitable LV station the generator is directly connected to the MV busbar.
+    There is no need for a switch disconnector in that case because generators
+    don't need to be n-1 safe.
+
     References
     ----------
     .. [1] "Verteilnetzstudie für das Land Baden-Württemberg"
@@ -277,14 +285,14 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
             logging.error("Voltage issues of station need to be solved at " +
                           "secondary side.")
             # raise exceptions.MaximumIterationError(
-            #     "Overloading issues for the following lines could not be solved:"
-            #     "{}".format(crit_lines))
+            #     "Overloading issues for the following lines could not be :"
+            #     "solved {}".format(crit_lines))
 
-        # check if representative of line is already in list
-        # main_line_reinforced, if it is the main line the critical node is
-        # connected to has already been reinforced in this iteration step
-        # TODO: "if len(path) > 1:" when exception above is raised
-        if len(path) > 1:
+        else:
+            # check if representative of line is already in list
+            # main_line_reinforced; if it is, the main line the critical node
+            # is connected to has already been reinforced in this iteration
+            # step
             if not path[1] in main_line_reinforced:
 
                 main_line_reinforced.append(path[1])
@@ -295,8 +303,9 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                     target=crit_nodes.index[i])
                 # find first node in path that exceeds 2/3 of the line length
                 # from station to critical node farthest away from the station
-                node_2_3 = next(j for j in path if path_length[j] >= path_length[
-                    crit_nodes.index[i]] * 2 / 3)
+                node_2_3 = next(j for j in path if
+                                path_length[j] >= path_length[
+                                    crit_nodes.index[i]] * 2 / 3)
 
                 # if LVGrid: check if node_2_3 is outside of a house
                 # and if not find next BranchTee outside the house
@@ -307,8 +316,8 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                             try:
                                 node_2_3 = path[path.index(node_2_3) - 1]
                             except IndexError:
-                                print('BranchTee outside of building is not in ' +
-                                      'path.')
+                                print('BranchTee outside of building is not ' +
+                                      'in path.')
                     elif (isinstance(node_2_3, Generator) or
                               isinstance(node_2_3, Load)):
                         pred_node = path[path.index(node_2_3) - 1]
@@ -323,26 +332,41 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                     else:
                         logging.error("Not implemented for {}.".format(
                             str(type(node_2_3))))
+                # if MVGrid: check if node_2_3 is LV station and if not find
+                # next LV station
+                else:
+                    if not isinstance(node_2_3, LVStation):
+                        next_index = path.index(node_2_3) + 1
+                        try:
+                            # try to find LVStation behind node_2_3
+                            while not isinstance(node_2_3, LVStation):
+                                node_2_3 = path[next_index]
+                                next_index += 1
+                        except IndexError:
+                            # if no LVStation between node_2_3 and node with
+                            # voltage problem, connect node directly to
+                            # MVStation
+                            node_2_3 = crit_nodes.index[i]
 
-                # if node_2_3 is a representative (meaning it is already directly
-                # connected to the station), line cannot be disconnected and must
-                # therefore be reinforced
+                # if node_2_3 is a representative (meaning it is already
+                # directly connected to the station), line cannot be
+                # disconnected and must therefore be reinforced
                 if node_2_3 in rep_main_line:
                     crit_line = grid.graph.get_edge_data(
                         grid.station, node_2_3)['line']
 
-                    # if critical line is already a standard line install one more
-                    # parallel line
+                    # if critical line is already a standard line install one
+                    # more parallel line
                     if crit_line.type.name == standard_line.name:
                         crit_line.quantity += 1
                         lines_changes[crit_line] = 1
 
-                    # if critical line is not yet a standard line replace old line
-                    # by a standard line
+                    # if critical line is not yet a standard line replace old
+                    # line by a standard line
                     else:
                         # number of parallel standard lines could be calculated
-                        # following [2] p.103; for now number of parallel standard
-                        # lines is iterated
+                        # following [2] p.103; for now number of parallel
+                        # standard lines is iterated
                         crit_line.type = standard_line.copy()
                         crit_line.quantity = 1
                         crit_line.kind = 'cable'
@@ -367,15 +391,15 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                     crit_line.kind = 'cable'
                     crit_line.quantity = 1
                     lines_changes[crit_line] = 1
-                    # add node_2_3 to representatives list to not further reinforce
-                    # this part off the grid in this iteration step
+                    # add node_2_3 to representatives list to not further
+                    # reinforce this part off the grid in this iteration step
                     rep_main_line.append(node_2_3)
                     main_line_reinforced.append(node_2_3)
 
             else:
                 logger.debug(
-                    '==> Main line of node {} '.format(str(crit_nodes.index[i])) +
-                    'in LV grid {} '.format(str(grid)) +
+                    '==> Main line of node {} in LV grid {} '.format(
+                        str(crit_nodes.index[i]), str(grid)) +
                     'has already been reinforced.')
 
     if main_line_reinforced:
