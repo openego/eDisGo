@@ -3,6 +3,7 @@ from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
 from ..grid.grids import MVGrid, LVGrid
 from ..grid.connect import connect_mv_generators, connect_lv_generators
 from ..grid.tools import select_cable
+from ..tools.geo import proj2equidistant
 
 from egoio.db_tables import model_draft, supply
 from egoio.tools.db import connection
@@ -23,6 +24,7 @@ if not 'READTHEDOCS' in os.environ:
     from ding0.core.network.stations import LVStationDing0
     from ding0.core.network.grids import CircuitBreakerDing0
     from ding0.core.structure.regions import LVLoadAreaCentreDing0
+    from shapely.ops import transform
 
 import logging
 logger = logging.getLogger('edisgo')
@@ -1657,6 +1659,33 @@ def _import_genos_from_oedb(network):
         else:
             logger.debug('Cumulative capacity of imported generators validated.')
 
+    def _validate_sample_geno_location():
+        # get geom of 1 random MV and 1 random LV generator and transform
+        sample_mv_geno_geom_shp = transform(proj2equidistant(network),
+                                            wkt_loads(generators_res_mv['geom']
+                                                      .dropna()
+                                                      .sample(n=1)
+                                                      .item())
+                                            )
+        sample_lv_geno_geom_shp = transform(proj2equidistant(network),
+                                            wkt_loads(generators_res_lv['geom']
+                                                      .dropna()
+                                                      .sample(n=1)
+                                                      .item())
+                                            )
+
+        # get geom of MV grid district
+        mvgd_geom_shp = transform(proj2equidistant(network),
+                                  network.mv_grid.grid_district['geom']
+                                  )
+
+        # check if MVGD contains geno
+        if not (mvgd_geom_shp.contains(sample_mv_geno_geom_shp) and
+                    mvgd_geom_shp.contains(sample_lv_geno_geom_shp)):
+            raise ValueError('At least one imported generator is not located '
+                             'in the MV grid area. Check compatibility of '
+                             'grid and generator datasets.')
+
     # make DB session
     conn = connection(section=network.config['connection']['section'])
     Session = sessionmaker(bind=conn)
@@ -1712,6 +1741,8 @@ def _import_genos_from_oedb(network):
     generators_res_mv, generators_res_lv = _import_res_generators()
 
     #generators_mv = generators_conv_mv.append(generators_res_mv)
+
+    _validate_sample_geno_location()
 
     _update_grids(network=network,
                   #generators_mv=generators_mv,
