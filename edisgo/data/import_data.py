@@ -1665,31 +1665,33 @@ def _import_genos_from_oedb(network):
             logger.debug('Cumulative capacity of imported generators validated.')
 
     def _validate_sample_geno_location():
-        # get geom of 1 random MV and 1 random LV generator and transform
-        sample_mv_geno_geom_shp = transform(proj2equidistant(network),
-                                            wkt_loads(generators_res_mv['geom']
-                                                      .dropna()
-                                                      .sample(n=1)
-                                                      .item())
-                                            )
-        sample_lv_geno_geom_shp = transform(proj2equidistant(network),
-                                            wkt_loads(generators_res_lv['geom']
-                                                      .dropna()
-                                                      .sample(n=1)
-                                                      .item())
-                                            )
+        if all(generators_res_lv['geom'].notnull()) and all(
+                generators_res_mv['geom'].notnull()):
+            # get geom of 1 random MV and 1 random LV generator and transform
+            sample_mv_geno_geom_shp = transform(proj2equidistant(network),
+                                                wkt_loads(generators_res_mv['geom']
+                                                          .dropna()
+                                                          .sample(n=1)
+                                                          .item())
+                                                )
+            sample_lv_geno_geom_shp = transform(proj2equidistant(network),
+                                                wkt_loads(generators_res_lv['geom']
+                                                          .dropna()
+                                                          .sample(n=1)
+                                                          .item())
+                                                )
 
-        # get geom of MV grid district
-        mvgd_geom_shp = transform(proj2equidistant(network),
-                                  network.mv_grid.grid_district['geom']
-                                  )
+            # get geom of MV grid district
+            mvgd_geom_shp = transform(proj2equidistant(network),
+                                      network.mv_grid.grid_district['geom']
+                                      )
 
-        # check if MVGD contains geno
-        if not (mvgd_geom_shp.contains(sample_mv_geno_geom_shp) and
-                    mvgd_geom_shp.contains(sample_lv_geno_geom_shp)):
-            raise ValueError('At least one imported generator is not located '
-                             'in the MV grid area. Check compatibility of '
-                             'grid and generator datasets.')
+            # check if MVGD contains geno
+            if not (mvgd_geom_shp.contains(sample_mv_geno_geom_shp) and
+                        mvgd_geom_shp.contains(sample_lv_geno_geom_shp)):
+                raise ValueError('At least one imported generator is not located '
+                                 'in the MV grid area. Check compatibility of '
+                                 'grid and generator datasets.')
 
     # make DB session
     conn = connection(section=network.config['connection']['section'])
