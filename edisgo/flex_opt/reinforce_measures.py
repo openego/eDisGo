@@ -1,11 +1,11 @@
 import copy
 import math
-import sys
 import networkx as nx
 from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
     dijkstra_shortest_path_length
 
-from edisgo.grid.components import Transformer, BranchTee, Generator, Load
+from edisgo.grid.components import Transformer, BranchTee, Generator, Load, \
+    LVStation
 from edisgo.grid.grids import LVGrid
 
 import logging
@@ -238,6 +238,14 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     In LV grids only lines outside buildings are reinforced; loads and
     generators in buildings cannot be directly connected to the MV/LV station.
 
+    In MV grids lines can only be disconnected at LVStations because they
+    have switch disconnectors needed to operate the lines as half rings (loads
+    in MV would be suitable as well because they have a switch bay (Schaltfeld)
+    but loads in dingo are only connected to MV busbar). If there is no
+    suitable LV station the generator is directly connected to the MV busbar.
+    There is no need for a switch disconnector in that case because generators
+    don't need to be n-1 safe.
+
     References
     ----------
     .. [1] "Verteilnetzstudie für das Land Baden-Württemberg"
@@ -323,6 +331,21 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                     else:
                         logging.error("Not implemented for {}.".format(
                             str(type(node_2_3))))
+                # if MVGrid: check if node_2_3 is LV station and if not find
+                # next LV station
+                else:
+                    if not isinstance(node_2_3, LVStation):
+                        next_index = path.index(node_2_3) + 1
+                        try:
+                            # try to find LVStation behind node_2_3
+                            while not isinstance(node_2_3, LVStation):
+                                node_2_3 = path[next_index]
+                                next_index += 1
+                        except IndexError:
+                            # if no LVStation between node_2_3 and node with
+                            # voltage problem, connect node directly to
+                            # MVStation
+                            node_2_3 = crit_nodes.index[i]
 
                 # if node_2_3 is a representative (meaning it is already directly
                 # connected to the station), line cannot be disconnected and must
