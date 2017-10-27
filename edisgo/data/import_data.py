@@ -1402,23 +1402,25 @@ def _import_genos_from_oedb(network):
                         lv_geno_added_to_agg_geno = True
 
                 if not lv_geno_added_to_agg_geno:
-                    if row['voltage_level'] not in agg_geno_new:
-                        agg_geno_new[row['voltage_level']] = {}
-                    if row['voltage_level'] not in agg_geno_new:
-                        agg_geno_new[row['voltage_level']] = {}
-                    if row['generation_type'] not in agg_geno_new[row['voltage_level']]:
-                        agg_geno_new[row['voltage_level']][row['generation_type']] = {}
-                    if row['generation_subtype'] not in agg_geno_new[row['voltage_level']][row['generation_type']]:
-                        agg_geno_new[row['voltage_level']][row['generation_type']]\
+                    la_id = int(row['la_id'])
+                    if la_id not in agg_geno_new:
+                        agg_geno_new[la_id] = {}
+                    if row['voltage_level'] not in agg_geno_new[la_id]:
+                        agg_geno_new[la_id][row['voltage_level']] = {}
+                    if row['generation_type'] not in agg_geno_new[la_id][row['voltage_level']]:
+                        agg_geno_new[la_id][row['voltage_level']][row['generation_type']] = {}
+                    if row['generation_subtype'] not in \
+                            agg_geno_new[la_id][row['voltage_level']][row['generation_type']]:
+                        agg_geno_new[la_id][row['voltage_level']][row['generation_type']]\
                             .update({row['generation_subtype']: {'ids': [int(id)],
                                                                  'capacity': row['electrical_capacity']
                                                                  }
                              }
                         )
                     else:
-                        agg_geno_new[row['voltage_level']][row['generation_type']] \
+                        agg_geno_new[la_id][row['voltage_level']][row['generation_type']] \
                             [row['generation_subtype']]['ids'].append(int(id))
-                        agg_geno_new[row['voltage_level']][row['generation_type']] \
+                        agg_geno_new[la_id][row['voltage_level']][row['generation_type']] \
                             [row['generation_subtype']]['capacity'] += row['electrical_capacity']
 
             # new generator is a single (non-aggregated) unit
@@ -1455,45 +1457,45 @@ def _import_genos_from_oedb(network):
             pfac_mv_gen = network.config['scenario']['pfac_mv_gen']
 
             # add aggregated generators
-            for v_level, val in agg_geno_new.items():
-                for type, val2 in val.items():
-                    for subtype, val3 in val2.items():
-                        # TODO: Add la_id of real agg. LA here!
-                        # TODO: (need additional dict top level for la_id here)
-                        gen = Generator(
-                            id='agg-' + 'LA_ID' + '-' + '_'.join([str(_) for _ in val3['ids']]),
-                            nominal_capacity=val3['capacity'],
-                            type=type,
-                            subtype=subtype,
-                            geom=network.mv_grid.station.geom,
-                            grid=network.mv_grid,
-                            v_level=4)
-                        network.mv_grid.graph.add_node(gen, type='generator')
+            for la_id, val in agg_geno_new.items():
+                for v_level, val2 in val.items():
+                    for type, val3 in val2.items():
+                        for subtype, val4 in val3.items():
+                            gen = Generator(
+                                id='agg-' + str(la_id) + '-' + '_'.join([str(_) for _ in val4['ids']]),
+                                nominal_capacity=val4['capacity'],
+                                type=type,
+                                subtype=subtype,
+                                geom=network.mv_grid.station.geom,
+                                grid=network.mv_grid,
+                                v_level=4)
 
-                        # select cable type
-                        line_type, line_count = select_cable(network=network,
-                                                             level='mv',
-                                                             apparent_power=gen.nominal_capacity /
-                                                             pfac_mv_gen)
+                            network.mv_grid.graph.add_node(gen, type='generator')
 
-                        # connect generator to MV station
-                        line = Line(id='line_aggr_generator_vlevel_{v_level}_'
-                                    '{subtype}'.format(
-                                     v_level=v_level,
-                                     subtype=subtype),
-                                    type=line_type,
-                                    kind='cable',
-                                    quantity=line_count,
-                                    length=1e-3,
-                                    grid=network.mv_grid)
+                            # select cable type
+                            line_type, line_count = select_cable(network=network,
+                                                                 level='mv',
+                                                                 apparent_power=gen.nominal_capacity /
+                                                                 pfac_mv_gen)
 
-                        network.mv_grid.graph.add_edge(network.mv_grid.station,
-                                                       gen,
-                                                       line=line,
-                                                       type='line_aggr')
+                            # connect generator to MV station
+                            line = Line(id='line_aggr_generator_la_' + str(la_id) + '_vlevel_{v_level}_'
+                                        '{subtype}'.format(
+                                         v_level=v_level,
+                                         subtype=subtype),
+                                        type=line_type,
+                                        kind='cable',
+                                        quantity=line_count,
+                                        length=1e-3,
+                                        grid=network.mv_grid)
 
-                        log_agg_geno_new_count += len(val3['ids'])
-                        log_geno_cap += val3['capacity']
+                            network.mv_grid.graph.add_edge(network.mv_grid.station,
+                                                           gen,
+                                                           line=line,
+                                                           type='line_aggr')
+
+                            log_agg_geno_new_count += len(val4['ids'])
+                            log_geno_cap += val4['capacity']
 
         logger.debug('{} of {} new generators added ({} single units, {} to existing '
                      'agg. generators and {} units as new aggregated generators) '
