@@ -1369,6 +1369,13 @@ def _import_genos_from_oedb(network):
         seed = int(network.config['random']['seed'])
         random.seed(a=seed)
 
+        # check if none of new generators can be allocated to an existing  LV grid
+        if not any([_ in lv_grid_dict.keys()
+                    for _ in list(generators_lv_new['mvlv_subst_id'])]):
+            logger.warning('None of the imported generators can be allocated '
+                           'to an existing LV grid. Check compatibility of grid '
+                           'and generator datasets.')
+
         # iterate over new (single unit or part of agg. unit) generators and create them
         log_geno_cap = 0
         for id, row in generators_lv_new.iterrows():
