@@ -14,3 +14,15 @@ class MaximumIterationError(Error):
 
     def __init__(self, message):
         self.message = message
+
+
+class ImpossibleVoltageReduction(Error):
+    """
+    Exception raised when voltage issue cannot be solved.
+
+    Attributes:
+        message -- explanation of the error
+    """
+
+    def __init__(self, message):
+        self.message = message
