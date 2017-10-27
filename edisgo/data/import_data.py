@@ -1383,17 +1383,18 @@ def _import_genos_from_oedb(network):
 
             # new unit is part of agg. LA (mvlv_subst_id is different from existing
             # ones in LV grids of non-agg. load areas)
-            if row['mvlv_subst_id'] not in lv_grid_dict.keys():
+            if (row['mvlv_subst_id'] not in lv_grid_dict.keys() and
+                    row['la_id'] and not isnan(row['la_id']) and
+                    row['mvlv_subst_id'] and not isnan(row['mvlv_subst_id'])):
 
                 # check if new unit can be added to existing agg. generator
                 # (LA id, type and subtype match) -> update existing agg. generator.
                 # Normally, this case should not occur since `subtype` of new genos
                 # is set to a new value (e.g. 'solar')
                 for _, agg_row in g_mv_agg.iterrows():
-                    if not isnan(row['la_id']) and \
-                            agg_row['la_id'] == int(row['la_id']) and agg_row['obj']\
-                            .type == row['generation_type'] and agg_row['obj']\
-                            .subtype == row['generation_subtype']:
+                    if (agg_row['la_id'] == int(row['la_id']) and
+                            agg_row['obj'].type == row['generation_type'] and
+                            agg_row['obj'].subtype == row['generation_subtype']):
 
                         agg_row['obj'].nominal_capacity += row['electrical_capacity']
                         agg_row['obj'].id += '_{}'.format(str(id))
