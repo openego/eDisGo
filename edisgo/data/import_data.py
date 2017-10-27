@@ -1476,7 +1476,7 @@ def _import_genos_from_oedb(network):
                                 grid=network.mv_grid,
                                 v_level=4)
 
-                            network.mv_grid.graph.add_node(gen, type='generator')
+                            network.mv_grid.graph.add_node(gen, type='generator_aggr')
 
                             # select cable type
                             line_type, line_count = select_cable(network=network,
