@@ -1330,6 +1330,11 @@ def _import_genos_from_oedb(network):
                 ids.remove(str(int(row['id'])))
                 row['agg_geno'].id = '-'.join([id[0], id[1], '_'.join(ids)])
 
+                # after removing the LV geno from agg geno, is the agg. geno empty?
+                # if yes, remove it from grid
+                if not ids:
+                    row['agg_geno'].grid.graph.remove_node(row['agg_geno'])
+
                 log_geno_count += 1
             logger.debug('{} of {} decommissioned generators in aggregated generators removed ({} kW).'
                          .format(str(log_geno_count),
