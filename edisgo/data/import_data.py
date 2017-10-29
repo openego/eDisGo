@@ -1665,8 +1665,10 @@ def _import_genos_from_oedb(network):
             logger.debug('Cumulative capacity of imported generators validated.')
 
     def _validate_sample_geno_location():
-        if all(generators_res_lv['geom'].notnull()) and all(
-                generators_res_mv['geom'].notnull()):
+        if all(generators_res_lv['geom'].notnull()) \
+                and all(generators_res_mv['geom'].notnull()) \
+                and not generators_res_lv['geom'].empty \
+                and not generators_res_mv['geom'].empty:
             # get geom of 1 random MV and 1 random LV generator and transform
             sample_mv_geno_geom_shp = transform(proj2equidistant(network),
                                                 wkt_loads(generators_res_mv['geom']
