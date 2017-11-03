@@ -445,7 +445,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
 
             else:
                 logger.debug(
-                    '==> Main line of node {} in LV grid {} '.format(
+                    '==> Main line of node {} in grid {} '.format(
                         str(crit_nodes.index[i]), str(grid)) +
                     'has already been reinforced.')
 
