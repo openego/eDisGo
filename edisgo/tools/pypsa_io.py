@@ -1150,18 +1150,20 @@ def process_pfa_results(network, pypsa):
     }
 
     # write voltage levels obtained from power flow to results object
-    pfa_v_mag_pu = pypsa.buses_t['v_mag_pu'].rename(columns=names_mapping)
+    pfa_v_mag_pu_mv = (pypsa.buses_t['v_mag_pu'][
+        list(generators_mapping) +
+        list(branch_t_mapping) +
+        list(mv_station_mapping_sec) +
+        list(mv_switch_disconnector_mapping) +
+        list(lv_station_mapping_pri) +
+        list(loads_mapping)]).rename(columns=names_mapping)
+    pfa_v_mag_pu_lv = (pypsa.buses_t['v_mag_pu'][
+        list(lv_station_mapping_sec) +
+        list(lv_generators_mapping) +
+        list(lv_branch_t_mapping) +
+        list(lv_loads_mapping)]).rename(columns=names_mapping)
     network.results.pfa_v_mag_pu = pd.concat(
-        {'mv': pfa_v_mag_pu[list(generators_mapping.values()) +
-                            list(branch_t_mapping.values()) +
-                            list(mv_station_mapping_sec.values()) +
-                            list(mv_switch_disconnector_mapping.values()) +
-                            list(lv_station_mapping_pri.values()) +
-                            list(loads_mapping.values())],
-         'lv': pfa_v_mag_pu[list(lv_station_mapping_sec.values()) +
-                            list(lv_generators_mapping.values()) +
-                            list(lv_branch_t_mapping.values()) +
-                            list(lv_loads_mapping.values())]}, axis=1)
+        {'mv': pfa_v_mag_pu_mv, 'lv': pfa_v_mag_pu_lv}, axis=1)
 
 
 def update_pypsa(network):
