@@ -209,10 +209,23 @@ def reinforce_grid(network, max_while_iterations=10):
         logger.debug('==> Run power flow analysis.')
         network.analyze()
         logger.debug('==> Recheck voltage at secondary side of LV stations.')
-        crit_nodes = checks.lv_voltage_deviation(network)
+        crit_stations = checks.lv_voltage_deviation(network, mode='stations')
 
         iteration_step += 1
         while_counter += 1
+
+    # check if all voltage problems were solved after maximum number of
+    # iterations allowed
+    if while_counter == max_while_iterations and crit_stations:
+        logger.error("==> Voltage issues at busbars in LV grids were not"
+                     "solved.")
+        # raise exceptions.MaximumIterationError(
+        #     "Overvoltage issues at busbar could not be solved for the "
+        #     "following LV grids: {}".format(crit_nodes))
+        for k, v in crit_stations.items():
+            network.results.unresolved_issues.update({repr(k.station): v})
+    else:
+        logger.info('==> All voltage issues in LV grids are solved.')
 
     # solve voltage problems in LV grids
     logger.debug('==> Check voltage in LV grids.')
