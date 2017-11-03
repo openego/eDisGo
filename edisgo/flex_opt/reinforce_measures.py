@@ -105,6 +105,53 @@ def extend_distribution_substation(network, critical_stations):
             transformers_changes['added'][station] = new_transformers
             transformers_changes['removed'][station] = station.transformers
             station.transformers = new_transformers
+    return transformers_changes
+
+
+def extend_distribution_substation_overvoltage(network, critical_stations):
+    """
+    Reinforce MV/LV substations due to voltage issues.
+
+    A parallel standard transformer is installed.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+    critical_stations : dict
+        Dictionary with critical :class:`~.grid.components.LVStation`
+        Format: {lv_station_1: overloading_1, ..., lv_station_n: overloading_n}
+
+    Returns
+    -------
+    Dictionary with lists of added transformers.
+
+    """
+
+    # get parameters for standard transformer
+    try:
+        standard_transformer = network.equipment_data['LV_trafos'].loc[
+            network.config['grid_expansion']['std_mv_lv_transformer']]
+    except KeyError:
+        print('Standard MV/LV transformer is not in equipment list.')
+
+    transformers_changes = {'added': {}}
+    for grid, station in critical_stations.items():
+
+        # get any transformer to get attributes for new transformer from
+        station_transformer = station.transformers[0]
+
+        new_transformer = Transformer(
+            id='LVStation_{}_transformer_{}'.format(
+                str(station.id), str(len(station.transformers) + 1)),
+            geom=station_transformer.geom,
+            mv_grid=station_transformer.mv_grid,
+            grid=station_transformer.grid,
+            voltage_op=station_transformer.voltage_op,
+            type=copy.deepcopy(standard_transformer))
+
+        # add standard transformer to station and return value
+        station.add_transformer(new_transformer)
+        transformers_changes['added'][station] = [new_transformer]
 
     if transformers_changes['added']:
         logger.debug("==> {} LV station(s) has/have been reinforced ".format(
