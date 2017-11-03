@@ -332,14 +332,12 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     for i in range(len(crit_nodes)):
         path = nx.shortest_path(grid.graph, grid.station,
                                 crit_nodes.index[i])
-        # stop execution if voltage issue occurs at station's secondary side
+        # raise exception if voltage issue occurs at station's secondary side
+        # because voltage issues should have been solved during extension of
+        # distribution substations due to overvoltage issues.
         if len(path) == 1:
-            logging.error("Voltage issues of station need to be solved at " +
-                          "secondary side.")
-            # raise exceptions.MaximumIterationError(
-            #     "Overloading issues for the following lines could not be :"
-            #     "solved {}".format(crit_lines))
-
+            logging.error("Voltage issues at busbar in LV grid {} should have "
+                          "been solved in previous steps.".format(grid))
         else:
             # check if representative of line is already in list
             # main_line_reinforced; if it is, the main line the critical node
