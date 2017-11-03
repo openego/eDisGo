@@ -281,6 +281,8 @@ def lv_voltage_deviation(network, mode=None):
 
     """
 
+    #ToDo: devide this function into several functions to not have so many
+    # if statements
     crit_nodes = {}
 
     # load max. voltage deviation
