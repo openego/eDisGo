@@ -193,6 +193,27 @@ def reinforce_grid(network, max_while_iterations=10):
     else:
         logger.debug('==> All voltage issues in MV grid are solved.')
 
+    # solve voltage problems at secondary side of LV stations
+    logger.debug('==> Check voltage at secondary side of LV stations.')
+    crit_stations = checks.lv_voltage_deviation(network, mode='stations')
+
+    while_counter = 0
+    while crit_nodes and while_counter < max_while_iterations:
+        # reinforce distribution substations
+        transformer_changes = \
+            reinforce_measures.extend_distribution_substation_overvoltage(
+                network, crit_stations)
+        # write added transformers to results.equipment_changes
+        _add_transformer_changes_to_equipment_changes('added')
+
+        logger.debug('==> Run power flow analysis.')
+        network.analyze()
+        logger.debug('==> Recheck voltage at secondary side of LV stations.')
+        crit_nodes = checks.lv_voltage_deviation(network)
+
+        iteration_step += 1
+        while_counter += 1
+
     # solve voltage problems in LV grids
     logger.debug('==> Check voltage in LV grids.')
     crit_nodes = checks.lv_voltage_deviation(network)
