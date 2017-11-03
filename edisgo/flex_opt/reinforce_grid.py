@@ -95,7 +95,7 @@ def reinforce_grid(network, max_while_iterations=10):
         if overloaded_mv_station:
             # reinforce substations
             transformer_changes = \
-                reinforce_measures.extend_substation(
+                reinforce_measures.extend_substation_overloading(
                     network, overloaded_mv_station)
             # write added and removed transformers to results.equipment_changes
             _add_transformer_changes_to_equipment_changes('added')
@@ -104,7 +104,7 @@ def reinforce_grid(network, max_while_iterations=10):
         if overloaded_stations:
             # reinforce distribution substations
             transformer_changes = \
-                reinforce_measures.extend_distribution_substation(
+                reinforce_measures.extend_distribution_substation_overloading(
                     network, overloaded_stations)
             # write added and removed transformers to results.equipment_changes
             _add_transformer_changes_to_equipment_changes('added')
@@ -255,7 +255,7 @@ def reinforce_grid(network, max_while_iterations=10):
         if overloaded_mv_station:
             # reinforce substations
             transformer_changes = \
-                reinforce_measures.extend_substation(
+                reinforce_measures.extend_substation_overloading(
                     network, overloaded_mv_station)
             # write added and removed transformers to results.equipment_changes
             _add_transformer_changes_to_equipment_changes('added')
@@ -264,7 +264,7 @@ def reinforce_grid(network, max_while_iterations=10):
         if overloaded_stations:
             # reinforce substations
             transformer_changes = \
-                reinforce_measures.extend_distribution_substation(
+                reinforce_measures.extend_distribution_substation_overloading(
                     network, overloaded_stations)
             # write added and removed transformers to results.equipment_changes
             _add_transformer_changes_to_equipment_changes('added')

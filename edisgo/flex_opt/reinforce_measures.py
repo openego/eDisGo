@@ -13,9 +13,9 @@ import logging
 logger = logging.getLogger('edisgo')
 
 
-def extend_distribution_substation(network, critical_stations):
+def extend_distribution_substation_overloading(network, critical_stations):
     """
-    Reinforce MV/LV substations.
+    Reinforce MV/LV substations due to overloading issues.
 
     In a first step a parallel transformer of the same kind is installed.
     If this is not sufficient as many standard transformers as needed are
@@ -161,9 +161,9 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
     return transformers_changes
 
 
-def extend_substation(network, critical_stations):
+def extend_substation_overloading(network, critical_stations):
     """
-    Reinforce HV/MV station.
+    Reinforce HV/MV station due to overloading issues.
 
     In a first step a parallel transformer of the same kind is installed.
     If this is not sufficient as many standard transformers as needed are
