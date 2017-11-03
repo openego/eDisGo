@@ -927,9 +927,10 @@ def import_generators(network, data_source=None, file=None):
     :pandas:`pandas.DataFrame<dataframe>`
         List of generators
     """
+    types = ['wind', 'solar']
 
     if data_source == 'oedb':
-        _import_genos_from_oedb(network=network)
+        _import_genos_from_oedb(network=network, types=types)
     elif data_source == 'pypsa':
         _import_genos_from_pypsa(network=network, file=file)
     else:
@@ -938,7 +939,7 @@ def import_generators(network, data_source=None, file=None):
         raise ValueError('The source you specified is not supported.')
 
 
-def _import_genos_from_oedb(network):
+def _import_genos_from_oedb(network, types=None):
     """Import generator data from the Open Energy Database (OEDB).
 
     The importer uses SQLAlchemy ORM objects.
@@ -988,7 +989,7 @@ def _import_genos_from_oedb(network):
 
         return generators_mv
 
-    def _import_res_generators():
+    def _import_res_generators(types_filter):
         """Import renewable (res) generators
 
         Returns
@@ -1021,7 +1022,8 @@ def _import_genos_from_oedb(network):
             func.ST_AsText(func.ST_Transform(
             orm_re_generators.columns.geom, srid)).label('geom_em')). \
                 filter(orm_re_generators.columns.subst_id == network.mv_grid.id). \
-            filter(orm_re_generators_version)
+            filter(orm_re_generators_version). \
+            filter(types_filter)
 
         # extend basic query for MV generators and read data from db
         generators_mv_sqla = generators_sqla. \
@@ -1745,9 +1747,15 @@ def _import_genos_from_oedb(network):
         orm_conv_generators_version = orm_conv_generators.columns.preversion == data_version
         orm_re_generators_version = orm_re_generators.columns.preversion == data_version
 
+    # Create filter for generation technologies
+    if types is None:
+        types_condition = 1 == 1
+    else:
+        types_condition = orm_re_generators.columns.generation_type.in_(types)
+
     # get conventional and renewable generators
     #generators_conv_mv = _import_conv_generators()
-    generators_res_mv, generators_res_lv = _import_res_generators()
+    generators_res_mv, generators_res_lv = _import_res_generators(types_condition)
 
     #generators_mv = generators_conv_mv.append(generators_res_mv)
 
