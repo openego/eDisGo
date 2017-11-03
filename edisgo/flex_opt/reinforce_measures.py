@@ -135,14 +135,14 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
         print('Standard MV/LV transformer is not in equipment list.')
 
     transformers_changes = {'added': {}}
-    for grid, station in critical_stations.items():
+    for grid, voltage_deviation in critical_stations.items():
 
         # get any transformer to get attributes for new transformer from
-        station_transformer = station.transformers[0]
+        station_transformer = grid.station.transformers[0]
 
         new_transformer = Transformer(
             id='LVStation_{}_transformer_{}'.format(
-                str(station.id), str(len(station.transformers) + 1)),
+                str(grid.station.id), str(len(grid.station.transformers) + 1)),
             geom=station_transformer.geom,
             mv_grid=station_transformer.mv_grid,
             grid=station_transformer.grid,
@@ -150,8 +150,8 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
             type=copy.deepcopy(standard_transformer))
 
         # add standard transformer to station and return value
-        station.add_transformer(new_transformer)
-        transformers_changes['added'][station] = [new_transformer]
+        grid.station.add_transformer(new_transformer)
+        transformers_changes['added'][grid.station] = [new_transformer]
 
     if transformers_changes['added']:
         logger.debug("==> {} LV station(s) has/have been reinforced ".format(
