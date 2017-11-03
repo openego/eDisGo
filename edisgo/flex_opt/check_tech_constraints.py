@@ -253,20 +253,27 @@ def mv_voltage_deviation(network):
     return crit_nodes
 
 
-def lv_voltage_deviation(network):
+def lv_voltage_deviation(network, mode=None):
     """
     Checks for voltage stability issues in LV grids.
 
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
+    mode : None or String
+        If None voltage at all nodes in LV grid is checked. If mode is set to
+        'stations' only voltage at busbar is checked.
 
     Returns
     -------
-    Dict of :class:`~.grid.grids.LVGrid` with critical nodes as
+    Dict with :class:`~.grid.grids.LVGrid` as keys.
+    If mode is None values of dictionary are critical nodes of grid as
     :pandas:`pandas.Series<series>`, sorted descending by voltage deviation.
-    Format: {grid_1: pd.Series(data=[v_mag_pu_node_1A, v_mag_pu_node_1B],
-                               index=[node_1A, node_1B]), ...}
+    (Format: {grid_1: pd.Series(data=[v_mag_pu_node_1A, v_mag_pu_node_1B],
+                               index=[node_1A, node_1B]), ...}).
+    If mode is 'stations' values are maximum voltage deviation at secondary
+    side of station (Format: {grid_1: v_mag_pu_station_grid_1, ...,
+                              grid_n: v_mag_pu_station_grid_n}).
 
     Notes
     -----
@@ -280,8 +287,18 @@ def lv_voltage_deviation(network):
     lv_max_v_deviation = network.scenario.parameters.lv_max_v_deviation
 
     for lv_grid in network.mv_grid.lv_grids:
-        v_mag_pu_pfa = network.results.v_res(nodes=lv_grid.graph.nodes(),
-                                             level='lv')
+        if mode:
+            if mode == 'stations':
+                v_mag_pu_pfa = network.results.v_res(
+                    nodes=[lv_grid.station], level='lv')
+            else:
+                raise ValueError(
+                    "{} is not a valid option for input variable 'mode' in "
+                    "function lv_voltage_deviation. Try 'stations' or "
+                    "None".format(mode))
+        else:
+            v_mag_pu_pfa = network.results.v_res(nodes=lv_grid.graph.nodes(),
+                                                 level='lv')
         # check for overvoltage
         v_max = v_mag_pu_pfa.max()
         crit_nodes_max = v_max[(v_max > (1 + lv_max_v_deviation))] - 1
@@ -292,8 +309,11 @@ def lv_voltage_deviation(network):
         # node
         crit_nodes_grid = crit_nodes_max.append(crit_nodes_min).max(level=0)
         if len(crit_nodes_grid) > 0:
-            crit_nodes[lv_grid] = crit_nodes_grid.sort_values(
-                ascending=False)
+            if not mode:
+                crit_nodes[lv_grid] = crit_nodes_grid.sort_values(
+                    ascending=False)
+            else:
+                crit_nodes[lv_grid] = crit_nodes_grid[repr(lv_grid.station)]
 
     if crit_nodes:
         logger.debug(
