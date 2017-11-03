@@ -141,7 +141,8 @@ def reinforce_grid(network, max_while_iterations=10):
         #     "Overloading issues for the following lines could not be solved:"
         #     "{}".format(crit_lines))
     else:
-        logger.debug('==> All load issues in MV grid are solved.')
+        logger.info('==> Load issues in MV grid were solved in {} iteration '
+                     'step(s).'.format(while_counter))
 
     # REINFORCE BRANCHES DUE TO VOLTAGE ISSUES
     iteration_step += 1
@@ -191,7 +192,8 @@ def reinforce_grid(network, max_while_iterations=10):
             for i, d in v.iteritems():
                 network.results.unresolved_issues.update({repr(i): d})
     else:
-        logger.debug('==> All voltage issues in MV grid are solved.')
+        logger.info('==> Voltage issues in MV grid were solved in {} '
+                     'iteration step(s).'.format(while_counter))
 
     # solve voltage problems at secondary side of LV stations
     logger.debug('==> Check voltage at secondary side of LV stations.')
@@ -225,7 +227,8 @@ def reinforce_grid(network, max_while_iterations=10):
         for k, v in crit_stations.items():
             network.results.unresolved_issues.update({repr(k.station): v})
     else:
-        logger.info('==> All voltage issues in LV grids are solved.')
+        logger.info('==> Voltage issues at busbars in LV grids were solved '
+                     'in {} iteration step(s).'.format(while_counter))
 
     # solve voltage problems in LV grids
     logger.debug('==> Check voltage in LV grids.')
@@ -271,7 +274,9 @@ def reinforce_grid(network, max_while_iterations=10):
             for i, d in v.iteritems():
                 network.results.unresolved_issues.update({repr(i): d})
     else:
-        logger.info('==> All voltage issues in LV grids are solved.')
+        logger.info(
+            '==> Voltage issues in LV grids were solved '
+            'in {} iteration step(s).'.format(while_counter))
 
     # RECHECK FOR OVERLOADED TRANSFORMERS AND LINES
     logger.debug('==> Recheck station load.')
@@ -338,4 +343,6 @@ def reinforce_grid(network, max_while_iterations=10):
         network.results.unresolved_issues.update(overloaded_stations)
         network.results.unresolved_issues.update(overloaded_mv_station)
     else:
-        logger.debug('==> All load issues in MV grid are solved.')
+        logger.info(
+            '==> Load issues were rechecked and solved '
+            'in {} iteration step(s).'.format(while_counter))
