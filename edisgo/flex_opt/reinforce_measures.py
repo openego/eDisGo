@@ -387,13 +387,20 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                     #     )
                     # # maximum allowed impedance of critical line to solve
                     # # voltage problem
-                    # Z_allowed = delta_U / max(network.results.i_res[
-                    #                               repr(crit_line)])
+                    # I = float(network.results.v_res(
+                    #     nodes=[node_2_3], level=voltage_level).max(axis=1) *
+                    #      grid.voltage_nom *
+                    #      max(network.results.i_res[repr(crit_line)])) / (
+                    #     (network.results.v_res(
+                    #         nodes=[node_2_3], level=voltage_level).max(axis=1)
+                    #     - delta_U_reduction) * grid.voltage_nom
+                    # )
+                    # Z_allowed = (delta_U * grid.voltage_nom * 1000) / I
                     # omega = 2 * math.pi * 50
                     # standard_line_Z = (standard_line.R * crit_line.length +
                     #                    standard_line.L * omega / 1e3 *
                     #                    crit_line.length)
-                    # #1 / standard_line_Z
+                    # n = math.ceil(standard_line_Z / Z_allowed)
 
                     # if critical line is already a standard line install one
                     # more parallel line
