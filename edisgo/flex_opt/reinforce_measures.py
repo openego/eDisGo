@@ -7,14 +7,15 @@ from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
 from edisgo.grid.components import Transformer, BranchTee, Generator, Load, \
     LVStation
 from edisgo.grid.grids import LVGrid
+from edisgo.flex_opt import exceptions
 
 import logging
 logger = logging.getLogger('edisgo')
 
 
-def extend_distribution_substation(network, critical_stations):
+def extend_distribution_substation_overloading(network, critical_stations):
     """
-    Reinforce MV/LV substations.
+    Reinforce MV/LV substations due to overloading issues.
 
     In a first step a parallel transformer of the same kind is installed.
     If this is not sufficient as many standard transformers as needed are
@@ -104,6 +105,53 @@ def extend_distribution_substation(network, critical_stations):
             transformers_changes['added'][station] = new_transformers
             transformers_changes['removed'][station] = station.transformers
             station.transformers = new_transformers
+    return transformers_changes
+
+
+def extend_distribution_substation_overvoltage(network, critical_stations):
+    """
+    Reinforce MV/LV substations due to voltage issues.
+
+    A parallel standard transformer is installed.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+    critical_stations : dict
+        Dictionary with critical :class:`~.grid.components.LVStation`
+        Format: {lv_station_1: overloading_1, ..., lv_station_n: overloading_n}
+
+    Returns
+    -------
+    Dictionary with lists of added transformers.
+
+    """
+
+    # get parameters for standard transformer
+    try:
+        standard_transformer = network.equipment_data['LV_trafos'].loc[
+            network.config['grid_expansion']['std_mv_lv_transformer']]
+    except KeyError:
+        print('Standard MV/LV transformer is not in equipment list.')
+
+    transformers_changes = {'added': {}}
+    for grid, voltage_deviation in critical_stations.items():
+
+        # get any transformer to get attributes for new transformer from
+        station_transformer = grid.station.transformers[0]
+
+        new_transformer = Transformer(
+            id='LVStation_{}_transformer_{}'.format(
+                str(grid.station.id), str(len(grid.station.transformers) + 1)),
+            geom=station_transformer.geom,
+            mv_grid=station_transformer.mv_grid,
+            grid=station_transformer.grid,
+            voltage_op=station_transformer.voltage_op,
+            type=copy.deepcopy(standard_transformer))
+
+        # add standard transformer to station and return value
+        grid.station.add_transformer(new_transformer)
+        transformers_changes['added'][grid.station] = [new_transformer]
 
     if transformers_changes['added']:
         logger.debug("==> {} LV station(s) has/have been reinforced ".format(
@@ -113,9 +161,9 @@ def extend_distribution_substation(network, critical_stations):
     return transformers_changes
 
 
-def extend_substation(network, critical_stations):
+def extend_substation_overloading(network, critical_stations):
     """
-    Reinforce HV/MV station.
+    Reinforce HV/MV station due to overloading issues.
 
     In a first step a parallel transformer of the same kind is installed.
     If this is not sufficient as many standard transformers as needed are
@@ -260,12 +308,16 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
         try:
             standard_line = network.equipment_data['LV_cables'].loc[
                 network.config['grid_expansion']['std_lv_line']]
+            max_v_deviation = network.scenario.parameters.lv_max_v_deviation
+            voltage_level = 'lv'
         except KeyError:
             print('Chosen standard LV line is not in equipment list.')
     else:
         try:
             standard_line = network.equipment_data['MV_cables'].loc[
                 network.config['grid_expansion']['std_mv_line']]
+            max_v_deviation = network.scenario.parameters.mv_max_v_deviation
+            voltage_level = 'mv'
         except KeyError:
             print('Chosen standard MV line is not in equipment list.')
 
@@ -280,14 +332,12 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     for i in range(len(crit_nodes)):
         path = nx.shortest_path(grid.graph, grid.station,
                                 crit_nodes.index[i])
-        # stop execution if voltage issue occurs at station's secondary side
+        # raise exception if voltage issue occurs at station's secondary side
+        # because voltage issues should have been solved during extension of
+        # distribution substations due to overvoltage issues.
         if len(path) == 1:
-            logging.error("Voltage issues of station need to be solved at " +
-                          "secondary side.")
-            # raise exceptions.MaximumIterationError(
-            #     "Overloading issues for the following lines could not be :"
-            #     "solved {}".format(crit_lines))
-
+            logging.error("Voltage issues at busbar in LV grid {} should have "
+                          "been solved in previous steps.".format(grid))
         else:
             # check if representative of line is already in list
             # main_line_reinforced; if it is, the main line the critical node
@@ -398,7 +448,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
 
             else:
                 logger.debug(
-                    '==> Main line of node {} in LV grid {} '.format(
+                    '==> Main line of node {} in grid {} '.format(
                         str(crit_nodes.index[i]), str(grid)) +
                     'has already been reinforced.')
 

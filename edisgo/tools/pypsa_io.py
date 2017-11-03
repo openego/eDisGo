@@ -331,6 +331,7 @@ def mv_to_pypsa(network):
         line['x'].append(
             l['line'].type['L'] * omega / 1e3 * l['line'].length)
         line['r'].append(l['line'].type['R'] * l['line'].length)
+        #ToDo remove s_nom?
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
         line['length'].append(l['line'].length)
@@ -498,6 +499,7 @@ def lv_to_pypsa(network):
         line['x'].append(
             l['line'].type['L'] * omega / 1e3 * l['line'].length)
         line['r'].append(l['line'].type['R'] * l['line'].length)
+        #ToDo remove s_nom?
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
         line['length'].append(l['line'].length)
@@ -1148,18 +1150,20 @@ def process_pfa_results(network, pypsa):
     }
 
     # write voltage levels obtained from power flow to results object
-    pfa_v_mag_pu = pypsa.buses_t['v_mag_pu'].rename(columns=names_mapping)
+    pfa_v_mag_pu_mv = (pypsa.buses_t['v_mag_pu'][
+        list(generators_mapping) +
+        list(branch_t_mapping) +
+        list(mv_station_mapping_sec) +
+        list(mv_switch_disconnector_mapping) +
+        list(lv_station_mapping_pri) +
+        list(loads_mapping)]).rename(columns=names_mapping)
+    pfa_v_mag_pu_lv = (pypsa.buses_t['v_mag_pu'][
+        list(lv_station_mapping_sec) +
+        list(lv_generators_mapping) +
+        list(lv_branch_t_mapping) +
+        list(lv_loads_mapping)]).rename(columns=names_mapping)
     network.results.pfa_v_mag_pu = pd.concat(
-        {'mv': pfa_v_mag_pu[list(generators_mapping.values()) +
-                            list(branch_t_mapping.values()) +
-                            list(mv_station_mapping_sec.values()) +
-                            list(mv_switch_disconnector_mapping.values()) +
-                            list(lv_station_mapping_pri.values()) +
-                            list(loads_mapping.values())],
-         'lv': pfa_v_mag_pu[list(lv_station_mapping_sec.values()) +
-                            list(lv_generators_mapping.values()) +
-                            list(lv_branch_t_mapping.values()) +
-                            list(lv_loads_mapping.values())]}, axis=1)
+        {'mv': pfa_v_mag_pu_mv, 'lv': pfa_v_mag_pu_lv}, axis=1)
 
 
 def update_pypsa(network):
@@ -1246,6 +1250,7 @@ def update_pypsa(network):
             idx.type['R'] / idx.quantity * idx.length)
         network.pypsa.lines.loc[repr(idx), 'x'] = (
             idx.type['L'] / 1e3 * omega / idx.quantity * idx.length)
+        #ToDo remove s_nom?
         network.pypsa.lines.loc[repr(idx), 's_nom'] = (
             sqrt(3) * idx.type['I_max_th'] * idx.type[
                 'U_n'] * idx.quantity / 1e3)

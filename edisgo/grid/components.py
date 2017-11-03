@@ -508,7 +508,7 @@ class Line(Component):
         Column   Description        Unit   Data type
         ======== ================== ====== =========
         name     Name (e.g. NAYY..) -      str
-        U_n      Nominal voltage    V      int
+        U_n      Nominal voltage    kV     int
         I_max_th Max. th. current   A      float
         R        Resistance         Ohm/km float
         L        Inductance         mH/km  float
