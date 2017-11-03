@@ -200,7 +200,7 @@ def reinforce_grid(network, max_while_iterations=10):
     crit_stations = checks.lv_voltage_deviation(network, mode='stations')
 
     while_counter = 0
-    while crit_nodes and while_counter < max_while_iterations:
+    while crit_stations and while_counter < max_while_iterations:
         # reinforce distribution substations
         transformer_changes = \
             reinforce_measures.extend_distribution_substation_overvoltage(
@@ -223,7 +223,7 @@ def reinforce_grid(network, max_while_iterations=10):
                      "solved.")
         # raise exceptions.MaximumIterationError(
         #     "Overvoltage issues at busbar could not be solved for the "
-        #     "following LV grids: {}".format(crit_nodes))
+        #     "following LV grids: {}".format(crit_stations))
         for k, v in crit_stations.items():
             network.results.unresolved_issues.update({repr(k.station): v})
     else:
