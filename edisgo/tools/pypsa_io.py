@@ -236,7 +236,8 @@ def mv_to_pypsa(network):
         `#54 <https://github.com/openego/eDisGo/issues/54>`_ for discussion.
     """
 
-    generators = network.mv_grid.graph.nodes_by_attribute('generator')
+    generators = network.mv_grid.graph.nodes_by_attribute('generator') + \
+                 network.mv_grid.graph.nodes_by_attribute('generator_aggr')
     loads = network.mv_grid.graph.nodes_by_attribute('load')
     branch_tees = network.mv_grid.graph.nodes_by_attribute('branch_tee')
     lines = network.mv_grid.graph.lines()
@@ -697,7 +698,8 @@ def _pypsa_generator_timeseries(network, mode=None):
 
     # MV generator timeseries
     if mode is 'mv' or mode is None:
-        for gen in network.mv_grid.graph.nodes_by_attribute('generator'):
+        for gen in network.mv_grid.graph.nodes_by_attribute('generator') + \
+                network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
             mv_gen_timeseries_q.append(
                 gen.pypsa_timeseries('q').rename(repr(gen)).to_frame())
             mv_gen_timeseries_p.append(
@@ -1085,7 +1087,8 @@ def process_pfa_results(network, pypsa):
         pypsa.lines['v_nom'] * line_voltage_avg.T, axis='columns') * 1e3
     # process results at nodes
     generators_names = [repr(g) for g in
-                        network.mv_grid.graph.nodes_by_attribute('generator')]
+                        network.mv_grid.graph.nodes_by_attribute('generator') +
+                        network.mv_grid.graph.nodes_by_attribute('generator_aggr')]
     generators_mapping = {v: k for k, v in
                           pypsa.generators.loc[generators_names][
                               'bus'].to_dict().items()}

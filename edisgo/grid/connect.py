@@ -53,7 +53,8 @@ def connect_mv_generators(network):
     std_line_type = network.equipment_data['MV_cables'].loc[
         network.config['grid_expansion']['std_mv_line']]
 
-    for geno in sorted(network.mv_grid.graph.nodes_by_attribute('generator'), key=lambda _: repr(_)):
+    for geno in sorted(network.mv_grid.graph.nodes_by_attribute('generator'),
+                       key=lambda _: repr(_)):
         if nx.is_isolate(network.mv_grid.graph, geno):
 
             # ===== voltage level 4: generator has to be connected to MV station =====
