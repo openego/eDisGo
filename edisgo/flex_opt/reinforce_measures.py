@@ -360,48 +360,6 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                     crit_line = grid.graph.get_edge_data(
                         grid.station, node_2_3)['line']
 
-                    # # calculated number of parallel lines
-                    # # delta U
-                    # #ToDo: remove max(axis=1) when v_res returns only wanted level
-                    # # current voltage drop of critical line
-                    # delta_U_crit_line = abs(
-                    #     network.results.v_res(
-                    #         nodes=[node_2_3], level=voltage_level).max(axis=1) -
-                    #     network.results.v_res(
-                    #         nodes=[grid.station], level=voltage_level).max(
-                    #         axis=1)
-                    # ).max()
-                    # # necessary voltage reduction at critical node
-                    # delta_U_reduction = float(
-                    #     abs(network.results.v_res(
-                    #         nodes=[crit_nodes.index[i]],
-                    #         level=voltage_level).max(axis=1) - 1) -
-                    #     max_v_deviation)
-                    # # maximum allowed voltage drop of critical line
-                    # delta_U = delta_U_crit_line - delta_U_reduction
-                    # if delta_U <= 0:
-                    #     raise exceptions.ImpossibleVoltageReduction(
-                    #         "Voltage issue in {} cannot be solved.".format(
-                    #             grid
-                    #         )
-                    #     )
-                    # # maximum allowed impedance of critical line to solve
-                    # # voltage problem
-                    # I = float(network.results.v_res(
-                    #     nodes=[node_2_3], level=voltage_level).max(axis=1) *
-                    #      grid.voltage_nom *
-                    #      max(network.results.i_res[repr(crit_line)])) / (
-                    #     (network.results.v_res(
-                    #         nodes=[node_2_3], level=voltage_level).max(axis=1)
-                    #     - delta_U_reduction) * grid.voltage_nom
-                    # )
-                    # Z_allowed = (delta_U * grid.voltage_nom * 1000) / I
-                    # omega = 2 * math.pi * 50
-                    # standard_line_Z = (standard_line.R * crit_line.length +
-                    #                    standard_line.L * omega / 1e3 *
-                    #                    crit_line.length)
-                    # n = math.ceil(standard_line_Z / Z_allowed)
-
                     # if critical line is already a standard line install one
                     # more parallel line
                     if crit_line.type.name == standard_line.name:
