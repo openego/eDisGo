@@ -1,5 +1,4 @@
 from ..grid.components import Line, MVStation, LVStation, MVDisconnectingPoint, Generator, Load, BranchTee
-from ..grid.tools import select_cable
 from ..tools.geo import calc_geo_dist_vincenty, \
                         calc_geo_lines_in_buffer, \
                         proj2equidistant, \
@@ -49,13 +48,13 @@ def connect_mv_generators(network):
     # get params from config
     buffer_radius = int(network.config['connect']['conn_buffer_radius'])
     buffer_radius_inc = int(network.config['connect']['conn_buffer_radius_inc'])
-    pfac_mv_gen = network.config['scenario']['pfac_mv_gen']
 
     # get standard equipment
     std_line_type = network.equipment_data['MV_cables'].loc[
         network.config['grid_expansion']['std_mv_line']]
 
-    for geno in sorted(network.mv_grid.graph.nodes_by_attribute('generator'), key=lambda _: repr(_)):
+    for geno in sorted(network.mv_grid.graph.nodes_by_attribute('generator'),
+                       key=lambda _: repr(_)):
         if nx.is_isolate(network.mv_grid.graph, geno):
 
             # ===== voltage level 4: generator has to be connected to MV station =====

@@ -216,7 +216,6 @@ class Graph(nx.Graph):
 
         return line
 
-
     def nodes_by_attribute(self, attr_val, attr='type'):
         """
         Select Graph's nodes by attribute value

@@ -4,7 +4,7 @@ topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA grid
 container.
 """
 
-from edisgo.grid.components import Transformer, Line
+from edisgo.grid.components import Transformer, Line, LVStation
 
 import pandas as pd
 from math import pi, sqrt, floor
@@ -252,7 +252,8 @@ def mv_to_pypsa(network):
         `#54 <https://github.com/openego/eDisGo/issues/54>`_ for discussion.
     """
 
-    generators = network.mv_grid.graph.nodes_by_attribute('generator')
+    generators = network.mv_grid.graph.nodes_by_attribute('generator') + \
+                 network.mv_grid.graph.nodes_by_attribute('generator_aggr')
     loads = network.mv_grid.graph.nodes_by_attribute('load')
     branch_tees = network.mv_grid.graph.nodes_by_attribute('branch_tee')
     lines = network.mv_grid.graph.lines()
@@ -356,6 +357,7 @@ def mv_to_pypsa(network):
         line['x'].append(
             l['line'].type['L'] * omega / 1e3 * l['line'].length)
         line['r'].append(l['line'].type['R'] * l['line'].length)
+        #ToDo remove s_nom?
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
         line['length'].append(l['line'].length)
@@ -551,6 +553,7 @@ def lv_to_pypsa(network):
         line['x'].append(
             l['line'].type['L'] * omega / 1e3 * l['line'].length)
         line['r'].append(l['line'].type['R'] * l['line'].length)
+        #ToDo remove s_nom?
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
         line['length'].append(l['line'].length)
@@ -765,7 +768,8 @@ def _pypsa_generator_timeseries(network, mode=None):
 
     # MV generator timeseries
     if mode is 'mv' or mode is None:
-        for gen in network.mv_grid.graph.nodes_by_attribute('generator'):
+        for gen in network.mv_grid.graph.nodes_by_attribute('generator') + \
+                network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
             mv_gen_timeseries_q.append(
                 gen.pypsa_timeseries('q').rename(repr(gen)).to_frame())
             mv_gen_timeseries_p.append(
@@ -1158,15 +1162,28 @@ def process_pfa_results(network, pypsa):
 
     """
 
-    # get p and q of lines and transformers in absolute values
-    q0 = abs(
-        pd.concat([pypsa.lines_t['q0'], pypsa.transformers_t['q0']], axis=1))
-    q1 = abs(
-        pd.concat([pypsa.lines_t['q1'], pypsa.transformers_t['q1']], axis=1))
-    p0 = abs(
-        pd.concat([pypsa.lines_t['p0'], pypsa.transformers_t['p0']], axis=1))
-    p1 = abs(
-        pd.concat([pypsa.lines_t['p1'], pypsa.transformers_t['p1']], axis=1))
+    # get p and q of lines, LV transformers and MV Station (slack generator)
+    # in absolute values
+    q0 = pd.concat(
+        [abs(pypsa.lines_t['q0']),
+         abs(pypsa.transformers_t['q0']),
+         abs(pypsa.generators_t['q']['Generator_slack'].rename(
+             repr(network.mv_grid.station)))], axis=1)
+    q1 = pd.concat(
+        [abs(pypsa.lines_t['q1']),
+         abs(pypsa.transformers_t['q1']),
+         abs(pypsa.generators_t['q']['Generator_slack'].rename(
+             repr(network.mv_grid.station)))], axis=1)
+    p0 = pd.concat(
+        [abs(pypsa.lines_t['p0']),
+         abs(pypsa.transformers_t['p0']),
+         abs(pypsa.generators_t['p']['Generator_slack'].rename(
+            repr(network.mv_grid.station)))], axis=1)
+    p1 = pd.concat(
+        [abs(pypsa.lines_t['p1']),
+         abs(pypsa.transformers_t['p1']),
+         abs(pypsa.generators_t['p']['Generator_slack'].rename(
+             repr(network.mv_grid.station)))], axis=1)
 
     # determine apparent power and line endings/transformers' side
     s0 = (p0 ** 2 + q0 ** 2).applymap(sqrt)
@@ -1176,12 +1193,19 @@ def process_pfa_results(network, pypsa):
     network.results.pfa_p = p0.where(s0 > s1, p1) * 1e3
     network.results.pfa_q = q0.where(s0 > s1, q1) * 1e3
 
+    def voltage_at_lines(row):
+        return (pypsa.buses_t['v_mag_pu'][row['bus0']] +\
+            pypsa.buses_t['v_mag_pu'][row['bus1']]) / 2
+
+    line_voltage_avg = pypsa.lines.apply(voltage_at_lines, axis=1)
+
     # Get voltage levels at line (avg. of buses at both sides)
     network.results._i_res = s0[pypsa.lines_t['q0'].columns].truediv(
-        pypsa.lines['v_nom'], axis='columns') * 1e3
+        pypsa.lines['v_nom'] * line_voltage_avg.T, axis='columns') * 1e3
     # process results at nodes
     generators_names = [repr(g) for g in
-                        network.mv_grid.graph.nodes_by_attribute('generator')]
+                        network.mv_grid.graph.nodes_by_attribute('generator') +
+                        network.mv_grid.graph.nodes_by_attribute('generator_aggr')]
     generators_mapping = {v: k for k, v in
                           pypsa.generators.loc[generators_names][
                               'bus'].to_dict().items()}
@@ -1243,18 +1267,20 @@ def process_pfa_results(network, pypsa):
     }
 
     # write voltage levels obtained from power flow to results object
-    pfa_v_mag_pu = pypsa.buses_t['v_mag_pu'].rename(columns=names_mapping)
+    pfa_v_mag_pu_mv = (pypsa.buses_t['v_mag_pu'][
+        list(generators_mapping) +
+        list(branch_t_mapping) +
+        list(mv_station_mapping_sec) +
+        list(mv_switch_disconnector_mapping) +
+        list(lv_station_mapping_pri) +
+        list(loads_mapping)]).rename(columns=names_mapping)
+    pfa_v_mag_pu_lv = (pypsa.buses_t['v_mag_pu'][
+        list(lv_station_mapping_sec) +
+        list(lv_generators_mapping) +
+        list(lv_branch_t_mapping) +
+        list(lv_loads_mapping)]).rename(columns=names_mapping)
     network.results.pfa_v_mag_pu = pd.concat(
-        {'mv': pfa_v_mag_pu[list(generators_mapping.values()) +
-                            list(branch_t_mapping.values()) +
-                            list(mv_station_mapping_sec.values()) +
-                            list(mv_switch_disconnector_mapping.values()) +
-                            list(lv_station_mapping_pri.values()) +
-                            list(loads_mapping.values())],
-         'lv': pfa_v_mag_pu[list(lv_station_mapping_sec.values()) +
-                            list(lv_generators_mapping.values()) +
-                            list(lv_branch_t_mapping.values()) +
-                            list(lv_loads_mapping.values())]}, axis=1)
+        {'mv': pfa_v_mag_pu_mv, 'lv': pfa_v_mag_pu_lv}, axis=1)
 
 
 def update_pypsa(network):
@@ -1303,18 +1329,21 @@ def update_pypsa(network):
 
 
     for idx, row in added_transformers.iterrows():
-        v_base = idx.mv_grid.voltage_nom  # we choose voltage of transformers' primary side
-        z_base = v_base ** 2 / row['equipment'].type.S_nom
 
-        transformer['bus0'].append('_'.join(['Bus', idx.__repr__(side='mv')]))
-        transformer['bus1'].append('_'.join(['Bus', idx.__repr__(side='lv')]))
-        transformer['name'].append(repr(row['equipment']))
-        transformer['type'].append("")
-        transformer['model'].append('pi')
-        transformer['r'].append(row['equipment'].type.R / z_base)
-        transformer['x'].append(row['equipment'].type.X / z_base)
-        transformer['s_nom'].append(row['equipment'].type.S_nom / 1e3)
-        transformer['tap_ratio'].append(1)
+        if isinstance(idx, LVStation):
+            # we choose voltage of transformers' primary side
+            v_base = idx.mv_grid.voltage_nom
+            z_base = v_base ** 2 / row['equipment'].type.S_nom
+
+            transformer['bus0'].append('_'.join(['Bus', idx.__repr__(side='mv')]))
+            transformer['bus1'].append('_'.join(['Bus', idx.__repr__(side='lv')]))
+            transformer['name'].append(repr(row['equipment']))
+            transformer['type'].append("")
+            transformer['model'].append('pi')
+            transformer['r'].append(row['equipment'].type.R / z_base)
+            transformer['x'].append(row['equipment'].type.X / z_base)
+            transformer['s_nom'].append(row['equipment'].type.S_nom / 1e3)
+            transformer['tap_ratio'].append(1)
 
     network.pypsa.transformers.drop(removed_transformers, inplace=True)
 
@@ -1338,6 +1367,7 @@ def update_pypsa(network):
             idx.type['R'] / idx.quantity * idx.length)
         network.pypsa.lines.loc[repr(idx), 'x'] = (
             idx.type['L'] / 1e3 * omega / idx.quantity * idx.length)
+        #ToDo remove s_nom?
         network.pypsa.lines.loc[repr(idx), 's_nom'] = (
             sqrt(3) * idx.type['I_max_th'] * idx.type[
                 'U_n'] * idx.quantity / 1e3)

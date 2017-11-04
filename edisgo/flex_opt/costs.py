@@ -87,8 +87,8 @@ def grid_expansion_costs(network):
 
     costs = pd.DataFrame()
 
+    # costs for transformers
     if not network.results.equipment_changes.empty:
-        # costs for transformers
         transformers = network.results.equipment_changes[
             network.results.equipment_changes['equipment'].apply(
                 isinstance, args=(Transformer,))]
@@ -117,22 +117,30 @@ def grid_expansion_costs(network):
                     isinstance, args=(Line,))]]
         # calculate costs for each reinforced line
         for l in list(lines.index.unique()):
-            number_lines_added = network.results.equipment_changes[
-                (network.results.equipment_changes.index == l) &
-                (network.results.equipment_changes.equipment == l.type.name)][
-                'quantity'].sum()
-            costs = costs.append(pd.DataFrame(
-                {'type': l.type.name,
-                 'total_costs': _get_line_costs(l, number_lines_added),
-                 'length': l.length * number_lines_added,
-                 'quantity': number_lines_added},
-                index=[repr(l)]))
-    else:
+            # check if line connects aggregated units
+            aggr_lines = []
+            aggr_lines_generator = l.grid.graph.lines_by_attribute('line_aggr')
+            for aggr_line in aggr_lines_generator:
+                aggr_lines.append(repr(aggr_line['line']))
+            if not repr(l) in aggr_lines:
+                number_lines_added = network.results.equipment_changes[
+                    (network.results.equipment_changes.index == l) &
+                    (network.results.equipment_changes.equipment ==
+                     l.type.name)]['quantity'].sum()
+                costs = costs.append(pd.DataFrame(
+                    {'type': l.type.name,
+                     'total_costs': _get_line_costs(l, number_lines_added),
+                     'length': l.length * number_lines_added,
+                     'quantity': number_lines_added},
+                    index=[repr(l)]))
+
+    # if no costs incurred write zero costs to DataFrame
+    if costs.empty:
         costs = costs.append(pd.DataFrame(
-            {'type': [],
-             'total_costs': [],
-             'length': [],
-             'quantity': []},
-            index=[]))
+            {'type': ['N/A'],
+             'total_costs': [0],
+             'length': [0],
+             'quantity': [0]},
+            index=['No reinforced equipment.']))
 
     return costs

@@ -4,10 +4,23 @@ class Error(Exception):
 
 
 class MaximumIterationError(Error):
-    """Exception raised for errors in the input.
+    """
+    Exception raised when maximum number of iterations in grid reinforcement
+    is exceeded.
 
     Attributes:
-        expression -- input expression in which the error occurred
+        message -- explanation of the error
+    """
+
+    def __init__(self, message):
+        self.message = message
+
+
+class ImpossibleVoltageReduction(Error):
+    """
+    Exception raised when voltage issue cannot be solved.
+
+    Attributes:
         message -- explanation of the error
     """
 
