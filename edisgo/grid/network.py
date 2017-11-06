@@ -5,7 +5,7 @@ import logging
 
 import edisgo
 from edisgo.tools import config, pypsa_io
-from edisgo.data.import_data import import_from_ding0
+from edisgo.data.import_data import import_from_ding0, import_generators
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 
@@ -63,6 +63,8 @@ class Network:
         self._config = self._load_config()
         self._equipment_data = self._load_equipment_data()
 
+        self._dingo_import_data = []
+
     @staticmethod
     def _load_config():
         """Load config files
@@ -72,6 +74,7 @@ class Network:
         config object
         """
 
+        # load config
         config.load_config('config_db_tables.cfg')
         config.load_config('config_data.cfg')
         config.load_config('config_flexopt.cfg')
@@ -79,7 +82,34 @@ class Network:
         config.load_config('config_scenario.cfg')
         config.load_config('config_costs.cfg')
 
-        return config.cfg._sections
+        confic_dict = config.cfg._sections
+
+        # convert numeric values to float
+        for sec, subsecs in confic_dict.items():
+            for subsec, val in subsecs.items():
+                # try str -> float conversion
+                try:
+                    confic_dict[sec][subsec] = float(val)
+                except:
+                    pass
+
+        # modify structure of config data
+        confic_dict['data']['peakload_consumption_ratio'] = {
+            'residential': confic_dict['data'][
+                'residential_peakload_consumption'],
+            'retail': confic_dict['data'][
+                'retail_peakload_consumption'],
+            'industrial': confic_dict['data'][
+                'residential_peakload_consumption'],
+            'agricultural': confic_dict['data'][
+                'agricultural_peakload_consumption']}
+
+        del (confic_dict['data']['residential_peakload_consumption'])
+        del (confic_dict['data']['retail_peakload_consumption'])
+        del (confic_dict['data']['industrial_peakload_consumption'])
+        del (confic_dict['data']['agricultural_peakload_consumption'])
+
+        return confic_dict
 
     def _load_equipment_data(self):
         """Load equipment data for transformers, cables etc.
@@ -154,17 +184,20 @@ class Network:
         network = cls(**kwargs)
 
         # call the importer
-        import_from_ding0(file, network)
+        import_from_ding0(file=file,
+                          network=network)
 
         return network
 
     def import_generators(self):
-        """Imports generators
+        """Import generators
 
-        TBD
-
+        For details see
+        :func:`edisgo.data.import_data.import_generators`
         """
-        raise NotImplementedError
+        data_source = data_source=self.config['data']['data_source']
+        import_generators(network=self,
+                          data_source=data_source)
 
     def analyze(self, mode=None):
         """Analyzes the grid by power flow analysis
@@ -210,7 +243,7 @@ class Network:
             Translator to PyPSA data format
 
         """
-        if self.results.equipment_changes.empty:
+        if self.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
             self.pypsa = pypsa_io.to_pypsa(self, mode)
         else:
@@ -273,6 +306,14 @@ class Network:
         """Set data source for key (e.g. 'grid')
         """
         self._data_sources[key] = data_source
+
+    @property
+    def dingo_import_data(self):
+        return self._dingo_import_data
+
+    @dingo_import_data.setter
+    def dingo_import_data(self, dingo_data):
+        self._dingo_import_data = dingo_data
 
     @property
     def pypsa(self):
@@ -379,8 +420,6 @@ class Scenario:
         self._etrago_specs = kwargs.get('etrago_specs', None)
         self._parameters = Parameters(self, **kwargs)
 
-        # populate timeseries attribute
-        # ToDo: als funktion auslagern
         if isinstance(power_flow, str):
             if power_flow != 'worst-case':
                 raise ValueError(
@@ -660,6 +699,9 @@ class TimeSeries:
         dict or :pandas:`pandas.Series<series>`
             See class definition for details.
         """
+        if self._generation is None:
+            self._generation = self._set_generation(mode='worst-case')
+
         return self._generation
 
     @generation.setter
@@ -836,6 +878,7 @@ class Results:
         self._i_res = None
         self._equipment_changes = pd.DataFrame()
         self._grid_expansion_costs = None
+        self._unresolved_issues = {}
 
     @property
     def pfa_p(self):
@@ -1060,6 +1103,43 @@ class Results:
     def grid_expansion_costs(self, total_costs):
         self._grid_expansion_costs = total_costs
 
+    @property
+    def unresolved_issues(self):
+        """
+        Holds lines and nodes where over-loading or over-voltage issues
+        could not be solved in grid reinforcement.
+
+        In case over-loading or over-voltage issues could not be solved
+        after maximum number of iterations, grid reinforcement is not
+        aborted but grid expansion costs are still calculated and unresolved
+        issues listed here.
+
+        Parameters
+        ----------
+        issues : Dictionary
+
+            Dictionary of critical lines/stations with relative over-loading
+            and critical nodes with voltage deviation in p.u.. Format:
+                {crit_line_1: rel_overloading_1, ...,
+                 crit_line_n: rel_overloading_n,
+                 crit_node_1: v_mag_pu_node_1, ...,
+                 crit_node_n: v_mag_pu_node_n}
+            Provide this if you want to set unresolved_issues. For retrieval
+            of unresolved issues do not pass an argument.
+
+        Returns
+        -------
+        Dictionary
+            Dictionary of critical lines/stations with relative over-loading
+            and critical nodes with voltage deviation in p.u.
+
+        """
+        return self._unresolved_issues
+
+    @unresolved_issues.setter
+    def unresolved_issues(self, issues):
+        self._unresolved_issues = issues
+
     def s_res(self, components=None):
         """
         Get resulting apparent power in kVA at line(s) and transformer(s).
@@ -1157,6 +1237,23 @@ class Results:
 
 
         return self.pfa_v_mag_pu[level][labels_included]
+
+
+def worst_case_generation_ts(timeindex):
+    """
+    Define worst case generation time series
+
+    Parameters
+    ----------
+    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+            Time range of power flow analysis
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Normalized active power (1 kW)
+    """
+    return pd.DataFrame({'p': 1}, index=timeindex)
 
 
 def worst_case_load_ts(timeindex):

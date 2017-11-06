@@ -39,7 +39,7 @@ def mv_line_load(network):
             # check if maximum current from power flow analysis exceeds
             # allowed maximum current
             i_line_pfa = max(network.results.i_res[repr(line['line'])])
-            if i_line_pfa > i_line_max:
+            if i_line_pfa > float(i_line_max):
                 crit_lines[line['line']] = i_line_pfa / i_line_max
         except KeyError:
             logger.debug('No results for line {} '.format(str(line)) +
@@ -106,9 +106,9 @@ def lv_line_load(network):
     return crit_lines
 
 
-def mv_lv_station_load(network):
+def hv_mv_station_load(network):
     """
-    Checks for over-loading of MV/LV transformers.
+    Checks for over-loading of HV/MV station.
 
     Parameters
     ----------
@@ -116,15 +116,56 @@ def mv_lv_station_load(network):
 
     Returns
     -------
-    Dictionary with critical :class:`~.grid.components.LVStation`
-    Format: {lv_station_1: overloading_1, ..., lv_station_n: overloading_n}
+    Dictionary with critical :class:`~.grid.components.MVStation` and maximum
+    apparent power from power flow analysis. Format: {mv_station: S_max}
+
+    """
+
+    crit_stations = {}
+
+    load_factor = \
+        network.scenario.parameters.load_factor_hv_mv_transformer
+
+    # maximum allowed apparent power of station
+    s_station_max = (sum(
+        [_.type.S_nom for _ in network.mv_grid.station.transformers]) *
+                     load_factor)
+    try:
+        # check if maximum allowed apparent power of station exceeds
+        # apparent power from power flow analysis
+        s_station_pfa = network.results.s_res(
+            [network.mv_grid.station]).sum(axis=1).max()
+        if s_station_max < s_station_pfa:
+            crit_stations[network.mv_grid.station] = s_station_pfa
+    except KeyError:
+        logger.debug('No results for MV station to check overloading.')
+
+    if crit_stations:
+        logger.debug('==> HV/MV station has load issues.')
+    else:
+        logger.debug('==> No HV/MV station load issues.')
+
+    return crit_stations
+
+
+def mv_lv_station_load(network):
+    """
+    Checks for over-loading of MV/LV stations.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+
+    Returns
+    -------
+    Dictionary with critical :class:`~.grid.components.LVStation` and maximum
+    apparent power from power flow analysis.
+    Format: {lv_station_1: S_max_1, ..., lv_station_n: S_max_n}
 
     Notes
     -----
     According to [1]_ load factors in feed-in case of all equipment in MV and
-    LV is set to 1.
-
-    HV/MV transformers are not checked.
+    LV are set to 1.
 
     References
     ----------
@@ -212,20 +253,27 @@ def mv_voltage_deviation(network):
     return crit_nodes
 
 
-def lv_voltage_deviation(network):
+def lv_voltage_deviation(network, mode=None):
     """
     Checks for voltage stability issues in LV grids.
 
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
+    mode : None or String
+        If None voltage at all nodes in LV grid is checked. If mode is set to
+        'stations' only voltage at busbar is checked.
 
     Returns
     -------
-    Dict of :class:`~.grid.grids.LVGrid` with critical nodes as
+    Dict with :class:`~.grid.grids.LVGrid` as keys.
+    If mode is None values of dictionary are critical nodes of grid as
     :pandas:`pandas.Series<series>`, sorted descending by voltage deviation.
-    Format: {grid_1: pd.Series(data=[v_mag_pu_node_1A, v_mag_pu_node_1B],
-                               index=[node_1A, node_1B]), ...}
+    (Format: {grid_1: pd.Series(data=[v_mag_pu_node_1A, v_mag_pu_node_1B],
+                               index=[node_1A, node_1B]), ...}).
+    If mode is 'stations' values are maximum voltage deviation at secondary
+    side of station (Format: {grid_1: v_mag_pu_station_grid_1, ...,
+                              grid_n: v_mag_pu_station_grid_n}).
 
     Notes
     -----
@@ -233,14 +281,26 @@ def lv_voltage_deviation(network):
 
     """
 
+    #ToDo: devide this function into several functions to not have so many
+    # if statements
     crit_nodes = {}
 
     # load max. voltage deviation
     lv_max_v_deviation = network.scenario.parameters.lv_max_v_deviation
 
     for lv_grid in network.mv_grid.lv_grids:
-        v_mag_pu_pfa = network.results.v_res(nodes=lv_grid.graph.nodes(),
-                                             level='lv')
+        if mode:
+            if mode == 'stations':
+                v_mag_pu_pfa = network.results.v_res(
+                    nodes=[lv_grid.station], level='lv')
+            else:
+                raise ValueError(
+                    "{} is not a valid option for input variable 'mode' in "
+                    "function lv_voltage_deviation. Try 'stations' or "
+                    "None".format(mode))
+        else:
+            v_mag_pu_pfa = network.results.v_res(nodes=lv_grid.graph.nodes(),
+                                                 level='lv')
         # check for overvoltage
         v_max = v_mag_pu_pfa.max()
         crit_nodes_max = v_max[(v_max > (1 + lv_max_v_deviation))] - 1
@@ -251,8 +311,11 @@ def lv_voltage_deviation(network):
         # node
         crit_nodes_grid = crit_nodes_max.append(crit_nodes_min).max(level=0)
         if len(crit_nodes_grid) > 0:
-            crit_nodes[lv_grid] = crit_nodes_grid.sort_values(
-                ascending=False)
+            if not mode:
+                crit_nodes[lv_grid] = crit_nodes_grid.sort_values(
+                    ascending=False)
+            else:
+                crit_nodes[lv_grid] = crit_nodes_grid[repr(lv_grid.station)]
 
     if crit_nodes:
         logger.debug(
