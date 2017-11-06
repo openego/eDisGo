@@ -3,7 +3,7 @@ from edisgo.grid.tools import select_cable
 
 import logging
 
-def integrate_storage(network, position, operation):
+def integrate_storage(network, position):
     """
     Integrate storage units in the grid and specify its operational mode
 
@@ -49,19 +49,19 @@ def storage_at_hvmv_substation(mv_grid, nominal_capacity=1000):
     storage_id = len(mv_grid.graph.nodes_by_attribute('storage')) + 1
     storage = Storage(operation={'mode': 'fifty-fifty'},
                       id=storage_id,
-                      nominal_capacity=nominal_capacity)
+                      nominal_capacity=nominal_capacity,
+                      grid=mv_grid)
 
     # add storage itself to graph
-    mv_grid.graph.add_nodes_from(storage, type='storage')
+    mv_grid.graph.add_node(storage, type='storage')
 
     # add 1m connecting line to hv/mv substation bus bar
     line_type, _ = select_cable(mv_grid.network, 'mv', nominal_capacity)
-    line = [mv_grid.station, storage,
-              {'line': Line(
-                  id=storage_id,
-                  type=line_type,
-                  kind='cable',
-                  length=1,
-                  grid=mv_grid)
-              }]
-    mv_grid.graph.add_edges_from(line, type='line')
+    line = Line(
+        id=storage_id,
+        type=line_type,
+        kind='cable',
+        length=1,
+        grid=mv_grid)
+
+    mv_grid.graph.add_edge(mv_grid.station, storage, line=line, type='line')

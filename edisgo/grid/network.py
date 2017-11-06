@@ -7,6 +7,7 @@ from edisgo.tools import config, pypsa_io
 from edisgo.data.import_data import import_from_ding0, import_generators
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
+from edisgo.flex_opt.storage_integration import integrate_storage
 
 
 class Network:
@@ -275,6 +276,10 @@ class Network:
         reinforce_grid(
             self, max_while_iterations=kwargs.get('max_while_iterations', 10))
         self.results.grid_expansion_costs = grid_expansion_costs(self)
+
+    def integrate_storage(self, **kwargs):
+        """Integrate storage in grid"""
+        integrate_storage(self, kwargs.get('position', None))
 
     @property
     def id(self):
