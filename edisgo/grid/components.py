@@ -4,7 +4,7 @@ import pandas as pd
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString
 from .grids import LVGrid, MVGrid
-from math import acos, tan
+from math import acos, tan, sqrt
 import pandas as pd
 
 
@@ -302,7 +302,7 @@ class Generator(Component):
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
 
-        Convert from kV, kVA to MW, MVA
+        Convert from kW, kVA to MW, MVA
 
         Parameters
         ----------
@@ -385,6 +385,19 @@ class Storage(Component):
         else:
             return self._timeseries
 
+
+    def pypsa_timeseries(self, attr):
+        """Return time series in PyPSA format
+
+        Convert from kW, kVA to MW, MVA
+
+        Parameters
+        ----------
+        attr : str
+            Attribute name (PyPSA conventions). Choose from {p_set, q_set}
+        """
+        return self.timeseries[attr] / 1e3
+
     @property
     def nominal_capacity(self):
         """
@@ -459,7 +472,7 @@ class StorageOperation():
         if mode is not None:
             self.define_timeseries(mode)
 
-    def define_timeseries(self, mode):
+    def define_timeseries(self, mode, feedin_threshold=.5):
         """
         Define time series for :class:`Storage`
 
@@ -474,11 +487,34 @@ class StorageOperation():
                 storage time series as defined by eTraGo
         """
         if mode == 'etrago-plain':
+            # TODO: untested code
             if self._timeseries is None:
                 self._timeseries = pd.DataFrame()
                 self._timeseries[
                     'p'] = self.storage.grid.network.scenario.etrago_specs.battery_active_power
                 self._timeseries['q'] = self.storage.grid.network.scenario.etrago_specs.battery_active_power * 0
+        elif 'fifty-fifty':
+            # determine generators cumulative apparent power output
+            generators = self.storage.grid.graph.nodes_by_attribute(
+                'generator') + [generators for lv_grid in
+                                self.storage.grid.lv_grids for generators in
+                                lv_grid.graph.nodes_by_attribute('generator')]
+            generators_p = pd.concat([_.timeseries['p'] for _ in generators],
+                                     axis=1).sum(axis=1).rename('p')
+            generators_q = pd.concat([_.timeseries['q'] for _ in generators],
+                                     axis=1).sum(axis=1).rename('q')
+            generation = pd.concat([generators_p, generators_q], axis=1)
+            generation['s'] = generation.apply(
+                lambda x: sqrt(x['p'] ** 2 + x['q'] ** 2), axis=1)
+            generators_nom_capacity = sum(
+                [_.nominal_capacity for _ in generators])
+            feedin_bool = generation['s'] > (
+                feedin_threshold * generators_nom_capacity)
+            feedin = feedin_bool.apply(
+                lambda x: self.storage.nominal_capacity if x
+                else -self.storage.nominal_capacity).rename('p').to_frame()
+            feedin['q'] = 0
+            self._timeseries = feedin * self.storage.nominal_capacity
         else:
             raise ValueError('The mode {} is not know as valid storage '
                              'operational mode'.format(mode))

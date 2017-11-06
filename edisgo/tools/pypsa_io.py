@@ -98,7 +98,7 @@ def to_pypsa(network, mode):
                 network,
                 components['Bus'].index.tolist())
 
-        if len(list(components['StorageUnit'].index.values)) > 1:
+        if len(list(components['StorageUnit'].index.values)) > 0:
             timeseries_storage_p, timeseries_storage_q = _pypsa_storage_timeseries(
                 network,
                 mode=mode)
@@ -158,7 +158,7 @@ def to_pypsa(network, mode):
     pypsa_network.import_components_from_dataframe(components['Bus'], 'Bus')
 
     for k, comps in components.items():
-        if k is not 'Bus':
+        if k is not 'Bus' and not comps.empty:
             pypsa_network.import_components_from_dataframe(comps, k)
 
     # import time series to PyPSA network
@@ -188,7 +188,7 @@ def to_pypsa(network, mode):
                                      'Bus',
                                      'v_mag_pu_set')
 
-    if len(list(components['StorageUnit'].index.values)) > 1:
+    if len(list(components['StorageUnit'].index.values)) > 0:
         import_series_from_dataframe(pypsa_network,
                                      timeseries_storage_p,
                                      'StorageUnit',
