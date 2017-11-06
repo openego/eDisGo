@@ -98,7 +98,7 @@ def to_pypsa(network, mode):
                 network,
                 components['Bus'].index.tolist())
 
-        if len(list(components['Storage'].index.values)) > 1:
+        if len(list(components['StorageUnit'].index.values)) > 1:
             timeseries_storage_p, timeseries_storage_q = _pypsa_storage_timeseries(
                 network,
                 mode=mode)
@@ -188,14 +188,14 @@ def to_pypsa(network, mode):
                                      'Bus',
                                      'v_mag_pu_set')
 
-    if len(list(components['Storage'].index.values)) > 1:
+    if len(list(components['StorageUnit'].index.values)) > 1:
         import_series_from_dataframe(pypsa_network,
                                      timeseries_storage_p,
-                                     'Storage',
+                                     'StorageUnit',
                                      'p_set')
         import_series_from_dataframe(pypsa_network,
                                      timeseries_storage_q,
-                                     'Storage',
+                                     'StorageUnit',
                                      'q_set')
 
     _check_integrity_of_pypsa(pypsa_network)
@@ -228,7 +228,7 @@ def mv_to_pypsa(network):
         * 'Line'
         * 'BranchTee'
         * 'Tranformer'
-        * 'Storage'
+        * 'StorageUnit'
 
 
     .. warning::
@@ -432,7 +432,7 @@ def mv_to_pypsa(network):
         'Load': pd.DataFrame(load).set_index('name'),
         'Line': pd.DataFrame(line).set_index('name'),
         'Transformer': pd.DataFrame(transformer).set_index('name'),
-        'Storage': pd.DataFrame(storage).set_index('name')}
+        'StorageUnit': pd.DataFrame(storage).set_index('name')}
 
     return components
 
@@ -458,7 +458,7 @@ def lv_to_pypsa(network):
         * 'Load'
         * 'Line'
         * 'BranchTee'
-        * 'Storage'
+        * 'StorageUnit'
     """
 
     generators = []
@@ -578,7 +578,7 @@ def lv_to_pypsa(network):
         'Bus': pd.DataFrame(bus).set_index('name'),
         'Load': pd.DataFrame(load).set_index('name'),
         'Line': pd.DataFrame(line).set_index('name'),
-        'Storage': pd.DataFrame(storage).set_index('name')}
+        'StorageUnit': pd.DataFrame(storage).set_index('name')}
 
     return lv_components
 
