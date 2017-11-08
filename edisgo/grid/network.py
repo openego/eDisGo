@@ -153,28 +153,6 @@ class Network:
         import_generators(network=self,
                           data_source=data_source)
 
-    def import_feedin_timeseries(self):
-        """
-        Import feedin timeseries and assing it in eDisGo data structure
-        """
-        import_feedin_timeseries(self)
-        
-    def import_load_timeseries(self, data_source=None):
-        """
-        Import load timeseries and assing it in eDisGo data structure
-
-        Parameters
-        ----------
-        data_source : str
-            Specfiy type of data source. Available data sources are
-
-             * 'oedb': retrieves load time series cumulated across sectors
-             * 'demandlib': determine a load time series with the use of the
-                demandlib. This calculated standard load profiles for 4 different
-                sectors.
-        """
-        import_load_timeseries(self, data_source)
-
     def analyze(self, mode=None):
         """Analyzes the grid by power flow analysis
 
@@ -849,6 +827,31 @@ class TimeSeries:
             'industrial': 1 * peak_load_consumption_ratio['industrial'],
             'agricultural': 1 * peak_load_consumption_ratio['agricultural']},
             index=self.timeindex)
+
+    def import_feedin_timeseries(self, scenario):
+        """
+        Import feedin timeseries from oedb
+        """
+        #ToDo: add docstring
+        return import_feedin_timeseries(scenario)
+
+    def import_load_timeseries(self, scenario, data_source='demandlib'):
+        """
+        Import load timeseries
+
+        Parameters
+        ----------
+        data_source : str
+            Specfiy type of data source. Available data sources are
+
+             * 'oedb': retrieves load time series cumulated across sectors
+             * 'demandlib': determine a load time series with the use of the
+                demandlib. This calculated standard load profiles for 4
+                different sectors.
+        """
+        # ToDo: add docstring
+        #ToDo: find better place for input data_source (in config?)
+        return import_load_timeseries(scenario, data_source)
 
 
 class ETraGoSpecs:
