@@ -28,6 +28,14 @@ edisgo\.grid\.network module
     :undoc-members:
     :show-inheritance:
 
+edisgo\.grid\.tools module
+--------------------------
+
+.. automodule:: edisgo.grid.tools
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 
 Module contents
 ---------------

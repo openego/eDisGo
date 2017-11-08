@@ -2,16 +2,33 @@ import pandas as pd
 import numpy as np
 import networkx as nx
 import os
-from math import isclose
+import random
+from math import isclose, isnan
 import logging
+
 if not 'READTHEDOCS' in os.environ:
     from ding0.tools.results import load_nd_from_pickle
     from ding0.core.network.stations import LVStationDing0
     from ding0.core.structure.regions import LVLoadAreaCentreDing0
+    from shapely.ops import transform
+    from shapely.wkt import loads as wkt_loads
 
 from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
     MVStation, Line, Transformer, LVStation
 from ..grid.grids import MVGrid, LVGrid
+from ..grid.connect import connect_mv_generators, connect_lv_generators
+from ..grid.tools import select_cable
+from ..tools.geo import proj2equidistant
+
+from egoio.db_tables import model_draft, supply
+from egoio.tools.db import connection
+
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import func
+from workalendar.europe import Germany
+from demandlib import bdew as bdew, particular_profiles as profiles
+import datetime
+
 
 logger = logging.getLogger('edisgo')
 
@@ -63,6 +80,9 @@ def import_from_ding0(file, network):
         ding0_nd = file
 
     ding0_mv_grid = ding0_nd._mv_grid_districts[0].mv_grid
+
+    # Make sure circuit breakers (respectively the rings) are closed
+    ding0_mv_grid.close_circuit_breakers()
 
     # Import medium-voltage grid data
     network.mv_grid =_build_mv_grid(ding0_mv_grid, network)
@@ -178,6 +198,7 @@ def _build_lv_grid(ding0_grid, network):
                     edges.append({'adj_nodes': edge[0], 'branch': edge[1]})
 
                 # Create list of line instances and add these to grid's graph
+                #ToDo convert type voltage to kV (either here or in dingo)
                 lines = [(nodes[_['adj_nodes'][0]], nodes[_['adj_nodes'][1]],
                           {'line': Line(
                               id=_['branch'].id_db,
@@ -236,10 +257,17 @@ def _build_mv_grid(ding0_grid, network):
     la_centers = [_ for _ in ding0_grid._graph.nodes()
                   if isinstance(_, LVLoadAreaCentreDing0)]
     if la_centers:
-        aggregated, aggr_stations = _determine_aggregated_nodes(la_centers)
+        aggregated, aggr_stations, dingo_import_data = _determine_aggregated_nodes(la_centers)
+        network.dingo_import_data = dingo_import_data
     else:
         aggregated = {}
         aggr_stations = []
+
+        # create empty DF for imported agg. generators
+        network.dingo_import_data = pd.DataFrame(columns=('id',
+                                                          'capacity',
+                                                          'agg_geno')
+                                                 )
 
     # Create list of load instances and add these to grid's graph
     loads = {_: Load(
@@ -306,15 +334,16 @@ def _build_mv_grid(ding0_grid, network):
         transformers=[Transformer(
             mv_grid=grid,
             grid=grid,
-            id='_'.join(['MV_station',
+            id='_'.join(['MVStation',
                          str(ding0_grid.station().id_db),
                          'transformer',
                          str(count)]),
             geom=ding0_grid.station().geo_data,
             voltage_op=_.v_level,
             type=pd.Series(dict(
-                s=_.s_max_a, x=_.x, r=_.r)))
-            for (count, _) in enumerate(ding0_grid.station().transformers())])
+                S_nom=_.s_max_a, X=_.x, R=_.r)))
+            for (count, _) in enumerate(
+                ding0_grid.station().transformers(), 1)])
     grid.graph.add_node(mv_station, type='mv_station')
 
     # Merge node above defined above to a single dict
@@ -343,7 +372,7 @@ def _build_mv_grid(ding0_grid, network):
     grid._station = mv_station
 
     # Attach aggregated to MV station
-    _attach_aggregated(grid, aggregated, ding0_grid)
+    _attach_aggregated(network, grid, aggregated, ding0_grid)
 
     return grid
 
@@ -470,6 +499,11 @@ def _determine_aggregated_nodes(la_centers):
                     generation_aggr[gen.type][gen.subtype].setdefault('ding0', 0)
                     generation_aggr[gen.type][gen.subtype]['ding0'] += gen.capacity
 
+    dingo_import_data = pd.DataFrame(columns=('id',
+                                              'capacity',
+                                              'agg_geno')
+                                     )
+
     for la_center in la_centers:
         aggr = {'generation': {}, 'load': {}, 'aggregates': []}
 
@@ -477,6 +511,11 @@ def _determine_aggregated_nodes(la_centers):
         for lvgd in la_center.lv_load_area._lv_grid_districts:
             for gen in lvgd.lv_grid.generators():
                 aggr = aggregate_generators(gen, aggr)
+
+                dingo_import_data.loc[len(dingo_import_data)] = \
+                    [int(gen.id_db),
+                     gen.capacity,
+                     None]
 
         # Determine aggregated load in MV grid
         # -> Implement once laods in Ding0 MV grids exist
@@ -494,13 +533,13 @@ def _determine_aggregated_nodes(la_centers):
             aggr_stations.append(_.lv_grid.station())
 
         # add elements to lists
-        aggregated.update({repr(la_center): aggr})
+        aggregated.update({la_center.id_db: aggr})
 
 
-    return aggregated, aggr_stations
+    return aggregated, aggr_stations, dingo_import_data
 
 
-def _attach_aggregated(grid, aggregated, ding0_grid):
+def _attach_aggregated(network, grid, aggregated, ding0_grid):
     """Add Generators and Loads to MV station representing aggregated generation
     capacity and load
 
@@ -528,47 +567,55 @@ def _attach_aggregated(grid, aggregated, ding0_grid):
             for type, val2 in val.items():
                 for subtype, val3 in val2.items():
                     gen = Generator(
-                        id='_'.join([la_id] + [str(_) for _ in val3['ids']]),
+                        id='agg-' + str(la_id) + '-' + '_'.join([str(_) for _ in val3['ids']]),
                         nominal_capacity=val3['capacity'],
                         type=type,
                         subtype=subtype,
                         geom=grid.station.geom,
                         grid=grid,
                         v_level=4)
-                    grid.graph.add_node(gen, type='generator')
+                    grid.graph.add_node(gen, type='generator_aggr')
+
+                    # backup reference of geno to LV geno list (save geno
+                    # where the former LV genos are aggregated in)
+                    network.dingo_import_data.set_value(network.dingo_import_data['id'].isin(val3['ids']),
+                                                        'agg_geno',
+                                                        gen)
 
                     # connect generator to MV station
-                    line = {'line': Line(
-                             id='line_aggr_generator_{LA}_vlevel_{v_level}_'
-                                '_{type}{subtype}'.format(
+                    line = Line(id='line_aggr_generator_la_' + str(la_id) + '_vlevel_{v_level}_'
+                                '{subtype}'.format(
                                  v_level=v_level,
-                                 type=type,
-                                 subtype=subtype,
-                                 LA=la_id),
-                             type=aggr_line_type,
-                             kind='cable',
-                             length=.5,
-                             grid=grid)
-                         }
-                    grid.graph.add_edge(grid.station, gen, line, type='line_aggr')
+                                 subtype=subtype),
+                                 type=aggr_line_type,
+                                 kind='cable',
+                                 length=1e-3,
+                                 grid=grid)
+                    grid.graph.add_edge(grid.station,
+                                        gen,
+                                        line=line,
+                                        type='line_aggr')
+
         for sector, sectoral_load in la['load'].items():
             load = Load(
                 geom=grid.station.geom,
                 consumption={sector: sectoral_load},
                 grid=grid,
-                id='_'.join(['Load_aggregated', sector, repr(grid), la_id]))
+                id='_'.join(['Load_aggregated', sector, repr(grid), str(la_id)]))
 
             grid.graph.add_node(load, type='load')
 
             # connect aggregated load to MV station
-            line = {'line': Line(
-                id='_'.join(['line_aggr_load', sector, la_id]),
-                type=aggr_line_type,
-                kind='cable',
-                length=.5,
-                grid=grid)
-            }
-            grid.graph.add_edge(grid.station, load, line, type='line_aggr')
+            line = Line(id='_'.join(['line_aggr_load_la_' + str(la_id), sector, str(la_id)]),
+                        type=aggr_line_type,
+                        kind='cable',
+                        length=1e-3,
+                        grid=grid)
+
+            grid.graph.add_edge(grid.station,
+                                load,
+                                line=line,
+                                type='line_aggr')
 
 
 def _validate_ding0_grid_import(mv_grid, ding0_mv_grid, lv_grid_mapping):
@@ -722,7 +769,8 @@ def _validate_ding0_lv_grid_import(grids, ding0_grid, lv_grid_mapping):
 
         # Check number of generators
         data_integrity[grid]['generator']['edisgo'] = len(
-            grid.graph.nodes_by_attribute('generator'))
+            grid.graph.nodes_by_attribute('generator') +
+            grid.graph.nodes_by_attribute('generator_aggr'))
         data_integrity[grid]['generator']['ding0'] = len(
             list(lv_grid_mapping[grid].generators()))
 
@@ -803,17 +851,20 @@ def _validate_load_generation(mv_grid, ding0_mv_grid):
     lv_gens = []
     [lv_gens.extend(_.graph.nodes_by_attribute('generator'))
                     for _ in mv_grid.lv_grids]
+    gens_aggr = mv_grid.graph.nodes_by_attribute('generator_aggr')
 
     generation = {}
     generation_aggr = {}
 
     # collect eDisGo cumulative generation capacity
     for gen in mv_gens + lv_gens:
-        if gen in mv_grid.graph.neighbors(mv_grid.station) and \
-            mv_grid.graph.get_edge_data(mv_grid.station,gen)['line'].length <= .5:
-            generation_aggr.setdefault(gen.type, {})
-            generation_aggr[gen.type].setdefault(gen.subtype, {'edisgo': 0})
-            generation_aggr[gen.type][gen.subtype]['edisgo'] += gen.nominal_capacity
+        generation.setdefault(gen.type, {})
+        generation[gen.type].setdefault(gen.subtype, {'edisgo': 0})
+        generation[gen.type][gen.subtype]['edisgo'] += gen.nominal_capacity
+    for gen in gens_aggr:
+        generation_aggr.setdefault(gen.type, {})
+        generation_aggr[gen.type].setdefault(gen.subtype, {'edisgo': 0})
+        generation_aggr[gen.type][gen.subtype]['edisgo'] += gen.nominal_capacity
         generation.setdefault(gen.type, {})
         generation[gen.type].setdefault(gen.subtype, {'edisgo': 0})
         generation[gen.type][gen.subtype]['edisgo'] += gen.nominal_capacity

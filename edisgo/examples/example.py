@@ -1,4 +1,4 @@
-from edisgo.grid.network import Network, Scenario, TimeSeries, ETraGoSpecs
+from edisgo.grid.network import Network, Scenario, TimeSeries, Results, ETraGoSpecs
 import os
 import sys
 import pandas as pd
@@ -63,17 +63,52 @@ if __name__ == '__main__':
     scenario = Scenario(etrago_specs=etrago_specs, power_flow=())
 
     costs = pd.DataFrame()
-    faulty_grids = []
+    faulty_grids = {'grid': [], 'msg': []}
     for dingo_grid in grids:
         logging.info('Grid expansion for {}'.format(dingo_grid))
         network = Network.import_from_ding0(
             os.path.join('data', dingo_grid),
             id='Test grid',
             scenario=scenario)
+
+        # Exemplary import feedin time series data
+        network.import_feedin_timeseries()
+        network.import_load_timeseries(data_source='demandlib')
+
         # Do non-linear power flow analysis with PyPSA
         network.analyze()
         # Do grid reinforcement
         try:
+            # Calculate grid expansion costs before generator import
+
+            # Do non-linear power flow analysis with PyPSA
+            network.analyze()
+            # Do grid reinforcement
+            network.reinforce()
+            # Get costs
+            costs_grouped = network.results.grid_expansion_costs.groupby(
+                ['type']).sum()
+            costs_before_geno_import = costs.append(
+                pd.DataFrame(costs_grouped.values,
+                             columns=costs_grouped.columns,
+                             index=[[network.id] * len(costs_grouped),
+                                    costs_grouped.index]))
+            if network.results.unresolved_issues:
+                faulty_grids_before_geno_import['grid'].append(network.id)
+                faulty_grids_before_geno_import['msg'].append(
+                    str(network.results.unresolved_issues))
+            # Clear results
+            network.results = Results()
+            network.pypsa = None
+
+            # Calculate grid expansion costs after generator import
+
+            logging.info('Grid expansion after generator import.')
+            # Import generators
+            network.import_generators()
+            # Do non-linear power flow analysis with PyPSA
+            network.analyze()
+            # Do grid reinforcement
             network.reinforce()
             costs_grouped = network.results.grid_expansion_costs.groupby(
                 ['type']).sum()
@@ -81,22 +116,28 @@ if __name__ == '__main__':
                 pd.DataFrame(costs_grouped.values,
                              columns=costs_grouped.columns,
                              index=[[network.id] * len(costs_grouped),
-                             costs_grouped.index]))
-            logging.info('SUCCESS!')
-        except:
-            faulty_grids.append(dingo_grid)
+                                    costs_grouped.index]))
+            if network.results.unresolved_issues:
+                faulty_grids['grid'].append(network.id)
+                faulty_grids['msg'].append(
+                    str(network.results.unresolved_issues))
+                logging.info('Unresolved issues left after grid expansion.')
+            else:
+                logging.info('SUCCESS!')
+        except Exception as e:
+            faulty_grids['grid'].append(network.id)
+            faulty_grids['msg'].append(e)
             logging.info('Something went wrong.')
 
-    costs.to_csv('costs.csv')
+    pd.DataFrame(faulty_grids_before_geno_import).to_csv(
+        'faulty_grids_before_geno_import.csv', index=False)
+    f = open('costs_before_geno_import.csv', 'a')
+    f.write('# units: length in km, total_costs in kEUR\n')
+    costs_before_geno_import.to_csv(f)
+    f.close()
 
-
-gens = network.mv_grid.graph.nodes_by_attribute('generator')
-for lv_grid in network.mv_grid.lv_grids:
-    gens.extend(lv_grid.graph.nodes_by_attribute('generator'))
-sum = 0
-for gen in gens:
-    sum += gen.timeseries['p']
-typ = []
-for gen in gens:
-    typ.append(gen.type)
-print(set(typ))
+    pd.DataFrame(faulty_grids).to_csv('faulty_grids.csv', index=False)
+    f = open('costs.csv', 'a')
+    f.write('# units: length in km, total_costs in kEUR\n')
+    costs.to_csv(f)
+    f.close()

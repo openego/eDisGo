@@ -2,6 +2,7 @@ import os
 import logging
 import pandas as pd
 from math import acos, tan
+
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString
 
@@ -30,12 +31,20 @@ class Component:
         """Returns id of component"""
         return self._id
 
+    @id.setter
+    def id(self, id):
+        self._id = id
+
     @property
     def geom(self):
         """:shapely:`Shapely Point object<points>` or
         :shapely:`Shapely LineString object<linestrings>` : Location of the
         :class:`Component` as Shapely Point or LineString"""
         return self._geom
+
+    @geom.setter
+    def geom(self, geom):
+        self._geom = geom
 
     @property
     def grid(self):
@@ -117,6 +126,11 @@ class Transformer(Component):
 
 class Load(Component):
     """Load object
+
+    Attributes
+    ----------
+    _timeseries : :pandas:`pandas.Series<series>`
+        Contains time series for load
     """
 
     def __init__(self, **kwargs):
@@ -138,13 +152,19 @@ class Load(Component):
         edisgo.network.TimeSeries : Details of global TimeSeries
         """
         if self._timeseries is None:
-            # calculate share of reactive power
+            peak_load_consumption_ratio = float(self.grid.network.config['data'][
+                'peakload_consumption_ratio'][sector])
+
             if isinstance(self.grid, MVGrid):
                 q_factor = tan(acos(
                     self.grid.network.scenario.parameters.pfac_mv_load))
+                power_scaling = float(self.grid.network.config['scenario'][
+                                          'scale_factor_mv_load'])
             elif isinstance(self.grid, LVGrid):
                 q_factor = tan(acos(
                     self.grid.network.scenario.parameters.pfac_lv_load))
+                power_scaling = float(self.grid.network.config['scenario'][
+                                          'scale_factor_lv_load'])
 
             # work around until retail and industrial are separate sectors
             # TODO: remove once Ding0 data changed to single sector consumption
@@ -213,6 +233,17 @@ class Load(Component):
     @consumption.setter
     def consumption(self, cons_dict):
         self._consumption = cons_dict
+
+    @property
+    def peak_load(self):
+        """
+        Get sectoral peak load
+        """
+        peak_load = pd.Series(self.consumption).mul(pd.Series(
+            self.grid.network.config['data'][
+                'peakload_consumption_ratio']).astype(float), fill_value=0)
+
+        return peak_load
 
     def __repr__(self):
         return '_'.join(['Load',
@@ -290,6 +321,7 @@ class Generator(Component):
                     logger.exception("No timeseries for type {} given.".format(
                         self.type))
                     raise
+
         return self._timeseries
 
     def pypsa_timeseries(self, attr):
@@ -319,6 +351,10 @@ class Generator(Component):
         """:obj:`float` : Nominal generation capacity"""
         return self._nominal_capacity
 
+    @nominal_capacity.setter
+    def nominal_capacity(self, nominal_capacity):
+        self._nominal_capacity = nominal_capacity
+
     @property
     def v_level(self):
         """:obj:`int` : Voltage level"""
@@ -345,22 +381,75 @@ class MVDisconnectingPoint(Component):
 
     Attributes
     ----------
-    _state : :obj:`str`
-        State of switch ('open' or 'closed')
+    _nodes : tuple
+        Nodes of switch disconnector line segment
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
         self._state = kwargs.get('state', None)
+        self._line = kwargs.get('line', None)
+        self._nodes = kwargs.get('nodes', None)
 
     def open(self):
-        """Toggle state to opened switch disconnector"""
-        raise NotImplementedError
+        """Toggle state to open switch disconnector"""
+        if self._line is not None:
+            self._state = 'open'
+            self._nodes = self.grid.graph.nodes_from_line(self._line)
+            self.grid.graph.remove_edge(
+                self._nodes[0], self._nodes[1])
+        else:
+            raise ValueError('``line`` is not set')
 
     def close(self):
         """Toggle state to closed switch disconnector"""
-        raise NotImplementedError
+        self._state = 'closed'
+        self.grid.graph.add_edge(
+            self._nodes[0], self._nodes[1], {'line': self._line})
+
+    @property
+    def state(self):
+        """
+        Get state of switch disconnector
+
+        Returns
+        -------
+        str or None
+            State of MV ring disconnector: 'open' or 'closed'.
+
+            Returns `None` if switch disconnector line segment is not set. This
+            refers to an open ring, but it's unknown if the grid topology was
+            built correctly.
+        """
+        return self._state
+
+    @property
+    def line(self):
+        """
+        Get or set line segment that belongs to the switch disconnector
+
+        The setter allows only to set the respective line initially. Once the
+        line segment representing the switch disconnector is set, it cannot be
+        changed.
+
+        Returns
+        -------
+        Line
+            Line segment that is part of the switch disconnector model
+        """
+        return self._line
+
+    @line.setter
+    def line(self, line):
+        if self._line is None:
+            if isinstance(line, Line):
+                self._line = line
+            else:
+                raise TypeError('``line`` must be of type {}'.format(Line))
+        else:
+            raise ValueError('``line`` can only be set initially. Too late '
+                             'dude!')
 
 
 class BranchTee(Component):
@@ -373,6 +462,15 @@ class BranchTee(Component):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.in_building = kwargs.get('in_building', None)
+
+        # set id of BranchTee automatically if not provided
+        if not self._id:
+            ids = [_.id for _ in
+                            self.grid.graph.nodes_by_attribute('branch_tee')]
+            if ids:
+                self._id = max(ids) + 1
+            else:
+                self._id = 1
 
     def __repr__(self):
         return '_'.join([self.__class__.__name__, repr(self.grid), str(self._id)])
@@ -435,7 +533,7 @@ class Line(Component):
         Column   Description        Unit   Data type
         ======== ================== ====== =========
         name     Name (e.g. NAYY..) -      str
-        U_n      Nominal voltage    V      int
+        U_n      Nominal voltage    kV     int
         I_max_th Max. th. current   A      float
         R        Resistance         Ohm/km float
         L        Inductance         mH/km  float
