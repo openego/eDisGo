@@ -81,10 +81,6 @@ if __name__ == '__main__':
             id='Test grid',
             scenario=scenario)
 
-        # Exemplary import feedin time series data
-        network.import_feedin_timeseries()
-        network.import_load_timeseries(data_source='demandlib')
-
         # Do non-linear power flow analysis with PyPSA
         network.analyze()
         # Do grid reinforcement
