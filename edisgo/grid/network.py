@@ -406,6 +406,8 @@ class Scenario:
     ----------
     _name : :obj:`str`
         Scenario name (e.g. "feedin case weather 2011")
+    _mv_grid_id : :obj:`str`
+        ID of MV grid district
     _mode : :obj:`str`
         'worst-case' or 'time-range'
     _network : :class:~.grid.network.Network`
@@ -431,7 +433,8 @@ class Scenario:
 
     """
 
-    def __init__(self, power_flow, **kwargs):
+    def __init__(self, power_flow, mv_grid_id, **kwargs):
+        self._mv_grid_id = mv_grid_id
         self._name = kwargs.get('name', None)
         self._network = kwargs.get('network', None)
         self._timeseries = kwargs.get('timeseries', None)
@@ -441,6 +444,10 @@ class Scenario:
 
         # populate timeseries attribute
         self.set_timeseries(power_flow)
+
+    @property
+    def mv_grid_id(self):
+        return self._mv_grid_id
 
     @property
     def timeseries(self):

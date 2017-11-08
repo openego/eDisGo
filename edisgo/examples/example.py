@@ -1,4 +1,5 @@
-from edisgo.grid.network import Network, Scenario, TimeSeries, Results, ETraGoSpecs
+from edisgo.grid.network import Network, Scenario, TimeSeries, Results, \
+    ETraGoSpecs
 import os
 import sys
 import pandas as pd
@@ -34,37 +35,46 @@ if __name__ == '__main__':
         if file.endswith(".pkl"):
             grids.append(file)
 
-    # # worst-case scenario
-    # scenario = Scenario(power_flow='worst-case')
-
-    # time-range non-empty tuple
-    power_flow = (date(2017, 10, 10), date(2017, 10, 13))
-    timeindex = pd.date_range(power_flow[0], power_flow[1], freq='H')
-    etrago_specs = ETraGoSpecs(
-        dispatch=pd.DataFrame({'biomass': [1] * len(timeindex),
-                               'solar': [1] * len(timeindex),
-                               'gas': [1] * len(timeindex),
-                               'wind': [1] * len(timeindex)}, index=timeindex),
-        capacity=pd.DataFrame({'biomass': 1846.5,
-                               'solar': 7131,
-                               'gas': 1564,
-                               'wind': 10}, index=['cap']),
-        load=pd.DataFrame({'residential': [1] * len(timeindex),
-                           'retail': [1] * len(timeindex),
-                           'industrial': [1] * len(timeindex),
-                           'agricultural': [1] * len(timeindex)},
-                          index=timeindex),
-        annual_load=pd.DataFrame({'residential': 1,
-                           'retail': 1,
-                           'industrial': 1,
-                           'agricultural': 1},
-                          index=timeindex)
-    )
-    scenario = Scenario(etrago_specs=etrago_specs, power_flow=())
-
+    costs_before_geno_import = pd.DataFrame()
+    faulty_grids_before_geno_import = {'grid': [], 'msg': []}
     costs = pd.DataFrame()
     faulty_grids = {'grid': [], 'msg': []}
     for dingo_grid in grids:
+        # # worst-case scenario
+        # scenario = Scenario(power_flow='worst-case')
+
+        # # time-range non-empty tuple
+        # power_flow = (date(2017, 10, 10), date(2017, 10, 13))
+        # timeindex = pd.date_range(power_flow[0], power_flow[1], freq='H')
+        # etrago_specs = ETraGoSpecs(
+        #     dispatch=pd.DataFrame({'biomass': [1] * len(timeindex),
+        #                            'solar': [1] * len(timeindex),
+        #                            'gas': [1] * len(timeindex),
+        #                            'wind': [1] * len(timeindex)},
+        # index=timeindex),
+        #     capacity=pd.DataFrame({'biomass': 1846.5,
+        #                            'solar': 7131,
+        #                            'gas': 1564,
+        #                            'wind': 10}, index=['cap']),
+        #     load=pd.DataFrame({'residential': [1] * len(timeindex),
+        #                        'retail': [1] * len(timeindex),
+        #                        'industrial': [1] * len(timeindex),
+        #                        'agricultural': [1] * len(timeindex)},
+        #                       index=timeindex),
+        #     annual_load=pd.DataFrame({'residential': 1,
+        #                        'retail': 1,
+        #                        'industrial': 1,
+        #                        'agricultural': 1},
+        #                       index=timeindex)
+        # )
+        # scenario = Scenario(etrago_specs=etrago_specs, power_flow=(),
+        #                     scenario_name='NEP 2035')
+
+        # time-range non-empty tuple
+        mv_grid_id = dingo_grid.split('_')[-1].split('.')[0]
+        scenario = Scenario(power_flow=(), mv_grid_id=mv_grid_id,
+                            scenario_name='NEP 2035')
+
         logging.info('Grid expansion for {}'.format(dingo_grid))
         network = Network.import_from_ding0(
             os.path.join('data', dingo_grid),
