@@ -510,25 +510,6 @@ class Scenario:
                 logger.error("Please provide etrago specifications or time "
                              "series for load and generation.")
 
-        # Set timeindex of Timeseries()
-        #self.timeseries.timeindex = timeindex
-
-    @property
-    def timeseries(self):
-        return self._timeseries
-
-    @property
-    def parameters(self):
-        return self._parameters
-
-    @property
-    def mode(self):
-        return self._mode
-
-    @property
-    def etrago_specs(self):
-        return self._etrago_specs
-
     def __repr__(self):
         return 'Scenario ' + self._name
 
