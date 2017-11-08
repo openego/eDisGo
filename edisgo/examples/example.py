@@ -41,8 +41,8 @@ if __name__ == '__main__':
     faulty_grids = {'grid': [], 'msg': []}
     for dingo_grid in grids:
         mv_grid_id = dingo_grid.split('_')[-1].split('.')[0]
-        # worst-case scenario
-        scenario = Scenario(power_flow='worst-case', mv_grid_id=mv_grid_id)
+        # # worst-case scenario
+        # scenario = Scenario(power_flow='worst-case', mv_grid_id=mv_grid_id)
 
         # # scenario with etrago specs
         # power_flow = (date(2017, 10, 10), date(2017, 10, 13))
@@ -71,7 +71,11 @@ if __name__ == '__main__':
         # scenario = Scenario(etrago_specs=etrago_specs, power_flow=(),
         #                     scenario_name='NEP 2035')
 
-        # # scenario with time series
+        # scenario with time series
+        scenario = Scenario(
+            power_flow=(date(2011, 10, 10), date(2011, 10, 13)),
+            mv_grid_id=mv_grid_id,
+            scenario_name='NEP 2035')
         # scenario = Scenario(power_flow=(), mv_grid_id=mv_grid_id,
         #                     scenario_name='NEP 2035')
 

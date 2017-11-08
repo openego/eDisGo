@@ -509,10 +509,22 @@ class Scenario:
             elif not self._timeseries:
                 self._mode = 'time-range'
                 self._timeseries = TimeSeries()
-                self._timeseries.generation = \
-                    self._timeseries.import_feedin_timeseries(self)
-                self._timeseries.load = \
-                    self._timeseries.import_load_timeseries(self)
+                if not power_flow:
+                    self._timeseries.generation = \
+                        self._timeseries.import_feedin_timeseries(self)
+                    self._timeseries.load = \
+                        self._timeseries.import_load_timeseries(self)
+                    self._timeseries.timeindex = \
+                        self._timeseries.generation.index
+                else:
+                    self._timeseries.timeindex = pd.date_range(
+                        power_flow[0], power_flow[1], freq='H')
+                    self._timeseries.generation = \
+                        self._timeseries.import_feedin_timeseries(self).loc[
+                            self._timeseries.timeindex]
+                    self._timeseries.load = \
+                        self._timeseries.import_load_timeseries(self).loc[
+                            self._timeseries.timeindex]
 
     def __repr__(self):
         return 'Scenario ' + self._name
@@ -827,6 +839,8 @@ class TimeSeries:
                 [generation_df, pd.DataFrame({'other': 0.9},
                                              index=generation_df.index)],
                 axis=1)
+        #ToDo remove hard coded index?
+        generation_df.index = pd.date_range('1/1/2011', periods=8760, freq='H')
         return generation_df
 
     def import_load_timeseries(self, scenario, data_source='demandlib'):
