@@ -25,6 +25,9 @@ from egoio.tools.db import connection
 
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
+from workalendar.europe import Germany
+from demandlib import bdew as bdew, particular_profiles as profiles
+import datetime
 
 
 logger = logging.getLogger('edisgo')
@@ -2047,7 +2050,7 @@ def import_feedin_timeseries(network):
     # TODO: reshape and assign feedin data to TimeSeries()
     
     
-def import_load_timeseries(network):
+def import_load_timeseries(network, data_source):
     """
     Import load time series
     
@@ -2055,6 +2058,13 @@ def import_load_timeseries(network):
     ----------
     network: :class:`~.grid.network.Network`
             The eDisGo container object
+    data_source : str
+        Specfiy type of data source. Available data sources are
+
+         * 'oedb': retrieves load time series cumulated across sectors
+         * 'demandlib': determine a load time series with the use of the
+            demandlib. This calculated standard load profiles for 4 different
+            sectors.
 
     Returns
     -------
@@ -2116,6 +2126,56 @@ def import_load_timeseries(network):
 
         return load
 
-    load = _import_load_timeseries_from_oedb(network)
+    def _load_timeseries_demandlib():
+        """
+        Get normalized sectoral load time series
+
+        Time series are normalized to 1 kWh consumption per year
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Feedin time series
+        """
+
+        # TODO: move all hard-coded data below to a config file
+        year = 2011
+
+        sectoral_consumption = {'h0': 1, 'g0': 1, 'i0': 1, 'l0': 1}
+
+        cal = Germany()
+        holidays = dict(cal.holidays(year))
+
+        e_slp = bdew.ElecSlp(year, holidays=holidays)
+
+        # multiply given annual demand with timeseries
+        elec_demand = e_slp.get_profile(sectoral_consumption)
+
+        # Add the slp for the industrial group
+        ilp = profiles.IndustrialLoadProfile(e_slp.date_time_index,
+                                             holidays=holidays)
+
+        # Beginning and end of workday, weekdays and weekend days, and scaling factors
+        # by default
+        elec_demand['i0'] = ilp.simple_profile(
+            sectoral_consumption['i0'],
+            am=datetime.time(6, 0, 0),
+            pm=datetime.time(22, 0, 0),
+            profile_factors=
+            {'week': {'day': 0.8, 'night': 0.6},
+             'weekend': {'day': 0.6, 'night': 0.6}})
+
+        # Resample 15-minute values to hourly values and sum across sectors
+        elec_demand = elec_demand.resample('H').mean()
+
+        return elec_demand
+
+
+    if data_source == 'oedb':
+        load = _import_load_timeseries_from_oedb(network)
+    elif data_source == 'demandlib':
+        load = _load_timeseries_demandlib()
+
+    print(load)
 
     # TODO: reshape and assign feedin data to TimeSeries()

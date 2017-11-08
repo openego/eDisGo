@@ -206,11 +206,21 @@ class Network:
         """
         import_feedin_timeseries(self)
         
-    def import_load_timeseries(self):
+    def import_load_timeseries(self, data_source=None):
         """
         Import load timeseries and assing it in eDisGo data structure
+
+        Parameters
+        ----------
+        data_source : str
+            Specfiy type of data source. Available data sources are
+
+             * 'oedb': retrieves load time series cumulated across sectors
+             * 'demandlib': determine a load time series with the use of the
+                demandlib. This calculated standard load profiles for 4 different
+                sectors.
         """
-        import_load_timeseries(self)
+        import_load_timeseries(self, data_source)
 
     def analyze(self, mode=None):
         """Analyzes the grid by power flow analysis
