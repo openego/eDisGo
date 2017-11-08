@@ -820,7 +820,14 @@ class TimeSeries:
         Import feedin timeseries from oedb
         """
         #ToDo: add docstring
-        return import_feedin_timeseries(scenario)
+        generation_df = import_feedin_timeseries(scenario)
+        #ToDo: remove hard coded value
+        if generation_df is not None:
+            generation_df = pd.concat(
+                [generation_df, pd.DataFrame({'other': 0.9},
+                                             index=generation_df.index)],
+                axis=1)
+        return generation_df
 
     def import_load_timeseries(self, scenario, data_source='demandlib'):
         """
