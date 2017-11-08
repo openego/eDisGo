@@ -412,7 +412,7 @@ class Storage(Component):
 
     @property
     def soc_initial(self):
-        """Initial state of charge
+        """Initial state of charge in kWh
 
         Returns
         -------
@@ -423,7 +423,7 @@ class Storage(Component):
 
     @property
     def efficiency_in(self):
-        """Storage charge efficiency
+        """Storage charge efficiency in per unit
 
         Returns
         -------
@@ -434,7 +434,7 @@ class Storage(Component):
 
     @property
     def efficiency_out(self):
-        """Storage charge efficiency
+        """Storage charge efficiency  in per unit
 
         Returns
         -------

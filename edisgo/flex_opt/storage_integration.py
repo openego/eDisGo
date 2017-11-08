@@ -3,7 +3,7 @@ from edisgo.grid.tools import select_cable
 
 import logging
 
-def integrate_storage(network, position):
+def integrate_storage(network, position, parameters):
     """
     Integrate storage units in the grid and specify its operational mode
 
@@ -14,12 +14,25 @@ def integrate_storage(network, position):
     position : str
         Specify storage location. Available options are
          * 'hvmv_substation_busbar'
-    operation : str
-        Specify mode of storage operation
+    parameters : dict
+        Parameters specifying characteristics of storage in detail
+
+        The format looks like the following example and requires given
+        parameters
+
+        .. code-block:: python
+
+            {
+                'soc_initial': <float>, # in kWh,
+                'efficiency_in': <float>, # in per unit 0..1
+                'efficiency_out': <float>, # in per unit 0..1
+                'standing_loss': <float> # in per unit 0..1
+            }
+
     """
 
     if position == 'hvmv_substation_busbar':
-        storage_at_hvmv_substation(network.mv_grid)
+        storage_at_hvmv_substation(network.mv_grid, parameters)
     else:
         logging.error("{} is not a valid storage positioning mode".format(
             position))
@@ -28,7 +41,7 @@ def integrate_storage(network, position):
             position))
 
 
-def storage_at_hvmv_substation(mv_grid, nominal_capacity=1000):
+def storage_at_hvmv_substation(mv_grid, parameters, nominal_capacity=1000):
     """
     Place 1 MVA battery at HV/MV substation bus bar
 
@@ -41,6 +54,8 @@ def storage_at_hvmv_substation(mv_grid, nominal_capacity=1000):
     ----------
     mv_grid : :class:`~.grid.grids.MVGrid`
         MV grid instance
+    parameters : dict
+        Parameters specifying characteristics of storage in detail
     nominal_capacity : float
         Storage's apparent rated power
     """
@@ -50,7 +65,11 @@ def storage_at_hvmv_substation(mv_grid, nominal_capacity=1000):
     storage = Storage(operation={'mode': 'fifty-fifty'},
                       id=storage_id,
                       nominal_capacity=nominal_capacity,
-                      grid=mv_grid)
+                      grid=mv_grid,
+                      soc_initial=parameters['soc_initial'],
+                      efficiency_in=parameters['efficiency_in'],
+                      efficiency_out=parameters['efficiency_out'],
+                      standing_loss=parameters['standing_loss'])
 
     # add storage itself to graph
     mv_grid.graph.add_node(storage, type='storage')
