@@ -2061,3 +2061,211 @@ def _build_lv_grid_dict(network):
     return lv_grid_dict
 
 
+def import_feedin_timeseries(scenario):
+    """
+    Import RES feedin time series data and process
+
+    Parameters
+    ----------
+    scenario: :class:`~.grid.network.Scenario`
+        eDisGo scenario object
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Feedin time series
+    """
+
+    def _retrieve_timeseries_from_oedb(scenario):
+        """Retrieve time series from oedb
+
+        Parameters
+        ----------
+        scenario: :class:`~.grid.network.Scenario`
+            eDisGo scenario object
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Feedin time series
+        """
+        if scenario.config.data['versioned']['version'] == 'model_draft':
+            orm_feedin_name = scenario.config.data['model_draft'][
+                'res_feedin_data']
+            orm_feedin = model_draft.__getattribute__(orm_feedin_name)
+            orm_feedin_version = 1 == 1
+        else:
+            orm_feedin_name = scenario.config.data['versioned'][
+                'res_feedin_data']
+            # orm_feedin = supply.__getattribute__(orm_feedin_name)
+            # TODO: remove workaround
+            orm_feedin = model_draft.__getattribute__(orm_feedin_name)
+            orm_feedin_version = 1 == 1
+            # orm_feedin_version = orm_feedin.columns.version == scenario.config.data['versioned']['version']
+
+        conn = connection(section=scenario.config.data['connection'][
+            'section'])
+        Session = sessionmaker(bind=conn)
+        session = Session()
+
+        # TODO: add option to retrieve subset of time series
+        feedin_sqla = session.query(
+            orm_feedin.hour,
+            orm_feedin.coastdat_id,
+            orm_feedin.sub_id.label('subst_id'),
+            orm_feedin.generation_type,
+            orm_feedin.scenario,
+            orm_feedin.feedin). \
+            filter(orm_feedin.sub_id == scenario.mv_grid_id). \
+            filter(orm_feedin.scenario == scenario.scenario_name). \
+            filter(orm_feedin_version)
+
+        feedin = pd.read_sql_query(feedin_sqla.statement,
+                                   session.bind,
+                                   index_col='subst_id')
+        return feedin
+
+    feedin = _retrieve_timeseries_from_oedb(scenario)
+    gen_dict = {}
+    for gen_type in feedin.generation_type.unique():
+        gen_dict[gen_type] = feedin[
+            feedin.generation_type==gen_type].sort_values(by='hour').set_index(
+            'hour').feedin
+    if gen_dict:
+        return pd.DataFrame(gen_dict, index=gen_dict[gen_type].index)
+    else:
+        return None
+
+
+def import_load_timeseries(scenario, data_source):
+    """
+    Import load time series
+
+    Parameters
+    ----------
+    scenario: :class:`~.grid.network.Scenario`
+        eDisGo scenario object
+    data_source : str
+        Specfiy type of data source. Available data sources are
+
+         * 'oedb': retrieves load time series cumulated across sectors
+         * 'demandlib': determine a load time series with the use of the
+            demandlib. This calculated standard load profiles for 4 different
+            sectors.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Feedin time series
+    """
+
+    def _import_load_timeseries_from_oedb(scenario):
+        """
+        Retrieve load time series from oedb
+
+        Parameters
+        ----------
+        scenario: :class:`~.grid.network.Scenario`
+            eDisGo scenario object
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Feedin time series
+        """
+
+        if scenario.config.data['versioned']['version'] == 'model_draft':
+            orm_load_name = scenario.config.data['model_draft']['load_data']
+            orm_load = model_draft.__getattribute__(orm_load_name)
+            orm_load_areas_name = scenario.config.data['model_draft'][
+                'load_areas']
+            orm_load_areas = model_draft.__getattribute__(orm_load_areas_name)
+            orm_load_version = 1 == 1
+        else:
+            orm_load_name = scenario.config.data['versioned']['load_data']
+            # orm_load = supply.__getattribute__(orm_load_name)
+            # TODO: remove workaround
+            orm_load = model_draft.__getattribute__(orm_load_name)
+            # orm_load_version = orm_load.version == config.data['versioned']['version']
+
+            orm_load_areas_name = scenario.config.data['versioned'][
+                'load_areas']
+            # orm_load_areas = supply.__getattribute__(orm_load_areas_name)
+            # TODO: remove workaround
+            orm_load_areas = model_draft.__getattribute__(orm_load_areas_name)
+            # orm_load_areas_version = orm_load.version == config.data['versioned']['version']
+
+            orm_load_version = 1 == 1
+
+        conn = connection(section=scenario.config.data['connection'][
+            'section'])
+        Session = sessionmaker(bind=conn)
+        session = Session()
+
+        load_sqla = session.query(  # orm_load.id,
+            orm_load.p_set,
+            orm_load.q_set,
+            orm_load_areas.subst_id). \
+            join(orm_load_areas, orm_load.id == orm_load_areas.otg_id). \
+            filter(orm_load_areas.subst_id == scenario.mv_grid_id). \
+            filter(orm_load_version). \
+            distinct()
+
+        load = pd.read_sql_query(load_sqla.statement,
+                                 session.bind,
+                                 index_col='subst_id')
+
+        return load
+
+    def _load_timeseries_demandlib():
+        """
+        Get normalized sectoral load time series
+
+        Time series are normalized to 1 kWh consumption per year
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Feedin time series
+        """
+
+        # TODO: move all hard-coded data below to a config file
+        year = 2011
+
+        sectoral_consumption = {'h0': 1, 'g0': 1, 'i0': 1, 'l0': 1}
+
+        cal = Germany()
+        holidays = dict(cal.holidays(year))
+
+        e_slp = bdew.ElecSlp(year, holidays=holidays)
+
+        # multiply given annual demand with timeseries
+        elec_demand = e_slp.get_profile(sectoral_consumption)
+
+        # Add the slp for the industrial group
+        ilp = profiles.IndustrialLoadProfile(e_slp.date_time_index,
+                                             holidays=holidays)
+
+        # Beginning and end of workday, weekdays and weekend days, and scaling
+        # factors by default
+        elec_demand['i0'] = ilp.simple_profile(
+            sectoral_consumption['i0'],
+            am=datetime.time(6, 0, 0),
+            pm=datetime.time(22, 0, 0),
+            profile_factors=
+            {'week': {'day': 0.8, 'night': 0.6},
+             'weekend': {'day': 0.6, 'night': 0.6}})
+
+        # Resample 15-minute values to hourly values and sum across sectors
+        elec_demand = elec_demand.resample('H').mean()
+
+        return elec_demand
+
+    if data_source == 'oedb':
+        load = _import_load_timeseries_from_oedb(scenario)
+    elif data_source == 'demandlib':
+        load = _load_timeseries_demandlib()
+        load.rename(columns={'g0': 'retail', 'h0': 'residential',
+                             'l0': 'agricultural', 'i0': 'industrial'},
+                    inplace=True)
+    return load
