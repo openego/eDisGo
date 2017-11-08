@@ -11,6 +11,7 @@ if not 'READTHEDOCS' in os.environ:
     from ding0.core.network.stations import LVStationDing0
     from ding0.core.structure.regions import LVLoadAreaCentreDing0
     from shapely.ops import transform
+    from shapely.wkt import loads as wkt_loads
 
 from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
     MVStation, Line, Transformer, LVStation
@@ -24,7 +25,7 @@ from egoio.tools.db import connection
 
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
-from shapely.wkt import loads as wkt_loads
+
 
 logger = logging.getLogger('edisgo')
 
@@ -1978,3 +1979,69 @@ def _build_lv_grid_dict(network):
         lv_grid_dict[lv_grid.id] = lv_grid
     return lv_grid_dict
 
+
+def import_feedin_timeseries(network):
+    """
+    Import RES feedin time series data and process
+
+    Parameters
+    ----------
+    network: :class:`~.grid.network.Network`
+            The eDisGo container object
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Feedin time series
+    """
+
+    def _retrieve_timeseries_from_oedb(network):
+        """Retrieve time series from oedb
+
+        Parameters
+        ----------
+        network: :class:`~.grid.network.Network`
+            The eDisGo container object
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Feedin time series
+        """
+        if network.config['versioned']['version'] == 'model_draft':
+            orm_feedin_name = network.config['model_draft']['res_feedin_data']
+            orm_feedin = model_draft.__getattribute__(orm_feedin_name)
+            orm_feedin_version = 1 == 1
+        else:
+            orm_feedin_name = network.config['versioned']['res_feedin_data']
+            # orm_feedin = supply.__getattribute__(orm_feedin_name)
+            # TODO: remove workaround
+            orm_feedin = model_draft.__getattribute__(orm_feedin_name)
+            orm_feedin_version = 1 == 1
+            # orm_feedin_version = orm_feedin.columns.version == network.config['versioned']['version']
+
+        conn = connection(section=network.config['connection']['section'])
+        Session = sessionmaker(bind=conn)
+        session = Session()
+
+        # TODO: add option to retrieve subset of time series
+        feedin_sqla = session.query(
+            orm_feedin.hour,
+            orm_feedin.coastdat_id,
+            orm_feedin.sub_id.label('subst_id'),
+            orm_feedin.generation_type,
+            orm_feedin.scenario,
+            orm_feedin.feedin). \
+            filter(orm_feedin.sub_id == network.mv_grid.id). \
+            filter(orm_feedin.scenario == network.scenario.scenario_name). \
+            filter(orm_feedin_version)
+
+        feedin = pd.read_sql_query(feedin_sqla.statement,
+                                   session.bind,
+                                   index_col='subst_id')
+
+        return feedin
+
+    _retrieve_timeseries_from_oedb(network)
+
+    # TODO: reshape and assign feedin data to TimeSeries()

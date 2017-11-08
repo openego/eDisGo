@@ -5,7 +5,8 @@ import logging
 
 import edisgo
 from edisgo.tools import config, pypsa_io
-from edisgo.data.import_data import import_from_ding0, import_generators
+from edisgo.data.import_data import import_from_ding0, import_generators, \
+    import_feedin_timeseries
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 
@@ -198,6 +199,13 @@ class Network:
         data_source = data_source=self.config['data']['data_source']
         import_generators(network=self,
                           data_source=data_source)
+
+    def import_feedin_timeseries(self):
+        """
+        Import feedin timeseries and assing it in eDisGo data structure
+        """
+        import_feedin_timeseries(self)
+
 
     def analyze(self, mode=None):
         """Analyzes the grid by power flow analysis
@@ -402,6 +410,9 @@ class Scenario:
         substation)
     _parameters : :class:`~.grid.network.Parameters`
         Parameters for power flow analysis and grid expansion.
+    scenario_name : str
+        Specify a scenario that is used to distinguish data, assumptions and
+        parameter.
 
     Notes
     -------
@@ -419,6 +430,7 @@ class Scenario:
         self._timeseries = kwargs.get('timeseries', None)
         self._etrago_specs = kwargs.get('etrago_specs', None)
         self._parameters = Parameters(self, **kwargs)
+        self.scenario_name = kwargs.get('scenario_name', None)
 
         if isinstance(power_flow, str):
             if power_flow != 'worst-case':

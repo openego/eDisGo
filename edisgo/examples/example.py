@@ -36,7 +36,8 @@ if __name__ == '__main__':
 
     timeseries = TimeSeries()
     scenario = Scenario(timeseries=timeseries,
-                        power_flow='worst-case')
+                        power_flow='worst-case',
+                        scenario_name='NEP 2035')
     costs_before_geno_import = pd.DataFrame()
     faulty_grids_before_geno_import = {'grid': [], 'msg': []}
     costs = pd.DataFrame()
@@ -47,6 +48,10 @@ if __name__ == '__main__':
             os.path.join('data', dingo_grid),
             id='Test grid',
             scenario=scenario)
+
+        # Exemplary import feedin time series data
+        network.import_feedin_timeseries()
+
         # Do non-linear power flow analysis with PyPSA
         network.analyze()
         # Do grid reinforcement
