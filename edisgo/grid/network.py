@@ -725,9 +725,6 @@ class TimeSeries:
         dict or :pandas:`pandas.Series<series>`
             See class definition for details.
         """
-        if self._generation is None:
-            self._generation = self._set_generation(mode='worst-case')
-
         return self._generation
 
     @generation.setter
@@ -747,9 +744,6 @@ class TimeSeries:
         dict or :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
         """
-        if self._load is None:
-            self._load = self._set_load(mode='worst-case')
-
         return self._load
 
     @load.setter
