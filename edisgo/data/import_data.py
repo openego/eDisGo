@@ -2045,3 +2045,77 @@ def import_feedin_timeseries(network):
     _retrieve_timeseries_from_oedb(network)
 
     # TODO: reshape and assign feedin data to TimeSeries()
+    
+    
+def import_load_timeseries(network):
+    """
+    Import load time series
+    
+    Parameters
+    ----------
+    network: :class:`~.grid.network.Network`
+            The eDisGo container object
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Feedin time series
+    """
+    def _import_load_timeseries_from_oedb(network):
+        """
+        Retrieve load time series from oedb
+        
+        Parameters
+        ----------
+        network: :class:`~.grid.network.Network`
+                The eDisGo container object
+    
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Feedin time series
+        """
+        
+        if network.config['versioned']['version'] == 'model_draft':
+            orm_load_name = network.config['model_draft']['load_data']
+            orm_load = model_draft.__getattribute__(orm_load_name)
+            orm_load_areas_name = network.config['model_draft']['load_areas']
+            orm_load_areas = model_draft.__getattribute__(orm_load_areas_name)
+            orm_load_version = 1 == 1
+        else:
+            orm_load_name = network.config['versioned']['load_data']
+            # orm_load = supply.__getattribute__(orm_load_name)
+            # TODO: remove workaround
+            orm_load = model_draft.__getattribute__(orm_load_name)
+            # orm_load_version = orm_load.version == network.config['versioned']['version']
+
+            orm_load_areas_name = network.config['versioned']['load_areas']
+            # orm_load_areas = supply.__getattribute__(orm_load_areas_name)
+            # TODO: remove workaround
+            orm_load_areas = model_draft.__getattribute__(orm_load_areas_name)
+            # orm_load_areas_version = orm_load.version == network.config['versioned']['version']
+
+            orm_load_version = 1 == 1
+
+        conn = connection(section=network.config['connection']['section'])
+        Session = sessionmaker(bind=conn)
+        session = Session()
+
+        load_sqla = session.query(#orm_load.id,
+                                      orm_load.p_set,
+                                      orm_load.q_set,
+                                      orm_load_areas.subst_id). \
+            join(orm_load_areas, orm_load.id == orm_load_areas.otg_id). \
+            filter(orm_load_areas.subst_id == network.mv_grid.id). \
+            filter(orm_load_version).\
+            distinct()
+
+        load = pd.read_sql_query(load_sqla.statement,
+                                   session.bind,
+                                   index_col='subst_id')
+
+        return load
+
+    load = _import_load_timeseries_from_oedb(network)
+
+    # TODO: reshape and assign feedin data to TimeSeries()

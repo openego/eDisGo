@@ -6,7 +6,7 @@ import logging
 import edisgo
 from edisgo.tools import config, pypsa_io
 from edisgo.data.import_data import import_from_ding0, import_generators, \
-    import_feedin_timeseries
+    import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 
@@ -205,7 +205,12 @@ class Network:
         Import feedin timeseries and assing it in eDisGo data structure
         """
         import_feedin_timeseries(self)
-
+        
+    def import_load_timeseries(self):
+        """
+        Import load timeseries and assing it in eDisGo data structure
+        """
+        import_load_timeseries(self)
 
     def analyze(self, mode=None):
         """Analyzes the grid by power flow analysis

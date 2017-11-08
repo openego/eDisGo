@@ -51,6 +51,7 @@ if __name__ == '__main__':
 
         # Exemplary import feedin time series data
         network.import_feedin_timeseries()
+        network.import_load_timeseries()
 
         # Do non-linear power flow analysis with PyPSA
         network.analyze()
