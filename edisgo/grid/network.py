@@ -423,14 +423,6 @@ class Scenario:
         Specify a scenario that is used to distinguish data, assumptions and
         parameter.
 
-    Notes
-    -------
-    timeseries_generation wird in der init überschrieben, wenn etrago_specs
-    vorgegeben werden oder wenn power_flow = 'worst-case' (perspektivisch
-    soll timeseries.load auch überschrieben werden)
-    wenn power_flow = 'worst-case' werden etrago_specs auch überschrieben -
-    ToDo: am besten Warnung raus geben
-
     """
 
     def __init__(self, power_flow, mv_grid_id, **kwargs):
