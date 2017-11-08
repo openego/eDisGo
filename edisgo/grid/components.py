@@ -152,9 +152,6 @@ class Load(Component):
         edisgo.network.TimeSeries : Details of global TimeSeries
         """
         if self._timeseries is None:
-            peak_load_consumption_ratio = float(self.grid.network.config['data'][
-                'peakload_consumption_ratio'][sector])
-
             if isinstance(self.grid, MVGrid):
                 q_factor = tan(acos(
                     self.grid.network.scenario.parameters.pfac_mv_load))

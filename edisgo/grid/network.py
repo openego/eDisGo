@@ -482,7 +482,8 @@ class Scenario:
                 self._timeseries = TimeSeries()
                 self._timeseries.generation = \
                     self._timeseries.worst_case_generation_ts()
-                self._timeseries.load = self._timeseries.worst_case_load_ts()
+                self._timeseries.load = self._timeseries.worst_case_load_ts(
+                    self)
         elif isinstance(power_flow, tuple):
             if self._etrago_specs:
                 if self._etrago_specs.dispatch is not None:
@@ -786,7 +787,7 @@ class TimeSeries:
         self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
         return pd.DataFrame({'p': 1}, index=self.timeindex)
 
-    def worst_case_load_ts(self):
+    def worst_case_load_ts(self, scenario):
         """
         Define worst case load time series
 
@@ -799,17 +800,19 @@ class TimeSeries:
         # set random timeindex
         self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
         #ToDo: remove hard coded sectors?
-        # TODO: replace by correct values (see OEDB) and put to config
-        peak_load_consumption_ratio = {
-            'residential': 0.0025,
-            'retail': 0.0025,
-            'industrial': 0.0025,
-            'agricultural': 0.0025}
         return pd.DataFrame({
-            'residential': 1 * peak_load_consumption_ratio['residential'],
-            'retail': 1 * peak_load_consumption_ratio['retail'],
-            'industrial': 1 * peak_load_consumption_ratio['industrial'],
-            'agricultural': 1 * peak_load_consumption_ratio['agricultural']},
+            'residential': 1 * float(
+                scenario.config.data['data']['peakload_consumption_ratio'][
+                    'residential']),
+            'retail': 1 * float(
+                scenario.config.data['data']['peakload_consumption_ratio'][
+                    'retail']),
+            'industrial': 1 * float(
+                scenario.config.data['data']['peakload_consumption_ratio'][
+                    'industrial']),
+            'agricultural': 1 * float(
+                scenario.config.data['data']['peakload_consumption_ratio'][
+                    'agricultural'])},
             index=self.timeindex)
 
     def import_feedin_timeseries(self, scenario):
