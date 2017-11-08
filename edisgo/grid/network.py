@@ -61,56 +61,15 @@ class Network:
         else:
             self._pypsa = kwargs.get('pypsa', None)
 
-        self._config = self._load_config()
+        self._config = kwargs.get('config', None)
+        if self._config is None:
+            try:
+                self._config = self._scenario.config
+            except:
+                self._config = Config()
         self._equipment_data = self._load_equipment_data()
 
         self._dingo_import_data = []
-
-    @staticmethod
-    def _load_config():
-        """Load config files
-
-        Returns
-        -------
-        config object
-        """
-
-        # load config
-        config.load_config('config_db_tables.cfg')
-        config.load_config('config_data.cfg')
-        config.load_config('config_flexopt.cfg')
-        config.load_config('config_misc.cfg')
-        config.load_config('config_scenario.cfg')
-        config.load_config('config_costs.cfg')
-
-        confic_dict = config.cfg._sections
-
-        # convert numeric values to float
-        for sec, subsecs in confic_dict.items():
-            for subsec, val in subsecs.items():
-                # try str -> float conversion
-                try:
-                    confic_dict[sec][subsec] = float(val)
-                except:
-                    pass
-
-        # modify structure of config data
-        confic_dict['data']['peakload_consumption_ratio'] = {
-            'residential': confic_dict['data'][
-                'residential_peakload_consumption'],
-            'retail': confic_dict['data'][
-                'retail_peakload_consumption'],
-            'industrial': confic_dict['data'][
-                'residential_peakload_consumption'],
-            'agricultural': confic_dict['data'][
-                'agricultural_peakload_consumption']}
-
-        del (confic_dict['data']['residential_peakload_consumption'])
-        del (confic_dict['data']['retail_peakload_consumption'])
-        del (confic_dict['data']['industrial_peakload_consumption'])
-        del (confic_dict['data']['agricultural_peakload_consumption'])
-
-        return confic_dict
 
     def _load_equipment_data(self):
         """Load equipment data for transformers, cables etc.
@@ -121,55 +80,49 @@ class Network:
         """
 
         package_path =  edisgo.__path__[0]
-        equipment_dir = self._config['system_dirs']['equipment_dir']
+        equipment_dir = self.config['system_dirs']['equipment_dir']
 
         data = {}
 
-        equipment_mv_parameters_trafos = self._config['equipment']['equipment_mv_parameters_trafos']
-        data['MV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
-                                                  equipment_mv_parameters_trafos),
-                                        comment='#',
-                                        index_col='name',
-                                        delimiter=',',
-                                        decimal='.'
-                                        )
+        equipment_mv_parameters_trafos = self.config['equipment'][
+            'equipment_mv_parameters_trafos']
+        data['MV_trafos'] = pd.read_csv(
+            path.join(package_path, equipment_dir,
+                      equipment_mv_parameters_trafos),
+            comment='#', index_col='name',
+            delimiter=',', decimal='.')
 
+        equipment_mv_parameters_lines = self.config['equipment'][
+            'equipment_mv_parameters_lines']
+        data['MV_lines'] = pd.read_csv(
+            path.join(package_path, equipment_dir,
+                      equipment_mv_parameters_lines),
+            comment='#', index_col='name',
+            delimiter=',', decimal='.')
 
-        equipment_mv_parameters_lines = self._config['equipment']['equipment_mv_parameters_lines']
-        data['MV_lines'] = pd.read_csv(path.join(package_path, equipment_dir,
-                                                 equipment_mv_parameters_lines),
-                                       comment='#',
-                                       index_col='name',
-                                       delimiter=',',
-                                       decimal='.'
-                                       )
+        equipment_mv_parameters_cables = self.config['equipment'][
+            'equipment_mv_parameters_cables']
+        data['MV_cables'] = pd.read_csv(
+            path.join(package_path, equipment_dir,
+                      equipment_mv_parameters_cables),
+            comment='#', index_col='name',
+            delimiter=',', decimal='.')
 
-        equipment_mv_parameters_cables = self._config['equipment']['equipment_mv_parameters_cables']
-        data['MV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
-                                                  equipment_mv_parameters_cables),
-                                        comment='#',
-                                        index_col='name',
-                                        delimiter=',',
-                                        decimal='.'
-                                        )
+        equipment_lv_parameters_cables = self.config['equipment'][
+            'equipment_lv_parameters_cables']
+        data['LV_cables'] = pd.read_csv(
+            path.join(package_path, equipment_dir,
+                      equipment_lv_parameters_cables),
+            comment='#', index_col='name',
+            delimiter=',', decimal='.')
 
-        equipment_lv_parameters_cables = self._config['equipment']['equipment_lv_parameters_cables']
-        data['LV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
-                                                  equipment_lv_parameters_cables),
-                                        comment='#',
-                                        index_col='name',
-                                        delimiter=',',
-                                        decimal='.'
-                                        )
-
-        equipment_lv_parameters_trafos = self._config['equipment']['equipment_lv_parameters_trafos']
-        data['LV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
-                                                  equipment_lv_parameters_trafos),
-                                        comment='#',
-                                        index_col='name',
-                                        delimiter=',',
-                                        decimal='.'
-                                        )
+        equipment_lv_parameters_trafos = self.config['equipment'][
+            'equipment_lv_parameters_trafos']
+        data['LV_trafos'] = pd.read_csv(
+            path.join(package_path, equipment_dir,
+                      equipment_lv_parameters_trafos),
+            comment='#', index_col='name',
+            delimiter=',', decimal='.')
 
         return data
 
@@ -295,7 +248,7 @@ class Network:
     @property
     def config(self):
         """Returns config object"""
-        return self._config
+        return self._config.data
 
     @property
     def equipment_data(self):
@@ -376,6 +329,67 @@ class Network:
 
     def __repr__(self):
         return 'Network ' + str(self._id)
+
+
+class Config:
+    """Defines the configurations
+
+    Used as container for all configurations.
+
+    """
+    #ToDo: add docstring
+    def __init__(self, **kwargs):
+        self._data = self._load_config()
+
+    @staticmethod
+    def _load_config():
+        """Load config files
+
+        Returns
+        -------
+        config object
+        """
+
+        # load config
+        config.load_config('config_db_tables.cfg')
+        config.load_config('config_data.cfg')
+        config.load_config('config_flexopt.cfg')
+        config.load_config('config_misc.cfg')
+        config.load_config('config_scenario.cfg')
+        config.load_config('config_costs.cfg')
+
+        confic_dict = config.cfg._sections
+
+        # convert numeric values to float
+        for sec, subsecs in confic_dict.items():
+            for subsec, val in subsecs.items():
+                # try str -> float conversion
+                try:
+                    confic_dict[sec][subsec] = float(val)
+                except:
+                    pass
+
+        # modify structure of config data
+        confic_dict['data']['peakload_consumption_ratio'] = {
+            'residential': confic_dict['data'][
+                'residential_peakload_consumption'],
+            'retail': confic_dict['data'][
+                'retail_peakload_consumption'],
+            'industrial': confic_dict['data'][
+                'residential_peakload_consumption'],
+            'agricultural': confic_dict['data'][
+                'agricultural_peakload_consumption']}
+
+        del (confic_dict['data']['residential_peakload_consumption'])
+        del (confic_dict['data']['retail_peakload_consumption'])
+        del (confic_dict['data']['industrial_peakload_consumption'])
+        del (confic_dict['data']['agricultural_peakload_consumption'])
+
+        return confic_dict
+
+    @property
+    def data(self):
+        return self._data
 
 
 class Scenario:
