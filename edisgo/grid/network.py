@@ -503,12 +503,15 @@ class Scenario:
                         self._timeseries.load = self._etrago_specs.load.loc[
                             self._timeseries.timeindex]
                 else:
-                    #ToDo: Wollen wir timeseries zulassen, wenn etrago specs gegeben sind? Dann müssen wir das hier noch prüfen
                     logger.error("Etrago specifications must contain dispatch "
                                  "timeseries. Please provide them.")
             elif not self._timeseries:
-                logger.error("Please provide etrago specifications or time "
-                             "series for load and generation.")
+                self._mode = 'time-range'
+                self._timeseries = TimeSeries()
+                self._timeseries.generation = \
+                    self._timeseries.import_feedin_timeseries(self)
+                self._timeseries.load = \
+                    self._timeseries.import_load_timeseries(self)
 
     def __repr__(self):
         return 'Scenario ' + self._name
