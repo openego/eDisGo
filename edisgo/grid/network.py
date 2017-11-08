@@ -410,8 +410,8 @@ class Scenario:
         ID of MV grid district
     _mode : :obj:`str`
         'worst-case' or 'time-range'
-    _network : :class:~.grid.network.Network`
-        Network which this scenario is associated with
+    _config : :class:~.grid.network.Config`
+        Configuration parameters
     _timeseries : :obj:`list` of :class:`~.grid.grids.TimeSeries`
         Time series associated with a scenario.
     _etrago_specs : :class:`~.grid.grids.ETraGoSpecs`
@@ -436,12 +436,15 @@ class Scenario:
     def __init__(self, power_flow, mv_grid_id, **kwargs):
         self._mv_grid_id = mv_grid_id
         self._name = kwargs.get('name', None)
-        self._network = kwargs.get('network', None)
+        self._config = kwargs.get('config', None)
         self._timeseries = kwargs.get('timeseries', None)
         self._etrago_specs = kwargs.get('etrago_specs', None)
         self._parameters = Parameters(self, **kwargs)
         self.scenario_name = kwargs.get('scenario_name', None)
 
+        # get config parameters if not provided
+        if self._config is None:
+            self._config = Config()
         # populate timeseries attribute
         self.set_timeseries(power_flow)
 
@@ -456,6 +459,10 @@ class Scenario:
     @property
     def parameters(self):
         return self._parameters
+
+    @property
+    def config(self):
+        return self._config
 
     @property
     def mode(self):
