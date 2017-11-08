@@ -40,10 +40,11 @@ if __name__ == '__main__':
     costs = pd.DataFrame()
     faulty_grids = {'grid': [], 'msg': []}
     for dingo_grid in grids:
-        # # worst-case scenario
-        # scenario = Scenario(power_flow='worst-case')
+        mv_grid_id = dingo_grid.split('_')[-1].split('.')[0]
+        # worst-case scenario
+        scenario = Scenario(power_flow='worst-case', mv_grid_id=mv_grid_id)
 
-        # # time-range non-empty tuple
+        # # scenario with etrago specs
         # power_flow = (date(2017, 10, 10), date(2017, 10, 13))
         # timeindex = pd.date_range(power_flow[0], power_flow[1], freq='H')
         # etrago_specs = ETraGoSpecs(
@@ -70,10 +71,9 @@ if __name__ == '__main__':
         # scenario = Scenario(etrago_specs=etrago_specs, power_flow=(),
         #                     scenario_name='NEP 2035')
 
-        # time-range non-empty tuple
-        mv_grid_id = dingo_grid.split('_')[-1].split('.')[0]
-        scenario = Scenario(power_flow=(), mv_grid_id=mv_grid_id,
-                            scenario_name='NEP 2035')
+        # # scenario with time series
+        # scenario = Scenario(power_flow=(), mv_grid_id=mv_grid_id,
+        #                     scenario_name='NEP 2035')
 
         logging.info('Grid expansion for {}'.format(dingo_grid))
         network = Network.import_from_ding0(
@@ -81,8 +81,6 @@ if __name__ == '__main__':
             id='Test grid',
             scenario=scenario)
 
-        # Do non-linear power flow analysis with PyPSA
-        network.analyze()
         # Do grid reinforcement
         try:
             # Calculate grid expansion costs before generator import
