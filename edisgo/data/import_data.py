@@ -2046,7 +2046,7 @@ def import_feedin_timeseries(scenario):
             orm_feedin.scenario,
             orm_feedin.feedin). \
             filter(orm_feedin.sub_id == scenario.mv_grid_id). \
-            filter(orm_feedin.scenario == scenario.scenario_name). \
+            filter(orm_feedin.scenario.in_(scenario.scenario_name)). \
             filter(orm_feedin_version)
 
         feedin = pd.read_sql_query(feedin_sqla.statement,

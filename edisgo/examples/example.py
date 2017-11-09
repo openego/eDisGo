@@ -75,7 +75,7 @@ if __name__ == '__main__':
         scenario = Scenario(
             power_flow=(date(2011, 10, 10), date(2011, 10, 13)),
             mv_grid_id=mv_grid_id,
-            scenario_name='NEP 2035')
+            scenario_name=['NEP 2035', 'Status Quo'])
         # scenario = Scenario(power_flow=(), mv_grid_id=mv_grid_id,
         #                     scenario_name='NEP 2035')
 
