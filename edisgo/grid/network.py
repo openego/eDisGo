@@ -201,7 +201,7 @@ class Network:
 
         return network
 
-    def import_generators(self):
+    def import_generators(self, types):
         """Import generators
 
         For details see
@@ -209,7 +209,8 @@ class Network:
         """
         data_source = data_source=self.config['data']['data_source']
         import_generators(network=self,
-                          data_source=data_source)
+                          data_source=data_source,
+                          types=types)
 
     def analyze(self, mode=None):
         """Analyzes the grid by power flow analysis

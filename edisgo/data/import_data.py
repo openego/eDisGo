@@ -895,7 +895,7 @@ def _validate_load_generation(mv_grid, ding0_mv_grid):
                         edisgo=v2['edisgo']))
 
 
-def import_generators(network, data_source=None, file=None):
+def import_generators(network, data_source=None, file=None, types=None):
     """Import generator data from source.
 
     The generator data include
@@ -922,13 +922,14 @@ def import_generators(network, data_source=None, file=None):
 
     file: :obj:`str`
         File to import data from, required when using file-based sources.
+    types : list of str
+        Power generation technologies that should be considered
 
     Returns
     -------
     :pandas:`pandas.DataFrame<dataframe>`
         List of generators
     """
-    types = ['wind', 'solar']
 
     if data_source == 'oedb':
         _import_genos_from_oedb(network=network, types=types)
