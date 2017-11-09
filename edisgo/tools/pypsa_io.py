@@ -4,7 +4,7 @@ topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA grid
 container.
 """
 
-from edisgo.grid.components import Transformer, Line, LVStation
+from edisgo.grid.components import Transformer, Line, LVStation, MVStation
 
 import pandas as pd
 from math import pi, sqrt, floor
@@ -1312,9 +1312,10 @@ def update_pypsa(network):
     # Step 1: Update transformers
     transformers = equipment_changes[
         equipment_changes['equipment'].apply(isinstance, args=(Transformer,))]
+    # HV/MV transformers are excluded because it's not part of the PFA
     removed_transformers = [repr(_) for _ in
                             transformers[transformers['change'] == 'removed'][
-                                'equipment'].tolist()]
+                                'equipment'].tolist() if _.voltage_op < 10]
     added_transformers = transformers[transformers['change'] == 'added']
 
     transformer = {'name': [],
