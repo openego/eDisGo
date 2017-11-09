@@ -143,7 +143,7 @@ class Network:
 
         return network
 
-    def import_generators(self, types):
+    def import_generators(self, types=None):
         """Import generators
 
         For details see
