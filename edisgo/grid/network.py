@@ -434,6 +434,7 @@ class Scenario:
         self._etrago_specs = kwargs.get('etrago_specs', None)
         self._parameters = Parameters(self, **kwargs)
         self.scenario_name = kwargs.get('scenario_name', None)
+        self._curtailment = kwargs.get('curtailment', None)
 
         # get config parameters if not provided
         if self._config is None:
@@ -526,6 +527,13 @@ class Scenario:
                     self._timeseries.load = \
                         self._timeseries.import_load_timeseries(self).loc[
                             self._timeseries.timeindex]
+
+    @property
+    def curtailment(self):
+        """
+        Return technology specific curtailment factors
+        """
+        return self._curtailment
 
     def __repr__(self):
         return 'Scenario ' + self._name

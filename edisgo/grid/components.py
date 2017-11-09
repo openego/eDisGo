@@ -323,6 +323,11 @@ class Generator(Component):
                         type))
                     raise
 
+        curtailment = self.grid.network.scenario.curtailment
+        if curtailment:
+            if self.type in list(curtailment.keys()):
+                self._timeseries = self._timeseries * curtailment[self._type]
+
         return self._timeseries
 
     def pypsa_timeseries(self, attr):
