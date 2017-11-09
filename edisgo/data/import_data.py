@@ -1031,7 +1031,7 @@ def _validate_etrago_specs(network):
                             gen_type, capacity_etrago[gen_type].values[0]))
 
 
-def import_generators(network, data_source=None, file=None):
+def import_generators(network, data_source=None, file=None, types=None):
     """Import generator data from source.
 
     The generator data include
@@ -1059,7 +1059,8 @@ def import_generators(network, data_source=None, file=None):
     file: :obj:`str`
         File to import data from, required when using file-based sources.
     types : list of str
-        Power generation technologies that should be considered
+        Power generation technologies that should be considered. Defaults to
+        None which refers to "all technologies".
 
     Returns
     -------
