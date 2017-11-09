@@ -2054,7 +2054,7 @@ def import_feedin_timeseries(scenario):
                                    index_col='subst_id')
 
         # rename 'windonshore' to 'wind'
-        feedin = feedin.rename(columns={'windonshore': 'wind'})
+        feedin = feedin.replace({'generation_type': {'windonshore': 'wind'}})
 
         # average across different weather cells in grid district
         # TODO: replace this by using the specific time series for each generator when input tables are replaced are information on weather cells is available
