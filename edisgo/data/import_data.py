@@ -10,7 +10,9 @@ from egoio.tools.db import connection
 
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
-from shapely.wkt import loads as wkt_loads
+from workalendar.europe import Germany
+from demandlib import bdew as bdew, particular_profiles as profiles
+import datetime
 
 import pandas as pd
 import numpy as np
@@ -25,6 +27,8 @@ if not 'READTHEDOCS' in os.environ:
     from ding0.core.network.grids import CircuitBreakerDing0
     from ding0.core.structure.regions import LVLoadAreaCentreDing0
     from shapely.ops import transform
+from shapely.wkt import loads as wkt_loads
+
 
 import logging
 logger = logging.getLogger('edisgo')
@@ -281,6 +285,15 @@ def _build_mv_grid(ding0_grid, network):
         v_level=_.v_level) for _ in ding0_grid.generators()}
     grid.graph.add_nodes_from(generators.values(), type='generator')
 
+    # Create list of diconnection point instances and add these to grid's graph
+    disconnecting_points = {_: MVDisconnectingPoint(id=_.id_db,
+                                                    geom=_.geo_data,
+                                                    state=_.status,
+                                                    grid=grid)
+                            for _ in ding0_grid._circuit_breakers}
+    grid.graph.add_nodes_from(disconnecting_points.values(),
+                              type='disconnection_point')
+
     # Create list of branch tee instances and add these to grid's graph
     branch_tees = {_: BranchTee(id=_.id_db,
                                 geom=_.geo_data,
@@ -333,6 +346,7 @@ def _build_mv_grid(ding0_grid, network):
     # Merge node above defined above to a single dict
     nodes = {**loads,
              **generators,
+             **disconnecting_points,
              **branch_tees,
              **stations,
              **{ding0_grid.station(): mv_station}}
@@ -661,6 +675,12 @@ def _validate_ding0_mv_grid_import(grid, ding0_grid):
     data_integrity['branch_tee']['edisgo'] = len(
         grid.graph.nodes_by_attribute('branch_tee'))
 
+    # Check number of disconnecting points
+    data_integrity['disconnection_point']['ding0'] = len(
+        ding0_grid._circuit_breakers)
+    data_integrity['disconnection_point']['edisgo'] = len(
+        grid.graph.nodes_by_attribute('disconnection_point'))
+
     # Check number of MV transformers
     data_integrity['mv_transformer']['ding0'] = len(
         list(ding0_grid.station().transformers()))
@@ -895,7 +915,123 @@ def _validate_load_generation(mv_grid, ding0_mv_grid):
                         edisgo=v2['edisgo']))
 
 
-def import_generators(network, data_source=None, file=None):
+def _validate_etrago_specs(network):
+    def _compare_etrago_edisgo_values(edisgo_dict, etrago_df):
+        if set(edisgo_dict.keys()).intersection(set(etrago_df.columns)):
+            for type in edisgo_dict.keys():
+                if not isclose(edisgo_dict[type], etrago_df[type],
+                               rel_tol=1e-3):
+                    logger.error(
+                        "ETraGo specifications:Capacity in edisgo for generator type '{}' does "
+                        "not match capacity given in ETraGoSpecs.".format(
+                            type))
+        else:
+            gen_types_missing = list(set(capacity_edisgo.keys()) -
+                                     set(capacity_etrago.columns))
+            for gen_type in gen_types_missing:
+                if gen_type in capacity_edisgo.keys():
+                    if capacity_etrago[gen_type] != 0:
+                        logger.error(
+                            "According to the etrago specifications {} MW "
+                            "of {} should be installed, but no generators of that "
+                            "type were found in edisgo network.".format(
+                                capacity_etrago[gen_type].values[0], gen_type))
+                else:
+                    if capacity_edisgo[gen_type] != 0:
+                        logger.error(
+                            "According to the etrago specifications no {} should "
+                            "be installed, but {} MW were found in edisgo "
+                            "network.".format(
+                                gen_type, capacity_etrago[gen_type].values[0]))
+
+    # compare generator capacities
+    capacity_etrago = network.scenario.etrago_specs.capacity
+    capacity_edisgo = {}
+    # get total capacity of each generator type in edisgo network
+    gens = network.mv_grid.graph.nodes_by_attribute('generator')
+    for lv_grid in network.mv_grid.lv_grids:
+        gens.extend(lv_grid.graph.nodes_by_attribute('generator'))
+    for gen in gens:
+        capacity_edisgo.setdefault(gen.type, 0)
+        capacity_edisgo[gen.type] += gen.nominal_capacity
+    # compare edisgo and etrago capacities
+    if set(capacity_edisgo.keys()).intersection(
+            set(capacity_etrago.columns)):
+        for gen_type in capacity_edisgo.keys():
+            if not isclose(capacity_edisgo[gen_type],
+                           capacity_etrago[gen_type],
+                           rel_tol=1e-3):
+                logger.error(
+                    "Capacity in edisgo for generator type '{}' does "
+                    "not match capacity given in ETraGoSpecs.".format(
+                        gen_type))
+    else:
+        gen_types_missing = list(set(capacity_edisgo.keys()) -
+                                 set(capacity_etrago.columns))
+        for gen_type in gen_types_missing:
+            if gen_type in capacity_edisgo.keys():
+                if capacity_etrago[gen_type] != 0:
+                    logger.error(
+                        "According to the etrago specifications {} MW "
+                        "of {} should be installed, but no generators of that "
+                        "type were found in edisgo network.".format(
+                            capacity_etrago[gen_type].values[0], gen_type))
+            else:
+                if capacity_edisgo[gen_type] != 0:
+                    logger.error(
+                        "According to the etrago specifications no {} should "
+                        "be installed, but {} MW were found in edisgo "
+                        "network.".format(
+                            gen_type, capacity_etrago[gen_type].values[0]))
+
+    # compare loads
+    load_etrago = network.scenario.etrago_specs.load
+    load_edisgo = {}
+    # get total capacity of each load type in edisgo network
+    loads = network.mv_grid.graph.nodes_by_attribute('load')
+    for lv_grid in network.mv_grid.lv_grids:
+        loads.extend(lv_grid.graph.nodes_by_attribute('load'))
+    for load in loads:
+        load_type = list(load.consumption.keys())[0]
+        load_edisgo.setdefault(load_type, 0)
+        load_edisgo[load_type] += load.consumption[load_type]
+    # combine retail and industrial to retail
+    # ToDo: 'retail' and 'industrial' are considered as one
+    load_edisgo.setdefault('retail', 0)
+    load_edisgo.setdefault('industrial', 0)
+    load_edisgo['retail'] = (load_edisgo['retail'] +
+                             load_edisgo.pop('industrial', None))
+    # compare edisgo and etrago loads
+    if set(load_edisgo.keys()).intersection(set(load_etrago.columns)):
+        for load_type in load_edisgo.keys():
+            if not isclose(load_edisgo[load_type],
+                           capacity_etrago[gen_type],
+                           rel_tol=1e-3):
+                logger.error(
+                    "Capacity in edisgo for generator type '{}' does "
+                    "not match capacity given in ETraGoSpecs.".format(
+                        gen_type))
+    else:
+        gen_types_missing = list(set(capacity_edisgo.keys()) -
+                                 set(capacity_etrago.columns))
+        for gen_type in gen_types_missing:
+            if gen_type in capacity_edisgo.keys():
+                if capacity_etrago[gen_type] != 0:
+                    logger.error(
+                        "According to the etrago specifications {} MW "
+                        "of {} should be installed, but no generators of that "
+                        "type were found in edisgo network.".format(
+                            capacity_etrago[gen_type].values[0], gen_type))
+            else:
+                if capacity_edisgo[gen_type] != 0:
+                    logger.error(
+                        "According to the etrago specifications no {} should "
+                        "be installed, but {} MW were found in edisgo "
+                        "network.".format(
+                            gen_type, capacity_etrago[gen_type].values[0]))
+
+
+def import_generators(network, data_source=None, file=None, types=None):
     """Import generator data from source.
 
     The generator data include
@@ -922,6 +1058,9 @@ def import_generators(network, data_source=None, file=None):
 
     file: :obj:`str`
         File to import data from, required when using file-based sources.
+    types : list of str
+        Power generation technologies that should be considered. Defaults to
+        None which refers to "all technologies".
 
     Returns
     -------
@@ -930,7 +1069,7 @@ def import_generators(network, data_source=None, file=None):
     """
 
     if data_source == 'oedb':
-        _import_genos_from_oedb(network=network)
+        _import_genos_from_oedb(network=network, types=types)
     elif data_source == 'pypsa':
         _import_genos_from_pypsa(network=network, file=file)
     else:
@@ -939,7 +1078,7 @@ def import_generators(network, data_source=None, file=None):
         raise ValueError('The source you specified is not supported.')
 
 
-def _import_genos_from_oedb(network):
+def _import_genos_from_oedb(network, types=None):
     """Import generator data from the Open Energy Database (OEDB).
 
     The importer uses SQLAlchemy ORM objects.
@@ -989,7 +1128,7 @@ def _import_genos_from_oedb(network):
 
         return generators_mv
 
-    def _import_res_generators():
+    def _import_res_generators(types_filter):
         """Import renewable (res) generators
 
         Returns
@@ -1022,7 +1161,8 @@ def _import_genos_from_oedb(network):
             func.ST_AsText(func.ST_Transform(
             orm_re_generators.columns.geom, srid)).label('geom_em')). \
                 filter(orm_re_generators.columns.subst_id == network.mv_grid.id). \
-            filter(orm_re_generators_version)
+            filter(orm_re_generators_version). \
+            filter(types_filter)
 
         # extend basic query for MV generators and read data from db
         generators_mv_sqla = generators_sqla. \
@@ -1746,9 +1886,15 @@ def _import_genos_from_oedb(network):
         orm_conv_generators_version = orm_conv_generators.columns.preversion == data_version
         orm_re_generators_version = orm_re_generators.columns.preversion == data_version
 
+    # Create filter for generation technologies
+    if types is None:
+        types_condition = 1 == 1
+    else:
+        types_condition = orm_re_generators.columns.generation_type.in_(types)
+
     # get conventional and renewable generators
     #generators_conv_mv = _import_conv_generators()
-    generators_res_mv, generators_res_lv = _import_res_generators()
+    generators_res_mv, generators_res_lv = _import_res_generators(types_condition)
 
     #generators_mv = generators_conv_mv.append(generators_res_mv)
 
@@ -1842,3 +1988,221 @@ def _build_lv_grid_dict(network):
     for lv_grid in network.mv_grid.lv_grids:
         lv_grid_dict[lv_grid.id] = lv_grid
     return lv_grid_dict
+
+
+def import_feedin_timeseries(scenario):
+    """
+    Import RES feedin time series data and process
+
+    Parameters
+    ----------
+    scenario: :class:`~.grid.network.Scenario`
+        eDisGo scenario object
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Feedin time series
+    """
+
+    def _retrieve_timeseries_from_oedb(scenario):
+        """Retrieve time series from oedb
+
+        Parameters
+        ----------
+        scenario: :class:`~.grid.network.Scenario`
+            eDisGo scenario object
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Feedin time series
+        """
+        if scenario.config.data['versioned']['version'] == 'model_draft':
+            orm_feedin_name = scenario.config.data['model_draft'][
+                'res_feedin_data']
+            orm_feedin = model_draft.__getattribute__(orm_feedin_name)
+            orm_feedin_version = 1 == 1
+        else:
+            orm_feedin_name = scenario.config.data['versioned'][
+                'res_feedin_data']
+            # orm_feedin = supply.__getattribute__(orm_feedin_name)
+            # TODO: remove workaround
+            orm_feedin = model_draft.__getattribute__(orm_feedin_name)
+            orm_feedin_version = 1 == 1
+            # orm_feedin_version = orm_feedin.columns.version == scenario.config.data['versioned']['version']
+
+        conn = connection(section=scenario.config.data['connection'][
+            'section'])
+        Session = sessionmaker(bind=conn)
+        session = Session()
+
+        # TODO: add option to retrieve subset of time series
+        feedin_sqla = session.query(
+            orm_feedin.hour,
+            orm_feedin.coastdat_id,
+            orm_feedin.sub_id.label('subst_id'),
+            orm_feedin.generation_type,
+            orm_feedin.scenario,
+            orm_feedin.feedin). \
+            filter(orm_feedin.sub_id == scenario.mv_grid_id). \
+            filter(orm_feedin.scenario.in_(scenario.scenario_name)). \
+            filter(orm_feedin_version)
+
+        feedin = pd.read_sql_query(feedin_sqla.statement,
+                                   session.bind,
+                                   index_col='subst_id')
+
+        # rename 'windonshore' to 'wind'
+        feedin = feedin.replace({'generation_type': {'windonshore': 'wind'}})
+
+        # average across different weather cells in grid district
+        # TODO: replace this by using the specific time series for each generator when input tables are replaced are information on weather cells is available
+        feedin = feedin.groupby(['hour', 'generation_type'], as_index=False).mean()
+
+        return feedin
+
+    feedin = _retrieve_timeseries_from_oedb(scenario)
+    gen_dict = {}
+    for gen_type in feedin.generation_type.unique():
+        gen_dict[gen_type] = feedin[
+            feedin.generation_type==gen_type].sort_values(by='hour').set_index(
+            'hour').feedin
+    if gen_dict:
+        return pd.DataFrame(gen_dict, index=gen_dict[gen_type].index)
+    else:
+        return None
+
+
+def import_load_timeseries(scenario, data_source):
+    """
+    Import load time series
+
+    Parameters
+    ----------
+    scenario: :class:`~.grid.network.Scenario`
+        eDisGo scenario object
+    data_source : str
+        Specfiy type of data source. Available data sources are
+
+         * 'oedb': retrieves load time series cumulated across sectors
+         * 'demandlib': determine a load time series with the use of the
+            demandlib. This calculated standard load profiles for 4 different
+            sectors.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Feedin time series
+    """
+
+    def _import_load_timeseries_from_oedb(scenario):
+        """
+        Retrieve load time series from oedb
+
+        Parameters
+        ----------
+        scenario: :class:`~.grid.network.Scenario`
+            eDisGo scenario object
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Feedin time series
+        """
+
+        if scenario.config.data['versioned']['version'] == 'model_draft':
+            orm_load_name = scenario.config.data['model_draft']['load_data']
+            orm_load = model_draft.__getattribute__(orm_load_name)
+            orm_load_areas_name = scenario.config.data['model_draft'][
+                'load_areas']
+            orm_load_areas = model_draft.__getattribute__(orm_load_areas_name)
+            orm_load_version = 1 == 1
+        else:
+            orm_load_name = scenario.config.data['versioned']['load_data']
+            # orm_load = supply.__getattribute__(orm_load_name)
+            # TODO: remove workaround
+            orm_load = model_draft.__getattribute__(orm_load_name)
+            # orm_load_version = orm_load.version == config.data['versioned']['version']
+
+            orm_load_areas_name = scenario.config.data['versioned'][
+                'load_areas']
+            # orm_load_areas = supply.__getattribute__(orm_load_areas_name)
+            # TODO: remove workaround
+            orm_load_areas = model_draft.__getattribute__(orm_load_areas_name)
+            # orm_load_areas_version = orm_load.version == config.data['versioned']['version']
+
+            orm_load_version = 1 == 1
+
+        conn = connection(section=scenario.config.data['connection'][
+            'section'])
+        Session = sessionmaker(bind=conn)
+        session = Session()
+
+        load_sqla = session.query(  # orm_load.id,
+            orm_load.p_set,
+            orm_load.q_set,
+            orm_load_areas.subst_id). \
+            join(orm_load_areas, orm_load.id == orm_load_areas.otg_id). \
+            filter(orm_load_areas.subst_id == scenario.mv_grid_id). \
+            filter(orm_load_version). \
+            distinct()
+
+        load = pd.read_sql_query(load_sqla.statement,
+                                 session.bind,
+                                 index_col='subst_id')
+
+        return load
+
+    def _load_timeseries_demandlib():
+        """
+        Get normalized sectoral load time series
+
+        Time series are normalized to 1 kWh consumption per year
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Feedin time series
+        """
+
+        # TODO: move all hard-coded data below to a config file
+        year = 2011
+
+        sectoral_consumption = {'h0': 1, 'g0': 1, 'i0': 1, 'l0': 1}
+
+        cal = Germany()
+        holidays = dict(cal.holidays(year))
+
+        e_slp = bdew.ElecSlp(year, holidays=holidays)
+
+        # multiply given annual demand with timeseries
+        elec_demand = e_slp.get_profile(sectoral_consumption)
+
+        # Add the slp for the industrial group
+        ilp = profiles.IndustrialLoadProfile(e_slp.date_time_index,
+                                             holidays=holidays)
+
+        # Beginning and end of workday, weekdays and weekend days, and scaling
+        # factors by default
+        elec_demand['i0'] = ilp.simple_profile(
+            sectoral_consumption['i0'],
+            am=datetime.time(6, 0, 0),
+            pm=datetime.time(22, 0, 0),
+            profile_factors=
+            {'week': {'day': 0.8, 'night': 0.6},
+             'weekend': {'day': 0.6, 'night': 0.6}})
+
+        # Resample 15-minute values to hourly values and sum across sectors
+        elec_demand = elec_demand.resample('H').mean()
+
+        return elec_demand
+
+    if data_source == 'oedb':
+        load = _import_load_timeseries_from_oedb(scenario)
+    elif data_source == 'demandlib':
+        load = _load_timeseries_demandlib()
+        load.rename(columns={'g0': 'retail', 'h0': 'residential',
+                             'l0': 'agricultural', 'i0': 'industrial'},
+                    inplace=True)
+    return load

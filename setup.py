@@ -37,7 +37,9 @@ setup(
         'pandas >=0.20.3, <=0.20.3',
         'pypsa >=0.10.0, <=0.10.0',
         'pyproj >= 1.9.5.1, <= 1.9.5.1',
-        'geopy >= 1.11.0, <= 1.11.0'
+        'geopy >= 1.11.0, <= 1.11.0',
+        'workalendar',
+        'demandlib'
     ],
     package_data={
         'config': [
