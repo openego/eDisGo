@@ -13,6 +13,7 @@ use a virtual environment and use its pip.
 
     pip3 install edisgo
 
+Consider to install a developer version as detailed in :ref:`dev-notes`.
 
 Prerequisites
 -------------
@@ -35,6 +36,8 @@ through the
     Describe oedb access here (mention: internet connection required)
 
 
+.. _edisgo-mwe:
+
 A minimum working example
 -------------------------
 
@@ -45,8 +48,7 @@ Assuming you have file name "ding0_grids__42.pkl" in current working directory.
     from edisgo.grid.network import Network, Scenario, TimeSeries
 
     # Define a scenario including a TimeSeries instance
-    timeseries = TimeSeries()
-    scenario = Scenario(power_flow='worst-case', timeseries=TimeSeries())
+    scenario = Scenario(power_flow='worst-case', mv_grid_id=grid_district)
 
     # Get the grid topology data
     network = Network.import_from_ding0(

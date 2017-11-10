@@ -20,6 +20,14 @@ edisgo\.flex\_opt\.costs module
     :undoc-members:
     :show-inheritance:
 
+edisgo\.flex\_opt\.exceptions module
+------------------------------------
+
+.. automodule:: edisgo.flex_opt.exceptions
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 edisgo\.flex\_opt\.reinforce\_grid module
 -----------------------------------------
 

@@ -8,7 +8,7 @@ analyze distribution grids for grid issues and evaluate measures responding thes
 `Examples <https://github.com/openego/eDisGo/tree/dev/edisgo/examples>`_
 are provided to show a typical workflow how eDisGo can be used. See
 the standard example or take a look at a
-`script <https://gist.github.com/gplssm/14d3f1305447ff91574cd89c53cbcd7c>`_
+`script <https://gist.github.com/gplssm/e0fd6cb99f7e8c1eed3fd4a4e325dde0>`_
 that is used to assess grid
 extension cost for distribution grids in the upcoming two decades.
 Further, we discuss how different features can be used in detail below.
@@ -61,7 +61,7 @@ Lines represent edges in the graph. Other equipment is represented by a node.
 .. todo::
 
     Add more
-     * May add examples on accessing particular data, i.e. generators
+     * Add examples on accessing particular data, i.e. generators
 
 
 Identify grid issues
@@ -69,7 +69,33 @@ Identify grid issues
 
 Use PyPSA's non-linear power flow to perform a stationary power flow analysis.
 
-Once you
+As detailed in :ref:`edisgo-mwe`, once you imported a grid topology by
+:code:`Network.import_from_ding0()`, you are ready for an analysis of grid
+issues (line overloading or voltage band violations) respectively the hosting
+capacity of the grid by :code:`Network.analyze()`.
+
+The range of time analyzed by the power flow analysis is defined
+:class:`~.grid.network.Network`'s :class:`~.grid.network.TimeSeries` class.
+
+A worst-case analysis can be set up by passing :code:`power_flow='worst-case'`
+when instantiating a :class:`~.grid.network.Scenario` obejct
+
+.. code-block:: python
+
+    scenario = Scenario(power_flow='worst-case', mv_grid_id=42)
+
+Time series spanning a defined range from zero am on the 10th of October 2011 to
+12 pm on the 13th of October 2011 is defined by
+
+.. code-block:: python
+
+    scenario = Scenario(
+                power_flow=(date(2011, 10, 10), date(2011, 10, 13)),
+                mv_grid_id=mv_grid_id,
+                scenario_name=['NEP 2035', 'Status Quo'])
+
+The `scenario_name` is used to distinguish time series data for wind and PV
+power.
 
 Grid extension
 --------------
