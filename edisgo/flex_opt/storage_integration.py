@@ -69,7 +69,8 @@ def storage_at_hvmv_substation(mv_grid, parameters, nominal_capacity=1000):
                       soc_initial=parameters['soc_initial'],
                       efficiency_in=parameters['efficiency_in'],
                       efficiency_out=parameters['efficiency_out'],
-                      standing_loss=parameters['standing_loss'])
+                      standing_loss=parameters['standing_loss'],
+                      geom=mv_grid.station.geom)
 
     # add storage itself to graph
     mv_grid.graph.add_node(storage, type='storage')
