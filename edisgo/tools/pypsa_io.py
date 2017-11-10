@@ -410,7 +410,7 @@ def mv_to_pypsa(network):
 
         storage['name'].append(repr(sto))
         storage['bus'].append(bus_name)
-        storage['p_nom'].append(sto.nominal_capacity)
+        storage['p_nom'].append(sto.nominal_capacity / 1e3)
         storage['state_of_charge_initial'].append(sto.soc_initial)
         storage['efficiency_store'].append(sto.efficiency_in)
         storage['efficiency_dispatch'].append(sto.efficiency_out)
