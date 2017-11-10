@@ -373,15 +373,25 @@ class Generator(Component):
 class Storage(Component):
     """Storage object
 
+    Describes a single storage instance in the eDisGo grid. Includes technical
+    parameters like :attr:`Storage.efficiency_in` or
+    :attr:`Storage.standing_loss` as
+    well as its time series of operation :meth:`Storage.timeseries`.
+    The storage's operation is defined by :class:`StorageOperation`.
+
     Examples
     --------
-    In order to define a storage that operates in eTraGo plain mode
+    In order to define a storage that operates in mode "fifty-fifty"
     (see :ref:`battery-operation` for details about modes)
     provide the following when instantiating a storage.
 
     >>> from edisgo.grid.components import Storage
-    >>> storage = Storage(nominal_capacity=76.0,
-    >>>     operation={'mode': 'etrago-plain'})
+    >>> storage_parameters = {'soc_initial': 0,
+    >>>                       'efficiency_in': .9,
+    >>>                       'efficiency_out': .9,
+    >>>                       'standing_loss': 0}
+    >>> network.integrate_storage(position='hvmv_substation_busbar',
+    >>>                           parameters=storage_parameters)
     """
 
     def __init__(self, **kwargs):
@@ -405,9 +415,9 @@ class Storage(Component):
         """
         Get time series of storage operation
 
-        Returns time series defined by :method:`StorageOperation.timeseries` if
-        :attribute:`operation` is available. Otherwise, time series stored in
-        :attribute:`timeseries` is returned.
+        Returns time series defined by :attr:`StorageOperation.timeseries` if
+        :attr:`operation` is available. Otherwise, time series stored in
+        :attr:`timeseries` is returned.
 
         Returns
         -------
@@ -491,6 +501,17 @@ class Storage(Component):
         """
         return self._standing_loss
 
+    @property
+    def operation(self):
+        """
+        Storage operation definition
+
+        Returns
+        -------
+        StorageOperation
+            Class defining operation of a :class:`Storage`
+        """
+
 
 class StorageOperation():
     """
@@ -511,14 +532,18 @@ class StorageOperation():
         Define time series for :class:`Storage`
 
         Determine the actual storage time series and save it to
-        :attribute:`_timeseries`.
+        :attr:`timeseries`.
 
         Parameters
         ----------
         mode : str
-            Choose way of time series definition. Available ``mode``'s are
-             * **'etrago-plain'** the storage operation exactly matches the
-                storage time series as defined by eTraGo
+            Choose way of time series definition. Available ``mode`` 's are
+
+             * **'fifty-fifty'**: the storage operation depends on actual power
+               by generators. If cumulative generation exceeds 50 % of nominal
+               power, the storage will charge. Otherwise, the storage will
+               charge.
+
         """
         if mode == 'etrago-plain':
             # TODO: untested code

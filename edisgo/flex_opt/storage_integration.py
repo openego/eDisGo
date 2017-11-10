@@ -13,7 +13,10 @@ def integrate_storage(network, position, parameters):
             The eDisGo container object
     position : str
         Specify storage location. Available options are
-         * 'hvmv_substation_busbar'
+
+         * 'hvmv_substation_busbar': places a storage unit directly at the
+           HV/MV station's bus bar
+
     parameters : dict
         Parameters specifying characteristics of storage in detail
 
