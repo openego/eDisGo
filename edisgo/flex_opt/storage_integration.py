@@ -81,7 +81,7 @@ def storage_at_hvmv_substation(mv_grid, parameters, nominal_capacity=1000):
         id=storage_id,
         type=line_type,
         kind='cable',
-        length=1,
+        length=1e-3,
         grid=mv_grid)
 
     mv_grid.graph.add_edge(mv_grid.station, storage, line=line, type='line')
