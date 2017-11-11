@@ -18,7 +18,7 @@ def reinforce_grid(network, max_while_iterations=10):
 
     Notes
     -----
-    Vorgehen laut BW-Studie:
+    Vorgehen laut [VerteilnetzstudieBW]_:
     * getrennte oder kombinierte Betrachtung von NS und MS muss noch
       entschieden werden, BW-Studie führt getrennte Betrachtung durch
     * Reihenfolge der Behebung von Grenzwertverletzungen:
@@ -44,9 +44,8 @@ def reinforce_grid(network, max_while_iterations=10):
 
     References
     ----------
-    .. [1] dena VNS
-    .. [2] Ackermann et al. (RP VNS)
 
+    The methodology and parameters found on [DenaVNS]_ and [VNSRP]_.
     """
 
     def _add_lines_changes_to_equipment_changes():

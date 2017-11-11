@@ -296,11 +296,9 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
 
     References
     ----------
-    .. [1] "Verteilnetzstudie für das Land Baden-Württemberg"
-    .. [2] "Technische Richtlinie Erzeugungsanlagen am Mittelspannungsnetz -
-            Richtlinie für Anschluss und Parallelbetrieb von
-            Erzeugungsanlagen am Mittelspannungsnetz, Juni 2008"
 
+    The method of grid reinforce as implemented here bases on
+    [VerteilnetzstudieBW]_ and [EAMS]_.
     """
 
     # load standard line data

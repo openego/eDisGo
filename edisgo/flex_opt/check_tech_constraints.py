@@ -66,8 +66,12 @@ def lv_line_load(network):
 
     Notes
     -----
-    According to [VerteilnetzstudieBW]_ load factors in feed-in case of all cables and lines in
+    According to [1]_ load factors in feed-in case of all cables and lines in
     LV grids are set to 1.
+
+    References
+    ----------
+    .. [1] Verteilnetzstudie für das Land Baden-Württemberg
 
     """
 

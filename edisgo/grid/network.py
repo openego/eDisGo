@@ -1302,7 +1302,7 @@ class Results:
             interested in. It is required to provide this argument in order
             to distinguish voltage levels at primary and secondary side of the
             transformer/LV station.
-            If not provided (respectively None) defaults to `['mv', 'lv'].
+            If not provided (respectively None) defaults to ['mv', 'lv'].
 
         Returns
         -------
