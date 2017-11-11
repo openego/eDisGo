@@ -30,7 +30,8 @@ def extend_distribution_substation_overloading(network, critical_stations):
 
     Returns
     -------
-    Dictionary with lists of added and removed transformers.
+    dict
+        Dictionary with lists of added and removed transformers.
 
     """
 
@@ -279,6 +280,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     Notes
     -----
     Reinforce measures:
+
     1. Disconnect line at 2/3 of the length between station and critical node
     farthest away from the station and install new standard line
     2. Install parallel standard line
@@ -299,6 +301,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
 
     The method of grid reinforce as implemented here bases on
     [VerteilnetzstudieBW]_ and [EAMS]_.
+
     """
 
     # load standard line data
@@ -477,6 +480,7 @@ def reinforce_branches_overloading(network, crit_lines):
     Notes
     -----
     Reinforce measures:
+
     1. Install parallel line of the same type as the existing line (Only if
        line is a cable, not an overhead line. Otherwise a standard equipment
        cable is installed right away.)

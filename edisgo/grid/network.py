@@ -1234,14 +1234,18 @@ class Results:
 
         Parameters
         ----------
-        issues : Dictionary
+        issues : dict
 
             Dictionary of critical lines/stations with relative over-loading
             and critical nodes with voltage deviation in p.u.. Format:
+
+            .. code-block:: python
+
                 {crit_line_1: rel_overloading_1, ...,
                  crit_line_n: rel_overloading_n,
                  crit_node_1: v_mag_pu_node_1, ...,
                  crit_node_n: v_mag_pu_node_n}
+
             Provide this if you want to set unresolved_issues. For retrieval
             of unresolved issues do not pass an argument.
 
