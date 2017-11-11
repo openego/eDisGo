@@ -42,8 +42,23 @@ class Network:
 
     Attributes
     ----------
+    _id : :obj:`str`
+        Name of network
+    _equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+        Electrical equipment such as lines and transformers
+    _config : ???
+        #TODO: TBD
     _metadata : :obj:`dict`
         Metadata of Network such as ?
+    _data_sources : :obj:`dict` of :obj:`str`
+        Data Sources of grid, generators etc.
+        Keys: 'grid', 'generators', ?
+    _scenario : :class:`~.grid.grids.Scenario`
+        Scenario which is used for calculations
+    _pypsa : :pypsa:`pypsa.Network<network>`
+        PyPSA representation of grid topology
+    _dingo_import_data :
+        Temporary data from ding0 import which are needed for OEP generator update
     """
 
     def __init__(self, **kwargs):
@@ -738,6 +753,7 @@ class TimeSeries:
     --------
     edisgo.grid.components.Generator : Usage details of :meth:`_generation`
     edisgo.grid.components.Load : Usage details of :meth:`_load`
+
     """
 
     def __init__(self, **kwargs):
@@ -965,6 +981,7 @@ class Results:
         A stack that details the history of measures to increase grid's hosting
         capacity. The last item refers to the latest measure. The key `original`
         refers to the state of the grid topology as it was initially imported.
+
     """
 
     # TODO: maybe add setter to alter list of measures
@@ -1003,6 +1020,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Active power results from power flow analysis
+
         """
         return self._pfa_p
 
@@ -1144,6 +1162,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Equipment changes
+
         """
         return self._equipment_changes
 
@@ -1248,7 +1267,7 @@ class Results:
 
         .. math::
 
-            S = \sqrt(max(p0, p1)^2 + max(q0, q1)^2)
+            S = max(\sqrt{p0^2 + q0^2}, \sqrt{p1^2 + q1^2})
 
         Parameters
         ----------
