@@ -32,7 +32,7 @@ def to_pypsa(network, mode):
       exported by :func:`mv_to_pypsa` including the LV station. LV grid load
       and generation is considered using :func:`add_aggregated_lv_components`.
       Time series are collected by `_pypsa_load_timeseries` (as example
-      for loads, generators and buses) specifying `mode='mv'). Timeseries
+      for loads, generators and buses) specifying `mode='mv'`). Timeseries
       for aggregated load/generation at substations are determined individually.
     * Low-voltage only (`mode='lv'`): LV grid topology including the MV-LV
       transformer is exported. The slack is defind at primary side of the MV-LV
@@ -512,12 +512,6 @@ def lv_to_pypsa(network):
 
 def combine_mv_and_lv(mv, lv):
     """Combine MV and LV grid topology in PyPSA format
-
-    Idea for implementation
-    -----------------------
-    Merge all DataFrames except for LV transformers which are already included
-    in the MV grid PyPSA representation
-
     """
 
     combined = {

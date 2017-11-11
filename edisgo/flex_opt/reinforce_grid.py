@@ -8,45 +8,56 @@ logger = logging.getLogger('edisgo')
 
 
 def reinforce_grid(network, max_while_iterations=10):
-    """ Evaluates grid reinforcement needs and performs measures. This function
-        is the parent function for all grid reinforcements.
+    """
+    Evaluates grid reinforcement needs and performs measures.
+
+    This function is the parent function for all grid reinforcements.
 
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
+        The eDisGo overall container
     max_while_iterations : int
         Maximum number of times each while loop is conducted.
 
     Notes
     -----
     Vorgehen laut [VerteilnetzstudieBW]_:
+
     * getrennte oder kombinierte Betrachtung von NS und MS muss noch
       entschieden werden, BW-Studie führt getrennte Betrachtung durch
     * Reihenfolge der Behebung von Grenzwertverletzungen:
-    ** Trafo
-    ** Spannung
-    ** Leitungen
+
+      * Trafo
+      * Spannung
+      * Leitungen
     * Thermische Belastung:
-    ** vorhandene BM werden maximal durch ein weiteres gleiches BM verstärkt
-    ** ist das nicht ausreichend, wird das BM durch beliebig viele Standard-
-       BM ersetzt
+
+      * vorhandene BM werden maximal durch ein weiteres gleiches BM verstärkt
+      * ist das nicht ausreichend, wird das BM durch beliebig viele Standard-
+        BM ersetzt
     * Spannungsbandverletztung
-    ** Strangauftrennung nach 2/3 der Distanz
-    ** danach eventuell weitere Strangauftrennung wenn sinnvoll, sonst
-       parallele BM
+
+      * Strangauftrennung nach 2/3 der Distanz
+      * danach eventuell weitere Strangauftrennung wenn sinnvoll, sonst
+        parallele BM
 
     Sonstiges:
+
     * nur Rückspeisefall
-    ** NS: 20% Last, 85-100% Einspeisung, BM-Belastung 100%
-    ** MS: 30% Last, 85-100% Einspeisung, BM-Belastung 100%
+
+     * NS: 20% Last, 85-100% Einspeisung, BM-Belastung 100%
+     * MS: 30% Last, 85-100% Einspeisung, BM-Belastung 100%
+
     * Spannungsbandaufteilung wie in Wuppertal Studie
     * bei Spannungsproblemen am Trafo wird nicht Trafo ausgebaut, sondern
       Leistung in der MS
 
+
     References
     ----------
-
     The methodology and parameters found on [DenaVNS]_ and [VNSRP]_.
+
     """
 
     def _add_lines_changes_to_equipment_changes():
