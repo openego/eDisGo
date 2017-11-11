@@ -19,12 +19,8 @@ def mv_line_load(network):
 
     Notes
     -----
-    According to [1]_ load factors in feed-in case of all cables and lines in
-    MV grids are set to 1.
-
-    References
-    ----------
-    .. [1] Verteilnetzstudie für das Land Baden-Württemberg
+    According to [VerteilnetzstudieBW]_ load factors in feed-in case of all
+    cables and lines in MV grids are set to 1.
 
     """
 
@@ -70,13 +66,8 @@ def lv_line_load(network):
 
     Notes
     -----
-    According to [1]_ load factors in feed-in case of all cables and lines in
+    According to [VerteilnetzstudieBW]_ load factors in feed-in case of all cables and lines in
     LV grids are set to 1.
-
-    References
-    ----------
-    .. [1] Verteilnetzstudie für das Land Baden-Württemberg
-
     """
 
     crit_lines = {}
@@ -121,15 +112,10 @@ def mv_lv_station_load(network):
 
     Notes
     -----
-    According to [1]_ load factors in feed-in case of all equipment in MV and
+    According to [VerteilnetzstudieBW]_ load factors in feed-in case of all equipment in MV and
     LV is set to 1.
 
     HV/MV transformers are not checked.
-
-    References
-    ----------
-    .. [1] Verteilnetzstudie für das Land Baden-Württemberg
-
     """
 
     crit_stations = {}
