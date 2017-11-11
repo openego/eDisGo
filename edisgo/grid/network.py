@@ -634,6 +634,7 @@ class TimeSeries:
     _load : :pandas:`pandas.DataFrame<dataframe>`
         Time series of active power of (cumulative) loads. This index is given
         by :meth:`timeindex`. Columns represent load sectors:
+
          * 'residential'
          * 'retail'
          * 'industrial'
@@ -643,6 +644,7 @@ class TimeSeries:
     --------
     edisgo.grid.components.Generator : Usage details of :meth:`_generation`
     edisgo.grid.components.Load : Usage details of :meth:`_load`
+
     """
 
     def __init__(self, **kwargs):
@@ -805,6 +807,7 @@ class Results:
         A stack that details the history of measures to increase grid's hosting
         capacity. The last item refers to the latest measure. The key `original`
         refers to the state of the grid topology as it was initially imported.
+
     """
 
     # TODO: maybe add setter to alter list of measures
@@ -843,6 +846,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Active power results from power flow analysis
+
         """
         return self._pfa_p
 
@@ -984,6 +988,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Equipment changes
+
         """
         return self._equipment_changes
 
@@ -1088,7 +1093,7 @@ class Results:
 
         .. math::
 
-            S = \sqrt(max(p0, p1)^2 + max(q0, q1)^2)
+            S = max(\sqrt{p0^2 + q0^2}, \sqrt{p1^2 + q1^2})
 
         Parameters
         ----------
