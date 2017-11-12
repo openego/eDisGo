@@ -12,6 +12,14 @@ edisgo\.tools\.config module
     :undoc-members:
     :show-inheritance:
 
+edisgo\.tools\.geo module
+-------------------------
+
+.. automodule:: edisgo.tools.geo
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 edisgo\.tools\.pypsa\_io module
 -------------------------------
 

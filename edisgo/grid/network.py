@@ -335,8 +335,7 @@ class Network:
 
         A grid topology representation based on
         :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
-        this data model the
-        `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+        this data model the :pypsa:`pypsa.Network<network>`
         is assigned to this attribute.
         This allows as well to overwrite data.
 
@@ -348,7 +347,9 @@ class Network:
 
         Returns
         -------
-        PyPSA grid representation
+        :pypsa:`pypsa.Network<network>`
+            PyPSA grid representation
+
         """
         return self._pypsa
 
@@ -634,6 +635,7 @@ class TimeSeries:
     _load : :pandas:`pandas.DataFrame<dataframe>`
         Time series of active power of (cumulative) loads. This index is given
         by :meth:`timeindex`. Columns represent load sectors:
+
          * 'residential'
          * 'retail'
          * 'industrial'
@@ -643,6 +645,7 @@ class TimeSeries:
     --------
     edisgo.grid.components.Generator : Usage details of :meth:`_generation`
     edisgo.grid.components.Load : Usage details of :meth:`_load`
+
     """
 
     def __init__(self, **kwargs):
@@ -805,6 +808,7 @@ class Results:
         A stack that details the history of measures to increase grid's hosting
         capacity. The last item refers to the latest measure. The key `original`
         refers to the state of the grid topology as it was initially imported.
+
     """
 
     # TODO: maybe add setter to alter list of measures
@@ -843,6 +847,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Active power results from power flow analysis
+
         """
         return self._pfa_p
 
@@ -984,6 +989,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Equipment changes
+
         """
         return self._equipment_changes
 
@@ -1055,14 +1061,18 @@ class Results:
 
         Parameters
         ----------
-        issues : Dictionary
+        issues : dict
 
             Dictionary of critical lines/stations with relative over-loading
             and critical nodes with voltage deviation in p.u.. Format:
+
+            .. code-block:: python
+
                 {crit_line_1: rel_overloading_1, ...,
                  crit_line_n: rel_overloading_n,
                  crit_node_1: v_mag_pu_node_1, ...,
                  crit_node_n: v_mag_pu_node_n}
+
             Provide this if you want to set unresolved_issues. For retrieval
             of unresolved issues do not pass an argument.
 
@@ -1088,7 +1098,7 @@ class Results:
 
         .. math::
 
-            S = \sqrt(max(p0, p1)^2 + max(q0, q1)^2)
+            S = max(\sqrt{p0^2 + q0^2}, \sqrt{p1^2 + q1^2})
 
         Parameters
         ----------
@@ -1143,7 +1153,7 @@ class Results:
             interested in. It is required to provide this argument in order
             to distinguish voltage levels at primary and secondary side of the
             transformer/LV station.
-            If not provided (respectively None) defaults to `['mv', 'lv'].
+            If not provided (respectively None) defaults to ['mv', 'lv'].
 
         Returns
         -------

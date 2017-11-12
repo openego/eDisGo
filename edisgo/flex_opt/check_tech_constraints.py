@@ -19,12 +19,8 @@ def mv_line_load(network):
 
     Notes
     -----
-    According to [1]_ load factors in feed-in case of all cables and lines in
-    MV grids are set to 1.
-
-    References
-    ----------
-    .. [1] Verteilnetzstudie für das Land Baden-Württemberg
+    According to [VerteilnetzstudieBW]_ load factors in feed-in case of all
+    cables and lines in MV grids are set to 1.
 
     """
 
@@ -70,12 +66,8 @@ def lv_line_load(network):
 
     Notes
     -----
-    According to [1]_ load factors in feed-in case of all cables and lines in
+    According to [VerteilnetzstudieBW]_ load factors in feed-in case of all cables and lines in
     LV grids are set to 1.
-
-    References
-    ----------
-    .. [1] Verteilnetzstudie für das Land Baden-Württemberg
 
     """
 
@@ -106,48 +98,6 @@ def lv_line_load(network):
     return crit_lines
 
 
-def hv_mv_station_load(network):
-    """
-    Checks for over-loading of HV/MV station.
-
-    Parameters
-    ----------
-    network : :class:`~.grid.network.Network`
-
-    Returns
-    -------
-    Dictionary with critical :class:`~.grid.components.MVStation` and maximum
-    apparent power from power flow analysis. Format: {mv_station: S_max}
-
-    """
-
-    crit_stations = {}
-
-    load_factor = \
-        network.scenario.parameters.load_factor_hv_mv_transformer
-
-    # maximum allowed apparent power of station
-    s_station_max = (sum(
-        [_.type.S_nom for _ in network.mv_grid.station.transformers]) *
-                     load_factor)
-    try:
-        # check if maximum allowed apparent power of station exceeds
-        # apparent power from power flow analysis
-        s_station_pfa = network.results.s_res(
-            [network.mv_grid.station]).sum(axis=1).max()
-        if s_station_max < s_station_pfa:
-            crit_stations[network.mv_grid.station] = s_station_pfa
-    except KeyError:
-        logger.debug('No results for MV station to check overloading.')
-
-    if crit_stations:
-        logger.debug('==> HV/MV station has load issues.')
-    else:
-        logger.debug('==> No HV/MV station load issues.')
-
-    return crit_stations
-
-
 def mv_lv_station_load(network):
     """
     Checks for over-loading of MV/LV stations.
@@ -164,12 +114,10 @@ def mv_lv_station_load(network):
 
     Notes
     -----
-    According to [1]_ load factors in feed-in case of all equipment in MV and
-    LV are set to 1.
+    According to [VerteilnetzstudieBW]_ load factors in feed-in case of all equipment in MV and
+    LV is set to 1.
 
-    References
-    ----------
-    .. [1] Verteilnetzstudie für das Land Baden-Württemberg
+    HV/MV transformers are not checked.
 
     """
 
@@ -253,27 +201,20 @@ def mv_voltage_deviation(network):
     return crit_nodes
 
 
-def lv_voltage_deviation(network, mode=None):
+def lv_voltage_deviation(network):
     """
     Checks for voltage stability issues in LV grids.
 
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-    mode : None or String
-        If None voltage at all nodes in LV grid is checked. If mode is set to
-        'stations' only voltage at busbar is checked.
 
     Returns
     -------
-    Dict with :class:`~.grid.grids.LVGrid` as keys.
-    If mode is None values of dictionary are critical nodes of grid as
+    Dict of :class:`~.grid.grids.LVGrid` with critical nodes as
     :pandas:`pandas.Series<series>`, sorted descending by voltage deviation.
-    (Format: {grid_1: pd.Series(data=[v_mag_pu_node_1A, v_mag_pu_node_1B],
-                               index=[node_1A, node_1B]), ...}).
-    If mode is 'stations' values are maximum voltage deviation at secondary
-    side of station (Format: {grid_1: v_mag_pu_station_grid_1, ...,
-                              grid_n: v_mag_pu_station_grid_n}).
+    Format: {grid_1: pd.Series(data=[v_mag_pu_node_1A, v_mag_pu_node_1B],
+                               index=[node_1A, node_1B]), ...}
 
     Notes
     -----

@@ -12,6 +12,14 @@ edisgo\.grid\.components module
     :undoc-members:
     :show-inheritance:
 
+edisgo\.grid\.connect module
+----------------------------
+
+.. automodule:: edisgo.grid.connect
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 edisgo\.grid\.grids module
 --------------------------
 
