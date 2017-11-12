@@ -100,8 +100,13 @@ series data for wind and PV power.
 Grid extension
 --------------
 
-.. Battery storages
-.. ----------------
+Battery storages
+----------------
+
+.. _battery-operation:
+
+Modes of storage operation
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. Curtailment
 .. -----------

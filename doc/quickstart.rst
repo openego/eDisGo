@@ -34,6 +34,11 @@ A dataset on future installation of power plants (mainly extension of RES) is
 through the
 `OEP API <https://oep-data-interface.readthedocs.io/en/latest/index.html>`_.
 
+.. note::
+
+    Currently, you still need an account on the OEDB itself. Access via the OEP
+    is not implemented, yet.
+
 .. todo::
 
     Describe oedb access here (mention: internet connection required)

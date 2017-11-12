@@ -28,6 +28,14 @@ edisgo\.tools\.pypsa\_io module
     :undoc-members:
     :show-inheritance:
 
+edisgo\.tools\.tools module
+---------------------------
+
+.. automodule:: edisgo.tools.tools
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 
 Module contents
 ---------------
