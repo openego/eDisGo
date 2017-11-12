@@ -62,15 +62,56 @@ class Network:
         else:
             self._pypsa = kwargs.get('pypsa', None)
 
-        self._config = kwargs.get('config', None)
-        if self._config is None:
-            try:
-                self._config = self._scenario.config
-            except:
-                self._config = Config()
+        self._config = self._load_config()
         self._equipment_data = self._load_equipment_data()
 
         self._dingo_import_data = []
+
+    @staticmethod
+    def _load_config():
+        """Load config files
+
+        Returns
+        -------
+        config object
+        """
+
+        # load config
+        config.load_config('config_db_tables.cfg')
+        config.load_config('config_data.cfg')
+        config.load_config('config_flexopt.cfg')
+        config.load_config('config_misc.cfg')
+        config.load_config('config_scenario.cfg')
+        config.load_config('config_costs.cfg')
+
+        confic_dict = config.cfg._sections
+
+        # convert numeric values to float
+        for sec, subsecs in confic_dict.items():
+            for subsec, val in subsecs.items():
+                # try str -> float conversion
+                try:
+                    confic_dict[sec][subsec] = float(val)
+                except:
+                    pass
+
+        # modify structure of config data
+        confic_dict['data']['peakload_consumption_ratio'] = {
+            'residential': confic_dict['data'][
+                'residential_peakload_consumption'],
+            'retail': confic_dict['data'][
+                'retail_peakload_consumption'],
+            'industrial': confic_dict['data'][
+                'residential_peakload_consumption'],
+            'agricultural': confic_dict['data'][
+                'agricultural_peakload_consumption']}
+
+        del (confic_dict['data']['residential_peakload_consumption'])
+        del (confic_dict['data']['retail_peakload_consumption'])
+        del (confic_dict['data']['industrial_peakload_consumption'])
+        del (confic_dict['data']['agricultural_peakload_consumption'])
+
+        return confic_dict
 
     def _load_equipment_data(self):
         """Load equipment data for transformers, cables etc.
@@ -81,17 +122,18 @@ class Network:
         """
 
         package_path =  edisgo.__path__[0]
-        equipment_dir = self.config['system_dirs']['equipment_dir']
+        equipment_dir = self._config['system_dirs']['equipment_dir']
 
         data = {}
 
-        equipment_mv_parameters_trafos = self.config['equipment'][
-            'equipment_mv_parameters_trafos']
-        data['MV_trafos'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_mv_parameters_trafos),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
+        equipment_mv_parameters_trafos = self._config['equipment']['equipment_mv_parameters_trafos']
+        data['MV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_mv_parameters_trafos),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.'
+                                        )
 
         equipment_mv_parameters_lines = self.config['equipment'][
             'equipment_mv_parameters_lines']
@@ -101,29 +143,41 @@ class Network:
             comment='#', index_col='name',
             delimiter=',', decimal='.')
 
-        equipment_mv_parameters_cables = self.config['equipment'][
-            'equipment_mv_parameters_cables']
-        data['MV_cables'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_mv_parameters_cables),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
+        equipment_mv_parameters_lines = self._config['equipment']['equipment_mv_parameters_lines']
+        data['MV_lines'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                 equipment_mv_parameters_lines),
+                                       comment='#',
+                                       index_col='name',
+                                       delimiter=',',
+                                       decimal='.'
+                                       )
 
-        equipment_lv_parameters_cables = self.config['equipment'][
-            'equipment_lv_parameters_cables']
-        data['LV_cables'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_lv_parameters_cables),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
+        equipment_mv_parameters_cables = self._config['equipment']['equipment_mv_parameters_cables']
+        data['MV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_mv_parameters_cables),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.'
+                                        )
 
-        equipment_lv_parameters_trafos = self.config['equipment'][
-            'equipment_lv_parameters_trafos']
-        data['LV_trafos'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_lv_parameters_trafos),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
+        equipment_lv_parameters_cables = self._config['equipment']['equipment_lv_parameters_cables']
+        data['LV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_lv_parameters_cables),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.'
+                                        )
+
+        equipment_lv_parameters_trafos = self._config['equipment']['equipment_lv_parameters_trafos']
+        data['LV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
+                                                  equipment_lv_parameters_trafos),
+                                        comment='#',
+                                        index_col='name',
+                                        delimiter=',',
+                                        decimal='.'
+                                        )
 
         return data
 
@@ -234,7 +288,7 @@ class Network:
     @property
     def config(self):
         """Returns config object"""
-        return self._config.data
+        return self._config
 
     @property
     def equipment_data(self):
@@ -284,8 +338,7 @@ class Network:
 
         A grid topology representation based on
         :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
-        this data model the
-        `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+        this data model the :pypsa:`pypsa.Network<network>`
         is assigned to this attribute.
         This allows as well to overwrite data.
 
@@ -297,7 +350,9 @@ class Network:
 
         Returns
         -------
-        PyPSA grid representation
+        :pypsa:`pypsa.Network<network>`
+            PyPSA grid representation
+
         """
         return self._pypsa
 
@@ -414,12 +469,8 @@ class Scenario:
     ----------
     _name : :obj:`str`
         Scenario name (e.g. "feedin case weather 2011")
-    _mv_grid_id : :obj:`str`
-        ID of MV grid district
-    _mode : :obj:`str`
-        'worst-case' or 'time-range'
-    _config : :class:~.grid.network.Config`
-        Configuration parameters
+    _network : :class:~.grid.network.Network`
+        Network which this scenario is associated with
     _timeseries : :obj:`list` of :class:`~.grid.grids.TimeSeries`
         Time series associated with a scenario.
     _etrago_specs : :class:`~.grid.grids.ETraGoSpecs`
@@ -737,6 +788,7 @@ class TimeSeries:
     --------
     edisgo.grid.components.Generator : Usage details of :meth:`_generation`
     edisgo.grid.components.Load : Usage details of :meth:`_load`
+
     """
 
     def __init__(self, **kwargs):
@@ -754,11 +806,35 @@ class TimeSeries:
         dict or :pandas:`pandas.Series<series>`
             See class definition for details.
         """
+        if self._generation is None:
+            self._generation = self._set_generation(mode='worst-case')
+
         return self._generation
 
-    @generation.setter
-    def generation(self, generation_timeseries):
-        self._generation = generation_timeseries
+    def _set_generation(self, mode=None):
+        """
+        Assign generation data according to provided case
+
+        Parameters
+        ----------
+        mode : str or tuple
+            Create time series for worst-case analysis ('worst-case') or
+            retrieve generation data from OEDB for each covered weather cell.
+
+            .. code-block:: python
+
+                timeseries._set_generation(mode=(
+                    datetime(2012, 3, 24, 13),
+                    datetime(2012, 3, 24, 21)))
+        """
+
+        if mode == 'worst-case':
+            return worst_case_generation_ts(self.timeindex)
+        elif mode == 'time-range':
+            raise NotImplementedError
+        else:
+            raise ValueError("Provide proper mode of analysis: 'worst-case | "
+                             "'time-range'")
         
     @property
     def load(self):
@@ -773,11 +849,23 @@ class TimeSeries:
         dict or :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
         """
+        if self._load is None:
+            self._load = self._set_load(mode='worst-case')
+
         return self._load
 
-    @load.setter
-    def load(self, load_timeseries):
-        self._load = load_timeseries
+    def _set_load(self, mode=None):
+        """
+        Assigne load data according to provided case
+        """
+
+        if mode == 'worst-case':
+            return worst_case_load_ts(self.timeindex)
+        elif mode == 'time-range':
+            raise NotImplementedError
+        else:
+            raise ValueError("Provide proper mode of analysis: 'worst-case | "
+                             "'time-range'")
 
     @property
     def timeindex(self):
@@ -964,6 +1052,7 @@ class Results:
         A stack that details the history of measures to increase grid's hosting
         capacity. The last item refers to the latest measure. The key `original`
         refers to the state of the grid topology as it was initially imported.
+
     """
 
     # TODO: maybe add setter to alter list of measures
@@ -1002,6 +1091,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Active power results from power flow analysis
+
         """
         return self._pfa_p
 
@@ -1214,14 +1304,18 @@ class Results:
 
         Parameters
         ----------
-        issues : Dictionary
+        issues : dict
 
             Dictionary of critical lines/stations with relative over-loading
             and critical nodes with voltage deviation in p.u.. Format:
+
+            .. code-block:: python
+
                 {crit_line_1: rel_overloading_1, ...,
                  crit_line_n: rel_overloading_n,
                  crit_node_1: v_mag_pu_node_1, ...,
                  crit_node_n: v_mag_pu_node_n}
+
             Provide this if you want to set unresolved_issues. For retrieval
             of unresolved issues do not pass an argument.
 
@@ -1247,7 +1341,7 @@ class Results:
 
         .. math::
 
-            S = \sqrt(max(p0, p1)^2 + max(q0, q1)^2)
+            S = max(\sqrt{p0^2 + q0^2}, \sqrt{p1^2 + q1^2})
 
         Parameters
         ----------
@@ -1302,7 +1396,7 @@ class Results:
             interested in. It is required to provide this argument in order
             to distinguish voltage levels at primary and secondary side of the
             transformer/LV station.
-            If not provided (respectively None) defaults to `['mv', 'lv'].
+            If not provided (respectively None) defaults to ['mv', 'lv'].
 
         Returns
         -------
@@ -1336,3 +1430,39 @@ class Results:
 
         return self.pfa_v_mag_pu[level][labels_included]
 
+
+def worst_case_generation_ts(timeindex):
+    """
+    Define worst case generation time series
+
+    Parameters
+    ----------
+    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+            Time range of power flow analysis
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Normalized active power (1 kW)
+    """
+    return pd.DataFrame({'p': 1}, index=timeindex)
+
+
+def worst_case_load_ts(timeindex):
+    """
+    Define worst case load time series
+
+    Parameters
+    ----------
+    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+            Time range of power flow analysis
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Normalized active power (1 kW)
+    """
+    return pd.DataFrame({'residential': 1,
+                         'retail': 1,
+                         'industrial': 1,
+                         'agricultural': 1}, index=timeindex)

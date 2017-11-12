@@ -50,7 +50,7 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
     'sphinx.ext.coverage',
-    'sphinx.ext.pngmath',
+    'sphinx.ext.imgmath',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',  # enable Napoleon Sphinx v>1.3
     'sphinx.ext.extlinks'  # enables external links with a key
@@ -72,14 +72,15 @@ napoleon_use_keyword = False
 # Dictionary of external links
 extlinks = {'pandas':('http://pandas.pydata.org/pandas-docs/stable/api.html#%s',
                       'pandas.'),
-            'networkx':('https://networkx.readthedocs.io/en/stable/reference/classes.graph.html%s',
+            'networkx':('https://networkx.github.io/documentation/stable/reference/classes/%s.html',
                       'NetworkX Graph Obj'),
             'sqlalchemy':('http://docs.sqlalchemy.org/en/latest/orm/session_basics.html%s',
                       'SQLAlchemy session object'),
             'shapely':('http://toblerity.org/shapely/manual.html#%s',
                       'Shapely object'),
             'dingo':('https://dingo.readthedocs.io/en/dev/api/dingo.html#%s',
-                     'Dingo')
+                     'Dingo'),
+            'pypsa': ('https://pypsa.org/doc/components.html#%s', 'pypsa')
             }
 
 # Add any paths that contain templates here, relative to this directory.
