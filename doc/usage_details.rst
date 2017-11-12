@@ -106,6 +106,7 @@ Grid extension
 .. Curtailment
 .. -----------
 
+
 Retrieve results
 ----------------
 
