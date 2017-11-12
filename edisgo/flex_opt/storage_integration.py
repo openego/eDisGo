@@ -10,16 +10,15 @@ def integrate_storage(network, position, parameters):
     Parameters
     ----------
     network: :class:`~.grid.network.Network`
-            The eDisGo container object
+        The eDisGo container object
     position : str
         Specify storage location. Available options are
 
-         * 'hvmv_substation_busbar': places a storage unit directly at the
-            HV/MV station's bus bar
+        * 'hvmv_substation_busbar': places a storage unit directly at the
+          HV/MV station's bus bar, see :func:`storage_at_hvmv_substation`
 
     parameters : dict
         Parameters specifying characteristics of storage in detail
-
         The format looks like the following example and requires given
         parameters
 
