@@ -13,6 +13,9 @@ use a virtual environment and use its pip.
 
     pip3 install edisgo
 
+Having trouble to install eDisGo dependencies, please also consult the `Ding0
+installation notes <https://dingo.readthedocs.io/en/dev/getting_started.html>`_.
+
 Consider to install a developer version as detailed in :ref:`dev-notes`.
 
 Prerequisites
