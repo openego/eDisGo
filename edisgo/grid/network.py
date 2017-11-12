@@ -734,16 +734,19 @@ class TimeSeries:
     _generation : :pandas:`pandas.DataFrame<dataframe>`
         Time series of active power of generators. Columns represent generator
         type:
+
          * 'solar'
          * 'wind'
          * 'coal'
          * ...
+
         In case of worst-case analysis generator type is distinguished so that
         the DataFrame contains only one column for all generators.
 
     _load : :pandas:`pandas.DataFrame<dataframe>`
         Time series of active power of (cumulative) loads. Columns represent
         load sectors:
+
          * 'residential'
          * 'retail'
          * 'industrial'
@@ -789,6 +792,7 @@ class TimeSeries:
         -------
         dict or :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
+
         """
         return self._load
 
@@ -808,6 +812,7 @@ class TimeSeries:
         -------
         :pandas:`pandas.DatetimeIndex<datetimeindex>`
             Time range of power flow analysis
+
         """
         return self._timeindex
 
@@ -827,6 +832,7 @@ class TimeSeries:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Normalized active power (1 kW) in column 'p' with random time index
+
         """
         # set random timeindex
         self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
@@ -841,6 +847,7 @@ class TimeSeries:
         :pandas:`pandas.DataFrame<dataframe>`
             Normalized active power (1 kW) for each load sector with
             random time index
+
         """
         # set random timeindex
         self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
@@ -889,6 +896,7 @@ class TimeSeries:
              * 'demandlib': determine a load time series with the use of the
                 demandlib. This calculated standard load profiles for 4
                 different sectors.
+
         """
         # ToDo: add docstring
         #ToDo: find better place for input data_source (in config?)
@@ -916,10 +924,12 @@ class ETraGoSpecs:
         Time series of active power for each type of generator normalized with
         corresponding capacity given in `capacity`.
         Columns represent generator type:
+
          * 'solar'
          * 'wind'
          * 'coal'
          * ...
+
     _capacity : :pandas:`pandas.DataFrame<dataframe>`
         Total capacity of each generator type in MW. Columns represent
         generator type.
@@ -927,18 +937,22 @@ class ETraGoSpecs:
         Time series of normalized active power of (cumulative) loads normalized
         by corresponding annual load given in `annual_load`.
         Columns represent load sectors:
+
          * 'residential'
          * 'retail'
          * 'industrial'
          * 'agricultural'
+
     _annual_load : :pandas:`pandas.DataFrame<dataframe>`
         Annual load of each sector in MWh. Columns represent load sectors.
     _curtailment : :pandas:`pandas.DataFrame<dataframe>`
         Time series of curtailed power for wind and solar generators
         normalized with corresponding capacity given in `capacity`.
         Columns represent generator type:
+
          * 'solar'
          * 'wind'
+
     """
 
     def __init__(self, **kwargs):
@@ -1117,6 +1131,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Current results from power flow analysis
+
         """
         return self._i_res
 

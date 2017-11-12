@@ -15,7 +15,7 @@ def integrate_storage(network, position, parameters):
         Specify storage location. Available options are
 
          * 'hvmv_substation_busbar': places a storage unit directly at the
-           HV/MV station's bus bar
+            HV/MV station's bus bar
 
     parameters : dict
         Parameters specifying characteristics of storage in detail
@@ -50,6 +50,7 @@ def storage_at_hvmv_substation(mv_grid, parameters, nominal_capacity=1000):
 
     As this is currently a dummy implementation the storage operation is as
     simple as follows:
+
      * Feedin > 50 % -> charge at full power
      * Feedin < 50 % -> discharge at full power
 

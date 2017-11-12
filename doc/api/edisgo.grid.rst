@@ -36,14 +36,6 @@ edisgo\.grid\.network module
     :undoc-members:
     :show-inheritance:
 
-edisgo\.grid\.test\_feedin\_timeseries\_import module
------------------------------------------------------
-
-.. automodule:: edisgo.grid.test_feedin_timeseries_import
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 edisgo\.grid\.tools module
 --------------------------
 
