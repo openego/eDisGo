@@ -23,5 +23,6 @@ Modes of storage operation
 .. Curtailment
 .. -----------
 
+
 Retrieve results
 ----------------
