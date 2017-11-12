@@ -1,5 +1,5 @@
 import networkx as nx
-
+import matplotlib.pyplot as plt
 
 class Grid:
     """Defines a basic grid in eDisGo
@@ -150,6 +150,26 @@ class MVGrid(Grid):
     @lv_grids.setter
     def lv_grids(self, lv_grids):
         self._lv_grids = lv_grids
+
+    def draw(self):
+        """ Draw MV grid's graph using the geo data of nodes
+
+        Notes
+        -----
+        This method uses the coordinates stored in the nodes' geoms which
+        are usually conformal, not equidistant. Therefore, the plot might
+        be distorted and does not (fully) reflect the real positions or
+        distances between nodes.
+        """
+
+        # get nodes' positions
+        nodes_pos = {}
+        for node in self.graph.nodes():
+            nodes_pos[node] = (node.geom.x, node.geom.y)
+
+        plt.figure()
+        nx.draw_networkx(self.graph, nodes_pos, node_size=16, font_size=8)
+        plt.show()
 
 
 class LVGrid(Grid):
