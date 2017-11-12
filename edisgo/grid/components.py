@@ -382,7 +382,7 @@ class Storage(Component):
     Examples
     --------
     In order to define a storage that operates in mode "fifty-fifty"
-    (see :ref:`battery-operation` for details about modes)
+    (see :ref:`storage-operation` for details about modes)
     provide the following when instantiating a storage.
 
     >>> from edisgo.grid.components import Storage

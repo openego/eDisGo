@@ -103,10 +103,39 @@ Grid extension
 Battery storages
 ----------------
 
-.. _battery-operation:
+Battery storages can be integrated into the grid as alternative to classical
+grid extension. A battery in eDisGo is represented by the class
+:class:`~.grid.components.Storage`. Its operation is defined by the associated
+class :class:`~.grid.components.StorageOperation`.
+In order to a storage to the grid, start from the following exemplary code
+
+.. code-block:: python
+
+    # define storage parameters
+    storage_parameters = {'soc_initial': 0,
+                          'efficiency_in': .9,
+                          'efficiency_out': .9,
+                          'standing_loss': 0}
+
+    # add storage instance to the grid
+    network.integrate_storage(position='hvmv_substation_busbar',
+                              parameters=storage_parameters)
+
+Using the method :meth:`~.grid.network.Network.integrate_storage` provides a
+high-level interface to define the position, size and storage operation at once,
+based on predefined rules. Thus, a limited set of storage integration rules are
+implemented. See :func:`~.flex_opt.storage_integration.integrate_storage` for
+available storage integration strategies.
+
+.. _storage-operation:
 
 Modes of storage operation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+As already mentioned the operational mode of a storage is described by its
+:class:`~.grid.components.StorageOperation` instance. The mode is defined by
+:meth:`~.grid.components.StorageOperation.define_timeseries`. See there for
+available modes.
 
 .. Curtailment
 .. -----------
