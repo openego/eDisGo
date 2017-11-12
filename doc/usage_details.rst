@@ -137,8 +137,26 @@ As already mentioned the operational mode of a storage is described by its
 :meth:`~.grid.components.StorageOperation.define_timeseries`. See there for
 available modes.
 
-.. Curtailment
-.. -----------
+
+Curtailment
+-----------
+
+Curtailment can be specified per generation technology as factor between 0 and
+1. Then, power output of a technology is cropped at its specific curtailment
+factor.
+For example define a curtailment for wind and PV power at 70 %.
+
+.. code-block:: python
+
+    # curtailment of each technology relative (0..1)
+    curtailment = {'wind': 0.7, 'solar': 0.7}
+
+    # define curtailment for power flow analysis through scenario
+    scenario = Scenario(
+                power_flow=(date(2011, 10, 10), date(2011, 10, 13)),
+                mv_grid_id=42,
+                scenario_name=['NEP 2035', 'Status Quo'],
+                curtailment=curtailment)
 
 
 Retrieve results
