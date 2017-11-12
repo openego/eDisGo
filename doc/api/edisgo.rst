@@ -1,10 +1,8 @@
 edisgo package
 ==============
 
-Subpackages
------------
-
 .. toctree::
+    :maxdepth: 2
 
     edisgo.data
     edisgo.flex_opt
