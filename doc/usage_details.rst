@@ -91,11 +91,11 @@ Time series spanning a defined range from zero am on the 10th of October 2011 to
 
     scenario = Scenario(
                 power_flow=(date(2011, 10, 10), date(2011, 10, 13)),
-                mv_grid_id=mv_grid_id,
+                mv_grid_id=42,
                 scenario_name=['NEP 2035', 'Status Quo'])
 
-The `scenario_name` is used to distinguish time series data for wind and PV
-power.
+The :attr:`~.grid.network.Scenario.scenario_name` is used to distinguish time
+series data for wind and PV power.
 
 Grid extension
 --------------
@@ -108,3 +108,14 @@ Grid extension
 
 Retrieve results
 ----------------
+
+Results - voltage levels and line loading - from the power flow analysis are
+provided through :class:`~.grid.network.Results`. Get voltage levels at nodes
+from :meth:`~.grid.network.Results.v_res`
+and line loading from :meth:`~.grid.network.Results.s_res` or
+:attr:`~.grid.network.Results.i_res` respectively.
+:attr:`~.grid.network.Results.equipment_changes` details about measures
+performed during grid extension. Associated cost are determined by
+:attr:`~.grid.network.Results.grid_expansion_costs`.
+Flexibility measure may not entirely resolve all issues.
+These are listed in :attr:`~.grid.network.Results.unresolved_issues`.
