@@ -32,7 +32,7 @@ setup(
     description='A python package for distribution grid analysis and optimization',
     install_requires = [
         'ding0 >=0.1.2, <=0.1.3',
-        'networkx >=1.11',
+        'networkx >=1.11, <2.0 ',
         'shapely >= 1.5.12, <= 1.5.12',
         'pandas >=0.20.3, <=0.20.3',
         'pypsa >=0.10.0, <=0.10.0',
