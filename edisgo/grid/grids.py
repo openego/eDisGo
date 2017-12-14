@@ -268,10 +268,17 @@ class Graph(nx.Graph):
         """
 
         # get all nodes that have the attribute 'type' set
-        nodes_attributes = nx.get_node_attributes(self, attr)
+        #nodes_attributes = nx.get_node_attributes(self, attr)
 
         # extract nodes where 'type' == attr_val
-        nodes = [k for k, v in nodes_attributes.items() if v == attr_val]
+        #nodes = [k for k, v in nodes_attributes.items() if v == attr_val]
+
+        #  speed improved code
+
+        nodes = getattr(self,'_node')
+        nodes = list(map(lambda x: x if nodes[x][attr] == attr_val else None,
+                         nodes.keys()))
+	
 
         return nodes
 
