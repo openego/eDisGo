@@ -2,6 +2,7 @@ from edisgo.grid.network import Network, Scenario, TimeSeries, Results
 import os
 import sys
 import pandas as pd
+from edisgo.flex_opt.exceptions import MaximumIterationError
 
 import logging
 logging.basicConfig(filename='example.log',
@@ -35,6 +36,7 @@ if __name__ == '__main__':
         if file.endswith(".pkl"):
             grids.append(file)
 
+    technologies = ['wind', 'solar']
     timeseries = TimeSeries()
     scenario = Scenario(timeseries=timeseries,
                         power_flow='worst-case')
@@ -63,10 +65,7 @@ if __name__ == '__main__':
                              columns=costs_grouped.columns,
                              index=[[network.id] * len(costs_grouped),
                                     costs_grouped.index]))
-            if network.results.unresolved_issues:
-                faulty_grids_before_geno_import['grid'].append(network.id)
-                faulty_grids_before_geno_import['msg'].append(
-                    str(network.results.unresolved_issues))
+
             # Clear results
             network.results = Results()
             network.pypsa = None
@@ -75,7 +74,7 @@ if __name__ == '__main__':
 
             logging.info('Grid expansion after generator import.')
             # Import generators
-            network.import_generators()
+            network.import_generators(types=technologies)
             # Do non-linear power flow analysis with PyPSA
             network.analyze()
             # Do grid reinforcement
@@ -87,13 +86,12 @@ if __name__ == '__main__':
                              columns=costs_grouped.columns,
                              index=[[network.id] * len(costs_grouped),
                                     costs_grouped.index]))
-            if network.results.unresolved_issues:
-                faulty_grids['grid'].append(network.id)
-                faulty_grids['msg'].append(
-                    str(network.results.unresolved_issues))
-                logging.info('Unresolved issues left after grid expansion.')
-            else:
-                logging.info('SUCCESS!')
+            logging.info('SUCCESS!')
+        except MaximumIterationError as e:
+            faulty_grids['grid'].append(network.id)
+            faulty_grids['msg'].append(
+                str(network.results.unresolved_issues))
+            logging.info('Unresolved issues left after grid expansion.')
         except Exception as e:
             faulty_grids['grid'].append(network.id)
             faulty_grids['msg'].append(e)
