@@ -53,6 +53,8 @@ if __name__ == '__main__':
         try:
             # Calculate grid expansion costs before generator import
 
+            logging.info('Grid expansion before generator import.')
+            before_geno_import = True
             # Do non-linear power flow analysis with PyPSA
             network.analyze()
             # Do grid reinforcement
@@ -60,7 +62,7 @@ if __name__ == '__main__':
             # Get costs
             costs_grouped = network.results.grid_expansion_costs.groupby(
                 ['type']).sum()
-            costs_before_geno_import = costs.append(
+            costs_before_geno_import = costs_before_geno_import.append(
                 pd.DataFrame(costs_grouped.values,
                              columns=costs_grouped.columns,
                              index=[[network.id] * len(costs_grouped),
@@ -73,6 +75,7 @@ if __name__ == '__main__':
             # Calculate grid expansion costs after generator import
 
             logging.info('Grid expansion after generator import.')
+            before_geno_import = False
             # Import generators
             network.import_generators(types=technologies)
             # Do non-linear power flow analysis with PyPSA
@@ -87,14 +90,24 @@ if __name__ == '__main__':
                              index=[[network.id] * len(costs_grouped),
                                     costs_grouped.index]))
             logging.info('SUCCESS!')
-        except MaximumIterationError as e:
-            faulty_grids['grid'].append(network.id)
-            faulty_grids['msg'].append(
-                str(network.results.unresolved_issues))
+        except MaximumIterationError:
+            if before_geno_import:
+                faulty_grids_before_geno_import['grid'].append(network.id)
+                faulty_grids_before_geno_import['msg'].append(
+                    str(network.results.unresolved_issues))
+            else:
+                faulty_grids['grid'].append(network.id)
+                faulty_grids['msg'].append(
+                    str(network.results.unresolved_issues))
             logging.info('Unresolved issues left after grid expansion.')
         except Exception as e:
-            faulty_grids['grid'].append(network.id)
-            faulty_grids['msg'].append(e)
+            if before_geno_import:
+                faulty_grids_before_geno_import['grid'].append(network.id)
+                faulty_grids_before_geno_import['msg'].append(e)
+            else:
+                faulty_grids['grid'].append(network.id)
+                faulty_grids['msg'].append(
+                    str(network.results.unresolved_issues))
             logging.info('Something went wrong.')
 
     pd.DataFrame(faulty_grids_before_geno_import).to_csv(
