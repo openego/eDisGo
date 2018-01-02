@@ -1,6 +1,6 @@
 import pandas as pd
 from edisgo.flex_opt import check_tech_constraints as checks
-from edisgo.flex_opt import reinforce_measures
+from edisgo.flex_opt import reinforce_measures, exceptions
 import logging
 
 logger = logging.getLogger('edisgo')
@@ -136,10 +136,12 @@ def reinforce_grid(network, max_while_iterations=10):
     # iterations allowed
     if (while_counter == max_while_iterations and
             (crit_lines or overloaded_mv_station or overloaded_stations)):
-        logger.error("==> Load issues were not solved.")
-        # raise exceptions.MaximumIterationError(
-        #     "Overloading issues for the following lines could not be solved:"
-        #     "{}".format(crit_lines))
+        network.results.unresolved_issues.update(crit_lines)
+        network.results.unresolved_issues.update(overloaded_stations)
+        network.results.unresolved_issues.update(overloaded_mv_station)
+        raise exceptions.MaximumIterationError(
+            "Overloading issues for the following lines could not be solved:"
+            "{}".format(crit_lines))
     else:
         logger.info('==> Load issues in MV grid were solved in {} iteration '
                      'step(s).'.format(while_counter))
@@ -184,13 +186,12 @@ def reinforce_grid(network, max_while_iterations=10):
     # check if all voltage problems were solved after maximum number of
     # iterations allowed
     if while_counter == max_while_iterations and crit_nodes:
-        logger.error("==> Voltage issues in MV grid were not solved.")
-        # raise exceptions.MaximumIterationError(
-        #     "Overvoltage issues for the following nodes in MV grid could "
-        #     "not be solved: {}".format(crit_nodes))
         for k, v in crit_nodes.items():
             for i, d in v.iteritems():
                 network.results.unresolved_issues.update({repr(i): d})
+        raise exceptions.MaximumIterationError(
+            "Overvoltage issues for the following nodes in MV grid could "
+            "not be solved: {}".format(crit_nodes))
     else:
         logger.info('==> Voltage issues in MV grid were solved in {} '
                      'iteration step(s).'.format(while_counter))
@@ -219,13 +220,11 @@ def reinforce_grid(network, max_while_iterations=10):
     # check if all voltage problems were solved after maximum number of
     # iterations allowed
     if while_counter == max_while_iterations and crit_stations:
-        logger.error("==> Voltage issues at busbars in LV grids were not"
-                     "solved.")
-        # raise exceptions.MaximumIterationError(
-        #     "Overvoltage issues at busbar could not be solved for the "
-        #     "following LV grids: {}".format(crit_stations))
         for k, v in crit_stations.items():
             network.results.unresolved_issues.update({repr(k.station): v})
+        raise exceptions.MaximumIterationError(
+            "Overvoltage issues at busbar could not be solved for the "
+            "following LV grids: {}".format(crit_stations))
     else:
         logger.info('==> Voltage issues at busbars in LV grids were solved '
                      'in {} iteration step(s).'.format(while_counter))
@@ -266,13 +265,12 @@ def reinforce_grid(network, max_while_iterations=10):
     # check if all voltage problems were solved after maximum number of
     # iterations allowed
     if while_counter == max_while_iterations and crit_nodes:
-        logger.error("==> Voltage issues in LV grids were not solved.")
-        # raise exceptions.MaximumIterationError(
-        #     "Overvoltage issues for the following nodes in LV grids could "
-        #     "not be solved: {}".format(crit_nodes))
         for k, v in crit_nodes.items():
             for i, d in v.iteritems():
                 network.results.unresolved_issues.update({repr(i): d})
+        raise exceptions.MaximumIterationError(
+            "Overvoltage issues for the following nodes in LV grids could "
+            "not be solved: {}".format(crit_nodes))
     else:
         logger.info(
             '==> Voltage issues in LV grids were solved '
@@ -335,13 +333,12 @@ def reinforce_grid(network, max_while_iterations=10):
     # iterations allowed
     if (while_counter == max_while_iterations and
             (crit_lines or overloaded_mv_station or overloaded_stations)):
-        logger.error("==> Load issues were not solved.")
-        # raise exceptions.MaximumIterationError(
-        #     "Overloading issues for the following lines could not be solved:"
-        #     "{}".format(crit_lines))
         network.results.unresolved_issues.update(crit_lines)
         network.results.unresolved_issues.update(overloaded_stations)
         network.results.unresolved_issues.update(overloaded_mv_station)
+        raise exceptions.MaximumIterationError(
+            "Overloading issues (after solving over-voltage issues) for the"
+            "following lines could not be solved: {}".format(crit_lines))
     else:
         logger.info(
             '==> Load issues were rechecked and solved '

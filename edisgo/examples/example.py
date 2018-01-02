@@ -4,6 +4,7 @@ import os
 import sys
 import pandas as pd
 from datetime import date
+from edisgo.flex_opt.exceptions import MaximumIterationError
 
 import logging
 logging.basicConfig(filename='example.log',
@@ -13,27 +14,13 @@ logging.basicConfig(filename='example.log',
 logger = logging.getLogger('edisgo')
 logger.setLevel(logging.DEBUG)
 
-# import pickle
-# import_network = True
-# if import_network:
-#     network = Network.import_from_ding0(
-#         os.path.join('data', 'ding0_grids__76.pkl'),
-#         id='Test grid',
-#         scenario=scenario
-#     )
-#     # Do non-linear power flow analysis with PyPSA
-#     network.analyze()
-#     #network.pypsa.export_to_csv_folder('data/pypsa_export')
-#     #network.pypsa = None
-#     #pickle.dump(network, open('test_network.pkl', 'wb'))
-# else:
-#     network = pickle.load(open('test_results_neu.pkl', 'rb'))
-
 if __name__ == '__main__':
     grids = []
     for file in os.listdir(os.path.join(sys.path[0], "data")):
         if file.endswith(".pkl"):
             grids.append(file)
+
+    technologies = ['wind', 'solar']
 
     costs_before_geno_import = pd.DataFrame()
     faulty_grids_before_geno_import = {'grid': [], 'msg': []}
@@ -41,8 +28,8 @@ if __name__ == '__main__':
     faulty_grids = {'grid': [], 'msg': []}
     for dingo_grid in grids:
         mv_grid_id = dingo_grid.split('_')[-1].split('.')[0]
-        # # worst-case scenario
-        # scenario = Scenario(power_flow='worst-case', mv_grid_id=mv_grid_id)
+        # worst-case scenario
+        scenario = Scenario(power_flow='worst-case', mv_grid_id=mv_grid_id)
 
         # # scenario with etrago specs
         # power_flow = (date(2017, 10, 10), date(2017, 10, 13))
@@ -72,10 +59,10 @@ if __name__ == '__main__':
         #                     scenario_name='NEP 2035')
 
         # scenario with time series
-        scenario = Scenario(
-            power_flow=(date(2011, 10, 10), date(2011, 10, 13)),
-            mv_grid_id=mv_grid_id,
-            scenario_name=['NEP 2035', 'Status Quo'])
+        # scenario = Scenario(
+            # power_flow=(date(2011, 10, 10), date(2011, 10, 13)),
+            # mv_grid_id=mv_grid_id,
+            # scenario_name=['NEP 2035', 'Status Quo'])
         # scenario = Scenario(power_flow=(), mv_grid_id=mv_grid_id,
         #                     scenario_name='NEP 2035')
 
@@ -89,6 +76,8 @@ if __name__ == '__main__':
         try:
             # Calculate grid expansion costs before generator import
 
+            logging.info('Grid expansion before generator import.')
+            before_geno_import = True
             # Do non-linear power flow analysis with PyPSA
             network.analyze()
             # Do grid reinforcement
@@ -96,15 +85,12 @@ if __name__ == '__main__':
             # Get costs
             costs_grouped = network.results.grid_expansion_costs.groupby(
                 ['type']).sum()
-            costs_before_geno_import = costs.append(
+            costs_before_geno_import = costs_before_geno_import.append(
                 pd.DataFrame(costs_grouped.values,
                              columns=costs_grouped.columns,
                              index=[[network.id] * len(costs_grouped),
                                     costs_grouped.index]))
-            if network.results.unresolved_issues:
-                faulty_grids_before_geno_import['grid'].append(network.id)
-                faulty_grids_before_geno_import['msg'].append(
-                    str(network.results.unresolved_issues))
+
             # Clear results
             network.results = Results()
             network.pypsa = None
@@ -112,8 +98,9 @@ if __name__ == '__main__':
             # Calculate grid expansion costs after generator import
 
             logging.info('Grid expansion after generator import.')
+            before_geno_import = False
             # Import generators
-            network.import_generators()
+            network.import_generators(types=technologies)
             # Do non-linear power flow analysis with PyPSA
             network.analyze()
             # Do grid reinforcement
@@ -125,16 +112,25 @@ if __name__ == '__main__':
                              columns=costs_grouped.columns,
                              index=[[network.id] * len(costs_grouped),
                                     costs_grouped.index]))
-            if network.results.unresolved_issues:
+            logging.info('SUCCESS!')
+        except MaximumIterationError:
+            if before_geno_import:
+                faulty_grids_before_geno_import['grid'].append(network.id)
+                faulty_grids_before_geno_import['msg'].append(
+                    str(network.results.unresolved_issues))
+            else:
                 faulty_grids['grid'].append(network.id)
                 faulty_grids['msg'].append(
                     str(network.results.unresolved_issues))
-                logging.info('Unresolved issues left after grid expansion.')
-            else:
-                logging.info('SUCCESS!')
+            logging.info('Unresolved issues left after grid expansion.')
         except Exception as e:
-            faulty_grids['grid'].append(network.id)
-            faulty_grids['msg'].append(e)
+            if before_geno_import:
+                faulty_grids_before_geno_import['grid'].append(network.id)
+                faulty_grids_before_geno_import['msg'].append(e)
+            else:
+                faulty_grids['grid'].append(network.id)
+                faulty_grids['msg'].append(
+                    str(network.results.unresolved_issues))
             logging.info('Something went wrong.')
 
     pd.DataFrame(faulty_grids_before_geno_import).to_csv(
