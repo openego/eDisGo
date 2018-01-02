@@ -116,4 +116,19 @@ Reinforce lines due to over-voltage
 Grid expansion costs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-tbc
+Total grid expansion costs are the sum of costs for each added transformer and line.
+Costs for lines and transformers are only distinguished by the voltage level they are installed in 
+and not by the different types. 
+In the case of lines it is further taken into account wether the line is installed in a rural or an urban area whereas rural areas
+are areas with a population density smaller or equal to 500 people per km² and urban areas are defined as areas
+with a population density higher than 500 people per km² [DENA]_. 
+The population density is calculated by the population and area of the grid district the line is in (See :class:`~.grid.grids.Grid`).
+
+Costs for lines of aggregated loads and generators are not considered in the costs calculation since grids of
+aggregated areas are not modeled but aggregated loads and generators are directly connected to the MV busbar.
+
+References
+----------
+
+.. [DENA] A.C. Agricola et al.:
+    *dena-Verteilnetzstudie: Ausbau- und Innovationsbedarf der Stromverteilnetze in Deutschland bis 2030*. 2012.
