@@ -1,4 +1,6 @@
 import networkx as nx
+from collections import defaultdict
+import pandas as pd
 import matplotlib.pyplot as plt
 
 class Grid:
@@ -86,7 +88,7 @@ class Grid:
         Returns
         -------
         float
-            Ad-hoc calculated of cached peak generation capacity
+            Ad-hoc calculated or cached peak generation capacity
         """
         if self._peak_generation is None:
             self._peak_generation = sum(
@@ -96,6 +98,22 @@ class Grid:
         return self._peak_generation
 
     @property
+    def peak_generation_per_technology(self):
+        """
+        Peak generation of each technology in the grid
+
+        Returns
+        -------
+        :pandas:`pandas.Series<series>`
+            Peak generation index by technology
+        """
+        peak_generation = defaultdict(float)
+        for gen in self.graph.nodes_by_attribute('generator'):
+            peak_generation[gen.type] += gen.nominal_capacity
+
+        return pd.Series(peak_generation)
+
+    @property
     def peak_load(self):
         """
         Cumulative peak load capacity of generators of this grid
@@ -103,7 +121,7 @@ class Grid:
         Returns
         -------
         float
-            Ad-hoc calculated of cached peak load capacity
+            Ad-hoc calculated or cached peak load capacity
         """
         if self._peak_load is None:
             self._peak_load = sum(
@@ -111,6 +129,23 @@ class Grid:
                  for _ in self.graph.nodes_by_attribute('load')])
 
         return self._peak_load
+
+    @property
+    def consumption(self):
+        """
+        Consumption in kWh per sector for whole grid
+
+        Returns
+        -------
+        :pandas:`pandas.Series<series>`
+            Indexed by demand sector
+        """
+        consumption = defaultdict(float)
+        for load in self.graph.nodes_by_attribute('load'):
+            for sector, val in load.consumption.items():
+                consumption[sector] += val
+
+        return pd.Series(consumption)
 
 
     def __repr__(self):

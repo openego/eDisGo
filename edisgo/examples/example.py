@@ -1,7 +1,9 @@
-from edisgo.grid.network import Network, Scenario, TimeSeries, Results
+from edisgo.grid.network import Network, Scenario, TimeSeries, Results, \
+    ETraGoSpecs
 import os
 import sys
 import pandas as pd
+from datetime import date
 from edisgo.flex_opt.exceptions import MaximumIterationError
 
 import logging
@@ -12,24 +14,6 @@ logging.basicConfig(filename='example.log',
 logger = logging.getLogger('edisgo')
 logger.setLevel(logging.DEBUG)
 
-# import pickle
-# import_network = True
-# if import_network:
-#     network = Network.import_from_ding0(
-#         os.path.join('data', 'ding0_grids__76.pkl'),
-#         id='Test grid',
-#         scenario=scenario
-#     )
-#     # Import generators
-#     network.import_generators()
-#     # Do non-linear power flow analysis with PyPSA
-#     network.analyze()
-#     #network.pypsa.export_to_csv_folder('data/pypsa_export')
-#     #network.pypsa = None
-#     #pickle.dump(network, open('test_network.pkl', 'wb'))
-# else:
-#     network = pickle.load(open('test_results_neu.pkl', 'rb'))
-
 if __name__ == '__main__':
     grids = []
     for file in os.listdir(os.path.join(sys.path[0], "data")):
@@ -37,19 +21,58 @@ if __name__ == '__main__':
             grids.append(file)
 
     technologies = ['wind', 'solar']
-    timeseries = TimeSeries()
-    scenario = Scenario(timeseries=timeseries,
-                        power_flow='worst-case')
+
     costs_before_geno_import = pd.DataFrame()
     faulty_grids_before_geno_import = {'grid': [], 'msg': []}
     costs = pd.DataFrame()
     faulty_grids = {'grid': [], 'msg': []}
     for dingo_grid in grids:
+        mv_grid_id = dingo_grid.split('_')[-1].split('.')[0]
+        # worst-case scenario
+        scenario = Scenario(power_flow='worst-case', mv_grid_id=mv_grid_id)
+
+        # # scenario with etrago specs
+        # power_flow = (date(2017, 10, 10), date(2017, 10, 13))
+        # timeindex = pd.date_range(power_flow[0], power_flow[1], freq='H')
+        # etrago_specs = ETraGoSpecs(
+        #     dispatch=pd.DataFrame({'biomass': [1] * len(timeindex),
+        #                            'solar': [1] * len(timeindex),
+        #                            'gas': [1] * len(timeindex),
+        #                            'wind': [1] * len(timeindex)},
+        # index=timeindex),
+        #     capacity=pd.DataFrame({'biomass': 1846.5,
+        #                            'solar': 7131,
+        #                            'gas': 1564,
+        #                            'wind': 10}, index=['cap']),
+        #     load=pd.DataFrame({'residential': [1] * len(timeindex),
+        #                        'retail': [1] * len(timeindex),
+        #                        'industrial': [1] * len(timeindex),
+        #                        'agricultural': [1] * len(timeindex)},
+        #                       index=timeindex),
+        #     annual_load=pd.DataFrame({'residential': 1,
+        #                        'retail': 1,
+        #                        'industrial': 1,
+        #                        'agricultural': 1},
+        #                       index=timeindex)
+        # )
+        # scenario = Scenario(etrago_specs=etrago_specs, power_flow=(),
+        #                     scenario_name='NEP 2035')
+
+        # scenario with time series
+        # scenario = Scenario(
+            # power_flow=(date(2011, 10, 10), date(2011, 10, 13)),
+            # mv_grid_id=mv_grid_id,
+            # scenario_name=['NEP 2035', 'Status Quo'])
+        # scenario = Scenario(power_flow=(), mv_grid_id=mv_grid_id,
+        #                     scenario_name='NEP 2035')
+
         logging.info('Grid expansion for {}'.format(dingo_grid))
         network = Network.import_from_ding0(
             os.path.join('data', dingo_grid),
             id='Test grid',
             scenario=scenario)
+
+        # Do grid reinforcement
         try:
             # Calculate grid expansion costs before generator import
 
