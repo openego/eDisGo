@@ -9,6 +9,7 @@ from edisgo.data.import_data import import_from_ding0, import_generators, \
     import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
+from edisgo.flex_opt.storage_integration import integrate_storage
 
 
 logger = logging.getLogger('edisgo')
@@ -41,8 +42,23 @@ class Network:
 
     Attributes
     ----------
+    _id : :obj:`str`
+        Name of network
+    _equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+        Electrical equipment such as lines and transformers
+    _config : ???
+        #TODO: TBD
     _metadata : :obj:`dict`
         Metadata of Network such as ?
+    _data_sources : :obj:`dict` of :obj:`str`
+        Data Sources of grid, generators etc.
+        Keys: 'grid', 'generators', ?
+    _scenario : :class:`~.grid.grids.Scenario`
+        Scenario which is used for calculations
+    _pypsa : :pypsa:`pypsa.Network<network>`
+        PyPSA representation of grid topology
+    _dingo_import_data :
+        Temporary data from ding0 import which are needed for OEP generator update
     """
 
     def __init__(self, **kwargs):
@@ -219,6 +235,12 @@ class Network:
             self, max_while_iterations=kwargs.get('max_while_iterations', 10))
         self.results.grid_expansion_costs = grid_expansion_costs(self)
 
+    def integrate_storage(self, **kwargs):
+        """Integrate storage in grid"""
+        integrate_storage(self,
+                          kwargs.get('position', None),
+                          kwargs.get('parameters', None))
+
     @property
     def id(self):
         """Returns id of network"""
@@ -277,8 +299,7 @@ class Network:
 
         A grid topology representation based on
         :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
-        this data model the
-        `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+        this data model the :pypsa:`pypsa.Network<network>`
         is assigned to this attribute.
         This allows as well to overwrite data.
 
@@ -290,7 +311,9 @@ class Network:
 
         Returns
         -------
-        PyPSA grid representation
+        :pypsa:`pypsa.Network<network>`
+            PyPSA grid representation
+
         """
         return self._pypsa
 
@@ -711,16 +734,19 @@ class TimeSeries:
     _generation : :pandas:`pandas.DataFrame<dataframe>`
         Time series of active power of generators. Columns represent generator
         type:
+
          * 'solar'
          * 'wind'
          * 'coal'
          * ...
+
         In case of worst-case analysis generator type is distinguished so that
         the DataFrame contains only one column for all generators.
 
     _load : :pandas:`pandas.DataFrame<dataframe>`
         Time series of active power of (cumulative) loads. Columns represent
         load sectors:
+
          * 'residential'
          * 'retail'
          * 'industrial'
@@ -730,6 +756,7 @@ class TimeSeries:
     --------
     edisgo.grid.components.Generator : Usage details of :meth:`_generation`
     edisgo.grid.components.Load : Usage details of :meth:`_load`
+
     """
 
     def __init__(self, **kwargs):
@@ -765,6 +792,7 @@ class TimeSeries:
         -------
         dict or :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
+
         """
         return self._load
 
@@ -784,6 +812,7 @@ class TimeSeries:
         -------
         :pandas:`pandas.DatetimeIndex<datetimeindex>`
             Time range of power flow analysis
+
         """
         return self._timeindex
 
@@ -803,6 +832,7 @@ class TimeSeries:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Normalized active power (1 kW) in column 'p' with random time index
+
         """
         # set random timeindex
         self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
@@ -817,6 +847,7 @@ class TimeSeries:
         :pandas:`pandas.DataFrame<dataframe>`
             Normalized active power (1 kW) for each load sector with
             random time index
+
         """
         # set random timeindex
         self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
@@ -865,6 +896,7 @@ class TimeSeries:
              * 'demandlib': determine a load time series with the use of the
                 demandlib. This calculated standard load profiles for 4
                 different sectors.
+
         """
         # ToDo: add docstring
         #ToDo: find better place for input data_source (in config?)
@@ -892,10 +924,12 @@ class ETraGoSpecs:
         Time series of active power for each type of generator normalized with
         corresponding capacity given in `capacity`.
         Columns represent generator type:
+
          * 'solar'
          * 'wind'
          * 'coal'
          * ...
+
     _capacity : :pandas:`pandas.DataFrame<dataframe>`
         Total capacity of each generator type in MW. Columns represent
         generator type.
@@ -903,18 +937,22 @@ class ETraGoSpecs:
         Time series of normalized active power of (cumulative) loads normalized
         by corresponding annual load given in `annual_load`.
         Columns represent load sectors:
+
          * 'residential'
          * 'retail'
          * 'industrial'
          * 'agricultural'
+
     _annual_load : :pandas:`pandas.DataFrame<dataframe>`
         Annual load of each sector in MWh. Columns represent load sectors.
     _curtailment : :pandas:`pandas.DataFrame<dataframe>`
         Time series of curtailed power for wind and solar generators
         normalized with corresponding capacity given in `capacity`.
         Columns represent generator type:
+
          * 'solar'
          * 'wind'
+
     """
 
     def __init__(self, **kwargs):
@@ -957,6 +995,7 @@ class Results:
         A stack that details the history of measures to increase grid's hosting
         capacity. The last item refers to the latest measure. The key `original`
         refers to the state of the grid topology as it was initially imported.
+
     """
 
     # TODO: maybe add setter to alter list of measures
@@ -995,6 +1034,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Active power results from power flow analysis
+
         """
         return self._pfa_p
 
@@ -1091,6 +1131,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Current results from power flow analysis
+
         """
         return self._i_res
 
@@ -1136,6 +1177,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Equipment changes
+
         """
         return self._equipment_changes
 
@@ -1207,14 +1249,18 @@ class Results:
 
         Parameters
         ----------
-        issues : Dictionary
+        issues : dict
 
             Dictionary of critical lines/stations with relative over-loading
             and critical nodes with voltage deviation in p.u.. Format:
+
+            .. code-block:: python
+
                 {crit_line_1: rel_overloading_1, ...,
                  crit_line_n: rel_overloading_n,
                  crit_node_1: v_mag_pu_node_1, ...,
                  crit_node_n: v_mag_pu_node_n}
+
             Provide this if you want to set unresolved_issues. For retrieval
             of unresolved issues do not pass an argument.
 
@@ -1240,7 +1286,7 @@ class Results:
 
         .. math::
 
-            S = \sqrt(max(p0, p1)^2 + max(q0, q1)^2)
+            S = max(\sqrt{p0^2 + q0^2}, \sqrt{p1^2 + q1^2})
 
         Parameters
         ----------
@@ -1295,7 +1341,7 @@ class Results:
             interested in. It is required to provide this argument in order
             to distinguish voltage levels at primary and secondary side of the
             transformer/LV station.
-            If not provided (respectively None) defaults to `['mv', 'lv'].
+            If not provided (respectively None) defaults to ['mv', 'lv'].
 
         Returns
         -------

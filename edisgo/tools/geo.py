@@ -22,7 +22,7 @@ def proj2equidistant(network):
 
     Returns
     -------
-    :functools:`partial`
+    :py:func:`functools.partial`
     """
     srid = int(network.config['geo']['srid'])
 
@@ -44,7 +44,7 @@ def proj2conformal(network):
 
     Returns
     -------
-    :functools:`partial`
+    :py:func:`functools.partial`
     """
     srid = int(network.config['geo']['srid'])
 

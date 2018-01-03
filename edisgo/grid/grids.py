@@ -3,6 +3,7 @@ from collections import defaultdict
 import pandas as pd
 import matplotlib.pyplot as plt
 
+
 class Grid:
     """Defines a basic grid in eDisGo
 
