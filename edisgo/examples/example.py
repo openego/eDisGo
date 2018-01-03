@@ -103,11 +103,10 @@ if __name__ == '__main__':
         except Exception as e:
             if before_geno_import:
                 faulty_grids_before_geno_import['grid'].append(network.id)
-                faulty_grids_before_geno_import['msg'].append(e)
+                faulty_grids_before_geno_import['msg'].append(repr(e))
             else:
                 faulty_grids['grid'].append(network.id)
-                faulty_grids['msg'].append(
-                    str(network.results.unresolved_issues))
+                faulty_grids['msg'].append(repr(e))
             logging.info('Something went wrong.')
 
     pd.DataFrame(faulty_grids_before_geno_import).to_csv(
