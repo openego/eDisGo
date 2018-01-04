@@ -911,10 +911,6 @@ class ETraGoSpecs:
 
     Attributes
     ----------
-    _active_power : :pandas:`pandas.Series<series>`
-        Time series of active power at Transition Point
-    _reactive_power : :pandas:`pandas.Series<series>`
-        Time series of reactive power at Transition Point
     _battery_capacity: :obj:`float`
         Capacity of virtual battery at Transition Point
     _battery_active_power : :pandas:`pandas.Series<series>`
@@ -956,8 +952,6 @@ class ETraGoSpecs:
     """
 
     def __init__(self, **kwargs):
-        self._active_power = kwargs.get('active_power', None)
-        self._reactive_power = kwargs.get('reactive_power', None)
         self._battery_capacity = kwargs.get('battery_capacity', None)
         self._battery_active_power = kwargs.get('battery_active_power', None)
         self._dispatch = kwargs.get('dispatch', None)
