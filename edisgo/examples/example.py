@@ -15,6 +15,7 @@ logger = logging.getLogger('edisgo')
 logger.setLevel(logging.DEBUG)
 
 if __name__ == '__main__':
+
     grids = []
     for file in os.listdir(os.path.join(sys.path[0], "data")):
         if file.endswith(".pkl"):
@@ -28,35 +29,31 @@ if __name__ == '__main__':
     faulty_grids = {'grid': [], 'msg': []}
     for dingo_grid in grids:
         mv_grid_id = dingo_grid.split('_')[-1].split('.')[0]
-        # worst-case scenario
-        scenario = Scenario(power_flow='worst-case', mv_grid_id=mv_grid_id)
+        # # worst-case scenario
+        # scenario = Scenario(power_flow='worst-case', mv_grid_id=mv_grid_id)
 
-        # # scenario with etrago specs
-        # power_flow = (date(2017, 10, 10), date(2017, 10, 13))
-        # timeindex = pd.date_range(power_flow[0], power_flow[1], freq='H')
-        # etrago_specs = ETraGoSpecs(
-        #     dispatch=pd.DataFrame({'biomass': [1] * len(timeindex),
-        #                            'solar': [1] * len(timeindex),
-        #                            'gas': [1] * len(timeindex),
-        #                            'wind': [1] * len(timeindex)},
-        # index=timeindex),
-        #     capacity=pd.DataFrame({'biomass': 1846.5,
-        #                            'solar': 7131,
-        #                            'gas': 1564,
-        #                            'wind': 10}, index=['cap']),
-        #     load=pd.DataFrame({'residential': [1] * len(timeindex),
-        #                        'retail': [1] * len(timeindex),
-        #                        'industrial': [1] * len(timeindex),
-        #                        'agricultural': [1] * len(timeindex)},
-        #                       index=timeindex),
-        #     annual_load=pd.DataFrame({'residential': 1,
-        #                        'retail': 1,
-        #                        'industrial': 1,
-        #                        'agricultural': 1},
-        #                       index=timeindex)
-        # )
-        # scenario = Scenario(etrago_specs=etrago_specs, power_flow=(),
-        #                     scenario_name='NEP 2035')
+        # scenario with etrago specs
+        power_flow = (date(2017, 10, 10), date(2017, 10, 13))
+        timeindex = pd.date_range(power_flow[0], power_flow[1], freq='H')
+        etrago_specs = ETraGoSpecs(
+            conv_dispatch=pd.DataFrame({'biomass': [1] * len(timeindex),
+                                        'coal': [1] * len(timeindex),
+                                        'gas': [1] * len(timeindex)},
+                                       index=timeindex),
+            ren_dispatch=pd.DataFrame({'0': [0.2] * len(timeindex),
+                                       '1': [0.3] * len(timeindex),
+                                       '2': [0.4] * len(timeindex),
+                                       '3': [0.5] * len(timeindex)},
+                                      index=timeindex),
+            renewables=pd.DataFrame({
+                'name': ['wind', 'wind', 'solar', 'solar'],
+                'w_id': ['1', '2', '1', '2'],
+                'ren_id': ['0', '1', '2', '3']}, index=[0, 1, 2, 3]),
+            battery_capacity=100,
+            battery_active_power=pd.Series(data=[50, 20, -10, 20])
+        )
+        scenario = Scenario(etrago_specs=etrago_specs, power_flow=(),
+                            scenario_name='NEP 2035', mv_grid_id=mv_grid_id)
 
         # scenario with time series
         # scenario = Scenario(
