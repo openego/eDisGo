@@ -237,9 +237,11 @@ class Network:
 
     def integrate_storage(self, **kwargs):
         """Integrate storage in grid"""
-        integrate_storage(self,
-                          kwargs.get('position', None),
-                          kwargs.get('parameters', None))
+        integrate_storage(network=self,
+                          position=kwargs.get('position', None),
+                          operational_mode=kwargs.get(
+                              'operational_mode', None),
+                          parameters=kwargs.get('parameters', None))
 
     @property
     def id(self):

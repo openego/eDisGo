@@ -3,7 +3,8 @@ from edisgo.grid.tools import select_cable
 
 import logging
 
-def integrate_storage(network, position, parameters):
+
+def integrate_storage(network, position, operational_mode, parameters):
     """
     Integrate storage units in the grid and specify its operational mode
 
@@ -16,7 +17,9 @@ def integrate_storage(network, position, parameters):
 
         * 'hvmv_substation_busbar': places a storage unit directly at the
           HV/MV station's bus bar, see :func:`storage_at_hvmv_substation`
-
+    operational_mode : str
+        Operational mode. See :class:`~.grid.components.StorageOperation for
+        possible options and more information.
     parameters : dict
         Parameters specifying characteristics of storage in detail
         The format looks like the following example and requires given
@@ -34,7 +37,8 @@ def integrate_storage(network, position, parameters):
     """
 
     if position == 'hvmv_substation_busbar':
-        storage_at_hvmv_substation(network.mv_grid, parameters)
+        storage_at_hvmv_substation(network.mv_grid, parameters,
+                                   operational_mode)
     else:
         logging.error("{} is not a valid storage positioning mode".format(
             position))
@@ -43,7 +47,7 @@ def integrate_storage(network, position, parameters):
             position))
 
 
-def storage_at_hvmv_substation(mv_grid, parameters, nominal_capacity=1000):
+def storage_at_hvmv_substation(mv_grid, parameters, mode, nominal_capacity=1000):
     """
     Place 1 MVA battery at HV/MV substation bus bar
 
@@ -61,11 +65,14 @@ def storage_at_hvmv_substation(mv_grid, parameters, nominal_capacity=1000):
         Parameters specifying characteristics of storage in detail
     nominal_capacity : float
         Storage's apparent rated power
+    mode : str
+        Operational mode. See :class:`~.grid.components.StorageOperation for
+        possible options and more information.
     """
 
     # define storage instance and define it's operational mode
     storage_id = len(mv_grid.graph.nodes_by_attribute('storage')) + 1
-    storage = Storage(operation={'mode': 'fifty-fifty'},
+    storage = Storage(operation={'mode': mode},
                       id=storage_id,
                       nominal_capacity=nominal_capacity,
                       grid=mv_grid,
