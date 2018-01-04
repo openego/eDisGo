@@ -536,15 +536,15 @@ class Scenario:
                             self._etrago_specs.dispatch.index
                         self._timeseries.generation = \
                             self._etrago_specs.dispatch
-                        self._timeseries.load = self._etrago_specs.load
+                        #self._timeseries.load = self._etrago_specs.load
                     else:
                         self._timeseries.timeindex = pd.date_range(
                             power_flow[0], power_flow[1], freq='H')
                         self._timeseries.generation = \
                             self._etrago_specs.dispatch.loc[
                                 self._timeseries.timeindex]
-                        self._timeseries.load = self._etrago_specs.load.loc[
-                            self._timeseries.timeindex]
+                        # self._timeseries.load = self._etrago_specs.load.loc[
+                        #     self._timeseries.timeindex]
                 else:
                     logger.error("Etrago specifications must contain dispatch "
                                  "timeseries. Please provide them.")
@@ -943,21 +943,15 @@ class ETraGoSpecs:
          * 'coal'
          * ...
 
-    _capacity : :pandas:`pandas.DataFrame<dataframe>`
-        Total capacity of each generator type in MW. Columns represent
-        generator type.
     _load : :pandas:`pandas.DataFrame<dataframe>`
         Time series of normalized active power of (cumulative) loads normalized
         by corresponding annual load given in `annual_load`.
         Columns represent load sectors:
-
          * 'residential'
          * 'retail'
          * 'industrial'
          * 'agricultural'
 
-    _annual_load : :pandas:`pandas.DataFrame<dataframe>`
-        Annual load of each sector in MWh. Columns represent load sectors.
     _curtailment : :pandas:`pandas.DataFrame<dataframe>`
         Time series of curtailed power for wind and solar generators
         normalized with corresponding capacity given in `capacity`.
@@ -972,9 +966,6 @@ class ETraGoSpecs:
         self._battery_capacity = kwargs.get('battery_capacity', None)
         self._battery_active_power = kwargs.get('battery_active_power', None)
         self._dispatch = kwargs.get('dispatch', None)
-        self._capacity = kwargs.get('capacity', None)
-        self._load = kwargs.get('load', None)
-        self._annual_load = kwargs.get('annual_load', None)
     @property
     def battery_capacity(self):
         return self._battery_capacity
@@ -987,17 +978,6 @@ class ETraGoSpecs:
     def dispatch(self):
         return self._dispatch
 
-    @property
-    def capacity(self):
-        return self._capacity
-
-    @property
-    def load(self):
-        return self._load
-
-    @property
-    def annual_load(self):
-        return self._annual_load
 
 
 class Results:
