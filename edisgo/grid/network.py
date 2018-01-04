@@ -932,16 +932,30 @@ class ETraGoSpecs:
         Capacity of virtual battery at Transition Point in kWh.
     _battery_active_power : :pandas:`pandas.Series<series>`
         Time series of active power the (virtual) battery (at Transition Point)
-    _dispatch : :pandas:`pandas.DataFrame<dataframe>`
-        Time series of active power for each type of generator normalized with
-        corresponding capacity given in `capacity`.
         is charged (negative) or discharged (positive) with in kW.
+    _conv_dispatch : :pandas:`pandas.DataFrame<dataframe>`
+        Time series of active power for each (aggregated) type of flexible
+        generators normalized with corresponding capacity.
         Columns represent generator type:
-
-         * 'solar'
-         * 'wind'
+         * 'gas'
          * 'coal'
+         * 'biomass'
          * ...
+    _ren_dispatch : :pandas:`pandas.DataFrame<dataframe>`
+        Time series of active power of wind and solar aggregates,
+        normalized with corresponding capacity.
+        Columns represent ren_id (see _renewables):
+         * '0'
+         * '1'
+         * ...
+         * ...
+    _renewables : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe containing `ren_id` specifying type (wind or solar) and
+        weather cell ID.
+        Columns are:
+         * 'name' (type, e.g. 'solar')
+         * 'w_id' (weather cell ID)
+         * 'ren_id'
 
     _load : :pandas:`pandas.DataFrame<dataframe>`
         Time series of normalized active power of (cumulative) loads normalized
@@ -965,7 +979,9 @@ class ETraGoSpecs:
     def __init__(self, **kwargs):
         self._battery_capacity = kwargs.get('battery_capacity', None)
         self._battery_active_power = kwargs.get('battery_active_power', None)
-        self._dispatch = kwargs.get('dispatch', None)
+        self._conv_dispatch = kwargs.get('conv_dispatch', None)
+        self._ren_dispatch = kwargs.get('ren_dispatch', None)
+        self._renewables = kwargs.get('renewables', None)
     @property
     def battery_capacity(self):
         return self._battery_capacity
@@ -976,8 +992,30 @@ class ETraGoSpecs:
 
     @property
     def dispatch(self):
-        return self._dispatch
+        """
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Time series of active power for each type of generator normalized
+            with corresponding capacity.
+            Columns represent generator type:
+             * 'solar'
+             * 'wind'
+             * 'coal'
+             * ...
 
+        """
+        # this is temporary until feed-in of renewables is distinguished by
+        # weather ID
+        wind = self._renewables[self._renewables['name'] == 'wind']['ren_id']
+        solar = self._renewables[self._renewables['name'] == 'solar']['ren_id']
+        ren_dispatch_aggr_wind = self._ren_dispatch[wind].mean(axis=1).rename(
+            'wind')
+        ren_dispatch_aggr_solar = self._ren_dispatch[solar].mean(
+            axis=1).rename('solar')
+        ren_dispatch_aggr = pd.DataFrame(ren_dispatch_aggr_wind).join(
+            ren_dispatch_aggr_solar)
+        return ren_dispatch_aggr.join(self._conv_dispatch)
 
 
 class Results:
