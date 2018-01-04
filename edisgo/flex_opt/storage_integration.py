@@ -43,7 +43,7 @@ def integrate_storage(network, position, operational_mode, parameters):
     else:
         logging.error("{} is not a valid storage positioning mode".format(
             position))
-        raise ValueError("Unknown parameter for storage posisitioning: {} is "
+        raise ValueError("Unknown parameter for storage positioning: {} is "
                          "not a valid storage positioning mode".format(
             position))
 
