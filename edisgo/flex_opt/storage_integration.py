@@ -28,7 +28,8 @@ def integrate_storage(network, position, operational_mode, parameters):
         .. code-block:: python
 
             {
-                'soc_initial': <float>, # in kWh,
+                'nominal_capacity': <float>, # in kWh
+                'soc_initial': <float>, # in kWh
                 'efficiency_in': <float>, # in per unit 0..1
                 'efficiency_out': <float>, # in per unit 0..1
                 'standing_loss': <float> # in per unit 0..1
@@ -47,7 +48,7 @@ def integrate_storage(network, position, operational_mode, parameters):
             position))
 
 
-def storage_at_hvmv_substation(mv_grid, parameters, mode, nominal_capacity=1000):
+def storage_at_hvmv_substation(mv_grid, parameters, mode):
     """
     Place 1 MVA battery at HV/MV substation bus bar
 
@@ -63,8 +64,6 @@ def storage_at_hvmv_substation(mv_grid, parameters, mode, nominal_capacity=1000)
         MV grid instance
     parameters : dict
         Parameters specifying characteristics of storage in detail
-    nominal_capacity : float
-        Storage's apparent rated power
     mode : str
         Operational mode. See :class:`~.grid.components.StorageOperation for
         possible options and more information.
@@ -74,7 +73,7 @@ def storage_at_hvmv_substation(mv_grid, parameters, mode, nominal_capacity=1000)
     storage_id = len(mv_grid.graph.nodes_by_attribute('storage')) + 1
     storage = Storage(operation={'mode': mode},
                       id=storage_id,
-                      nominal_capacity=nominal_capacity,
+                      nominal_capacity=parameters['nominal_capacity'],
                       grid=mv_grid,
                       soc_initial=parameters['soc_initial'],
                       efficiency_in=parameters['efficiency_in'],
@@ -86,7 +85,8 @@ def storage_at_hvmv_substation(mv_grid, parameters, mode, nominal_capacity=1000)
     mv_grid.graph.add_node(storage, type='storage')
 
     # add 1m connecting line to hv/mv substation bus bar
-    line_type, _ = select_cable(mv_grid.network, 'mv', nominal_capacity)
+    line_type, _ = select_cable(mv_grid.network, 'mv',
+                                storage.nominal_capacity)
     line = Line(
         id=storage_id,
         type=line_type,
