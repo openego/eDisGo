@@ -157,6 +157,21 @@ class Network:
         import_from_ding0(file=file,
                           network=network)
 
+        # integrate storage into grid in case ETraGo Specs are given
+        scenario = kwargs.get('scenario', None)
+        if scenario and scenario.etrago_specs and \
+            scenario.etrago_specs.battery_capacity:
+            integrate_storage(network,
+                              position='hvmv_substation_busbar',
+                              operational_mode='etrago-specs',
+                              parameters={
+                                  'nominal_capacity': \
+                                      scenario.etrago_specs.battery_capacity,
+                                  'soc_initial': 0.0,
+                                  'efficiency_in': 1.0,
+                                  'efficiency_out': 1.0,
+                                  'standing_loss': 0})
+
         return network
 
     def import_generators(self, types=None):
