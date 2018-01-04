@@ -543,15 +543,18 @@ class StorageOperation():
                by generators. If cumulative generation exceeds 50 % of nominal
                power, the storage will charge. Otherwise, the storage will
                charge.
+             * **'etrago-specs'**: the storage operation is given by ETraGo
+               specification
 
         """
-        if mode == 'etrago-plain':
-            # TODO: untested code
+        if mode == 'etrago-specs':
             if self._timeseries is None:
                 self._timeseries = pd.DataFrame()
-                self._timeseries[
-                    'p'] = self.storage.grid.network.scenario.etrago_specs.battery_active_power
-                self._timeseries['q'] = self.storage.grid.network.scenario.etrago_specs.battery_active_power * 0
+                self._timeseries['p'] = self.storage.grid.network.scenario.\
+                    etrago_specs.battery_active_power
+                self._timeseries['q'] = (self.storage.grid.network.scenario.\
+                                            etrago_specs.battery_active_power *
+                                         0)
         elif 'fifty-fifty':
             # determine generators cumulative apparent power output
             generators = self.storage.grid.graph.nodes_by_attribute(
