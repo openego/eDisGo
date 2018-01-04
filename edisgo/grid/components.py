@@ -467,23 +467,23 @@ class Storage(Component):
 
     @property
     def efficiency_in(self):
-        """Storage charge efficiency in per unit
+        """Storage charging efficiency in per unit
 
         Returns
         -------
         float
-            Charge efficiciency in range of 0..1
+            Charging efficiency in range of 0..1
         """
         return self._efficiency_in
 
     @property
     def efficiency_out(self):
-        """Storage charge efficiency  in per unit
+        """Storage discharging efficiency in per unit
 
         Returns
         -------
         float
-            Charge efficiciency in range of 0..1
+            Discharging efficiency in range of 0..1
         """
         return self._efficiency_out
 
