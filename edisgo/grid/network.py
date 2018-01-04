@@ -912,13 +912,13 @@ class ETraGoSpecs:
     Attributes
     ----------
     _battery_capacity: :obj:`float`
-        Capacity of virtual battery at Transition Point
+        Capacity of virtual battery at Transition Point in kWh.
     _battery_active_power : :pandas:`pandas.Series<series>`
         Time series of active power the (virtual) battery (at Transition Point)
-        is charged (negative) or discharged (positive) with
     _dispatch : :pandas:`pandas.DataFrame<dataframe>`
         Time series of active power for each type of generator normalized with
         corresponding capacity given in `capacity`.
+        is charged (negative) or discharged (positive) with in kW.
         Columns represent generator type:
 
          * 'solar'
@@ -958,6 +958,13 @@ class ETraGoSpecs:
         self._capacity = kwargs.get('capacity', None)
         self._load = kwargs.get('load', None)
         self._annual_load = kwargs.get('annual_load', None)
+    @property
+    def battery_capacity(self):
+        return self._battery_capacity
+
+    @property
+    def battery_active_power(self):
+        return self._battery_active_power
 
     @property
     def dispatch(self):
