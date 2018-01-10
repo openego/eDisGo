@@ -909,7 +909,7 @@ class TimeSeries:
         Parameters
         ----------
         data_source : str
-            Specfiy type of data source. Available data sources are
+            Specify type of data source. Available data sources are
 
              * 'oedb': retrieves load time series cumulated across sectors
              * 'demandlib': determine a load time series with the use of the
