@@ -536,15 +536,17 @@ class Scenario:
                             self._etrago_specs.dispatch.index
                         self._timeseries.generation = \
                             self._etrago_specs.dispatch
-                        #self._timeseries.load = self._etrago_specs.load
+                        self._timeseries.load = \
+                            self._timeseries.import_load_timeseries(self)
                     else:
                         self._timeseries.timeindex = pd.date_range(
                             power_flow[0], power_flow[1], freq='H')
                         self._timeseries.generation = \
                             self._etrago_specs.dispatch.loc[
                                 self._timeseries.timeindex]
-                        # self._timeseries.load = self._etrago_specs.load.loc[
-                        #     self._timeseries.timeindex]
+                        self._timeseries.load = \
+                            self._timeseries.import_load_timeseries(self).loc[
+                                self._timeseries.timeindex]
                 else:
                     logger.error("Etrago specifications must contain dispatch "
                                  "timeseries. Please provide them.")
@@ -957,14 +959,6 @@ class ETraGoSpecs:
          * 'w_id' (weather cell ID)
          * 'ren_id'
 
-    _load : :pandas:`pandas.DataFrame<dataframe>`
-        Time series of normalized active power of (cumulative) loads normalized
-        by corresponding annual load given in `annual_load`.
-        Columns represent load sectors:
-         * 'residential'
-         * 'retail'
-         * 'industrial'
-         * 'agricultural'
 
     _curtailment : :pandas:`pandas.DataFrame<dataframe>`
         Time series of curtailed power for wind and solar generators
