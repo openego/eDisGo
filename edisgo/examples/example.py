@@ -66,7 +66,7 @@ if __name__ == '__main__':
 
         logging.info('Grid expansion for {}'.format(dingo_grid))
         network = Network.import_from_ding0(
-            os.path.join('data', dingo_grid),
+            os.path.join('data', 'ding0_grids__{}.pkl'.format(dingo_grid)),
             id='Test grid',
             scenario=scenario)
 
