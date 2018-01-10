@@ -17,10 +17,11 @@ logger.setLevel(logging.DEBUG)
 if __name__ == '__main__':
 
     grids = []
-    for file in os.listdir(os.path.join(sys.path[0], "data")):
-        if file.endswith(".pkl"):
-            grids.append(file)
+    # for file in os.listdir(os.path.join(sys.path[0], "data")):
+    #     if file.endswith(".pkl"):
+    #         grids.append(file)
 
+    scenario_name = 'NEP 2035'
     technologies = ['wind', 'solar']
 
     costs_before_geno_import = pd.DataFrame()
@@ -28,7 +29,7 @@ if __name__ == '__main__':
     costs = pd.DataFrame()
     faulty_grids = {'grid': [], 'msg': []}
     for dingo_grid in grids:
-        mv_grid_id = dingo_grid.split('_')[-1].split('.')[0]
+        mv_grid_id = dingo_grid  # dingo_grid.split('_')[-1].split('.')[0]
         # # worst-case scenario
         # scenario = Scenario(power_flow='worst-case', mv_grid_id=mv_grid_id)
 
@@ -53,7 +54,7 @@ if __name__ == '__main__':
             battery_active_power=pd.Series(data=[50, 20, -10, 20])
         )
         scenario = Scenario(etrago_specs=etrago_specs, power_flow=(),
-                            scenario_name='NEP 2035', mv_grid_id=mv_grid_id)
+                            scenario_name=scenario_name, mv_grid_id=mv_grid_id)
 
         # scenario with time series
         # scenario = Scenario(
