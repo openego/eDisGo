@@ -311,20 +311,22 @@ class Generator(Component):
                                               'scale_factor_feedin_other'])
                 self._timeseries = ts * self.nominal_capacity * power_scaling
             else:
-                if self.type != 'wind' and self.type != 'solar':
-                    type = 'other'
-                else:
-                    type = self.type
                 try:
                     ts = pd.DataFrame()
                     ts['p'] = self.grid.network.scenario.timeseries.generation[
-                        type]
+                        self.type]
                     ts['q'] = ts['p'] * q_factor
                     self._timeseries = ts * self.nominal_capacity
                 except KeyError:
-                    logger.exception("No timeseries for type {} given.".format(
-                        type))
-                    raise
+                    try:
+                        ts['p'] = self.grid.network.scenario.timeseries.\
+                            generation['other']
+                        ts['q'] = ts['p'] * q_factor
+                        self._timeseries = ts * self.nominal_capacity
+                    except KeyError:
+                        logger.exception("No timeseries for type {} "
+                                         "given.".format(self.type))
+                        raise
 
         curtailment = self.grid.network.scenario.curtailment
         if curtailment:
