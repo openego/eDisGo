@@ -49,14 +49,14 @@ through the
 A minimum working example
 -------------------------
 
-Assuming you have file name "ding0_grids__42.pkl" in current working directory.
+Assuming you have file name "ding0_grids__42.pkl" in current working directory run a worst-case scenario as follows:
 
 .. code-block:: python
 
-    from edisgo.grid.network import Network, Scenario, TimeSeries
+    from edisgo.grid.network import Network, Scenario
 
-    # Define a scenario including a TimeSeries instance
-    scenario = Scenario(power_flow='worst-case', mv_grid_id=grid_district)
+    # Define a scenario
+    scenario = Scenario(power_flow='worst-case', mv_grid_id='42')
 
     # Get the grid topology data
     network = Network.import_from_ding0(
@@ -65,7 +65,7 @@ Assuming you have file name "ding0_grids__42.pkl" in current working directory.
         scenario=scenario)
 
     # Import future generators
-    network.import_generators()
+    network.import_generators(types=['wind', 'solar'])
 
     # Do non-linear power flow analysis with PyPSA
     network.analyze()
