@@ -950,6 +950,12 @@ class ETraGoSpecs:
          * '0'
          * '1'
          * ...
+    _curtailment : :pandas:`pandas.DataFrame<dataframe>`
+        Time series of curtailed power for wind and solar aggregates,
+        normalized with corresponding capacity.
+        Columns represent ren_id (see _renewables):
+         * '0'
+         * '1'
          * ...
     _renewables : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing `ren_id` specifying type (wind or solar) and
@@ -959,15 +965,6 @@ class ETraGoSpecs:
          * 'w_id' (weather cell ID)
          * 'ren_id'
 
-
-    _curtailment : :pandas:`pandas.DataFrame<dataframe>`
-        Time series of curtailed power for wind and solar generators
-        normalized with corresponding capacity given in `capacity`.
-        Columns represent generator type:
-
-         * 'solar'
-         * 'wind'
-
     """
 
     def __init__(self, **kwargs):
@@ -975,7 +972,9 @@ class ETraGoSpecs:
         self._battery_active_power = kwargs.get('battery_active_power', None)
         self._conv_dispatch = kwargs.get('conv_dispatch', None)
         self._ren_dispatch = kwargs.get('ren_dispatch', None)
+        self._curtailment = kwargs.get('curtailment', None)
         self._renewables = kwargs.get('renewables', None)
+
     @property
     def battery_capacity(self):
         return self._battery_capacity
