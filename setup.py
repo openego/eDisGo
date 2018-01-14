@@ -40,13 +40,13 @@ setup(
         'geopy >= 1.11.0, <= 1.11.0'
     ],
     package_data={
-        'config': [
-            os.path.join('config',
-                         'config_system'),
-            os.path.join('config',
-                         '*.cfg')
-        ]
-        },
+        'edisgo': [
+            os.path.join('config', 'config_system'),
+            os.path.join('config', '*.cfg'),
+            os.path.join('equipment', '*.csv')]
+    },
+    dependency_links=[
+        'https://github.com/openego/ding0/archive/00c1c842dd9314742cfc6bad50e801ce9507c1a6.zip#egg=ding0-0.1.4+git.00c1c84'],
     cmdclass={
-      'install': InstallSetup}
+        'install': InstallSetup}
 )
