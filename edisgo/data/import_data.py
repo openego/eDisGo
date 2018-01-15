@@ -195,7 +195,6 @@ def _build_lv_grid(ding0_grid, network):
                     edges.append({'adj_nodes': edge[0], 'branch': edge[1]})
 
                 # Create list of line instances and add these to grid's graph
-                #ToDo convert type voltage to kV (either here or in dingo)
                 lines = [(nodes[_['adj_nodes'][0]], nodes[_['adj_nodes'][1]],
                           {'line': Line(
                               id=_['branch'].id_db,
@@ -205,6 +204,10 @@ def _build_lv_grid(ding0_grid, network):
                               grid=lv_grid)
                           })
                          for _ in edges]
+                # convert voltage from V to kV
+                for line in lines:
+                    line[2]['line'].type['U_n'] = \
+                        line[2]['line'].type['U_n'] / 1e3
                 lv_grid.graph.add_edges_from(lines, type='line')
 
                 # Add LV station as association to LV grid
