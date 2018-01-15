@@ -209,8 +209,8 @@ def mv_to_pypsa(network):
     MV grid topology translated here includes
 
     * MV station (no transformer, see :meth:`~.grid.network.Network.analyze`)
-    * Loads, Generators, Lines, Storages, Branch Tees of MV grid level as well as LV
-      stations. LV stations do not have load and generation of LV level.
+    * Loads, Generators, Lines, Storages, Branch Tees of MV grid level as well
+      as LV stations. LV stations do not have load and generation of LV level.
 
     Parameters
     ----------
@@ -357,7 +357,6 @@ def mv_to_pypsa(network):
         line['x'].append(
             l['line'].type['L'] * omega / 1e3 * l['line'].length)
         line['r'].append(l['line'].type['R'] * l['line'].length)
-        #ToDo remove s_nom?
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
         line['length'].append(l['line'].length)
@@ -553,7 +552,6 @@ def lv_to_pypsa(network):
         line['x'].append(
             l['line'].type['L'] * omega / 1e3 * l['line'].length)
         line['r'].append(l['line'].type['R'] * l['line'].length)
-        #ToDo remove s_nom?
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
         line['length'].append(l['line'].length)
