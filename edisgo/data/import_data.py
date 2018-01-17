@@ -1763,15 +1763,12 @@ def _import_genos_from_oedb(network, types=None):
         data_version = network.config['versioned']['version']
 
         # import ORMs
-        #orm_conv_generators = supply.__getattribute__(orm_conv_generators_name)
-        #orm_re_generators = supply.__getattribute__(orm_re_generators_name)
-        # TODO: REMOVE WORKAROUND
-        orm_conv_generators = model_draft.__getattribute__(orm_conv_generators_name)
-        orm_re_generators = model_draft.__getattribute__(orm_re_generators_name)
+        orm_conv_generators = supply.__getattribute__(orm_conv_generators_name)
+        orm_re_generators = supply.__getattribute__(orm_re_generators_name)
 
         # set version condition
-        orm_conv_generators_version = orm_conv_generators.columns.preversion == data_version
-        orm_re_generators_version = orm_re_generators.columns.preversion == data_version
+        orm_conv_generators_version = orm_conv_generators.columns.version == data_version
+        orm_re_generators_version = orm_re_generators.columns.version == data_version
 
     # Create filter for generation technologies
     if types is None:
