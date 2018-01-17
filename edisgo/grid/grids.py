@@ -303,11 +303,9 @@ class Graph(nx.Graph):
             value
         """
 
-        # get all nodes that have the attribute 'type' set
-        nodes_attributes = nx.get_node_attributes(self, attr)
-
-        # extract nodes where 'type' == attr_val
-        nodes = [k for k, v in nodes_attributes.items() if v == attr_val]
+        temp_nodes = getattr(self, 'node')
+        nodes = list(filter(None, map(lambda x: x if temp_nodes[x][attr] == attr_val else None,
+                                      temp_nodes.keys())))
 
         return nodes
 
