@@ -33,7 +33,7 @@ setup(
     install_requires = [
         'ding0==0.1.4+git.25dbbb8',
         'networkx >=1.11, <2.0 ',
-        'shapely >= 1.5.12, <= 1.5.12',
+        'shapely >= 1.5.12, <= 1.6.3',
         'pandas >=0.20.3, <=0.20.3',
         'pypsa >=0.11.0, <=0.11.0',
         'pyproj >= 1.9.5.1, <= 1.9.5.1',
