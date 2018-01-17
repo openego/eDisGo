@@ -1,0 +1,11 @@
+sphinx_rtd_theme
+networkx >= 1.11
+pandas >=0.20.3, <=0.20.3
+pypsa >=0.10.0, <=0.10.0
+pyproj >=1.9.5.1, <=1.9.5.1
+matplotlib >=1.5.3, <=1.5.3
+geopy >=1.11.0, <=1.11.0
+-e git+https://github.com/openego/ego.io.git@b9d3153f02845110cc76a30f1a634e20ddeefef4#egg=ego.io
+oemof.db >=0.0.4, <=0.0.4
+workalendar
+demandlib

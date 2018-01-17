@@ -1,0 +1,32 @@
+# exclude project files
+.idea/
+
+
+# exclude certain types of files
+*.doctree
+*.txt
+*.html
+*.js
+*.inv
+*.pyc
+*.ttf
+*.woff
+*.png
+*.css
+*.pkl
+
+# exclude locally built docs
+doc/_html
+
+# exclude egg-info
+eDisGo.egg-info/
+/edisgo/examples/Exemplary_PyPSA_bus_results.csv
+/edisgo/examples/Exemplary_PyPSA_line_results.csv
+
+# exclude directories
+/edisgo/examples/edisgo2pypsa_export/*
+/edisgo/examples/data/
+
+# exclude check scripts
+/edisgo/examples/compare_graphs.py
+/edisgo/examples/compare_pypsa_network.py
