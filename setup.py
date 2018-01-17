@@ -31,7 +31,7 @@ setup(
     author_email='',
     description='A python package for distribution grid analysis and optimization',
     install_requires = [
-        'ding0==0.1.4+git.00c1c84',
+        'ding0==0.1.4+git.0f61ea3',
         'networkx >=1.11, <2.0 ',
         'shapely >= 1.5.12, <= 1.5.12',
         'pandas >=0.20.3, <=0.20.3',
@@ -46,7 +46,7 @@ setup(
             os.path.join('equipment', '*.csv')]
     },
     dependency_links=[
-        'https://github.com/openego/ding0/archive/00c1c842dd9314742cfc6bad50e801ce9507c1a6.zip#egg=ding0-0.1.4+git.00c1c84'],
+        'https://github.com/openego/ding0/archive/0f61ea33d66fe7c4c4230c7cb3b8fd5e7d24fff0.zip#egg=ding0-0.1.4+git.0f61ea3'],
     cmdclass={
         'install': InstallSetup}
 )
