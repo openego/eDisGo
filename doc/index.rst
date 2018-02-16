@@ -20,6 +20,7 @@ eDisGo -- Optimization of flexibility options and grid expansion for distributio
    definitions_and_units
    references
    api
+   whatsnew
 
 
 
