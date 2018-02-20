@@ -4,7 +4,7 @@ topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA grid
 container.
 """
 
-from edisgo.grid.components import Transformer, Line, LVStation
+from edisgo.grid.components import Transformer, Line, LVStation, MVStation
 
 import pandas as pd
 from math import pi, sqrt, floor
@@ -32,7 +32,7 @@ def to_pypsa(network, mode):
       exported by :func:`mv_to_pypsa` including the LV station. LV grid load
       and generation is considered using :func:`add_aggregated_lv_components`.
       Time series are collected by `_pypsa_load_timeseries` (as example
-      for loads, generators and buses) specifying `mode='mv'). Timeseries
+      for loads, generators and buses) specifying `mode='mv'`). Timeseries
       for aggregated load/generation at substations are determined individually.
     * Low-voltage only (`mode='lv'`): LV grid topology including the MV-LV
       transformer is exported. The slack is defind at primary side of the MV-LV
@@ -97,6 +97,11 @@ def to_pypsa(network, mode):
             timeseries_bus_v_set = _pypsa_bus_timeseries(
                 network,
                 components['Bus'].index.tolist())
+
+        if len(list(components['StorageUnit'].index.values)) > 0:
+            timeseries_storage_p, timeseries_storage_q = _pypsa_storage_timeseries(
+                network,
+                mode=mode)
     elif mode is 'mv':
         mv_components = mv_to_pypsa(network)
         components = add_aggregated_lv_components(
@@ -153,7 +158,7 @@ def to_pypsa(network, mode):
     pypsa_network.import_components_from_dataframe(components['Bus'], 'Bus')
 
     for k, comps in components.items():
-        if k is not 'Bus':
+        if k is not 'Bus' and not comps.empty:
             pypsa_network.import_components_from_dataframe(comps, k)
 
     # import time series to PyPSA network
@@ -183,6 +188,16 @@ def to_pypsa(network, mode):
                                      'Bus',
                                      'v_mag_pu_set')
 
+    if len(list(components['StorageUnit'].index.values)) > 0:
+        import_series_from_dataframe(pypsa_network,
+                                     timeseries_storage_p,
+                                     'StorageUnit',
+                                     'p_set')
+        import_series_from_dataframe(pypsa_network,
+                                     timeseries_storage_q,
+                                     'StorageUnit',
+                                     'q_set')
+
     _check_integrity_of_pypsa(pypsa_network)
 
     return pypsa_network
@@ -194,8 +209,8 @@ def mv_to_pypsa(network):
     MV grid topology translated here includes
 
     * MV station (no transformer, see :meth:`~.grid.network.Network.analyze`)
-    * Loads, Generators, Lines, Branch Tees of MV grid level as well as LV
-      stations. LV stations do not have load and generation of LV level.
+    * Loads, Generators, Lines, Storages, Branch Tees of MV grid level as well
+      as LV stations. LV stations do not have load and generation of LV level.
 
     Parameters
     ----------
@@ -213,6 +228,7 @@ def mv_to_pypsa(network):
         * 'Line'
         * 'BranchTee'
         * 'Tranformer'
+        * 'StorageUnit'
 
 
     .. warning::
@@ -245,6 +261,8 @@ def mv_to_pypsa(network):
     mv_stations = network.mv_grid.graph.nodes_by_attribute('mv_station')
     disconnecting_points = network.mv_grid.graph.nodes_by_attribute(
         'mv_disconnecting_point')
+    storages = network.mv_grid.graph.nodes_by_attribute(
+        'storage')
 
     omega = 2 * pi * 50
 
@@ -278,12 +296,20 @@ def mv_to_pypsa(network):
                    's_nom': [],
                    'tap_ratio': []}
 
+    storage = {
+        'name': [],
+        'bus': [],
+        'p_nom': [],
+        'state_of_charge_initial': [],
+        'efficiency_store': [],
+        'efficiency_dispatch': [],
+        'standing_loss': []}
+
     # create dataframe representing generators and associated buses
     for gen in generators:
         bus_name = '_'.join(['Bus', repr(gen)])
         generator['name'].append(repr(gen))
         generator['bus'].append(bus_name)
-        # TODO: revisit 'control' for dispatchable power plants
         generator['control'].append('PQ')
         generator['p_nom'].append(gen.nominal_capacity / 1e3)
         generator['type'].append('_'.join([gen.type, gen.subtype]))
@@ -331,7 +357,6 @@ def mv_to_pypsa(network):
         line['x'].append(
             l['line'].type['L'] * omega / 1e3 * l['line'].length)
         line['r'].append(l['line'].type['R'] * l['line'].length)
-        #ToDo remove s_nom?
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
         line['length'].append(l['line'].length)
@@ -378,6 +403,21 @@ def mv_to_pypsa(network):
         bus['name'].append('_'.join(['Bus', repr(dp)]))
         bus['v_nom'].append(dp.grid.voltage_nom)
 
+    # create dataframe representing storages
+    for sto in storages:
+        bus_name = '_'.join(['Bus', repr(sto)])
+
+        storage['name'].append(repr(sto))
+        storage['bus'].append(bus_name)
+        storage['p_nom'].append(sto.nominal_capacity / 1e3)
+        storage['state_of_charge_initial'].append(sto.soc_initial)
+        storage['efficiency_store'].append(sto.efficiency_in)
+        storage['efficiency_dispatch'].append(sto.efficiency_out)
+        storage['standing_loss'].append(sto.standing_loss)
+
+        bus['name'].append(bus_name)
+        bus['v_nom'].append(sto.grid.voltage_nom)
+
     # Add separate slack generator at MV station secondary side bus bar
     generator['name'].append("Generator_slack")
     generator['bus'].append(bus1_name)
@@ -390,7 +430,8 @@ def mv_to_pypsa(network):
         'Bus': pd.DataFrame(bus).set_index('name'),
         'Load': pd.DataFrame(load).set_index('name'),
         'Line': pd.DataFrame(line).set_index('name'),
-        'Transformer': pd.DataFrame(transformer).set_index('name')}
+        'Transformer': pd.DataFrame(transformer).set_index('name'),
+        'StorageUnit': pd.DataFrame(storage).set_index('name')}
 
     return components
 
@@ -416,6 +457,7 @@ def lv_to_pypsa(network):
         * 'Load'
         * 'Line'
         * 'BranchTee'
+        * 'StorageUnit'
     """
 
     generators = []
@@ -423,6 +465,7 @@ def lv_to_pypsa(network):
     branch_tees = []
     lines = []
     lv_stations = []
+    storages = []
 
     for lv_grid in network.mv_grid.lv_grids:
         generators.extend(lv_grid.graph.nodes_by_attribute('generator'))
@@ -430,6 +473,8 @@ def lv_to_pypsa(network):
         branch_tees.extend(lv_grid.graph.nodes_by_attribute('branch_tee'))
         lines.extend(lv_grid.graph.lines())
         lv_stations.extend(lv_grid.graph.nodes_by_attribute('lv_station'))
+        storages.extend(lv_grid.graph.nodes_by_attribute('storage'))
+
 
     omega = 2 * pi * 50
 
@@ -452,12 +497,20 @@ def lv_to_pypsa(network):
             's_nom': [],
             'length': []}
 
+    storage = {
+        'name': [],
+        'bus': [],
+        'p_nom': [],
+        'state_of_charge_initial': [],
+        'efficiency_store': [],
+        'efficiency_dispatch': [],
+        'standing_loss': []}
+
     # create dictionary representing generators and associated buses
     for gen in generators:
         bus_name = '_'.join(['Bus', repr(gen)])
         generator['name'].append(repr(gen))
         generator['bus'].append(bus_name)
-        # TODO: revisit 'control' for dispatchable power plants
         generator['control'].append('PQ')
         generator['p_nom'].append(gen.nominal_capacity / 1e3)
         generator['type'].append('_'.join([gen.type, gen.subtype]))
@@ -499,28 +552,37 @@ def lv_to_pypsa(network):
         line['x'].append(
             l['line'].type['L'] * omega / 1e3 * l['line'].length)
         line['r'].append(l['line'].type['R'] * l['line'].length)
-        #ToDo remove s_nom?
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
         line['length'].append(l['line'].length)
+
+    # create dataframe representing storages
+    for sto in storages:
+        bus_name = '_'.join(['Bus', repr(sto)])
+
+        storage['name'].append(repr(sto))
+        storage['bus'].append(bus_name)
+        storage['p_nom'].append(sto.nominal_capacity)
+        storage['state_of_charge_initial'].append(sto.soc_inital)
+        storage['efficiency_store'].append(sto.efficiency_in)
+        storage['efficiency_dispatch'].append(sto.efficiency_out)
+        storage['standing_loss'].append(sto.standing_loss)
+
+        bus['name'].append(bus_name)
+        bus['v_nom'].append(sto.grid.voltage_nom)
 
     lv_components = {
         'Generator': pd.DataFrame(generator).set_index('name'),
         'Bus': pd.DataFrame(bus).set_index('name'),
         'Load': pd.DataFrame(load).set_index('name'),
-        'Line': pd.DataFrame(line).set_index('name')}
+        'Line': pd.DataFrame(line).set_index('name'),
+        'StorageUnit': pd.DataFrame(storage).set_index('name')}
 
     return lv_components
 
 
 def combine_mv_and_lv(mv, lv):
     """Combine MV and LV grid topology in PyPSA format
-
-    Idea for implementation
-    -----------------------
-    Merge all DataFrames except for LV transformers which are already included
-    in the MV grid PyPSA representation
-
     """
 
     combined = {
@@ -718,6 +780,53 @@ def _pypsa_generator_timeseries(network, mode=None):
     gen_df_q = pd.concat(mv_gen_timeseries_q + lv_gen_timeseries_q, axis=1)
 
     return gen_df_p, gen_df_q
+
+
+def _pypsa_storage_timeseries(network, mode=None):
+    """Timeseries in PyPSA compatible format for storage instances
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+    mode : str, optional
+        Specifically retrieve generator time series for MV or LV grid level or
+        both. Either choose 'mv' or 'lv'.
+        Defaults to None, which returns both timeseries for MV and LV in a
+        single DataFrame.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Time series table in PyPSA format
+    """
+
+    mv_storage_timeseries_q = []
+    mv_storage_timeseries_p = []
+    lv_storage_timeseries_q = []
+    lv_storage_timeseries_p = []
+
+    # MV storage timeseries
+    if mode is 'mv' or mode is None:
+        for storage in network.mv_grid.graph.nodes_by_attribute('storage'):
+            mv_storage_timeseries_q.append(
+                storage.pypsa_timeseries('q').rename(repr(storage)).to_frame())
+            mv_storage_timeseries_p.append(
+                storage.pypsa_timeseries('p').rename(repr(storage)).to_frame())
+
+    # LV storage timeseries
+    if mode is 'lv' or mode is None:
+        for lv_grid in network.mv_grid.lv_grids:
+            for storage in lv_grid.graph.nodes_by_attribute('storage'):
+                lv_storage_timeseries_q.append(
+                    storage.pypsa_timeseries('q').rename(repr(storage)).to_frame())
+                lv_storage_timeseries_p.append(
+                    storage.pypsa_timeseries('p').rename(repr(storage)).to_frame())
+
+    storage_df_p = pd.concat(mv_storage_timeseries_p + lv_storage_timeseries_p, axis=1)
+    storage_df_q = pd.concat(mv_storage_timeseries_q + lv_storage_timeseries_q, axis=1)
+
+    return storage_df_p, storage_df_q
 
 
 def _pypsa_bus_timeseries(network, buses, mode=None):
@@ -1195,9 +1304,10 @@ def update_pypsa(network):
     # Step 1: Update transformers
     transformers = equipment_changes[
         equipment_changes['equipment'].apply(isinstance, args=(Transformer,))]
+    # HV/MV transformers are excluded because it's not part of the PFA
     removed_transformers = [repr(_) for _ in
                             transformers[transformers['change'] == 'removed'][
-                                'equipment'].tolist()]
+                                'equipment'].tolist() if _.voltage_op < 10]
     added_transformers = transformers[transformers['change'] == 'added']
 
     transformer = {'name': [],

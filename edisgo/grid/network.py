@@ -1,13 +1,18 @@
 from os import path
 import pandas as pd
 from math import sqrt
+import logging
 
 import edisgo
 from edisgo.tools import config, pypsa_io
-from edisgo.data.import_data import import_from_ding0, import_generators
+from edisgo.data.import_data import import_from_ding0, import_generators, \
+    import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
+from edisgo.flex_opt.storage_integration import integrate_storage
 
+
+logger = logging.getLogger('edisgo')
 
 class Network:
     """Defines the eDisGo Network
@@ -72,56 +77,15 @@ class Network:
         else:
             self._pypsa = kwargs.get('pypsa', None)
 
-        self._config = self._load_config()
+        self._config = kwargs.get('config', None)
+        if self._config is None:
+            try:
+                self._config = self._scenario.config
+            except:
+                self._config = Config()
         self._equipment_data = self._load_equipment_data()
 
         self._dingo_import_data = []
-
-    @staticmethod
-    def _load_config():
-        """Load config files
-
-        Returns
-        -------
-        config object
-        """
-
-        # load config
-        config.load_config('config_db_tables.cfg')
-        config.load_config('config_data.cfg')
-        config.load_config('config_flexopt.cfg')
-        config.load_config('config_misc.cfg')
-        config.load_config('config_scenario.cfg')
-        config.load_config('config_costs.cfg')
-
-        confic_dict = config.cfg._sections
-
-        # convert numeric values to float
-        for sec, subsecs in confic_dict.items():
-            for subsec, val in subsecs.items():
-                # try str -> float conversion
-                try:
-                    confic_dict[sec][subsec] = float(val)
-                except:
-                    pass
-
-        # modify structure of config data
-        confic_dict['data']['peakload_consumption_ratio'] = {
-            'residential': confic_dict['data'][
-                'residential_peakload_consumption'],
-            'retail': confic_dict['data'][
-                'retail_peakload_consumption'],
-            'industrial': confic_dict['data'][
-                'residential_peakload_consumption'],
-            'agricultural': confic_dict['data'][
-                'agricultural_peakload_consumption']}
-
-        del (confic_dict['data']['residential_peakload_consumption'])
-        del (confic_dict['data']['retail_peakload_consumption'])
-        del (confic_dict['data']['industrial_peakload_consumption'])
-        del (confic_dict['data']['agricultural_peakload_consumption'])
-
-        return confic_dict
 
     def _load_equipment_data(self):
         """Load equipment data for transformers, cables etc.
@@ -132,55 +96,49 @@ class Network:
         """
 
         package_path =  edisgo.__path__[0]
-        equipment_dir = self._config['system_dirs']['equipment_dir']
+        equipment_dir = self.config['system_dirs']['equipment_dir']
 
         data = {}
 
-        equipment_mv_parameters_trafos = self._config['equipment']['equipment_mv_parameters_trafos']
-        data['MV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
-                                                  equipment_mv_parameters_trafos),
-                                        comment='#',
-                                        index_col='name',
-                                        delimiter=',',
-                                        decimal='.'
-                                        )
+        equipment_mv_parameters_trafos = self.config['equipment'][
+            'equipment_mv_parameters_trafos']
+        data['MV_trafos'] = pd.read_csv(
+            path.join(package_path, equipment_dir,
+                      equipment_mv_parameters_trafos),
+            comment='#', index_col='name',
+            delimiter=',', decimal='.')
 
+        equipment_mv_parameters_lines = self.config['equipment'][
+            'equipment_mv_parameters_lines']
+        data['MV_lines'] = pd.read_csv(
+            path.join(package_path, equipment_dir,
+                      equipment_mv_parameters_lines),
+            comment='#', index_col='name',
+            delimiter=',', decimal='.')
 
-        equipment_mv_parameters_lines = self._config['equipment']['equipment_mv_parameters_lines']
-        data['MV_lines'] = pd.read_csv(path.join(package_path, equipment_dir,
-                                                 equipment_mv_parameters_lines),
-                                       comment='#',
-                                       index_col='name',
-                                       delimiter=',',
-                                       decimal='.'
-                                       )
+        equipment_mv_parameters_cables = self.config['equipment'][
+            'equipment_mv_parameters_cables']
+        data['MV_cables'] = pd.read_csv(
+            path.join(package_path, equipment_dir,
+                      equipment_mv_parameters_cables),
+            comment='#', index_col='name',
+            delimiter=',', decimal='.')
 
-        equipment_mv_parameters_cables = self._config['equipment']['equipment_mv_parameters_cables']
-        data['MV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
-                                                  equipment_mv_parameters_cables),
-                                        comment='#',
-                                        index_col='name',
-                                        delimiter=',',
-                                        decimal='.'
-                                        )
+        equipment_lv_parameters_cables = self.config['equipment'][
+            'equipment_lv_parameters_cables']
+        data['LV_cables'] = pd.read_csv(
+            path.join(package_path, equipment_dir,
+                      equipment_lv_parameters_cables),
+            comment='#', index_col='name',
+            delimiter=',', decimal='.')
 
-        equipment_lv_parameters_cables = self._config['equipment']['equipment_lv_parameters_cables']
-        data['LV_cables'] = pd.read_csv(path.join(package_path, equipment_dir,
-                                                  equipment_lv_parameters_cables),
-                                        comment='#',
-                                        index_col='name',
-                                        delimiter=',',
-                                        decimal='.'
-                                        )
-
-        equipment_lv_parameters_trafos = self._config['equipment']['equipment_lv_parameters_trafos']
-        data['LV_trafos'] = pd.read_csv(path.join(package_path, equipment_dir,
-                                                  equipment_lv_parameters_trafos),
-                                        comment='#',
-                                        index_col='name',
-                                        delimiter=',',
-                                        decimal='.'
-                                        )
+        equipment_lv_parameters_trafos = self.config['equipment'][
+            'equipment_lv_parameters_trafos']
+        data['LV_trafos'] = pd.read_csv(
+            path.join(package_path, equipment_dir,
+                      equipment_lv_parameters_trafos),
+            comment='#', index_col='name',
+            delimiter=',', decimal='.')
 
         return data
 
@@ -199,9 +157,24 @@ class Network:
         import_from_ding0(file=file,
                           network=network)
 
+        # integrate storage into grid in case ETraGo Specs are given
+        scenario = kwargs.get('scenario', None)
+        if scenario and scenario.etrago_specs and \
+            scenario.etrago_specs.battery_capacity:
+            integrate_storage(network,
+                              position='hvmv_substation_busbar',
+                              operational_mode='etrago-specs',
+                              parameters={
+                                  'nominal_capacity': \
+                                      scenario.etrago_specs.battery_capacity,
+                                  'soc_initial': 0.0,
+                                  'efficiency_in': 1.0,
+                                  'efficiency_out': 1.0,
+                                  'standing_loss': 0})
+
         return network
 
-    def import_generators(self, types):
+    def import_generators(self, types=None):
         """Import generators
 
         For details see
@@ -277,6 +250,14 @@ class Network:
             self, max_while_iterations=kwargs.get('max_while_iterations', 10))
         self.results.grid_expansion_costs = grid_expansion_costs(self)
 
+    def integrate_storage(self, **kwargs):
+        """Integrate storage in grid"""
+        integrate_storage(network=self,
+                          position=kwargs.get('position', None),
+                          operational_mode=kwargs.get(
+                              'operational_mode', None),
+                          parameters=kwargs.get('parameters', None))
+
     @property
     def id(self):
         """Returns id of network"""
@@ -285,7 +266,7 @@ class Network:
     @property
     def config(self):
         """Returns config object"""
-        return self._config
+        return self._config.data
 
     @property
     def equipment_data(self):
@@ -335,8 +316,7 @@ class Network:
 
         A grid topology representation based on
         :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
-        this data model the
-        `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+        this data model the :pypsa:`pypsa.Network<network>`
         is assigned to this attribute.
         This allows as well to overwrite data.
 
@@ -348,7 +328,9 @@ class Network:
 
         Returns
         -------
-        PyPSA grid representation
+        :pypsa:`pypsa.Network<network>`
+            PyPSA grid representation
+
         """
         return self._pypsa
 
@@ -366,6 +348,67 @@ class Network:
 
     def __repr__(self):
         return 'Network ' + str(self._id)
+
+
+class Config:
+    """Defines the configurations
+
+    Used as container for all configurations.
+
+    """
+    #ToDo: add docstring
+    def __init__(self, **kwargs):
+        self._data = self._load_config()
+
+    @staticmethod
+    def _load_config():
+        """Load config files
+
+        Returns
+        -------
+        config object
+        """
+
+        # load config
+        config.load_config('config_db_tables.cfg')
+        config.load_config('config_data.cfg')
+        config.load_config('config_flexopt.cfg')
+        config.load_config('config_misc.cfg')
+        config.load_config('config_scenario.cfg')
+        config.load_config('config_costs.cfg')
+
+        confic_dict = config.cfg._sections
+
+        # convert numeric values to float
+        for sec, subsecs in confic_dict.items():
+            for subsec, val in subsecs.items():
+                # try str -> float conversion
+                try:
+                    confic_dict[sec][subsec] = float(val)
+                except:
+                    pass
+
+        # modify structure of config data
+        confic_dict['data']['peakload_consumption_ratio'] = {
+            'residential': confic_dict['data'][
+                'residential_peakload_consumption'],
+            'retail': confic_dict['data'][
+                'retail_peakload_consumption'],
+            'industrial': confic_dict['data'][
+                'residential_peakload_consumption'],
+            'agricultural': confic_dict['data'][
+                'agricultural_peakload_consumption']}
+
+        del (confic_dict['data']['residential_peakload_consumption'])
+        del (confic_dict['data']['retail_peakload_consumption'])
+        del (confic_dict['data']['industrial_peakload_consumption'])
+        del (confic_dict['data']['agricultural_peakload_consumption'])
+
+        return confic_dict
+
+    @property
+    def data(self):
+        return self._data
 
 
 class Scenario:
@@ -387,6 +430,10 @@ class Scenario:
 
     Optional Parameters
     --------------------
+    timeseries : :obj:`list` of :class:`~.grid.grids.TimeSeries`
+        Time series associated with a scenario. Only specify if you don't
+        want to do a worst-case analysis and are not using etrago
+        specifications.
     pfac_mv_gen : :obj:`float`
         Power factor for medium voltage generators
     pfac_mv_load : :obj:`float`
@@ -400,38 +447,44 @@ class Scenario:
     ----------
     _name : :obj:`str`
         Scenario name (e.g. "feedin case weather 2011")
-    _network : :class:~.grid.network.Network`
-        Network which this scenario is associated with
+    _mv_grid_id : :obj:`str`
+        ID of MV grid district
+    _mode : :obj:`str`
+        'worst-case' or 'time-range'
+    _config : :class:~.grid.network.Config`
+        Configuration parameters
     _timeseries : :obj:`list` of :class:`~.grid.grids.TimeSeries`
-        Time series associated to a scenario
+        Time series associated with a scenario.
     _etrago_specs : :class:`~.grid.grids.ETraGoSpecs`
         Specifications which are to be fulfilled at transition point (HV-MV
         substation)
     _parameters : :class:`~.grid.network.Parameters`
         Parameters for power flow analysis and grid expansion.
+    scenario_name : str
+        Specify a scenario that is used to distinguish data, assumptions and
+        parameter.
 
     """
 
-    def __init__(self, power_flow, **kwargs):
+    def __init__(self, power_flow, mv_grid_id, **kwargs):
+        self._mv_grid_id = mv_grid_id
         self._name = kwargs.get('name', None)
-        self._network = kwargs.get('network', None)
+        self._config = kwargs.get('config', None)
         self._timeseries = kwargs.get('timeseries', None)
         self._etrago_specs = kwargs.get('etrago_specs', None)
         self._parameters = Parameters(self, **kwargs)
+        self.scenario_name = kwargs.get('scenario_name', None)
+        self._curtailment = kwargs.get('curtailment', None)
 
-        if isinstance(power_flow, str):
-            if power_flow != 'worst-case':
-                raise ValueError(
-                    "{} is not a valid specification for type of power flow"
-                    "analysis. Try 'worst-case'".format(power_flow))
-            else:
-                timeindex = pd.date_range('12/4/2011', periods=1, freq='H')
-        elif isinstance(power_flow, tuple):
-            raise NotImplementedError("Time range analyze will be implemented "
-                                      "in near future.")
+        # get config parameters if not provided
+        if self._config is None:
+            self._config = Config()
+        # populate timeseries attribute
+        self.set_timeseries(power_flow)
 
-        # Set timeindex of Timeseries()
-        self.timeseries.timeindex = timeindex
+    @property
+    def mv_grid_id(self):
+        return self._mv_grid_id
 
     @property
     def timeseries(self):
@@ -440,6 +493,89 @@ class Scenario:
     @property
     def parameters(self):
         return self._parameters
+
+    @property
+    def config(self):
+        return self._config
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @property
+    def etrago_specs(self):
+        return self._etrago_specs
+
+    def set_timeseries(self, power_flow):
+        if isinstance(power_flow, str):
+            if power_flow != 'worst-case':
+                raise ValueError(
+                    "{} is not a valid specification for type of power flow "
+                    "analysis. Try 'worst-case'".format(power_flow))
+            else:
+                self._mode = 'worst-case'
+                if self._etrago_specs:
+                    logger.warning("Dispatch specifications from etrago are "
+                                   "overwritten when power_flow is set to "
+                                   "'worst-case'.")
+                if self._timeseries:
+                    logger.warning("Timeseries are overwritten when "
+                                   "power_flow is set to 'worst-case'.")
+                self._timeseries = TimeSeries()
+                self._timeseries.generation = \
+                    self._timeseries.worst_case_generation_ts()
+                self._timeseries.load = self._timeseries.worst_case_load_ts(
+                    self)
+        elif isinstance(power_flow, tuple):
+            if self._etrago_specs:
+                if self._etrago_specs.dispatch is not None:
+                    self._mode = 'time-range'
+                    self._timeseries = TimeSeries()
+                    if not power_flow:
+                        self._timeseries.timeindex = \
+                            self._etrago_specs.dispatch.index
+                        self._timeseries.generation = \
+                            self._etrago_specs.dispatch
+                        self._timeseries.load = \
+                            self._timeseries.import_load_timeseries(self)
+                    else:
+                        self._timeseries.timeindex = pd.date_range(
+                            power_flow[0], power_flow[1], freq='H')
+                        self._timeseries.generation = \
+                            self._etrago_specs.dispatch.loc[
+                                self._timeseries.timeindex]
+                        self._timeseries.load = \
+                            self._timeseries.import_load_timeseries(self).loc[
+                                self._timeseries.timeindex]
+                else:
+                    logger.error("Etrago specifications must contain dispatch "
+                                 "timeseries. Please provide them.")
+            elif not self._timeseries:
+                self._mode = 'time-range'
+                self._timeseries = TimeSeries()
+                if not power_flow:
+                    self._timeseries.generation = \
+                        self._timeseries.import_feedin_timeseries(self)
+                    self._timeseries.load = \
+                        self._timeseries.import_load_timeseries(self)
+                    self._timeseries.timeindex = \
+                        self._timeseries.generation.index
+                else:
+                    self._timeseries.timeindex = pd.date_range(
+                        power_flow[0], power_flow[1], freq='H')
+                    self._timeseries.generation = \
+                        self._timeseries.import_feedin_timeseries(self).loc[
+                            self._timeseries.timeindex]
+                    self._timeseries.load = \
+                        self._timeseries.import_load_timeseries(self).loc[
+                            self._timeseries.timeindex]
+
+    @property
+    def curtailment(self):
+        """
+        Return technology specific curtailment factors
+        """
+        return self._curtailment
 
     def __repr__(self):
         return 'Scenario ' + self._name
@@ -610,30 +746,26 @@ class TimeSeries:
     """Defines an eDisGo time series
 
     Contains time series for loads (sector-specific) and generators
-    (technology-specific), e.g. tech. solar, sub-tech. rooftop.
+    (technology-specific), e.g. tech. solar.
 
     Attributes
     ----------
-    _generation : :obj:`dict` of :obj:`dict` of :pandas:`pandas.Series<series>`
-        Time series of active power of generators for technologies and
-        sub-technologies, format:
+    _generation : :pandas:`pandas.DataFrame<dataframe>`
+        Time series of active power of generators. Columns represent generator
+        type:
 
-        .. code-block:: python
+         * 'solar'
+         * 'wind'
+         * 'coal'
+         * ...
 
-            {tech_1: {
-                sub-tech_1_1: timeseries_1_1,
-                ...,
-                sub-tech_1_n: timeseries_1_n},
-                 ...,
-            tech_m: {
-                sub-tech_m_1: timeseries_m_1,
-                ...,
-                sub-tech_m_n: timeseries_m_n}
-            }
+        In case of worst-case analysis generator type is distinguished so that
+        the DataFrame contains only one column for all generators.
 
     _load : :pandas:`pandas.DataFrame<dataframe>`
-        Time series of active power of (cumulative) loads. This index is given
-        by :meth:`timeindex`. Columns represent load sectors:
+        Time series of active power of (cumulative) loads. Columns represent
+        load sectors:
+
          * 'residential'
          * 'retail'
          * 'industrial'
@@ -643,6 +775,7 @@ class TimeSeries:
     --------
     edisgo.grid.components.Generator : Usage details of :meth:`_generation`
     edisgo.grid.components.Load : Usage details of :meth:`_load`
+
     """
 
     def __init__(self, **kwargs):
@@ -660,35 +793,11 @@ class TimeSeries:
         dict or :pandas:`pandas.Series<series>`
             See class definition for details.
         """
-        if self._generation is None:
-            self._generation = self._set_generation(mode='worst-case')
-
         return self._generation
 
-    def _set_generation(self, mode=None):
-        """
-        Assign generation data according to provided case
-
-        Parameters
-        ----------
-        mode : str or tuple
-            Create time series for worst-case analysis ('worst-case') or
-            retrieve generation data from OEDB for each covered weather cell.
-
-            .. code-block:: python
-
-                timeseries._set_generation(mode=(
-                    datetime(2012, 3, 24, 13),
-                    datetime(2012, 3, 24, 21)))
-        """
-
-        if mode == 'worst-case':
-            return worst_case_generation_ts(self.timeindex)
-        elif mode == 'time-range':
-            raise NotImplementedError
-        else:
-            raise ValueError("Provide proper mode of analysis: 'worst-case | "
-                             "'time-range'")
+    @generation.setter
+    def generation(self, generation_timeseries):
+        self._generation = generation_timeseries
         
     @property
     def load(self):
@@ -702,24 +811,13 @@ class TimeSeries:
         -------
         dict or :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
-        """
-        if self._load is None:
-            self._load = self._set_load(mode='worst-case')
 
+        """
         return self._load
 
-    def _set_load(self, mode=None):
-        """
-        Assigne load data according to provided case
-        """
-
-        if mode == 'worst-case':
-            return worst_case_load_ts(self.timeindex)
-        elif mode == 'time-range':
-            raise NotImplementedError
-        else:
-            raise ValueError("Provide proper mode of analysis: 'worst-case | "
-                             "'time-range'")
+    @load.setter
+    def load(self, load_timeseries):
+        self._load = load_timeseries
 
     @property
     def timeindex(self):
@@ -733,12 +831,95 @@ class TimeSeries:
         -------
         :pandas:`pandas.DatetimeIndex<datetimeindex>`
             Time range of power flow analysis
+
         """
         return self._timeindex
 
     @timeindex.setter
     def timeindex(self, time_range):
         self._timeindex = time_range
+
+    def worst_case_generation_ts(self):
+        """
+        Define worst case generation time series.
+
+        Parameters
+        ----------
+        network : :class:~.grid.network.Network`
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Normalized active power (1 kW) in column 'p' with random time index
+
+        """
+        # set random timeindex
+        self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
+        return pd.DataFrame({'p': 1}, index=self.timeindex)
+
+    def worst_case_load_ts(self, scenario):
+        """
+        Define worst case load time series
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Normalized active power (1 kW) for each load sector with
+            random time index
+
+        """
+        # set random timeindex
+        self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
+        #ToDo: remove hard coded sectors?
+        return pd.DataFrame({
+            'residential': 1 * float(
+                scenario.config.data['data']['peakload_consumption_ratio'][
+                    'residential']),
+            'retail': 1 * float(
+                scenario.config.data['data']['peakload_consumption_ratio'][
+                    'retail']),
+            'industrial': 1 * float(
+                scenario.config.data['data']['peakload_consumption_ratio'][
+                    'industrial']),
+            'agricultural': 1 * float(
+                scenario.config.data['data']['peakload_consumption_ratio'][
+                    'agricultural'])},
+            index=self.timeindex)
+
+    def import_feedin_timeseries(self, scenario):
+        """
+        Import feedin timeseries from oedb
+        """
+        #ToDo: add docstring
+        generation_df = import_feedin_timeseries(scenario)
+        #ToDo: remove hard coded value
+        if generation_df is not None:
+            generation_df = pd.concat(
+                [generation_df, pd.DataFrame({'other': 0.9},
+                                             index=generation_df.index)],
+                axis=1)
+        #ToDo remove hard coded index?
+        generation_df.index = pd.date_range('1/1/2011', periods=8760, freq='H')
+        return generation_df
+
+    def import_load_timeseries(self, scenario, data_source='demandlib'):
+        """
+        Import load timeseries
+
+        Parameters
+        ----------
+        data_source : str
+            Specify type of data source. Available data sources are
+
+             * 'oedb': retrieves load time series cumulated across sectors
+             * 'demandlib': determine a load time series with the use of the
+                demandlib. This calculated standard load profiles for 4
+                different sectors.
+
+        """
+        # ToDo: add docstring
+        #ToDo: find better place for input data_source (in config?)
+        return import_load_timeseries(scenario, data_source)
 
 
 class ETraGoSpecs:
@@ -749,47 +930,85 @@ class ETraGoSpecs:
 
     Attributes
     ----------
-    _active_power : :pandas:`pandas.Series<series>`
-        Time series of active power at Transition Point
-    _reactive_power : :pandas:`pandas.Series<series>`
-        Time series of reactive power at Transition Point
     _battery_capacity: :obj:`float`
-        Capacity of virtual battery at Transition Point
+        Capacity of virtual battery at Transition Point in kWh.
     _battery_active_power : :pandas:`pandas.Series<series>`
         Time series of active power the (virtual) battery (at Transition Point)
-        is charged (negative) or discharged (positive) with
-    _dispatch : :obj:`dict` of :obj:`dict` of :pandas:`pandas.Series<series>`
-        Time series of actual dispatch and a time series of power generation
-        potential (without curtailment) for technologies
-        and sub-technologies, format::
+        is charged (negative) or discharged (positive) with in kW.
+    _conv_dispatch : :pandas:`pandas.DataFrame<dataframe>`
+        Time series of active power for each (aggregated) type of flexible
+        generators normalized with corresponding capacity.
+        Columns represent generator type:
+         * 'gas'
+         * 'coal'
+         * 'biomass'
+         * ...
+    _ren_dispatch : :pandas:`pandas.DataFrame<dataframe>`
+        Time series of active power of wind and solar aggregates,
+        normalized with corresponding capacity.
+        Columns represent ren_id (see _renewables):
+         * '0'
+         * '1'
+         * ...
+    _curtailment : :pandas:`pandas.DataFrame<dataframe>`
+        Time series of curtailed power for wind and solar aggregates,
+        normalized with corresponding capacity.
+        Columns represent ren_id (see _renewables):
+         * '0'
+         * '1'
+         * ...
+    _renewables : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe containing `ren_id` specifying type (wind or solar) and
+        weather cell ID.
+        Columns are:
+         * 'name' (type, e.g. 'solar')
+         * 'w_id' (weather cell ID)
+         * 'ren_id'
 
-            {
-                tech_1: {
-                    sub-tech_1_1:
-                        timeseries_1_1,
-                        ...,
-                    sub-tech_1_n:
-                    timeseries_1_n
-                    },
-                ...,
-                tech_m: {
-                    sub-tech_m_1:
-                        timeseries_m_1,
-                        ...,
-                    sub-tech_m_n:
-                        timeseries_m_n
-                        }
-                 }
-
-        .. TODO: Is this really an active power value or a ratio (%) ?
     """
 
     def __init__(self, **kwargs):
-        self._active_power = kwargs.get('active_power', None)
-        self._reactive_power = kwargs.get('reactive_power', None)
         self._battery_capacity = kwargs.get('battery_capacity', None)
         self._battery_active_power = kwargs.get('battery_active_power', None)
-        self._dispatch = kwargs.get('dispatch', None)
+        self._conv_dispatch = kwargs.get('conv_dispatch', None)
+        self._ren_dispatch = kwargs.get('ren_dispatch', None)
+        self._curtailment = kwargs.get('curtailment', None)
+        self._renewables = kwargs.get('renewables', None)
+
+    @property
+    def battery_capacity(self):
+        return self._battery_capacity
+
+    @property
+    def battery_active_power(self):
+        return self._battery_active_power
+
+    @property
+    def dispatch(self):
+        """
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Time series of active power for each type of generator normalized
+            with corresponding capacity.
+            Columns represent generator type:
+             * 'solar'
+             * 'wind'
+             * 'coal'
+             * ...
+
+        """
+        # this is temporary until feed-in of renewables is distinguished by
+        # weather ID
+        wind = self._renewables[self._renewables['name'] == 'wind']['ren_id']
+        solar = self._renewables[self._renewables['name'] == 'solar']['ren_id']
+        ren_dispatch_aggr_wind = self._ren_dispatch[wind].mean(axis=1).rename(
+            'wind')
+        ren_dispatch_aggr_solar = self._ren_dispatch[solar].mean(
+            axis=1).rename('solar')
+        ren_dispatch_aggr = pd.DataFrame(ren_dispatch_aggr_wind).join(
+            ren_dispatch_aggr_solar)
+        return ren_dispatch_aggr.join(self._conv_dispatch)
 
 
 class Results:
@@ -805,6 +1024,7 @@ class Results:
         A stack that details the history of measures to increase grid's hosting
         capacity. The last item refers to the latest measure. The key `original`
         refers to the state of the grid topology as it was initially imported.
+
     """
 
     # TODO: maybe add setter to alter list of measures
@@ -843,6 +1063,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Active power results from power flow analysis
+
         """
         return self._pfa_p
 
@@ -939,6 +1160,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Current results from power flow analysis
+
         """
         return self._i_res
 
@@ -984,6 +1206,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Equipment changes
+
         """
         return self._equipment_changes
 
@@ -1055,14 +1278,18 @@ class Results:
 
         Parameters
         ----------
-        issues : Dictionary
+        issues : dict
 
             Dictionary of critical lines/stations with relative over-loading
             and critical nodes with voltage deviation in p.u.. Format:
+
+            .. code-block:: python
+
                 {crit_line_1: rel_overloading_1, ...,
                  crit_line_n: rel_overloading_n,
                  crit_node_1: v_mag_pu_node_1, ...,
                  crit_node_n: v_mag_pu_node_n}
+
             Provide this if you want to set unresolved_issues. For retrieval
             of unresolved issues do not pass an argument.
 
@@ -1088,7 +1315,7 @@ class Results:
 
         .. math::
 
-            S = \sqrt(max(p0, p1)^2 + max(q0, q1)^2)
+            S = max(\sqrt{p0^2 + q0^2}, \sqrt{p1^2 + q1^2})
 
         Parameters
         ----------
@@ -1143,7 +1370,7 @@ class Results:
             interested in. It is required to provide this argument in order
             to distinguish voltage levels at primary and secondary side of the
             transformer/LV station.
-            If not provided (respectively None) defaults to `['mv', 'lv'].
+            If not provided (respectively None) defaults to ['mv', 'lv'].
 
         Returns
         -------
@@ -1177,39 +1404,3 @@ class Results:
 
         return self.pfa_v_mag_pu[level][labels_included]
 
-
-def worst_case_generation_ts(timeindex):
-    """
-    Define worst case generation time series
-
-    Parameters
-    ----------
-    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
-            Time range of power flow analysis
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Normalized active power (1 kW)
-    """
-    return pd.DataFrame({'p': 1}, index=timeindex)
-
-
-def worst_case_load_ts(timeindex):
-    """
-    Define worst case load time series
-
-    Parameters
-    ----------
-    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
-            Time range of power flow analysis
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Normalized active power (1 kW)
-    """
-    return pd.DataFrame({'residential': 1,
-                         'retail': 1,
-                         'industrial': 1,
-                         'agricultural': 1}, index=timeindex)
