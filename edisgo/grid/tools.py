@@ -158,17 +158,19 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
 
         # Identify nodes where switch disconnector is located in between
         for ctr in range(len(node_peak_data)):
-            # Iteratively split route and calc peak load difference
-            route_data_part1 = sum(node_peak_data[0:ctr])
-            route_data_part2 = sum(node_peak_data[ctr:len(node_peak_data)])
-            diff = abs(route_data_part1 - route_data_part2)
+            # check if node that own the switch disconnecter is of type LVStation
+            if isinstance(ring[ctr - 2], LVStation):
+                # Iteratively split route and calc peak load difference
+                route_data_part1 = sum(node_peak_data[0:ctr])
+                route_data_part2 = sum(node_peak_data[ctr:len(node_peak_data)])
+                diff = abs(route_data_part1 - route_data_part2)
 
-            # stop walking through the ring when load/generation is most equal
-            if diff <= diff_min:
-                diff_min = diff
-                position = ctr
-            else:
-                break
+                # stop walking through the ring when load/generation is most equal
+                if diff <= diff_min:
+                    diff_min = diff
+                    position = ctr
+                else:
+                    break
 
         # find position of switch disconnector
         node1 = ring[position - 1]

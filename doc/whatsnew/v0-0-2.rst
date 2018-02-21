@@ -1,0 +1,15 @@
+Release v0.0.2
+==============
+
+Release data: February XX 2018
+
+Changes
+-------
+
+* Switch disconnecter/ disconnecting points are now relocated by eDisGo
+  `#99 <https://github.com/openego/eDisGo/issues/99>`_. Before,
+  locations determined by Ding0 were used. Relocation is conducted according to
+  minimal load differences in both parts of the ring.
+* Switch disconnecters are always located in LV stations
+  `#23 <https://github.com/openego/eDisGo/issues/23>`_
+

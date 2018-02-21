@@ -2,7 +2,7 @@ from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
     MVStation, Line, Transformer, LVStation
 from ..grid.grids import MVGrid, LVGrid
 from ..grid.connect import connect_mv_generators, connect_lv_generators
-from ..grid.tools import select_cable
+from ..grid.tools import select_cable, position_switch_disconnectors
 from ..tools.geo import proj2equidistant
 
 from egoio.db_tables import model_draft, supply
@@ -93,6 +93,11 @@ def import_from_ding0(file, network):
 
     # Assign lv_grids to network
     network.mv_grid.lv_grids = lv_grids
+
+    # Integrate disconnecting points
+    position_switch_disconnectors(network.mv_grid,
+                                  mode=network.config['scenario'][
+                                      'disconnecting_point_position'])
 
     # Check data integrity
     _validate_ding0_grid_import(network.mv_grid, ding0_mv_grid, lv_grid_mapping)
@@ -288,15 +293,6 @@ def _build_mv_grid(ding0_grid, network):
         v_level=_.v_level) for _ in ding0_grid.generators()}
     grid.graph.add_nodes_from(generators.values(), type='generator')
 
-    # Create list of diconnection point instances and add these to grid's graph
-    disconnecting_points = {_: MVDisconnectingPoint(id=_.id_db,
-                                                    geom=_.geo_data,
-                                                    state=_.status,
-                                                    grid=grid)
-                            for _ in ding0_grid._circuit_breakers}
-    grid.graph.add_nodes_from(disconnecting_points.values(),
-                              type='disconnection_point')
-
     # Create list of branch tee instances and add these to grid's graph
     branch_tees = {_: BranchTee(id=_.id_db,
                                 geom=_.geo_data,
@@ -349,7 +345,6 @@ def _build_mv_grid(ding0_grid, network):
     # Merge node above defined above to a single dict
     nodes = {**loads,
              **generators,
-             **disconnecting_points,
              **branch_tees,
              **stations,
              **{ding0_grid.station(): mv_station}}
@@ -685,7 +680,7 @@ def _validate_ding0_mv_grid_import(grid, ding0_grid):
     data_integrity['disconnection_point']['ding0'] = len(
         ding0_grid._circuit_breakers)
     data_integrity['disconnection_point']['edisgo'] = len(
-        grid.graph.nodes_by_attribute('disconnection_point'))
+        grid.graph.nodes_by_attribute('mv_disconnecting_point'))
 
     # Check number of MV transformers
     data_integrity['mv_transformer']['ding0'] = len(
@@ -1766,15 +1761,12 @@ def _import_genos_from_oedb(network, types=None):
         data_version = network.config['versioned']['version']
 
         # import ORMs
-        #orm_conv_generators = supply.__getattribute__(orm_conv_generators_name)
-        #orm_re_generators = supply.__getattribute__(orm_re_generators_name)
-        # TODO: REMOVE WORKAROUND
-        orm_conv_generators = model_draft.__getattribute__(orm_conv_generators_name)
-        orm_re_generators = model_draft.__getattribute__(orm_re_generators_name)
+        orm_conv_generators = supply.__getattribute__(orm_conv_generators_name)
+        orm_re_generators = supply.__getattribute__(orm_re_generators_name)
 
         # set version condition
-        orm_conv_generators_version = orm_conv_generators.columns.preversion == data_version
-        orm_re_generators_version = orm_re_generators.columns.preversion == data_version
+        orm_conv_generators_version = orm_conv_generators.columns.version == data_version
+        orm_re_generators_version = orm_re_generators.columns.version == data_version
 
     # Create filter for generation technologies
     if types is None:
