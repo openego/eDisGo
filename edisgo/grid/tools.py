@@ -211,7 +211,7 @@ def implement_switch_disconnector(mv_grid, node1, node2):
     # Get disconnecting point's location
     line = mv_grid.graph.edge[node1][node2]['line']
 
-    length_sd_line = 1e-3 # in km
+    length_sd_line = .75e-3 # in km
 
     x_sd = node1.geom.x * (length_sd_line / line.length) * (
         node1.geom.x - node2.geom.x)
