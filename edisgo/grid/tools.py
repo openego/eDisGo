@@ -250,7 +250,7 @@ def implement_switch_disconnector(mv_grid, node1, node2):
                            switch_disconnector_line_attr)
 
     # Set line to switch disconnector
-    disconnecting_point.line =  mv_grid.graph.line_from_nodes(disconnecting_point, node2)
+    disconnecting_point.line =  mv_grid.graph.line_from_nodes(disconnecting_point, node1)
 
 
 def select_cable(network, level, apparent_power):
