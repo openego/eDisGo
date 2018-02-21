@@ -361,6 +361,9 @@ def _build_mv_grid(ding0_grid, network):
              for _ in ding0_grid.graph_edges()
              if not any([isinstance(_['adj_nodes'][0], LVLoadAreaCentreDing0),
                         isinstance(_['adj_nodes'][1], LVLoadAreaCentreDing0)])]
+    # set line name as series name
+    for line in lines:
+        line[2]['line'].type.name = line[2]['line'].type['name']
     grid.graph.add_edges_from(lines, type='line')
 
     # Assign reference to HV-MV station to MV grid
