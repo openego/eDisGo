@@ -24,7 +24,8 @@ def grid_expansion_costs(network):
     `pandas.DataFrame<dataframe>`
         DataFrame containing type and costs plus in the case of lines the
         line length and number of parallel lines of each reinforced
-        transformer and line. The DataFrame has the following columns:
+        transformer and line. Index of the DataFrame is the representation of
+        the respective object, columns are the following:
 
         type: String
             Transformer size or cable name

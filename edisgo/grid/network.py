@@ -1231,7 +1231,8 @@ class Results:
             grid_expansion_costs. For retrieval of costs do not pass an
             argument.
 
-            The DataFrame has the following columns:
+            Index of the DataFrame is the representation of the respective
+            object, columns are the following:
 
             type: String
                 Transformer size or cable name
