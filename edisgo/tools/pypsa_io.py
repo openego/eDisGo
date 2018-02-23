@@ -1186,11 +1186,15 @@ def process_pfa_results(network, pypsa):
     network.results.pfa_p = p0.where(s0 > s1, p1) * 1e3
     network.results.pfa_q = q0.where(s0 > s1, q1) * 1e3
 
-    def voltage_at_lines(row):
-        return (pypsa.buses_t['v_mag_pu'][row['bus0']] +\
-            pypsa.buses_t['v_mag_pu'][row['bus1']]) / 2
+    lines_bus0 = pypsa.lines['bus0'].to_dict()
+    bus0_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[list(lines_bus0.values()), :].copy()
+    bus0_v_mag_pu.index = list(lines_bus0.keys())
 
-    line_voltage_avg = pypsa.lines.apply(voltage_at_lines, axis=1)
+    lines_bus1 = pypsa.lines['bus1'].to_dict()
+    bus1_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[list(lines_bus1.values()), :].copy()
+    bus1_v_mag_pu.index = list(lines_bus1.keys())
+
+    line_voltage_avg = 0.5 * (bus0_v_mag_pu + bus1_v_mag_pu)
 
     # Get voltage levels at line (avg. of buses at both sides)
     network.results._i_res = s0[pypsa.lines_t['q0'].columns].truediv(
