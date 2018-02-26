@@ -14,6 +14,152 @@ from edisgo.flex_opt.storage_integration import integrate_storage
 
 logger = logging.getLogger('edisgo')
 
+class EDisGoAPI:
+    """
+    Handles user inputs.
+    #ToDo: Doch noch mode paramater einführen, damit der User nur einmal den
+    worst case Fall definieren muss und nicht für jede Zeitreihe?
+
+    Parameters
+    ----------
+    mv_grid_id : :obj:`str`
+        MV grid ID used in import of ding0 grid.
+        ToDo: explain where MV grid IDs come from
+    ding0_grid : file: :obj:`str` or :class:`ding0.core.NetworkDing0`
+        If a str is provided it is assumed it points to a pickle with Ding0
+        grid data. This file will be read. If an object of the type
+        :class:`ding0.core.NetworkDing0` data will be used directly from this
+        object.
+        This will probably be removed when ding0 grids are in oedb.
+    config_path : dict
+        Dictionary specifying which config files to use. If not specified
+        config files in $HOME/.edisgo/config/ are used. Keys of the dictionary
+        are the config files, values contain the corresponding path to the
+        file.
+        ToDo: list allowed keys
+    scenario_name : None or :obj:`str`
+        Can be used to describe your scenario but is not used for anything
+        else. Default: None.
+    timeseries_fluc : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
+        Parameter used to obtain time series for active power feed-in of
+        fluctuating renewables wind and solar.
+        Possible options are:
+         * 'worst-case'
+            feed-in for the two worst-case scenarios feed-in case and load case
+            are generated
+         * 'worst-case-feedin'
+            feed-in for the worst-case scenario feed-in case is generated
+         * 'worst-case-load'
+            feed-in for the worst-case scenario load case is generated
+         * 'oedb'
+            time series for the time steps specified in `timeindex` are
+            obtained from the OpenEnergy DataBase
+         * :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with time series, normalized with corresponding capacity.
+            Time series can either be aggregated by technology type or by type
+            and weather cell ID. In the first case columns of the DataFrame are
+            'solar' and 'wind'; in the second case columns need to be a
+            :pandas:`pandas.MultiIndex<multiindex>` with the first level
+            containing the type and the second level the weather cell ID.
+        ToDo: explain how to obtain weather cell ID, add link to explanation
+        of worst-case analyses
+    timeseries_flex : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
+        Parameter used to obtain time series for active power feed-in of
+        flexible generators such as coal and biomass generators.
+        Possible options are:
+         * 'worst-case'
+            feed-in for the two worst-case scenarios feed-in case and load case
+            are generated
+         * 'worst-case-feedin'
+            feed-in for the worst-case scenario feed-in case is generated
+         * 'worst-case-load'
+            feed-in for the worst-case scenario load case is generated
+         * :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with time series for active power of each (aggregated)
+            type of flexible generator normalized with corresponding capacity.
+            Columns represent generator type:
+             * 'gas'
+             * 'coal'
+             * 'biomass'
+             * ...
+    timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
+        Parameter used to obtain time series of active power of (cumulative)
+        loads.
+        Possible options are:
+         * 'worst-case'
+            load time series for the two worst-case scenarios feed-in case and
+            load case are generated
+         * 'worst-case-feedin'
+            load time series for the worst-case scenario feed-in case is
+            generated
+         * 'worst-case-load'
+            load time series for the worst-case scenario load case is generated
+         * 'oedb'
+            time series for the time steps specified in `timeindex` are
+            obtained from the OpenEnergy DataBase
+         * 'demandlib'
+            time series for the time steps specified in `timeindex` are
+            generated using the oemof demandlib
+         * :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with load time series of each (cumulative) type of load
+            normalized with corresponding annual energy demand.
+            Columns represent load type:
+             * 'residential'
+             * 'retail'
+             * 'industrial'
+             * 'agricultural'
+    timeseries_battery : None or :obj:`str` or :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
+        Parameter used to obtain time series of active power the battery
+        storage(s) is/are charged (negative) or discharged (positive) with.
+        Possible options are:
+         * 'worst-case'
+            time series for the two worst-case scenarios feed-in case and
+            load case are generated
+         * 'worst-case-feedin'
+            time series for the worst-case scenario feed-in case is
+            generated
+         * 'worst-case-load'
+            time series for the worst-case scenario load case is generated
+         * :pandas:`pandas.Series<series>`/:pandas:`pandas.DataFrame<dataframe>`
+            Time series of active power the battery storage is charged
+            (negative) or discharged (positive) with, normalized with
+            corresponding capacity. In case of more than one storage provide
+            a DataFrame where each column represents one storage.
+    battery_parameters : None or dict or list
+        In case of one battery storage a dictionary needs to be provided. In
+        case of more than one battery storage a list of dictionaries needs to
+        be provided. Default: None.
+        #ToDo: Add description of the dictionary.
+        #ToDo: Besser DataFrame mit gleichen columns wie timeseries_battery?
+    timeseries_curtailment : None or :pandas:`pandas.DataFrame<dataframe>`
+        DataFrame with time series of curtailed power of wind and solar
+        aggregates in kW.
+        Time series can either be aggregated by technology type or by type
+        and weather cell ID. In the first case columns of the DataFrame are
+        'solar' and 'wind'; in the second case columns need to be a
+        :pandas:`pandas.MultiIndex<multiindex>` with the first level
+        containing the type and the second level the weather cell ID. See
+        `timeseries_fluc` parameter for further explanation of the weather
+        cell ID. Default: None.
+    curtailment_methodology : None or :obj:`str`
+        Specifies the methodology used to allocate the curtailment time
+        series to single generators. Needs to be set when curtailment time
+        series are given. Default: None.
+        #ToDo: Add possible options and links to them once we defined them.
+    import_generator_scenario : None or :obj:`str`
+        If provided defines which scenario of future generator park to use.
+        Possible options are 'nep2035' and 'ego100'.
+        #ToDo: Add link to explanation of scenarios.
+    timeindex : None or :pandas:`pandas.DatetimeIndex<datetimeindex>`
+        Can be used to define a time range for which to obtain load time series
+        and feed-in time series of fluctuating renewables or to define time
+        ranges of the given time series that will be used in the analysis.
+    """
+
+    def __init__(self, grid_id):
+        pass
+
+
 class Network:
     """Defines the eDisGo Network
 
