@@ -375,30 +375,30 @@ class Config:
         config.load_config('config_grid_expansion.cfg')
         config.load_config('config_timeseries.cfg')
 
-        confic_dict = config.cfg._sections
+        config_dict = config.cfg._sections
 
         # convert numeric values to float
-        for sec, subsecs in confic_dict.items():
+        for sec, subsecs in config_dict.items():
             for subsec, val in subsecs.items():
                 # try str -> float conversion
                 try:
-                    confic_dict[sec][subsec] = float(val)
+                    config_dict[sec][subsec] = float(val)
                 except:
                     pass
 
         # convert to time object
-        confic_dict['demandlib']['day_start'] = datetime.datetime.strptime(
-            confic_dict['demandlib']['day_start'], "%H:%M")
-        confic_dict['demandlib']['day_start'] = datetime.time(
-            confic_dict['demandlib']['day_start'].hour,
-            confic_dict['demandlib']['day_start'].minute)
-        confic_dict['demandlib']['day_end'] = datetime.datetime.strptime(
-            confic_dict['demandlib']['day_end'], "%H:%M")
-        confic_dict['demandlib']['day_end'] = datetime.time(
-            confic_dict['demandlib']['day_end'].hour,
-            confic_dict['demandlib']['day_end'].minute)
+        config_dict['demandlib']['day_start'] = datetime.datetime.strptime(
+            config_dict['demandlib']['day_start'], "%H:%M")
+        config_dict['demandlib']['day_start'] = datetime.time(
+            config_dict['demandlib']['day_start'].hour,
+            config_dict['demandlib']['day_start'].minute)
+        config_dict['demandlib']['day_end'] = datetime.datetime.strptime(
+            config_dict['demandlib']['day_end'], "%H:%M")
+        config_dict['demandlib']['day_end'] = datetime.time(
+            config_dict['demandlib']['day_end'].hour,
+            config_dict['demandlib']['day_end'].minute)
 
-        return confic_dict
+        return config_dict
 
     @property
     def data(self):
