@@ -152,11 +152,11 @@ class Load(Component):
         """
         if self._timeseries is None:
             if isinstance(self.grid, MVGrid):
-                q_factor = tan(acos(
-                    self.grid.network.scenario.parameters.pfac_mv_load))
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor']['mv_load']))
             elif isinstance(self.grid, LVGrid):
-                q_factor = tan(acos(
-                    self.grid.network.scenario.parameters.pfac_lv_load))
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor']['mv_load']))
 
             # work around until retail and industrial are separate sectors
             # TODO: remove once Ding0 data changed to single sector consumption
@@ -287,11 +287,11 @@ class Generator(Component):
         if self._timeseries is None:
             # calculate share of reactive power
             if isinstance(self.grid, MVGrid):
-                q_factor = tan(acos(
-                    self.grid.network.scenario.parameters.pfac_mv_gen))
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor']['mv_gen']))
             elif isinstance(self.grid, LVGrid):
-                q_factor = tan(acos(
-                    self.grid.network.scenario.parameters.pfac_lv_gen))
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor']['lv_load']))
             # set timeseries for active and reactive power
             if self.grid.network.scenario.mode == 'worst-case':
                 #ToDo: differentiate between load and feed-in case

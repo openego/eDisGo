@@ -118,9 +118,8 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
         else:
             return (0, 0)
 
-
-    cos_phi_load = mv_grid.network.scenario.parameters.pfac_mv_load
-    cos_phi_gen = mv_grid.network.scenario.parameters.pfac_mv_gen
+    cos_phi_load = mv_grid.network.config['reactive_power_factor']['mv_load']
+    cos_phi_gen = mv_grid.network.config['reactive_power_factor']['mv_gen']
 
     # Identify position of switch disconnector (SD)
     rings = nx.algorithms.cycle_basis(mv_grid.graph, root=mv_grid.station)

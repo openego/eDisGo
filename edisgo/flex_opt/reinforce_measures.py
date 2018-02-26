@@ -43,8 +43,9 @@ def extend_distribution_substation_overloading(network, critical_stations):
     except KeyError:
         print('Standard MV/LV transformer is not in equipment list.')
 
-    load_factor_mv_lv_transformer = \
-        network.scenario.parameters.load_factor_mv_lv_transformer
+    #ToDo: differentiate between load and feed-in case!
+    load_factor = network.config['grid_expansion_load_factors'][
+        'lv_feedin_case_transformer']
 
     transformers_changes = {'added': {}, 'removed': {}}
     for station in critical_stations:
@@ -56,8 +57,7 @@ def extend_distribution_substation_overloading(network, critical_stations):
         s_station_pfa = critical_stations[station]
 
         # determine missing transformer power to solve overloading issue
-        s_trafo_missing = s_station_pfa - (
-            sum(s_max_per_trafo) * load_factor_mv_lv_transformer)
+        s_trafo_missing = s_station_pfa - (sum(s_max_per_trafo) * load_factor)
 
         # check if second transformer of the same kind is sufficient
         # if true install second transformer, otherwise install as many
@@ -194,8 +194,10 @@ def extend_substation_overloading(network, critical_stations):
     except KeyError:
         print('Standard HV/MV transformer is not in equipment list.')
 
+    # ToDo: differentiate between load and feed-in case!
     load_factor = \
-        network.scenario.parameters.load_factor_hv_mv_transformer
+        network.config['grid_expansion_load_factors'][
+            'mv_feedin_case_transformer']
 
     transformers_changes = {'added': {}, 'removed': {}}
     for station in critical_stations:
@@ -312,16 +314,12 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
         try:
             standard_line = network.equipment_data['LV_cables'].loc[
                 network.config['grid_expansion_standard_equipment']['lv_line']]
-            max_v_deviation = network.scenario.parameters.lv_max_v_deviation
-            voltage_level = 'lv'
         except KeyError:
             print('Chosen standard LV line is not in equipment list.')
     else:
         try:
             standard_line = network.equipment_data['MV_cables'].loc[
                 network.config['grid_expansion_standard_equipment']['mv_line']]
-            max_v_deviation = network.scenario.parameters.mv_max_v_deviation
-            voltage_level = 'mv'
         except KeyError:
             print('Chosen standard MV line is not in equipment list.')
 
