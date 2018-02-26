@@ -20,11 +20,11 @@ class Network:
     Used as container for all data related to a single
     :class:`~.grid.grids.MVGrid`.
     Provides the top-level API for invocation of data import, analysis of
-    hosting capacity, grid reinforce and flexibility measures.
+    hosting capacity, grid reinforcement and flexibility measures.
 
     Examples
     --------
-    Assuming you the Ding0 `ding0_data.pkl` in CWD
+    Assuming you have the Ding0 `ding0_data.pkl` in CWD
 
     Create eDisGo Network object by loading Ding0 file
 
@@ -42,23 +42,29 @@ class Network:
 
     Attributes
     ----------
-    _id : :obj:`str`
+    id : :obj:`str`
         Name of network
-    _equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+    equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
         Electrical equipment such as lines and transformers
-    _config : ???
-        #TODO: TBD
-    _metadata : :obj:`dict`
+    config : :class:`~.grid.network.Config`
+        Data from config files
+    metadata : :obj:`dict`
         Metadata of Network such as ?
-    _data_sources : :obj:`dict` of :obj:`str`
+    data_sources : :obj:`dict` of :obj:`str`
         Data Sources of grid, generators etc.
         Keys: 'grid', 'generators', ?
-    _scenario : :class:`~.grid.grids.Scenario`
-        Scenario which is used for calculations
-    _pypsa : :pypsa:`pypsa.Network<network>`
+    pypsa : :pypsa:`pypsa.Network<network>`
         PyPSA representation of grid topology
-    _dingo_import_data :
-        Temporary data from ding0 import which are needed for OEP generator update
+    dingo_import_data :
+        Temporary data from ding0 import which are needed for OEP generator
+        update
+    results : :class:`~.grid.network.Results`
+        Object with results from power flow analyses
+    timeseries : :class:`~.grid.network.TimeSeries`
+        Object containing time series
+    mv_grid : :class:`~.grid.grids.MVGrid`
+    scenario : :obj:`str`
+        Defines which scenario of future generator park to use.
     """
 
     def __init__(self, **kwargs):
@@ -66,10 +72,6 @@ class Network:
             self._id = kwargs.get('id', None)
             self._metadata = kwargs.get('metadata', None)
             self._data_sources = kwargs.get('data_sources', {})
-            self._scenario = kwargs.get('scenario', None)
-
-            if self._scenario is not None:
-                self._scenario.network = self
 
             self._mv_grid = kwargs.get('mv_grid', None)
             self._pypsa = None
@@ -77,12 +79,7 @@ class Network:
         else:
             self._pypsa = kwargs.get('pypsa', None)
 
-        self._config = kwargs.get('config', None)
-        if self._config is None:
-            try:
-                self._config = self._scenario.config
-            except:
-                self._config = Config()
+        self._config = Config()
         self._equipment_data = self._load_equipment_data()
 
         self._dingo_import_data = []
@@ -121,7 +118,7 @@ class Network:
         For details see
         :func:`edisgo.data.import_data.import_from_ding0`
         """
-
+        #ToDo: Should also work when only an MV grid ID is provided.
         # create the network instance
         network = cls(**kwargs)
 
@@ -129,30 +126,14 @@ class Network:
         import_from_ding0(file=file,
                           network=network)
 
-        # integrate storage into grid in case ETraGo Specs are given
-        scenario = kwargs.get('scenario', None)
-        if scenario and scenario.etrago_specs and \
-            scenario.etrago_specs.battery_capacity:
-            integrate_storage(network,
-                              position='hvmv_substation_busbar',
-                              operational_mode='etrago-specs',
-                              parameters={
-                                  'nominal_capacity': \
-                                      scenario.etrago_specs.battery_capacity,
-                                  'soc_initial': 0.0,
-                                  'efficiency_in': 1.0,
-                                  'efficiency_out': 1.0,
-                                  'standing_loss': 0})
-
         return network
 
-    def import_generators(self, types=None):
+    def import_generators(self, types=None, data_source='oedb'):
         """Import generators
 
         For details see
         :func:`edisgo.data.import_data.import_generators`
         """
-        data_source = data_source=self.config['data']['data_source']
         import_generators(network=self,
                           data_source=data_source,
                           types=types)
@@ -173,8 +154,8 @@ class Network:
         <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
         The high-voltage to medium-voltage transformer are not included in the
         analysis. The slack bus is defined at secondary side of these
-        transformers assuming an ideal tap changer. Hence, potential overloading
-        of the transformers is not studied here.
+        transformers assuming an ideal tap changer. Hence, potential
+        overloading of the transformers is not studied here.
 
         Parameters
         ----------
@@ -237,12 +218,17 @@ class Network:
 
     @property
     def config(self):
-        """Returns config object"""
+        """Returns config object data"""
         return self._config.data
 
     @property
+    def metadata(self):
+        """Returns meta data"""
+        return self._metadata
+
+    @property
     def equipment_data(self):
-        """Returns equipment data object
+        """Returns equipment data
 
         Electrical equipment such as lines and transformers
         :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
@@ -260,6 +246,16 @@ class Network:
     @mv_grid.setter
     def mv_grid(self, mv_grid):
         self._mv_grid = mv_grid
+
+    @property
+    def timeseries(self):
+        """:class:`~.grid.network.TimeSeries`
+        """
+        return self._timeseries
+
+    @timeseries.setter
+    def timeseries(self, timeseries):
+        self._timeseries = timeseries
 
     @property
     def data_sources(self):
@@ -309,14 +305,6 @@ class Network:
     @pypsa.setter
     def pypsa(self, pypsa):
         self._pypsa = pypsa
-
-    @property
-    def scenario(self):
-        return self._scenario
-
-    @scenario.setter
-    def scenario(self, scenario):
-        self._scenario = scenario
 
     def __repr__(self):
         return 'Network ' + str(self._id)
@@ -377,159 +365,18 @@ class Config:
         return self._data
 
 
-class Scenario:
-    """Defines an eDisGo scenario
 
-    It contains parameters and links to further data that is used for
-    calculations within eDisGo.
 
-    Parameters
-    ----------
-    power_flow : str or tuple of two :obj:`datetime` objects.
-        Define time range of power flow analysis. Either choose 'worst-case' to
-        analyze feedin worst-case. Or analyze a timerange based on actual power
-        generation and demand data.
 
-        For input of type str only 'worst-case' is a valid input.
-        To specify the time range for a power flow analysis provide the start
-        and end time as 2-tuple of :obj:`datetime`
 
-    Optional Parameters
-    --------------------
-    timeseries : :obj:`list` of :class:`~.grid.grids.TimeSeries`
-        Time series associated with a scenario. Only specify if you don't
-        want to do a worst-case analysis and are not using etrago
-        specifications.
 
-    Attributes
-    ----------
-    _name : :obj:`str`
-        Scenario name (e.g. "feedin case weather 2011")
-    _mv_grid_id : :obj:`str`
-        ID of MV grid district
-    _mode : :obj:`str`
-        'worst-case' or 'time-range'
-    _config : :class:~.grid.network.Config`
-        Configuration parameters
-    _timeseries : :obj:`list` of :class:`~.grid.grids.TimeSeries`
-        Time series associated with a scenario.
-    _etrago_specs : :class:`~.grid.grids.ETraGoSpecs`
-        Specifications which are to be fulfilled at transition point (HV-MV
-        substation)
-    scenario_name : str
-        Specify a scenario that is used to distinguish data, assumptions and
-        parameter.
 
-    """
 
-    def __init__(self, power_flow, mv_grid_id, **kwargs):
-        self._mv_grid_id = mv_grid_id
-        self._name = kwargs.get('name', None)
-        self._config = kwargs.get('config', None)
-        self._timeseries = kwargs.get('timeseries', None)
-        self._etrago_specs = kwargs.get('etrago_specs', None)
-        self.scenario_name = kwargs.get('scenario_name', None)
-        self._curtailment = kwargs.get('curtailment', None)
 
-        # get config parameters if not provided
-        if self._config is None:
-            self._config = Config()
-        # populate timeseries attribute
-        self.set_timeseries(power_flow)
 
-    @property
-    def mv_grid_id(self):
-        return self._mv_grid_id
-
-    @property
-    def timeseries(self):
-        return self._timeseries
-
-    @property
-    def config(self):
-        return self._config
-
-    @property
-    def mode(self):
-        return self._mode
-
-    @property
-    def etrago_specs(self):
-        return self._etrago_specs
-
-    def set_timeseries(self, power_flow):
-        if isinstance(power_flow, str):
-            if power_flow != 'worst-case':
-                raise ValueError(
-                    "{} is not a valid specification for type of power flow "
-                    "analysis. Try 'worst-case'".format(power_flow))
-            else:
-                self._mode = 'worst-case'
-                if self._etrago_specs:
-                    logger.warning("Dispatch specifications from etrago are "
-                                   "overwritten when power_flow is set to "
-                                   "'worst-case'.")
-                if self._timeseries:
-                    logger.warning("Timeseries are overwritten when "
-                                   "power_flow is set to 'worst-case'.")
-                self._timeseries = TimeSeries()
-                self._timeseries.generation = \
-                    self._timeseries.worst_case_generation_ts()
-                self._timeseries.load = self._timeseries.worst_case_load_ts(
-                    self)
-        elif isinstance(power_flow, tuple):
-            if self._etrago_specs:
-                if self._etrago_specs.dispatch is not None:
-                    self._mode = 'time-range'
-                    self._timeseries = TimeSeries()
-                    if not power_flow:
-                        self._timeseries.timeindex = \
-                            self._etrago_specs.dispatch.index
-                        self._timeseries.generation = \
-                            self._etrago_specs.dispatch
-                        self._timeseries.load = \
-                            self._timeseries.import_load_timeseries(self)
-                    else:
-                        self._timeseries.timeindex = pd.date_range(
-                            power_flow[0], power_flow[1], freq='H')
-                        self._timeseries.generation = \
-                            self._etrago_specs.dispatch.loc[
-                                self._timeseries.timeindex]
-                        self._timeseries.load = \
-                            self._timeseries.import_load_timeseries(self).loc[
-                                self._timeseries.timeindex]
-                else:
-                    logger.error("Etrago specifications must contain dispatch "
-                                 "timeseries. Please provide them.")
-            elif not self._timeseries:
-                self._mode = 'time-range'
-                self._timeseries = TimeSeries()
-                if not power_flow:
-                    self._timeseries.generation = \
-                        self._timeseries.import_feedin_timeseries(self)
-                    self._timeseries.load = \
-                        self._timeseries.import_load_timeseries(self)
-                    self._timeseries.timeindex = \
-                        self._timeseries.generation.index
-                else:
-                    self._timeseries.timeindex = pd.date_range(
-                        power_flow[0], power_flow[1], freq='H')
-                    self._timeseries.generation = \
-                        self._timeseries.import_feedin_timeseries(self).loc[
-                            self._timeseries.timeindex]
-                    self._timeseries.load = \
-                        self._timeseries.import_load_timeseries(self).loc[
-                            self._timeseries.timeindex]
-
-    @property
-    def curtailment(self):
         """
-        Return technology specific curtailment factors
         """
-        return self._curtailment
 
-    def __repr__(self):
-        return 'Scenario ' + self._name
 
 
 

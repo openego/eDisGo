@@ -175,15 +175,15 @@ class Load(Component):
                 elif isinstance(self.grid, LVGrid):
                     power_scaling = self.grid.network.config[
                         'worst_case_scale_factor']['lv_feedin_case_load']
-                ts = (self.grid.network.scenario.timeseries.load[
+                ts = (self.grid.network.timeseries.load[
                           sector]).to_frame('p')
-                ts['q'] = (self.grid.network.scenario.timeseries.load[sector] *
+                ts['q'] = (self.grid.network.timeseries.load[sector] *
                            q_factor)
                 self._timeseries = (ts * consumption * power_scaling)
             else:
                 try:
                     ts = pd.DataFrame()
-                    ts['p'] = self.grid.network.scenario.timeseries.load[
+                    ts['p'] = self.grid.network.timeseries.load[
                         sector]
                     ts['q'] = ts['p'] * q_factor
                     self._timeseries = ts * consumption
@@ -295,7 +295,7 @@ class Generator(Component):
             # set timeseries for active and reactive power
             if self.grid.network.scenario.mode == 'worst-case':
                 #ToDo: differentiate between load and feed-in case
-                ts = self.grid.network.scenario.timeseries.generation.copy()
+                ts = self.grid.network.timeseries.generation.copy()
                 ts['q'] = ts['p'] * q_factor
                 if self.type == 'solar':
                     power_scaling = self.grid.network.config[
@@ -307,13 +307,13 @@ class Generator(Component):
             else:
                 try:
                     ts = pd.DataFrame()
-                    ts['p'] = self.grid.network.scenario.timeseries.generation[
+                    ts['p'] = self.grid.network.timeseries.generation[
                         self.type]
                     ts['q'] = ts['p'] * q_factor
                     self._timeseries = ts * self.nominal_capacity
                 except KeyError:
                     try:
-                        ts['p'] = self.grid.network.scenario.timeseries.\
+                        ts['p'] = self.grid.network.timeseries.\
                             generation['other']
                         ts['q'] = ts['p'] * q_factor
                         self._timeseries = ts * self.nominal_capacity

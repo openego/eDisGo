@@ -151,7 +151,7 @@ def to_pypsa(network, mode):
 
     # create power flow problem
     pypsa_network = PyPSANetwork()
-    pypsa_network.set_snapshots(network.scenario.timeseries.timeindex)
+    pypsa_network.set_snapshots(network.timeseries.timeindex)
 
     # import grid topology to PyPSA network
     # buses are created first to avoid warnings
@@ -886,7 +886,7 @@ def _pypsa_bus_timeseries(network, buses, mode=None):
 
     # Convert to PyPSA compatible dataframe
     v_set_df = pd.DataFrame(v_set_dict,
-                            index=network.scenario.timeseries.timeindex)
+                            index=network.timeseries.timeindex)
 
     return v_set_df
 

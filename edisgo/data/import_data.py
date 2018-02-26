@@ -89,7 +89,8 @@ def import_from_ding0(file, network):
     network.mv_grid = _build_mv_grid(ding0_mv_grid, network)
 
     # Import low-voltage grid data
-    lv_grids, lv_station_mapping, lv_grid_mapping = _build_lv_grid(ding0_mv_grid, network)
+    lv_grids, lv_station_mapping, lv_grid_mapping = _build_lv_grid(
+        ding0_mv_grid, network)
 
     # Assign lv_grids to network
     network.mv_grid.lv_grids = lv_grids
@@ -1733,7 +1734,7 @@ def _import_genos_from_oedb(network, types=None):
     srid = int(network.config['geo']['srid'])
 
     oedb_data_source = network.config['data_source']['oedb_data_source']
-    scenario = network.import_generator_scenario
+    scenario = network.scenario
 
     if oedb_data_source == 'model_draft':
 
@@ -1876,14 +1877,18 @@ def _build_lv_grid_dict(network):
     return lv_grid_dict
 
 
-def import_feedin_timeseries(scenario):
+def import_feedin_timeseries(config_data, mv_grid_id, scenario_name):
     """
-    Import RES feedin time series data and process
+    Import RES feed-in time series data and process
 
     Parameters
     ----------
-    scenario: :class:`~.grid.network.Scenario`
-        eDisGo scenario object
+    config_data : dict
+        Dictionary containing config data from config files.
+    mv_grid_id : :obj:`str`
+        MV grid ID as used in oedb.
+    scenario_name : None or :obj:`str`
+        Defines which scenario of future generator park to use.
 
     Returns
     -------
@@ -1891,35 +1896,36 @@ def import_feedin_timeseries(scenario):
         Feedin time series
     """
 
-    def _retrieve_timeseries_from_oedb(scenario):
+    def _retrieve_timeseries_from_oedb(config_data, mv_grid_id, scenario_name):
         """Retrieve time series from oedb
 
         Parameters
         ----------
-        scenario: :class:`~.grid.network.Scenario`
-            eDisGo scenario object
+        config_data : dict
+            Dictionary containing config data from config files.
+        mv_grid_id : :obj:`str`
+            MV grid ID as used in oedb.
+        scenario_name : None or :obj:`str`
+            Defines which scenario of future generator park to use.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Feedin time series
         """
-        if scenario.config.data['versioned']['version'] == 'model_draft':
-            orm_feedin_name = scenario.config.data['model_draft'][
-                'res_feedin_data']
+        if config_data['versioned']['version'] == 'model_draft':
+            orm_feedin_name = config_data['model_draft']['res_feedin_data']
             orm_feedin = model_draft.__getattribute__(orm_feedin_name)
             orm_feedin_version = 1 == 1
         else:
-            orm_feedin_name = scenario.config.data['versioned'][
-                'res_feedin_data']
+            orm_feedin_name = config_data['versioned']['res_feedin_data']
             # orm_feedin = supply.__getattribute__(orm_feedin_name)
             # TODO: remove workaround
             orm_feedin = model_draft.__getattribute__(orm_feedin_name)
             orm_feedin_version = 1 == 1
             # orm_feedin_version = orm_feedin.columns.version == scenario.config.data['versioned']['version']
 
-        conn = connection(section=scenario.config.data['db_connection'][
-            'section'])
+        conn = connection(section=config_data['db_connection']['section'])
         Session = sessionmaker(bind=conn)
         session = Session()
 
@@ -1931,8 +1937,8 @@ def import_feedin_timeseries(scenario):
             orm_feedin.generation_type,
             orm_feedin.scenario,
             orm_feedin.feedin). \
-            filter(orm_feedin.sub_id == scenario.mv_grid_id). \
-            filter(orm_feedin.scenario.in_(scenario.scenario_name)). \
+            filter(orm_feedin.sub_id == mv_grid_id). \
+            filter(orm_feedin.scenario.in_(scenario_name)). \
             filter(orm_feedin_version)
 
         feedin = pd.read_sql_query(feedin_sqla.statement,
@@ -1948,7 +1954,8 @@ def import_feedin_timeseries(scenario):
 
         return feedin
 
-    feedin = _retrieve_timeseries_from_oedb(scenario)
+    feedin = _retrieve_timeseries_from_oedb(config_data, mv_grid_id,
+                                            scenario_name)
     gen_dict = {}
     for gen_type in feedin.generation_type.unique():
         gen_dict[gen_type] = feedin[
