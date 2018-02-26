@@ -52,7 +52,7 @@ def connect_mv_generators(network):
                                 'grid_connection']['conn_buffer_radius_inc'])
 
     # get standard equipment
-    std_line_type = network.equipment_data['MV_cables'].loc[
+    std_line_type = network.equipment_data['mv_cables'].loc[
         network.config['grid_expansion_standard_equipment']['mv_line']]
 
     for geno in sorted(network.mv_grid.graph.nodes_by_attribute('generator'),
@@ -157,7 +157,7 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
     # TODO: Switch back to 'seed' as soon as line ids are finished, #58
 
     # get standard equipment
-    std_line_type = network.equipment_data['LV_cables'].loc[
+    std_line_type = network.equipment_data['lv_cables'].loc[
         network.config['grid_expansion_standard_equipment']['lv_line']]
     std_line_kind = 'cable'
 
@@ -493,7 +493,7 @@ def _connect_mv_node(network, node, target_obj):
     """
 
     # get standard equipment
-    std_line_type = network.equipment_data['MV_cables'].loc[
+    std_line_type = network.equipment_data['mv_cables'].loc[
         network.config['grid_expansion_standard_equipment']['mv_line']]
     std_line_kind = 'cable'
 

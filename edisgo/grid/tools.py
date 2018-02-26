@@ -278,8 +278,8 @@ def select_cable(network, level, apparent_power):
         load_factor = network.config['grid_expansion_load_factors'][
             'mv_feedin_case_line']
 
-        available_cables = network.equipment_data['MV_cables'][
-            network.equipment_data['MV_cables']['U_n'] == network.mv_grid.voltage_nom]
+        available_cables = network.equipment_data['mv_cables'][
+            network.equipment_data['mv_cables']['U_n'] == network.mv_grid.voltage_nom]
 
         suitable_cables = available_cables[
             available_cables['I_max_th'] *
@@ -302,17 +302,17 @@ def select_cable(network, level, apparent_power):
         load_factor = network.config['grid_expansion_load_factors'][
             'lv_feedin_case_line']
 
-        suitable_cables = network.equipment_data['LV_cables'][
-            network.equipment_data['LV_cables']['I_max_th'] *
-            network.equipment_data['LV_cables']['U_n'] *
+        suitable_cables = network.equipment_data['lv_cables'][
+            network.equipment_data['lv_cables']['I_max_th'] *
+            network.equipment_data['lv_cables']['U_n'] *
             load_factor > apparent_power]
 
         # increase cable count until appropriate cable type is found
         while suitable_cables.empty:
             cable_count += 1
-            suitable_cables = network.equipment_data['LV_cables'][
-                network.equipment_data['LV_cables']['I_max_th'] *
-                network.equipment_data['LV_cables']['U_n'] *
+            suitable_cables = network.equipment_data['lv_cables'][
+                network.equipment_data['lv_cables']['I_max_th'] *
+                network.equipment_data['lv_cables']['U_n'] *
                 cable_count *
                 load_factor > apparent_power]
 

@@ -37,7 +37,7 @@ def extend_distribution_substation_overloading(network, critical_stations):
 
     # get parameters for standard transformer
     try:
-        standard_transformer = network.equipment_data['LV_trafos'].loc[
+        standard_transformer = network.equipment_data['lv_trafos'].loc[
             network.config['grid_expansion_standard_equipment'][
                 'mv_lv_transformer']]
     except KeyError:
@@ -131,7 +131,7 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
 
     # get parameters for standard transformer
     try:
-        standard_transformer = network.equipment_data['LV_trafos'].loc[
+        standard_transformer = network.equipment_data['lv_trafos'].loc[
             network.config['grid_expansion_standard_equipment'][
                 'mv_lv_transformer']]
     except KeyError:
@@ -188,7 +188,7 @@ def extend_substation_overloading(network, critical_stations):
 
     # get parameters for standard transformer
     try:
-        standard_transformer = network.equipment_data['MV_trafos'].loc[
+        standard_transformer = network.equipment_data['mv_trafos'].loc[
             network.config['grid_expansion_standard_equipment'][
                 'hv_mv_transformer']]
     except KeyError:
@@ -312,13 +312,13 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     # load standard line data
     if isinstance(grid, LVGrid):
         try:
-            standard_line = network.equipment_data['LV_cables'].loc[
+            standard_line = network.equipment_data['lv_cables'].loc[
                 network.config['grid_expansion_standard_equipment']['lv_line']]
         except KeyError:
             print('Chosen standard LV line is not in equipment list.')
     else:
         try:
-            standard_line = network.equipment_data['MV_cables'].loc[
+            standard_line = network.equipment_data['mv_cables'].loc[
                 network.config['grid_expansion_standard_equipment']['mv_line']]
         except KeyError:
             print('Chosen standard MV line is not in equipment list.')
@@ -492,12 +492,12 @@ def reinforce_branches_overloading(network, crit_lines):
 
     # load standard line data
     try:
-        standard_line_lv = network.equipment_data['LV_cables'].loc[
+        standard_line_lv = network.equipment_data['lv_cables'].loc[
             network.config['grid_expansion_standard_equipment']['lv_line']]
     except KeyError:
         print('Chosen standard LV line is not in equipment list.')
     try:
-        standard_line_mv = network.equipment_data['MV_cables'].loc[
+        standard_line_mv = network.equipment_data['mv_cables'].loc[
             network.config['grid_expansion_standard_equipment']['mv_line']]
     except KeyError:
         print('Chosen standard MV line is not in equipment list.')
