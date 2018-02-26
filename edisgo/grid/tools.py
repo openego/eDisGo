@@ -275,7 +275,9 @@ def select_cable(network, level, apparent_power):
     cable_count = 1
 
     if level == 'mv':
-        load_factor = network.config['grid_expansion']['load_factor_mv_line']
+        #ToDo: Which load factor should be used?
+        load_factor = network.config['grid_expansion_load_factors'][
+            'mv_feedin_case_line']
 
         available_cables = network.equipment_data['MV_cables'][
             network.equipment_data['MV_cables']['U_n'] == network.mv_grid.voltage_nom]
@@ -297,7 +299,9 @@ def select_cable(network, level, apparent_power):
         cable_type = suitable_cables.ix[suitable_cables['I_max_th'].idxmin()]
 
     elif level == 'lv':
-        load_factor = network.config['grid_expansion']['load_factor_lv_line']
+        # ToDo: Which load factor should be used?
+        load_factor = network.config['grid_expansion_load_factors'][
+            'lv_feedin_case_line']
 
         suitable_cables = network.equipment_data['LV_cables'][
             network.equipment_data['LV_cables']['I_max_th'] *

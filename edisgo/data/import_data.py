@@ -96,8 +96,8 @@ def import_from_ding0(file, network):
 
     # Integrate disconnecting points
     position_switch_disconnectors(network.mv_grid,
-                                  mode=network.config['scenario'][
-                                      'disconnecting_point_position'])
+                                  mode=network.config['disconnecting_point'][
+                                      'position'])
 
     # Check data integrity
     _validate_ding0_grid_import(network.mv_grid, ding0_mv_grid, lv_grid_mapping)
@@ -958,9 +958,9 @@ def import_generators(network, data_source=None, file=None, types=None):
     elif data_source == 'pypsa':
         _import_genos_from_pypsa(network=network, file=file)
     else:
-        logger.error("Invalid data source {} provided. Please re-check the file "
-                     "`config_data.cfg`".format(data_source))
-        raise ValueError('The source you specified is not supported.')
+        logger.error("Invalid option {} for generator import. Must either be "
+                     "'oedb' or 'pypsa'.".format(data_source))
+        raise ValueError('The option you specified is not supported.')
 
 
 def _import_genos_from_oedb(network, types=None):
@@ -1106,8 +1106,10 @@ def _import_genos_from_oedb(network, types=None):
                 * generation_type: :obj:`str` (e.g. 'solar')
                 * generation_subtype: :obj:`str` (e.g. 'solar_roof_mounted')
                 * voltage level: :obj:`int` (range: 4..7,)
-                * geom: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
-                * geom_em: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
+                * geom: :shapely:`Shapely Point object<points>`
+                  (CRS see config_grid.cfg)
+                * geom_em: :shapely:`Shapely Point object<points>`
+                  (CRS see config_grid.cfg)
 
         generators_lv: :pandas:`pandas.DataFrame<dataframe>`
             List of LV generators
@@ -1119,8 +1121,10 @@ def _import_genos_from_oedb(network, types=None):
                 * generation_type: :obj:`str` (e.g. 'solar')
                 * generation_subtype: :obj:`str` (e.g. 'solar_roof_mounted')
                 * voltage level: :obj:`int` (range: 4..7,)
-                * geom: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
-                * geom_em: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
+                * geom: :shapely:`Shapely Point object<points>`
+                  (CRS see config_grid.cfg)
+                * geom_em: :shapely:`Shapely Point object<points>`
+                  (CRS see config_grid.cfg)
 
         remove_missing: :obj:`bool`
             If true, remove generators from grid which are not included in the imported dataset.
@@ -1398,7 +1402,7 @@ def _import_genos_from_oedb(network, types=None):
         lv_grid_dict = _build_lv_grid_dict(network)
 
         # get predefined random seed and initialize random generator
-        seed = int(network.config['random']['seed'])
+        seed = int(network.config['grid_connection']['random_seed'])
         random.seed(a=seed)
 
         # check if none of new generators can be allocated to an existing  LV grid
@@ -1486,7 +1490,7 @@ def _import_genos_from_oedb(network, types=None):
         # there are new agg. generators to be created
         if agg_geno_new:
 
-            pfac_mv_gen = network.config['scenario']['pfac_mv_gen']
+            pfac_mv_gen = network.config['reactive_power_factor']['mv_gen']
 
             # add aggregated generators
             for la_id, val in agg_geno_new.items():
@@ -1722,14 +1726,14 @@ def _import_genos_from_oedb(network, types=None):
                                  'grid and generator datasets.')
 
     # make DB session
-    conn = connection(section=network.config['connection']['section'])
+    conn = connection(section=network.config['db_connection']['section'])
     Session = sessionmaker(bind=conn)
     session = Session()
 
     srid = int(network.config['geo']['srid'])
 
     oedb_data_source = network.config['data_source']['oedb_data_source']
-    scenario = network.config['scenario']['name']
+    scenario = network.import_generator_scenario
 
     if oedb_data_source == 'model_draft':
 
@@ -1914,7 +1918,7 @@ def import_feedin_timeseries(scenario):
             orm_feedin_version = 1 == 1
             # orm_feedin_version = orm_feedin.columns.version == scenario.config.data['versioned']['version']
 
-        conn = connection(section=scenario.config.data['connection'][
+        conn = connection(section=scenario.config.data['db_connection'][
             'section'])
         Session = sessionmaker(bind=conn)
         session = Session()
@@ -1956,14 +1960,14 @@ def import_feedin_timeseries(scenario):
         return None
 
 
-def import_load_timeseries(scenario, data_source):
+def import_load_timeseries(config_data, data_source):
     """
     Import load time series
 
     Parameters
     ----------
-    scenario: :class:`~.grid.network.Scenario`
-        eDisGo scenario object
+    config_data : dict
+        Dictionary containing config data from config files.
     data_source : str
         Specfiy type of data source. Available data sources are
 
@@ -1978,14 +1982,14 @@ def import_load_timeseries(scenario, data_source):
         Feedin time series
     """
 
-    def _import_load_timeseries_from_oedb(scenario):
+    def _import_load_timeseries_from_oedb(config_data):
         """
         Retrieve load time series from oedb
 
         Parameters
         ----------
-        scenario: :class:`~.grid.network.Scenario`
-            eDisGo scenario object
+        config_data : dict
+            Dictionary containing config data from config files.
 
         Returns
         -------
@@ -1993,22 +1997,20 @@ def import_load_timeseries(scenario, data_source):
             Feedin time series
         """
 
-        if scenario.config.data['versioned']['version'] == 'model_draft':
-            orm_load_name = scenario.config.data['model_draft']['load_data']
+        if config_data['versioned']['version'] == 'model_draft':
+            orm_load_name = config_data['model_draft']['load_data']
             orm_load = model_draft.__getattribute__(orm_load_name)
-            orm_load_areas_name = scenario.config.data['model_draft'][
-                'load_areas']
+            orm_load_areas_name = config_data['model_draft']['load_areas']
             orm_load_areas = model_draft.__getattribute__(orm_load_areas_name)
             orm_load_version = 1 == 1
         else:
-            orm_load_name = scenario.config.data['versioned']['load_data']
+            orm_load_name = config_data['versioned']['load_data']
             # orm_load = supply.__getattribute__(orm_load_name)
             # TODO: remove workaround
             orm_load = model_draft.__getattribute__(orm_load_name)
             # orm_load_version = orm_load.version == config.data['versioned']['version']
 
-            orm_load_areas_name = scenario.config.data['versioned'][
-                'load_areas']
+            orm_load_areas_name = config_data['versioned']['load_areas']
             # orm_load_areas = supply.__getattribute__(orm_load_areas_name)
             # TODO: remove workaround
             orm_load_areas = model_draft.__getattribute__(orm_load_areas_name)
@@ -2016,8 +2018,7 @@ def import_load_timeseries(scenario, data_source):
 
             orm_load_version = 1 == 1
 
-        conn = connection(section=scenario.config.data['connection'][
-            'section'])
+        conn = connection(section=config_data['db_connection']['section'])
         Session = sessionmaker(bind=conn)
         session = Session()
 
@@ -2036,7 +2037,7 @@ def import_load_timeseries(scenario, data_source):
 
         return load
 
-    def _load_timeseries_demandlib():
+    def _load_timeseries_demandlib(config_data):
         """
         Get normalized sectoral load time series
 
@@ -2048,7 +2049,7 @@ def import_load_timeseries(scenario, data_source):
             Feedin time series
         """
 
-        # TODO: move all hard-coded data below to a config file
+        # TODO: why 2011?
         year = 2011
 
         sectoral_consumption = {'h0': 1, 'g0': 1, 'i0': 1, 'l0': 1}
@@ -2069,11 +2070,15 @@ def import_load_timeseries(scenario, data_source):
         # factors by default
         elec_demand['i0'] = ilp.simple_profile(
             sectoral_consumption['i0'],
-            am=datetime.time(6, 0, 0),
-            pm=datetime.time(22, 0, 0),
+            am=datetime.time(config_data['demandlib']['day_start'].hour,
+                             config_data['demandlib']['day_start'].minute, 0),
+            pm=datetime.time(config_data['demandlib']['day_end'].hour,
+                             config_data['demandlib']['day_end'].minute, 0),
             profile_factors=
-            {'week': {'day': 0.8, 'night': 0.6},
-             'weekend': {'day': 0.6, 'night': 0.6}})
+            {'week': {'day': config_data['demandlib']['week_day'],
+                      'night': config_data['demandlib']['week_night']},
+             'weekend': {'day': config_data['demandlib']['weekend_day'],
+                         'night': config_data['demandlib']['weekend_night']}})
 
         # Resample 15-minute values to hourly values and sum across sectors
         elec_demand = elec_demand.resample('H').mean()
@@ -2081,9 +2086,9 @@ def import_load_timeseries(scenario, data_source):
         return elec_demand
 
     if data_source == 'oedb':
-        load = _import_load_timeseries_from_oedb(scenario)
+        load = _import_load_timeseries_from_oedb(config_data)
     elif data_source == 'demandlib':
-        load = _load_timeseries_demandlib()
+        load = _load_timeseries_demandlib(config_data)
         load.rename(columns={'g0': 'retail', 'h0': 'residential',
                              'l0': 'agricultural', 'i0': 'industrial'},
                     inplace=True)

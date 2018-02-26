@@ -26,7 +26,9 @@ def mv_line_load(network):
 
     crit_lines = {}
 
-    load_factor_mv_line = network.scenario.parameters.load_factor_mv_line
+    #ToDo: differentiate between load and feed-in case!
+    load_factor_mv_line = network.config['grid_expansion_load_factors'][
+        'mv_feedin_case_line']
 
     for line in list(network.mv_grid.graph.lines()):
         i_line_max = line['line'].type['I_max_th'] * \
@@ -77,7 +79,9 @@ def lv_line_load(network):
 
     crit_lines = {}
 
-    load_factor_lv_line = network.scenario.parameters.load_factor_lv_line
+    #ToDo: differentiate between load and feed-in case!
+    load_factor_lv_line = network.config['grid_expansion_load_factors'][
+        'lv_feedin_case_line']
 
     for lv_grid in network.mv_grid.lv_grids:
         for line in list(lv_grid.graph.lines()):
@@ -119,8 +123,9 @@ def hv_mv_station_load(network):
 
     crit_stations = {}
 
-    load_factor = \
-        network.scenario.parameters.load_factor_hv_mv_transformer
+    #ToDo: differentiate between load and feed-in case!
+    load_factor = network.config['grid_expansion_load_factors'][
+        'mv_feedin_case_transformer']
 
     # maximum allowed apparent power of station
     s_station_max = (sum(
@@ -169,14 +174,15 @@ def mv_lv_station_load(network):
 
     crit_stations = {}
 
-    load_factor_mv_lv_transformer = \
-        network.scenario.parameters.load_factor_mv_lv_transformer
+    # ToDo: differentiate between load and feed-in case!
+    load_factor = network.config['grid_expansion_load_factors'][
+        'lv_feedin_case_transformer']
 
     for lv_grid in network.mv_grid.lv_grids:
         station = lv_grid.station
         # maximum allowed apparent power of station
         s_station_max = (sum([_.type.S_nom for _ in station.transformers]) *
-                         load_factor_mv_lv_transformer)
+                         load_factor)
         try:
             # check if maximum allowed apparent power of station exceeds
             # apparent power from power flow analysis
@@ -221,16 +227,20 @@ def mv_voltage_deviation(network):
     crit_nodes = {}
 
     # load max. voltage deviation
-    mv_max_v_deviation = network.scenario.parameters.mv_max_v_deviation
+    #ToDo: for now only voltage deviation for the combined calculation of MV
+    # and LV is considered (load and feed-in case for seperate consideration
+    # of MV and LV needs to be implemented)
+    max_v_dev = network.config['grid_expansion_allowed_voltage_deviations'][
+        'mv_lv_max_v_deviation']
 
     v_mag_pu_pfa = network.results.v_res(nodes=network.mv_grid.graph.nodes(),
                                          level='mv')
     # check for over-voltage
     v_max = v_mag_pu_pfa.max()
-    crit_nodes_max = v_max[(v_max > (1 + mv_max_v_deviation))] - 1
+    crit_nodes_max = v_max[(v_max > (1 + max_v_dev))] - 1
     # check for under-voltage
     v_min = v_mag_pu_pfa.min()
-    crit_nodes_min = 1 - v_min[(v_min < (1 - mv_max_v_deviation))]
+    crit_nodes_min = 1 - v_min[(v_min < (1 - max_v_dev))]
     # combine critical nodes and keep highest voltage deviation at each
     # node
     crit_nodes_grid = crit_nodes_max.append(crit_nodes_min).max(level=0)
@@ -280,7 +290,11 @@ def lv_voltage_deviation(network, mode=None):
     crit_nodes = {}
 
     # load max. voltage deviation
-    lv_max_v_deviation = network.scenario.parameters.lv_max_v_deviation
+    # ToDo: for now only voltage deviation for the combined calculation of MV
+    # and LV is considered (load and feed-in case for seperate consideration
+    # of MV and LV needs to be implemented)
+    max_v_dev = network.config['grid_expansion_allowed_voltage_deviations'][
+        'mv_lv_max_v_deviation']
 
     for lv_grid in network.mv_grid.lv_grids:
         if mode:
@@ -297,10 +311,10 @@ def lv_voltage_deviation(network, mode=None):
                                                  level='lv')
         # check for overvoltage
         v_max = v_mag_pu_pfa.max()
-        crit_nodes_max = v_max[(v_max > (1 + lv_max_v_deviation))] - 1
+        crit_nodes_max = v_max[(v_max > (1 + max_v_dev))] - 1
         # check for undervoltage
         v_min = v_mag_pu_pfa.min()
-        crit_nodes_min = 1 - v_min[(v_min < (1 - lv_max_v_deviation))]
+        crit_nodes_min = 1 - v_min[(v_min < (1 - max_v_dev))]
         # combine critical nodes and keep highest voltage deviation at each
         # node
         crit_nodes_grid = crit_nodes_max.append(crit_nodes_min).max(level=0)

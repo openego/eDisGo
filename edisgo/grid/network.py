@@ -371,11 +371,9 @@ class Config:
 
         # load config
         config.load_config('config_db_tables.cfg')
-        config.load_config('config_data.cfg')
-        config.load_config('config_flexopt.cfg')
-        config.load_config('config_misc.cfg')
-        config.load_config('config_scenario.cfg')
-        config.load_config('config_costs.cfg')
+        config.load_config('config_grid.cfg')
+        config.load_config('config_grid_expansion.cfg')
+        config.load_config('config_timeseries.cfg')
 
         confic_dict = config.cfg._sections
 
@@ -388,21 +386,17 @@ class Config:
                 except:
                     pass
 
-        # modify structure of config data
-        confic_dict['data']['peakload_consumption_ratio'] = {
-            'residential': confic_dict['data'][
-                'residential_peakload_consumption'],
-            'retail': confic_dict['data'][
-                'retail_peakload_consumption'],
-            'industrial': confic_dict['data'][
-                'residential_peakload_consumption'],
-            'agricultural': confic_dict['data'][
-                'agricultural_peakload_consumption']}
-
-        del (confic_dict['data']['residential_peakload_consumption'])
-        del (confic_dict['data']['retail_peakload_consumption'])
-        del (confic_dict['data']['industrial_peakload_consumption'])
-        del (confic_dict['data']['agricultural_peakload_consumption'])
+        # convert to time object
+        confic_dict['demandlib']['day_start'] = datetime.datetime.strptime(
+            confic_dict['demandlib']['day_start'], "%H:%M")
+        confic_dict['demandlib']['day_start'] = datetime.time(
+            confic_dict['demandlib']['day_start'].hour,
+            confic_dict['demandlib']['day_start'].minute)
+        confic_dict['demandlib']['day_end'] = datetime.datetime.strptime(
+            confic_dict['demandlib']['day_end'], "%H:%M")
+        confic_dict['demandlib']['day_end'] = datetime.time(
+            confic_dict['demandlib']['day_end'].hour,
+            confic_dict['demandlib']['day_end'].minute)
 
         return confic_dict
 
@@ -857,7 +851,7 @@ class TimeSeries:
         self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
         return pd.DataFrame({'p': 1}, index=self.timeindex)
 
-    def worst_case_load_ts(self, scenario):
+    def worst_case_load_ts(self, config_data):
         """
         Define worst case load time series
 
@@ -873,17 +867,13 @@ class TimeSeries:
         #ToDo: remove hard coded sectors?
         return pd.DataFrame({
             'residential': 1 * float(
-                scenario.config.data['data']['peakload_consumption_ratio'][
-                    'residential']),
+                config_data['peakload_consumption_ratio']['residential']),
             'retail': 1 * float(
-                scenario.config.data['data']['peakload_consumption_ratio'][
-                    'retail']),
+                config_data['peakload_consumption_ratio']['retail']),
             'industrial': 1 * float(
-                scenario.config.data['data']['peakload_consumption_ratio'][
-                    'industrial']),
+                config_data['peakload_consumption_ratio']['industrial']),
             'agricultural': 1 * float(
-                scenario.config.data['data']['peakload_consumption_ratio'][
-                    'agricultural'])},
+                config_data['peakload_consumption_ratio']['agricultural'])},
             index=self.timeindex)
 
     def import_feedin_timeseries(self, scenario):
@@ -902,7 +892,7 @@ class TimeSeries:
         generation_df.index = pd.date_range('1/1/2011', periods=8760, freq='H')
         return generation_df
 
-    def import_load_timeseries(self, scenario, data_source='demandlib'):
+    def import_load_timeseries(self, config_data, data_source):
         """
         Import load timeseries
 
@@ -918,8 +908,7 @@ class TimeSeries:
 
         """
         # ToDo: add docstring
-        #ToDo: find better place for input data_source (in config?)
-        return import_load_timeseries(scenario, data_source)
+        return import_load_timeseries(config_data, data_source)
 
 
 class ETraGoSpecs:

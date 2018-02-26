@@ -54,7 +54,7 @@ _loaded = False
 
 # load config dirs
 package_path = edisgo.__path__[0]
-internal_config_file = os.path.join(package_path, 'config', 'config_system')
+internal_config_file = os.path.join(package_path, 'config', 'config_system.cfg')
 try:
     cfg.read(internal_config_file)
 except:
@@ -77,6 +77,7 @@ def load_config(filename):
     global _loaded
     _loaded = True
 
+
 def get(section, key):
     """
     returns the value of a given key of a given section of the main
@@ -86,7 +87,7 @@ def get(section, key):
     :param key: the key.
     :type key: str.
     :returns: the value which will be casted to float, int or boolean.
-    if no cast is successfull, the raw string will be returned.
+    if no cast is successful, the raw string will be returned.
     """
     if not _loaded:
         pass

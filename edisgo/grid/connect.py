@@ -46,12 +46,14 @@ def connect_mv_generators(network):
     """
 
     # get params from config
-    buffer_radius = int(network.config['connect']['conn_buffer_radius'])
-    buffer_radius_inc = int(network.config['connect']['conn_buffer_radius_inc'])
+    buffer_radius = int(network.config[
+                            'grid_connection']['conn_buffer_radius'])
+    buffer_radius_inc = int(network.config[
+                                'grid_connection']['conn_buffer_radius_inc'])
 
     # get standard equipment
     std_line_type = network.equipment_data['MV_cables'].loc[
-        network.config['grid_expansion']['std_mv_line']]
+        network.config['grid_expansion_standard_equipment']['mv_line']]
 
     for geno in sorted(network.mv_grid.graph.nodes_by_attribute('generator'),
                        key=lambda _: repr(_)):
@@ -110,8 +112,8 @@ def connect_mv_generators(network):
                 if not generator_connected:
                     logger.debug(
                         'Generator {0} could not be connected, try to '
-                        'increase the parameter `generator_buffer_radius` in '
-                        'config file `config_calc.cfg` to gain more possible '
+                        'increase the parameter `conn_buffer_radius` in '
+                        'config file `config_grid.cfg` to gain more possible '
                         'connection points.'.format(geno))
 
 
@@ -149,14 +151,14 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
     """
 
     # get predefined random seed and initialize random generator
-    seed = int(network.config['random']['seed'])
+    seed = int(network.config['grid_connection']['random_seed'])
     #random.seed(a=seed)
     random.seed(a=1234)
     # TODO: Switch back to 'seed' as soon as line ids are finished, #58
 
     # get standard equipment
     std_line_type = network.equipment_data['LV_cables'].loc[
-        network.config['grid_expansion']['std_lv_line']]
+        network.config['grid_expansion_standard_equipment']['lv_line']]
     std_line_kind = 'cable'
 
     # # TEMP: DEBUG STUFF
@@ -408,7 +410,8 @@ def _find_nearest_conn_objects(network, node, branches):
     """
 
     # threshold which is used to determine if 2 objects are on the same position (see below for details on usage)
-    conn_diff_tolerance = network.config['connect']['conn_diff_tolerance']
+    conn_diff_tolerance = network.config['grid_connection'][
+        'conn_diff_tolerance']
 
     conn_objects_min_stack = []
 
@@ -491,7 +494,7 @@ def _connect_mv_node(network, node, target_obj):
 
     # get standard equipment
     std_line_type = network.equipment_data['MV_cables'].loc[
-        network.config['grid_expansion']['std_mv_line']]
+        network.config['grid_expansion_standard_equipment']['mv_line']]
     std_line_kind = 'cable'
 
     target_obj_result = None

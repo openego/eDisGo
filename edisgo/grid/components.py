@@ -151,20 +151,12 @@ class Load(Component):
         edisgo.network.TimeSeries : Details of global TimeSeries
         """
         if self._timeseries is None:
-            sector = list(self.consumption.keys())[0]
-            peak_load_consumption_ratio = float(self.grid.network.config['data'][
-                'peakload_consumption_ratio'][sector])
-
             if isinstance(self.grid, MVGrid):
                 q_factor = tan(acos(
                     self.grid.network.scenario.parameters.pfac_mv_load))
-                power_scaling = float(self.grid.network.config['scenario'][
-                                          'scale_factor_mv_load'])
             elif isinstance(self.grid, LVGrid):
                 q_factor = tan(acos(
                     self.grid.network.scenario.parameters.pfac_lv_load))
-                power_scaling = float(self.grid.network.config['scenario'][
-                                          'scale_factor_lv_load'])
 
             # work around until retail and industrial are separate sectors
             # TODO: remove once Ding0 data changed to single sector consumption
@@ -176,12 +168,13 @@ class Load(Component):
 
             # set timeseries for active and reactive power
             if self.grid.network.scenario.mode == 'worst-case':
+                #ToDo: Differentiate between load and feed-in case
                 if isinstance(self.grid, MVGrid):
-                    power_scaling = float(self.grid.network.config['scenario'][
-                                              'scale_factor_mv_load'])
+                    power_scaling = self.grid.network.config[
+                        'worst_case_scale_factor']['mv_feedin_case_load']
                 elif isinstance(self.grid, LVGrid):
-                    power_scaling = float(self.grid.network.config['scenario'][
-                                              'scale_factor_lv_load'])
+                    power_scaling = self.grid.network.config[
+                        'worst_case_scale_factor']['lv_feedin_case_load']
                 ts = (self.grid.network.scenario.timeseries.load[
                           sector]).to_frame('p')
                 ts['q'] = (self.grid.network.scenario.timeseries.load[sector] *
@@ -240,8 +233,8 @@ class Load(Component):
         Get sectoral peak load
         """
         peak_load = pd.Series(self.consumption).mul(pd.Series(
-            self.grid.network.config['data'][
-                'peakload_consumption_ratio']).astype(float), fill_value=0)
+            self.grid.network.config['peakload_consumption_ratio']).astype(
+            float), fill_value=0)
 
         return peak_load
 
@@ -301,14 +294,15 @@ class Generator(Component):
                     self.grid.network.scenario.parameters.pfac_lv_gen))
             # set timeseries for active and reactive power
             if self.grid.network.scenario.mode == 'worst-case':
+                #ToDo: differentiate between load and feed-in case
                 ts = self.grid.network.scenario.timeseries.generation.copy()
                 ts['q'] = ts['p'] * q_factor
                 if self.type == 'solar':
-                    power_scaling = float(self.grid.network.config['scenario'][
-                                              'scale_factor_feedin_pv'])
+                    power_scaling = self.grid.network.config[
+                        'worst_case_scale_factor']['feedin_case_feedin_pv']
                 else:
-                    power_scaling = float(self.grid.network.config['scenario'][
-                                              'scale_factor_feedin_other'])
+                    power_scaling = self.grid.network.config[
+                        'worst_case_scale_factor']['feedin_case_feedin_other']
                 self._timeseries = ts * self.nominal_capacity * power_scaling
             else:
                 try:
