@@ -95,50 +95,22 @@ class Network:
         :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
         """
 
-        package_path =  edisgo.__path__[0]
+        package_path = edisgo.__path__[0]
         equipment_dir = self.config['system_dirs']['equipment_dir']
 
         data = {}
+        equipment = {'mv': ['trafos', 'lines', 'cables'],
+                     'lv': ['trafos', 'cables']}
 
-        equipment_mv_parameters_trafos = self.config['equipment'][
-            'equipment_mv_parameters_trafos']
-        data['MV_trafos'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_mv_parameters_trafos),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
-
-        equipment_mv_parameters_lines = self.config['equipment'][
-            'equipment_mv_parameters_lines']
-        data['MV_lines'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_mv_parameters_lines),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
-
-        equipment_mv_parameters_cables = self.config['equipment'][
-            'equipment_mv_parameters_cables']
-        data['MV_cables'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_mv_parameters_cables),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
-
-        equipment_lv_parameters_cables = self.config['equipment'][
-            'equipment_lv_parameters_cables']
-        data['LV_cables'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_lv_parameters_cables),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
-
-        equipment_lv_parameters_trafos = self.config['equipment'][
-            'equipment_lv_parameters_trafos']
-        data['LV_trafos'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_lv_parameters_trafos),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
+        for voltage_level, eq_list in equipment.items():
+            for i in eq_list:
+                equipment_parameters = self.config['equipment'][
+                    'equipment_{}_parameters_{}'.format(voltage_level, i)]
+                data['{}_{}'.format(voltage_level, i)] = pd.read_csv(
+                    path.join(package_path, equipment_dir,
+                              equipment_parameters),
+                    comment='#', index_col='name',
+                    delimiter=',', decimal='.')
 
         return data
 
