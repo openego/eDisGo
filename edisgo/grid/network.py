@@ -512,19 +512,223 @@ class Config:
         return self._data
 
 
+class TimeSeriesControl:
+    """
+    Sets up TimeSeries Object.
 
+    #ToDo: Default for kwargs in docstring? None for kwargs in docstring?
+    #ToDo: How to avoid redundant docstrings?
 
+    Parameters
+    ----------
+    mode : :obj:`str`, optional
+        Mode must be set in case of worst-case analyses and can either be
+        'worst-case' (both feed-in and load case), 'worst-case-feedin' (only
+        feed-in case) or 'worst-case-load' (only load case). All other
+        parameters except of `config-data` will be ignored. Default: None.
+    mv_grid_id : :obj:`str`, optional
+        MV grid ID as used in oedb. Default: None.
+    scenario_name : :obj:`str`
+        Defines which scenario of future generator park to use. Possible
+        options are 'nep2035' and 'ego100'. Default: None.
+    timeseries_generation_fluc : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
+        Parameter used to obtain time series for active power feed-in of
+        fluctuating renewables wind and solar.
+        Possible options are:
+         * 'oedb'
+            time series are obtained from the OpenEnergy DataBase
+         * :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with time series, normalized with corresponding capacity.
+            Time series can either be aggregated by technology type or by type
+            and weather cell ID. In the first case columns of the DataFrame are
+            'solar' and 'wind'; in the second case columns need to be a
+            :pandas:`pandas.MultiIndex<multiindex>` with the first level
+            containing the type and the second level the weather cell ID.
+        Default: None.
+    timeseries_generation_flex : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series for active power of each (aggregated)
+        type of flexible generator normalized with corresponding capacity.
+        Columns represent generator type:
+         * 'gas'
+         * 'coal'
+         * 'biomass'
+         * 'other'
+         * ...
+        Use 'other' if you don't want to explicitly provide every possible
+        type.
+        Default: None.
+    timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
+        Parameter used to obtain time series of active power of (cumulative)
+        loads.
+        Possible options are:
+         * 'oedb'
+            time series are obtained from the OpenEnergy DataBase
+         * 'demandlib'
+            time series are generated using the oemof demandlib
+         * :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with load time series of each (cumulative) type of load
+            normalized with corresponding annual energy demand.
+            Columns represent load type:
+             * 'residential'
+             * 'retail'
+             * 'industrial'
+             * 'agricultural'
+         Default: None.
+    config_data : dict, optional
+        Dictionary containing config data from config files. See
+        :class:`~.grid.network.Config` data attribute for more information.
+        Default: None.
 
+    """
+    def __init__(self, **kwargs):
 
+        self.timeseries = TimeSeries()
+        mode = kwargs.get('mode', None)
+        config_data = kwargs.get('config_data', None)
 
+        if mode:
+            if mode == 'worst-case':
+                modes = ['feedin_case', 'load_case']
+            elif mode == 'worst-case-feedin' or mode == 'worst-case-load':
+                modes = ['{}_case'.format(mode.split('-')[-1])]
+            else:
+                raise ValueError('{} is not a valid mode.'.format(mode))
 
+            # set random timeindex
+            self.timeseries.timeindex = pd.date_range(
+                '1/1/1970', periods=len(modes), freq='H')
+            self._worst_case_generation(config_data['worst_case_scale_factor'],
+                                        modes)
+            self._worst_case_load(config_data['worst_case_scale_factor'],
+                                  config_data['peakload_consumption_ratio'],
+                                  modes)
 
+        else:
+            # feed-in time series of fluctuating renewables
+            ts = kwargs.get('timeseries_generation_fluc', None)
+            if isinstance(ts, pd.DataFrame):
+                self.timeseries.generation_fluctuating = ts
+            elif isinstance(ts, str) and ts == 'oedb':
+                self._import_feedin_timeseries(
+                    config_data, kwargs.get('mv_grid_id', None),
+                    kwargs.get('scenario_name', None))
+            else:
+                raise ValueError('Your input for "timeseries_fluc" is not '
+                                 'valid.'.format(mode))
+            # feed-in time series for flexible generators
+                ts = kwargs.get('timeseries_generation_flex', None)
+            if isinstance(ts, pd.DataFrame):
+                self.timeseries.generation_flexible = ts
+            else:
+                raise ValueError('Your input for "timeseries_flex" is not '
+                                 'valid.'.format(mode))
+            # load time series
+            ts = kwargs.get('timeseries_load', None)
+            if isinstance(ts, pd.DataFrame):
+                self.timeseries.load = ts_flex
+            elif isinstance(ts, str) and (ts == 'oedb' or ts == 'demandlib'):
+                self.timeseries.load = import_load_timeseries(
+                    config_data, ts)
+            else:
+                raise ValueError('Your input for "timeseries_flex" is not '
+                                 'valid.'.format(mode))
 
+            #ToDo: check if time series have the same index (or timeindex in
+            #TimeSeries object)
+
+    def _worst_case_generation(self, worst_case_scale_factors, modes):
+        """
+        Define worst case generation time series for fluctuating and flexible
+        generators.
+
+        Parameters
+        ----------
+        worst_case_scale_factors : dict
+            Scale factors defined in config file 'config_timeseries.cfg'.
+            Scale factors describe actual power to nominal power ratio of in
+            worst-case scenarios.
+        modes : list
+            List with worst-cases to generate time series for. Can be
+            'feedin_case', 'load_case' or both.
 
         """
+
+        self.timeseries.generation_fluctuating = pd.DataFrame(
+            {'solar': [worst_case_scale_factors[
+                           '{}_feedin_pv'.format(mode)] for mode in modes],
+             'wind': [worst_case_scale_factors[
+                          '{}_feedin_other'.format(mode)] for mode in modes]},
+            index=self.timeseries.timeindex)
+
+        self.timeseries.generation_flexible = pd.DataFrame(
+            {'other': [worst_case_scale_factors[
+                          '{}_feedin_other'.format(mode)] for mode in modes]},
+            index=self.timeseries.timeindex)
+
+    def _worst_case_load(self, worst_case_scale_factors,
+                           peakload_consumption_ratio, modes):
+        """
+        Define worst case load time series for each sector.
+
+        Parameters
+        ----------
+        worst_case_scale_factors : dict
+            Scale factors defined in config file 'config_timeseries.cfg'.
+            Scale factors describe actual power to nominal power ratio of in
+            worst-case scenarios.
+        peakload_consumption_ratio : dict
+            Ratios of peak load to annual consumption per sector, defined in
+            config file 'config_timeseries.cfg'
+        modes : list
+            List with worst-cases to generate time series for. Can be
+            'feedin_case', 'load_case' or both.
+
         """
 
+        sectors = ['residential', 'retail', 'industrial', 'agricultural']
+        lv_power_scaling = np.array(
+            [worst_case_scale_factors['lv_{}_load'.format(mode)]
+             for mode in modes])
+        mv_power_scaling = np.array(
+            [worst_case_scale_factors['mv_{}_load'.format(mode)]
+             for mode in modes])
+        
+        lv = {(sector, 'lv'): peakload_consumption_ratio[sector] *
+                              lv_power_scaling
+              for sector in sectors}
+        mv = {(sector, 'mv'): peakload_consumption_ratio[sector] *
+                              mv_power_scaling
+              for sector in sectors}
+        self.timeseries.load = pd.DataFrame({**lv, **mv},
+                                            index=self.timeseries.timeindex)
 
+    def _import_feedin_timeseries(self, config_data, mv_grid_id,
+                                  scenario_name):
+        """
+        Import feed-in time series for wind and solar for the year 2011
+        from oedb
+
+        Parameters
+        ----------
+        config_data : dict
+            Dictionary containing config data from config files. See
+            :class:`~.grid.network.Config` data attribute for more information.
+        mv_grid_id : :obj:`str`
+            MV grid ID as used in oedb.
+        scenario_name : None or :obj:`str`
+            Defines which scenario of future generator park to use.
+
+        """
+
+        #ToDo: remove this function if it just calls another function
+        self.timeseries.generation_fluctuating = import_feedin_timeseries(
+            config_data, mv_grid_id, scenario_name)
+        #ToDo: remove hard coded value
+        # if generation_df is not None:
+        #     generation_df = pd.concat(
+        #         [generation_df, pd.DataFrame({'other': 0.9},
+        #                                      index=generation_df.index)],
+        #         axis=1)
 
 
 class TimeSeries:
@@ -535,26 +739,39 @@ class TimeSeries:
 
     Attributes
     ----------
-    _generation : :pandas:`pandas.DataFrame<dataframe>`
-        Time series of active power of generators. Columns represent generator
-        type:
-
-         * 'solar'
-         * 'wind'
+    generation_fluctuating : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with active power feed-in time series for fluctuating
+        renewables solar and wind, normalized with corresponding capacity.
+        Time series can either be aggregated by technology type or by type
+        and weather cell ID. In the first case columns of the DataFrame are
+        'solar' and 'wind'; in the second case columns need to be a
+        :pandas:`pandas.MultiIndex<multiindex>` with the first level
+        containing the type and the second level the weather cell ID.
+        Default: None.
+    generation_flexible : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series for active power of each (aggregated)
+        type of flexible generator normalized with corresponding capacity.
+        Columns represent generator type:
+         * 'gas'
          * 'coal'
+         * 'biomass'
+         * 'other'
          * ...
-
-        In case of worst-case analysis generator type is distinguished so that
-        the DataFrame contains only one column for all generators.
-
-    _load : :pandas:`pandas.DataFrame<dataframe>`
-        Time series of active power of (cumulative) loads. Columns represent
-        load sectors:
-
+        Use 'other' if you don't want to explicitly provide every possible
+        type.
+        Default: None.
+    load : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with active power of load time series of each (cumulative)
+        type of load, normalized with corresponding annual energy demand.
+        Columns represent load type:
          * 'residential'
          * 'retail'
          * 'industrial'
          * 'agricultural'
+         Default: None.
+    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`, optional
+        Can be used to define a time range for which to obtain the provided
+        time series and run power flow analysis. Default: None.
 
     See also
     --------
@@ -564,33 +781,55 @@ class TimeSeries:
     """
 
     def __init__(self, **kwargs):
-        self._generation = kwargs.get('generation', None)
+        self._generation_flexible = kwargs.get('generation_flexible', None)
+        self._generation_fluctuating = kwargs.get('generation_fluctuating',
+                                                  None)
         self._load = kwargs.get('load', None)
         self._timeindex = kwargs.get('timeindex', None)
 
     @property
-    def generation(self):
+    def generation_flexible(self):
         """
-        Get generation timeseries (only active power)
+        Get generation time series of flexible generators (only active power)
 
         Returns
         -------
-        dict or :pandas:`pandas.Series<series>`
+        :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
         """
-        return self._generation
+        try:
+            return self._generation_flexible.loc[[self.timeindex], :]
+        except:
+            return self._generation_flexible.loc[self.timeindex, :]
 
-    @generation.setter
-    def generation(self, generation_timeseries):
-        self._generation = generation_timeseries
+    @generation_flexible.setter
+    def generation_flexible(self, generation_flex_timeseries):
+        self._generation_flexible = generation_flex_timeseries
+
+    @property
+    def generation_fluctuating(self):
+        """
+        Get generation time series of fluctuating renewables (only active
+        power)
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            See class definition for details.
+        """
+        try:
+            return self._generation_fluctuating.loc[[self.timeindex], :]
+        except:
+            return self._generation_fluctuating.loc[self.timeindex, :]
+
+    @generation_fluctuating.setter
+    def generation_fluctuating(self, generation_fluc_timeseries):
+        self._generation_fluctuating = generation_fluc_timeseries
         
     @property
     def load(self):
         """
         Get load timeseries (only active power)
-
-        Provides normalized load for each sector. Simply access sectoral load
-        time series by :code:`Timeseries.load['residential']`.
 
         Returns
         -------
@@ -598,7 +837,10 @@ class TimeSeries:
             See class definition for details.
 
         """
-        return self._load
+        try:
+            return self._load.loc[[self.timeindex], :]
+        except:
+            return self._load.loc[self.timeindex, :]
 
     @load.setter
     def load(self, load_timeseries):
@@ -609,13 +851,13 @@ class TimeSeries:
         """
         Parameters
         ----------
-        timerange : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+        time_range : :pandas:`pandas.DatetimeIndex<datetimeindex>`
             Time range of power flow analysis
 
         Returns
         -------
         :pandas:`pandas.DatetimeIndex<datetimeindex>`
-            Time range of power flow analysis
+            See class definition for details.
 
         """
         return self._timeindex
@@ -623,83 +865,6 @@ class TimeSeries:
     @timeindex.setter
     def timeindex(self, time_range):
         self._timeindex = time_range
-
-    def worst_case_generation_ts(self):
-        """
-        Define worst case generation time series.
-
-        Parameters
-        ----------
-        network : :class:~.grid.network.Network`
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Normalized active power (1 kW) in column 'p' with random time index
-
-        """
-        # set random timeindex
-        self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
-        return pd.DataFrame({'p': 1}, index=self.timeindex)
-
-    def worst_case_load_ts(self, config_data):
-        """
-        Define worst case load time series
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Normalized active power (1 kW) for each load sector with
-            random time index
-
-        """
-        # set random timeindex
-        self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
-        #ToDo: remove hard coded sectors?
-        return pd.DataFrame({
-            'residential': 1 * float(
-                config_data['peakload_consumption_ratio']['residential']),
-            'retail': 1 * float(
-                config_data['peakload_consumption_ratio']['retail']),
-            'industrial': 1 * float(
-                config_data['peakload_consumption_ratio']['industrial']),
-            'agricultural': 1 * float(
-                config_data['peakload_consumption_ratio']['agricultural'])},
-            index=self.timeindex)
-
-    def import_feedin_timeseries(self, scenario):
-        """
-        Import feedin timeseries from oedb
-        """
-        #ToDo: add docstring
-        generation_df = import_feedin_timeseries(scenario)
-        #ToDo: remove hard coded value
-        if generation_df is not None:
-            generation_df = pd.concat(
-                [generation_df, pd.DataFrame({'other': 0.9},
-                                             index=generation_df.index)],
-                axis=1)
-        #ToDo remove hard coded index?
-        generation_df.index = pd.date_range('1/1/2011', periods=8760, freq='H')
-        return generation_df
-
-    def import_load_timeseries(self, config_data, data_source):
-        """
-        Import load timeseries
-
-        Parameters
-        ----------
-        data_source : str
-            Specify type of data source. Available data sources are
-
-             * 'oedb': retrieves load time series cumulated across sectors
-             * 'demandlib': determine a load time series with the use of the
-                demandlib. This calculated standard load profiles for 4
-                different sectors.
-
-        """
-        # ToDo: add docstring
-        return import_load_timeseries(config_data, data_source)
 
 
 class ETraGoSpecs:
