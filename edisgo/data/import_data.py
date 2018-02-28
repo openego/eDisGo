@@ -1220,7 +1220,8 @@ def _import_genos_from_oedb(network, types=None):
         # new genos
         log_geno_count = 0
         log_geno_cap = 0
-        generators_mv_new = generators_mv[~generators_mv.index.isin(list(g_mv_existing['id']))]
+        generators_mv_new = generators_mv[~generators_mv.index.isin(
+            list(g_mv_existing['id']))]
 
         # remove them from grid's geno list
         g_mv = g_mv[~g_mv.isin(list(generators_mv_new.index.values))].dropna()
@@ -1233,22 +1234,33 @@ def _import_genos_from_oedb(network, types=None):
             # check if geom is available, skip otherwise
             geom = _check_geom(id, row)
             if not geom:
-                logger.warning('Generator {} has no geom entry at all and will not be imported!'
-                               .format(id)
-                               )
+                logger.warning('Generator {} has no geom entry at all and will'
+                               'not be imported!'.format(id))
                 continue
 
             # create generator object and add it to MV grid's graph
-            network.mv_grid.graph.add_node(
-                Generator(id=id,
-                          grid=network.mv_grid,
-                          nominal_capacity=row['electrical_capacity'],
-                          type=row['generation_type'],
-                          subtype=row['generation_subtype'],
-                          v_level=int(row['voltage_level']),
-                          geom=wkt_loads(geom)
-                          ),
-                type='generator')
+            if row['generation_type'] in ['solar', 'wind']:
+                network.mv_grid.graph.add_node(
+                    GeneratorFluctuating(
+                        id=id,
+                        grid=network.mv_grid,
+                        nominal_capacity=row['electrical_capacity'],
+                        type=row['generation_type'],
+                        subtype=row['generation_subtype'],
+                        v_level=int(row['voltage_level']),
+                        geom=wkt_loads(geom)),
+                    type='generator')
+            else:
+                network.mv_grid.graph.add_node(
+                    Generator(id=id,
+                              grid=network.mv_grid,
+                              nominal_capacity=row['electrical_capacity'],
+                              type=row['generation_type'],
+                              subtype=row['generation_subtype'],
+                              v_level=int(row['voltage_level']),
+                              geom=wkt_loads(geom)
+                              ),
+                    type='generator')
             log_geno_cap += row['electrical_capacity']
             log_geno_count += 1
 
@@ -1488,21 +1500,34 @@ def _import_genos_from_oedb(network, types=None):
                 # check if geom is available
                 geom = _check_geom(id, row)
 
-                gen = Generator(id=id,
-                                grid=None,
-                                nominal_capacity=row['electrical_capacity'],
-                                type=row['generation_type'],
-                                subtype=row['generation_subtype'],
-                                v_level=int(row['voltage_level']),
-                                geom=wkt_loads(geom) if geom else geom)
+                if row['generation_type'] in ['solar', 'wind']:
+                    gen = GeneratorFluctuating(
+                        id=id,
+                        grid=None,
+                        nominal_capacity=row['electrical_capacity'],
+                        type=row['generation_type'],
+                        subtype=row['generation_subtype'],
+                        v_level=int(row['voltage_level']),
+                        geom=wkt_loads(geom) if geom else geom)
+                else:
+                    gen = Generator(id=id,
+                                    grid=None,
+                                    nominal_capacity=row[
+                                        'electrical_capacity'],
+                                    type=row['generation_type'],
+                                    subtype=row['generation_subtype'],
+                                    v_level=int(row['voltage_level']),
+                                    geom=wkt_loads(geom) if geom else geom)
 
                 # TEMP: REMOVE MVLV SUBST ID FOR TESTING
                 #row['mvlv_subst_id'] = None
 
-                # check if MV-LV substation id exists. if not, allocate to random one
-                lv_grid = _check_mvlv_subst_id(generator=gen,
-                                               mvlv_subst_id=row['mvlv_subst_id'],
-                                               lv_grid_dict=lv_grid_dict)
+                # check if MV-LV substation id exists. if not, allocate to
+                # random one
+                lv_grid = _check_mvlv_subst_id(
+                    generator=gen,
+                    mvlv_subst_id=row['mvlv_subst_id'],
+                    lv_grid_dict=lv_grid_dict)
 
                 gen.grid = lv_grid
 
@@ -1522,7 +1547,8 @@ def _import_genos_from_oedb(network, types=None):
                     for type, val3 in val2.items():
                         for subtype, val4 in val3.items():
                             gen = Generator(
-                                id='agg-' + str(la_id) + '-' + '_'.join([str(_) for _ in val4['ids']]),
+                                id='agg-' + str(la_id) + '-' + '_'.join([
+                                    str(_) for _ in val4['ids']]),
                                 nominal_capacity=val4['capacity'],
                                 type=type,
                                 subtype=subtype,
@@ -1530,13 +1556,15 @@ def _import_genos_from_oedb(network, types=None):
                                 grid=network.mv_grid,
                                 v_level=4)
 
-                            network.mv_grid.graph.add_node(gen, type='generator_aggr')
+                            network.mv_grid.graph.add_node(
+                                gen, type='generator_aggr')
 
                             # select cable type
-                            line_type, line_count = select_cable(network=network,
-                                                                 level='mv',
-                                                                 apparent_power=gen.nominal_capacity /
-                                                                 pfac_mv_gen)
+                            line_type, line_count = select_cable(
+                                network=network,
+                                level='mv',
+                                apparent_power=gen.nominal_capacity /
+                                pfac_mv_gen)
 
                             # connect generator to MV station
                             line = Line(id='line_aggr_generator_la_' + str(la_id) + '_vlevel_{v_level}_'
