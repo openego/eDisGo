@@ -1,5 +1,6 @@
 from os import path
 import pandas as pd
+import numpy as np
 from math import sqrt
 import logging
 import datetime
@@ -41,7 +42,7 @@ class EDisGoAPI:
     scenario_name : None or :obj:`str`
         Can be used to describe your scenario but is not used for anything
         else. Default: None.
-    timeseries_fluc : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
+    timeseries_generation_fluc : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
         Parameter used to obtain time series for active power feed-in of
         fluctuating renewables wind and solar.
         Possible options are:
@@ -64,7 +65,7 @@ class EDisGoAPI:
             containing the type and the second level the weather cell ID.
         ToDo: explain how to obtain weather cell ID, add link to explanation
         of worst-case analyses
-    timeseries_flex : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
+    timeseries_generation_flex : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
         Parameter used to obtain time series for active power feed-in of
         flexible generators such as coal and biomass generators.
         Possible options are:
@@ -82,7 +83,10 @@ class EDisGoAPI:
              * 'gas'
              * 'coal'
              * 'biomass'
+             * 'other'
              * ...
+            Use 'other' if you don't want to explicitly provide every possible
+            type.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
         Parameter used to obtain time series of active power of (cumulative)
         loads.
