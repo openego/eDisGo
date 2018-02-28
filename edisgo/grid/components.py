@@ -151,13 +151,6 @@ class Load(Component):
         edisgo.network.TimeSeries : Details of global TimeSeries
         """
         if self._timeseries is None:
-            if isinstance(self.grid, MVGrid):
-                q_factor = tan(acos(self.grid.network.config[
-                                        'reactive_power_factor']['mv_load']))
-            elif isinstance(self.grid, LVGrid):
-                q_factor = tan(acos(self.grid.network.config[
-                                        'reactive_power_factor']['lv_load']))
-
             # work around until retail and industrial are separate sectors
             # TODO: remove once Ding0 data changed to single sector consumption
             sector = list(self.consumption.keys())[0]
@@ -166,29 +159,30 @@ class Load(Component):
             else:
                 consumption = self.consumption[sector]
 
-            # set timeseries for active and reactive power
-            if self.grid.network.scenario.mode == 'worst-case':
-                if isinstance(self.grid, MVGrid):
-                    ts = (self.grid.network.timeseries.load[
-                              sector, 'mv']).to_frame('p')
-                elif isinstance(self.grid, LVGrid):
-                    ts = (self.grid.network.timeseries.load[
-                              sector, 'lv']).to_frame('p')
-
-                ts['q'] = (self.grid.network.timeseries.load[sector] *
-                           q_factor)
-                self._timeseries = (ts * consumption)
-            else:
+            if isinstance(self.grid, MVGrid):
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor']['mv_load']))
+                voltage_level = 'mv'
+            elif isinstance(self.grid, LVGrid):
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor']['lv_load']))
+                voltage_level = 'lv'
+            # check if load time series for MV and LV are differentiated
+            try:
+                ts = self.grid.network.timeseries.load[
+                    sector, voltage_level].to_frame('p')
+            except KeyError:
                 try:
-                    ts = pd.DataFrame()
-                    ts['p'] = self.grid.network.timeseries.load[
-                        sector]
-                    ts['q'] = ts['p'] * q_factor
-                    self._timeseries = ts * consumption
+                    ts = self.grid.network.timeseries.load[
+                        sector].to_frame('p')
                 except KeyError:
-                    logger.exception("No timeseries for load of type {}"
-                                     "given.".format(sector))
+                    logger.exception(
+                        "No timeseries for load of type {} "
+                        "given.".format(sector))
                     raise
+            ts['q'] = ts['p'] * q_factor
+            self._timeseries = ts * consumption
+
         return self._timeseries
 
     def pypsa_timeseries(self, attr):
@@ -290,33 +284,20 @@ class Generator(Component):
             elif isinstance(self.grid, LVGrid):
                 q_factor = tan(acos(self.grid.network.config[
                                         'reactive_power_factor']['lv_gen']))
-            # set timeseries for active and reactive power
-            if self.grid.network.scenario.mode == 'worst-case':
-                ts = self.grid.network.timeseries.generation.copy()
-                ts['q'] = ts['p'] * q_factor
-                self._timeseries = ts * self.nominal_capacity
-            else:
+            # set time series for active and reactive power
+            try:
+                ts = self.grid.network.timeseries.generation_flexible[
+                    self.type].to_frame('p')
+            except KeyError:
                 try:
-                    ts = pd.DataFrame()
-                    ts['p'] = self.grid.network.timeseries.generation[
-                        self.type]
-                    ts['q'] = ts['p'] * q_factor
-                    self._timeseries = ts * self.nominal_capacity
+                    ts = self.grid.network.timeseries.generation_flexible[
+                        'other'].to_frame('p')
                 except KeyError:
-                    try:
-                        ts['p'] = self.grid.network.timeseries.\
-                            generation['other']
-                        ts['q'] = ts['p'] * q_factor
-                        self._timeseries = ts * self.nominal_capacity
-                    except KeyError:
-                        logger.exception("No timeseries for type {} "
-                                         "given.".format(self.type))
-                        raise
-
-        curtailment = self.grid.network.scenario.curtailment
-        if curtailment:
-            if self.type in list(curtailment.keys()):
-                self._timeseries = self._timeseries * curtailment[self._type]
+                    logger.exception("No time series for type {} "
+                                     "given.".format(self.type))
+                    raise
+            ts['q'] = ts['p'] * q_factor
+            self._timeseries = ts * self.nominal_capacity
 
         return self._timeseries
 
