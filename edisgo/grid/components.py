@@ -357,6 +357,121 @@ class Generator(Component):
         return self._v_level
 
 
+class GeneratorFluctuating(Generator):
+    """Generator object
+
+    Attributes
+    ----------
+    _curtailment : :pandas:`pandas.Series<series>`
+        Contains time series for curtailment
+    _weather_cell_id : :obj:`str`
+        ID of the weather cell used to generate feed-in time series
+
+    Notes
+    -----
+    The attributes :attr:`_type` and :attr:`_subtype` have to match the
+    corresponding types in :class:`~.grid.network.Timeseries` to
+    allow allocation of time series to generators.
+
+    See also
+    --------
+    edisgo.network.TimeSeries : Details of global
+        :class:`~.grid.network.TimeSeries`
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self._curtailment = kwargs.get('curtailment', None)
+        self._weather_cell_id = kwargs.get('weather_cell_id', None)
+
+    @property
+    def timeseries(self):
+        """Return time series of generator
+
+        It returns the actual time series used in power flow analysis. If
+        :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
+        :meth:`timeseries` looks for time series of the according weather cell
+        and type of technology in :class:`~.grid.network.TimeSeries` object and
+        considers for predefined curtailment as well.
+        """
+        if self._timeseries is None:
+
+            # get time series for active power depending on if they are
+            # differentiated by weather cell ID or not
+            if isinstance(self.grid.network.timeseries.generation_fluctuating.
+                          columns, pd.MultiIndex):
+                if self.weather_cell_id:
+                    try:
+                        ts = self.grid.network.timeseries.\
+                            generation_fluctuating[
+                                self.type, self.weather_cell_id].to_frame('p')
+                    except KeyError:
+                        logger.exception("No time series for type {} and "
+                                         "weather cell ID {} given.".format(
+                                            self.type, self.weather_cell_id))
+                        raise
+                else:
+                    logger.exception("No weather cell ID provided for "
+                                     "fluctuating generator {}.".format(
+                                        repr(self)))
+                    raise KeyError
+            else:
+                try:
+                    ts = self.grid.network.timeseries.generation_fluctuating[
+                        self.type].to_frame('p')
+                except KeyError:
+                    logger.exception("No time series for type {} "
+                                     "given.".format(self.type))
+                    raise
+
+            # subtract curtailment
+            #ToDo check if indexes overlap?
+            if self.curtailment:
+                ts = ts.join(self.curtailment.to_frame('curtailment'),
+                             how='left')
+                ts.p = ts.p - ts.curtailment.fillna(0)
+
+            # calculate share of reactive power
+            if isinstance(self.grid, MVGrid):
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor'][
+                                        'mv_gen']))
+            elif isinstance(self.grid, LVGrid):
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor'][
+                                        'lv_gen']))
+            ts['q'] = ts['p'] * q_factor
+            self._timeseries = ts * self.nominal_capacity
+
+        return self._timeseries
+
+    @property
+    def curtailment(self):
+        return self._curtailment
+
+    @curtailment.setter
+    def curtailment(self, curtailmen_ts):
+        self._curtailment = curtailmen_ts
+
+    @property
+    def weather_cell_id(self):
+        """
+        Get weather cell ID
+
+        Returns
+        -------
+        :obj:`str`
+            See class definition for details.
+
+        """
+        return self._weather_cell_id
+
+    @weather_cell_id.setter
+    def weather_cell_id(self, weather_cell):
+        self._weather_cell_id = weather_cell
+
+
 class Storage(Component):
     """Storage object
 
