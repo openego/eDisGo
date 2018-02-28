@@ -221,6 +221,7 @@ class Network:
             self._data_sources = kwargs.get('data_sources', {})
 
             self._mv_grid = kwargs.get('mv_grid', None)
+            self._scenario = kwargs.get('scenario', None)
             self._pypsa = None
             self.results = Results()
         else:
@@ -372,6 +373,11 @@ class Network:
     def metadata(self):
         """Returns meta data"""
         return self._metadata
+
+    @property
+    def scenario(self):
+        """Returns scenario name"""
+        return self._scenario
 
     @property
     def equipment_data(self):
