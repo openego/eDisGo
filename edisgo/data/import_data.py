@@ -1,5 +1,5 @@
-from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
-    MVStation, Line, Transformer, LVStation
+from ..grid.components import Load, Generator, MVDisconnectingPoint,\
+    BranchTee, MVStation, Line, Transformer, LVStation, GeneratorFluctuating
 from ..grid.grids import MVGrid, LVGrid
 from ..grid.connect import connect_mv_generators, connect_lv_generators
 from ..grid.tools import select_cable, position_switch_disconnectors
@@ -101,7 +101,8 @@ def import_from_ding0(file, network):
                                       'position'])
 
     # Check data integrity
-    _validate_ding0_grid_import(network.mv_grid, ding0_mv_grid, lv_grid_mapping)
+    _validate_ding0_grid_import(network.mv_grid, ding0_mv_grid,
+                                lv_grid_mapping)
 
     # Set data source
     network.set_data_source('grid', 'dingo')
@@ -148,9 +149,10 @@ def _build_lv_grid(ding0_grid, network):
                     voltage_nom=ding0_lv_grid.v_level / 1e3,
                     network=network)
 
-                station = {repr(_):_
-                           for _ in network.mv_grid.graph.nodes_by_attribute('lv_station')} \
-                            ['LVStation_' + str(ding0_lv_grid._station.id_db)]
+                station = {repr(_): _ for _ in
+                           network.mv_grid.graph.nodes_by_attribute(
+                               'lv_station')}['LVStation_' + str(
+                                    ding0_lv_grid._station.id_db)]
 
                 station.grid = lv_grid
                 for t in station.transformers:
@@ -167,18 +169,30 @@ def _build_lv_grid(ding0_grid, network):
                     consumption=_.consumption) for _ in ding0_lv_grid.loads()}
                 lv_grid.graph.add_nodes_from(loads.values(), type='load')
 
-                # Create list of generator instances and add these to grid's graph
-                generators = {_: Generator(
+                # Create list of generator instances and add these to grid's
+                # graph
+                generators = {_: (GeneratorFluctuating(
                     id=_.id_db,
                     geom=_.geo_data,
                     nominal_capacity=_.capacity,
                     type=_.type,
                     subtype=_.subtype,
                     grid=lv_grid,
-                    v_level=_.v_level) for _ in ding0_lv_grid.generators()}
-                lv_grid.graph.add_nodes_from(generators.values(), type='generator')
+                    v_level=_.v_level) if _.type in ['wind', 'solar'] else
+                                  Generator(
+                                      id=_.id_db,
+                                      geom=_.geo_data,
+                                      nominal_capacity=_.capacity,
+                                      type=_.type,
+                                      subtype=_.subtype,
+                                      grid=lv_grid,
+                                      v_level=_.v_level))
+                              for _ in ding0_lv_grid.generators()}
+                lv_grid.graph.add_nodes_from(generators.values(),
+                                             type='generator')
 
-                # Create list of branch tee instances and add these to grid's graph
+                # Create list of branch tee instances and add these to grid's
+                # graph
                 branch_tees = {
                     _: BranchTee(id=_.id_db,
                                  geom=_.geo_data,
@@ -284,14 +298,23 @@ def _build_mv_grid(ding0_grid, network):
     grid.graph.add_nodes_from(loads.values(), type='load')
 
     # Create list of generator instances and add these to grid's graph
-    generators = {_: Generator(
+    generators = {_: (GeneratorFluctuating(
         id=_.id_db,
         geom=_.geo_data,
         nominal_capacity=_.capacity,
         type=_.type,
         subtype=_.subtype,
         grid=grid,
-        v_level=_.v_level) for _ in ding0_grid.generators()}
+        v_level=_.v_level) if _.type in ['wind', 'solar'] else
+                      Generator(
+                          id=_.id_db,
+                          geom=_.geo_data,
+                          nominal_capacity=_.capacity,
+                          type=_.type,
+                          subtype=_.subtype,
+                          grid=grid,
+                          v_level=_.v_level))
+                  for _ in ding0_grid.generators()}
     grid.graph.add_nodes_from(generators.values(), type='generator')
 
     # Create list of branch tee instances and add these to grid's graph
