@@ -429,11 +429,47 @@ class GeneratorFluctuating(Generator):
 
     @property
     def curtailment(self):
-        return self._curtailment
+        """
+        Parameters
+        ----------
+        curtailment_ts : :pandas:`pandas.Series<series>`
+            See class definition for details.
+        Returns
+        -------
+        :pandas:`pandas.Series<series>`
+            If self._curtailment is set it returns that. Otherwise, if
+            curtailment in :class:`~.grid.network.TimeSeries` for the
+            corresponding technology type (and if given, weather cell ID)
+            is returned.
+
+        """
+        if self._curtailment:
+            return self._curtailment
+        elif isinstance(self.grid.network.timeseries.curtailment,
+                        pd.DataFrame):
+            if isinstance(self.grid.network.timeseries.curtailment.
+                          columns, pd.MultiIndex):
+                if self.weather_cell_id:
+                    try:
+                        return self.grid.network.timeseries.curtailment[
+                            self.type, self.weather_cell_id]
+                    except KeyError:
+                        logger.exception("No curtailment time series for type "
+                                         "{} and  weather cell ID {} "
+                                         "given.".format(self.type,
+                                                         self.weather_cell_id))
+                        raise
+                else:
+                    logger.exception("No weather cell ID provided for "
+                                     "fluctuating generator {}.".format(
+                                        repr(self)))
+                    raise KeyError
+        else:
+            return None
 
     @curtailment.setter
-    def curtailment(self, curtailmen_ts):
-        self._curtailment = curtailmen_ts
+    def curtailment(self, curtailment_ts):
+        self._curtailment = curtailment_ts
 
     @property
     def weather_cell_id(self):
