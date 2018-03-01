@@ -807,6 +807,17 @@ class TimeSeries:
          * 'industrial'
          * 'agricultural'
          Default: None.
+    curtailment : :pandas:`pandas.DataFrame<dataframe>` or List, optional
+        In the case curtailment is applied to all fluctuating renewables
+        this needs to be a DataFrame with active power curtailment time series.
+        Time series can either be aggregated by technology type or by type
+        and weather cell ID. In the first case columns of the DataFrame are
+        'solar' and 'wind'; in the second case columns need to be a
+        :pandas:`pandas.MultiIndex<multiindex>` with the first level
+        containing the type and the second level the weather cell ID.
+        In the case curtailment is only applied to specific generators, this
+        parameter needs to be a list of all generators that are curtailed.
+        Default: None.
     timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`, optional
         Can be used to define a time range for which to obtain the provided
         time series and run power flow analysis. Default: None.
@@ -823,6 +834,7 @@ class TimeSeries:
         self._generation_fluctuating = kwargs.get('generation_fluctuating',
                                                   None)
         self._load = kwargs.get('load', None)
+        self._curtailment = kwargs.get('curtailment', None)
         self._timeindex = kwargs.get('timeindex', None)
 
     @property
@@ -899,6 +911,51 @@ class TimeSeries:
 
         """
         return self._timeindex
+
+    @property
+    def curtailment(self):
+        """
+        Get generation time series of flexible generators (only active power)
+
+        Parameters
+        ----------
+        curtailment : list or :pandas:`pandas.DataFrame<dataframe>`
+            See class definition for details.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            In the case curtailment is applied to all solar and wind generators
+            curtailment time series either aggregated by technology type or by
+            type and weather cell ID are returnded. In the first case columns
+            of the DataFrame are 'solar' and 'wind'; in the second case columns
+            need to be a :pandas:`pandas.MultiIndex<multiindex>` with the
+            first level containing the type and the second level the weather
+            cell ID.
+            In the case curtailment is only applied to specific generators,
+            curtailment time series of all curtailed generators, specified in
+            by the column name are returned.
+        """
+        if self._curtailment:
+            if isinstance(self._curtailment, pd.DataFrame):
+                try:
+                    return self._curtailment.loc[[self.timeindex], :]
+                except:
+                    return self._curtailment.loc[self.timeindex, :]
+            elif isinstance(self._curtailment, list):
+                try:
+                    curtailment = pd.DataFrame()
+                    for gen in self._curtailment:
+                        curtailment[gen] = gen.curtailment
+                    return curtailment
+                except:
+                    raise
+        else:
+            return None
+
+    @curtailment.setter
+    def curtailment(self, curtailment):
+        self._curtailment = curtailment
 
     @timeindex.setter
     def timeindex(self, time_range):
