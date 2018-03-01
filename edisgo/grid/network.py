@@ -244,17 +244,14 @@ class Network:
     """
 
     def __init__(self, **kwargs):
-        if 'pypsa' not in kwargs.keys():
-            self._id = kwargs.get('id', None)
-            self._metadata = kwargs.get('metadata', None)
-            self._data_sources = kwargs.get('data_sources', {})
+        self._id = kwargs.get('id', None)
+        self._metadata = kwargs.get('metadata', None)
+        self._data_sources = kwargs.get('data_sources', {})
 
-            self._mv_grid = kwargs.get('mv_grid', None)
-            self._scenario = kwargs.get('scenario', None)
-            self._pypsa = None
-            self.results = Results()
-        else:
-            self._pypsa = kwargs.get('pypsa', None)
+        self._mv_grid = kwargs.get('mv_grid', None)
+        self._scenario = kwargs.get('scenario', None)
+        self._pypsa = None
+        self.results = Results()
 
         self._config = Config()
         self._equipment_data = self._load_equipment_data()
