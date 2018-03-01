@@ -20,7 +20,7 @@ import os
 import sys
 import pandas as pd
 
-from edisgo.grid.network import EDisGoAPI, Results, Config
+from edisgo.grid.network import EDisGo, Results
 from edisgo.flex_opt.exceptions import MaximumIterationError
 
 import logging
@@ -57,8 +57,8 @@ if __name__ == '__main__':
 
         # set up worst-case scenario
         mv_grid_id = dingo_grid.split('_')[-1].split('.')[0]
-        network = EDisGoAPI(dingo_grid, mv_grid_id=mv_grid_id,
-                            mode='worst-case-feedin').network
+        network = EDisGo(dingo_grid, mv_grid_id=mv_grid_id,
+                         mode='worst-case-feedin').network
 
         try:
             # Calculate grid expansion costs before generator import

@@ -16,7 +16,7 @@ from edisgo.flex_opt.storage_integration import integrate_storage
 
 logger = logging.getLogger('edisgo')
 
-class EDisGoAPI:
+class EDisGo:
     """
     Handles user inputs.
 
