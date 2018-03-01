@@ -210,7 +210,7 @@ def implement_switch_disconnector(mv_grid, node1, node2):
     # Get disconnecting point's location
     line = mv_grid.graph.edge[node1][node2]['line']
 
-    length_sd_line = 1e-3 # in km
+    length_sd_line = .75e-3 # in km
 
     x_sd = node1.geom.x * (length_sd_line / line.length) * (
         node1.geom.x - node2.geom.x)
@@ -226,11 +226,13 @@ def implement_switch_disconnector(mv_grid, node1, node2):
     mv_grid.graph.add_node(disconnecting_point, type='mv_disconnecting_point')
 
     # Replace original line by a new line
-    new_line_attr = {'line': Line(
-                  id=line.id,
-                  type=line.type,
-                  length=line.length - length_sd_line,
-                  grid=mv_grid)}
+    new_line_attr = {
+        'line': Line(
+            id=line.id,
+            type=line.type,
+            length=line.length - length_sd_line,
+            grid=mv_grid),
+        'type': 'line'}
     mv_grid.graph.remove_edge(node1, node2)
     mv_grid.graph.add_edge(disconnecting_point, node2, new_line_attr)
 
@@ -240,13 +242,14 @@ def implement_switch_disconnector(mv_grid, node1, node2):
                   id="switch_disconnector_line_{}".format(str(mv_dp_number + 1)),
                   type=line.type,
                   length=length_sd_line,
-                  grid=mv_grid)}
+                  grid=mv_grid),
+        'type': 'line'}
 
     mv_grid.graph.add_edge(node1, disconnecting_point,
                            switch_disconnector_line_attr)
 
     # Set line to switch disconnector
-    disconnecting_point.line =  mv_grid.graph.line_from_nodes(disconnecting_point, node2)
+    disconnecting_point.line =  mv_grid.graph.line_from_nodes(disconnecting_point, node1)
 
 
 def select_cable(network, level, apparent_power):
