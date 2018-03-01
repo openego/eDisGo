@@ -769,6 +769,119 @@ class TimeSeriesControl:
         #         axis=1)
 
 
+class CurtailmentControl:
+    """
+    Sets up Curtailment Object.
+
+    Parameters
+    ----------
+    mode : :obj:`str`, optional
+        Mode must be set in case of worst-case analyses and can either be
+        'worst-case' (both feed-in and load case), 'worst-case-feedin' (only
+        feed-in case) or 'worst-case-load' (only load case). All other
+        parameters except of `config-data` will be ignored. Default: None.
+    mv_grid_id : :obj:`str`, optional
+        MV grid ID as used in oedb. Default: None.
+    scenario_name : :obj:`str`
+        Defines which scenario of future generator park to use. Possible
+        options are 'nep2035' and 'ego100'. Default: None.
+    total_curtailment_ts : :pandas:`pandas.DataFrame<dataframe>`, optional
+        Parameter used to obtain time series for active power feed-in of
+        fluctuating renewables wind and solar.
+        Possible options are:
+         * 'oedb'
+            time series are obtained from the OpenEnergy DataBase
+         * :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with time series, normalized with corresponding capacity.
+            Time series can either be aggregated by technology type or by type
+            and weather cell ID. In the first case columns of the DataFrame are
+            'solar' and 'wind'; in the second case columns need to be a
+            :pandas:`pandas.MultiIndex<multiindex>` with the first level
+            containing the type and the second level the weather cell ID.
+        Default: None.
+    config_data : dict, optional
+        Dictionary containing config data from config files. See
+        :class:`~.grid.network.Config` data attribute for more information.
+        Default: None.
+
+    """
+    def __init__(self, mode, network, timeseries, **kwargs):
+
+        self.curtailment = TimeSeries()
+        if mode == 'curtail-all':
+            self._curtail_all(kwargs.get('total_curtailment_ts', None),
+                              network)
+        else:
+            raise ValueError('{} is not a valid mode.'.format(mode))
+
+    def _curtail_all(self, total_curtailment_ts, network,
+                     timeseries_generation_fluctuating):
+        """
+        Define worst case generation time series for fluctuating and flexible
+        generators.
+
+        Parameters
+        ----------
+
+        """
+
+        def _get_capacities_by_type_and_weather_cell():
+            dict_capacities = {}
+            for gen in gens:
+                if gen.type in ['solar', 'wind']:
+                    if gen.weather_cell_id:
+                        if (gen.type, gen.weather_cell_id) in \
+                                dict_capacities.keys():
+                            dict_capacities[
+                                (gen.type, gen.weather_cell_id)] = \
+                                dict_capacities[
+                                    (gen.type, gen.weather_cell_id)] + \
+                                gen.nominal_capacity
+                        else:
+                            dict_capacities[
+                                (gen.type, gen.weather_cell_id)] = \
+                                gen.nominal_capacity
+                    else:
+                        message = 'Please provide a weather cell ID for ' \
+                                  'generator {}.'.format(repr(gen))
+                        logging.error(message)
+                        raise KeyError(message)
+            return dict_capacities
+
+        def _get_capacities_by_type():
+            dict_capacities = {'solar': 0, 'wind': 0}
+            for gen in gens:
+                if gen.type in ['solar', 'wind']:
+                    dict_capacities[gen.type] = gen.nominal_capacity
+            return dict_capacities
+
+        def _calculate_curtailment(feedin_df, curtailment_series):
+            curtailment = (feedin_df.divide(
+                feedin_df.sum(axis=1), axis=0)).multiply(
+                curtailment_series, axis=0)
+            return curtailment
+
+        # get all generators
+        gens = list(network.mv_grid.graph.nodes_by_attribute('generator'))
+        for lv_grid in network.mv_grid.lv_grids:
+            gens.extend(list(lv_grid.nodes_by_attribute('generator')))
+
+        # get aggregated capacities
+        if isinstance(timeseries_generation_fluctuating.columns,
+                      pd.MultiIndex):
+            dict_capacities =_get_capacities_by_type_and_weather_cell()
+        else:
+            dict_capacities = _get_capacities_by_type()
+
+        feedin_df = timeseries_generation_fluctuating.multiply(
+            pd.Series(dict_capacities))
+        # ToDo: Check if there are any nans in feedin_df and if so, report
+        # error if capacity_dict has more entries than timeseries df
+
+        if isinstance(total_curtailment_ts, pd.Series):
+            return _calculate_curtailment(feedin_df, total_curtailment_ts)
+
+
 class TimeSeries:
     """Defines an eDisGo time series
 
