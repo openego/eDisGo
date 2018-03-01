@@ -19,11 +19,27 @@ logger = logging.getLogger('edisgo')
 class EDisGoAPI:
     """
     Handles user inputs.
-    #ToDo: Doch noch mode paramater einführen, damit der User nur einmal den
-    worst case Fall definieren muss und nicht für jede Zeitreihe?
 
     Parameters
     ----------
+    worst_case_analysis : None or :obj:`str`, optional
+        If not None time series for feed-in and load will be generated
+        according to the chosen worst case analysis
+        Possible options are:
+         * 'worst-case'
+            feed-in for the two worst-case scenarios feed-in case and load case
+            are generated
+         * 'worst-case-feedin'
+            feed-in for the worst-case scenario feed-in case is generated
+         * 'worst-case-load'
+            feed-in for the worst-case scenario load case is generated
+        Be aware that if you choose to conduct a worst-case analysis your
+        input for the following parameters will not be used:
+         * `timeseries_generation_fluc`
+         * `timeseries_generation_flex`
+         * `timeseries_load`
+         #ToDo: Wollen wir die Erstellung von worst-case Zeitreihen in den
+         #genannten parametern trotzdem noch erlauben?
     mv_grid_id : :obj:`str`
         MV grid ID used in import of ding0 grid.
         ToDo: explain where MV grid IDs come from
@@ -161,8 +177,17 @@ class EDisGoAPI:
         ranges of the given time series that will be used in the analysis.
     """
 
-    def __init__(self, grid_id):
-        pass
+    def __init__(self, ding0_grid, **kwargs):
+
+        # create network
+        self.network = Network.import_from_ding0(
+            ding0_grid, id=kwargs.get('mv_grid_id', None),
+            scenario=kwargs.get('import_generator_scenario', None))
+
+        # set-up worst-case time series
+        self.network.timeseries = TimeSeriesControl(
+            mode=kwargs.get('mode', None),
+            config_data=self.network.config).timeseries
 
 
 class Network:
@@ -280,12 +305,14 @@ class Network:
 
         return network
 
-    def import_generators(self, types=None, data_source='oedb'):
+    def import_generators(self, types=None, data_source='oedb', scenario=None):
         """Import generators
 
         For details see
         :func:`edisgo.data.import_data.import_generators`
         """
+        if scenario:
+            self.scenario = scenario
         import_generators(network=self,
                           data_source=data_source,
                           types=types)
@@ -382,6 +409,10 @@ class Network:
     def scenario(self):
         """Returns scenario name"""
         return self._scenario
+
+    @scenario.setter
+    def scenario(self, scenario_name):
+        self._scenario = scenario_name
 
     @property
     def equipment_data(self):

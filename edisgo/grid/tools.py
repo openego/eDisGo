@@ -27,8 +27,8 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
         'load', 'generation' or both 'loadgen'. Defaults to 'load'
     status : str
         Either 'open' or 'closed'. Define which status is should be set
-        initially. Defaults to 'open' (which refers to conditions of normal grid
-        operation).
+        initially. Defaults to 'open' (which refers to conditions of normal
+        grid operation).
 
     Returns
     -------
@@ -218,7 +218,8 @@ def implement_switch_disconnector(mv_grid, node1, node2):
         node1.geom.y - node2.geom.y)
 
     # Instantiate disconnecting point
-    mv_dp_number = len(mv_grid.graph.nodes_by_attribute('mv_disconnecting_point'))
+    mv_dp_number = len(mv_grid.graph.nodes_by_attribute(
+        'mv_disconnecting_point'))
     disconnecting_point = MVDisconnectingPoint(
         id=mv_dp_number + 1,
         geom=Point(x_sd, y_sd),
@@ -239,7 +240,8 @@ def implement_switch_disconnector(mv_grid, node1, node2):
     # Add disconnecting line segment
     switch_disconnector_line_attr = {
         'line': Line(
-                  id="switch_disconnector_line_{}".format(str(mv_dp_number + 1)),
+                  id="switch_disconnector_line_{}".format(
+                      str(mv_dp_number + 1)),
                   type=line.type,
                   length=length_sd_line,
                   grid=mv_grid),
@@ -249,11 +251,12 @@ def implement_switch_disconnector(mv_grid, node1, node2):
                            switch_disconnector_line_attr)
 
     # Set line to switch disconnector
-    disconnecting_point.line =  mv_grid.graph.line_from_nodes(disconnecting_point, node1)
+    disconnecting_point.line = mv_grid.graph.line_from_nodes(disconnecting_point, node1)
 
 
 def select_cable(network, level, apparent_power):
-    """Selects an appropriate cable type and quantity using given apparent power.
+    """Selects an appropriate cable type and quantity using given apparent
+    power.
 
     Considers load factor.
 

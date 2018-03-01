@@ -4,11 +4,11 @@ topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA grid
 container.
 """
 
-from edisgo.grid.components import Transformer, Line, LVStation, MVStation
+from edisgo.grid.components import Transformer, Line, LVStation
 
 import numpy as np
 import pandas as pd
-from math import pi, sqrt, floor
+from math import pi, sqrt
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
 from networkx import connected_component_subgraphs
