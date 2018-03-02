@@ -16,9 +16,11 @@ from edisgo.flex_opt.storage_integration import integrate_storage
 
 logger = logging.getLogger('edisgo')
 
+
 class EDisGo:
     """
-    Handles user inputs.
+    Provides the top-level API for invocation of data import, analysis of
+    hosting capacity, grid reinforcement and flexibility measures.
 
     Parameters
     ----------
@@ -33,11 +35,13 @@ class EDisGo:
             feed-in for the worst-case scenario feed-in case is generated
          * 'worst-case-load'
             feed-in for the worst-case scenario load case is generated
+
         Be aware that if you choose to conduct a worst-case analysis your
         input for the following parameters will not be used:
          * `timeseries_generation_fluc`
          * `timeseries_generation_flex`
          * `timeseries_load`
+
          #ToDo: Wollen wir die Erstellung von worst-case Zeitreihen in den
          #genannten parametern trotzdem noch erlauben?
     mv_grid_id : :obj:`str`
@@ -79,6 +83,7 @@ class EDisGo:
             'solar' and 'wind'; in the second case columns need to be a
             :pandas:`pandas.MultiIndex<multiindex>` with the first level
             containing the type and the second level the weather cell ID.
+
         ToDo: explain how to obtain weather cell ID, add link to explanation
         of worst-case analyses
     timeseries_generation_flex : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
@@ -101,6 +106,7 @@ class EDisGo:
              * 'biomass'
              * 'other'
              * ...
+
             Use 'other' if you don't want to explicitly provide every possible
             type.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
@@ -129,6 +135,7 @@ class EDisGo:
              * 'retail'
              * 'industrial'
              * 'agricultural'
+
     timeseries_battery : None or :obj:`str` or :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
         Parameter used to obtain time series of active power the battery
         storage(s) is/are charged (negative) or discharged (positive) with.
@@ -146,6 +153,7 @@ class EDisGo:
             (negative) or discharged (positive) with, normalized with
             corresponding capacity. In case of more than one storage provide
             a DataFrame where each column represents one storage.
+
     battery_parameters : None or dict or list
         In case of one battery storage a dictionary needs to be provided. In
         case of more than one battery storage a list of dictionaries needs to
@@ -167,36 +175,20 @@ class EDisGo:
         series to single generators. Needs to be set when curtailment time
         series are given. Default: None.
         #ToDo: Add possible options and links to them once we defined them.
-    import_generator_scenario : None or :obj:`str`
-        If provided defines which scenario of future generator park to use.
-        Possible options are 'nep2035' and 'ego100'.
+    generator_scenario : None or :obj:`str`
+        If provided defines which scenario of future generator park to use
+        and invokes import of these generators. Possible options are 'nep2035'
+        and 'ego100'.
         #ToDo: Add link to explanation of scenarios.
     timeindex : None or :pandas:`pandas.DatetimeIndex<datetimeindex>`
         Can be used to define a time range for which to obtain load time series
         and feed-in time series of fluctuating renewables or to define time
         ranges of the given time series that will be used in the analysis.
-    """
 
-    def __init__(self, ding0_grid, **kwargs):
-
-        # create network
-        self.network = Network.import_from_ding0(
-            ding0_grid, id=kwargs.get('mv_grid_id', None),
-            scenario=kwargs.get('import_generator_scenario', None))
-
-        # set-up worst-case time series
-        self.network.timeseries = TimeSeriesControl(
-            mode=kwargs.get('mode', None),
-            config_data=self.network.config).timeseries
-
-
-class Network:
-    """Defines the eDisGo Network
-
-    Used as container for all data related to a single
-    :class:`~.grid.grids.MVGrid`.
-    Provides the top-level API for invocation of data import, analysis of
-    hosting capacity, grid reinforcement and flexibility measures.
+    Attributes
+    ----------
+    network : :class:`~.grid.network.Network`
+        The network is a container object holding all data.
 
     Examples
     --------
@@ -204,22 +196,175 @@ class Network:
 
     Create eDisGo Network object by loading Ding0 file
 
-    >>> from edisgo.grid.network import Network
-    >>> network = Network.import_from_ding0('ding0_data.pkl'))
+    >>> from edisgo.grid.network import EDisGo
+    >>> edisgo = EDisGo(ding0_grid='ding0_data.pkl', mode='worst-case-feedin')
 
-    Analyze hosting capacity for MV grid level
+    Analyze hosting capacity for MV and LV grid level
 
-    >>> network.analyze(mode='mv')
+    >>> edisgo.analyze()
 
     Print LV station secondary side voltage levels returned by PFA
 
-    >>> lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
-    >>> print(network.results.v_res(lv_stations, 'lv'))
+    >>> lv_stations = edisgo.network.mv_grid.graph.nodes_by_attribute(
+    >>>     'lv_station')
+    >>> print(edisgo.network.results.v_res(lv_stations, 'lv'))
+
+    """
+
+    def __init__(self, **kwargs):
+
+        # create network
+        self.network = Network(
+            generator_scenario=kwargs.get('generator_scenario', None),
+            config_path=kwargs.get('config_path', None))
+
+        # load grid
+        # ToDo: should at some point work with only MV grid ID
+        self.import_from_ding0(kwargs.get('ding0_grid', None))
+
+        # set up time series for feed-in and load
+        # worst-case time series
+        if kwargs.get('worst_case_analysis', None):
+            self.network.timeseries = TimeSeriesControl(
+                mode=kwargs.get('worst_case_analysis', None),
+                config_data=self.network.config).timeseries
+        else:
+            self.network.timeseries = TimeSeriesControl(
+                timeseries_generation_fluc=kwargs.get(
+                    'timeseries_generation_fluc', None),
+                timeseries_generation_flex=kwargs.get(
+                    'timeseries_generation_flex', None),
+                timeseries_load=kwargs.get(
+                    'timeseries_load', None),
+                config_data=self.network.config,
+                timeindex=kwargs.get('timeindex', None)).timeseries
+
+        # # set up curtailment
+        # CurtailmentControl(kwargs.get('timeseries_curtailment', None),
+        #                    kwargs.get('curtailment_methodology', None))
+
+        # include battery
+        # kwargs.get('timeseries_battery', None)
+        # kwargs.get('battery_parameters', None)
+
+        # import new generators
+        if self.network.generator_scenario:
+            self.import_generators(types=None)
+
+    def import_from_ding0(self, file, **kwargs):
+        """Import grid data from DINGO file
+
+        For details see
+        :func:`edisgo.data.import_data.import_from_ding0`
+        """
+        import_from_ding0(file=file,
+                          network=self.network)
+
+    def import_generators(self, types=None, data_source='oedb',
+                          generator_scenario=None):
+        """Import generators
+
+        For details see
+        :func:`edisgo.data.import_data.import_generators`
+        """
+        if generator_scenario:
+            self.network.generator_scenario = generator_scenario
+        # ToDo: Remove hard-coded types and data source?
+        types = ['wind', 'solar']
+        data_source = 'oedb'
+        import_generators(network=self.network,
+                          data_source=data_source,
+                          types=types)
+
+    def analyze(self, mode=None):
+        """Analyzes the grid by power flow analysis
+
+        Analyze the grid for violations of hosting capacity. Means, perform a
+        power flow analysis and obtain voltages at nodes (load, generator,
+        stations/transformers and branch tees) and active/reactive power at
+        lines.
+
+        The power flow analysis can be performed for both grid levels MV and LV
+        and for both of them individually. Use `mode` to choose (defaults to
+        MV + LV).
+
+        A static `non-linear power flow analysis is performed using PyPSA
+        <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
+        The high-voltage to medium-voltage transformer are not included in the
+        analysis. The slack bus is defined at secondary side of these
+        transformers assuming an ideal tap changer. Hence, potential
+        overloading of the transformers is not studied here.
+
+        Parameters
+        ----------
+        mode : str
+            Allows to toggle between power flow analysis (PFA) on the whole
+            grid topology (MV + LV), only MV or only LV. Therefore, either
+            specify `mode='mv'` for PFA of the MV grid topology or `mode='lv'`
+            for PFA of the LV grid topology.
+            Defaults to None which equals power flow analysis for MV + LV.
+
+        Notes
+        -----
+        The current implementation always translates the grid topology
+        representation to the PyPSA format and stores it to
+        :attr:`self.network.pypsa`.
+
+        TODO: extend docstring by
+
+        * How power plants are modeled, if possible use a link
+        * Where to find and adjust power flow analysis defining parameters
+
+        See Also
+        --------
+        :func:`~.tools.pypsa_io.to_pypsa`
+            Translator to PyPSA data format
+
+        """
+        if self.network.pypsa is None:
+            # Translate eDisGo grid topology representation to PyPSA format
+            self.network.pypsa = pypsa_io.to_pypsa(self.network, mode)
+        else:
+            # Update PyPSA data with equipment changes
+            pypsa_io.update_pypsa(self.network)
+
+        # run power flow analysis
+        pf_results = self.network.pypsa.pf(self.network.pypsa.snapshots)
+
+        if all(pf_results['converged']['0'].tolist()) == True:
+            pypsa_io.process_pfa_results(self.network, self.network.pypsa)
+        else:
+            raise ValueError("Power flow analysis did not converge.")
+
+    def reinforce(self, **kwargs):
+        """Reinforces the grid and calculates grid expansion costs"""
+        reinforce_grid(
+            self, max_while_iterations=kwargs.get(
+                'max_while_iterations', 10))
+        self.network.results.grid_expansion_costs = grid_expansion_costs(
+            self.network)
+
+    def integrate_storage(self, **kwargs):
+        """Integrate storage in grid"""
+        integrate_storage(network=self.network,
+                          position=kwargs.get('position', None),
+                          operational_mode=kwargs.get(
+                              'operational_mode', None),
+                          parameters=kwargs.get('parameters', None))
+
+
+class Network:
+    """
+    Used as container for all data related to a single
+    :class:`~.grid.grids.MVGrid`.
 
     Attributes
     ----------
     id : :obj:`str`
         Name of network
+    scenario_name : :obj:`str`
+        Can be used to describe your scenario but is not used for anything
+        else.
     equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
         Electrical equipment such as lines and transformers
     config : :class:`~.grid.network.Config`
@@ -239,22 +384,22 @@ class Network:
     timeseries : :class:`~.grid.network.TimeSeries`
         Object containing time series
     mv_grid : :class:`~.grid.grids.MVGrid`
-    scenario : :obj:`str`
+    generator_scenario : :obj:`str`
         Defines which scenario of future generator park to use.
+
     """
 
     def __init__(self, **kwargs):
-        self._id = kwargs.get('id', None)
+        self._scenario_name = kwargs.get('scenario_name', None)
+        self._config = Config(config_path=kwargs.get('config_path', None))
+        self._equipment_data = self._load_equipment_data()
         self._metadata = kwargs.get('metadata', None)
         self._data_sources = kwargs.get('data_sources', {})
+        self._generator_scenario = kwargs.get('generator_scenario', None)
 
         self._mv_grid = kwargs.get('mv_grid', None)
-        self._scenario = kwargs.get('scenario', None)
         self._pypsa = None
         self.results = Results()
-
-        self._config = Config()
-        self._equipment_data = self._load_equipment_data()
 
         self._dingo_import_data = []
 
@@ -285,111 +430,11 @@ class Network:
 
         return data
 
-    @classmethod
-    def import_from_ding0(cls, file, **kwargs):
-        """Import grid data from DINGO file
-
-        For details see
-        :func:`edisgo.data.import_data.import_from_ding0`
-        """
-        #ToDo: Should also work when only an MV grid ID is provided.
-        # create the network instance
-        network = cls(**kwargs)
-
-        # call the importer
-        import_from_ding0(file=file,
-                          network=network)
-
-        return network
-
-    def import_generators(self, types=None, data_source='oedb', scenario=None):
-        """Import generators
-
-        For details see
-        :func:`edisgo.data.import_data.import_generators`
-        """
-        if scenario:
-            self.scenario = scenario
-        import_generators(network=self,
-                          data_source=data_source,
-                          types=types)
-
-    def analyze(self, mode=None):
-        """Analyzes the grid by power flow analysis
-
-        Analyze the grid for violations of hosting capacity. Means, perform a
-        power flow analysis and obtain voltages at nodes (load, generator,
-        stations/transformers and branch tees) and active/reactive power at
-        lines.
-
-        The power flow analysis can be performed for both grid levels MV and LV
-        and for both of them individually. Use `mode` to choose (defaults to
-        MV + LV).
-
-        A static `non-linear power flow analysis is performed using PyPSA
-        <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
-        The high-voltage to medium-voltage transformer are not included in the
-        analysis. The slack bus is defined at secondary side of these
-        transformers assuming an ideal tap changer. Hence, potential
-        overloading of the transformers is not studied here.
-
-        Parameters
-        ----------
-        mode: str
-            Allows to toggle between power flow analysis (PFA) on the whole grid
-            topology (MV + LV), only MV or only LV. Therefore, either specify
-            `mode='mv'` for PFA of the MV grid topology or `mode='lv'`
-            for PFA of the LV grid topology.
-            Defaults to None which equals power flow analysis for MV + LV.
-
-        Notes
-        -----
-        The current implementation always translates the grid topology
-        representation to the PyPSA format and stores it to :attr:`self._pypsa`.
-
-        TODO: extend doctring by
-
-        * How power plants are modeled, if possible use a link
-        * Where to find and adjust power flow analysis defining parameters
-
-        See Also
-        --------
-        :func:~.tools.pypsa_io.to_pypsa
-            Translator to PyPSA data format
-
-        """
-        if self.pypsa is None:
-            # Translate eDisGo grid topology representation to PyPSA format
-            self.pypsa = pypsa_io.to_pypsa(self, mode)
-        else:
-            # Update PyPSA data with equipment changes
-            pypsa_io.update_pypsa(self)
-
-        # run power flow analysis
-        pf_results = self.pypsa.pf(self.pypsa.snapshots)
-
-        if all(pf_results['converged']['0'].tolist()) == True:
-            pypsa_io.process_pfa_results(self, self.pypsa)
-        else:
-            raise ValueError("Power flow analysis did not converge.")
-
-    def reinforce(self, **kwargs):
-        """Reinforces the grid and calculates grid expansion costs"""
-        reinforce_grid(
-            self, max_while_iterations=kwargs.get('max_while_iterations', 10))
-        self.results.grid_expansion_costs = grid_expansion_costs(self)
-
-    def integrate_storage(self, **kwargs):
-        """Integrate storage in grid"""
-        integrate_storage(network=self,
-                          position=kwargs.get('position', None),
-                          operational_mode=kwargs.get(
-                              'operational_mode', None),
-                          parameters=kwargs.get('parameters', None))
-
     @property
     def id(self):
-        """Returns id of network"""
+        """
+        Returns id of MV grid.
+        """
         return self._id
 
     @property
@@ -403,13 +448,22 @@ class Network:
         return self._metadata
 
     @property
-    def scenario(self):
-        """Returns scenario name"""
-        return self._scenario
+    def generator_scenario(self):
+        """Returns generator scenario name"""
+        return self._generator_scenario
 
-    @scenario.setter
-    def scenario(self, scenario_name):
-        self._scenario = scenario_name
+    @generator_scenario.setter
+    def generator_scenario(self, generator_scenario_name):
+        self._generator_scenario = generator_scenario_name
+
+    @property
+    def scenario_name(self):
+        """Returns scenario name"""
+        return self._scenario_name
+
+    @scenario_name.setter
+    def scenario_name(self, scenario_name):
+        self._scenario_name = scenario_name
 
     @property
     def equipment_data(self):
@@ -476,8 +530,8 @@ class Network:
         Parameters
         ----------
         pypsa:
-            The `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
-            container
+            The `PyPSA network
+            <https://www.pypsa.org/doc/components.html#network>`_ container
 
         Returns
         -------
@@ -501,8 +555,12 @@ class Config:
     Used as container for all configurations.
 
     """
-    #ToDo: add docstring
+    # ToDo: add docstring
+    # ToDo: add method that catches error in case a non-existing value is tried
+    # to fetch
+    # ToDo: add variable path to config files
     def __init__(self, **kwargs):
+        config_path = kwargs.get('config_path', None)
         self._data = self._load_config()
 
     @staticmethod
@@ -582,6 +640,7 @@ class TimeSeriesControl:
             'solar' and 'wind'; in the second case columns need to be a
             :pandas:`pandas.MultiIndex<multiindex>` with the first level
             containing the type and the second level the weather cell ID.
+
         Default: None.
     timeseries_generation_flex : :pandas:`pandas.DataFrame<dataframe>`, optional
         DataFrame with time series for active power of each (aggregated)
@@ -592,6 +651,7 @@ class TimeSeriesControl:
          * 'biomass'
          * 'other'
          * ...
+
         Use 'other' if you don't want to explicitly provide every possible
         type.
         Default: None.
@@ -611,6 +671,7 @@ class TimeSeriesControl:
              * 'retail'
              * 'industrial'
              * 'agricultural'
+
          Default: None.
     config_data : dict, optional
         Dictionary containing config data from config files. See
@@ -798,6 +859,7 @@ class CurtailmentControl:
             'solar' and 'wind'; in the second case columns need to be a
             :pandas:`pandas.MultiIndex<multiindex>` with the first level
             containing the type and the second level the weather cell ID.
+
         Default: None.
     config_data : dict, optional
         Dictionary containing config data from config files. See
@@ -908,6 +970,7 @@ class TimeSeries:
          * 'biomass'
          * 'other'
          * ...
+
         Use 'other' if you don't want to explicitly provide every possible
         type.
         Default: None.
@@ -919,6 +982,7 @@ class TimeSeries:
          * 'retail'
          * 'industrial'
          * 'agricultural'
+
          Default: None.
     curtailment : :pandas:`pandas.DataFrame<dataframe>` or List, optional
         In the case curtailment is applied to all fluctuating renewables
@@ -1096,6 +1160,7 @@ class ETraGoSpecs:
          * 'coal'
          * 'biomass'
          * ...
+
     _ren_dispatch : :pandas:`pandas.DataFrame<dataframe>`
         Time series of active power of wind and solar aggregates,
         normalized with corresponding capacity.
@@ -1103,6 +1168,7 @@ class ETraGoSpecs:
          * '0'
          * '1'
          * ...
+
     _curtailment : :pandas:`pandas.DataFrame<dataframe>`
         Time series of curtailed power for wind and solar aggregates,
         normalized with corresponding capacity.
@@ -1110,6 +1176,7 @@ class ETraGoSpecs:
          * '0'
          * '1'
          * ...
+
     _renewables : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing `ren_id` specifying type (wind or solar) and
         weather cell ID.
@@ -1139,6 +1206,8 @@ class ETraGoSpecs:
     @property
     def dispatch(self):
         """
+        Returns dispatch
+
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
@@ -1175,8 +1244,9 @@ class Results:
     ----------
     measures: list
         A stack that details the history of measures to increase grid's hosting
-        capacity. The last item refers to the latest measure. The key `original`
-        refers to the state of the grid topology as it was initially imported.
+        capacity. The last item refers to the latest measure. The key
+        `original` refers to the state of the grid topology as it was initially
+        imported.
 
     """
 

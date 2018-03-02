@@ -1,5 +1,5 @@
-from ..grid.components import Load, Generator, MVDisconnectingPoint,\
-    BranchTee, MVStation, Line, Transformer, LVStation, GeneratorFluctuating
+from ..grid.components import Load, Generator, BranchTee, MVStation, Line, \
+    Transformer, LVStation, GeneratorFluctuating
 from ..grid.grids import MVGrid, LVGrid
 from ..grid.connect import connect_mv_generators, connect_lv_generators
 from ..grid.tools import select_cable, position_switch_disconnectors
@@ -24,7 +24,6 @@ import os
 if not 'READTHEDOCS' in os.environ:
     from ding0.tools.results import load_nd_from_pickle
     from ding0.core.network.stations import LVStationDing0
-    from ding0.core.network.grids import CircuitBreakerDing0
     from ding0.core.structure.regions import LVLoadAreaCentreDing0
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
@@ -36,7 +35,7 @@ logger = logging.getLogger('edisgo')
 
 def import_from_ding0(file, network):
     """
-    Import a eDisGo grid topology from
+    Import an eDisGo grid topology from
     `Ding0 data <https://github.com/openego/ding0>`_.
 
     This import method is specifically designed to load grid topology data in
@@ -58,14 +57,7 @@ def import_from_ding0(file, network):
         If a object of the type :class:`ding0.core.NetworkDing0` data will be
         used directly from this object.
     network: :class:`~.grid.network.Network`
-        The eDisGo container object
-
-    Examples
-    --------
-    Assuming you the Ding0 `ding0_data.pkl` in CWD
-
-    >>> from edisgo.grid.network import Network
-    >>> network = Network.import_from_ding0('ding0_data.pkl'))
+        The eDisGo data container object
 
     Notes
     -----
@@ -277,7 +269,8 @@ def _build_mv_grid(ding0_grid, network):
     la_centers = [_ for _ in ding0_grid._graph.nodes()
                   if isinstance(_, LVLoadAreaCentreDing0)]
     if la_centers:
-        aggregated, aggr_stations, dingo_import_data = _determine_aggregated_nodes(la_centers)
+        aggregated, aggr_stations, dingo_import_data = \
+            _determine_aggregated_nodes(la_centers)
         network.dingo_import_data = dingo_import_data
     else:
         aggregated = {}
@@ -1785,7 +1778,7 @@ def _import_genos_from_oedb(network, types=None):
     srid = int(network.config['geo']['srid'])
 
     oedb_data_source = network.config['data_source']['oedb_data_source']
-    scenario = network.scenario
+    scenario = network.generator_scenario
 
     if oedb_data_source == 'model_draft':
 
@@ -2031,10 +2024,11 @@ def import_load_timeseries(config_data, data_source):
     data_source : str
         Specfiy type of data source. Available data sources are
 
-         * 'oedb': retrieves load time series cumulated across sectors
-         * 'demandlib': determine a load time series with the use of the
-            demandlib. This calculated standard load profiles for 4 different
-            sectors.
+         * 'oedb'
+            Retrieves load time series cumulated across sectors.
+         * 'demandlib'
+            Determine a load time series with the use of the demandlib.
+            This calculated standard load profiles for 4 different sectors.
 
     Returns
     -------

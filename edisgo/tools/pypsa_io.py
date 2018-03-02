@@ -19,9 +19,9 @@ def to_pypsa(network, mode):
     """
     Translate graph based grid representation to PyPSA Network
 
-    For details from a user perspective see API documention of
-    :meth:`~.grid.network.Network.analyze` of the grid container
-    :class:`~.grid.network.Network`.
+    For details from a user perspective see API documentation of
+    :meth:`~.grid.network.EDisGo.analyze` of the API class
+    :class:`~.grid.network.EDisGo`.
 
     Translating eDisGo's grid topology to PyPSA representation is structured
     into tranlating the topology and adding time series for components of the
@@ -209,7 +209,7 @@ def mv_to_pypsa(network):
 
     MV grid topology translated here includes
 
-    * MV station (no transformer, see :meth:`~.grid.network.Network.analyze`)
+    * MV station (no transformer, see :meth:`~.grid.network.EDisGo.analyze`)
     * Loads, Generators, Lines, Storages, Branch Tees of MV grid level as well
       as LV stations. LV stations do not have load and generation of LV level.
 

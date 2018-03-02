@@ -55,26 +55,23 @@ Assuming you have file name "ding0_grids__42.pkl" in current working directory r
 
     from edisgo.grid.network import Network, Scenario
 
-    # Define a scenario
-    scenario = Scenario(power_flow='worst-case', mv_grid_id='42')
-
-    # Get the grid topology data
-    network = Network.import_from_ding0(
-        "ding0_grids__42.pkl",
-        id='42',
-        scenario=scenario)
+    # Set up the EDisGo object that will import the grid topology, set up
+    # feed-in and load time series (here for a feed-in worst case analysis)
+    # and other relevant data
+    edisgo = EDisGo(ding0_grid="ding0_grids__42.pkl",
+                    worst_case_analysis='worst-case-feedin')
 
     # Import future generators
-    network.import_generators(types=['wind', 'solar'])
+    edisgo.import_generators(types=['wind', 'solar'], scenario='nep2035')
 
     # Do non-linear power flow analysis with PyPSA
-    network.analyze()
+    edisgo.analyze()
 
     # Do grid reinforcement
-    network.reinforce()
+    edisgo.reinforce()
 
     # Determine cost for each line/transformer that was reinforced
-    costs = network.results.grid_expansion_costs
+    costs = edisgo.network.results.grid_expansion_costs
 
 
 If you want to provide eTraGo specifications:
