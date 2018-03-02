@@ -756,6 +756,11 @@ class TimeSeriesControl:
             self._check_timeindex()
 
     def _check_timeindex(self):
+        """
+        Check function to check if all feed-in and load time series contain
+        values for the specified time index.
+
+        """
         try:
             self.timeseries.generation_fluctuating
             self.timeseries.generation_flexible
@@ -863,63 +868,74 @@ class TimeSeriesControl:
 
 class CurtailmentControl:
     """
-    Sets up Curtailment Object.
+    Sets up curtailment time series for solar and wind generators.
 
     Parameters
     ----------
-    mode : :obj:`str`, optional
-        Mode must be set in case of worst-case analyses and can either be
-        'worst-case' (both feed-in and load case), 'worst-case-feedin' (only
-        feed-in case) or 'worst-case-load' (only load case). All other
-        parameters except of `config-data` will be ignored. Default: None.
-    mv_grid_id : :obj:`str`, optional
-        MV grid ID as used in oedb. Default: None.
-    scenario_name : :obj:`str`
-        Defines which scenario of future generator park to use. Possible
-        options are 'nep2035' and 'ego100'. Default: None.
-    total_curtailment_ts : :pandas:`pandas.DataFrame<dataframe>`, optional
-        Parameter used to obtain time series for active power feed-in of
-        fluctuating renewables wind and solar.
-        Possible options are:
-         * 'oedb'
-            time series are obtained from the OpenEnergy DataBase
-         * :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame with time series, normalized with corresponding capacity.
-            Time series can either be aggregated by technology type or by type
-            and weather cell ID. In the first case columns of the DataFrame are
-            'solar' and 'wind'; in the second case columns need to be a
-            :pandas:`pandas.MultiIndex<multiindex>` with the first level
-            containing the type and the second level the weather cell ID.
+    mode : :obj:`str`
+        Mode defines the curtailment strategy. Possible options are:
+         * 'curtail_all'
+            The curtailment that has to be met in each time step is allocated
+            equally to all generators depending on their share of total
+            feed-in in that time step.
 
-        Default: None.
-    config_data : dict, optional
-        Dictionary containing config data from config files. See
-        :class:`~.grid.network.Config` data attribute for more information.
+    network : :class:`~.grid.network.Network`
+    total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
+        Series or DataFrame containing the curtailment time series in kW. Index
+        needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Provide a Series if the curtailment time series applies to wind and
+        solar generators. Provide a DataFrame if the curtailment time series
+        applies to a specific technology and/or weather cell. In the first case
+        columns of the DataFrame are e.g. 'solar' and 'wind'; in the second
+        case columns need to be a :pandas:`pandas.MultiIndex<multiindex>` with
+        the first level containing the type and the second level the weather
+        cell ID.
+        Curtailment time series cannot be more specific than the feed-in time
+        series (e.g. if feed-in is given by technology curtailment cannot be
+        given by technology and weather cell).
         Default: None.
 
     """
     def __init__(self, mode, network, **kwargs):
 
         self.network = network
+
         curtailment_ts = kwargs.get('total_curtailment_ts', None)
         if curtailment_ts is not None:
             self._check_timeindex(curtailment_ts)
-        if mode == 'curtail-all':
+        if mode == 'curtail_all':
             self._curtail_all(curtailment_ts)
         else:
             raise ValueError('{} is not a valid mode.'.format(mode))
 
     def _curtail_all(self, total_curtailment_ts):
         """
-        Define worst case generation time series for fluctuating and flexible
-        generators.
+        Implements curtailment methodology 'curtail_all'.
+
+        The curtailment that has to be met in each time step is allocated
+        equally to all generators depending on their share of total
+        feed-in in that time step.
 
         Parameters
         ----------
+        total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
+            See class definition for further information.
 
         """
 
         def _get_capacities_by_type_and_weather_cell():
+            """
+            Gets installed capacities of wind and solar generators by weather
+            cell ID.
+
+            Returns
+            --------
+            dict
+                Dictionary with keys being a tuple of technology and weather
+                cell ID (e.g. ('solar', '1')) and the values containing the
+                corresponding installed capacity.
+
+            """
             dict_capacities = {}
             for gen in gens:
                 if gen.type in ['solar', 'wind']:
@@ -943,6 +959,16 @@ class CurtailmentControl:
             return dict_capacities
 
         def _get_capacities_by_type():
+            """
+            Gets installed capacities of wind and solar generators.
+
+            Returns
+            --------
+            dict
+                Dictionary with keys 'solar' and 'wind' and the values
+                containing the corresponding installed capacity.
+
+            """
             dict_capacities = {'solar': 0, 'wind': 0}
             for gen in gens:
                 if gen.type in ['solar', 'wind']:
@@ -950,6 +976,24 @@ class CurtailmentControl:
             return dict_capacities
 
         def _calculate_curtailment(feedin_df, curtailment_series):
+            """
+            Gets installed capacities of wind and solar generators.
+
+            Parameters
+            -----------
+            feedin_df : :pandas:`pandas.DataFrame<dataframe>`
+                DataFrame with feed-in time series the curtailment is
+                allocated to.
+            curtailment_series : :pandas:`pandas.Series<series>`
+                Series with curtailment time series that needs to be
+                allocated to solar and wind generators and/or weather cells.
+
+            Returns
+            --------
+            :pandas:`pandas.DataFrame<dataframe>`
+                DataFrame with the allocated curtailment time series.
+
+            """
             curtailment = (feedin_df.divide(
                 feedin_df.sum(axis=1), axis=0)).multiply(
                 curtailment_series, axis=0)
@@ -960,17 +1004,18 @@ class CurtailmentControl:
         for lv_grid in self.network.mv_grid.lv_grids:
             gens.extend(list(lv_grid.graph.nodes_by_attribute('generator')))
 
-        # get aggregated capacities
+        # get aggregated capacities either by technology or technology and
+        # weather cell
         if isinstance(self.network.timeseries.generation_fluctuating.columns,
                       pd.MultiIndex):
-            dict_capacities =_get_capacities_by_type_and_weather_cell()
+            dict_capacities = _get_capacities_by_type_and_weather_cell()
         else:
             dict_capacities = _get_capacities_by_type()
 
+        # calculate absolute feed-in
         feedin_df = self.network.timeseries._generation_fluctuating.multiply(
             pd.Series(dict_capacities))
-        # ToDo: Check if there are any nans in feedin_df and if so, report
-        # error if capacity_dict has more entries than timeseries df
+        feedin_df.dropna(axis=1, how='all', inplace=True)
 
         # allocate curtailment if feed-in time series are in a higher
         # resolution than the curtailment time series (e.g. curtailment
@@ -994,12 +1039,34 @@ class CurtailmentControl:
             else:
                 if isinstance(feedin_df.columns, pd.MultiIndex):
                     # allocate curtailment to weather cells
-                    curtailment_wind = _calculate_curtailment(
-                        feedin_df['wind'], total_curtailment_ts['wind'])
-                    curtailment_solar = _calculate_curtailment(
-                        feedin_df['solar'], total_curtailment_ts['solar'])
+                    if 'wind' in total_curtailment_ts.columns:
+                        try:
+                            curtailment_wind = _calculate_curtailment(
+                                feedin_df.loc[:, 'wind': 'wind'],
+                                total_curtailment_ts['wind'])
+                        except:
+                            message = 'Curtailment time series for wind ' \
+                                      'generators provided but no wind ' \
+                                      'feed-in time series.'
+                            logging.error(message)
+                            raise KeyError(message)
+                    else:
+                        curtailment_wind = pd.DataFrame()
+                    if 'solar' in total_curtailment_ts.columns:
+                        try:
+                            curtailment_solar = _calculate_curtailment(
+                                feedin_df.loc[:, 'solar': 'solar'],
+                                total_curtailment_ts['solar'])
+                        except:
+                            message = 'Curtailment time series for solar ' \
+                                      'generators provided but no solar ' \
+                                      'feed-in time series.'
+                            logging.error(message)
+                            raise KeyError(message)
+                    else:
+                        curtailment_solar = pd.DataFrame()
                     self.network.timeseries.curtailment = \
-                        curtailment_wind.join(curtailment_solar)
+                        curtailment_wind.join(curtailment_solar, how='outer')
                 else:
                     # if both feed-in and curtailment are only differentiated
                     # by technology the curtailment time series can be used
@@ -1012,19 +1079,38 @@ class CurtailmentControl:
             logging.error(message)
             raise TypeError(message)
 
-        # check if curtailment does exceed feed-in
+        # check if curtailment exceeds feed-in
         self._check_curtailment(feedin_df)
 
     def _check_curtailment(self, feedin_df):
-        # checks if curtailment exceeds feed-in
-        if not (feedin_df >= self.network.timeseries.curtailment).all().all():
+        """
+        Raises an error if the curtailment at any time step exceeds the
+        feed-in at that time.
+
+        Parameters
+        -----------
+        feedin_df : :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with feed-in time series in kW.
+
+        """
+        if not (feedin_df.loc[:, self.network.timeseries.curtailment.columns]
+                >= self.network.timeseries.curtailment).all().all():
             message = 'Curtailment exceeds feed-in.'
             logging.error(message)
             raise TypeError(message)
 
     def _check_timeindex(self, curtailment_ts):
-        # check if time index of curtailment time series complies with the
-        # time index of load and feed-in time series
+        """
+        Raises an error if time index of curtailment time series does not
+        comply with the time index of load and feed-in time series.
+
+        Parameters
+        -----------
+        curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
+            See parameter `total_curtailment_ts` in class definition for more
+            information.
+
+        """
         try:
             curtailment_ts.loc[self.network.timeseries.timeindex]
         except:
@@ -1032,7 +1118,7 @@ class CurtailmentControl:
                       'with load and feed-in time series.'
             logging.error(message)
             raise KeyError(message)
-        # check if time indexes have the same entries
+        # raise warning if time indexes do not have the same entries
         if pd.Series(self.network.timeseries._generation_fluctuating.
                              index).equals(pd.Series(
             curtailment_ts.index)) is False:
