@@ -74,8 +74,8 @@ class EDisGo:
          * 'worst-case-load'
             feed-in for the worst-case scenario load case is generated
          * 'oedb'
-            time series for the time steps specified in `timeindex` are
-            obtained from the OpenEnergy DataBase
+            Time series for the year 2011 are obtained from the OpenEnergy
+            DataBase.
          * :pandas:`pandas.DataFrame<dataframe>`
             DataFrame with time series, normalized with corresponding capacity.
             Time series can either be aggregated by technology type or by type
@@ -83,6 +83,7 @@ class EDisGo:
             'solar' and 'wind'; in the second case columns need to be a
             :pandas:`pandas.MultiIndex<multiindex>` with the first level
             containing the type and the second level the weather cell ID.
+            Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         ToDo: explain how to obtain weather cell ID, add link to explanation
         of worst-case analyses
@@ -100,6 +101,7 @@ class EDisGo:
          * :pandas:`pandas.DataFrame<dataframe>`
             DataFrame with time series for active power of each (aggregated)
             type of flexible generator normalized with corresponding capacity.
+            Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
             Columns represent generator type:
              * 'gas'
              * 'coal'
@@ -125,11 +127,12 @@ class EDisGo:
             time series for the time steps specified in `timeindex` are
             obtained from the OpenEnergy DataBase
          * 'demandlib'
-            time series for the time steps specified in `timeindex` are
+            time series for the year specified in `timeindex` are
             generated using the oemof demandlib
          * :pandas:`pandas.DataFrame<dataframe>`
             DataFrame with load time series of each (cumulative) type of load
-            normalized with corresponding annual energy demand.
+            normalized with corresponding annual energy demand. Index needs to
+            be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
             Columns represent load type:
              * 'residential'
              * 'retail'
@@ -152,7 +155,8 @@ class EDisGo:
             Time series of active power the battery storage is charged
             (negative) or discharged (positive) with, normalized with
             corresponding capacity. In case of more than one storage provide
-            a DataFrame where each column represents one storage.
+            a DataFrame where each column represents one storage. Index needs
+            to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
     battery_parameters : None or dict or list
         In case of one battery storage a dictionary needs to be provided. In
@@ -169,7 +173,8 @@ class EDisGo:
         :pandas:`pandas.MultiIndex<multiindex>` with the first level
         containing the type and the second level the weather cell ID. See
         `timeseries_fluc` parameter for further explanation of the weather
-        cell ID. Default: None.
+        cell ID. Index needs to be a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`. Default: None.
     curtailment_methodology : None or :obj:`str`
         Specifies the methodology used to allocate the curtailment time
         series to single generators. Needs to be set when curtailment time
@@ -181,9 +186,10 @@ class EDisGo:
         and 'ego100'.
         #ToDo: Add link to explanation of scenarios.
     timeindex : None or :pandas:`pandas.DatetimeIndex<datetimeindex>`
-        Can be used to define a time range for which to obtain load time series
-        and feed-in time series of fluctuating renewables or to define time
-        ranges of the given time series that will be used in the analysis.
+        Can be used to select time ranges of the feed-in and load time series
+        that will be used in the power flow analysis. Also defines the year
+        load time series are obtained for when choosing the 'demandlib' option
+        to generate load time series.
 
     Attributes
     ----------
@@ -239,9 +245,9 @@ class EDisGo:
                 config_data=self.network.config,
                 timeindex=kwargs.get('timeindex', None)).timeseries
 
-        # # set up curtailment
-        # CurtailmentControl(kwargs.get('timeseries_curtailment', None),
-        #                    kwargs.get('curtailment_methodology', None))
+        # set up curtailment
+        CurtailmentControl(kwargs.get('timeseries_curtailment', None),
+                           kwargs.get('curtailment_methodology', None))
 
         # include battery
         # kwargs.get('timeseries_battery', None)
@@ -622,17 +628,13 @@ class TimeSeriesControl:
         'worst-case' (both feed-in and load case), 'worst-case-feedin' (only
         feed-in case) or 'worst-case-load' (only load case). All other
         parameters except of `config-data` will be ignored. Default: None.
-    mv_grid_id : :obj:`str`, optional
-        MV grid ID as used in oedb. Default: None.
-    scenario_name : :obj:`str`
-        Defines which scenario of future generator park to use. Possible
-        options are 'nep2035' and 'ego100'. Default: None.
     timeseries_generation_fluc : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Parameter used to obtain time series for active power feed-in of
         fluctuating renewables wind and solar.
         Possible options are:
          * 'oedb'
-            time series are obtained from the OpenEnergy DataBase
+            Time series are obtained from the OpenEnergy DataBase. `mv_grid_id`
+            and `scenario_name` have to be provided when choosing this option.
          * :pandas:`pandas.DataFrame<dataframe>`
             DataFrame with time series, normalized with corresponding capacity.
             Time series can either be aggregated by technology type or by type
@@ -660,9 +662,9 @@ class TimeSeriesControl:
         loads.
         Possible options are:
          * 'oedb'
-            time series are obtained from the OpenEnergy DataBase
+            Time series are obtained from the OpenEnergy DataBase.
          * 'demandlib'
-            time series are generated using the oemof demandlib
+            Time series are generated using the oemof demandlib.
          * :pandas:`pandas.DataFrame<dataframe>`
             DataFrame with load time series of each (cumulative) type of load
             normalized with corresponding annual energy demand.
@@ -677,6 +679,15 @@ class TimeSeriesControl:
         Dictionary containing config data from config files. See
         :class:`~.grid.network.Config` data attribute for more information.
         Default: None.
+    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+        Can be used to define a time range for which to obtain load time series
+        and feed-in time series of fluctuating renewables or to define time
+        ranges of the given time series that will be used in the analysis.
+    mv_grid_id : :obj:`str`, optional
+        MV grid ID as used in oedb. Default: None.
+    scenario_name : :obj:`str`
+        Defines which scenario of future generator park to use. Possible
+        options are 'nep2035' and 'ego100'. Default: None.
 
     """
     def __init__(self, **kwargs):
@@ -715,7 +726,7 @@ class TimeSeriesControl:
                 raise ValueError('Your input for "timeseries_fluc" is not '
                                  'valid.'.format(mode))
             # feed-in time series for flexible generators
-                ts = kwargs.get('timeseries_generation_flex', None)
+            ts = kwargs.get('timeseries_generation_flex', None)
             if isinstance(ts, pd.DataFrame):
                 self.timeseries.generation_flexible = ts
             else:
@@ -724,16 +735,34 @@ class TimeSeriesControl:
             # load time series
             ts = kwargs.get('timeseries_load', None)
             if isinstance(ts, pd.DataFrame):
-                self.timeseries.load = ts_flex
+                self.timeseries.load = ts
             elif isinstance(ts, str) and (ts == 'oedb' or ts == 'demandlib'):
                 self.timeseries.load = import_load_timeseries(
-                    config_data, ts)
+                    config_data, ts, kwargs.get('mv_grid_id', None))
             else:
                 raise ValueError('Your input for "timeseries_flex" is not '
                                  'valid.'.format(mode))
 
-            #ToDo: check if time series have the same index (or timeindex in
-            #TimeSeries object)
+            # set time index
+            if kwargs.get('timeindex', None) is not None:
+                self.timeseries.timeindex = kwargs.get('timeindex')
+            else:
+                self.timeseries.timeindex = \
+                    self.timeseries._generation_fluctuating.index
+
+            # check if time series for the set time index can be obtained
+            self._check_timeindex()
+
+    def _check_timeindex(self):
+        try:
+            self.timeseries.generation_fluctuating
+            self.timeseries.generation_flexible
+            self.timeseries.load
+        except:
+            logging.error('Time index of feed-in and load time series does '
+                          'not match.')
+            raise KeyError('Time index of feed-in and load time series does '
+                           'not match.')
 
     def _worst_case_generation(self, worst_case_scale_factors, modes):
         """

@@ -2013,7 +2013,7 @@ def import_feedin_timeseries(config_data, mv_grid_id, scenario_name):
         return None
 
 
-def import_load_timeseries(config_data, data_source):
+def import_load_timeseries(config_data, data_source, mv_grid_id=None):
     """
     Import load time series
 
@@ -2028,7 +2028,11 @@ def import_load_timeseries(config_data, data_source):
             Retrieves load time series cumulated across sectors.
          * 'demandlib'
             Determine a load time series with the use of the demandlib.
-            This calculated standard load profiles for 4 different sectors.
+            This calculates standard load profiles for 4 different sectors.
+
+     mv_grid_id : :obj:`str`
+        MV grid ID as used in oedb. Provide this if `data_source` is 'oedb'.
+        Default: None.
 
     Returns
     -------
@@ -2036,7 +2040,7 @@ def import_load_timeseries(config_data, data_source):
         Feedin time series
     """
 
-    def _import_load_timeseries_from_oedb(config_data):
+    def _import_load_timeseries_from_oedb(config_data, mv_grid_id):
         """
         Retrieve load time series from oedb
 
@@ -2081,7 +2085,7 @@ def import_load_timeseries(config_data, data_source):
             orm_load.q_set,
             orm_load_areas.subst_id). \
             join(orm_load_areas, orm_load.id == orm_load_areas.otg_id). \
-            filter(orm_load_areas.subst_id == scenario.mv_grid_id). \
+            filter(orm_load_areas.subst_id == mv_grid_id). \
             filter(orm_load_version). \
             distinct()
 
@@ -2140,7 +2144,7 @@ def import_load_timeseries(config_data, data_source):
         return elec_demand
 
     if data_source == 'oedb':
-        load = _import_load_timeseries_from_oedb(config_data)
+        load = _import_load_timeseries_from_oedb(config_data, mv_grid_id)
     elif data_source == 'demandlib':
         load = _load_timeseries_demandlib(config_data)
         load.rename(columns={'g0': 'retail', 'h0': 'residential',
