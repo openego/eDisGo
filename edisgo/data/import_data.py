@@ -2041,8 +2041,6 @@ def import_load_timeseries(config_data, data_source, mv_grid_id=None):
     data_source : str
         Specfiy type of data source. Available data sources are
 
-         * 'oedb'
-            Retrieves load time series cumulated across sectors.
          * 'demandlib'
             Determine a load time series with the use of the demandlib.
             This calculates standard load profiles for 4 different sectors.
@@ -2069,7 +2067,14 @@ def import_load_timeseries(config_data, data_source, mv_grid_id=None):
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Feedin time series
+            Load time series
+
+        Notes
+        ------
+        This is currently not a valid option to retrieve load time series
+        since time series in the oedb are not differentiated by sector. An
+        issue concerning this has been created.
+
         """
 
         if config_data['versioned']['version'] == 'model_draft':

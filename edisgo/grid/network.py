@@ -66,13 +66,6 @@ class EDisGo:
         Parameter used to obtain time series for active power feed-in of
         fluctuating renewables wind and solar.
         Possible options are:
-         * 'worst-case'
-            feed-in for the two worst-case scenarios feed-in case and load case
-            are generated
-         * 'worst-case-feedin'
-            feed-in for the worst-case scenario feed-in case is generated
-         * 'worst-case-load'
-            feed-in for the worst-case scenario load case is generated
          * 'oedb'
             Time series for the year 2011 are obtained from the OpenEnergy
             DataBase.
@@ -87,48 +80,26 @@ class EDisGo:
 
         ToDo: explain how to obtain weather cell ID, add link to explanation
         of worst-case analyses
-    timeseries_generation_dispatchable : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
-        Parameter used to obtain time series for active power feed-in of
-        dispatchable generators such as coal and biomass generators.
-        Possible options are:
-         * 'worst-case'
-            feed-in for the two worst-case scenarios feed-in case and load case
-            are generated
-         * 'worst-case-feedin'
-            feed-in for the worst-case scenario feed-in case is generated
-         * 'worst-case-load'
-            feed-in for the worst-case scenario load case is generated
-         * :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame with time series for active power of each (aggregated)
-            type of dispatchable generator normalized with corresponding capacity.
-            Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-            Columns represent generator type:
-             * 'gas'
-             * 'coal'
-             * 'biomass'
-             * 'other'
-             * ...
+    timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`
+        DataFrame with time series for active power of each (aggregated)
+        type of dispatchable generator normalized with corresponding capacity.
+        Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent generator type:
+         * 'gas'
+         * 'coal'
+         * 'biomass'
+         * 'other'
+         * ...
 
-            Use 'other' if you don't want to explicitly provide every possible
-            type.
+        Use 'other' if you don't want to explicitly provide every possible
+        type.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
         Parameter used to obtain time series of active power of (cumulative)
         loads.
         Possible options are:
-         * 'worst-case'
-            load time series for the two worst-case scenarios feed-in case and
-            load case are generated
-         * 'worst-case-feedin'
-            load time series for the worst-case scenario feed-in case is
-            generated
-         * 'worst-case-load'
-            load time series for the worst-case scenario load case is generated
-         * 'oedb'
-            time series for the time steps specified in `timeindex` are
-            obtained from the OpenEnergy DataBase
          * 'demandlib'
-            time series for the year specified in `timeindex` are
-            generated using the oemof demandlib
+            Time series for the year specified in `timeindex` are
+            generated using the oemof demandlib.
          * :pandas:`pandas.DataFrame<dataframe>`
             DataFrame with load time series of each (cumulative) type of load
             normalized with corresponding annual energy demand. Index needs to
@@ -143,14 +114,6 @@ class EDisGo:
         Parameter used to obtain time series of active power the battery
         storage(s) is/are charged (negative) or discharged (positive) with.
         Possible options are:
-         * 'worst-case'
-            time series for the two worst-case scenarios feed-in case and
-            load case are generated
-         * 'worst-case-feedin'
-            time series for the worst-case scenario feed-in case is
-            generated
-         * 'worst-case-load'
-            time series for the worst-case scenario load case is generated
          * :pandas:`pandas.Series<series>`/:pandas:`pandas.DataFrame<dataframe>`
             Time series of active power the battery storage is charged
             (negative) or discharged (positive) with, normalized with
@@ -633,8 +596,9 @@ class TimeSeriesControl:
         fluctuating renewables wind and solar.
         Possible options are:
          * 'oedb'
-            Time series are obtained from the OpenEnergy DataBase. `mv_grid_id`
-            and `scenario_name` have to be provided when choosing this option.
+            Time series for 2011 are obtained from the OpenEnergy DataBase.
+            `mv_grid_id` and `scenario_name` have to be provided when choosing
+            this option.
          * :pandas:`pandas.DataFrame<dataframe>`
             DataFrame with time series, normalized with corresponding capacity.
             Time series can either be aggregated by technology type or by type
@@ -661,8 +625,6 @@ class TimeSeriesControl:
         Parameter used to obtain time series of active power of (cumulative)
         loads.
         Possible options are:
-         * 'oedb'
-            Time series are obtained from the OpenEnergy DataBase.
          * 'demandlib'
             Time series are generated using the oemof demandlib.
          * :pandas:`pandas.DataFrame<dataframe>`
