@@ -246,10 +246,12 @@ class EDisGo:
                 timeindex=kwargs.get('timeindex', None)).timeseries
 
         # set up curtailment
-        CurtailmentControl(mode=kwargs.get('curtailment_methodology', None),
-                           network=self.network,
-                           total_curtailment_ts=kwargs.get(
-                               'timeseries_curtailment', None))
+        if kwargs.get('curtailment_methodology', None):
+            CurtailmentControl(mode=kwargs.get('curtailment_methodology',
+                                               None),
+                               network=self.network,
+                               total_curtailment_ts=kwargs.get(
+                                   'timeseries_curtailment', None))
 
         # include battery
         # kwargs.get('timeseries_battery', None)
