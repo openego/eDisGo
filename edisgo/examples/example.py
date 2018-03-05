@@ -41,7 +41,6 @@ if __name__ == '__main__':
             grids.append(file)
 
     # set scenario to define future power plant capacities
-    technologies = ['wind', 'solar']
     scenario = 'nep2035'
 
     # initialize containers that will hold grid expansion costs and, in the
@@ -85,8 +84,7 @@ if __name__ == '__main__':
             logging.info('Grid expansion after generator import.')
             before_geno_import = False
             # Import generators
-            edisgo.import_generators(types=technologies,
-                                     generator_scenario=scenario)
+            edisgo.import_generators(generator_scenario=scenario)
             # Do non-linear power flow analysis with PyPSA
             edisgo.analyze()
             # Do grid reinforcement

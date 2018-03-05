@@ -257,7 +257,7 @@ class EDisGo:
 
         # import new generators
         if self.network.generator_scenario:
-            self.import_generators(types=None)
+            self.import_generators()
 
     def import_from_ding0(self, file, **kwargs):
         """Import grid data from DINGO file
@@ -268,8 +268,7 @@ class EDisGo:
         import_from_ding0(file=file,
                           network=self.network)
 
-    def import_generators(self, types=None, data_source='oedb',
-                          generator_scenario=None):
+    def import_generators(self, generator_scenario=None):
         """Import generators
 
         For details see
@@ -277,12 +276,9 @@ class EDisGo:
         """
         if generator_scenario:
             self.network.generator_scenario = generator_scenario
-        # ToDo: Remove hard-coded types and data source?
-        types = ['wind', 'solar']
         data_source = 'oedb'
         import_generators(network=self.network,
-                          data_source=data_source,
-                          types=types)
+                          data_source=data_source)
 
     def analyze(self, mode=None):
         """Analyzes the grid by power flow analysis

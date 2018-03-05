@@ -945,7 +945,7 @@ def _validate_load_generation(mv_grid, ding0_mv_grid):
                         edisgo=v2['edisgo']))
 
 
-def import_generators(network, data_source=None, file=None, types=None):
+def import_generators(network, data_source=None, file=None):
     """Import generator data from source.
 
     The generator data include
@@ -972,9 +972,6 @@ def import_generators(network, data_source=None, file=None, types=None):
 
     file: :obj:`str`
         File to import data from, required when using file-based sources.
-    types : list of str
-        Power generation technologies that should be considered. Defaults to
-        None which refers to "all technologies".
 
     Returns
     -------
@@ -983,7 +980,9 @@ def import_generators(network, data_source=None, file=None, types=None):
     """
 
     if data_source == 'oedb':
-        _import_genos_from_oedb(network=network, types=types)
+        logging.warning('Right now only solar and wind generators can be '
+                        'imported from the oedb.')
+        _import_genos_from_oedb(network=network)
     elif data_source == 'pypsa':
         _import_genos_from_pypsa(network=network, file=file)
     else:
@@ -992,7 +991,7 @@ def import_generators(network, data_source=None, file=None, types=None):
         raise ValueError('The option you specified is not supported.')
 
 
-def _import_genos_from_oedb(network, types=None):
+def _import_genos_from_oedb(network):
     """Import generator data from the Open Energy Database (OEDB).
 
     The importer uses SQLAlchemy ORM objects.
@@ -1003,6 +1002,11 @@ def _import_genos_from_oedb(network, types=None):
     ----------
     network: :class:`~.grid.network.Network`
         The eDisGo container object
+
+    Notes
+    ------
+    Right now only solar and wind generators can be imported.
+
     """
 
     def _import_conv_generators():
@@ -1830,14 +1834,15 @@ def _import_genos_from_oedb(network, types=None):
         orm_re_generators_version = orm_re_generators.columns.version == data_version
 
     # Create filter for generation technologies
-    if types is None:
-        types_condition = 1 == 1
-    else:
-        types_condition = orm_re_generators.columns.generation_type.in_(types)
+    # ToDo: This needs to be removed when all generators can be imported
+    # (all generators in a scenario should be imported)
+    types_condition = orm_re_generators.columns.generation_type.in_(
+        ['solar', 'wind'])
 
     # get conventional and renewable generators
     #generators_conv_mv = _import_conv_generators()
-    generators_res_mv, generators_res_lv = _import_res_generators(types_condition)
+    generators_res_mv, generators_res_lv = _import_res_generators(
+        types_condition)
 
     #generators_mv = generators_conv_mv.append(generators_res_mv)
 
