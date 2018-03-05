@@ -286,11 +286,11 @@ class Generator(Component):
                                         'reactive_power_factor']['lv_gen']))
             # set time series for active and reactive power
             try:
-                ts = self.grid.network.timeseries.generation_flexible[
+                ts = self.grid.network.timeseries.generation_dispatchable[
                     self.type].to_frame('p')
             except KeyError:
                 try:
-                    ts = self.grid.network.timeseries.generation_flexible[
+                    ts = self.grid.network.timeseries.generation_dispatchable[
                         'other'].to_frame('p')
                 except KeyError:
                     logger.exception("No time series for type {} "

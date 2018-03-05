@@ -38,8 +38,8 @@ class EDisGo:
 
         Be aware that if you choose to conduct a worst-case analysis your
         input for the following parameters will not be used:
-         * `timeseries_generation_fluc`
-         * `timeseries_generation_flex`
+         * `timeseries_generation_fluctuating`
+         * `timeseries_generation_dispatchable`
          * `timeseries_load`
 
          #ToDo: Wollen wir die Erstellung von worst-case Zeitreihen in den
@@ -62,7 +62,7 @@ class EDisGo:
     scenario_name : None or :obj:`str`
         Can be used to describe your scenario but is not used for anything
         else. Default: None.
-    timeseries_generation_fluc : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
+    timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
         Parameter used to obtain time series for active power feed-in of
         fluctuating renewables wind and solar.
         Possible options are:
@@ -87,9 +87,9 @@ class EDisGo:
 
         ToDo: explain how to obtain weather cell ID, add link to explanation
         of worst-case analyses
-    timeseries_generation_flex : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
+    timeseries_generation_dispatchable : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
         Parameter used to obtain time series for active power feed-in of
-        flexible generators such as coal and biomass generators.
+        dispatchable generators such as coal and biomass generators.
         Possible options are:
          * 'worst-case'
             feed-in for the two worst-case scenarios feed-in case and load case
@@ -100,7 +100,7 @@ class EDisGo:
             feed-in for the worst-case scenario load case is generated
          * :pandas:`pandas.DataFrame<dataframe>`
             DataFrame with time series for active power of each (aggregated)
-            type of flexible generator normalized with corresponding capacity.
+            type of dispatchable generator normalized with corresponding capacity.
             Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
             Columns represent generator type:
              * 'gas'
@@ -172,8 +172,8 @@ class EDisGo:
         'solar' and 'wind'; in the second case columns need to be a
         :pandas:`pandas.MultiIndex<multiindex>` with the first level
         containing the type and the second level the weather cell ID. See
-        `timeseries_fluc` parameter for further explanation of the weather
-        cell ID. Index needs to be a
+        `timeseries_generation_fluctuating` parameter for further explanation
+        of the weather cell ID. Index needs to be a
         :pandas:`pandas.DatetimeIndex<datetimeindex>`. Default: None.
     curtailment_methodology : None or :obj:`str`
         Specifies the methodology used to allocate the curtailment time
@@ -236,10 +236,10 @@ class EDisGo:
                 config_data=self.network.config).timeseries
         else:
             self.network.timeseries = TimeSeriesControl(
-                timeseries_generation_fluc=kwargs.get(
-                    'timeseries_generation_fluc', None),
-                timeseries_generation_flex=kwargs.get(
-                    'timeseries_generation_flex', None),
+                timeseries_generation_fluctuating=kwargs.get(
+                    'timeseries_generation_fluctuating', None),
+                timeseries_generation_dispatchable=kwargs.get(
+                    'timeseries_generation_dispatchable', None),
                 timeseries_load=kwargs.get(
                     'timeseries_load', None),
                 config_data=self.network.config,
@@ -630,7 +630,7 @@ class TimeSeriesControl:
         'worst-case' (both feed-in and load case), 'worst-case-feedin' (only
         feed-in case) or 'worst-case-load' (only load case). All other
         parameters except of `config-data` will be ignored. Default: None.
-    timeseries_generation_fluc : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
+    timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Parameter used to obtain time series for active power feed-in of
         fluctuating renewables wind and solar.
         Possible options are:
@@ -646,9 +646,9 @@ class TimeSeriesControl:
             containing the type and the second level the weather cell ID.
 
         Default: None.
-    timeseries_generation_flex : :pandas:`pandas.DataFrame<dataframe>`, optional
+    timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`, optional
         DataFrame with time series for active power of each (aggregated)
-        type of flexible generator normalized with corresponding capacity.
+        type of dispatchable generator normalized with corresponding capacity.
         Columns represent generator type:
          * 'gas'
          * 'coal'
@@ -717,7 +717,7 @@ class TimeSeriesControl:
 
         else:
             # feed-in time series of fluctuating renewables
-            ts = kwargs.get('timeseries_generation_fluc', None)
+            ts = kwargs.get('timeseries_generation_fluctuating', None)
             if isinstance(ts, pd.DataFrame):
                 self.timeseries.generation_fluctuating = ts
             elif isinstance(ts, str) and ts == 'oedb':
@@ -725,14 +725,16 @@ class TimeSeriesControl:
                     config_data, kwargs.get('mv_grid_id', None),
                     kwargs.get('scenario_name', None))
             else:
-                raise ValueError('Your input for "timeseries_fluc" is not '
+                raise ValueError('Your input for '
+                                 '"timeseries_generation_fluctuating" is not '
                                  'valid.'.format(mode))
-            # feed-in time series for flexible generators
-            ts = kwargs.get('timeseries_generation_flex', None)
+            # feed-in time series for dispatchable generators
+            ts = kwargs.get('timeseries_generation_dispatchable', None)
             if isinstance(ts, pd.DataFrame):
-                self.timeseries.generation_flexible = ts
+                self.timeseries.generation_dispatchable = ts
             else:
-                raise ValueError('Your input for "timeseries_flex" is not '
+                raise ValueError('Your input for '
+                                 '"timeseries_generation_dispatchable" is not '
                                  'valid.'.format(mode))
             # load time series
             ts = kwargs.get('timeseries_load', None)
@@ -742,7 +744,7 @@ class TimeSeriesControl:
                 self.timeseries.load = import_load_timeseries(
                     config_data, ts, kwargs.get('mv_grid_id', None))
             else:
-                raise ValueError('Your input for "timeseries_flex" is not '
+                raise ValueError('Your input for "timeseries_load" is not '
                                  'valid.'.format(mode))
 
             # set time index
@@ -763,7 +765,7 @@ class TimeSeriesControl:
         """
         try:
             self.timeseries.generation_fluctuating
-            self.timeseries.generation_flexible
+            self.timeseries.generation_dispatchable
             self.timeseries.load
         except:
             message = 'Time index of feed-in and load time series does ' \
@@ -773,8 +775,8 @@ class TimeSeriesControl:
 
     def _worst_case_generation(self, worst_case_scale_factors, modes):
         """
-        Define worst case generation time series for fluctuating and flexible
-        generators.
+        Define worst case generation time series for fluctuating and
+        dispatchable generators.
 
         Parameters
         ----------
@@ -795,7 +797,7 @@ class TimeSeriesControl:
                           '{}_feedin_other'.format(mode)] for mode in modes]},
             index=self.timeseries.timeindex)
 
-        self.timeseries.generation_flexible = pd.DataFrame(
+        self.timeseries.generation_dispatchable = pd.DataFrame(
             {'other': [worst_case_scale_factors[
                           '{}_feedin_other'.format(mode)] for mode in modes]},
             index=self.timeseries.timeindex)
@@ -1143,9 +1145,9 @@ class TimeSeries:
         :pandas:`pandas.MultiIndex<multiindex>` with the first level
         containing the type and the second level the weather cell ID.
         Default: None.
-    generation_flexible : :pandas:`pandas.DataFrame<dataframe>`, optional
+    generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`, optional
         DataFrame with time series for active power of each (aggregated)
-        type of flexible generator normalized with corresponding capacity.
+        type of dispatchable generator normalized with corresponding capacity.
         Columns represent generator type:
          * 'gas'
          * 'coal'
@@ -1189,7 +1191,8 @@ class TimeSeries:
     """
 
     def __init__(self, **kwargs):
-        self._generation_flexible = kwargs.get('generation_flexible', None)
+        self._generation_dispatchable = kwargs.get('generation_dispatchable',
+                                                   None)
         self._generation_fluctuating = kwargs.get('generation_fluctuating',
                                                   None)
         self._load = kwargs.get('load', None)
@@ -1197,9 +1200,10 @@ class TimeSeries:
         self._timeindex = kwargs.get('timeindex', None)
 
     @property
-    def generation_flexible(self):
+    def generation_dispatchable(self):
         """
-        Get generation time series of flexible generators (only active power)
+        Get generation time series of dispatchable generators (only active
+        power)
 
         Returns
         -------
@@ -1207,13 +1211,13 @@ class TimeSeries:
             See class definition for details.
         """
         try:
-            return self._generation_flexible.loc[[self.timeindex], :]
+            return self._generation_dispatchable.loc[[self.timeindex], :]
         except:
-            return self._generation_flexible.loc[self.timeindex, :]
+            return self._generation_dispatchable.loc[self.timeindex, :]
 
-    @generation_flexible.setter
-    def generation_flexible(self, generation_flex_timeseries):
-        self._generation_flexible = generation_flex_timeseries
+    @generation_dispatchable.setter
+    def generation_dispatchable(self, generation_dispatchable_timeseries):
+        self._generation_dispatchable = generation_dispatchable_timeseries
 
     @property
     def generation_fluctuating(self):
@@ -1278,7 +1282,8 @@ class TimeSeries:
     @property
     def curtailment(self):
         """
-        Get generation time series of flexible generators (only active power)
+        Get curtailment time series of dispatchable generators (only active
+        power)
 
         Parameters
         ----------
