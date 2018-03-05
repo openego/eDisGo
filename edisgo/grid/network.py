@@ -681,9 +681,10 @@ class TimeSeriesControl:
             if isinstance(ts, pd.DataFrame):
                 self.timeseries.generation_fluctuating = ts
             elif isinstance(ts, str) and ts == 'oedb':
-                self._import_feedin_timeseries(
-                    config_data, kwargs.get('mv_grid_id', None),
-                    kwargs.get('scenario_name', None))
+                self.timeseries.generation_fluctuating = \
+                    import_feedin_timeseries(config_data,
+                                             kwargs.get('mv_grid_id', None),
+                                             kwargs.get('scenario_name', None))
             else:
                 raise ValueError('Your input for '
                                  '"timeseries_generation_fluctuating" is not '
@@ -799,34 +800,6 @@ class TimeSeriesControl:
               for sector in sectors}
         self.timeseries.load = pd.DataFrame({**lv, **mv},
                                             index=self.timeseries.timeindex)
-
-    def _import_feedin_timeseries(self, config_data, mv_grid_id,
-                                  scenario_name):
-        """
-        Import feed-in time series for wind and solar for the year 2011
-        from oedb
-
-        Parameters
-        ----------
-        config_data : dict
-            Dictionary containing config data from config files. See
-            :class:`~.grid.network.Config` data attribute for more information.
-        mv_grid_id : :obj:`str`
-            MV grid ID as used in oedb.
-        scenario_name : None or :obj:`str`
-            Defines which scenario of future generator park to use.
-
-        """
-
-        #ToDo: remove this function if it just calls another function
-        self.timeseries.generation_fluctuating = import_feedin_timeseries(
-            config_data, mv_grid_id, scenario_name)
-        #ToDo: remove hard coded value
-        # if generation_df is not None:
-        #     generation_df = pd.concat(
-        #         [generation_df, pd.DataFrame({'other': 0.9},
-        #                                      index=generation_df.index)],
-        #         axis=1)
 
 
 class CurtailmentControl:
