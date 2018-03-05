@@ -2030,7 +2030,8 @@ def import_feedin_timeseries(config_data, mv_grid_id, scenario_name):
         return None
 
 
-def import_load_timeseries(config_data, data_source, mv_grid_id=None):
+def import_load_timeseries(config_data, data_source, mv_grid_id=None,
+                           year=None):
     """
     Import load time series
 
@@ -2039,20 +2040,24 @@ def import_load_timeseries(config_data, data_source, mv_grid_id=None):
     config_data : dict
         Dictionary containing config data from config files.
     data_source : str
-        Specfiy type of data source. Available data sources are
+        Specify type of data source. Available data sources are
 
          * 'demandlib'
             Determine a load time series with the use of the demandlib.
             This calculates standard load profiles for 4 different sectors.
 
-     mv_grid_id : :obj:`str`
+    mv_grid_id : :obj:`str`
         MV grid ID as used in oedb. Provide this if `data_source` is 'oedb'.
         Default: None.
+    year : int
+        Year for which to generate load time series. Provide this if
+        `data_source` is 'demandlib'. Default: None.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<dataframe>`
-        Feedin time series
+        Load time series
+
     """
 
     def _import_load_timeseries_from_oedb(config_data, mv_grid_id):
@@ -2114,23 +2119,27 @@ def import_load_timeseries(config_data, data_source, mv_grid_id=None):
         load = pd.read_sql_query(load_sqla.statement,
                                  session.bind,
                                  index_col='subst_id')
-
         return load
 
-    def _load_timeseries_demandlib(config_data):
+    def _load_timeseries_demandlib(config_data, year):
         """
         Get normalized sectoral load time series
 
         Time series are normalized to 1 kWh consumption per year
 
+        Parameters
+        ----------
+        config_data : dict
+            Dictionary containing config data from config files.
+        year : int
+            Year for which to generate load time series.
+
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Feedin time series
-        """
+            Load time series
 
-        # TODO: why 2011?
-        year = 2011
+        """
 
         sectoral_consumption = {'h0': 1, 'g0': 1, 'i0': 1, 'l0': 1}
 
@@ -2168,7 +2177,7 @@ def import_load_timeseries(config_data, data_source, mv_grid_id=None):
     if data_source == 'oedb':
         load = _import_load_timeseries_from_oedb(config_data, mv_grid_id)
     elif data_source == 'demandlib':
-        load = _load_timeseries_demandlib(config_data)
+        load = _load_timeseries_demandlib(config_data, year)
         load.rename(columns={'g0': 'retail', 'h0': 'residential',
                              'l0': 'agricultural', 'i0': 'industrial'},
                     inplace=True)

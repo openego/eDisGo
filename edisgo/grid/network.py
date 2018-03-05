@@ -696,23 +696,24 @@ class TimeSeriesControl:
                 raise ValueError('Your input for '
                                  '"timeseries_generation_dispatchable" is not '
                                  'valid.'.format(mode))
-            # load time series
-            ts = kwargs.get('timeseries_load', None)
-            if isinstance(ts, pd.DataFrame):
-                self.timeseries.load = ts
-            elif isinstance(ts, str) and (ts == 'oedb' or ts == 'demandlib'):
-                self.timeseries.load = import_load_timeseries(
-                    config_data, ts, kwargs.get('mv_grid_id', None))
-            else:
-                raise ValueError('Your input for "timeseries_load" is not '
-                                 'valid.'.format(mode))
-
             # set time index
             if kwargs.get('timeindex', None) is not None:
                 self.timeseries.timeindex = kwargs.get('timeindex')
             else:
                 self.timeseries.timeindex = \
                     self.timeseries._generation_fluctuating.index
+            # load time series
+            ts = kwargs.get('timeseries_load', None)
+            if isinstance(ts, pd.DataFrame):
+                self.timeseries.load = ts
+            elif ts == 'demandlib':
+                self.timeseries.load = import_load_timeseries(
+                    config_data, ts, year=self.timeseries.timeindex[0].year)
+            else:
+                raise ValueError('Your input for "timeseries_load" is not '
+                                 'valid.'.format(mode))
+
+
 
             # check if time series for the set time index can be obtained
             self._check_timeindex()
