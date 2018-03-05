@@ -581,14 +581,26 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
         for v_level, val in la['generation'].items():
             for type, val2 in val.items():
                 for subtype, val3 in val2.items():
-                    gen = Generator(
-                        id='agg-' + str(la_id) + '-' + '_'.join([str(_) for _ in val3['ids']]),
-                        nominal_capacity=val3['capacity'],
-                        type=type,
-                        subtype=subtype,
-                        geom=grid.station.geom,
-                        grid=grid,
-                        v_level=4)
+                    if type in ['solar', 'wind']:
+                        gen = GeneratorFluctuating(
+                            id='agg-' + str(la_id) + '-' + '_'.join(
+                                [str(_) for _ in val3['ids']]),
+                            nominal_capacity=val3['capacity'],
+                            type=type,
+                            subtype=subtype,
+                            geom=grid.station.geom,
+                            grid=grid,
+                            v_level=4)
+                    else:
+                        gen = Generator(
+                            id='agg-' + str(la_id) + '-' + '_'.join(
+                                [str(_) for _ in val3['ids']]),
+                            nominal_capacity=val3['capacity'],
+                            type=type,
+                            subtype=subtype,
+                            geom=grid.station.geom,
+                            grid=grid,
+                            v_level=4)
                     grid.graph.add_node(gen, type='generator_aggr')
 
                     # backup reference of geno to LV geno list (save geno
