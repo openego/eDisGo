@@ -53,12 +53,32 @@ class EDisGo:
         :class:`ding0.core.NetworkDing0` data will be used directly from this
         object.
         This will probably be removed when ding0 grids are in oedb.
-    config_path : dict
-        Dictionary specifying which config files to use. If not specified
-        config files in $HOME/.edisgo/config/ are used. Keys of the dictionary
-        are the config files, values contain the corresponding path to the
-        file.
-        ToDo: list allowed keys
+    config_path : None or :obj:`str` or :obj:`dict`
+        Path to the config directory. Options are:
+
+         * None
+            If `config_path` is None configs are loaded from the edisgo
+            default config directory ($HOME$/.edisgo). If the directory
+            does not exist it is created. If config files don't exist the
+            default config files are copied into the directory.
+         * :obj:`str`
+            If `config_path` is a string configs will be loaded from the
+            directory specified by `config_path`. If the directory
+            does not exist it is created. If config files don't exist the
+            default config files are copied into the directory.
+         * :obj:`dict`
+            A dictionary can be used to specify different paths to the
+            different config files. The dictionary must have the following
+            keys:
+             * 'config_db_tables'
+             * 'config_grid'
+             * 'config_grid_expansion'
+             * 'config_timeseries'
+
+             Values of the dictionary are paths to the corresponding
+             config file. In contrast to the other two options the directories
+             and config files must exist and are not automatically created.
+        Default: None.
     scenario_name : None or :obj:`str`
         Can be used to describe your scenario but is not used for anything
         else. Default: None.
@@ -327,34 +347,28 @@ class Network:
     Used as container for all data related to a single
     :class:`~.grid.grids.MVGrid`.
 
-    Attributes
+    Parameters
     ----------
-    id : :obj:`str`
-        Name of network
-    scenario_name : :obj:`str`
+    scenario_name : :obj:`str`, optional
         Can be used to describe your scenario but is not used for anything
-        else.
-    equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
-        Electrical equipment such as lines and transformers
-    config : :class:`~.grid.network.Config`
-        Data from config files
+        else. Default: None.
+    config_path : None or :obj:`str` or :obj:`dict`, optional
+        See :class:`~.grid.network.Config` for further information.
+        Default: None.
     metadata : :obj:`dict`
         Metadata of Network such as ?
     data_sources : :obj:`dict` of :obj:`str`
         Data Sources of grid, generators etc.
         Keys: 'grid', 'generators', ?
-    pypsa : :pypsa:`pypsa.Network<network>`
-        PyPSA representation of grid topology
-    dingo_import_data :
-        Temporary data from ding0 import which are needed for OEP generator
-        update
-    results : :class:`~.grid.network.Results`
-        Object with results from power flow analyses
-    timeseries : :class:`~.grid.network.TimeSeries`
-        Object containing time series
     mv_grid : :class:`~.grid.grids.MVGrid`
+        Medium voltage (MV) grid
     generator_scenario : :obj:`str`
         Defines which scenario of future generator park to use.
+
+    Attributes
+    ----------
+    results : :class:`~.grid.network.Results`
+        Object with results from power flow analyses
 
     """
 
@@ -402,23 +416,58 @@ class Network:
     @property
     def id(self):
         """
-        Returns id of MV grid.
+        MV grid ID
+
+        Returns
+        --------
+        :obj:`str`
+            MV grid ID
+
         """
         return self._id
 
     @property
     def config(self):
-        """Returns config object data"""
+        """
+        eDisGo configuration data.
+
+        Returns
+        -------
+        :obj:`collections.OrderedDict`
+            Configuration data from config files.
+
+        """
         return self._config.data
 
     @property
     def metadata(self):
-        """Returns meta data"""
+        """
+        Metadata of Network
+
+        Returns
+        --------
+        :obj:`dict`
+            Metadata of Network
+
+        """
         return self._metadata
 
     @property
     def generator_scenario(self):
-        """Returns generator scenario name"""
+        """
+        Defines which scenario of future generator park to use.
+
+        Parameters
+        ----------
+        generator_scenario_name : :obj:`str`
+            Name of scenario of future generator park
+
+        Returns
+        --------
+        :obj:`str`
+            Name of scenario of future generator park
+
+        """
         return self._generator_scenario
 
     @generator_scenario.setter
@@ -427,7 +476,20 @@ class Network:
 
     @property
     def scenario_name(self):
-        """Returns scenario name"""
+        """
+        Used to describe your scenario but not used for anything else.
+
+        Parameters
+        ----------
+        scenario_name : :obj:`str`
+            Description of scenario
+
+        Returns
+        --------
+        :obj:`str`
+            Scenario name
+
+        """
         return self._scenario_name
 
     @scenario_name.setter
@@ -436,18 +498,32 @@ class Network:
 
     @property
     def equipment_data(self):
-        """Returns equipment data
+        """
+        Technical data of electrical equipment such as lines and transformers
 
-        Electrical equipment such as lines and transformers
+        Returns
+        --------
         :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+            Data of electrical equipment
+
         """
         return self._equipment_data
 
     @property
     def mv_grid(self):
-        """:class:`~.grid.grids.MVGrid` : Medium voltage (MV) grid
+        """
+        Medium voltage (MV) grid
 
-        Retrieve the instance of the loaded MV grid
+        Parameters
+        ----------
+        mv_grid : :class:`~.grid.grids.MVGrid`
+            Medium voltage (MV) grid
+
+        Returns
+        --------
+        :class:`~.grid.grids.MVGrid`
+            Medium voltage (MV) grid
+
         """
         return self._mv_grid
 
@@ -457,7 +533,19 @@ class Network:
 
     @property
     def timeseries(self):
-        """:class:`~.grid.network.TimeSeries`
+        """
+        Object containing load and feed-in time series.
+
+        Parameters
+        ----------
+        timeseries : :class:`~.grid.network.TimeSeries`
+            Object containing load and feed-in time series.
+
+        Returns
+        --------
+        :class:`~.grid.network.TimeSeries`
+            Object containing load and feed-in time series.
+
         """
         return self._timeseries
 
@@ -467,18 +555,37 @@ class Network:
 
     @property
     def data_sources(self):
-        """:obj:`dict` of :obj:`str` : Data Sources
+        """
+        Dictionary with data sources of grid, generators etc.
+
+        Returns
+        --------
+        :obj:`dict` of :obj:`str`
+            Data Sources of grid, generators etc.
 
         """
         return self._data_sources
 
     def set_data_source(self, key, data_source):
-        """Set data source for key (e.g. 'grid')
+        """
+        Set data source for key (e.g. 'grid')
+
+        Parameters
+        ----------
+        key : :obj:`str`
+            Specifies data
+        data_source : :obj:`str`
+            Specifies data source
+
         """
         self._data_sources[key] = data_source
 
     @property
     def dingo_import_data(self):
+        """
+        Temporary data from ding0 import needed for OEP generator update
+
+        """
         return self._dingo_import_data
 
     @dingo_import_data.setter
@@ -519,33 +626,72 @@ class Network:
 
 
 class Config:
-    """Defines the configurations
+    """
+    Container for all configurations.
 
-    Used as container for all configurations.
+    Parameters
+    -----------
+    config_path : None or :obj:`str` or :obj:`dict`
+        Path to the config directory. Options are:
+
+         * None
+            If `config_path` is None configs are loaded from the edisgo
+            default config directory ($HOME$/.edisgo). If the directory
+            does not exist it is created. If config files don't exist the
+            default config files are copied into the directory.
+         * :obj:`str`
+            If `config_path` is a string configs will be loaded from the
+            directory specified by `config_path`. If the directory
+            does not exist it is created. If config files don't exist the
+            default config files are copied into the directory.
+         * :obj:`dict`
+            A dictionary can be used to specify different paths to the
+            different config files. The dictionary must have the following
+            keys:
+             * 'config_db_tables'
+             * 'config_grid'
+             * 'config_grid_expansion'
+             * 'config_timeseries'
+
+             Values of the dictionary are paths to the corresponding
+             config file. In contrast to the other two options the directories
+             and config files must exist and are not automatically created.
+        Default: None.
 
     """
-    # ToDo: add docstring
-    # ToDo: add method that catches error in case a non-existing value is tried
-    # to fetch
-    # ToDo: add variable path to config files
     def __init__(self, **kwargs):
-        config_path = kwargs.get('config_path', None)
-        self._data = self._load_config()
+        self._data = self._load_config(kwargs.get('config_path', None))
 
     @staticmethod
-    def _load_config():
-        """Load config files
+    def _load_config(config_path=None):
+        """
+        Load config files.
+
+        Parameters
+        -----------
+        config_path : None or :obj:`str` or dict
+            See class definition for more information.
 
         Returns
         -------
-        config object
+        :obj:`collections.OrderedDict`
+            eDisGo configuration data from config files.
+
         """
 
-        # load config
-        config.load_config('config_db_tables.cfg')
-        config.load_config('config_grid.cfg')
-        config.load_config('config_grid_expansion.cfg')
-        config.load_config('config_timeseries.cfg')
+        config_files = ['config_db_tables', 'config_grid',
+                        'config_grid_expansion', 'config_timeseries']
+
+        # load configs
+        if isinstance(config_path, dict):
+            for conf in config_files:
+                config.load_config(filename='{}.cfg'.format(conf),
+                                   config_dir=config_path[conf],
+                                   copy_default_config=False)
+        else:
+            for conf in config_files:
+                config.load_config(filename='{}.cfg'.format(conf),
+                                   config_dir=config_path)
 
         config_dict = config.cfg._sections
 
@@ -574,6 +720,15 @@ class Config:
 
     @property
     def data(self):
+        """
+        eDisGo configuration data.
+
+        Returns
+        -------
+        :obj:`collections.OrderedDict`
+            Configuration data from config files.
+
+        """
         return self._data
 
 
