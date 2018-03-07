@@ -271,12 +271,8 @@ class EDisGo:
                 timeindex=kwargs.get('timeindex', None)).timeseries
 
         # set up curtailment
-        if kwargs.get('curtailment_methodology', None):
-            CurtailmentControl(mode=kwargs.get('curtailment_methodology',
-                                               None),
-                               network=self.network,
-                               total_curtailment_ts=kwargs.get(
-                                   'timeseries_curtailment', None))
+        if kwargs.get('curtailment_methodology', None) is not None:
+            self.curtail(**kwargs)
 
         # include battery
         if kwargs.get('timeseries_battery', None) is not None:
@@ -286,11 +282,35 @@ class EDisGo:
         if self.network.generator_scenario:
             self.import_generators()
 
+    def curtail(self, **kwargs):
+        """
+        Sets up curtailment time series.
+
+        Curtailment time series are written into
+        :class:`~.grid.network.TimeSeries`. See
+        :class:`~.grid.network.CurtailmentControl` for more information on
+        parameters and methodologies.
+
+        Parameters
+        -----------
+        curtailment_methodology : :obj:`str`, optional
+            See class definition for more information. Default: None.
+        timeseries_curtailment : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
+            See class definition for more information. Default: None.
+
+        """
+        CurtailmentControl(mode=kwargs.get('curtailment_methodology',
+                                           None),
+                           network=self.network,
+                           total_curtailment_ts=kwargs.get(
+                               'timeseries_curtailment', None))
+
     def import_from_ding0(self, file, **kwargs):
         """Import grid data from DINGO file
 
         For details see
         :func:`edisgo.data.import_data.import_from_ding0`
+
         """
         import_from_ding0(file=file,
                           network=self.network)
