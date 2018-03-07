@@ -28,19 +28,20 @@ class EDisGo:
         If not None time series for feed-in and load will be generated
         according to the chosen worst case analysis
         Possible options are:
-         * 'worst-case'
-            feed-in for the two worst-case scenarios feed-in case and load case
-            are generated
-         * 'worst-case-feedin'
-            feed-in for the worst-case scenario feed-in case is generated
-         * 'worst-case-load'
-            feed-in for the worst-case scenario load case is generated
+
+        * 'worst-case'
+          feed-in for the two worst-case scenarios feed-in case and load case
+          are generated
+        * 'worst-case-feedin'
+          feed-in for the worst-case scenario feed-in case is generated
+        * 'worst-case-load'
+          feed-in for the worst-case scenario load case is generated
 
         Be aware that if you choose to conduct a worst-case analysis your
         input for the following parameters will not be used:
-         * `timeseries_generation_fluctuating`
-         * `timeseries_generation_dispatchable`
-         * `timeseries_load`
+        * `timeseries_generation_fluctuating`
+        * `timeseries_generation_dispatchable`
+        * `timeseries_load`
 
          #ToDo: Wollen wir die Erstellung von worst-case Zeitreihen in den
          #genannten parametern trotzdem noch erlauben?
@@ -56,28 +57,29 @@ class EDisGo:
     config_path : None or :obj:`str` or :obj:`dict`
         Path to the config directory. Options are:
 
-         * None
-            If `config_path` is None configs are loaded from the edisgo
-            default config directory ($HOME$/.edisgo). If the directory
-            does not exist it is created. If config files don't exist the
-            default config files are copied into the directory.
-         * :obj:`str`
-            If `config_path` is a string configs will be loaded from the
-            directory specified by `config_path`. If the directory
-            does not exist it is created. If config files don't exist the
-            default config files are copied into the directory.
-         * :obj:`dict`
-            A dictionary can be used to specify different paths to the
-            different config files. The dictionary must have the following
-            keys:
-             * 'config_db_tables'
-             * 'config_grid'
-             * 'config_grid_expansion'
-             * 'config_timeseries'
+        * None
+          If `config_path` is None configs are loaded from the edisgo
+          default config directory ($HOME$/.edisgo). If the directory
+          does not exist it is created. If config files don't exist the
+          default config files are copied into the directory.
+        * :obj:`str`
+          If `config_path` is a string configs will be loaded from the
+          directory specified by `config_path`. If the directory
+          does not exist it is created. If config files don't exist the
+          default config files are copied into the directory.
+        * :obj:`dict`
+          A dictionary can be used to specify different paths to the
+          different config files. The dictionary must have the following
+          keys:
+          * 'config_db_tables'
+          * 'config_grid'
+          * 'config_grid_expansion'
+          * 'config_timeseries'
 
-             Values of the dictionary are paths to the corresponding
-             config file. In contrast to the other two options the directories
-             and config files must exist and are not automatically created.
+          Values of the dictionary are paths to the corresponding
+          config file. In contrast to the other two options the directories
+          and config files must exist and are not automatically created.
+
         Default: None.
     scenario_name : None or :obj:`str`
         Can be used to describe your scenario but is not used for anything
@@ -86,17 +88,18 @@ class EDisGo:
         Parameter used to obtain time series for active power feed-in of
         fluctuating renewables wind and solar.
         Possible options are:
-         * 'oedb'
-            Time series for the year 2011 are obtained from the OpenEnergy
-            DataBase.
-         * :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame with time series, normalized with corresponding capacity.
-            Time series can either be aggregated by technology type or by type
-            and weather cell ID. In the first case columns of the DataFrame are
-            'solar' and 'wind'; in the second case columns need to be a
-            :pandas:`pandas.MultiIndex<multiindex>` with the first level
-            containing the type and the second level the weather cell ID.
-            Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+
+        * 'oedb'
+          Time series for the year 2011 are obtained from the OpenEnergy
+          DataBase.
+        * :pandas:`pandas.DataFrame<dataframe>`
+          DataFrame with time series, normalized with corresponding capacity.
+          Time series can either be aggregated by technology type or by type
+          and weather cell ID. In the first case columns of the DataFrame are
+          'solar' and 'wind'; in the second case columns need to be a
+          :pandas:`pandas.MultiIndex<multiindex>` with the first level
+          containing the type and the second level the weather cell ID.
+          Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         ToDo: explain how to obtain weather cell ID, add link to explanation
         of worst-case analyses
@@ -105,11 +108,12 @@ class EDisGo:
         type of dispatchable generator normalized with corresponding capacity.
         Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
         Columns represent generator type:
-         * 'gas'
-         * 'coal'
-         * 'biomass'
-         * 'other'
-         * ...
+
+        * 'gas'
+        * 'coal'
+        * 'biomass'
+        * 'other'
+        * ...
 
         Use 'other' if you don't want to explicitly provide every possible
         type.
@@ -117,20 +121,19 @@ class EDisGo:
         Parameter used to obtain time series of active power of (cumulative)
         loads.
         Possible options are:
-         * 'demandlib'
-            Time series for the year specified in `timeindex` are
-            generated using the oemof demandlib.
-         * :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame with load time series of each (cumulative) type of load
-            normalized with corresponding annual energy demand. Index needs to
-            be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-            Columns represent load type:
-             * 'residential'
-             * 'retail'
-             * 'industrial'
-             * 'agricultural'
 
-    timeseries_battery : None or :obj:`str` or :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
+        * 'demandlib'
+          Time series for the year specified in `timeindex` are
+          generated using the oemof demandlib.
+        * :pandas:`pandas.DataFrame<dataframe>`
+          DataFrame with load time series of each (cumulative) type of load
+          normalized with corresponding annual energy demand. Index needs to
+          be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+          Columns represent load type:
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
         Parameter used to obtain time series of active power the battery
         storage(s) is/are charged (negative) or discharged (positive) with.
         Possible options are:
@@ -326,7 +329,10 @@ class EDisGo:
             raise ValueError("Power flow analysis did not converge.")
 
     def reinforce(self, **kwargs):
-        """Reinforces the grid and calculates grid expansion costs"""
+        """
+        Reinforces the grid and calculates grid expansion costs
+
+        """
         reinforce_grid(
             self, max_while_iterations=kwargs.get(
                 'max_while_iterations', 10))
@@ -334,7 +340,10 @@ class EDisGo:
             self.network)
 
     def integrate_storage(self, **kwargs):
-        """Integrate storage in grid"""
+        """
+        Integrate storage in grid
+
+        """
         integrate_storage(network=self.network,
                           position=kwargs.get('position', None),
                           operational_mode=kwargs.get(
@@ -392,6 +401,7 @@ class Network:
         Returns
         -------
         :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+
         """
 
         package_path = edisgo.__path__[0]
@@ -634,28 +644,29 @@ class Config:
     config_path : None or :obj:`str` or :obj:`dict`
         Path to the config directory. Options are:
 
-         * None
-            If `config_path` is None configs are loaded from the edisgo
-            default config directory ($HOME$/.edisgo). If the directory
-            does not exist it is created. If config files don't exist the
-            default config files are copied into the directory.
-         * :obj:`str`
-            If `config_path` is a string configs will be loaded from the
-            directory specified by `config_path`. If the directory
-            does not exist it is created. If config files don't exist the
-            default config files are copied into the directory.
-         * :obj:`dict`
-            A dictionary can be used to specify different paths to the
-            different config files. The dictionary must have the following
-            keys:
-             * 'config_db_tables'
-             * 'config_grid'
-             * 'config_grid_expansion'
-             * 'config_timeseries'
+        * None
+          If `config_path` is None configs are loaded from the edisgo
+          default config directory ($HOME$/.edisgo). If the directory
+          does not exist it is created. If config files don't exist the
+          default config files are copied into the directory.
+        * :obj:`str`
+          If `config_path` is a string configs will be loaded from the
+          directory specified by `config_path`. If the directory
+          does not exist it is created. If config files don't exist the
+          default config files are copied into the directory.
+        * :obj:`dict`
+          A dictionary can be used to specify different paths to the
+          different config files. The dictionary must have the following
+          keys:
+          * 'config_db_tables'
+          * 'config_grid'
+          * 'config_grid_expansion'
+          * 'config_timeseries'
 
-             Values of the dictionary are paths to the corresponding
-             config file. In contrast to the other two options the directories
-             and config files must exist and are not automatically created.
+          Values of the dictionary are paths to the corresponding
+          config file. In contrast to the other two options the directories
+          and config files must exist and are not automatically created.
+
         Default: None.
 
     """
@@ -750,48 +761,51 @@ class TimeSeriesControl:
         Parameter used to obtain time series for active power feed-in of
         fluctuating renewables wind and solar.
         Possible options are:
-         * 'oedb'
-            Time series for 2011 are obtained from the OpenEnergy DataBase.
-            `mv_grid_id` and `scenario_name` have to be provided when choosing
-            this option.
-         * :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame with time series, normalized with corresponding capacity.
-            Time series can either be aggregated by technology type or by type
-            and weather cell ID. In the first case columns of the DataFrame are
-            'solar' and 'wind'; in the second case columns need to be a
-            :pandas:`pandas.MultiIndex<multiindex>` with the first level
-            containing the type and the second level the weather cell ID.
+
+        * 'oedb'
+          Time series for 2011 are obtained from the OpenEnergy DataBase.
+          `mv_grid_id` and `scenario_name` have to be provided when choosing
+          this option.
+        * :pandas:`pandas.DataFrame<dataframe>`
+          DataFrame with time series, normalized with corresponding capacity.
+          Time series can either be aggregated by technology type or by type
+          and weather cell ID. In the first case columns of the DataFrame are
+          'solar' and 'wind'; in the second case columns need to be a
+          :pandas:`pandas.MultiIndex<multiindex>` with the first level
+          containing the type and the second level the weather cell ID.
 
         Default: None.
     timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`, optional
         DataFrame with time series for active power of each (aggregated)
         type of dispatchable generator normalized with corresponding capacity.
         Columns represent generator type:
-         * 'gas'
-         * 'coal'
-         * 'biomass'
-         * 'other'
-         * ...
+
+        * 'gas'
+        * 'coal'
+        * 'biomass'
+        * 'other'
+        * ...
 
         Use 'other' if you don't want to explicitly provide every possible
-        type.
-        Default: None.
+        type. Default: None.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Parameter used to obtain time series of active power of (cumulative)
         loads.
         Possible options are:
-         * 'demandlib'
-            Time series are generated using the oemof demandlib.
-         * :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame with load time series of each (cumulative) type of load
-            normalized with corresponding annual energy demand.
-            Columns represent load type:
-             * 'residential'
-             * 'retail'
-             * 'industrial'
-             * 'agricultural'
 
-         Default: None.
+        * 'demandlib'
+          Time series are generated using the oemof demandlib.
+        * :pandas:`pandas.DataFrame<dataframe>`
+          DataFrame with load time series of each (cumulative) type of load
+          normalized with corresponding annual energy demand.
+          Columns represent load type:
+
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
+
+        Default: None.
     config_data : dict, optional
         Dictionary containing config data from config files. See
         :class:`~.grid.network.Config` data attribute for more information.
@@ -965,10 +979,11 @@ class CurtailmentControl:
     ----------
     mode : :obj:`str`
         Mode defines the curtailment strategy. Possible options are:
-         * 'curtail_all'
-            The curtailment that has to be met in each time step is allocated
-            equally to all generators depending on their share of total
-            feed-in in that time step.
+
+        * 'curtail_all'
+          The curtailment that has to be met in each time step is allocated
+          equally to all generators depending on their share of total
+          feed-in in that time step.
 
     network : :class:`~.grid.network.Network`
     total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
@@ -1238,23 +1253,24 @@ class TimeSeries:
         DataFrame with time series for active power of each (aggregated)
         type of dispatchable generator normalized with corresponding capacity.
         Columns represent generator type:
-         * 'gas'
-         * 'coal'
-         * 'biomass'
-         * 'other'
-         * ...
+
+        * 'gas'
+        * 'coal'
+        * 'biomass'
+        * 'other'
+        * ...
 
         Use 'other' if you don't want to explicitly provide every possible
-        type.
-        Default: None.
+        type. Default: None.
     load : :pandas:`pandas.DataFrame<dataframe>`, optional
         DataFrame with active power of load time series of each (cumulative)
         type of load, normalized with corresponding annual energy demand.
         Columns represent load type:
-         * 'residential'
-         * 'retail'
-         * 'industrial'
-         * 'agricultural'
+
+        * 'residential'
+        * 'retail'
+        * 'industrial'
+        * 'agricultural'
 
          Default: None.
     curtailment : :pandas:`pandas.DataFrame<dataframe>` or List, optional
@@ -1318,6 +1334,7 @@ class TimeSeries:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
+
         """
         try:
             return self._generation_fluctuating.loc[[self.timeindex], :]
@@ -1392,6 +1409,7 @@ class TimeSeries:
             In the case curtailment is only applied to specific generators,
             curtailment time series of all curtailed generators, specified in
             by the column name are returned.
+
         """
         if self._curtailment is not None:
             if isinstance(self._curtailment, pd.DataFrame):
@@ -1432,34 +1450,39 @@ class ETraGoSpecs:
         Time series of active power for each (aggregated) type of flexible
         generators normalized with corresponding capacity.
         Columns represent generator type:
-         * 'gas'
-         * 'coal'
-         * 'biomass'
-         * ...
+
+        * 'gas'
+        * 'coal'
+        * 'biomass'
+        * ...
 
     _ren_dispatch : :pandas:`pandas.DataFrame<dataframe>`
         Time series of active power of wind and solar aggregates,
         normalized with corresponding capacity.
         Columns represent ren_id (see _renewables):
-         * '0'
-         * '1'
-         * ...
+
+        * '0'
+        * '1'
+        * ...
 
     _curtailment : :pandas:`pandas.DataFrame<dataframe>`
         Time series of curtailed power for wind and solar aggregates,
         normalized with corresponding capacity.
         Columns represent ren_id (see _renewables):
-         * '0'
-         * '1'
-         * ...
+
+        * '0'
+        * '1'
+        * ...
 
     _renewables : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing `ren_id` specifying type (wind or solar) and
         weather cell ID.
         Columns are:
-         * 'name' (type, e.g. 'solar')
-         * 'w_id' (weather cell ID)
-         * 'ren_id'
+
+        * 'name' (type, e.g. 'solar')
+        * 'w_id' (weather cell ID)
+        * 'ren_id'
+
 
     """
 
@@ -1490,10 +1513,11 @@ class ETraGoSpecs:
             Time series of active power for each type of generator normalized
             with corresponding capacity.
             Columns represent generator type:
-             * 'solar'
-             * 'wind'
-             * 'coal'
-             * ...
+
+            * 'solar'
+            * 'wind'
+            * 'coal'
+            * ...
 
         """
         # this is temporary until feed-in of renewables is distinguished by

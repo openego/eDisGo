@@ -15,10 +15,12 @@ def integrate_storage(network, position, operational_mode, parameters):
     position : str
         Specify storage location. Available options are
 
-        * 'hvmv_substation_busbar': places a storage unit directly at the
-          HV/MV station's bus bar, see :func:`storage_at_hvmv_substation`
+        * 'hvmv_substation_busbar'
+           places a storage unit directly at the
+           HV/MV station's bus bar, see :func:`storage_at_hvmv_substation`
+
     operational_mode : str
-        Operational mode. See :class:`~.grid.components.StorageOperation for
+        Operational mode. See :class:`~.grid.components.StorageOperation` for
         possible options and more information.
     parameters : dict
         Parameters specifying characteristics of storage in detail

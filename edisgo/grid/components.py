@@ -632,7 +632,7 @@ class Storage(Component):
         """
 
 
-class StorageOperation():
+class StorageOperation:
     """
     Define storage operation mode and time series for power flow analysis
     """
