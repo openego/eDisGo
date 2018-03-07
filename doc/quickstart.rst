@@ -80,7 +80,7 @@ If you want to provide eTraGo specifications:
 
     import pandas as pd
     from datetime import date
-    from edisgo.grid.network import Network, Scenario, ETraGoSpecs
+    from edisgo.grid.network import ETraGoSpecs
 
     # Define eTraGo specs
     timeindex = pd.date_range(date(2017, 10, 10), date(2017, 10, 13),
@@ -105,21 +105,11 @@ If you want to provide eTraGo specifications:
 	    'w_id': ['1', '2', '1', '2'],
 	    'ren_id': ['0', '1', '2', '3']}, index=[0, 1, 2, 3]),
 	battery_capacity=100,
-	battery_active_power=pd.Series(data=[50, 20, -10, 20])
-	)
-
-    # Define a scenario
-    scenario = Scenario(power_flow=(), mv_grid_id='42',
-                        etrago_specs=etrago_specs)
-
-    # Get the grid topology data
-    network = Network.import_from_ding0(
-        "ding0_grids__42.pkl",
-        id='42',
-        scenario=scenario)
+	battery_active_power=pd.Series(data=[50, 20, -10, 20]),
+        ding0_grid="ding0_grids__178.pkl")
 
     # Import future generators
-    network.import_generators(types=['wind', 'solar'])
+    network.import_generators(generator_scenario='nep2035')
 
     # Do non-linear power flow analysis with PyPSA
     network.analyze()

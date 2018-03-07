@@ -279,7 +279,7 @@ class EDisGo:
             self.integrate_storage(**kwargs)
 
         # import new generators
-        if self.network.generator_scenario:
+        if self.network.generator_scenario is not None:
             self.import_generators()
 
     def curtail(self, **kwargs):
@@ -320,6 +320,7 @@ class EDisGo:
 
         For details see
         :func:`edisgo.data.import_data.import_generators`
+
         """
         if generator_scenario:
             self.network.generator_scenario = generator_scenario
@@ -1655,16 +1656,16 @@ class ETraGoSpecs:
     """Defines an eTraGo object used in project open_eGo
 
     Contains specifications which are to be fulfilled at transition point
-    (superiorHV-MV substation) for a specific scenario.
+    (superior HV-MV substation) for a specific scenario.
 
-    Attributes
+    Parameters
     ----------
-    _battery_capacity: :obj:`float`
+    battery_capacity: :obj:`float`, optional
         Capacity of virtual battery at Transition Point in kWh.
-    _battery_active_power : :pandas:`pandas.Series<series>`
+    battery_active_power : :pandas:`pandas.Series<series>`, optional
         Time series of active power the (virtual) battery (at Transition Point)
         is charged (negative) or discharged (positive) with in kW.
-    _conv_dispatch : :pandas:`pandas.DataFrame<dataframe>`
+    conv_dispatch : :pandas:`pandas.DataFrame<dataframe>`, optional
         Time series of active power for each (aggregated) type of flexible
         generators normalized with corresponding capacity.
         Columns represent generator type:
@@ -1674,7 +1675,7 @@ class ETraGoSpecs:
         * 'biomass'
         * ...
 
-    _ren_dispatch : :pandas:`pandas.DataFrame<dataframe>`
+    ren_dispatch : :pandas:`pandas.DataFrame<dataframe>`, optional
         Time series of active power of wind and solar aggregates,
         normalized with corresponding capacity.
         Columns represent ren_id (see _renewables):
@@ -1683,7 +1684,7 @@ class ETraGoSpecs:
         * '1'
         * ...
 
-    _curtailment : :pandas:`pandas.DataFrame<dataframe>`
+    curtailment : :pandas:`pandas.DataFrame<dataframe>`, optional
         Time series of curtailed power for wind and solar aggregates,
         normalized with corresponding capacity.
         Columns represent ren_id (see _renewables):
@@ -1692,7 +1693,7 @@ class ETraGoSpecs:
         * '1'
         * ...
 
-    _renewables : :pandas:`pandas.DataFrame<dataframe>`
+    renewables : :pandas:`pandas.DataFrame<dataframe>`, optional
         Dataframe containing `ren_id` specifying type (wind or solar) and
         weather cell ID.
         Columns are:
@@ -1701,54 +1702,92 @@ class ETraGoSpecs:
         * 'w_id' (weather cell ID)
         * 'ren_id'
 
+    ding0_grid : file: :obj:`str` or :class:`ding0.core.NetworkDing0`
+        If a str is provided it is assumed it points to a pickle with Ding0
+        grid data. This file will be read. If an object of the type
+        :class:`ding0.core.NetworkDing0` data will be used directly from this
+        object.
+
+    Notes
+    ------
+    What has changed to before:
+
+    * ding0_grid has to be provided here
 
     """
 
     def __init__(self, **kwargs):
-        self._battery_capacity = kwargs.get('battery_capacity', None)
-        self._battery_active_power = kwargs.get('battery_active_power', None)
-        self._conv_dispatch = kwargs.get('conv_dispatch', None)
-        self._ren_dispatch = kwargs.get('ren_dispatch', None)
-        self._curtailment = kwargs.get('curtailment', None)
-        self._renewables = kwargs.get('renewables', None)
 
-    @property
-    def battery_capacity(self):
-        return self._battery_capacity
+        # get feed-in time series of renewables
+        timeseries_generation_fluc = self._get_feedin_fluctuating(
+            ren_dispatch=kwargs.get('ren_dispatch', None),
+            curtailment=kwargs.get('curtailment', None),
+            renewables=kwargs.get('renewables', None))
+        timeseries_generation_disp = kwargs.get('conv_dispatch', None)
 
-    @property
-    def battery_active_power(self):
-        return self._battery_active_power
+        # set up EDisGo object
+        self.edisgo = EDisGo(
+            ding0_grid=kwargs.get('ding0_grid', None),
+            timeseries_generation_fluctuating=timeseries_generation_fluc,
+            timeseries_generation_dispatchable=timeseries_generation_disp,
+            timeseries_load='demandlib',
+            timeindex=timeseries_generation_disp.index)
 
-    @property
-    def dispatch(self):
-        """
-        Returns dispatch
+        # get curtailment time series in kW and hand it over to EDisGo
+        timeseries_curtailment = self._get_curtailment(
+            timeseries_generation_fluc)
+        self.edisgo.curtail(curtailment_methodology='curtail_all',
+                            timeseries_curtailment=timeseries_curtailment)
 
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Time series of active power for each type of generator normalized
-            with corresponding capacity.
-            Columns represent generator type:
+        # integrate storage
+        battery_params = {
+            'nominal_capacity': kwargs.get('battery_capacity', None),
+            'soc_initial': 0.0,
+            'efficiency_in': 1.0,
+            'efficiency_out': 1.0,
+            'standing_loss': 0.0}
+        self.edisgo.integrate_storage(
+            timeseries_battery=kwargs.get('battery_active_power', None),
+            battery_parameters=battery_params,
+            battery_position='hvmv_substation_busbar')
 
-            * 'solar'
-            * 'wind'
-            * 'coal'
-            * ...
+    def _get_feedin_fluctuating(self, ren_dispatch, curtailment, renewables):
+        # get feed-in without curtailment
+        if curtailment is not None:
+            feedin = ren_dispatch + curtailment
+        else:
+            feedin = ren_dispatch
+        # change column names
+        new_columns = [
+            (renewables[renewables.ren_id == col].name.iloc[0],
+             renewables[renewables.ren_id == col].w_id.iloc[0])
+            for col in feedin.columns]
+        feedin.columns = pd.MultiIndex.from_tuples(new_columns)
+        # aggregate wind and solar time series until generators get a weather
+        # ID
+        # ToDo: Remove when generators have weather cell ID
+        feedin = pd.DataFrame(data={'wind': feedin.wind.sum(axis=1),
+                                    'solar': feedin.solar.sum(axis=1)})
+        return feedin
 
-        """
-        # this is temporary until feed-in of renewables is distinguished by
-        # weather ID
-        wind = self._renewables[self._renewables['name'] == 'wind']['ren_id']
-        solar = self._renewables[self._renewables['name'] == 'solar']['ren_id']
-        ren_dispatch_aggr_wind = self._ren_dispatch[wind].mean(axis=1).rename(
-            'wind')
-        ren_dispatch_aggr_solar = self._ren_dispatch[solar].mean(
-            axis=1).rename('solar')
-        ren_dispatch_aggr = pd.DataFrame(ren_dispatch_aggr_wind).join(
-            ren_dispatch_aggr_solar)
-        return ren_dispatch_aggr.join(self._conv_dispatch)
+    def _get_curtailment(self, timeseries_generation_fluc):
+
+        # get installed capacities of wind and solar generators
+        # ToDo: Differentiate by weather cell ID once generators have one
+        gens = list(self.edisgo.network.mv_grid.graph.nodes_by_attribute(
+            'generator'))
+        for lv_grid in self.edisgo.network.mv_grid.lv_grids:
+            gens.extend(list(lv_grid.graph.nodes_by_attribute('generator')))
+        dict_capacities = {'solar': 0, 'wind': 0}
+        for gen in gens:
+            if gen.type in ['solar', 'wind']:
+                dict_capacities[gen.type] = gen.nominal_capacity
+
+        # calculate absolute curtailment
+        timeseries_curtailment = timeseries_generation_fluc.multiply(
+            pd.Series(dict_capacities))
+
+        return timeseries_curtailment
 
 
 class Results:
