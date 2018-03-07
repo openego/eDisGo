@@ -408,7 +408,6 @@ class GeneratorFluctuating(Generator):
                     raise
 
             # subtract curtailment
-            #ToDo check if indexes overlap?
             if self.curtailment:
                 ts = ts.join(self.curtailment.to_frame('curtailment'),
                              how='left')

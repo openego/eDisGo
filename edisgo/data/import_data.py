@@ -2014,7 +2014,6 @@ def import_feedin_timeseries(config_data, mv_grid_id, scenario_name):
         # TODO: replace this by using the specific time series for each generator when input tables are replaced are information on weather cells is available
         feedin = feedin.groupby(['hour', 'generation_type'],
                                 as_index=False).mean()
-        # ToDo remove hard coded index?
         feedin.index = pd.date_range('1/1/2011', periods=8760, freq='H')
         return feedin
 

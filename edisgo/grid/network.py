@@ -43,8 +43,6 @@ class EDisGo:
         * `timeseries_generation_dispatchable`
         * `timeseries_load`
 
-         #ToDo: Wollen wir die Erstellung von worst-case Zeitreihen in den
-         #genannten parametern trotzdem noch erlauben?
     mv_grid_id : :obj:`str`
         MV grid ID used in import of ding0 grid.
         ToDo: explain where MV grid IDs come from
@@ -810,9 +808,6 @@ class Config:
 class TimeSeriesControl:
     """
     Sets up TimeSeries Object.
-
-    #ToDo: Default for kwargs in docstring? None for kwargs in docstring?
-    #ToDo: How to avoid redundant docstrings?
 
     Parameters
     ----------
@@ -1925,7 +1920,6 @@ class Results:
         the time period the power flow analysis was conducted for; columns
         of the DataFrame are the edges as well as stations of the grid
         topology.
-        ToDo: add unit
 
         Parameters
         ----------
