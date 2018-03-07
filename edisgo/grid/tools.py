@@ -284,14 +284,16 @@ def select_cable(network, level, apparent_power):
     :obj:`ìnt`
         Cable count
 
+    Notes
+    ------
+    Cable is selected to be able to carry the given `apparent_power`, no load
+    factor is considered.
+
     """
 
     cable_count = 1
 
     if level == 'mv':
-        #ToDo: Which load factor should be used?
-        load_factor = network.config['grid_expansion_load_factors'][
-            'mv_feedin_case_line']
 
         available_cables = network.equipment_data['mv_cables'][
             network.equipment_data['mv_cables']['U_n'] ==
@@ -299,8 +301,7 @@ def select_cable(network, level, apparent_power):
 
         suitable_cables = available_cables[
             available_cables['I_max_th'] *
-            network.mv_grid.voltage_nom *
-            load_factor > apparent_power]
+            network.mv_grid.voltage_nom > apparent_power]
 
         # increase cable count until appropriate cable type is found
         while suitable_cables.empty:
@@ -308,20 +309,15 @@ def select_cable(network, level, apparent_power):
             suitable_cables = available_cables[
                 available_cables['I_max_th'] *
                 network.mv_grid.voltage_nom *
-                cable_count *
-                load_factor > apparent_power]
+                cable_count > apparent_power]
 
         cable_type = suitable_cables.ix[suitable_cables['I_max_th'].idxmin()]
 
     elif level == 'lv':
-        # ToDo: Which load factor should be used?
-        load_factor = network.config['grid_expansion_load_factors'][
-            'lv_feedin_case_line']
 
         suitable_cables = network.equipment_data['lv_cables'][
             network.equipment_data['lv_cables']['I_max_th'] *
-            network.equipment_data['lv_cables']['U_n'] *
-            load_factor > apparent_power]
+            network.equipment_data['lv_cables']['U_n'] > apparent_power]
 
         # increase cable count until appropriate cable type is found
         while suitable_cables.empty:
@@ -329,8 +325,7 @@ def select_cable(network, level, apparent_power):
             suitable_cables = network.equipment_data['lv_cables'][
                 network.equipment_data['lv_cables']['I_max_th'] *
                 network.equipment_data['lv_cables']['U_n'] *
-                cable_count *
-                load_factor > apparent_power]
+                cable_count > apparent_power]
 
         cable_type = suitable_cables.ix[suitable_cables['I_max_th'].idxmin()]
 
