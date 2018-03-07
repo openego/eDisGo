@@ -3,7 +3,7 @@ from edisgo.grid.grids import MVGrid
 from edisgo.grid.tools import select_cable
 
 
-def storage_at_hvmv_substation(mv_grid, parameters, mode):
+def storage_at_hvmv_substation(mv_grid, parameters, mode=None):
     """
     Place battery at HV/MV substation bus bar.
 
@@ -15,15 +15,21 @@ def storage_at_hvmv_substation(mv_grid, parameters, mode):
         Dictionary with storage parameters. See
         :class:`~.grid.network.StorageControl` for more information.
     mode : None or :obj:`str`
-        Operational mode. See :class:`~.grid.components.StorageOperation for
-        possible options and more information.
+        Operational mode. See :class:`~.grid.network.StorageControl` for
+        possible options and more information. Default: None.
+
+    Returns
+    -------
+    :class:`~.grid.components.Storage`
+        Created storage instance
 
     """
     storage = set_up_storage(parameters, mv_grid.station, mode)
     connect_storage(storage, mv_grid.station)
+    return storage
 
 
-def set_up_storage(parameters, node, operational_mode):
+def set_up_storage(parameters, node, operational_mode=None):
     """
     Sets up a storage instance.
 
@@ -35,13 +41,13 @@ def set_up_storage(parameters, node, operational_mode):
     node : :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
         Node the storage will be connected to.
     operational_mode : :obj:`str`
-        Operational mode. See :class:`~.grid.components.StorageOperation` for
-        possible options and more information.
+        Operational mode. See :class:`~.grid.network.StorageControl` for
+        possible options and more information. Default: None.
 
     """
 
     # define storage instance and define it's operational mode
-    return Storage(operation={'mode': operational_mode},
+    return Storage(operation=operational_mode,
                    id=len(node.grid.graph.nodes_by_attribute('storage')) + 1,
                    nominal_capacity=parameters['nominal_capacity'],
                    grid=node.grid,

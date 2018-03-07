@@ -375,6 +375,7 @@ class GeneratorFluctuating(Generator):
         :meth:`timeseries` looks for time series of the according weather cell
         and type of technology in :class:`~.grid.network.TimeSeries` object and
         considers for predefined curtailment as well.
+
         """
         if self._timeseries is None:
 
@@ -493,24 +494,27 @@ class Storage(Component):
     """Storage object
 
     Describes a single storage instance in the eDisGo grid. Includes technical
-    parameters like :attr:`Storage.efficiency_in` or
-    :attr:`Storage.standing_loss` as
-    well as its time series of operation :meth:`Storage.timeseries`.
-    The storage's operation is defined by :class:`StorageOperation`.
+    parameters such as :attr:`Storage.efficiency_in` or
+    :attr:`Storage.standing_loss` as well as its time series of operation
+    :meth:`Storage.timeseries`.
 
     Examples
     --------
     In order to define a storage that operates in mode "fifty-fifty"
-    (see :ref:`storage-operation` for details about modes)
-    provide the following when instantiating a storage.
+    (see :class:`~.grid.network.StorageControl` `timeseries_battery` parameter
+    for details about modes) provide the following when instantiating a
+    storage:
 
     >>> from edisgo.grid.components import Storage
-    >>> storage_parameters = {'soc_initial': 0,
+    >>> from edisgo.flex_opt import storage_operation
+    >>> storage_parameters = {'nominal_capacity': 100,
+    >>>                       'soc_initial': 0,
     >>>                       'efficiency_in': .9,
     >>>                       'efficiency_out': .9,
     >>>                       'standing_loss': 0}
-    >>> network.integrate_storage(position='hvmv_substation_busbar',
-    >>>                           parameters=storage_parameters)
+    >>> storage = Storage(storage_parameters)
+    >>> storage_operation.fifty_fifty(storage)
+
     """
 
     def __init__(self, **kwargs):
@@ -521,33 +525,32 @@ class Storage(Component):
         self._efficiency_in = kwargs.get('efficiency_in', None)
         self._efficiency_out = kwargs.get('efficiency_out', None)
         self._standing_loss = kwargs.get('standing_loss', None)
-
-        operation = kwargs.get('operation', None)
-        if operation is not None:
-            self._operation = StorageOperation(storage=self,
-                                               mode=operation['mode'])
-        else:
-            self._operation = None
+        self._operation = kwargs.get('operation', None)
 
     @property
     def timeseries(self):
         """
-        Get time series of storage operation
+        Time series of storage operation
 
-        Returns time series defined by :attr:`StorageOperation.timeseries` if
-        :attr:`operation` is available. Otherwise, time series stored in
-        :attr:`timeseries` is returned.
+        Parameters
+        ----------
+        timeseries : :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame containing active power the storage is charged (negative)
+            and discharged (positive) with in kW in column 'p' and
+            reactive power in kVA in column 'q'.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Storage operational time series
-        """
-        if self._operation is not None:
-            return self._operation.timeseries
-        else:
-            return self._timeseries
+            See parameter `timeseries`.
 
+        """
+        # ToDo: Consider efficiencies
+        return self._timeseries.loc[self.network.timeseries.timeindex, :]
+
+    @timeseries.setter
+    def timeseries(self, timeseries):
+        self._timeseries = timeseries
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -558,51 +561,56 @@ class Storage(Component):
         ----------
         attr : str
             Attribute name (PyPSA conventions). Choose from {p_set, q_set}
+
         """
         return self.timeseries[attr] / 1e3
 
     @property
     def nominal_capacity(self):
         """
-        Get nominal capacity of storage instance
+        Nominal capacity of storage instance in kW.
 
         Returns
         -------
         float
             Storage nominal capacity
+
         """
         return self._nominal_capacity
 
     @property
     def soc_initial(self):
-        """Initial state of charge in kWh
+        """Initial state of charge in kWh.
 
         Returns
         -------
         float
             Initial state of charge
+
         """
         return self._soc_initial
 
     @property
     def efficiency_in(self):
-        """Storage charging efficiency in per unit
+        """Storage charging efficiency in per unit.
 
         Returns
         -------
         float
             Charging efficiency in range of 0..1
+
         """
         return self._efficiency_in
 
     @property
     def efficiency_out(self):
-        """Storage discharging efficiency in per unit
+        """Storage discharging efficiency in per unit.
 
         Returns
         -------
         float
             Discharging efficiency in range of 0..1
+
         """
         return self._efficiency_out
 
@@ -617,6 +625,7 @@ class Storage(Component):
         -------
         float
             Standing losses in pu.
+
         """
         return self._standing_loss
 
@@ -627,102 +636,10 @@ class Storage(Component):
 
         Returns
         -------
-        StorageOperation
-            Class defining operation of a :class:`Storage`
-        """
-
-
-class StorageOperation:
-    """
-    Define storage operation mode and time series for power flow analysis
-    """
-
-    def __init__(self, **kwargs):
-        self._timeseries = kwargs.get('timeseries', None)
-        self._storage = kwargs.get('storage', None)
-
-        mode = kwargs.get('mode', None)
-
-        if mode is not None:
-            self.define_timeseries(mode)
-
-    def define_timeseries(self, mode, feedin_threshold=.5):
-        """
-        Define time series for :class:`Storage`
-
-        Determine the actual storage time series and save it to
-        :attr:`timeseries`.
-
-        Parameters
-        ----------
-        mode : str
-            Choose way of time series definition. Available ``mode`` 's are
-
-             * **'fifty-fifty'**: the storage operation depends on actual power
-               by generators. If cumulative generation exceeds 50 % of nominal
-               power, the storage will charge. Otherwise, the storage will
-               charge.
-             * **'etrago-specs'**: the storage operation is given by ETraGo
-               specification
+        :obj:`str`
 
         """
-        if mode == 'etrago-specs':
-            if self._timeseries is None:
-                self._timeseries = pd.DataFrame()
-                self._timeseries['p'] = self.storage.grid.network.scenario.\
-                    etrago_specs.battery_active_power
-                self._timeseries['q'] = (self.storage.grid.network.scenario.\
-                                            etrago_specs.battery_active_power *
-                                         0)
-        elif 'fifty-fifty':
-            # determine generators cumulative apparent power output
-            generators = self.storage.grid.graph.nodes_by_attribute(
-                'generator') + [generators for lv_grid in
-                                self.storage.grid.lv_grids for generators in
-                                lv_grid.graph.nodes_by_attribute('generator')]
-            generators_p = pd.concat([_.timeseries['p'] for _ in generators],
-                                     axis=1).sum(axis=1).rename('p')
-            generators_q = pd.concat([_.timeseries['q'] for _ in generators],
-                                     axis=1).sum(axis=1).rename('q')
-            generation = pd.concat([generators_p, generators_q], axis=1)
-            generation['s'] = generation.apply(
-                lambda x: sqrt(x['p'] ** 2 + x['q'] ** 2), axis=1)
-            generators_nom_capacity = sum(
-                [_.nominal_capacity for _ in generators])
-            feedin_bool = generation['s'] > (
-                feedin_threshold * generators_nom_capacity)
-            feedin = feedin_bool.apply(
-                lambda x: self.storage.nominal_capacity if x
-                else -self.storage.nominal_capacity).rename('p').to_frame()
-            feedin['q'] = 0
-            self._timeseries = feedin * self.storage.nominal_capacity
-        else:
-            raise ValueError('The mode {} is not know as valid storage '
-                             'operational mode'.format(mode))
-
-    @property
-    def timeseries(self):
-        """
-        Storage's operational time series
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Storage's operational time series as p and q
-        """
-        return self._timeseries
-
-    @property
-    def storage(self):
-        """
-        Reference to storage instance
-
-        Returns
-        -------
-        Storage
-            Storage instance this object is associated to
-        """
-        return self._storage
+        self._operation
 
 
 class MVDisconnectingPoint(Component):

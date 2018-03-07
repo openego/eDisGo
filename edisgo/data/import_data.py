@@ -344,6 +344,7 @@ def _build_mv_grid(ding0_grid, network):
     mv_station = MVStation(
         id=ding0_grid.station().id_db,
         geom=ding0_grid.station().geo_data,
+        grid=grid,
         transformers=[Transformer(
             mv_grid=grid,
             grid=grid,

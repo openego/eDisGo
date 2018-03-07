@@ -11,8 +11,8 @@ from edisgo.data.import_data import import_from_ding0, import_generators, \
     import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
-from edisgo.flex_opt.storage_integration import integrate_storage
-
+from edisgo.flex_opt import storage_integration, storage_operation
+from edisgo.grid.components import Station, BranchTee
 
 logger = logging.getLogger('edisgo')
 
@@ -134,22 +134,61 @@ class EDisGo:
           * 'retail'
           * 'industrial'
           * 'agricultural'
-        Parameter used to obtain time series of active power the battery
-        storage(s) is/are charged (negative) or discharged (positive) with.
-        Possible options are:
-         * :pandas:`pandas.Series<series>`/:pandas:`pandas.DataFrame<dataframe>`
-            Time series of active power the battery storage is charged
-            (negative) or discharged (positive) with, normalized with
-            corresponding capacity. In case of more than one storage provide
-            a DataFrame where each column represents one storage. Index needs
-            to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
-    battery_parameters : None or dict or list
-        In case of one battery storage a dictionary needs to be provided. In
-        case of more than one battery storage a list of dictionaries needs to
-        be provided. Default: None.
-        #ToDo: Add description of the dictionary.
-        #ToDo: Besser DataFrame mit gleichen columns wie timeseries_battery?
+    timeseries_battery : None or :obj:`str` or :pandas:`pandas.Series<series>` or :obj:`dict`
+        Parameter used to obtain time series of active power the battery
+        storage(s) is/are charged (negative) or discharged (positive) with. Can
+        either be a given time series or an operation strategy.
+        Possible options are:
+
+        * Time series
+          Time series the storage will be charged and discharged with can be
+          set directly by providing a :pandas:`pandas.Series<series>` with
+          time series of active charge (negative) and discharge (positive)
+          power, normalized with corresponding storage capacity. Index needs
+          to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+          In case of more than one storage provide a :obj:`dict` where each
+          entry represents a storage. Keys of the dictionary have to match
+          the keys of the `battery_parameters` dictionary, values must
+          contain the corresponding time series as
+          :pandas:`pandas.Series<series>`.
+        * 'fifty-fifty'
+          Storage operation depends on actual power of generators. If
+          cumulative generation exceeds 50% of the nominal power, the storage
+          will charge. Otherwise, the storage will discharge.
+
+        Default: None.
+    battery_parameters : None or :obj:`dict`
+        Dictionary with storage parameters. Format must be as follows:
+
+        .. code-block:: python
+
+            {
+                'nominal_capacity': <float>, # in kWh
+                'soc_initial': <float>, # in kWh
+                'efficiency_in': <float>, # in per unit 0..1
+                'efficiency_out': <float>, # in per unit 0..1
+                'standing_loss': <float> # in per unit 0..1
+            }
+
+        In case of more than one storage provide a :obj:`dict` where each
+        entry represents a storage. Keys of the dictionary have to match
+        the keys of the `timeseries_battery` dictionary, values must
+        contain the corresponding parameters dictionary specified above.
+    battery_position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :obj:`dict`
+        To position the storage a positioning strategy can be used or a
+        node in the grid can be directly specified. Possible options are:
+
+        * 'hvmv_substation_busbar'
+          Places a storage unit directly at the HV/MV station's bus bar.
+        * :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
+          Specifies a node the storage should be connected to.
+
+        In case of more than one storage provide a :obj:`dict` where each
+        entry represents a storage. Keys of the dictionary have to match
+        the keys of the `timeseries_battery` and `battery_parameters`
+        dictionaries, values must contain the corresponding positioning
+        strategy or node to connect the storage to.
     timeseries_curtailment : None or :pandas:`pandas.DataFrame<dataframe>`
         DataFrame with time series of curtailed power of wind and solar
         aggregates in kW.
@@ -240,8 +279,8 @@ class EDisGo:
                                    'timeseries_curtailment', None))
 
         # include battery
-        # kwargs.get('timeseries_battery', None)
-        # kwargs.get('battery_parameters', None)
+        if kwargs.get('timeseries_battery', None) is not None:
+            self.integrate_storage(**kwargs)
 
         # import new generators
         if self.network.generator_scenario:
@@ -341,14 +380,18 @@ class EDisGo:
 
     def integrate_storage(self, **kwargs):
         """
-        Integrate storage in grid
+        Integrates storage into grid.
+
+        See :class:`~.grid.network.StorageControl` for more information.
 
         """
-        integrate_storage(network=self.network,
-                          position=kwargs.get('position', None),
-                          operational_mode=kwargs.get(
-                              'operational_mode', None),
-                          parameters=kwargs.get('parameters', None))
+        StorageControl(network=self.network,
+                       timeseries_battery=kwargs.get('timeseries_battery',
+                                                     None),
+                       battery_parameters=kwargs.get('battery_parameters',
+                                                     None),
+                       battery_position=kwargs.get('battery_position',
+                                                   None))
 
 
 class Network:
@@ -1230,6 +1273,161 @@ class CurtailmentControl:
             curtailment_ts.index)) is False:
             logging.warning('Time index of curtailment time series is not '
                             'equal to the feed-in time series index.')
+
+
+class StorageControl:
+    """
+    Integrates storages into the grid.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+    timeseries_battery : :obj:`str` or :pandas:`pandas.Series<series>` or :obj:`dict`
+        Parameter used to obtain time series of active power the battery
+        storage(s) is/are charged (negative) or discharged (positive) with. Can
+        either be a given time series or an operation strategy.
+        Possible options are:
+
+        * Time series
+          Time series the storage will be charged and discharged with can be
+          set directly by providing a :pandas:`pandas.Series<series>` with
+          time series of active charge (negative) and discharge (positive)
+          power, normalized with corresponding storage capacity. Index needs
+          to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+          In case of more than one storage provide a :obj:`dict` where each
+          entry represents a storage. Keys of the dictionary have to match
+          the keys of the `battery_parameters dictionary`, values must
+          contain the corresponding time series as
+          :pandas:`pandas.Series<series>`.
+        * 'fifty-fifty'
+          Storage operation depends on actual power of generators. If
+          cumulative generation exceeds 50% of the nominal power, the storage
+          will charge. Otherwise, the storage will discharge.
+
+        Default: None.
+    battery_parameters : :obj:`dict`
+        Dictionary with storage parameters. Format must be as follows:
+
+        .. code-block:: python
+
+            {
+                'nominal_capacity': <float>, # in kWh
+                'soc_initial': <float>, # in kWh
+                'efficiency_in': <float>, # in per unit 0..1
+                'efficiency_out': <float>, # in per unit 0..1
+                'standing_loss': <float> # in per unit 0..1
+            }
+
+        In case of more than one storage provide a :obj:`dict` where each
+        entry represents a storage. Keys of the dictionary have to match
+        the keys of the `timeseries_battery` dictionary, values must
+        contain the corresponding parameters dictionary specified above.
+    battery_position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :obj:`dict`
+        To position the storage a positioning strategy can be used or a
+        node in the grid can be directly specified. Possible options are:
+
+        * 'hvmv_substation_busbar'
+          Places a storage unit directly at the HV/MV station's bus bar.
+        * :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
+          Specifies a node the storage should be connected to.
+
+        In case of more than one storage provide a :obj:`dict` where each
+        entry represents a storage. Keys of the dictionary have to match
+        the keys of the `timeseries_battery` and `battery_parameters`
+        dictionaries, values must contain the corresponding positioning
+        strategy or node to connect the storage to.
+
+    """
+    def __init__(self, network, timeseries_battery, battery_parameters,
+                 battery_position):
+
+        self.network = network
+
+        if isinstance(timeseries_battery, dict):
+            for storage, ts in timeseries_battery.items():
+                try:
+                    params = battery_parameters[storage]
+                    position = battery_position[storage]
+                except KeyError:
+                    message = 'Please provide storage parameters or ' \
+                              'position for storage {}.'.format(storage)
+                    logging.error(message)
+                    raise KeyError(message)
+                self._integrate_storage(ts, params, position)
+        else:
+            self._integrate_storage(timeseries_battery, battery_parameters,
+                                    battery_position)
+
+    def _integrate_storage(self, timeseries, params, position):
+        """
+        Integrate storage units in the grid and specify its operational mode.
+
+        Parameters
+        ----------
+        timeseries : :obj:`str` or :pandas:`pandas.Series<series>`
+            Parameter used to obtain time series of active power the battery
+            storage is charged (negative) or discharged (positive) with. Can
+            either be a given time series or an operation strategy. See class
+            definition for more information
+        params : :obj:`dict`
+            Dictionary with storage parameters for one storage. See class
+            definition for more information on what parameters must be
+            provided.
+        position : :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
+            Parameter used to place the storage. See class definition for more
+            information.
+
+        """
+        # place storage
+        if position == 'hvmv_substation_busbar':
+            storage = storage_integration.storage_at_hvmv_substation(
+                self.network.mv_grid, params)
+        elif isinstance(position, Station) or isinstance(position, BranchTee):
+            storage = storage_integration.set_up_storage(
+                params, position)
+            storage_integration.connect_storage(storage, position)
+        else:
+            message = 'Provided battery position option {} is not ' \
+                      'valid.'.format(timeseries)
+            logging.error(message)
+            raise KeyError(message)
+
+        # implement operation strategy
+        if isinstance(timeseries, pd.Series):
+            # ToDo: Eingabe von Blindleistung auch ermöglichen?
+            timeseries = pd.DataFrame(data={'p': timeseries,
+                                            'q': [0] * len(timeseries)},
+                                      index=timeseries.index)
+            self._check_timeindex(timeseries)
+            storage.timeseries = timeseries
+        elif timeseries == 'fifty-fifty':
+                storage_operation.fifty_fifty(storage)
+        else:
+            message = 'Provided battery timeseries option {} is not ' \
+                      'valid.'.format(timeseries)
+            logging.error(message)
+            raise KeyError(message)
+
+    def _check_timeindex(self, timeseries):
+        """
+        Raises an error if time index of battery time series does not
+        comply with the time index of load and feed-in time series.
+
+        Parameters
+        -----------
+        timeseries : :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame containing active power the storage is charged (negative)
+            and discharged (positive) with in kW in column 'p' and
+            reactive power in kVA in column 'q'.
+
+        """
+        try:
+            timeseries.loc[self.network.timeseries.timeindex]
+        except:
+            message = 'Time index of battery time series does not match ' \
+                      'with load and feed-in time series.'
+            logging.error(message)
+            raise KeyError(message)
 
 
 class TimeSeries:
