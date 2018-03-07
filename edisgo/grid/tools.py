@@ -13,10 +13,9 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
     """
     Determine position of switch disconnector in MV grid rings
 
-    Determination of the switch disconnector location is motivated by placing it
-    to minimized load flows in both parts of the ring (half-rings).
+    Determination of the switch disconnector location is motivated by placing
+    it to minimized load flows in both parts of the ring (half-rings).
     Use the parameter mode
-
 
     Parameters
     ----------
@@ -43,6 +42,7 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
     part of the MV grid ring(s). Make sure grid topology data that is provided
     has closed rings. Otherwise, no location for a switch disconnector can be
     identified.
+
     """
 
     def peak_load_gen_at_node(node):
@@ -60,6 +60,7 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
             parameters reflects peak generation capacity at ``node``.
             Returned peak_load and generation capacity is given as apparent
             power in kVA.
+
         """
         if isinstance(node, LVStation):
             node_peak_load = node.grid.peak_load
@@ -96,12 +97,14 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
         -------
         tuple
             Tuple of size two. First item is the peak load of subtree at
-            ``node``; second parameters reflects peak generation capacity from
-            subtree at ``node``
+            ``node``; second parameter reflects peak generation capacity from
+            subtree at ``node``.
+
         """
         ring_nodes_except_node = [_ for _ in ring if _ is not node]
         non_ring_nodes = [n for n in
-                          [_ for _ in graph.nodes() if _ is not mv_grid.station]
+                          [_ for _ in graph.nodes()
+                           if _ is not mv_grid.station]
                           if n not in ring_nodes_except_node]
         subgraph = graph.subgraph(non_ring_nodes)
 
@@ -111,7 +114,8 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
             peak_load_subtree = 0
             peak_gen_subtree = 0
             for n in nodes_subtree.nodes():
-                peak_load_subtree_tmp, peak_gen_subtree_tmp = peak_load_gen_at_node(n)
+                peak_load_subtree_tmp, peak_gen_subtree_tmp = \
+                    peak_load_gen_at_node(n)
                 peak_load_subtree += peak_load_subtree_tmp
                 peak_gen_subtree += peak_gen_subtree_tmp
             return (peak_load_subtree, peak_gen_subtree)
@@ -157,14 +161,16 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
 
         # Identify nodes where switch disconnector is located in between
         for ctr in range(len(node_peak_data)):
-            # check if node that own the switch disconnecter is of type LVStation
+            # check if node that owns the switch disconnector is of type
+            # LVStation
             if isinstance(ring[ctr - 2], LVStation):
                 # Iteratively split route and calc peak load difference
                 route_data_part1 = sum(node_peak_data[0:ctr])
                 route_data_part2 = sum(node_peak_data[ctr:len(node_peak_data)])
                 diff = abs(route_data_part1 - route_data_part2)
 
-                # stop walking through the ring when load/generation is most equal
+                # stop walking through the ring when load/generation is almost
+                # equal
                 if diff <= diff_min:
                     diff_min = diff
                     position = ctr
@@ -192,9 +198,9 @@ def implement_switch_disconnector(mv_grid, node1, node2):
 
     The graph that represents the grid's topology is altered in such way that
     it explicitly includes a switch disconnector.
-    The switch disconnector is always located at ``node1``. Technically, it does
-    not make any difference. This is just an convention ensuring consistency of
-    multiple runs.
+    The switch disconnector is always located at ``node1``. Technically, it
+    does not make any difference. This is just an convention ensuring
+    consistency of multiple runs.
 
     The ring is still closed after manipulations of this function.
 
@@ -206,6 +212,7 @@ def implement_switch_disconnector(mv_grid, node1, node2):
         A rings node
     node2
         Another rings node
+
     """
     # Get disconnecting point's location
     line = mv_grid.graph.edge[node1][node2]['line']
@@ -251,7 +258,8 @@ def implement_switch_disconnector(mv_grid, node1, node2):
                            switch_disconnector_line_attr)
 
     # Set line to switch disconnector
-    disconnecting_point.line = mv_grid.graph.line_from_nodes(disconnecting_point, node1)
+    disconnecting_point.line = mv_grid.graph.line_from_nodes(
+        disconnecting_point, node1)
 
 
 def select_cable(network, level, apparent_power):
@@ -275,6 +283,7 @@ def select_cable(network, level, apparent_power):
         Cable type
     :obj:`ìnt`
         Cable count
+
     """
 
     cable_count = 1
@@ -285,7 +294,8 @@ def select_cable(network, level, apparent_power):
             'mv_feedin_case_line']
 
         available_cables = network.equipment_data['mv_cables'][
-            network.equipment_data['mv_cables']['U_n'] == network.mv_grid.voltage_nom]
+            network.equipment_data['mv_cables']['U_n'] ==
+            network.mv_grid.voltage_nom]
 
         suitable_cables = available_cables[
             available_cables['I_max_th'] *
