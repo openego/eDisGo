@@ -331,7 +331,7 @@ class Generator(Component):
             ts['q'] = ts['p'] * q_factor
             self._timeseries = ts * self.nominal_capacity
 
-        return self._timeseries.loc[self.network.timeseries.timeindex, :]
+        return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -466,7 +466,7 @@ class GeneratorFluctuating(Generator):
             ts['q'] = ts['p'] * q_factor
             self._timeseries = ts * self.nominal_capacity
 
-        return self._timeseries.loc[self.network.timeseries.timeindex, :]
+        return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
 
     @property
     def curtailment(self):
