@@ -10,6 +10,8 @@ Power flow analysis
 -------------------
 
 
+.. _grid_expansion_methodology:
+
 Automatic grid expansion
 -------------------------
 
@@ -63,7 +65,7 @@ Check line and station voltage deviation
 Grid expansion measures
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Reinforcement measures are conducted in :py:mod:`~edisgo.flex_opt.check_tech_constraints`.
+Reinforcement measures are conducted in :py:mod:`~edisgo.flex_opt.reinforce_measures`.
 
 .. _grid-expansion-measure-line-load-label:
 

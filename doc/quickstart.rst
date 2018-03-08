@@ -6,8 +6,7 @@ Quickstart
 Installation
 ------------
 
-Install latest eDisGo version through pip. Therefore, we highly recommend to
-use a virtual environment and use its pip.
+Install latest eDisGo version through pip. Therefore, we highly recommend using a virtual environment and use its pip.
 
 .. code-block:: bash
 
@@ -17,6 +16,8 @@ Having trouble to install eDisGo dependencies, please also consult the `Ding0
 installation notes <https://dingo.readthedocs.io/en/dev/getting_started.html>`_.
 
 Consider to install a developer version as detailed in :ref:`dev-notes`.
+
+.. _prerequisites:
 
 Prerequisites
 -------------
@@ -30,7 +31,7 @@ Aside from grid topology data stored in
 also includes a file with metadata (look for extension .meta).
 
 A dataset on future installation of power plants (mainly extension of RES) is
-`available at the OEP <https://oep.iks.cs.ovgu.de/>`_. It is linked to eDisGo
+`available on the OEP <https://oep.iks.cs.ovgu.de/>`_. It is linked to eDisGo
 through the
 `OEP API <https://oep-data-interface.readthedocs.io/en/latest/index.html>`_.
 
@@ -53,7 +54,7 @@ Assuming you have file name "ding0_grids__42.pkl" in current working directory r
 
 .. code-block:: python
 
-    from edisgo.grid.network import Network, Scenario
+    from edisgo import EDisGo
 
     # Set up the EDisGo object that will import the grid topology, set up
     # feed-in and load time series (here for a feed-in worst case analysis)
@@ -62,7 +63,7 @@ Assuming you have file name "ding0_grids__42.pkl" in current working directory r
                     worst_case_analysis='worst-case-feedin')
 
     # Import future generators
-    edisgo.import_generators(types=['wind', 'solar'], scenario='nep2035')
+    edisgo.import_generators(generator_scenario='nep2035')
 
     # Do non-linear power flow analysis with PyPSA
     edisgo.analyze()
@@ -70,7 +71,7 @@ Assuming you have file name "ding0_grids__42.pkl" in current working directory r
     # Do grid reinforcement
     edisgo.reinforce()
 
-    # Determine cost for each line/transformer that was reinforced
+    # Determine costs for each line/transformer that was reinforced
     costs = edisgo.network.results.grid_expansion_costs
 
 
