@@ -159,16 +159,20 @@ class Load(Component):
 
     @property
     def timeseries(self):
-        """Return time series of load
+        """
+        Load time series
 
         It returns the actual time series used in power flow analysis. If
         :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
         :meth:`timeseries()` looks for time series of the according sector in
         :class:`~.grid.network.TimeSeries` object.
 
-        See also
-        --------
-        edisgo.network.TimeSeries : Details of global TimeSeries
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame containing active power in kW in column 'p' and
+            reactive power in kVA in column 'q'.
+
         """
         if self._timeseries is None:
             # work around until retail and industrial are separate sectors
@@ -275,6 +279,7 @@ class Generator(Component):
     --------
     edisgo.network.TimeSeries : Details of global
         :class:`~.grid.network.TimeSeries`
+
     """
 
     def __init__(self, **kwargs):
@@ -288,13 +293,20 @@ class Generator(Component):
 
     @property
     def timeseries(self):
-        """Return time series of generator
+        """
+        Feed-in time series of generator
 
         It returns the actual time series used in power flow analysis. If
         :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
-        :meth:`timeseries` looks for time series of the according weather cell
-        and type of technology in :class:`~.grid.network.TimeSeries` object and
-        considers for predefined curtailment as well.
+        :meth:`timeseries` looks for time series of the according type of
+        technology in :class:`~.grid.network.TimeSeries`.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame containing active power in kW in column 'p' and
+            reactive power in kVA in column 'q'.
+
         """
         if self._timeseries is None:
             # calculate share of reactive power
@@ -319,7 +331,7 @@ class Generator(Component):
             ts['q'] = ts['p'] * q_factor
             self._timeseries = ts * self.nominal_capacity
 
-        return self._timeseries
+        return self._timeseries.loc[self.network.timeseries.timeindex, :]
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -390,13 +402,20 @@ class GeneratorFluctuating(Generator):
 
     @property
     def timeseries(self):
-        """Return time series of generator
+        """
+        Feed-in time series of generator
 
         It returns the actual time series used in power flow analysis. If
         :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
-        :meth:`timeseries` looks for time series of the according weather cell
-        and type of technology in :class:`~.grid.network.TimeSeries` object and
-        considers for predefined curtailment as well.
+        :meth:`timeseries` looks for generation and curtailment time series
+        of the according type of technology (and weather cell) in
+        :class:`~.grid.network.TimeSeries`.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame containing active power in kW in column 'p' and
+            reactive power in kVA in column 'q'.
 
         """
         if self._timeseries is None:
@@ -430,7 +449,7 @@ class GeneratorFluctuating(Generator):
                     raise
 
             # subtract curtailment
-            if self.curtailment:
+            if self.curtailment is not None:
                 ts = ts.join(self.curtailment.to_frame('curtailment'),
                              how='left')
                 ts.p = ts.p - ts.curtailment.fillna(0)
@@ -447,7 +466,7 @@ class GeneratorFluctuating(Generator):
             ts['q'] = ts['p'] * q_factor
             self._timeseries = ts * self.nominal_capacity
 
-        return self._timeseries
+        return self._timeseries.loc[self.network.timeseries.timeindex, :]
 
     @property
     def curtailment(self):
