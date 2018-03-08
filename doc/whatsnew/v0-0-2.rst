@@ -12,5 +12,5 @@ Changes
   minimal load differences in both parts of the ring.
 * Switch disconnecters are always located in LV stations
   `#23 <https://github.com/openego/eDisGo/issues/23>`_
-* Made all round speed improvemnts as mentioned in the issues `#43 <https://github.com/openego/eDisGo/issues/43>`_
+* Made all round speed improvements as mentioned in the issues `#43 <https://github.com/openego/eDisGo/issues/43>`_
 

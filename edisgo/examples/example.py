@@ -20,7 +20,8 @@ import os
 import sys
 import pandas as pd
 
-from edisgo.grid.network import EDisGo, Results
+from edisgo import EDisGo
+from edisgo.grid.network import Results
 from edisgo.flex_opt.exceptions import MaximumIterationError
 
 import logging
