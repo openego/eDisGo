@@ -1,7 +1,7 @@
 Release v0.0.2
 ==============
 
-Release data: February XX 2018
+Release data: March XX 2018
 
 Changes
 -------
@@ -13,4 +13,9 @@ Changes
 * Switch disconnecters are always located in LV stations
   `#23 <https://github.com/openego/eDisGo/issues/23>`_
 * Made all round speed improvemnts as mentioned in the issues `#43 <https://github.com/openego/eDisGo/issues/43>`_
+* Sort out meaning of the term scenario including the respective class Scenario
+  `#84 <https://github.com/openego/eDisGo/issues/84>`_
+* Restructuring of config files
+  `#25 <https://github.com/openego/eDisGo/issues/25>`_ was done during general
+  restructuring of code basis `#97 <https://github.com/openego/eDisGo/issues/97>`_
 
