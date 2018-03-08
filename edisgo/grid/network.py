@@ -79,7 +79,7 @@ class EDisGo:
           and config files must exist and are not automatically created.
 
         Default: None.
-    scenario_name : None or :obj:`str`
+    scenario_description : None or :obj:`str`
         Can be used to describe your scenario but is not used for anything
         else. Default: None.
     timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
@@ -245,7 +245,8 @@ class EDisGo:
         # create network
         self.network = Network(
             generator_scenario=kwargs.get('generator_scenario', None),
-            config_path=kwargs.get('config_path', None))
+            config_path=kwargs.get('config_path', None),
+            scenario_description=kwargs.get('scenario_description', None))
 
         # load grid
         # ToDo: should at some point work with only MV grid ID
@@ -420,7 +421,7 @@ class Network:
 
     Parameters
     ----------
-    scenario_name : :obj:`str`, optional
+    scenario_description : :obj:`str`, optional
         Can be used to describe your scenario but is not used for anything
         else. Default: None.
     config_path : None or :obj:`str` or :obj:`dict`, optional
@@ -444,7 +445,7 @@ class Network:
     """
 
     def __init__(self, **kwargs):
-        self._scenario_name = kwargs.get('scenario_name', None)
+        self._scenario_description = kwargs.get('scenario_description', None)
         self._config = Config(config_path=kwargs.get('config_path', None))
         self._equipment_data = self._load_equipment_data()
         self._metadata = kwargs.get('metadata', None)
@@ -547,13 +548,13 @@ class Network:
         self._generator_scenario = generator_scenario_name
 
     @property
-    def scenario_name(self):
+    def scenario_description(self):
         """
         Used to describe your scenario but not used for anything else.
 
         Parameters
         ----------
-        scenario_name : :obj:`str`
+        scenario_description : :obj:`str`
             Description of scenario
 
         Returns
@@ -562,11 +563,11 @@ class Network:
             Scenario name
 
         """
-        return self._scenario_name
+        return self._scenario_description
 
-    @scenario_name.setter
-    def scenario_name(self, scenario_name):
-        self._scenario_name = scenario_name
+    @scenario_description.setter
+    def scenario_description(self, scenario_description):
+        self._scenario_description = scenario_description
 
     @property
     def equipment_data(self):
@@ -823,8 +824,8 @@ class TimeSeriesControl:
 
         * 'oedb'
           Time series for 2011 are obtained from the OpenEnergy DataBase.
-          `mv_grid_id` and `scenario_name` have to be provided when choosing
-          this option.
+          `mv_grid_id` and `scenario_description` have to be provided when
+          choosing this option.
         * :pandas:`pandas.DataFrame<dataframe>`
           DataFrame with time series, normalized with corresponding capacity.
           Time series can either be aggregated by technology type or by type
@@ -875,7 +876,7 @@ class TimeSeriesControl:
         ranges of the given time series that will be used in the analysis.
     mv_grid_id : :obj:`str`, optional
         MV grid ID as used in oedb. Default: None.
-    scenario_name : :obj:`str`
+    generator_scenario : :obj:`str`
         Defines which scenario of future generator park to use. Possible
         options are 'nep2035' and 'ego100'. Default: None.
 
@@ -912,7 +913,8 @@ class TimeSeriesControl:
                 self.timeseries.generation_fluctuating = \
                     import_feedin_timeseries(config_data,
                                              kwargs.get('mv_grid_id', None),
-                                             kwargs.get('scenario_name', None))
+                                             kwargs.get('generator_scenario',
+                                                        None))
             else:
                 raise ValueError('Your input for '
                                  '"timeseries_generation_fluctuating" is not '
