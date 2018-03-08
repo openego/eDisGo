@@ -13,9 +13,6 @@ logger = logging.getLogger('edisgo')
 class Component:
     """Generic component
 
-    _id : :obj:`int`
-        Unique ID
-
     Notes
     -----
     In case of a MV-LV voltage station, :attr:`grid` refers to the LV grid.
@@ -27,7 +24,15 @@ class Component:
 
     @property
     def id(self):
-        """Returns id of component"""
+        """
+        Unique ID of component
+
+        Returns
+        --------
+        :obj:`int`
+            Unique ID of component
+
+        """
         return self._id
 
     @id.setter
@@ -36,9 +41,15 @@ class Component:
 
     @property
     def geom(self):
-        """:shapely:`Shapely Point object<points>` or
-        :shapely:`Shapely LineString object<linestrings>` : Location of the
-        :class:`Component` as Shapely Point or LineString"""
+        """
+        Location of component
+
+        Returns
+        --------
+        :shapely:`Shapely Point object<points>` or :shapely:`Shapely LineString object<linestrings>`
+            Location of the :class:`Component` as Shapely Point or LineString
+
+        """
         return self._geom
 
     @geom.setter
@@ -47,7 +58,15 @@ class Component:
 
     @property
     def grid(self):
-        """:class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid` : The MV or LV grid this component belongs to"""
+        """
+        Grid the component belongs to
+
+        Returns
+        --------
+        :class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid`
+            The MV or LV grid the component belongs to
+
+        """
         return self._grid
 
     @grid.setter
@@ -130,6 +149,7 @@ class Load(Component):
     ----------
     _timeseries : :pandas:`pandas.Series<series>`
         Contains time series for load
+
     """
 
     def __init__(self, **kwargs):
@@ -339,12 +359,13 @@ class Generator(Component):
 
 
 class GeneratorFluctuating(Generator):
-    """Generator object
+    """
+    Generator object for fluctuating renewables.
 
     Attributes
     ----------
     _curtailment : :pandas:`pandas.Series<series>`
-        Contains time series for curtailment
+        Contains time series for curtailment in kW
     _weather_cell_id : :obj:`str`
         ID of the weather cell used to generate feed-in time series
 
@@ -358,6 +379,7 @@ class GeneratorFluctuating(Generator):
     --------
     edisgo.network.TimeSeries : Details of global
         :class:`~.grid.network.TimeSeries`
+
     """
 
     def __init__(self, **kwargs):
@@ -434,13 +456,14 @@ class GeneratorFluctuating(Generator):
         ----------
         curtailment_ts : :pandas:`pandas.Series<series>`
             See class definition for details.
+
         Returns
         -------
         :pandas:`pandas.Series<series>`
             If self._curtailment is set it returns that. Otherwise, if
             curtailment in :class:`~.grid.network.TimeSeries` for the
             corresponding technology type (and if given, weather cell ID)
-            is returned.
+            is set this is returned.
 
         """
         if self._curtailment:
