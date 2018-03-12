@@ -179,22 +179,49 @@ above you can do the following:
 Curtailment
 -----------
 
-Curtailment can be specified per generation technology as factor between 0 and
-1. Then, power output of a technology is cropped at its specific curtailment
-factor.
-For example define a curtailment for wind and PV power at 70 %.
+At the moment curtailment cannot be applied to single generators but only to all generators or
+all generators of a given type and, if provided, weather cell ID equally.
+Therefore, a curtailment time series as shown in the following examples needs to be provided.
 
 .. code-block:: python
 
-    # curtailment of each technology relative (0..1)
-    curtailment = {'wind': 0.7, 'solar': 0.7}
+    timeindex = pd.date_range('1/1/1970', periods=3, freq='H')
 
-    # define curtailment for power flow analysis through scenario
-    scenario = Scenario(
-                power_flow=(date(2011, 10, 10), date(2011, 10, 13)),
-                mv_grid_id=42,
-                scenario_name=['NEP 2035', 'Status Quo'],
-                curtailment=curtailment)
+    # curtailment is allocated equally to all solar and wind generators
+    curtailment = pd.Series(data=[0.0, 5.0, 3.0],
+			    index=timeindex)
+
+    # curtailment time series for 'wind' is equally allocated to all wind generators, etc.
+    curtailment = pd.DataFrame(data={'wind': [0.0, 5.0, 3.0],
+			             'solar': [5.0, 5.0, 3.0]},
+			       index=timeindex)
+
+    # curtailment time series for ('wind', 1) is equally allocated to all wind generators 
+    # in weather cell 1, etc. 
+    curtailment = pd.DataFrame(data={('wind', 1): [0.0, 5.0, 3.0],
+				     ('wind', 2): [1.0, 2.0, 3.0]
+			             ('solar', 1): [5.0, 5.0, 3.0]},
+			       index=timeindex)
+
+Set curtailment by calling the method :meth:`~.grid.network.EDisGo.curtail()`:
+
+.. code-block:: python
+
+    edisgo.curtail(curtailment_methodology='curtail_all',
+                   timeseries_curtailment=curtailment)
+
+You can also define curtailment directly upon defining your scenario. Assuming
+you have the load and feed-in time series as well as the curtailment defined
+above you can do the following:
+
+.. code-block:: python
+
+    edisgo = EDisGo(ding0_grid="ding0_grids__42.pkl",
+                    timeseries_generation_fluctuating=feedin_renewables,
+		    timeseries_generation_dispatchable=feedin_dispatchable,
+		    timeseries_load=load,
+                    curtailment_methodology='curtail_all',
+                    timeseries_curtailment=curtailment)
 
 
 Retrieve results
@@ -210,3 +237,16 @@ performed during grid extension. Associated cost are determined by
 :attr:`~.grid.network.Results.grid_expansion_costs`.
 Flexibility measure may not entirely resolve all issues.
 These are listed in :attr:`~.grid.network.Results.unresolved_issues`.
+
+The grid data and results can e.g. be accessed via
+
+.. code-block:: python
+
+    # MV grid instance
+    edisgo.network.mv_grid
+
+    # List of LV grid instances
+    edisgo.network.lv_grids
+
+    # Results of network analysis
+    edisgo.network.results
