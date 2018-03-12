@@ -80,16 +80,14 @@ If you want to provide eTraGo specifications:
 .. code-block:: python
 
     import pandas as pd
-    from datetime import date
     from edisgo.grid.network import ETraGoSpecs
 
     # Define eTraGo specs
-    timeindex = pd.date_range(date(2017, 10, 10), date(2017, 10, 13),
-                              freq='H')
+    timeindex = pd.date_range('1/1/1970', periods=4, freq='H')
     etrago_specs = ETraGoSpecs(
 	conv_dispatch=pd.DataFrame({'biomass': [1] * len(timeindex),
 				    'coal': [1] * len(timeindex),
-				    'gas': [1] * len(timeindex)},
+				    'other': [1] * len(timeindex)},
 			           index=timeindex),
 	ren_dispatch=pd.DataFrame({'0': [0.2] * len(timeindex),
 			           '1': [0.3] * len(timeindex),
@@ -106,17 +104,21 @@ If you want to provide eTraGo specifications:
 	    'w_id': ['1', '2', '1', '2'],
 	    'ren_id': ['0', '1', '2', '3']}, index=[0, 1, 2, 3]),
 	battery_capacity=100,
-	battery_active_power=pd.Series(data=[50, 20, -10, 20]),
-        ding0_grid="ding0_grids__178.pkl")
+	battery_active_power=pd.Series(data=[50, 20, -10, 20],
+			               index=timeindex),
+        ding0_grid="ding0_grids__42.pkl")
+
+    # Get EDisGo API object
+    edisgo = etrago_specs.edisgo
 
     # Import future generators
-    network.import_generators(generator_scenario='nep2035')
+    edisgo.import_generators(generator_scenario='nep2035')
 
     # Do non-linear power flow analysis with PyPSA
-    network.analyze()
+    edisgo.analyze()
 
     # Do grid reinforcement
-    network.reinforce()
+    edisgo.reinforce()
 
     # Determine cost for each line/transformer that was reinforced
-    costs = network.results.grid_expansion_costs
+    costs = edisgo.network.results.grid_expansion_costs
