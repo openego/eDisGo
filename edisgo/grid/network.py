@@ -4,7 +4,6 @@ import numpy as np
 from math import sqrt
 import logging
 import datetime
-import collections
 
 import edisgo
 from edisgo.tools import config, pypsa_io
