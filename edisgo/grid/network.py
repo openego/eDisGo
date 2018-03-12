@@ -372,6 +372,7 @@ class EDisGo:
             Translator to PyPSA data format
 
         """
+        # ToDo: Should timeindex be an input to this as well?
         if self.network.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
             self.network.pypsa = pypsa_io.to_pypsa(self.network, mode)
