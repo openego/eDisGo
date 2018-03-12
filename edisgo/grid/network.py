@@ -6,7 +6,7 @@ import logging
 import edisgo
 from edisgo.tools import config, pypsa_io
 from edisgo.data.import_data import import_from_ding0, import_generators, \
-    import_feedin_timeseries, import_load_timeseries
+    import_feedin_timeseries, import_load_timeseries, import_from_csv
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt.storage_integration import integrate_storage
@@ -155,6 +155,38 @@ class Network:
 
         # call the importer
         import_from_ding0(file=file,
+                          network=network)
+
+        # integrate storage into grid in case ETraGo Specs are given
+        scenario = kwargs.get('scenario', None)
+        if scenario and scenario.etrago_specs and \
+            scenario.etrago_specs.battery_capacity:
+            integrate_storage(network,
+                              position='hvmv_substation_busbar',
+                              operational_mode='etrago-specs',
+                              parameters={
+                                  'nominal_capacity': \
+                                      scenario.etrago_specs.battery_capacity,
+                                  'soc_initial': 0.0,
+                                  'efficiency_in': 1.0,
+                                  'efficiency_out': 1.0,
+                                  'standing_loss': 0})
+
+        return network
+
+    @classmethod
+    def import_from_csv(cls, path, **kwargs):
+        """Import grid data from csv file
+
+        For details see
+        :func:`edisgo.data.import_data.import_from_csv`
+        """
+
+        # create the network instance
+        network = cls(**kwargs)
+
+        # call the importer
+        import_from_csv(path=path,
                           network=network)
 
         # integrate storage into grid in case ETraGo Specs are given
