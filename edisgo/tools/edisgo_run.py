@@ -1,5 +1,7 @@
 import os
 import sys
+import glob
+import re
 
 import random
 import itertools
@@ -52,26 +54,42 @@ def setup_logging(logfilename=None,
     return root_logger
 
 
-def run_edisgo_worst_case(grid_district, data_dir, scenario,
-                          filename_template="ding0_grids__{}.pkl",
-                          technologies=None):
+def _get_griddistrict(ding0_filepath):
+    """
+    Just get the grid district number from ding0 pkl file path
+
+    Parameters
+    ----------
+    ding0_filepath : str
+        Path to ding0 .pkl data ending typically
+        `/path/to/ding0_pkl/"ding0_grids__" + str(``grid_district``) + ".pkl"`
+    Returns
+    -------
+    int
+        grid_district number
+    """
+    grid_district = os.path.basename(ding0_filepath)
+    grid_district_search = re.search('[_]+\d+', grid_district)
+    if grid_district_search:
+        grid_district = int(grid_district_search.group(0)[2:])
+        return grid_district
+    else:
+        raise (KeyError('Grid District not found in '.format(grid_district)))
+
+
+def run_edisgo_worst_case(ding0_filepath, scenario):
     """
     Analyze worst-case grid extension cost as reference scenario
 
     Parameters
     ----------
-    grid_district : int
-        ID of the MV grid district
-    data_dir : str
-        Path to directory with ding0 .pkl data
-    scenario : : None or :obj:`str`
+    dig0_filepath : str
+        Path to ding0 .pkl data ending typically
+        `/path/to/ding0_pkl/"ding0_grids__" + str(``grid_district``) + ".pkl"`
+    scenario : None or str
         If provided defines which scenario of future generator park to use
         and invokes import of these generators. Possible options are 'nep2035'
         and 'ego100'.
-    filename_template : str
-        Specify file name pattern. Defaults to
-        `"ding0_grids__" + str(``grid_district``) + ".pkl"`
-
 
     Returns
     -------
@@ -80,13 +98,14 @@ def run_edisgo_worst_case(grid_district, data_dir, scenario,
     pandas.DataFrame
         Information about grid that cannot be properly equipped to host new
         generators
+        :param ding0_filepath:
     """
 
-    logging.info('Grid expansion for MV grid district {}'.format(grid_district))
+    grid_district = _get_griddistrict(ding0_filepath)
 
-    filename = filename_template.format(grid_district)
-    edisgo_grid = EDisGo(ding0_grid=filename,
-                    scenario=scenario)
+    logging.info('Grid expansion for MV grid district {}'.format(grid_district))
+    edisgo_grid = EDisGo(ding0_grid=ding0_filepath,
+                         worst_case_analysis='worst-case-feedin')
 
     try:
         # Calculate grid expansion costs before generator import
@@ -103,73 +122,43 @@ def run_edisgo_worst_case(grid_district, data_dir, scenario,
         costs_grouped = \
             edisgo_grid.network.results.grid_expansion_costs.groupby(
                 ['type']).sum()
-        costs_before_geno_import = costs_before_geno_import.append(
+        costs_before_geno_import = \
             pd.DataFrame(costs_grouped.values,
                          columns=costs_grouped.columns,
                          index=[[edisgo_grid.network.id] * len(costs_grouped),
-                                costs_grouped.index]))
+                                costs_grouped.index])
 
-        if edisgo_grid.results.unresolved_issues:
-            faulty_grids_before_geno_import = pd.DataFrame(
-                {'grid': [grid_district],
-                 'msg': [str(edisgo_grid.network.results.unresolved_issues)]}
-            ).set_index('grid', drop=True)
-            logging.info('Unresolved issues left after grid expansion '
-                         '(before grid connection of generators).')
-            costs = pd.DataFrame()
-            faulty_grids = pd.DataFrame({
-                'grid': [grid_district],
-                'msg': ["Unresolved issues before "
-                        "generator import"]}).set_index('grid', drop=True)
-        else:
-            faulty_grids_before_geno_import = pd.DataFrame()
-            logging.info('SUCCESS: grid reinforce before generators!')
+        # Clear results
+        edisgo_grid.network.results = Results()
+        edisgo_grid.network.pypsa = None
 
-            # Clear results
-            edisgo.network.results = Results()
-            edisgo.network.pypsa = None
+        # Calculate grid expansion costs after generator import
+        logging.info('Grid expansion after generator import.')
+        before_geno_import = False
 
-            # Calculate grid expansion costs after generator import
-            logging.info('Grid expansion after generator import.')
-            before_geno_import = False
+        # Import generators
+        if scenario:
+            edisgo_grid.import_generators(generator_scenario=scenario)
 
-            # Import generators
-            edisgo.import_generators(generator_scenario=scenario)
+        # Do non-linear power flow analysis with PyPSA
+        edisgo_grid.analyze()
 
-            # Do non-linear power flow analysis with PyPSA
-            edisgo.analyze()
+        # Do grid reinforcement
+        edisgo_grid.reinforce()
 
-            # Do grid reinforcement
-            edisgo.reinforce()
+        costs_grouped = \
+            edisgo_grid.network.results.grid_expansion_costs.groupby(
+                ['type']).sum()
 
-            # Get Costs
-            costs_grouped = \
-                edisgo.network.results.grid_expansion_costs.groupby(
-                    ['type']).sum()
-            costs = costs.append(
-                pd.DataFrame(costs_grouped.values,
-                             columns=costs_grouped.columns,
-                             index=[[edisgo.network.id] * len(costs_grouped),
-                                    costs_grouped.index]))
+        costs = \
+            pd.DataFrame(costs_grouped.values,
+                         columns=costs_grouped.columns,
+                         index=[[edisgo_grid.network.id] * len(costs_grouped),
+                                costs_grouped.index])
+        logging.info('SUCCESS!')
 
-            if network.results.unresolved_issues:
-                faulty_grids = pd.DataFrame(
-                    {'grid': [grid_district],
-                     'msg': [str(network.results.unresolved_issues)]}
-                ).set_index('grid', drop=True)
-                logging.info('Unresolved issues left after grid expansion.')
-            else:
-                faulty_grids = pd.DataFrame()
-                logging.info('SUCCESS!')
-        return costs, faulty_grids, costs_before_geno_import, faulty_grids_before_geno_import
-    except Exception as e:
-        faulty_grids = {'grid': [grid_district], 'msg': [e]}
-        faulty_grids_before_geno_import = {'grid': [grid_district], 'msg': [e]}
-        logging.info('Something went wrong.')
-        return pd.DataFrame(), \
-               pd.DataFrame(faulty_grids).set_index('grid', drop=True), \
-               pd.DataFrame(), \
-               pd.DataFrame(faulty_grids_before_geno_import).set_index('grid', drop=True)
+    return costs_before_geno_import, \
+           costs
 
 
 def run_edisgo_timeseries_worst_case(grid_district, data_dir, filename_template="ding0_grids__{}.pkl",
@@ -357,7 +346,7 @@ def select_worstcase_snapshots(network):
 
 
 def run_pool(number_of_processes, grid_ids, data_dir, worker_lifetime,
-                       analysis_mode, technologies=None, curtailment=None):
+             analysis_mode, technologies=None, curtailment=None):
     def collect_pool_results(result):
         results.append(result)
 
@@ -419,10 +408,6 @@ def run_pool(number_of_processes, grid_ids, data_dir, worker_lifetime,
 
 
 if __name__ == '__main__':
-    logger = setup_logging(logfilename='test.log',
-                           logfile_loglevel='debug',
-                           console_loglevel='info')
-
     # create the argument parser
     parser = argparse.ArgumentParser(description="Commandline running" + \
                                                  "of eDisGo")
@@ -430,39 +415,49 @@ if __name__ == '__main__':
     # add the arguments
     # verbosity arguments
 
-    parser.add_argument('analysis',
-                        # nargs='?',
-                        metavar='{worst-case,timeseries}',
-                        help='Choose how the power flow analysis is performed. '
-                             'Either on a single snapshot \'worst-case\' or '
-                             'along a time period \'timeseries\'')
+    ding0_files_parsegroup = parser.add_mutually_exclusive_group(required=True)
 
-    parser.add_argument('-g', '--grids',
-                        nargs='*',
-                        metavar='1 3608',
-                        default=None,
-                        type=first_and_last_grid,
-                        help='Specify grid range for analysis for two '
-                             'comma separated integers.')
+    ding0_files_parsegroup.add_argument('-f', '--ding0-file-path', type=str,
+                                        action='store',
+                                        dest='ding0_filename',
+                                        help='Path to a single ding0 pkl file')
+    ding0_files_parsegroup.add_argument('-d', '--ding0-files-directory', type=str,
+                                        action='store',
+                                        dest='ding0_dirpath',
+                                        help='Path to a directory of ding0 pkl files')
 
-    parser.add_argument('-gf', '--grids-file',
-                        nargs='?',
-                        metavar='/path/to/file',
-                        default=None,
-                        dest='grids_file',
+    analysis_parsegroup = parser.add_mutually_exclusive_group()
+
+    analysis_parsegroup.add_argument('-wc', '--worst-case',
+                                     help='Perfroms a worst-case simulation with ' + \
+                                          'a single snapshot',
+                                     default=True)
+
+    analysis_parsegroup.add_argument('-ts', '--time-series',
+                                     action='store',
+                                     dest='time_series',
+                                     default=None,
+                                     help='Perfroms a worst-case simulation with ' + \
+                                          'a timeseries')
+
+    analysis_parsegroup.add_argument('-twc', '--timeseries-worst-case',
+                                     action='store',
+                                     dest='twc_time_series',
+                                     default=None,
+                                     help='Analyze grid only in worst-case snapshots of a '
+                                          'time series.')
+
+    parser.add_argument('-s', '--scenario',
                         type=str,
-                        help='Specify grid range for analysis by list of grid '
-                             'IDs in a simple text file.')
+                        default=None,
+                        choices=['nep2035', 'ego100'],
+                        help="\'None\' or \'string\'\n" + \
+                             "If provided defines which scenario " + \
+                             "of future generator park to use " + \
+                             "and invokes import of these generators.\n" + \
+                             "Possible options are \'nep2035\'and \'ego100\'.")
 
-    parser.add_argument('-d', '--data-dir',
-                        nargs='?',
-                        metavar='/path/to/data/',
-                        dest="data_dir",
-                        type=str,
-                        default="",
-                        help='Absolute path to Ding0 grid data.')
-
-    parser.add_argument('-s', '--steps',
+    parser.add_argument('--steps',
                         nargs='?',
                         metavar='4',
                         dest="steps",
@@ -491,88 +486,115 @@ if __name__ == '__main__':
                              'new one.'
                              'The default sets the lifetime to the pools '
                              'lifetime. This can cause memory issues!')
-
-    parser.add_argument('-twc', '--timeseries-worst-case',
-                        nargs='?',
-                        dest='twc',
-                        help='Analyze grid only in worst-case snapshots of a '
-                             'time series.',
-                        default=False)
-
     args = parser.parse_args(sys.argv[1:])
 
-    # Range of grid districts
-    if args.grids is not None and args.grids_file is not None:
-        raise ValueError("Please specify only one of \'grids\', \'grids-file\'")
-    elif args.grids is None and args.grids_file is None:
-        raise ValueError("Please specify at least one of \'grids\', "
-                         "\'grids-file\'")
-    elif args.grids is not None:
-        grid_range = args.grids[0]
-        print(grid_range)
-    elif args.grids_file is not None:
-        with open(args.grids_file) as f:
-            grids_str = f.read()
-            grid_range = [int(_) for _ in grids_str.split('\n') if _]
-        f.close()
+    logger = setup_logging(logfilename='test.log',
+                           logfile_loglevel='debug',
+                           console_loglevel='info')
 
-    # Define number of parallel process (=number of grids calculated in parallel)
-    number_of_processes = mp.cpu_count()
+    if args.ding0_filename:
+        costs_before_geno_import, \
+        costs = \
+            run_edisgo_worst_case(args.ding0_filename, args.scenario)
 
-    technologies = ['wind', 'solar']
-    curtailment = {'wind': 0.7, 'solar': 0.7}
+        grid_district = _get_griddistrict(args.ding0_filename)
 
-    # Determine bunches of grid districts analyzed in one batch
-    grid_bunches = [grid_range[x:x + args.steps]
-                    for x in range(0, len(grid_range), args.steps)]
+        output_csv_name = '{}_costs_before_geno_import.csv'.format(grid_district)
+        costs_before_geno_import.to_csv(args.out_dir + output_csv_name)
 
-    # Run iteratively of bunches of grid districts
-    for grid_bunch in grid_bunches:
-        logger.info("Running eDisGo worst-case grid extension cost estimation "
-                    "across the following grids: \n\t {}".format(
-            str(grid_bunch)))
+        output_csv_name = '{}_costs.csv'.format(grid_district)
+        costs.to_csv(args.out_dir + output_csv_name)
 
-        # TODO: remove processes based parallelization option when code is transfered to eDisGo
-        costs, faulty_grids, \
-        cost_before_generators, \
-        faulty_grids_before_generators = \
-            run_pool(
-                number_of_processes,
-                grid_bunch,
-                args.data_dir,
-                args.worker_lifetime,
-                args.analysis,
-                technologies=technologies,
-                curtailment=curtailment)
+    elif args.ding0_dirpath:
+        ding0_file_list = glob.glob(args.ding0_dirpath + '*.pkl')
+        for ding0_filename in ding0_file_list:
+            costs_before_geno_import, \
+            costs = \
+                run_edisgo_worst_case(args.ding0_filename, args.scenario)
 
-        # Save results data
-        f = open(os.path.join(args.out_dir, 'costs_{start}_{end}.csv'.format(start=min(grid_bunch),
-                                                                             end=max(grid_bunch))), 'w')
-        f.write('# units: length in km, total_costs in kEUR\n')
-        costs.to_csv(f)
-        f.close()
-        faulty_grids.to_csv(
-            os.path.join(args.out_dir,
-                         'faulty_grids_{start}_{end}.csv'.format(
-                             start=min(grid_bunch),
-                             end=max(grid_bunch))),
-            index_label='grid')
+            grid_district = _get_griddistrict(args.ding0_filename)
 
-        f = open(
-            os.path.join(args.out_dir,
-                         'costs_before_generators_{start}_{end}.csv'.format(
-                             start=min(grid_bunch),
-                             end=max(grid_bunch))),
-            'w')
-        f.write('# units: length in km, total_costs in kEUR\n')
-        cost_before_generators.to_csv(f)
-        f.close()
-        faulty_grids_before_generators.to_csv(
-            os.path.join(args.out_dir,
-                         'faulty_grids_before_generators_{start}_{end}.csv'.format(
-                             start=min(grid_bunch),
-                             end=max(grid_bunch))),
-            index_label='grid')
+            output_csv_name = '{}_costs_before_geno_import.csv'.format(grid_district)
+            costs_before_geno_import.to_csv(args.out_dir + output_csv_name)
 
-        logger.info("Run across grid {one} to {two} finished!".format(
-            one=min(grid_bunch), two=max(grid_bunch)))
+            output_csv_name = '{}_costs.csv'.format(grid_district)
+            costs.to_csv(args.out_dir + output_csv_name)
+
+    # # Range of grid districts
+    # if args.grids is not None and args.grids_file is not None:
+    #     raise ValueError("Please specify only one of \'grids\', \'grids-file\'")
+    # elif args.grids is None and args.grids_file is None:
+    #     raise ValueError("Please specify at least one of \'grids\', "
+    #                      "\'grids-file\'")
+    # elif args.grids is not None:
+    #     grid_range = args.grids[0]
+    #     print(grid_range)
+    # elif args.grids_file is not None:
+    #     with open(args.grids_file) as f:
+    #         grids_str = f.read()
+    #         grid_range = [int(_) for _ in grids_str.split('\n') if _]
+    #     f.close()
+    #
+    # # Define number of parallel process (=number of grids calculated in parallel)
+    # number_of_processes = mp.cpu_count()
+    #
+    # technologies = ['wind', 'solar']
+    # curtailment = {'wind': 0.7, 'solar': 0.7}
+    #
+    # # Determine bunches of grid districts analyzed in one batch
+    # grid_bunches = [grid_range[x:x + args.steps]
+    #                 for x in range(0, len(grid_range), args.steps)]
+    #
+    # # Run iteratively of bunches of grid districts
+    # for grid_bunch in grid_bunches:
+    #     logger.info("Running eDisGo worst-case grid extension cost estimation "
+    #                 "across the following grids: \n\t {}".format(
+    #         str(grid_bunch)))
+    #
+    #
+    #
+    #     # Calculate multiple grids using pool
+    #
+    #     # costs, faulty_grids, \
+    #     # cost_before_generators, \
+    #     # faulty_grids_before_generators = \
+    #     #     run_pool(
+    #     #         number_of_processes,
+    #     #         grid_bunch,
+    #     #         args.data_dir,
+    #     #         args.worker_lifetime,
+    #     #         args.analysis,
+    #     #         technologies=technologies,
+    #     #         curtailment=curtailment)
+    #
+    #     # Save results data
+    #     f = open(os.path.join(args.out_dir, 'costs_{start}_{end}.csv'.format(start=min(grid_bunch),
+    #                                                                          end=max(grid_bunch))), 'w')
+    #     f.write('# units: length in km, total_costs in kEUR\n')
+    #     costs.to_csv(f)
+    #     f.close()
+    #     faulty_grids.to_csv(
+    #         os.path.join(args.out_dir,
+    #                      'faulty_grids_{start}_{end}.csv'.format(
+    #                          start=min(grid_bunch),
+    #                          end=max(grid_bunch))),
+    #         index_label='grid')
+    #
+    #     f = open(
+    #         os.path.join(args.out_dir,
+    #                      'costs_before_generators_{start}_{end}.csv'.format(
+    #                          start=min(grid_bunch),
+    #                          end=max(grid_bunch))),
+    #         'w')
+    #     f.write('# units: length in km, total_costs in kEUR\n')
+    #     cost_before_generators.to_csv(f)
+    #     f.close()
+    #     faulty_grids_before_generators.to_csv(
+    #         os.path.join(args.out_dir,
+    #                      'faulty_grids_before_generators_{start}_{end}.csv'.format(
+    #                          start=min(grid_bunch),
+    #                          end=max(grid_bunch))),
+    #         index_label='grid')
+    #
+    #     logger.info("Run across grid {one} to {two} finished!".format(
+    #         one=min(grid_bunch), two=max(grid_bunch)))
