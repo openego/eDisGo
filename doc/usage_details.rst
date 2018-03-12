@@ -227,26 +227,21 @@ above you can do the following:
 Retrieve results
 ----------------
 
-Results - voltage levels and line loading - from the power flow analysis are
-provided through :class:`~.grid.network.Results`. Get voltage levels at nodes
-from :meth:`~.grid.network.Results.v_res`
-and line loading from :meth:`~.grid.network.Results.s_res` or
-:attr:`~.grid.network.Results.i_res` respectively.
-:attr:`~.grid.network.Results.equipment_changes` details about measures
-performed during grid extension. Associated cost are determined by
-:attr:`~.grid.network.Results.grid_expansion_costs`.
-Flexibility measure may not entirely resolve all issues.
-These are listed in :attr:`~.grid.network.Results.unresolved_issues`.
-
-The grid data and results can e.g. be accessed via
+Results such as voltage levels and line loading from the power flow analysis and 
+grid extension costs are provided through the :class:`~.grid.network.Results` class
+and can be accessed the following way:
 
 .. code-block:: python
 
-    # MV grid instance
-    edisgo.network.mv_grid
-
-    # List of LV grid instances
-    edisgo.network.lv_grids
-
-    # Results of network analysis
+    # Results of network analysis and flexibility measures
     edisgo.network.results
+
+Get voltage levels at nodes from :meth:`~.grid.network.Results.v_res`
+and line loading from :meth:`~.grid.network.Results.s_res` or
+:attr:`~.grid.network.Results.i_res`.
+:attr:`~.grid.network.Results.equipment_changes` holds details about measures
+performed during grid extension. Associated costs are determined by
+:attr:`~.grid.network.Results.grid_expansion_costs`.
+Flexibility measures may not entirely resolve all issues.
+These unresolved issues are listed in :attr:`~.grid.network.Results.unresolved_issues`.
+
