@@ -1571,7 +1571,8 @@ class ETraGoSpecs:
 
         # get curtailment time series in kW and hand it over to EDisGo
         timeseries_curtailment = self._get_curtailment(
-            timeseries_generation_fluc)
+            curtailment=kwargs.get('curtailment', None),
+            renewables=kwargs.get('renewables', None))
         self.edisgo.curtail(curtailment_methodology='curtail_all',
                             timeseries_curtailment=timeseries_curtailment)
 
@@ -1606,7 +1607,7 @@ class ETraGoSpecs:
                                     'solar': feedin.solar.sum(axis=1)})
         return feedin
 
-    def _get_curtailment(self, timeseries_generation_fluc):
+    def _get_curtailment(self, curtailment, renewables):
 
         # get installed capacities of wind and solar generators
         # ToDo: Differentiate by weather cell ID once generators have one
@@ -1619,8 +1620,20 @@ class ETraGoSpecs:
             if gen.type in ['solar', 'wind']:
                 dict_capacities[gen.type] = gen.nominal_capacity
 
+        # change column names of curtailment DataFrame to
+        new_columns = [
+            (renewables[renewables.ren_id == col].name.iloc[0],
+             renewables[renewables.ren_id == col].w_id.iloc[0])
+            for col in curtailment.columns]
+        curtailment.columns = pd.MultiIndex.from_tuples(new_columns)
+        # aggregate wind and solar time series until generators get a weather
+        # ID
+        # ToDo: Remove when generators have weather cell ID
+        curtailment = pd.DataFrame(data={'wind': curtailment.wind.sum(axis=1),
+                                    'solar': curtailment.solar.sum(axis=1)})
+
         # calculate absolute curtailment
-        timeseries_curtailment = timeseries_generation_fluc.multiply(
+        timeseries_curtailment = curtailment.multiply(
             pd.Series(dict_capacities))
 
         return timeseries_curtailment
