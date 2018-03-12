@@ -1,7 +1,7 @@
 Release v0.0.2
 ==============
 
-Release data: February XX 2018
+Release data: March XX 2018
 
 Changes
 -------
