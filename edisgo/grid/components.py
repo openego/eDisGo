@@ -587,7 +587,7 @@ class Storage(Component):
 
         """
         # ToDo: Consider efficiencies
-        return self._timeseries.loc[self.network.timeseries.timeindex, :]
+        return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
 
     @timeseries.setter
     def timeseries(self, timeseries):
