@@ -359,7 +359,7 @@ if __name__ == '__main__':
 
         # clear the pypsa object and results from edisgo_grid
         edisgo_grid.network.results = Results()
-        edisgo_grid.pypsa = None
+        edisgo_grid.network.pypsa = None
 
         all_costs_before_geno_import.append(costs_before_geno_import)
 
