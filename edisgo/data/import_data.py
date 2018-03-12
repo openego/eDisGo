@@ -2092,40 +2092,52 @@ def import_load_timeseries(scenario, data_source):
     return load
 
 
-def import_ding0_from_csv(path):
-    lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_loads, mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafos, mv_loads, edges, mapping = read_network(
+def import_from_csv(path, network):
+
+    #import grid data from csv files
+    lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_loads, mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafos, mv_loads, edges, mapping = _read_network(
         path)
+
+    #build lv-grid
     lvgrids, lvstations, lvtrafos, lvgens, lvloads, lvcds = _build_lv_grid_from_csv(lv_grid, lv_gen, lv_cd, lv_stations,
                                                                                     lv_trafos, lv_loads)
+
+    #build mv-grid
     mvgrids, mvstations, mvtrafos, mvgens, mvloads, mvcds = _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd,
                                                                                     mv_stations, mv_trafos, mv_loads)
+
+    #build lines in mv and lv grids
     lines, lvgrids, mvgrids = _build_mvlv_lines_from_csv(lvgrids, lvstations, lvtrafos, lvgens, lvloads, lvcds, mvgrids, mvstations, mvtrafos,
                                                 mvgens, mvloads, mvcds, edges)
 
-    return lvgrids, lvstations, lvtrafos, lvgens, lvloads, lvcds, mvgrids, mvstations, mvtrafos, mvgens, mvloads, mvcds, lines
+    #update network with mv and lv grids
+    network.mv_grid = mvgrids[list(mvgrids.keys())[0]]
+    network.mv_grid.lv_grids = list(lvgrids.values())
 
-def read_network_as_pd(path, tablename): #ToDo: function definition inside read_network?
+    return network
+
+def _read_network_as_pd(path, tablename):
  # Reads csv files and loads data in a pandas dataframe
     file = '/'.join([path, tablename])
     table = pd.read_csv(file, sep = ';')
     return table
 
-def read_network(path):
-    lv_grid = read_network_as_pd(path, 'lv_grid.csv')
-    lv_gen = read_network_as_pd(path, 'lv_generators.csv')
-    lv_cd = read_network_as_pd(path, 'lv_branchtees.csv')
-    lv_stations = read_network_as_pd(path, 'lv_stations.csv')
-    lv_trafos = read_network_as_pd(path, 'lv_trafos.csv')
-    lv_loads = read_network_as_pd(path, 'lv_loads.csv')
-    mv_grid = read_network_as_pd(path, 'mv_grid.csv')
-    mv_gen = read_network_as_pd(path, 'mv_generators.csv')
-    mv_cb = read_network_as_pd(path, 'mv_circuitbreakers.csv')
-    mv_cd = read_network_as_pd(path, 'mv_branchtees.csv')
-    mv_stations = read_network_as_pd(path, 'mv_stations.csv')
-    mv_trafos = read_network_as_pd(path, 'mv_trafos.csv')
-    mv_loads = read_network_as_pd(path, 'mv_loads.csv')
-    edges = read_network_as_pd(path, 'edges.csv')
-    mapping = read_network_as_pd(path, 'mapping.csv')
+def _read_network(path):
+    lv_grid = _read_network_as_pd(path, 'lv_grid.csv')
+    lv_gen = _read_network_as_pd(path, 'lv_generators.csv')
+    lv_cd = _read_network_as_pd(path, 'lv_branchtees.csv')
+    lv_stations = _read_network_as_pd(path, 'lv_stations.csv')
+    lv_trafos = _read_network_as_pd(path, 'lv_trafos.csv')
+    lv_loads = _read_network_as_pd(path, 'lv_loads.csv')
+    mv_grid = _read_network_as_pd(path, 'mv_grid.csv')
+    mv_gen = _read_network_as_pd(path, 'mv_generators.csv')
+    mv_cb = _read_network_as_pd(path, 'mv_circuitbreakers.csv')
+    mv_cd = _read_network_as_pd(path, 'mv_branchtees.csv')
+    mv_stations = _read_network_as_pd(path, 'mv_stations.csv')
+    mv_trafos = _read_network_as_pd(path, 'mv_trafos.csv')
+    mv_loads = _read_network_as_pd(path, 'mv_loads.csv')
+    edges = _read_network_as_pd(path, 'edges.csv')
+    mapping = _read_network_as_pd(path, 'mapping.csv')
     return lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_loads, mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafos, mv_loads, edges, mapping
 
 
