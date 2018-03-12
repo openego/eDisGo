@@ -4,6 +4,7 @@ import numpy as np
 from math import sqrt
 import logging
 import datetime
+import collections
 
 import edisgo
 from edisgo.tools import config, pypsa_io
@@ -510,7 +511,7 @@ class Network:
             Configuration data from config files.
 
         """
-        return self._config.data
+        return self._config
 
     @property
     def metadata(self):
@@ -732,6 +733,22 @@ class Config:
 
         Default: None.
 
+    Notes
+    -----
+    The Config object can be used like a dictionary. See example on how to use
+    it.
+
+    Examples
+    --------
+    Create Config object from default config files
+
+    >>> from edisgo.grid.network import Config
+    >>> config = Config()
+
+    Get reactive power factor for generators in the MV grid
+
+    >>> config['reactive_power_factor']['mv_gen']
+
     """
     def __init__(self, **kwargs):
         self._data = self._load_config(kwargs.get('config_path', None))
@@ -792,18 +809,31 @@ class Config:
 
         return config_dict
 
-    @property
-    def data(self):
-        """
-        eDisGo configuration data.
+    def __getitem__(self, key1, key2=None):
+        if key2 is None:
+            try:
+                return self._data[key1]
+            except:
+                raise KeyError(
+                    "Config does not contain section {}.".format(key1))
+        else:
+            try:
+                return self._data[key1][key2]
+            except:
+                raise KeyError("Config does not contain value for {} or "
+                               "section {}.".format(key2, key1))
 
-        Returns
-        -------
-        :obj:`collections.OrderedDict`
-            Configuration data from config files.
+    def __setitem__(self, key, value):
+        self._data[key] = value
 
-        """
-        return self._data
+    def __delitem__(self, key):
+        del self._data[key]
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __len__(self):
+        return len(self._data)
 
 
 class TimeSeriesControl:

@@ -12,7 +12,7 @@ The toolbox currently includes
 
 * Data import from data sources of the open_eGo project
 * Power flow analysis for grid issue identification (enabled by `PyPSA <https://pypsa.org>`_)
-* Automatic grid reinforced solving overloading and overvoltage issues
+* Automatic grid reinforcement solving overloading and overvoltage issues
 
 Features to be included
 
