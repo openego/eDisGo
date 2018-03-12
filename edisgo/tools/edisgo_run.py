@@ -158,15 +158,12 @@ def run_edisgo_basic(ding0_filepath,
 
     return costs, grid_issues
 
-def run_pool(number_of_processes, grid_ids, data_dir, worker_lifetime,
-             analysis_mode, technologies=None, curtailment=None):
+def run_pool(number_of_processes, worker_lifetime, edisgo_args):
+
     def collect_pool_results(result):
         results.append(result)
 
     results = []
-
-    tech_dict = dict(technologies=technologies,
-                     curtailment=curtailment)
 
     pool = mp.Pool(number_of_processes,
                    maxtasksperchild=worker_lifetime)
@@ -253,6 +250,7 @@ if __name__ == '__main__':
     analysis_parsegroup = parser.add_mutually_exclusive_group()
 
     analysis_parsegroup.add_argument('-wc', '--worst-case',
+                                     action='store_true',
                                      help='Performs a worst-case simulation with ' + \
                                           'a single snapshot')
 
@@ -387,82 +385,3 @@ if __name__ == '__main__':
     with open(args.out_dir + 'costs.csv', 'a') as f:
         f.write('# units: length in km, total_costs in kEUR\n')
         all_costs.to_csv(f)
-
-    # # Range of grid districts
-    # if args.grids is not None and args.grids_file is not None:
-    #     raise ValueError("Please specify only one of \'grids\', \'grids-file\'")
-    # elif args.grids is None and args.grids_file is None:
-    #     raise ValueError("Please specify at least one of \'grids\', "
-    #                      "\'grids-file\'")
-    # elif args.grids is not None:
-    #     grid_range = args.grids[0]
-    #     print(grid_range)
-    # elif args.grids_file is not None:
-    #     with open(args.grids_file) as f:
-    #         grids_str = f.read()
-    #         grid_range = [int(_) for _ in grids_str.split('\n') if _]
-    #     f.close()
-    #
-    # # Define number of parallel process (=number of grids calculated in parallel)
-    # number_of_processes = mp.cpu_count()
-    #
-    # technologies = ['wind', 'solar']
-    # curtailment = {'wind': 0.7, 'solar': 0.7}
-    #
-    # # Determine bunches of grid districts analyzed in one batch
-    # grid_bunches = [grid_range[x:x + args.steps]
-    #                 for x in range(0, len(grid_range), args.steps)]
-    #
-    # # Run iteratively of bunches of grid districts
-    # for grid_bunch in grid_bunches:
-    #     logger.info("Running eDisGo worst-case grid extension cost estimation "
-    #                 "across the following grids: \n\t {}".format(
-    #         str(grid_bunch)))
-    #
-    #
-    #
-    #     # Calculate multiple grids using pool
-    #
-    #     # costs, faulty_grids, \
-    #     # cost_before_generators, \
-    #     # faulty_grids_before_generators = \
-    #     #     run_pool(
-    #     #         number_of_processes,
-    #     #         grid_bunch,
-    #     #         args.data_dir,
-    #     #         args.worker_lifetime,
-    #     #         args.analysis,
-    #     #         technologies=technologies,
-    #     #         curtailment=curtailment)
-    #
-    #     # Save results data
-    #     f = open(os.path.join(args.out_dir, 'costs_{start}_{end}.csv'.format(start=min(grid_bunch),
-    #                                                                          end=max(grid_bunch))), 'w')
-    #     f.write('# units: length in km, total_costs in kEUR\n')
-    #     costs.to_csv(f)
-    #     f.close()
-    #     faulty_grids.to_csv(
-    #         os.path.join(args.out_dir,
-    #                      'faulty_grids_{start}_{end}.csv'.format(
-    #                          start=min(grid_bunch),
-    #                          end=max(grid_bunch))),
-    #         index_label='grid')
-    #
-    #     f = open(
-    #         os.path.join(args.out_dir,
-    #                      'costs_before_generators_{start}_{end}.csv'.format(
-    #                          start=min(grid_bunch),
-    #                          end=max(grid_bunch))),
-    #         'w')
-    #     f.write('# units: length in km, total_costs in kEUR\n')
-    #     cost_before_generators.to_csv(f)
-    #     f.close()
-    #     faulty_grids_before_generators.to_csv(
-    #         os.path.join(args.out_dir,
-    #                      'faulty_grids_before_generators_{start}_{end}.csv'.format(
-    #                          start=min(grid_bunch),
-    #                          end=max(grid_bunch))),
-    #         index_label='grid')
-    #
-    #     logger.info("Run across grid {one} to {two} finished!".format(
-    #         one=min(grid_bunch), two=max(grid_bunch)))
