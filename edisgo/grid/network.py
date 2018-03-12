@@ -4,7 +4,6 @@ import numpy as np
 from math import sqrt
 import logging
 import datetime
-import collections
 
 import edisgo
 from edisgo.tools import config, pypsa_io
@@ -12,7 +11,7 @@ from edisgo.data.import_data import import_from_ding0, import_generators, \
     import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
-from edisgo.flex_opt import storage_integration, storage_operation
+from edisgo.flex_opt import storage_integration, storage_operation, curtailment
 from edisgo.grid.components import Station, BranchTee
 
 logger = logging.getLogger('edisgo')
@@ -373,6 +372,7 @@ class EDisGo:
             Translator to PyPSA data format
 
         """
+        # ToDo: Should timeindex be an input to this as well?
         if self.network.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
             self.network.pypsa = pypsa_io.to_pypsa(self.network, mode)
@@ -1101,200 +1101,9 @@ class CurtailmentControl:
         if curtailment_ts is not None:
             self._check_timeindex(curtailment_ts)
         if mode == 'curtail_all':
-            self._curtail_all(curtailment_ts)
+            curtailment.curtail_all(curtailment_ts, network)
         else:
             raise ValueError('{} is not a valid mode.'.format(mode))
-
-    def _curtail_all(self, total_curtailment_ts):
-        """
-        Implements curtailment methodology 'curtail_all'.
-
-        The curtailment that has to be met in each time step is allocated
-        equally to all generators depending on their share of total
-        feed-in in that time step.
-
-        Parameters
-        ----------
-        total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
-            See class definition for further information.
-
-        """
-
-        def _get_capacities_by_type_and_weather_cell():
-            """
-            Gets installed capacities of wind and solar generators by weather
-            cell ID.
-
-            Returns
-            --------
-            dict
-                Dictionary with keys being a tuple of technology and weather
-                cell ID (e.g. ('solar', '1')) and the values containing the
-                corresponding installed capacity.
-
-            """
-            dict_capacities = {}
-            for gen in gens:
-                if gen.type in ['solar', 'wind']:
-                    if gen.weather_cell_id:
-                        if (gen.type, gen.weather_cell_id) in \
-                                dict_capacities.keys():
-                            dict_capacities[
-                                (gen.type, gen.weather_cell_id)] = \
-                                dict_capacities[
-                                    (gen.type, gen.weather_cell_id)] + \
-                                gen.nominal_capacity
-                        else:
-                            dict_capacities[
-                                (gen.type, gen.weather_cell_id)] = \
-                                gen.nominal_capacity
-                    else:
-                        message = 'Please provide a weather cell ID for ' \
-                                  'generator {}.'.format(repr(gen))
-                        logging.error(message)
-                        raise KeyError(message)
-            return dict_capacities
-
-        def _get_capacities_by_type():
-            """
-            Gets installed capacities of wind and solar generators.
-
-            Returns
-            --------
-            dict
-                Dictionary with keys 'solar' and 'wind' and the values
-                containing the corresponding installed capacity.
-
-            """
-            dict_capacities = {'solar': 0, 'wind': 0}
-            for gen in gens:
-                if gen.type in ['solar', 'wind']:
-                    dict_capacities[gen.type] = gen.nominal_capacity
-            return dict_capacities
-
-        def _calculate_curtailment(feedin_df, curtailment_series):
-            """
-            Gets installed capacities of wind and solar generators.
-
-            Parameters
-            -----------
-            feedin_df : :pandas:`pandas.DataFrame<dataframe>`
-                DataFrame with feed-in time series the curtailment is
-                allocated to.
-            curtailment_series : :pandas:`pandas.Series<series>`
-                Series with curtailment time series that needs to be
-                allocated to solar and wind generators and/or weather cells.
-
-            Returns
-            --------
-            :pandas:`pandas.DataFrame<dataframe>`
-                DataFrame with the allocated curtailment time series.
-
-            """
-            curtailment = (feedin_df.divide(
-                feedin_df.sum(axis=1), axis=0)).multiply(
-                curtailment_series, axis=0)
-            return curtailment
-
-        # get all generators
-        gens = list(self.network.mv_grid.graph.nodes_by_attribute('generator'))
-        for lv_grid in self.network.mv_grid.lv_grids:
-            gens.extend(list(lv_grid.graph.nodes_by_attribute('generator')))
-
-        # get aggregated capacities either by technology or technology and
-        # weather cell
-        if isinstance(self.network.timeseries.generation_fluctuating.columns,
-                      pd.MultiIndex):
-            dict_capacities = _get_capacities_by_type_and_weather_cell()
-        else:
-            dict_capacities = _get_capacities_by_type()
-
-        # calculate absolute feed-in
-        feedin_df = self.network.timeseries._generation_fluctuating.multiply(
-            pd.Series(dict_capacities))
-        feedin_df.dropna(axis=1, how='all', inplace=True)
-
-        # allocate curtailment if feed-in time series are in a higher
-        # resolution than the curtailment time series (e.g. curtailment
-        # specified by technology and feed-in by technology and weather cell)
-        if isinstance(total_curtailment_ts, pd.Series):
-            self.network.timeseries.curtailment = _calculate_curtailment(
-                feedin_df, total_curtailment_ts)
-        elif isinstance(total_curtailment_ts, pd.DataFrame):
-            if isinstance(total_curtailment_ts.columns, pd.MultiIndex):
-                # if both feed-in and curtailment are differentiated by
-                # technology and weather cell the curtailment time series
-                # can be used directly
-                if isinstance(feedin_df.columns, pd.MultiIndex):
-                    self.network.timeseries.curtailment = total_curtailment_ts
-                else:
-                    message = 'Curtailment time series are provided for ' \
-                              'different weather cells but feed-in time ' \
-                              'series are not.'
-                    logging.error(message)
-                    raise KeyError(message)
-            else:
-                if isinstance(feedin_df.columns, pd.MultiIndex):
-                    # allocate curtailment to weather cells
-                    if 'wind' in total_curtailment_ts.columns:
-                        try:
-                            curtailment_wind = _calculate_curtailment(
-                                feedin_df.loc[:, 'wind': 'wind'],
-                                total_curtailment_ts['wind'])
-                        except:
-                            message = 'Curtailment time series for wind ' \
-                                      'generators provided but no wind ' \
-                                      'feed-in time series.'
-                            logging.error(message)
-                            raise KeyError(message)
-                    else:
-                        curtailment_wind = pd.DataFrame()
-                    if 'solar' in total_curtailment_ts.columns:
-                        try:
-                            curtailment_solar = _calculate_curtailment(
-                                feedin_df.loc[:, 'solar': 'solar'],
-                                total_curtailment_ts['solar'])
-                        except:
-                            message = 'Curtailment time series for solar ' \
-                                      'generators provided but no solar ' \
-                                      'feed-in time series.'
-                            logging.error(message)
-                            raise KeyError(message)
-                    else:
-                        curtailment_solar = pd.DataFrame()
-                    self.network.timeseries.curtailment = \
-                        curtailment_wind.join(curtailment_solar, how='outer')
-                else:
-                    # if both feed-in and curtailment are only differentiated
-                    # by technology the curtailment time series can be used
-                    # directly
-                    self.network.timeseries.curtailment = total_curtailment_ts
-        else:
-            message = 'Unallowed type {} of provided curtailment time ' \
-                      'series. Must either be pandas.Series or ' \
-                      'pandas.DataFrame.'.format(type(total_curtailment_ts))
-            logging.error(message)
-            raise TypeError(message)
-
-        # check if curtailment exceeds feed-in
-        self._check_curtailment(feedin_df)
-
-    def _check_curtailment(self, feedin_df):
-        """
-        Raises an error if the curtailment at any time step exceeds the
-        feed-in at that time.
-
-        Parameters
-        -----------
-        feedin_df : :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame with feed-in time series in kW.
-
-        """
-        if not (feedin_df.loc[:, self.network.timeseries.curtailment.columns]
-                >= self.network.timeseries.curtailment).all().all():
-            message = 'Curtailment exceeds feed-in.'
-            logging.error(message)
-            raise TypeError(message)
 
     def _check_timeindex(self, curtailment_ts):
         """
@@ -1762,7 +1571,8 @@ class ETraGoSpecs:
 
         # get curtailment time series in kW and hand it over to EDisGo
         timeseries_curtailment = self._get_curtailment(
-            timeseries_generation_fluc)
+            curtailment=kwargs.get('curtailment', None),
+            renewables=kwargs.get('renewables', None))
         self.edisgo.curtail(curtailment_methodology='curtail_all',
                             timeseries_curtailment=timeseries_curtailment)
 
@@ -1797,7 +1607,7 @@ class ETraGoSpecs:
                                     'solar': feedin.solar.sum(axis=1)})
         return feedin
 
-    def _get_curtailment(self, timeseries_generation_fluc):
+    def _get_curtailment(self, curtailment, renewables):
 
         # get installed capacities of wind and solar generators
         # ToDo: Differentiate by weather cell ID once generators have one
@@ -1810,8 +1620,20 @@ class ETraGoSpecs:
             if gen.type in ['solar', 'wind']:
                 dict_capacities[gen.type] = gen.nominal_capacity
 
+        # change column names of curtailment DataFrame to
+        new_columns = [
+            (renewables[renewables.ren_id == col].name.iloc[0],
+             renewables[renewables.ren_id == col].w_id.iloc[0])
+            for col in curtailment.columns]
+        curtailment.columns = pd.MultiIndex.from_tuples(new_columns)
+        # aggregate wind and solar time series until generators get a weather
+        # ID
+        # ToDo: Remove when generators have weather cell ID
+        curtailment = pd.DataFrame(data={'wind': curtailment.wind.sum(axis=1),
+                                    'solar': curtailment.solar.sum(axis=1)})
+
         # calculate absolute curtailment
-        timeseries_curtailment = timeseries_generation_fluc.multiply(
+        timeseries_curtailment = curtailment.multiply(
             pd.Series(dict_capacities))
 
         return timeseries_curtailment
