@@ -80,7 +80,8 @@ def _get_griddistrict(ding0_filepath):
 
 def run_edisgo_basic(ding0_filepath,
                      generator_scenario=None,
-                     analysis='worst-case'):
+                     analysis='worst-case',
+                     *edisgo_grid):
     """
     Analyze edisgo grid extension cost as reference scenario
 
@@ -113,13 +114,16 @@ def run_edisgo_basic(ding0_filepath,
 
     logging.info('Grid expansion for MV grid district {}'.format(grid_district))
 
-    if 'worst-case' in analysis:
-        edisgo_grid = EDisGo(ding0_grid=ding0_filepath,
-                             worst_case_analysis=analysis)
-    elif 'timeseries' in analysis:
-        edisgo_grid = EDisGo(ding0_grid=ding0_filepath,
-                             timeseries_generation_fluctuating='oedb',
-                             timeseries_load='demandlib')
+    if edisgo_grid: # if an edisgo_grid is passed in arg then ignore everything else
+        edisgo_grid = edisgo_grid[0]
+    else:
+        if 'worst-case' in analysis:
+            edisgo_grid = EDisGo(ding0_grid=ding0_filepath,
+                                 worst_case_analysis=analysis)
+        elif 'timeseries' in analysis:
+            edisgo_grid = EDisGo(ding0_grid=ding0_filepath,
+                                 timeseries_generation_fluctuating='oedb',
+                                 timeseries_load='demandlib')
     # Import generators
     if generator_scenario:
         logging.info('Grid expansion for scenario \'{}\'.'.format(generator_scenario))
@@ -156,7 +160,7 @@ def run_edisgo_basic(ding0_filepath,
         costs = pd.DataFrame()
         logging.info('Inexplicable Error, Please Check error messages and logs.')
 
-    return costs, grid_issues
+    return edisgo_grid, costs, grid_issues
 
 def run_pool(number_of_processes, worker_lifetime, edisgo_args):
 
@@ -300,6 +304,9 @@ if __name__ == '__main__':
                              'lifetime. This can cause memory issues!')
     args = parser.parse_args(sys.argv[1:])
 
+    # get current time for output file names
+    exec_time = pd.datetime.now().strftime('%Y-%m-%d_%H%M')
+
     logger = setup_logging(logfilename='test.log',
                            logfile_loglevel='debug',
                            console_loglevel='info')
@@ -346,8 +353,13 @@ if __name__ == '__main__':
         run_args = [ding0_filename]
         run_args.extend(run_args_opt_no_scenario)
 
-        costs_before_geno_import, \
+        edisgo_grid, \
+            costs_before_geno_import, \
             grid_issues_before_geno_import = run_func(*run_args)
+
+        # clear the pypsa object and results from edisgo_grid
+        edisgo_grid.network.results = Results()
+        edisgo_grid.pypsa = None
 
         all_costs_before_geno_import.append(costs_before_geno_import)
 
@@ -360,7 +372,9 @@ if __name__ == '__main__':
         # case after generator import
         run_args = [ding0_filename]
         run_args.extend(run_args_opt)
-        costs, \
+        run_args.append(edisgo_grid)
+
+        _, costs, \
             grid_issues = run_func(*run_args)
 
         all_costs.append(costs)
@@ -374,14 +388,18 @@ if __name__ == '__main__':
     # write costs and error messages to csv files
 
     pd.DataFrame(all_grid_issues_before_geno_import).to_csv(
-        args.out_dir + 'grid_issues_before_geno_import.csv', index=False)
+        args.out_dir +
+        exec_time + '_' +
+        'grid_issues_before_geno_import.csv', index=False)
 
-    with open(args.out_dir + 'costs_before_geno_import.csv', 'a') as f:
-        f.write('# units: length in km, total_costs in kEUR\n')
+    with open(args.out_dir +
+              exec_time + '_' + 'costs_before_geno_import.csv', 'a') as f:
+        f.write(',,,# units: length in km,, total_costs in kEUR\n')
         all_costs_before_geno_import.to_csv(f)
 
-    pd.DataFrame(all_grid_issues).to_csv(args.out_dir + \
+    pd.DataFrame(all_grid_issues).to_csv(args.out_dir + exec_time + '_' + \
                                          'grid_issues.csv', index=False)
-    with open(args.out_dir + 'costs.csv', 'a') as f:
-        f.write('# units: length in km, total_costs in kEUR\n')
+    with open(args.out_dir +
+              exec_time + '_' + 'costs.csv', 'a') as f:
+        f.write(',,,# units: length in km,, total_costs in kEUR\n')
         all_costs.to_csv(f)
