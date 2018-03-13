@@ -165,6 +165,55 @@ def run_edisgo_basic(ding0_filepath,
 
     return edisgo_grid, costs, grid_issues
 
+
+def run_edisgo_twice(run_args):
+    """
+
+    Returns
+    -------
+    all_costs_before_geno_import : list
+        Grid extension cost before grid connection of new generators
+    all_grid_issues_before_geno_import : list
+        Remaining overloading or over-voltage issues in grid
+    all_costs : list
+        Grid extension cost due to grid connection of new generators
+    all_grid_issues : list
+        Remaining overloading or over-voltage issues in grid
+    """
+    # base case with no generator import
+
+    edisgo_grid, \
+    costs_before_geno_import, \
+    grid_issues_before_geno_import = run_func(*run_args)
+
+    # clear the pypsa object and results from edisgo_grid
+    edisgo_grid.network.results = Results()
+    edisgo_grid.network.pypsa = None
+
+    all_costs_before_geno_import.append(costs_before_geno_import)
+
+    all_grid_issues_before_geno_import['grid'].extend(
+        grid_issues_before_geno_import['grid'])
+
+    all_grid_issues_before_geno_import['msg'].extend(
+        grid_issues_before_geno_import['msg'])
+
+    # case after generator import
+    run_args = [ding0_filename]
+    run_args.extend(run_args_opt)
+    run_args.append(edisgo_grid)
+
+    _, costs, \
+    grid_issues = run_func(*run_args)
+
+    all_costs.append(costs)
+    all_grid_issues['grid'].extend(grid_issues['grid'])
+    all_grid_issues['msg'].extend(grid_issues['msg'])
+
+    return all_costs_before_geno_import, all_grid_issues_before_geno_import, \
+           all_costs, all_grid_issues
+
+
 def run_pool(number_of_processes, worker_lifetime, edisgo_args):
 
     def collect_pool_results(result):
@@ -305,6 +354,13 @@ if __name__ == '__main__':
                              'new one.'
                              'The default sets the lifetime to the pools '
                              'lifetime. This can cause memory issues!')
+
+    analysis_parsegroup.add_argument('-p', '--parallel',
+                                     action='store_true',
+                                     help='Parallel execution of multiple '
+                                          'grids. Parallelization is provided '
+                                          'by multiprocessing.')
+
     args = parser.parse_args(sys.argv[1:])
 
     # get current time for output file names
@@ -331,8 +387,8 @@ if __name__ == '__main__':
     else:
         raise FileNotFoundError('Some of the Arguments for input files are missing.')
 
-    # this is the serial version of the run system
 
+    # this is the serial version of the run system
     run_func = run_edisgo_basic
 
     run_args_opt_no_scenario = [None]
@@ -349,40 +405,18 @@ if __name__ == '__main__':
     all_costs = []
     all_grid_issues = {'grid': [], 'msg': []}
 
-    for ding0_filename in ding0_file_list:
-        grid_district = _get_griddistrict(ding0_filename)
+    if not args.parallel:
+        for ding0_filename in ding0_file_list:
+            grid_district = _get_griddistrict(ding0_filename)
 
-        # base case with no generator import
-        run_args = [ding0_filename]
-        run_args.extend(run_args_opt_no_scenario)
+            run_args = [ding0_filename]
+            run_args.extend(run_args_opt_no_scenario)
 
-        edisgo_grid, \
-            costs_before_geno_import, \
-            grid_issues_before_geno_import = run_func(*run_args)
-
-        # clear the pypsa object and results from edisgo_grid
-        edisgo_grid.network.results = Results()
-        edisgo_grid.network.pypsa = None
-
-        all_costs_before_geno_import.append(costs_before_geno_import)
-
-        all_grid_issues_before_geno_import['grid'].extend(
-            grid_issues_before_geno_import['grid'])
-
-        all_grid_issues_before_geno_import['msg'].extend(
-            grid_issues_before_geno_import['msg'])
-
-        # case after generator import
-        run_args = [ding0_filename]
-        run_args.extend(run_args_opt)
-        run_args.append(edisgo_grid)
-
-        _, costs, \
-            grid_issues = run_func(*run_args)
-
-        all_costs.append(costs)
-        all_grid_issues['grid'].extend(grid_issues['grid'])
-        all_grid_issues['msg'].extend(grid_issues['msg'])
+            all_costs_before_geno_import, \
+            all_grid_issues_before_geno_import, \
+                all_costs, all_grid_issues = run_edisgo_twice(run_args)
+    else:
+        raise NotImplementedError("Parallelization will come soon (:")
 
     # consolidate costs for all the networks
     all_costs_before_geno_import = pd.concat(all_costs_before_geno_import,
