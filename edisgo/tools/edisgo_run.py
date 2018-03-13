@@ -98,12 +98,15 @@ def run_edisgo_basic(ding0_filepath,
         If provided defines which scenario of future generator park to use
         and invokes import of these generators. Possible options are 'nep2035'
         and 'ego100'.
+
     Returns
     -------
-    pandas : Dataframe
-        costs
-    dict
-        grid_issues
+    edisgo_grid : :class:`~.grid.network.EDisGo`
+        eDisGo network container
+    costs : :pandas:`pandas.Dataframe<dataframe>`
+        Cost of grid extension
+    grid_issues : dict
+        Grids resulting in an error including error message
 
     """
 
