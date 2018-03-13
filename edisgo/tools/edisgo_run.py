@@ -377,12 +377,12 @@ if __name__ == '__main__':
     elif args.ding0_dirglob:
         ding0_file_list = glob.glob(args.ding0_dirglob)
 
-    elif args.ding0_dirselect:
-        with open(args.ding0_dirselect[1], 'r') as file_handle:
+    elif args.ding0_dir_select:
+        with open(args.ding0_dir_select[1], 'r') as file_handle:
             ding0_file_list_grid_district_numbers = list(file_handle)
 
-        ding0_file_list = map(lambda x: args.ding0_dirselect[0] +
-                                        args.ding0_dirselect[2].format(x),
+        ding0_file_list = map(lambda x: args.ding0_dir_select[0] +
+                                        args.ding0_dir_select[2].format(x),
                               ding0_file_list_grid_district_numbers)
     else:
         raise FileNotFoundError('Some of the Arguments for input files are missing.')
