@@ -20,6 +20,14 @@ edisgo\.flex\_opt\.costs module
     :undoc-members:
     :show-inheritance:
 
+edisgo\.flex\_opt\.curtailment module
+-------------------------------------
+
+.. automodule:: edisgo.flex_opt.curtailment
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 edisgo\.flex\_opt\.exceptions module
 ------------------------------------
 
@@ -48,6 +56,14 @@ edisgo\.flex\_opt\.storage\_integration module
 ----------------------------------------------
 
 .. automodule:: edisgo.flex_opt.storage_integration
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+edisgo\.flex\_opt\.storage\_operation module
+--------------------------------------------
+
+.. automodule:: edisgo.flex_opt.storage_operation
     :members:
     :undoc-members:
     :show-inheritance:
