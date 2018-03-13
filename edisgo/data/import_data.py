@@ -2157,7 +2157,7 @@ def add_node_to_grid(grids, items, item_type):
     for g in grids:
         dic ={}
         for i in items:
-            if items[i].grid == grids[g].id:
+            if items[i].grid.id == grids[g].id:
                 dic.update({i : items[i]})
         grids[g].graph.add_nodes_from(dic.values(), type=item_type)
 
@@ -2166,7 +2166,7 @@ def add_edge_to_grid(grids, items, item_type):
         list = []
         for i in items:
             n1 , n2, l = i
-            if l['line'].grid == grids[g].id: #here: ggf. id_db
+            if l['line'].grid.id == grids[g].id:
                 list.append(i)
         grids[g].graph.add_edges_from(list, type=item_type)
 
@@ -2195,13 +2195,13 @@ def _build_lv_grid_from_csv( lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_
                    lvstations.update({row['id_db']: Station(
                      id=row['id_db'],
                      geom=row['geom'],
-                     grid=row['LV_grid_id'],
+                     grid=lvgrids[row['LV_grid_id_db']],  #grid=row['LV_grid_id'],
                 )})
                 ,axis = 1)
     #add station to corresponding grid
     for g in lvgrids:
         for i in lvstations:
-            if lvstations[i].grid == lvgrids[g].id:
+            if lvstations[i].grid.id == lvgrids[g].id:
                 lvgrids[g]._station = lvstations[i]
 
     # LV-Trafo
@@ -2210,7 +2210,7 @@ def _build_lv_grid_from_csv( lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_
                     lvtrafos.update({row['id_db']: Transformer(
                         id=row['id_db'],
                         geom=row['geom'],
-                        grid=row['LV_grid_id'],
+                        grid=lvgrids[row['LV_grid_id_db']],  #grid=row['LV_grid_id'],
                         mv_grid=None,
                         voltage_op=row['voltage_op'],
                         type=pd.Series(data=[row['X'], row['R'], row['S_nom']],
@@ -2220,7 +2220,7 @@ def _build_lv_grid_from_csv( lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_
     for s in lvstations:
         for t in lvtrafos:
             item = lvstations[i]
-            if lvtrafos[t].grid == lvstations[s].grid:
+            if lvtrafos[t].grid.id == lvstations[s].grid.id:
                 lvstations[s]._transformers = lvtrafos[t]
 
     add_node_to_grid(lvgrids, lvstations, 'station')
@@ -2231,7 +2231,7 @@ def _build_lv_grid_from_csv( lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_
                  lvgens.update({row['id_db']: Generator(
                      id=row['id_db'],
                      geom=row['geom'],
-                     grid=row['LV_grid_id'],
+                     grid=lvgrids[row['LV_grid_id_db']],  #grid=row['LV_grid_id'],
                      nominal_capacity=row['nominal_capacity'],
                      type = row['type'],
                      subtype=row['subtype'],
@@ -2247,7 +2247,7 @@ def _build_lv_grid_from_csv( lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_
                 lvloads.update({row['id_db']: Load(
                      id=row['id_db'],
                      geom=row['geom'],
-                     grid=row['LV_grid_id'],
+                     grid=lvgrids[row['LV_grid_id_db']],  #grid=row['LV_grid_id'],
                      consumption=row['consumption'],
                     #ToDo: Timeseries
                      #type=row['type'],
@@ -2264,7 +2264,7 @@ def _build_lv_grid_from_csv( lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_
                 lvcds.update({row['id_db']: BranchTee(
                      id=row['id_db'],
                      geom=row['geom'],
-                     grid=row['LV_grid_id'],
+                     grid=lvgrids[row['LV_grid_id_db']],  #grid=row['LV_grid_id'],
                      v_level=row['LV_grid_id'], #ToDo: v_level notwendig?
                      #ToDo: in_building
                   )})
@@ -2300,14 +2300,14 @@ def _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafo
                    mvstations.update({row['id_db']: Station(
                      id=row['id_db'],
                      geom=row['geom'],
-                     grid=row['MV_grid_id'],#mvgrids[],
+                     grid=mvgrids[row['MV_grid_id_db']], #grid=row['MV_grid_id'],#
                 )})
                 ,axis = 1)
 
     #add station to corresponding grid
     for g in mvgrids:
         for i in mvstations:
-            if mvstations[i].grid == mvgrids[g].id:
+            if mvstations[i].grid.id == mvgrids[g].id:
                 mvgrids[g]._station = mvstations[i]
 
     # MV-Trafo
@@ -2316,7 +2316,7 @@ def _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafo
                     mvtrafos.update({row['id_db']: Transformer(
                         id=row['id_db'],
                         geom=row['geom'],
-                        grid=row['MV_grid_id'],
+                        grid=mvgrids[row['MV_grid_id_db']],  #grid=row['MV_grid_id'],
                         mv_grid=row['MV_grid_id'],
                         voltage_op=row['voltage_op'],
                         type=pd.Series(data=[row['X'], row['R'], row['S_nom']],
@@ -2327,7 +2327,7 @@ def _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafo
     for s in mvstations:
         for t in mvtrafos:
             item = mvstations[i]
-            if mvtrafos[t].grid == mvstations[s].grid:
+            if mvtrafos[t].grid.id == mvstations[s].grid.id:
                 mvstations[s]._transformers = mvtrafos[t]
 
 
@@ -2342,7 +2342,7 @@ def _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafo
                      nominal_capacity=row['nominal_capacity'],
                      type=row['type'],
                      subtype=row['subtype'],
-                     grid=row['MV_grid_id'],
+                     grid=mvgrids[row['MV_grid_id_db']],  #grid=row['MV_grid_id'],
                      v_level=row['v_level']
                   )})
                 ,axis = 1)
@@ -2356,7 +2356,7 @@ def _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafo
                 mvloads.update({row['id_db']: Load(
                      id=row['id_db'],
                      geom=row['geom'],
-                     grid=row['MV_grid_id'],
+                     grid=mvgrids[row['MV_grid_id_db']],  #grid=row['MV_grid_id'],
                      consumption=row['consumption'],
                     # type=row['type'],
                      peak_load=row['peak_load']
@@ -2371,7 +2371,7 @@ def _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafo
                 mvcds.update({row['id_db']: BranchTee(
                      id=row['id_db'],
                      geom=row['geom'],
-                     grid=row['MV_grid_id'],
+                     grid=mvgrids[row['MV_grid_id_db']],  #grid=row['MV_grid_id'],
                      #ToDo: in_building=
                   )})
                 ,axis = 1)
@@ -2396,6 +2396,8 @@ def _build_mvlv_lines_from_csv(lvgrids, lvstations, lvtrafos, lvgens, lvloads, l
              **mvgens,
              **mvloads,
              **mvcds}#, # ToDo: circuitbreakers
+    grids = {**lvgrids,
+             **mvgrids}
 
     #Lines
     lines=[]
@@ -2405,7 +2407,7 @@ def _build_mvlv_lines_from_csv(lvgrids, lvstations, lvtrafos, lvgens, lvloads, l
                   type=pd.Series(data = [row['type_name'], row['U_n'], row['I_max_th'], row['R'], row['L'], row['C']], index = ['name', 'U_n', 'I_max_th', 'R', 'L', 'C']), #, columns = []#er row['branch'].type,
                   length=row['length'] / 1e3, #ToDo: Check if all edges, that are exported from Ding0, have the same scale
                   kind=row['type_kind'],
-                  grid=row['grid']
+                  grid=grids[row['grid_id_db']],  #grid=row['grid'] #
              )}))
             ,axis = 1)
     add_edge_to_grid(lvgrids, lines , 'line') #ToDo: Check what happens if mvgrid_id == lvgrid_id
