@@ -260,7 +260,7 @@ def _build_mv_grid(ding0_grid, network):
                                 for _ in
                                 ding0_grid.grid_district._lv_load_areas
                                 if not np.isnan(_.zensus_sum)])},
-        voltage_nom=ding0_grid.v_level)
+        voltage_nom=ding0_grid.v_level) #ToDo: voltagenom vs. v_level?
 
     # Special treatment of LVLoadAreaCenters see ...
     # TODO: add a reference above for explanation of how these are treated
@@ -2104,7 +2104,7 @@ def import_from_csv(path, network):
 
     #build mv-grid
     mvgrids, mvstations, mvtrafos, mvgens, mvloads, mvcds = _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd,
-                                                                                    mv_stations, mv_trafos, mv_loads)
+                                                                                    mv_stations, mv_trafos, mv_loads, network)
 
     #build lines in mv and lv grids
     lines, lvgrids, mvgrids = _build_mvlv_lines_from_csv(lvgrids, lvstations, lvtrafos, lvgens, lvloads, lvcds, mvgrids, mvstations, mvtrafos,
@@ -2113,6 +2113,18 @@ def import_from_csv(path, network):
     #update network with mv and lv grids
     network.mv_grid = mvgrids[list(mvgrids.keys())[0]]
     network.mv_grid.lv_grids = list(lvgrids.values())
+
+    # Integrate disconnecting points
+    #position_switch_disconnectors(network.mv_grid,mode=network.config['scenario']['disconnecting_point_position'])
+
+    # Check data integrity
+    #_validate_ding0_grid_import(network.mv_grid, ding0_mv_grid, lv_grid_mapping)
+
+    # Set data source
+    network.set_data_source('grid', 'dingo')
+
+    # Set more params
+    network._id = network.mv_grid.id
 
     return network
 
@@ -2154,7 +2166,7 @@ def add_edge_to_grid(grids, items, item_type):
         list = []
         for i in items:
             n1 , n2, l = i
-            if l['line'].grid == grids[g].id:
+            if l['line'].grid == grids[g].id: #here: ggf. id_db
                 list.append(i)
         grids[g].graph.add_edges_from(list, type=item_type)
 
@@ -2261,17 +2273,17 @@ def _build_lv_grid_from_csv( lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_
 
     return lvgrids, lvstations, lvtrafos, lvgens, lvloads, lvcds
 
-def _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafos, mv_loads): #Todo: Circuit Breaker MV?
+def _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafos, mv_loads, network): #Todo: Circuit Breaker MV?
 # Create MV grid instance
 
     mvgrids = {}
     mv_grid.apply(lambda row:
                   mvgrids.update({row['id_db']: MVGrid(
                         id=row['MV_grid_id'],
-                        network= row['network'],
+                        network=network,
                         voltage_nom=row['voltage_nom'],  #TODO: check MV/kv/V
-                        #ToDo: peak_load und peak_generation notwendig?
-                        #peak_load =,
+                        #ToDo: peak_load und peak_generation necessary?
+                        #peak_load = peak_load(),
                         #peak_generation=,
                         grid_district={
                             'geom': row['geom'],#ding0_lv_grid.grid_district.geo_data,
@@ -2288,7 +2300,7 @@ def _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafo
                    mvstations.update({row['id_db']: Station(
                      id=row['id_db'],
                      geom=row['geom'],
-                     grid=row['MV_grid_id'],
+                     grid=row['MV_grid_id'],#mvgrids[],
                 )})
                 ,axis = 1)
 
@@ -2347,7 +2359,7 @@ def _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafo
                      grid=row['MV_grid_id'],
                      consumption=row['consumption'],
                     # type=row['type'],
-                    # peak_load=row['peak_load']
+                     peak_load=row['peak_load']
                 )})
                 ,axis = 1)
     add_node_to_grid(mvgrids, mvloads, 'load')
@@ -2364,6 +2376,10 @@ def _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafo
                   )})
                 ,axis = 1)
     add_node_to_grid(mvgrids, mvcds, 'branch_tee')
+
+    for g in mvgrids:
+        mvgrids[g].peak_generation#= graph.nodes_by_attribute('generator')
+        #mvgrids[g].peak_load
 
     return mvgrids, mvstations, mvtrafos, mvgens, mvloads, mvcds
 
