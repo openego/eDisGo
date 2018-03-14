@@ -180,8 +180,8 @@ def run_edisgo_twice(run_args):
     all_grid_issues : list
         Remaining overloading or over-voltage issues in grid
     """
-    # base case with no generator import
 
+    # base case with no generator import
     edisgo_grid, \
     costs_before_geno_import, \
     grid_issues_before_geno_import = run_func(*run_args)
@@ -214,63 +214,62 @@ def run_edisgo_twice(run_args):
            all_costs, all_grid_issues
 
 
-def run_pool(number_of_processes, worker_lifetime, edisgo_args):
+def run_edisgo_pool(ding0_file_list, run_args_opt,
+                    workers=mp.cpu_count(), worker_lifetime=1):
+    """
+    Use python multiprocessing toolbox for parallelization
 
+    Several grids are analyzed in parallel.
+
+    Parameters
+    ----------
+    ding0_file_list : list
+        Ding0 grid data file names
+    run_args_opt : list
+        eDisGo options, see :func:`run_edisgo_basic` and
+        :func:`run_edisgo_twice`
+    workers: int
+        Number of parallel process
+    worker_lifetime : int
+        Bunch of grids sequentially analyzed by a worker
+
+    Returns
+    -------
+    all_costs_before_geno_import : list
+        Grid extension cost before grid connection of new generators
+    all_grid_issues_before_geno_import : list
+        Remaining overloading or over-voltage issues in grid
+    all_costs : list
+        Grid extension cost due to grid connection of new generators
+    all_grid_issues : list
+        Remaining overloading or over-voltage issues in grid
+    """
     def collect_pool_results(result):
         results.append(result)
 
     results = []
 
-    pool = mp.Pool(number_of_processes,
+    pool = mp.Pool(workers,
                    maxtasksperchild=worker_lifetime)
 
-    if analysis_mode == 'worst-case':
-        for grid_id in grid_ids:
-            pool.apply_async(func=run_edisgo_worst_case,
-                             args=(grid_id, data_dir),
-                             kwds=tech_dict,
-                             callback=collect_pool_results)
-    elif analysis_mode == 'timeseries':
-        for grid_id in grid_ids:
-            pool.apply_async(func=run_edisgo_timeseries_worst_case,
-                             args=(grid_id, data_dir),
-                             kwds=tech_dict,
-                             callback=collect_pool_results)
-    else:
-        logger.error("Unknown analysis mode {]".format(analysis_mode))
+    for file in ding0_file_list:
+        edisgo_args = [file] + run_args_opt
+        pool.apply_async(func=run_edisgo_twice,
+                         args=(edisgo_args,),
+                         callback=collect_pool_results)
 
     pool.close()
     pool.join()
 
     # process results data
-    costs_dfs = [r[0] for r in results]
-    faulty_grids_dfs = [r[1] for r in results]
-    costs_before_generators_dfs = [r[2] for r in results]
-    faulty_grids_before_generators_dfs = [r[3] for r in results]
+    all_costs_before_geno_import = [r[0] for r in results]
+    all_grid_issues_before_geno_import = [r[1] for r in results]
+    all_costs = [r[2] for r in results]
+    all_grid_issues = [r[3] for r in results]
 
-    if costs_dfs:
-        costs = pd.concat(costs_dfs, axis=0)
-    else:
-        costs = pd.DataFrame()
+    return all_costs_before_geno_import, all_grid_issues_before_geno_import, \
+           all_costs, all_grid_issues
 
-    if faulty_grids_dfs:
-        faulty_grids = pd.concat(faulty_grids_dfs, axis=0)
-    else:
-        faulty_grids = pd.DataFrame()
-
-    if costs_before_generators_dfs:
-        costs_before_generators = pd.concat(costs_before_generators_dfs, axis=0)
-    else:
-
-        costs_before_generators = pd.DataFrame()
-
-    if faulty_grids_before_generators_dfs:
-        faulty_grids_before_generators = pd.concat(
-            faulty_grids_before_generators_dfs, axis=0)
-    else:
-        faulty_grids_before_generators = pd.DataFrame()
-
-    return costs, faulty_grids, costs_before_generators, faulty_grids_before_generators
 
 
 if __name__ == '__main__':
@@ -333,14 +332,20 @@ if __name__ == '__main__':
                         default=os.path.join(sys.path[0]),
                         help='Absolute path to results data location.')
 
-    parser.add_argument('--steps',
+    parser.add_argument('-p', '--parallel',
+                                     action='store_true',
+                                     help='Parallel execution of multiple '
+                                          'grids. Parallelization is provided '
+                                          'by multiprocessing.')
+
+    parser.add_argument('-w', '--workers',
                         nargs='?',
-                        metavar='4',
-                        dest="steps",
+                        metavar='1..inf',
+                        dest="workers",
                         type=int,
-                        default=1,
-                        help='Number of grid district that are analyzed in one '
-                             'bunch. Hence, that are saved into one CSV file.')
+                        default=mp.cpu_count(),
+                        help='Number of workers in parallel. In other words, '
+                             'cores that are used for parallelization.')
 
     parser.add_argument('-lw', '--lifetime-workers',
                         nargs='?',
@@ -354,12 +359,6 @@ if __name__ == '__main__':
                              'new one.'
                              'The default sets the lifetime to the pools '
                              'lifetime. This can cause memory issues!')
-
-    analysis_parsegroup.add_argument('-p', '--parallel',
-                                     action='store_true',
-                                     help='Parallel execution of multiple '
-                                          'grids. Parallelization is provided '
-                                          'by multiprocessing.')
 
     args = parser.parse_args(sys.argv[1:])
 
@@ -418,7 +417,13 @@ if __name__ == '__main__':
             all_grid_issues_before_geno_import, \
                 all_costs, all_grid_issues = run_edisgo_twice(run_args)
     else:
-        raise NotImplementedError("Parallelization will come soon (:")
+        all_costs_before_geno_import, \
+        all_grid_issues_before_geno_import, \
+        all_costs, all_grid_issues = run_edisgo_pool(
+            ding0_file_list,
+            run_args_opt_no_scenario,
+            args.workers,
+            args.worker_lifetime)
 
     # consolidate costs for all the networks
     all_costs_before_geno_import = pd.concat(all_costs_before_geno_import,
