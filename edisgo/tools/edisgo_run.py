@@ -271,11 +271,27 @@ def run_edisgo_pool(ding0_file_list, run_args_opt,
            all_costs, all_grid_issues
 
 
-
 if __name__ == '__main__':
     # create the argument parser
-    parser = argparse.ArgumentParser(description="Commandline running" + \
-                                                 "of eDisGo")
+    example_text = '''Examples
+    
+    ...assumes all files located in PWD.
+    
+    Analyze a single grid in 'worst-case'
+    
+         edisgo_run -f ding0_grids__997.pkl -wc
+         
+         
+    Analyze multiple grids in 'worst-case' using parallelization. Grid IDs are 
+    specified by the grids_list.txt.
+    
+         edisgo_run -ds '' grids_list.txt ding0_grids__{}.pkl -wc --parallel
+         '''
+    parser = argparse.ArgumentParser(
+        description="Commandline running" + \
+                    "of eDisGo",
+        epilog=example_text,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
 
     # add the verbosity arguments
 
