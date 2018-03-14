@@ -422,8 +422,10 @@ if __name__ == '__main__':
 
     # consolidate costs for all the networks
     all_costs_before_geno_import = pd.concat(all_costs_before_geno_import,
-                                             ignore_index=True)
-    all_costs = pd.concat(all_costs, ignore_index=True)
+                                             ignore_index=True) \
+        if all_costs_before_geno_import else pd.DataFrame()
+    all_costs = pd.concat(all_costs,
+                          ignore_index=True) if all_costs else pd.DataFrame()
     # write costs and error messages to csv files
 
     pd.DataFrame(all_grid_issues_before_geno_import).to_csv(
