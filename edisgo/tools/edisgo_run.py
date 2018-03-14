@@ -174,6 +174,16 @@ def run_edisgo_basic(ding0_filepath,
 
 def run_edisgo_twice(run_args):
     """
+    Run grid analysis twice on same grid: once w/ and once w/o new generators
+
+    First run without connection of new generators approves sufficient grid
+    hosting capacity. Otherwise, grid is reinforced.
+    Second run assessment grid extension needs in terms of RES integration
+
+    Parameters
+    ----------
+    run_args : list
+        Optional parameters for :func:`run_edisgo_basic`.
 
     Returns
     -------
