@@ -112,21 +112,24 @@ def run_edisgo_basic(ding0_filepath,
 
     grid_district = _get_griddistrict(ding0_filepath)
 
-    grid_issues = {'grid': [],
-                   'msg': []}
+    grid_issues = {}
 
     logging.info('Grid expansion for MV grid district {}'.format(grid_district))
 
     if edisgo_grid: # if an edisgo_grid is passed in arg then ignore everything else
         edisgo_grid = edisgo_grid[0]
     else:
-        if 'worst-case' in analysis:
-            edisgo_grid = EDisGo(ding0_grid=ding0_filepath,
-                                 worst_case_analysis=analysis)
-        elif 'timeseries' in analysis:
-            edisgo_grid = EDisGo(ding0_grid=ding0_filepath,
-                                 timeseries_generation_fluctuating='oedb',
-                                 timeseries_load='demandlib')
+        try:
+            if 'worst-case' in analysis:
+                edisgo_grid = EDisGo(ding0_grid=ding0_filepath,
+                                     worst_case_analysis=analysis)
+            elif 'timeseries' in analysis:
+                edisgo_grid = EDisGo(ding0_grid=ding0_filepath,
+                                     timeseries_generation_fluctuating='oedb',
+                                     timeseries_load='demandlib')
+        except FileNotFoundError as e:
+            return None, pd.DataFrame(), {'grid': grid_district, 'msg': str(e)}
+
     # Import generators
     if generator_scenario:
         logging.info('Grid expansion for scenario \'{}\'.'.format(generator_scenario))
@@ -148,18 +151,21 @@ def run_edisgo_basic(ding0_filepath,
         costs = pd.DataFrame(costs_grouped.values,
                              columns=costs_grouped.columns,
                              index=[[edisgo_grid.network.id] * len(costs_grouped),
-                                    costs_grouped.index])
-        costs.reset_index(inplace=True)
+                                    costs_grouped.index]).reset_index()
+        costs.rename(columns={'level_0': 'grid'}, inplace=True)
+
+        grid_issues['grid'] = None
+        grid_issues['msg'] = None
 
         logging.info('SUCCESS!')
     except MaximumIterationError:
-        grid_issues['grid'].append(edisgo_grid.network.id)
-        grid_issues['msg'].append(str(edisgo_grid.network.results.unresolved_issues))
+        grid_issues['grid'] = edisgo_grid.network.id
+        grid_issues['msg'] = str(edisgo_grid.network.results.unresolved_issues)
         costs = pd.DataFrame()
         logging.info('Unresolved issues left after grid expansion.')
     except Exception as e:
-        grid_issues['grid'].append(edisgo_grid.network.id)
-        grid_issues['msg'].append(repr(e))
+        grid_issues['grid'] = edisgo_grid.network.id
+        grid_issues['msg'] = repr(e)
         costs = pd.DataFrame()
         logging.info('Inexplicable Error, Please Check error messages and logs.')
 
@@ -171,47 +177,39 @@ def run_edisgo_twice(run_args):
 
     Returns
     -------
-    all_costs_before_geno_import : list
+    all_costs_before_geno_import : :pandas:`pandas.Dataframe<dataframe>`
         Grid extension cost before grid connection of new generators
-    all_grid_issues_before_geno_import : list
+    all_grid_issues_before_geno_import : dict
         Remaining overloading or over-voltage issues in grid
-    all_costs : list
+    all_costs : :pandas:`pandas.Dataframe<dataframe>`
         Grid extension cost due to grid connection of new generators
-    all_grid_issues : list
+    all_grid_issues : dict
         Remaining overloading or over-voltage issues in grid
     """
 
     # base case with no generator import
     edisgo_grid, \
     costs_before_geno_import, \
-    grid_issues_before_geno_import = run_func(*run_args)
+    grid_issues_before_geno_import = run_edisgo_basic(*run_args)
 
-    # clear the pypsa object and results from edisgo_grid
-    edisgo_grid.network.results = Results()
-    edisgo_grid.network.pypsa = None
+    if edisgo_grid:
+        # clear the pypsa object and results from edisgo_grid
+        edisgo_grid.network.results = Results()
+        edisgo_grid.network.pypsa = None
 
-    all_costs_before_geno_import.append(costs_before_geno_import)
+        # case after generator import
+        # run_args = [ding0_filename]
+        # run_args.extend(run_args_opt)
+        run_args.append(edisgo_grid)
 
-    all_grid_issues_before_geno_import['grid'].extend(
-        grid_issues_before_geno_import['grid'])
+        _, costs, \
+        grid_issues = run_edisgo_basic(*run_args)
 
-    all_grid_issues_before_geno_import['msg'].extend(
-        grid_issues_before_geno_import['msg'])
-
-    # case after generator import
-    run_args = [ding0_filename]
-    run_args.extend(run_args_opt)
-    run_args.append(edisgo_grid)
-
-    _, costs, \
-    grid_issues = run_func(*run_args)
-
-    all_costs.append(costs)
-    all_grid_issues['grid'].extend(grid_issues['grid'])
-    all_grid_issues['msg'].extend(grid_issues['msg'])
-
-    return all_costs_before_geno_import, all_grid_issues_before_geno_import, \
-           all_costs, all_grid_issues
+        return costs_before_geno_import, grid_issues_before_geno_import, \
+               costs, grid_issues
+    else:
+        return costs_before_geno_import, grid_issues_before_geno_import, \
+               costs_before_geno_import, grid_issues_before_geno_import
 
 
 def run_edisgo_pool(ding0_file_list, run_args_opt,
@@ -271,7 +269,7 @@ def run_edisgo_pool(ding0_file_list, run_args_opt,
            all_costs, all_grid_issues
 
 
-if __name__ == '__main__':
+def edisgo_run():
     # create the argument parser
     example_text = '''Examples
     
@@ -429,9 +427,16 @@ if __name__ == '__main__':
             run_args = [ding0_filename]
             run_args.extend(run_args_opt_no_scenario)
 
-            all_costs_before_geno_import, \
-            all_grid_issues_before_geno_import, \
-                all_costs, all_grid_issues = run_edisgo_twice(run_args)
+            costs_before_geno_import, \
+            grid_issues_before_geno_import, \
+                costs, grid_issues = run_edisgo_twice(run_args)
+            
+            all_costs_before_geno_import.append(costs_before_geno_import)
+            all_grid_issues_before_geno_import['grid'].append(grid_issues_before_geno_import['grid'])
+            all_grid_issues_before_geno_import['msg'].append(grid_issues_before_geno_import['msg'])
+            all_costs.append(costs)
+            all_grid_issues['grid'].append(grid_issues['grid'])
+            all_grid_issues['msg'].append(grid_issues['msg'])
     else:
         all_costs_before_geno_import, \
         all_grid_issues_before_geno_import, \
@@ -443,13 +448,11 @@ if __name__ == '__main__':
 
     # consolidate costs for all the networks
     all_costs_before_geno_import = pd.concat(all_costs_before_geno_import,
-                                             ignore_index=True) \
-        if all_costs_before_geno_import else pd.DataFrame()
-    all_costs = pd.concat(all_costs,
-                          ignore_index=True) if all_costs else pd.DataFrame()
-    # write costs and error messages to csv files
+                                             ignore_index=True)
+    all_costs = pd.concat(all_costs, ignore_index=True)
 
-    pd.DataFrame(all_grid_issues_before_geno_import).to_csv(
+    # write costs and error messages to csv files
+    pd.DataFrame(all_grid_issues_before_geno_import).dropna(axis=0, how='all').to_csv(
         args.out_dir +
         exec_time + '_' +
         'grid_issues_before_geno_import.csv', index=False)
@@ -457,11 +460,15 @@ if __name__ == '__main__':
     with open(args.out_dir +
               exec_time + '_' + 'costs_before_geno_import.csv', 'a') as f:
         f.write(',,,# units: length in km,, total_costs in kEUR\n')
-        all_costs_before_geno_import.to_csv(f)
+        all_costs_before_geno_import.to_csv(f, index=False)
 
-    pd.DataFrame(all_grid_issues).to_csv(args.out_dir + exec_time + '_' + \
+    pd.DataFrame(all_grid_issues).dropna(axis=0, how='all').to_csv(args.out_dir + exec_time + '_' + \
                                          'grid_issues.csv', index=False)
     with open(args.out_dir +
               exec_time + '_' + 'costs.csv', 'a') as f:
         f.write(',,,# units: length in km,, total_costs in kEUR\n')
-        all_costs.to_csv(f)
+        all_costs.to_csv(f, index=False)
+
+
+if __name__ == '__main__':
+    pass
