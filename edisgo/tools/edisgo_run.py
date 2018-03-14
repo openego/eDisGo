@@ -380,6 +380,8 @@ if __name__ == '__main__':
     elif args.ding0_dir_select:
         with open(args.ding0_dir_select[1], 'r') as file_handle:
             ding0_file_list_grid_district_numbers = list(file_handle)
+            ding0_file_list_grid_district_numbers = [
+                _.splitlines()[0] for _ in ding0_file_list_grid_district_numbers]
 
         ding0_file_list = map(lambda x: args.ding0_dir_select[0] +
                                         args.ding0_dir_select[2].format(x),
