@@ -24,7 +24,8 @@ def grid_expansion_costs(network):
     `pandas.DataFrame<dataframe>`
         DataFrame containing type and costs plus in the case of lines the
         line length and number of parallel lines of each reinforced
-        transformer and line. The DataFrame has the following columns:
+        transformer and line. Index of the DataFrame is the representation of
+        the respective object, columns are the following:
 
         type: String
             Transformer size or cable name
@@ -64,7 +65,8 @@ def grid_expansion_costs(network):
         # transform area to calculate area in km^2
         projection = partial(
             pyproj.transform,
-            pyproj.Proj(init='epsg:{}'.format(int(network.config['geo']['srid']))),
+            pyproj.Proj(init='epsg:{}'.format(
+                int(network.config['geo']['srid']))),
             pyproj.Proj(init='epsg:3035'))
         sqm2sqkm = 1e6
         population_density = (line.grid.grid_district['population'] /

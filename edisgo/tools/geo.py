@@ -126,7 +126,8 @@ def calc_geo_dist_vincenty(network, node_source, node_target):
         ding0/tools/geo.py#L84>`_.
     """
 
-    branch_detour_factor = network.config['connect']['branch_detour_factor']
+    branch_detour_factor = network.config['grid_connection'][
+        'branch_detour_factor']
 
     # notice: vincenty takes (lat,lon)
     branch_length = branch_detour_factor * vincenty((node_source.geom.y, node_source.geom.x),

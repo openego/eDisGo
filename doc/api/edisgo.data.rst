@@ -1,11 +1,11 @@
-edisgo\.data package
-====================
+edisgo.data package
+===================
 
 Submodules
 ----------
 
-edisgo\.data\.import\_data module
----------------------------------
+edisgo.data.import\_data module
+-------------------------------
 
 .. automodule:: edisgo.data.import_data
     :members:

@@ -4,10 +4,11 @@ topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA grid
 container.
 """
 
-from edisgo.grid.components import Transformer, Line, LVStation, MVStation
+from edisgo.grid.components import Transformer, Line, LVStation
 
+import numpy as np
 import pandas as pd
-from math import pi, sqrt, floor
+from math import pi, sqrt
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
 from networkx import connected_component_subgraphs
@@ -18,9 +19,9 @@ def to_pypsa(network, mode):
     """
     Translate graph based grid representation to PyPSA Network
 
-    For details from a user perspective see API documention of
-    :meth:`~.grid.network.Network.analyze` of the grid container
-    :class:`~.grid.network.Network`.
+    For details from a user perspective see API documentation of
+    :meth:`~.grid.network.EDisGo.analyze` of the API class
+    :class:`~.grid.network.EDisGo`.
 
     Translating eDisGo's grid topology to PyPSA representation is structured
     into tranlating the topology and adding time series for components of the
@@ -151,7 +152,7 @@ def to_pypsa(network, mode):
 
     # create power flow problem
     pypsa_network = PyPSANetwork()
-    pypsa_network.set_snapshots(network.scenario.timeseries.timeindex)
+    pypsa_network.set_snapshots(network.timeseries.timeindex)
 
     # import grid topology to PyPSA network
     # buses are created first to avoid warnings
@@ -208,7 +209,7 @@ def mv_to_pypsa(network):
 
     MV grid topology translated here includes
 
-    * MV station (no transformer, see :meth:`~.grid.network.Network.analyze`)
+    * MV station (no transformer, see :meth:`~.grid.network.EDisGo.analyze`)
     * Loads, Generators, Lines, Storages, Branch Tees of MV grid level as well
       as LV stations. LV stations do not have load and generation of LV level.
 
@@ -876,13 +877,17 @@ def _pypsa_bus_timeseries(network, buses, mode=None):
     # Set slack bus to operational voltage (includes offset and control
     # deviation
     slack_voltage_pu = 1 + \
-        network.scenario.parameters.hv_mv_transformer_offset + \
-        network.scenario.parameters.hv_mv_transformer_control_deviation
+                       network.config[
+                           'grid_expansion_allowed_voltage_deviations'][
+                           'hv_mv_trafo_offset'] + \
+                       network.config[
+                           'grid_expansion_allowed_voltage_deviations'][
+                           'hv_mv_trafo_control_deviation']
     v_set_dict.update({slack_bus: slack_voltage_pu})
 
     # Convert to PyPSA compatible dataframe
     v_set_df = pd.DataFrame(v_set_dict,
-                            index=network.scenario.timeseries.timeindex)
+                            index=network.timeseries.timeindex)
 
     return v_set_df
 
@@ -1157,39 +1162,43 @@ def process_pfa_results(network, pypsa):
     # get p and q of lines, LV transformers and MV Station (slack generator)
     # in absolute values
     q0 = pd.concat(
-        [abs(pypsa.lines_t['q0']),
-         abs(pypsa.transformers_t['q0']),
-         abs(pypsa.generators_t['q']['Generator_slack'].rename(
+        [np.abs(pypsa.lines_t['q0']),
+         np.abs(pypsa.transformers_t['q0']),
+         np.abs(pypsa.generators_t['q']['Generator_slack'].rename(
              repr(network.mv_grid.station)))], axis=1)
     q1 = pd.concat(
-        [abs(pypsa.lines_t['q1']),
-         abs(pypsa.transformers_t['q1']),
-         abs(pypsa.generators_t['q']['Generator_slack'].rename(
+        [np.abs(pypsa.lines_t['q1']),
+         np.abs(pypsa.transformers_t['q1']),
+         np.abs(pypsa.generators_t['q']['Generator_slack'].rename(
              repr(network.mv_grid.station)))], axis=1)
     p0 = pd.concat(
-        [abs(pypsa.lines_t['p0']),
-         abs(pypsa.transformers_t['p0']),
-         abs(pypsa.generators_t['p']['Generator_slack'].rename(
+        [np.abs(pypsa.lines_t['p0']),
+         np.abs(pypsa.transformers_t['p0']),
+         np.abs(pypsa.generators_t['p']['Generator_slack'].rename(
             repr(network.mv_grid.station)))], axis=1)
     p1 = pd.concat(
-        [abs(pypsa.lines_t['p1']),
-         abs(pypsa.transformers_t['p1']),
-         abs(pypsa.generators_t['p']['Generator_slack'].rename(
+        [np.abs(pypsa.lines_t['p1']),
+         np.abs(pypsa.transformers_t['p1']),
+         np.abs(pypsa.generators_t['p']['Generator_slack'].rename(
              repr(network.mv_grid.station)))], axis=1)
 
     # determine apparent power and line endings/transformers' side
-    s0 = (p0 ** 2 + q0 ** 2).applymap(sqrt)
-    s1 = (p1 ** 2 + q1 ** 2).applymap(sqrt)
+    s0 = np.hypot(p0, q0)
+    s1 = np.hypot(p1, q1)
 
     # choose p and q from line ending with max(s0,s1)
     network.results.pfa_p = p0.where(s0 > s1, p1) * 1e3
     network.results.pfa_q = q0.where(s0 > s1, q1) * 1e3
 
-    def voltage_at_lines(row):
-        return (pypsa.buses_t['v_mag_pu'][row['bus0']] +\
-            pypsa.buses_t['v_mag_pu'][row['bus1']]) / 2
+    lines_bus0 = pypsa.lines['bus0'].to_dict()
+    bus0_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[list(lines_bus0.values()), :].copy()
+    bus0_v_mag_pu.index = list(lines_bus0.keys())
 
-    line_voltage_avg = pypsa.lines.apply(voltage_at_lines, axis=1)
+    lines_bus1 = pypsa.lines['bus1'].to_dict()
+    bus1_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[list(lines_bus1.values()), :].copy()
+    bus1_v_mag_pu.index = list(lines_bus1.keys())
+
+    line_voltage_avg = 0.5 * (bus0_v_mag_pu + bus1_v_mag_pu)
 
     # Get voltage levels at line (avg. of buses at both sides)
     network.results._i_res = s0[pypsa.lines_t['q0'].columns].truediv(

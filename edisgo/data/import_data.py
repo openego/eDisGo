@@ -1,8 +1,8 @@
-from ..grid.components import Load, Generator, MVDisconnectingPoint, BranchTee,\
-    MVStation, Line, Transformer, LVStation
+from ..grid.components import Load, Generator, BranchTee, MVStation, Line, \
+    Transformer, LVStation, GeneratorFluctuating
 from ..grid.grids import MVGrid, LVGrid
 from ..grid.connect import connect_mv_generators, connect_lv_generators
-from ..grid.tools import select_cable
+from ..grid.tools import select_cable, position_switch_disconnectors
 from ..tools.geo import proj2equidistant
 
 from egoio.db_tables import model_draft, supply
@@ -24,7 +24,6 @@ import os
 if not 'READTHEDOCS' in os.environ:
     from ding0.tools.results import load_nd_from_pickle
     from ding0.core.network.stations import LVStationDing0
-    from ding0.core.network.grids import CircuitBreakerDing0
     from ding0.core.structure.regions import LVLoadAreaCentreDing0
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
@@ -36,7 +35,7 @@ logger = logging.getLogger('edisgo')
 
 def import_from_ding0(file, network):
     """
-    Import a eDisGo grid topology from
+    Import an eDisGo grid topology from
     `Ding0 data <https://github.com/openego/ding0>`_.
 
     This import method is specifically designed to load grid topology data in
@@ -58,14 +57,7 @@ def import_from_ding0(file, network):
         If a object of the type :class:`ding0.core.NetworkDing0` data will be
         used directly from this object.
     network: :class:`~.grid.network.Network`
-        The eDisGo container object
-
-    Examples
-    --------
-    Assuming you the Ding0 `ding0_data.pkl` in CWD
-
-    >>> from edisgo.grid.network import Network
-    >>> network = Network.import_from_ding0('ding0_data.pkl'))
+        The eDisGo data container object
 
     Notes
     -----
@@ -89,13 +81,20 @@ def import_from_ding0(file, network):
     network.mv_grid = _build_mv_grid(ding0_mv_grid, network)
 
     # Import low-voltage grid data
-    lv_grids, lv_station_mapping, lv_grid_mapping = _build_lv_grid(ding0_mv_grid, network)
+    lv_grids, lv_station_mapping, lv_grid_mapping = _build_lv_grid(
+        ding0_mv_grid, network)
 
     # Assign lv_grids to network
     network.mv_grid.lv_grids = lv_grids
 
+    # Integrate disconnecting points
+    position_switch_disconnectors(network.mv_grid,
+                                  mode=network.config['disconnecting_point'][
+                                      'position'])
+
     # Check data integrity
-    _validate_ding0_grid_import(network.mv_grid, ding0_mv_grid, lv_grid_mapping)
+    _validate_ding0_grid_import(network.mv_grid, ding0_mv_grid,
+                                lv_grid_mapping)
 
     # Set data source
     network.set_data_source('grid', 'dingo')
@@ -142,9 +141,10 @@ def _build_lv_grid(ding0_grid, network):
                     voltage_nom=ding0_lv_grid.v_level / 1e3,
                     network=network)
 
-                station = {repr(_):_
-                           for _ in network.mv_grid.graph.nodes_by_attribute('lv_station')} \
-                            ['LVStation_' + str(ding0_lv_grid._station.id_db)]
+                station = {repr(_): _ for _ in
+                           network.mv_grid.graph.nodes_by_attribute(
+                               'lv_station')}['LVStation_' + str(
+                                    ding0_lv_grid._station.id_db)]
 
                 station.grid = lv_grid
                 for t in station.transformers:
@@ -161,18 +161,30 @@ def _build_lv_grid(ding0_grid, network):
                     consumption=_.consumption) for _ in ding0_lv_grid.loads()}
                 lv_grid.graph.add_nodes_from(loads.values(), type='load')
 
-                # Create list of generator instances and add these to grid's graph
-                generators = {_: Generator(
+                # Create list of generator instances and add these to grid's
+                # graph
+                generators = {_: (GeneratorFluctuating(
                     id=_.id_db,
                     geom=_.geo_data,
                     nominal_capacity=_.capacity,
                     type=_.type,
                     subtype=_.subtype,
                     grid=lv_grid,
-                    v_level=_.v_level) for _ in ding0_lv_grid.generators()}
-                lv_grid.graph.add_nodes_from(generators.values(), type='generator')
+                    v_level=_.v_level) if _.type in ['wind', 'solar'] else
+                                  Generator(
+                                      id=_.id_db,
+                                      geom=_.geo_data,
+                                      nominal_capacity=_.capacity,
+                                      type=_.type,
+                                      subtype=_.subtype,
+                                      grid=lv_grid,
+                                      v_level=_.v_level))
+                              for _ in ding0_lv_grid.generators()}
+                lv_grid.graph.add_nodes_from(generators.values(),
+                                             type='generator')
 
-                # Create list of branch tee instances and add these to grid's graph
+                # Create list of branch tee instances and add these to grid's
+                # graph
                 branch_tees = {
                     _: BranchTee(id=_.id_db,
                                  geom=_.geo_data,
@@ -257,7 +269,8 @@ def _build_mv_grid(ding0_grid, network):
     la_centers = [_ for _ in ding0_grid._graph.nodes()
                   if isinstance(_, LVLoadAreaCentreDing0)]
     if la_centers:
-        aggregated, aggr_stations, dingo_import_data = _determine_aggregated_nodes(la_centers)
+        aggregated, aggr_stations, dingo_import_data = \
+            _determine_aggregated_nodes(la_centers)
         network.dingo_import_data = dingo_import_data
     else:
         aggregated = {}
@@ -278,24 +291,24 @@ def _build_mv_grid(ding0_grid, network):
     grid.graph.add_nodes_from(loads.values(), type='load')
 
     # Create list of generator instances and add these to grid's graph
-    generators = {_: Generator(
+    generators = {_: (GeneratorFluctuating(
         id=_.id_db,
         geom=_.geo_data,
         nominal_capacity=_.capacity,
         type=_.type,
         subtype=_.subtype,
         grid=grid,
-        v_level=_.v_level) for _ in ding0_grid.generators()}
+        v_level=_.v_level) if _.type in ['wind', 'solar'] else
+                      Generator(
+                          id=_.id_db,
+                          geom=_.geo_data,
+                          nominal_capacity=_.capacity,
+                          type=_.type,
+                          subtype=_.subtype,
+                          grid=grid,
+                          v_level=_.v_level))
+                  for _ in ding0_grid.generators()}
     grid.graph.add_nodes_from(generators.values(), type='generator')
-
-    # Create list of diconnection point instances and add these to grid's graph
-    disconnecting_points = {_: MVDisconnectingPoint(id=_.id_db,
-                                                    geom=_.geo_data,
-                                                    state=_.status,
-                                                    grid=grid)
-                            for _ in ding0_grid._circuit_breakers}
-    grid.graph.add_nodes_from(disconnecting_points.values(),
-                              type='disconnection_point')
 
     # Create list of branch tee instances and add these to grid's graph
     branch_tees = {_: BranchTee(id=_.id_db,
@@ -331,6 +344,7 @@ def _build_mv_grid(ding0_grid, network):
     mv_station = MVStation(
         id=ding0_grid.station().id_db,
         geom=ding0_grid.station().geo_data,
+        grid=grid,
         transformers=[Transformer(
             mv_grid=grid,
             grid=grid,
@@ -349,7 +363,6 @@ def _build_mv_grid(ding0_grid, network):
     # Merge node above defined above to a single dict
     nodes = {**loads,
              **generators,
-             **disconnecting_points,
              **branch_tees,
              **stations,
              **{ding0_grid.station(): mv_station}}
@@ -366,6 +379,9 @@ def _build_mv_grid(ding0_grid, network):
              for _ in ding0_grid.graph_edges()
              if not any([isinstance(_['adj_nodes'][0], LVLoadAreaCentreDing0),
                         isinstance(_['adj_nodes'][1], LVLoadAreaCentreDing0)])]
+    # set line name as series name
+    for line in lines:
+        line[2]['line'].type.name = line[2]['line'].type['name']
     grid.graph.add_edges_from(lines, type='line')
 
     # Assign reference to HV-MV station to MV grid
@@ -566,14 +582,26 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
         for v_level, val in la['generation'].items():
             for type, val2 in val.items():
                 for subtype, val3 in val2.items():
-                    gen = Generator(
-                        id='agg-' + str(la_id) + '-' + '_'.join([str(_) for _ in val3['ids']]),
-                        nominal_capacity=val3['capacity'],
-                        type=type,
-                        subtype=subtype,
-                        geom=grid.station.geom,
-                        grid=grid,
-                        v_level=4)
+                    if type in ['solar', 'wind']:
+                        gen = GeneratorFluctuating(
+                            id='agg-' + str(la_id) + '-' + '_'.join(
+                                [str(_) for _ in val3['ids']]),
+                            nominal_capacity=val3['capacity'],
+                            type=type,
+                            subtype=subtype,
+                            geom=grid.station.geom,
+                            grid=grid,
+                            v_level=4)
+                    else:
+                        gen = Generator(
+                            id='agg-' + str(la_id) + '-' + '_'.join(
+                                [str(_) for _ in val3['ids']]),
+                            nominal_capacity=val3['capacity'],
+                            type=type,
+                            subtype=subtype,
+                            geom=grid.station.geom,
+                            grid=grid,
+                            v_level=4)
                     grid.graph.add_node(gen, type='generator_aggr')
 
                     # backup reference of geno to LV geno list (save geno
@@ -682,7 +710,7 @@ def _validate_ding0_mv_grid_import(grid, ding0_grid):
     data_integrity['disconnection_point']['ding0'] = len(
         ding0_grid._circuit_breakers)
     data_integrity['disconnection_point']['edisgo'] = len(
-        grid.graph.nodes_by_attribute('disconnection_point'))
+        grid.graph.nodes_by_attribute('mv_disconnecting_point'))
 
     # Check number of MV transformers
     data_integrity['mv_transformer']['ding0'] = len(
@@ -918,7 +946,7 @@ def _validate_load_generation(mv_grid, ding0_mv_grid):
                         edisgo=v2['edisgo']))
 
 
-def import_generators(network, data_source=None, file=None, types=None):
+def import_generators(network, data_source=None, file=None):
     """Import generator data from source.
 
     The generator data include
@@ -945,9 +973,6 @@ def import_generators(network, data_source=None, file=None, types=None):
 
     file: :obj:`str`
         File to import data from, required when using file-based sources.
-    types : list of str
-        Power generation technologies that should be considered. Defaults to
-        None which refers to "all technologies".
 
     Returns
     -------
@@ -956,16 +981,18 @@ def import_generators(network, data_source=None, file=None, types=None):
     """
 
     if data_source == 'oedb':
-        _import_genos_from_oedb(network=network, types=types)
+        logging.warning('Right now only solar and wind generators can be '
+                        'imported from the oedb.')
+        _import_genos_from_oedb(network=network)
     elif data_source == 'pypsa':
         _import_genos_from_pypsa(network=network, file=file)
     else:
-        logger.error("Invalid data source {} provided. Please re-check the file "
-                     "`config_data.cfg`".format(data_source))
-        raise ValueError('The source you specified is not supported.')
+        logger.error("Invalid option {} for generator import. Must either be "
+                     "'oedb' or 'pypsa'.".format(data_source))
+        raise ValueError('The option you specified is not supported.')
 
 
-def _import_genos_from_oedb(network, types=None):
+def _import_genos_from_oedb(network):
     """Import generator data from the Open Energy Database (OEDB).
 
     The importer uses SQLAlchemy ORM objects.
@@ -976,6 +1003,11 @@ def _import_genos_from_oedb(network, types=None):
     ----------
     network: :class:`~.grid.network.Network`
         The eDisGo container object
+
+    Notes
+    ------
+    Right now only solar and wind generators can be imported.
+
     """
 
     def _import_conv_generators():
@@ -1108,8 +1140,10 @@ def _import_genos_from_oedb(network, types=None):
                 * generation_type: :obj:`str` (e.g. 'solar')
                 * generation_subtype: :obj:`str` (e.g. 'solar_roof_mounted')
                 * voltage level: :obj:`int` (range: 4..7,)
-                * geom: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
-                * geom_em: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
+                * geom: :shapely:`Shapely Point object<points>`
+                  (CRS see config_grid.cfg)
+                * geom_em: :shapely:`Shapely Point object<points>`
+                  (CRS see config_grid.cfg)
 
         generators_lv: :pandas:`pandas.DataFrame<dataframe>`
             List of LV generators
@@ -1121,8 +1155,10 @@ def _import_genos_from_oedb(network, types=None):
                 * generation_type: :obj:`str` (e.g. 'solar')
                 * generation_subtype: :obj:`str` (e.g. 'solar_roof_mounted')
                 * voltage level: :obj:`int` (range: 4..7,)
-                * geom: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
-                * geom_em: :shapely:`Shapely Point object<points>` (CRS see config_misc.cfg)
+                * geom: :shapely:`Shapely Point object<points>`
+                  (CRS see config_grid.cfg)
+                * geom_em: :shapely:`Shapely Point object<points>`
+                  (CRS see config_grid.cfg)
 
         remove_missing: :obj:`bool`
             If true, remove generators from grid which are not included in the imported dataset.
@@ -1194,7 +1230,8 @@ def _import_genos_from_oedb(network, types=None):
         # new genos
         log_geno_count = 0
         log_geno_cap = 0
-        generators_mv_new = generators_mv[~generators_mv.index.isin(list(g_mv_existing['id']))]
+        generators_mv_new = generators_mv[~generators_mv.index.isin(
+            list(g_mv_existing['id']))]
 
         # remove them from grid's geno list
         g_mv = g_mv[~g_mv.isin(list(generators_mv_new.index.values))].dropna()
@@ -1207,22 +1244,33 @@ def _import_genos_from_oedb(network, types=None):
             # check if geom is available, skip otherwise
             geom = _check_geom(id, row)
             if not geom:
-                logger.warning('Generator {} has no geom entry at all and will not be imported!'
-                               .format(id)
-                               )
+                logger.warning('Generator {} has no geom entry at all and will'
+                               'not be imported!'.format(id))
                 continue
 
             # create generator object and add it to MV grid's graph
-            network.mv_grid.graph.add_node(
-                Generator(id=id,
-                          grid=network.mv_grid,
-                          nominal_capacity=row['electrical_capacity'],
-                          type=row['generation_type'],
-                          subtype=row['generation_subtype'],
-                          v_level=int(row['voltage_level']),
-                          geom=wkt_loads(geom)
-                          ),
-                type='generator')
+            if row['generation_type'] in ['solar', 'wind']:
+                network.mv_grid.graph.add_node(
+                    GeneratorFluctuating(
+                        id=id,
+                        grid=network.mv_grid,
+                        nominal_capacity=row['electrical_capacity'],
+                        type=row['generation_type'],
+                        subtype=row['generation_subtype'],
+                        v_level=int(row['voltage_level']),
+                        geom=wkt_loads(geom)),
+                    type='generator')
+            else:
+                network.mv_grid.graph.add_node(
+                    Generator(id=id,
+                              grid=network.mv_grid,
+                              nominal_capacity=row['electrical_capacity'],
+                              type=row['generation_type'],
+                              subtype=row['generation_subtype'],
+                              v_level=int(row['voltage_level']),
+                              geom=wkt_loads(geom)
+                              ),
+                    type='generator')
             log_geno_cap += row['electrical_capacity']
             log_geno_count += 1
 
@@ -1400,7 +1448,7 @@ def _import_genos_from_oedb(network, types=None):
         lv_grid_dict = _build_lv_grid_dict(network)
 
         # get predefined random seed and initialize random generator
-        seed = int(network.config['random']['seed'])
+        seed = int(network.config['grid_connection']['random_seed'])
         random.seed(a=seed)
 
         # check if none of new generators can be allocated to an existing  LV grid
@@ -1462,21 +1510,34 @@ def _import_genos_from_oedb(network, types=None):
                 # check if geom is available
                 geom = _check_geom(id, row)
 
-                gen = Generator(id=id,
-                                grid=None,
-                                nominal_capacity=row['electrical_capacity'],
-                                type=row['generation_type'],
-                                subtype=row['generation_subtype'],
-                                v_level=int(row['voltage_level']),
-                                geom=wkt_loads(geom) if geom else geom)
+                if row['generation_type'] in ['solar', 'wind']:
+                    gen = GeneratorFluctuating(
+                        id=id,
+                        grid=None,
+                        nominal_capacity=row['electrical_capacity'],
+                        type=row['generation_type'],
+                        subtype=row['generation_subtype'],
+                        v_level=int(row['voltage_level']),
+                        geom=wkt_loads(geom) if geom else geom)
+                else:
+                    gen = Generator(id=id,
+                                    grid=None,
+                                    nominal_capacity=row[
+                                        'electrical_capacity'],
+                                    type=row['generation_type'],
+                                    subtype=row['generation_subtype'],
+                                    v_level=int(row['voltage_level']),
+                                    geom=wkt_loads(geom) if geom else geom)
 
                 # TEMP: REMOVE MVLV SUBST ID FOR TESTING
                 #row['mvlv_subst_id'] = None
 
-                # check if MV-LV substation id exists. if not, allocate to random one
-                lv_grid = _check_mvlv_subst_id(generator=gen,
-                                               mvlv_subst_id=row['mvlv_subst_id'],
-                                               lv_grid_dict=lv_grid_dict)
+                # check if MV-LV substation id exists. if not, allocate to
+                # random one
+                lv_grid = _check_mvlv_subst_id(
+                    generator=gen,
+                    mvlv_subst_id=row['mvlv_subst_id'],
+                    lv_grid_dict=lv_grid_dict)
 
                 gen.grid = lv_grid
 
@@ -1488,7 +1549,7 @@ def _import_genos_from_oedb(network, types=None):
         # there are new agg. generators to be created
         if agg_geno_new:
 
-            pfac_mv_gen = network.config['scenario']['pfac_mv_gen']
+            pfac_mv_gen = network.config['reactive_power_factor']['mv_gen']
 
             # add aggregated generators
             for la_id, val in agg_geno_new.items():
@@ -1496,7 +1557,8 @@ def _import_genos_from_oedb(network, types=None):
                     for type, val3 in val2.items():
                         for subtype, val4 in val3.items():
                             gen = Generator(
-                                id='agg-' + str(la_id) + '-' + '_'.join([str(_) for _ in val4['ids']]),
+                                id='agg-' + str(la_id) + '-' + '_'.join([
+                                    str(_) for _ in val4['ids']]),
                                 nominal_capacity=val4['capacity'],
                                 type=type,
                                 subtype=subtype,
@@ -1504,13 +1566,15 @@ def _import_genos_from_oedb(network, types=None):
                                 grid=network.mv_grid,
                                 v_level=4)
 
-                            network.mv_grid.graph.add_node(gen, type='generator_aggr')
+                            network.mv_grid.graph.add_node(
+                                gen, type='generator_aggr')
 
                             # select cable type
-                            line_type, line_count = select_cable(network=network,
-                                                                 level='mv',
-                                                                 apparent_power=gen.nominal_capacity /
-                                                                 pfac_mv_gen)
+                            line_type, line_count = select_cable(
+                                network=network,
+                                level='mv',
+                                apparent_power=gen.nominal_capacity /
+                                pfac_mv_gen)
 
                             # connect generator to MV station
                             line = Line(id='line_aggr_generator_la_' + str(la_id) + '_vlevel_{v_level}_'
@@ -1724,14 +1788,14 @@ def _import_genos_from_oedb(network, types=None):
                                  'grid and generator datasets.')
 
     # make DB session
-    conn = connection(section=network.config['connection']['section'])
+    conn = connection(section=network.config['db_connection']['section'])
     Session = sessionmaker(bind=conn)
     session = Session()
 
     srid = int(network.config['geo']['srid'])
 
     oedb_data_source = network.config['data_source']['oedb_data_source']
-    scenario = network.config['scenario']['name']
+    scenario = network.generator_scenario
 
     if oedb_data_source == 'model_draft':
 
@@ -1771,14 +1835,15 @@ def _import_genos_from_oedb(network, types=None):
         orm_re_generators_version = orm_re_generators.columns.version == data_version
 
     # Create filter for generation technologies
-    if types is None:
-        types_condition = 1 == 1
-    else:
-        types_condition = orm_re_generators.columns.generation_type.in_(types)
+    # ToDo: This needs to be removed when all generators can be imported
+    # (all generators in a scenario should be imported)
+    types_condition = orm_re_generators.columns.generation_type.in_(
+        ['solar', 'wind'])
 
     # get conventional and renewable generators
     #generators_conv_mv = _import_conv_generators()
-    generators_res_mv, generators_res_lv = _import_res_generators(types_condition)
+    generators_res_mv, generators_res_lv = _import_res_generators(
+        types_condition)
 
     #generators_mv = generators_conv_mv.append(generators_res_mv)
 
@@ -1874,14 +1939,18 @@ def _build_lv_grid_dict(network):
     return lv_grid_dict
 
 
-def import_feedin_timeseries(scenario):
+def import_feedin_timeseries(config_data, mv_grid_id, generator_scenario):
     """
-    Import RES feedin time series data and process
+    Import RES feed-in time series data and process
 
     Parameters
     ----------
-    scenario: :class:`~.grid.network.Scenario`
-        eDisGo scenario object
+    config_data : dict
+        Dictionary containing config data from config files.
+    mv_grid_id : :obj:`str`
+        MV grid ID as used in oedb.
+    generator_scenario : None or :obj:`str`
+        Defines which scenario of future generator park to use.
 
     Returns
     -------
@@ -1889,35 +1958,37 @@ def import_feedin_timeseries(scenario):
         Feedin time series
     """
 
-    def _retrieve_timeseries_from_oedb(scenario):
+    def _retrieve_timeseries_from_oedb(config_data, mv_grid_id,
+                                       generator_scenario):
         """Retrieve time series from oedb
 
         Parameters
         ----------
-        scenario: :class:`~.grid.network.Scenario`
-            eDisGo scenario object
+        config_data : dict
+            Dictionary containing config data from config files.
+        mv_grid_id : :obj:`str`
+            MV grid ID as used in oedb.
+        generator_scenario : None or :obj:`str`
+            Defines which scenario of future generator park to use.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Feedin time series
         """
-        if scenario.config.data['versioned']['version'] == 'model_draft':
-            orm_feedin_name = scenario.config.data['model_draft'][
-                'res_feedin_data']
+        if config_data['versioned']['version'] == 'model_draft':
+            orm_feedin_name = config_data['model_draft']['res_feedin_data']
             orm_feedin = model_draft.__getattribute__(orm_feedin_name)
             orm_feedin_version = 1 == 1
         else:
-            orm_feedin_name = scenario.config.data['versioned'][
-                'res_feedin_data']
+            orm_feedin_name = config_data['versioned']['res_feedin_data']
             # orm_feedin = supply.__getattribute__(orm_feedin_name)
             # TODO: remove workaround
             orm_feedin = model_draft.__getattribute__(orm_feedin_name)
             orm_feedin_version = 1 == 1
             # orm_feedin_version = orm_feedin.columns.version == scenario.config.data['versioned']['version']
 
-        conn = connection(section=scenario.config.data['connection'][
-            'section'])
+        conn = connection(section=config_data['db_connection']['section'])
         Session = sessionmaker(bind=conn)
         session = Session()
 
@@ -1929,8 +2000,8 @@ def import_feedin_timeseries(scenario):
             orm_feedin.generation_type,
             orm_feedin.scenario,
             orm_feedin.feedin). \
-            filter(orm_feedin.sub_id == scenario.mv_grid_id). \
-            filter(orm_feedin.scenario.in_(scenario.scenario_name)). \
+            filter(orm_feedin.sub_id == mv_grid_id). \
+            filter(orm_feedin.scenario.in_(generator_scenario)). \
             filter(orm_feedin_version)
 
         feedin = pd.read_sql_query(feedin_sqla.statement,
@@ -1942,11 +2013,13 @@ def import_feedin_timeseries(scenario):
 
         # average across different weather cells in grid district
         # TODO: replace this by using the specific time series for each generator when input tables are replaced are information on weather cells is available
-        feedin = feedin.groupby(['hour', 'generation_type'], as_index=False).mean()
-
+        feedin = feedin.groupby(['hour', 'generation_type'],
+                                as_index=False).mean()
+        feedin.index = pd.date_range('1/1/2011', periods=8760, freq='H')
         return feedin
 
-    feedin = _retrieve_timeseries_from_oedb(scenario)
+    feedin = _retrieve_timeseries_from_oedb(config_data, mv_grid_id,
+                                            generator_scenario)
     gen_dict = {}
     for gen_type in feedin.generation_type.unique():
         gen_dict[gen_type] = feedin[
@@ -1958,59 +2031,72 @@ def import_feedin_timeseries(scenario):
         return None
 
 
-def import_load_timeseries(scenario, data_source):
+def import_load_timeseries(config_data, data_source, mv_grid_id=None,
+                           year=None):
     """
     Import load time series
 
     Parameters
     ----------
-    scenario: :class:`~.grid.network.Scenario`
-        eDisGo scenario object
+    config_data : dict
+        Dictionary containing config data from config files.
     data_source : str
-        Specfiy type of data source. Available data sources are
+        Specify type of data source. Available data sources are
 
-         * 'oedb': retrieves load time series cumulated across sectors
-         * 'demandlib': determine a load time series with the use of the
-            demandlib. This calculated standard load profiles for 4 different
-            sectors.
+         * 'demandlib'
+            Determine a load time series with the use of the demandlib.
+            This calculates standard load profiles for 4 different sectors.
+
+    mv_grid_id : :obj:`str`
+        MV grid ID as used in oedb. Provide this if `data_source` is 'oedb'.
+        Default: None.
+    year : int
+        Year for which to generate load time series. Provide this if
+        `data_source` is 'demandlib'. Default: None.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<dataframe>`
-        Feedin time series
+        Load time series
+
     """
 
-    def _import_load_timeseries_from_oedb(scenario):
+    def _import_load_timeseries_from_oedb(config_data, mv_grid_id):
         """
         Retrieve load time series from oedb
 
         Parameters
         ----------
-        scenario: :class:`~.grid.network.Scenario`
-            eDisGo scenario object
+        config_data : dict
+            Dictionary containing config data from config files.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Feedin time series
+            Load time series
+
+        Notes
+        ------
+        This is currently not a valid option to retrieve load time series
+        since time series in the oedb are not differentiated by sector. An
+        issue concerning this has been created.
+
         """
 
-        if scenario.config.data['versioned']['version'] == 'model_draft':
-            orm_load_name = scenario.config.data['model_draft']['load_data']
+        if config_data['versioned']['version'] == 'model_draft':
+            orm_load_name = config_data['model_draft']['load_data']
             orm_load = model_draft.__getattribute__(orm_load_name)
-            orm_load_areas_name = scenario.config.data['model_draft'][
-                'load_areas']
+            orm_load_areas_name = config_data['model_draft']['load_areas']
             orm_load_areas = model_draft.__getattribute__(orm_load_areas_name)
             orm_load_version = 1 == 1
         else:
-            orm_load_name = scenario.config.data['versioned']['load_data']
+            orm_load_name = config_data['versioned']['load_data']
             # orm_load = supply.__getattribute__(orm_load_name)
             # TODO: remove workaround
             orm_load = model_draft.__getattribute__(orm_load_name)
             # orm_load_version = orm_load.version == config.data['versioned']['version']
 
-            orm_load_areas_name = scenario.config.data['versioned'][
-                'load_areas']
+            orm_load_areas_name = config_data['versioned']['load_areas']
             # orm_load_areas = supply.__getattribute__(orm_load_areas_name)
             # TODO: remove workaround
             orm_load_areas = model_draft.__getattribute__(orm_load_areas_name)
@@ -2018,8 +2104,7 @@ def import_load_timeseries(scenario, data_source):
 
             orm_load_version = 1 == 1
 
-        conn = connection(section=scenario.config.data['connection'][
-            'section'])
+        conn = connection(section=config_data['db_connection']['section'])
         Session = sessionmaker(bind=conn)
         session = Session()
 
@@ -2028,30 +2113,34 @@ def import_load_timeseries(scenario, data_source):
             orm_load.q_set,
             orm_load_areas.subst_id). \
             join(orm_load_areas, orm_load.id == orm_load_areas.otg_id). \
-            filter(orm_load_areas.subst_id == scenario.mv_grid_id). \
+            filter(orm_load_areas.subst_id == mv_grid_id). \
             filter(orm_load_version). \
             distinct()
 
         load = pd.read_sql_query(load_sqla.statement,
                                  session.bind,
                                  index_col='subst_id')
-
         return load
 
-    def _load_timeseries_demandlib():
+    def _load_timeseries_demandlib(config_data, year):
         """
         Get normalized sectoral load time series
 
         Time series are normalized to 1 kWh consumption per year
 
+        Parameters
+        ----------
+        config_data : dict
+            Dictionary containing config data from config files.
+        year : int
+            Year for which to generate load time series.
+
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Feedin time series
-        """
+            Load time series
 
-        # TODO: move all hard-coded data below to a config file
-        year = 2011
+        """
 
         sectoral_consumption = {'h0': 1, 'g0': 1, 'i0': 1, 'l0': 1}
 
@@ -2071,11 +2160,15 @@ def import_load_timeseries(scenario, data_source):
         # factors by default
         elec_demand['i0'] = ilp.simple_profile(
             sectoral_consumption['i0'],
-            am=datetime.time(6, 0, 0),
-            pm=datetime.time(22, 0, 0),
+            am=datetime.time(config_data['demandlib']['day_start'].hour,
+                             config_data['demandlib']['day_start'].minute, 0),
+            pm=datetime.time(config_data['demandlib']['day_end'].hour,
+                             config_data['demandlib']['day_end'].minute, 0),
             profile_factors=
-            {'week': {'day': 0.8, 'night': 0.6},
-             'weekend': {'day': 0.6, 'night': 0.6}})
+            {'week': {'day': config_data['demandlib']['week_day'],
+                      'night': config_data['demandlib']['week_night']},
+             'weekend': {'day': config_data['demandlib']['weekend_day'],
+                         'night': config_data['demandlib']['weekend_night']}})
 
         # Resample 15-minute values to hourly values and sum across sectors
         elec_demand = elec_demand.resample('H').mean()
@@ -2083,9 +2176,9 @@ def import_load_timeseries(scenario, data_source):
         return elec_demand
 
     if data_source == 'oedb':
-        load = _import_load_timeseries_from_oedb(scenario)
+        load = _import_load_timeseries_from_oedb(config_data, mv_grid_id)
     elif data_source == 'demandlib':
-        load = _load_timeseries_demandlib()
+        load = _load_timeseries_demandlib(config_data, year)
         load.rename(columns={'g0': 'retail', 'h0': 'residential',
                              'l0': 'agricultural', 'i0': 'industrial'},
                     inplace=True)

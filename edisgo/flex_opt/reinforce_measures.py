@@ -37,13 +37,15 @@ def extend_distribution_substation_overloading(network, critical_stations):
 
     # get parameters for standard transformer
     try:
-        standard_transformer = network.equipment_data['LV_trafos'].loc[
-            network.config['grid_expansion']['std_mv_lv_transformer']]
+        standard_transformer = network.equipment_data['lv_trafos'].loc[
+            network.config['grid_expansion_standard_equipment'][
+                'mv_lv_transformer']]
     except KeyError:
         print('Standard MV/LV transformer is not in equipment list.')
 
-    load_factor_mv_lv_transformer = \
-        network.scenario.parameters.load_factor_mv_lv_transformer
+    #ToDo: differentiate between load and feed-in case!
+    load_factor = network.config['grid_expansion_load_factors'][
+        'lv_feedin_case_transformer']
 
     transformers_changes = {'added': {}, 'removed': {}}
     for station in critical_stations:
@@ -55,8 +57,7 @@ def extend_distribution_substation_overloading(network, critical_stations):
         s_station_pfa = critical_stations[station]
 
         # determine missing transformer power to solve overloading issue
-        s_trafo_missing = s_station_pfa - (
-            sum(s_max_per_trafo) * load_factor_mv_lv_transformer)
+        s_trafo_missing = s_station_pfa - (sum(s_max_per_trafo) * load_factor)
 
         # check if second transformer of the same kind is sufficient
         # if true install second transformer, otherwise install as many
@@ -130,8 +131,9 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
 
     # get parameters for standard transformer
     try:
-        standard_transformer = network.equipment_data['LV_trafos'].loc[
-            network.config['grid_expansion']['std_mv_lv_transformer']]
+        standard_transformer = network.equipment_data['lv_trafos'].loc[
+            network.config['grid_expansion_standard_equipment'][
+                'mv_lv_transformer']]
     except KeyError:
         print('Standard MV/LV transformer is not in equipment list.')
 
@@ -186,13 +188,16 @@ def extend_substation_overloading(network, critical_stations):
 
     # get parameters for standard transformer
     try:
-        standard_transformer = network.equipment_data['MV_trafos'].loc[
-            network.config['grid_expansion']['std_hv_mv_transformer']]
+        standard_transformer = network.equipment_data['mv_trafos'].loc[
+            network.config['grid_expansion_standard_equipment'][
+                'hv_mv_transformer']]
     except KeyError:
         print('Standard HV/MV transformer is not in equipment list.')
 
+    # ToDo: differentiate between load and feed-in case!
     load_factor = \
-        network.scenario.parameters.load_factor_hv_mv_transformer
+        network.config['grid_expansion_load_factors'][
+            'mv_feedin_case_transformer']
 
     transformers_changes = {'added': {}, 'removed': {}}
     for station in critical_stations:
@@ -307,18 +312,14 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     # load standard line data
     if isinstance(grid, LVGrid):
         try:
-            standard_line = network.equipment_data['LV_cables'].loc[
-                network.config['grid_expansion']['std_lv_line']]
-            max_v_deviation = network.scenario.parameters.lv_max_v_deviation
-            voltage_level = 'lv'
+            standard_line = network.equipment_data['lv_cables'].loc[
+                network.config['grid_expansion_standard_equipment']['lv_line']]
         except KeyError:
             print('Chosen standard LV line is not in equipment list.')
     else:
         try:
-            standard_line = network.equipment_data['MV_cables'].loc[
-                network.config['grid_expansion']['std_mv_line']]
-            max_v_deviation = network.scenario.parameters.mv_max_v_deviation
-            voltage_level = 'mv'
+            standard_line = network.equipment_data['mv_cables'].loc[
+                network.config['grid_expansion_standard_equipment']['mv_line']]
         except KeyError:
             print('Chosen standard MV line is not in equipment list.')
 
@@ -491,13 +492,13 @@ def reinforce_branches_overloading(network, crit_lines):
 
     # load standard line data
     try:
-        standard_line_lv = network.equipment_data['LV_cables'].loc[
-            network.config['grid_expansion']['std_lv_line']]
+        standard_line_lv = network.equipment_data['lv_cables'].loc[
+            network.config['grid_expansion_standard_equipment']['lv_line']]
     except KeyError:
         print('Chosen standard LV line is not in equipment list.')
     try:
-        standard_line_mv = network.equipment_data['MV_cables'].loc[
-            network.config['grid_expansion']['std_mv_line']]
+        standard_line_mv = network.equipment_data['mv_cables'].loc[
+            network.config['grid_expansion_standard_equipment']['mv_line']]
     except KeyError:
         print('Chosen standard MV line is not in equipment list.')
 

@@ -23,7 +23,7 @@ class InstallSetup(install):
 
 setup(
     name='eDisGo',
-    version='0.0.1',
+    version='0.0.2',
     packages=find_packages(),
     url='https://github.com/openego/eDisGo',
     license='GNU Affero General Public License v3.0',
@@ -48,5 +48,8 @@ setup(
             os.path.join('equipment', '*.csv')]
     },
     cmdclass={
-        'install': InstallSetup}
+        'install': InstallSetup},
+        entry_points={
+            'console_scripts': ['edisgo_run = edisgo.tools.edisgo_run:edisgo_run']
+        }
 )

@@ -1,7 +1,9 @@
 from os import path
 import pandas as pd
+import numpy as np
 from math import sqrt
 import logging
+import datetime
 
 import edisgo
 from edisgo.tools import config, pypsa_io
@@ -9,181 +11,321 @@ from edisgo.data.import_data import import_from_ding0, import_generators, \
     import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
-from edisgo.flex_opt.storage_integration import integrate_storage
-
+from edisgo.flex_opt import storage_integration, storage_operation, curtailment
+from edisgo.grid.components import Station, BranchTee
 
 logger = logging.getLogger('edisgo')
 
-class Network:
-    """Defines the eDisGo Network
 
-    Used as container for all data related to a single
-    :class:`~.grid.grids.MVGrid`.
+class EDisGo:
+    """
     Provides the top-level API for invocation of data import, analysis of
-    hosting capacity, grid reinforce and flexibility measures.
+    hosting capacity, grid reinforcement and flexibility measures.
 
-    Examples
-    --------
-    Assuming you the Ding0 `ding0_data.pkl` in CWD
+    Parameters
+    ----------
+    worst_case_analysis : None or :obj:`str`, optional
+        If not None time series for feed-in and load will be generated
+        according to the chosen worst case analysis
+        Possible options are:
 
-    Create eDisGo Network object by loading Ding0 file
+        * 'worst-case'
+          feed-in for the two worst-case scenarios feed-in case and load case
+          are generated
+        * 'worst-case-feedin'
+          feed-in for the worst-case scenario feed-in case is generated
+        * 'worst-case-load'
+          feed-in for the worst-case scenario load case is generated
 
-    >>> from edisgo.grid.network import Network
-    >>> network = Network.import_from_ding0('ding0_data.pkl'))
+        Be aware that if you choose to conduct a worst-case analysis your
+        input for the following parameters will not be used:
+        * `timeseries_generation_fluctuating`
+        * `timeseries_generation_dispatchable`
+        * `timeseries_load`
 
-    Analyze hosting capacity for MV grid level
+    mv_grid_id : :obj:`str`
+        MV grid ID used in import of ding0 grid.
+        ToDo: explain where MV grid IDs come from
+    ding0_grid : file: :obj:`str` or :class:`ding0.core.NetworkDing0`
+        If a str is provided it is assumed it points to a pickle with Ding0
+        grid data. This file will be read. If an object of the type
+        :class:`ding0.core.NetworkDing0` data will be used directly from this
+        object.
+        This will probably be removed when ding0 grids are in oedb.
+    config_path : None or :obj:`str` or :obj:`dict`
+        Path to the config directory. Options are:
 
-    >>> network.analyze(mode='mv')
+        * None
+          If `config_path` is None configs are loaded from the edisgo
+          default config directory ($HOME$/.edisgo). If the directory
+          does not exist it is created. If config files don't exist the
+          default config files are copied into the directory.
+        * :obj:`str`
+          If `config_path` is a string configs will be loaded from the
+          directory specified by `config_path`. If the directory
+          does not exist it is created. If config files don't exist the
+          default config files are copied into the directory.
+        * :obj:`dict`
+          A dictionary can be used to specify different paths to the
+          different config files. The dictionary must have the following
+          keys:
+          * 'config_db_tables'
+          * 'config_grid'
+          * 'config_grid_expansion'
+          * 'config_timeseries'
 
-    Print LV station secondary side voltage levels returned by PFA
+          Values of the dictionary are paths to the corresponding
+          config file. In contrast to the other two options the directories
+          and config files must exist and are not automatically created.
 
-    >>> lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
-    >>> print(network.results.v_res(lv_stations, 'lv'))
+        Default: None.
+    scenario_description : None or :obj:`str`
+        Can be used to describe your scenario but is not used for anything
+        else. Default: None.
+    timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
+        Parameter used to obtain time series for active power feed-in of
+        fluctuating renewables wind and solar.
+        Possible options are:
+
+        * 'oedb'
+          Time series for the year 2011 are obtained from the OpenEnergy
+          DataBase.
+        * :pandas:`pandas.DataFrame<dataframe>`
+          DataFrame with time series, normalized with corresponding capacity.
+          Time series can either be aggregated by technology type or by type
+          and weather cell ID. In the first case columns of the DataFrame are
+          'solar' and 'wind'; in the second case columns need to be a
+          :pandas:`pandas.MultiIndex<multiindex>` with the first level
+          containing the type and the second level the weather cell ID.
+          Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+
+        ToDo: explain how to obtain weather cell ID, add link to explanation
+        of worst-case analyses
+    timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`
+        DataFrame with time series for active power of each (aggregated)
+        type of dispatchable generator normalized with corresponding capacity.
+        Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent generator type:
+
+        * 'gas'
+        * 'coal'
+        * 'biomass'
+        * 'other'
+        * ...
+
+        Use 'other' if you don't want to explicitly provide every possible
+        type.
+    timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
+        Parameter used to obtain time series of active power of (cumulative)
+        loads.
+        Possible options are:
+
+        * 'demandlib'
+          Time series for the year specified in `timeindex` are
+          generated using the oemof demandlib.
+        * :pandas:`pandas.DataFrame<dataframe>`
+          DataFrame with load time series of each (cumulative) type of load
+          normalized with corresponding annual energy demand. Index needs to
+          be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+          Columns represent load type:
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
+
+    timeseries_battery : None or :obj:`str` or :pandas:`pandas.Series<series>` or :obj:`dict`
+        Parameter used to obtain time series of active power the battery
+        storage(s) is/are charged (negative) or discharged (positive) with. Can
+        either be a given time series or an operation strategy.
+        Possible options are:
+
+        * Time series
+          Time series the storage will be charged and discharged with can be
+          set directly by providing a :pandas:`pandas.Series<series>` with
+          time series of active charge (negative) and discharge (positive)
+          power, normalized with corresponding storage capacity. Index needs
+          to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+          In case of more than one storage provide a :obj:`dict` where each
+          entry represents a storage. Keys of the dictionary have to match
+          the keys of the `battery_parameters` dictionary, values must
+          contain the corresponding time series as
+          :pandas:`pandas.Series<series>`.
+        * 'fifty-fifty'
+          Storage operation depends on actual power of generators. If
+          cumulative generation exceeds 50% of the nominal power, the storage
+          will charge. Otherwise, the storage will discharge.
+
+        Default: None.
+    battery_parameters : None or :obj:`dict`
+        Dictionary with storage parameters. Format must be as follows:
+
+        .. code-block:: python
+
+            {
+                'nominal_capacity': <float>, # in kWh
+                'soc_initial': <float>, # in kWh
+                'efficiency_in': <float>, # in per unit 0..1
+                'efficiency_out': <float>, # in per unit 0..1
+                'standing_loss': <float> # in per unit 0..1
+            }
+
+        In case of more than one storage provide a :obj:`dict` where each
+        entry represents a storage. Keys of the dictionary have to match
+        the keys of the `timeseries_battery` dictionary, values must
+        contain the corresponding parameters dictionary specified above.
+    battery_position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :obj:`dict`
+        To position the storage a positioning strategy can be used or a
+        node in the grid can be directly specified. Possible options are:
+
+        * 'hvmv_substation_busbar'
+          Places a storage unit directly at the HV/MV station's bus bar.
+        * :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
+          Specifies a node the storage should be connected to.
+
+        In case of more than one storage provide a :obj:`dict` where each
+        entry represents a storage. Keys of the dictionary have to match
+        the keys of the `timeseries_battery` and `battery_parameters`
+        dictionaries, values must contain the corresponding positioning
+        strategy or node to connect the storage to.
+    timeseries_curtailment : None or :pandas:`pandas.DataFrame<dataframe>`
+        DataFrame with time series of curtailed power of wind and solar
+        aggregates in kW.
+        Time series can either be aggregated by technology type or by type
+        and weather cell ID. In the first case columns of the DataFrame are
+        'solar' and 'wind'; in the second case columns need to be a
+        :pandas:`pandas.MultiIndex<multiindex>` with the first level
+        containing the type and the second level the weather cell ID. See
+        `timeseries_generation_fluctuating` parameter for further explanation
+        of the weather cell ID. Index needs to be a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`. Default: None.
+    curtailment_methodology : None or :obj:`str`
+        Specifies the methodology used to allocate the curtailment time
+        series to single generators. Needs to be set when curtailment time
+        series are given. Default: None.
+        #ToDo: Add possible options and links to them once we defined them.
+    generator_scenario : None or :obj:`str`
+        If provided defines which scenario of future generator park to use
+        and invokes import of these generators. Possible options are 'nep2035'
+        and 'ego100'.
+        #ToDo: Add link to explanation of scenarios.
+    timeindex : None or :pandas:`pandas.DatetimeIndex<datetimeindex>`
+        Can be used to select time ranges of the feed-in and load time series
+        that will be used in the power flow analysis. Also defines the year
+        load time series are obtained for when choosing the 'demandlib' option
+        to generate load time series.
 
     Attributes
     ----------
-    _id : :obj:`str`
-        Name of network
-    _equipment_data : :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
-        Electrical equipment such as lines and transformers
-    _config : ???
-        #TODO: TBD
-    _metadata : :obj:`dict`
-        Metadata of Network such as ?
-    _data_sources : :obj:`dict` of :obj:`str`
-        Data Sources of grid, generators etc.
-        Keys: 'grid', 'generators', ?
-    _scenario : :class:`~.grid.grids.Scenario`
-        Scenario which is used for calculations
-    _pypsa : :pypsa:`pypsa.Network<network>`
-        PyPSA representation of grid topology
-    _dingo_import_data :
-        Temporary data from ding0 import which are needed for OEP generator update
+    network : :class:`~.grid.network.Network`
+        The network is a container object holding all data.
+
+    Examples
+    --------
+    Assuming you have the Ding0 `ding0_data.pkl` in CWD
+
+    Create eDisGo Network object by loading Ding0 file
+
+    >>> from edisgo.grid.network import EDisGo
+    >>> edisgo = EDisGo(ding0_grid='ding0_data.pkl', mode='worst-case-feedin')
+
+    Analyze hosting capacity for MV and LV grid level
+
+    >>> edisgo.analyze()
+
+    Print LV station secondary side voltage levels returned by PFA
+
+    >>> lv_stations = edisgo.network.mv_grid.graph.nodes_by_attribute(
+    >>>     'lv_station')
+    >>> print(edisgo.network.results.v_res(lv_stations, 'lv'))
+
     """
 
     def __init__(self, **kwargs):
-        if 'pypsa' not in kwargs.keys():
-            self._id = kwargs.get('id', None)
-            self._metadata = kwargs.get('metadata', None)
-            self._data_sources = kwargs.get('data_sources', {})
-            self._scenario = kwargs.get('scenario', None)
 
-            if self._scenario is not None:
-                self._scenario.network = self
+        # create network
+        self.network = Network(
+            generator_scenario=kwargs.get('generator_scenario', None),
+            config_path=kwargs.get('config_path', None),
+            scenario_description=kwargs.get('scenario_description', None))
 
-            self._mv_grid = kwargs.get('mv_grid', None)
-            self._pypsa = None
-            self.results = Results()
+        # load grid
+        # ToDo: should at some point work with only MV grid ID
+        self.import_from_ding0(kwargs.get('ding0_grid', None))
+
+        # set up time series for feed-in and load
+        # worst-case time series
+        if kwargs.get('worst_case_analysis', None):
+            self.network.timeseries = TimeSeriesControl(
+                mode=kwargs.get('worst_case_analysis', None),
+                config_data=self.network.config).timeseries
         else:
-            self._pypsa = kwargs.get('pypsa', None)
+            self.network.timeseries = TimeSeriesControl(
+                timeseries_generation_fluctuating=kwargs.get(
+                    'timeseries_generation_fluctuating', None),
+                timeseries_generation_dispatchable=kwargs.get(
+                    'timeseries_generation_dispatchable', None),
+                timeseries_load=kwargs.get(
+                    'timeseries_load', None),
+                config_data=self.network.config,
+                timeindex=kwargs.get('timeindex', None)).timeseries
 
-        self._config = kwargs.get('config', None)
-        if self._config is None:
-            try:
-                self._config = self._scenario.config
-            except:
-                self._config = Config()
-        self._equipment_data = self._load_equipment_data()
+        # set up curtailment
+        if kwargs.get('curtailment_methodology', None) is not None:
+            self.curtail(**kwargs)
 
-        self._dingo_import_data = []
+        # include battery
+        if kwargs.get('timeseries_battery', None) is not None:
+            self.integrate_storage(**kwargs)
 
-    def _load_equipment_data(self):
-        """Load equipment data for transformers, cables etc.
+        # import new generators
+        if self.network.generator_scenario is not None:
+            self.import_generators()
 
-        Returns
-        -------
-        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+    def curtail(self, **kwargs):
         """
+        Sets up curtailment time series.
 
-        package_path =  edisgo.__path__[0]
-        equipment_dir = self.config['system_dirs']['equipment_dir']
+        Curtailment time series are written into
+        :class:`~.grid.network.TimeSeries`. See
+        :class:`~.grid.network.CurtailmentControl` for more information on
+        parameters and methodologies.
 
-        data = {}
+        Parameters
+        -----------
+        curtailment_methodology : :obj:`str`, optional
+            See class definition for more information. Default: None.
+        timeseries_curtailment : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
+            See class definition for more information. Default: None.
 
-        equipment_mv_parameters_trafos = self.config['equipment'][
-            'equipment_mv_parameters_trafos']
-        data['MV_trafos'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_mv_parameters_trafos),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
+        """
+        CurtailmentControl(mode=kwargs.get('curtailment_methodology',
+                                           None),
+                           network=self.network,
+                           total_curtailment_ts=kwargs.get(
+                               'timeseries_curtailment', None))
 
-        equipment_mv_parameters_lines = self.config['equipment'][
-            'equipment_mv_parameters_lines']
-        data['MV_lines'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_mv_parameters_lines),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
-
-        equipment_mv_parameters_cables = self.config['equipment'][
-            'equipment_mv_parameters_cables']
-        data['MV_cables'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_mv_parameters_cables),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
-
-        equipment_lv_parameters_cables = self.config['equipment'][
-            'equipment_lv_parameters_cables']
-        data['LV_cables'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_lv_parameters_cables),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
-
-        equipment_lv_parameters_trafos = self.config['equipment'][
-            'equipment_lv_parameters_trafos']
-        data['LV_trafos'] = pd.read_csv(
-            path.join(package_path, equipment_dir,
-                      equipment_lv_parameters_trafos),
-            comment='#', index_col='name',
-            delimiter=',', decimal='.')
-
-        return data
-
-    @classmethod
-    def import_from_ding0(cls, file, **kwargs):
+    def import_from_ding0(self, file, **kwargs):
         """Import grid data from DINGO file
 
         For details see
         :func:`edisgo.data.import_data.import_from_ding0`
+
         """
-
-        # create the network instance
-        network = cls(**kwargs)
-
-        # call the importer
         import_from_ding0(file=file,
-                          network=network)
+                          network=self.network)
 
-        # integrate storage into grid in case ETraGo Specs are given
-        scenario = kwargs.get('scenario', None)
-        if scenario and scenario.etrago_specs and \
-            scenario.etrago_specs.battery_capacity:
-            integrate_storage(network,
-                              position='hvmv_substation_busbar',
-                              operational_mode='etrago-specs',
-                              parameters={
-                                  'nominal_capacity': \
-                                      scenario.etrago_specs.battery_capacity,
-                                  'soc_initial': 0.0,
-                                  'efficiency_in': 1.0,
-                                  'efficiency_out': 1.0,
-                                  'standing_loss': 0})
-
-        return network
-
-    def import_generators(self, types=None):
+    def import_generators(self, generator_scenario=None):
         """Import generators
 
         For details see
         :func:`edisgo.data.import_data.import_generators`
+
         """
-        data_source = data_source=self.config['data']['data_source']
-        import_generators(network=self,
-                          data_source=data_source,
-                          types=types)
+        if generator_scenario:
+            self.network.generator_scenario = generator_scenario
+        data_source = 'oedb'
+        import_generators(network=self.network,
+                          data_source=data_source)
 
     def analyze(self, mode=None):
         """Analyzes the grid by power flow analysis
@@ -201,87 +343,261 @@ class Network:
         <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
         The high-voltage to medium-voltage transformer are not included in the
         analysis. The slack bus is defined at secondary side of these
-        transformers assuming an ideal tap changer. Hence, potential overloading
-        of the transformers is not studied here.
+        transformers assuming an ideal tap changer. Hence, potential
+        overloading of the transformers is not studied here.
 
         Parameters
         ----------
-        mode: str
-            Allows to toggle between power flow analysis (PFA) on the whole grid
-            topology (MV + LV), only MV or only LV. Therefore, either specify
-            `mode='mv'` for PFA of the MV grid topology or `mode='lv'`
+        mode : str
+            Allows to toggle between power flow analysis (PFA) on the whole
+            grid topology (MV + LV), only MV or only LV. Therefore, either
+            specify `mode='mv'` for PFA of the MV grid topology or `mode='lv'`
             for PFA of the LV grid topology.
             Defaults to None which equals power flow analysis for MV + LV.
 
         Notes
         -----
         The current implementation always translates the grid topology
-        representation to the PyPSA format and stores it to :attr:`self._pypsa`.
+        representation to the PyPSA format and stores it to
+        :attr:`self.network.pypsa`.
 
-        TODO: extend doctring by
+        TODO: extend docstring by
 
         * How power plants are modeled, if possible use a link
         * Where to find and adjust power flow analysis defining parameters
 
         See Also
         --------
-        :func:~.tools.pypsa_io.to_pypsa
+        :func:`~.tools.pypsa_io.to_pypsa`
             Translator to PyPSA data format
 
         """
-        if self.pypsa is None:
+        # ToDo: Should timeindex be an input to this as well?
+        if self.network.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
-            self.pypsa = pypsa_io.to_pypsa(self, mode)
+            self.network.pypsa = pypsa_io.to_pypsa(self.network, mode)
         else:
             # Update PyPSA data with equipment changes
-            pypsa_io.update_pypsa(self)
+            pypsa_io.update_pypsa(self.network)
 
         # run power flow analysis
-        pf_results = self.pypsa.pf(self.pypsa.snapshots)
+        pf_results = self.network.pypsa.pf(self.network.pypsa.snapshots)
 
         if all(pf_results['converged']['0'].tolist()) == True:
-            pypsa_io.process_pfa_results(self, self.pypsa)
+            pypsa_io.process_pfa_results(self.network, self.network.pypsa)
         else:
             raise ValueError("Power flow analysis did not converge.")
 
     def reinforce(self, **kwargs):
-        """Reinforces the grid and calculates grid expansion costs"""
+        """
+        Reinforces the grid and calculates grid expansion costs
+
+        """
         reinforce_grid(
-            self, max_while_iterations=kwargs.get('max_while_iterations', 10))
-        self.results.grid_expansion_costs = grid_expansion_costs(self)
+            self, max_while_iterations=kwargs.get(
+                'max_while_iterations', 10))
+        self.network.results.grid_expansion_costs = grid_expansion_costs(
+            self.network)
 
     def integrate_storage(self, **kwargs):
-        """Integrate storage in grid"""
-        integrate_storage(network=self,
-                          position=kwargs.get('position', None),
-                          operational_mode=kwargs.get(
-                              'operational_mode', None),
-                          parameters=kwargs.get('parameters', None))
+        """
+        Integrates storage into grid.
+
+        See :class:`~.grid.network.StorageControl` for more information.
+
+        """
+        StorageControl(network=self.network,
+                       timeseries_battery=kwargs.get('timeseries_battery',
+                                                     None),
+                       battery_parameters=kwargs.get('battery_parameters',
+                                                     None),
+                       battery_position=kwargs.get('battery_position',
+                                                   None))
+
+
+class Network:
+    """
+    Used as container for all data related to a single
+    :class:`~.grid.grids.MVGrid`.
+
+    Parameters
+    ----------
+    scenario_description : :obj:`str`, optional
+        Can be used to describe your scenario but is not used for anything
+        else. Default: None.
+    config_path : None or :obj:`str` or :obj:`dict`, optional
+        See :class:`~.grid.network.Config` for further information.
+        Default: None.
+    metadata : :obj:`dict`
+        Metadata of Network such as ?
+    data_sources : :obj:`dict` of :obj:`str`
+        Data Sources of grid, generators etc.
+        Keys: 'grid', 'generators', ?
+    mv_grid : :class:`~.grid.grids.MVGrid`
+        Medium voltage (MV) grid
+    generator_scenario : :obj:`str`
+        Defines which scenario of future generator park to use.
+
+    Attributes
+    ----------
+    results : :class:`~.grid.network.Results`
+        Object with results from power flow analyses
+
+    """
+
+    def __init__(self, **kwargs):
+        self._scenario_description = kwargs.get('scenario_description', None)
+        self._config = Config(config_path=kwargs.get('config_path', None))
+        self._equipment_data = self._load_equipment_data()
+        self._metadata = kwargs.get('metadata', None)
+        self._data_sources = kwargs.get('data_sources', {})
+        self._generator_scenario = kwargs.get('generator_scenario', None)
+
+        self._mv_grid = kwargs.get('mv_grid', None)
+        self._pypsa = None
+        self.results = Results()
+
+        self._dingo_import_data = []
+
+    def _load_equipment_data(self):
+        """Load equipment data for transformers, cables etc.
+
+        Returns
+        -------
+        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+
+        """
+
+        package_path = edisgo.__path__[0]
+        equipment_dir = self.config['system_dirs']['equipment_dir']
+
+        data = {}
+        equipment = {'mv': ['trafos', 'lines', 'cables'],
+                     'lv': ['trafos', 'cables']}
+
+        for voltage_level, eq_list in equipment.items():
+            for i in eq_list:
+                equipment_parameters = self.config['equipment'][
+                    'equipment_{}_parameters_{}'.format(voltage_level, i)]
+                data['{}_{}'.format(voltage_level, i)] = pd.read_csv(
+                    path.join(package_path, equipment_dir,
+                              equipment_parameters),
+                    comment='#', index_col='name',
+                    delimiter=',', decimal='.')
+
+        return data
 
     @property
     def id(self):
-        """Returns id of network"""
+        """
+        MV grid ID
+
+        Returns
+        --------
+        :obj:`str`
+            MV grid ID
+
+        """
         return self._id
 
     @property
     def config(self):
-        """Returns config object"""
-        return self._config.data
+        """
+        eDisGo configuration data.
+
+        Returns
+        -------
+        :obj:`collections.OrderedDict`
+            Configuration data from config files.
+
+        """
+        return self._config
+
+    @property
+    def metadata(self):
+        """
+        Metadata of Network
+
+        Returns
+        --------
+        :obj:`dict`
+            Metadata of Network
+
+        """
+        return self._metadata
+
+    @property
+    def generator_scenario(self):
+        """
+        Defines which scenario of future generator park to use.
+
+        Parameters
+        ----------
+        generator_scenario_name : :obj:`str`
+            Name of scenario of future generator park
+
+        Returns
+        --------
+        :obj:`str`
+            Name of scenario of future generator park
+
+        """
+        return self._generator_scenario
+
+    @generator_scenario.setter
+    def generator_scenario(self, generator_scenario_name):
+        self._generator_scenario = generator_scenario_name
+
+    @property
+    def scenario_description(self):
+        """
+        Used to describe your scenario but not used for anything else.
+
+        Parameters
+        ----------
+        scenario_description : :obj:`str`
+            Description of scenario
+
+        Returns
+        --------
+        :obj:`str`
+            Scenario name
+
+        """
+        return self._scenario_description
+
+    @scenario_description.setter
+    def scenario_description(self, scenario_description):
+        self._scenario_description = scenario_description
 
     @property
     def equipment_data(self):
-        """Returns equipment data object
+        """
+        Technical data of electrical equipment such as lines and transformers
 
-        Electrical equipment such as lines and transformers
+        Returns
+        --------
         :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+            Data of electrical equipment
+
         """
         return self._equipment_data
 
     @property
     def mv_grid(self):
-        """:class:`~.grid.grids.MVGrid` : Medium voltage (MV) grid
+        """
+        Medium voltage (MV) grid
 
-        Retrieve the instance of the loaded MV grid
+        Parameters
+        ----------
+        mv_grid : :class:`~.grid.grids.MVGrid`
+            Medium voltage (MV) grid
+
+        Returns
+        --------
+        :class:`~.grid.grids.MVGrid`
+            Medium voltage (MV) grid
+
         """
         return self._mv_grid
 
@@ -290,19 +606,60 @@ class Network:
         self._mv_grid = mv_grid
 
     @property
+    def timeseries(self):
+        """
+        Object containing load and feed-in time series.
+
+        Parameters
+        ----------
+        timeseries : :class:`~.grid.network.TimeSeries`
+            Object containing load and feed-in time series.
+
+        Returns
+        --------
+        :class:`~.grid.network.TimeSeries`
+            Object containing load and feed-in time series.
+
+        """
+        return self._timeseries
+
+    @timeseries.setter
+    def timeseries(self, timeseries):
+        self._timeseries = timeseries
+
+    @property
     def data_sources(self):
-        """:obj:`dict` of :obj:`str` : Data Sources
+        """
+        Dictionary with data sources of grid, generators etc.
+
+        Returns
+        --------
+        :obj:`dict` of :obj:`str`
+            Data Sources of grid, generators etc.
 
         """
         return self._data_sources
 
     def set_data_source(self, key, data_source):
-        """Set data source for key (e.g. 'grid')
+        """
+        Set data source for key (e.g. 'grid')
+
+        Parameters
+        ----------
+        key : :obj:`str`
+            Specifies data
+        data_source : :obj:`str`
+            Specifies data source
+
         """
         self._data_sources[key] = data_source
 
     @property
     def dingo_import_data(self):
+        """
+        Temporary data from ding0 import needed for OEP generator update
+
+        """
         return self._dingo_import_data
 
     @dingo_import_data.setter
@@ -323,8 +680,8 @@ class Network:
         Parameters
         ----------
         pypsa:
-            The `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
-            container
+            The `PyPSA network
+            <https://www.pypsa.org/doc/components.html#network>`_ container
 
         Returns
         -------
@@ -338,408 +695,596 @@ class Network:
     def pypsa(self, pypsa):
         self._pypsa = pypsa
 
-    @property
-    def scenario(self):
-        return self._scenario
-
-    @scenario.setter
-    def scenario(self, scenario):
-        self._scenario = scenario
-
     def __repr__(self):
         return 'Network ' + str(self._id)
 
 
 class Config:
-    """Defines the configurations
+    """
+    Container for all configurations.
 
-    Used as container for all configurations.
+    Parameters
+    -----------
+    config_path : None or :obj:`str` or :obj:`dict`
+        Path to the config directory. Options are:
+
+        * None
+          If `config_path` is None configs are loaded from the edisgo
+          default config directory ($HOME$/.edisgo). If the directory
+          does not exist it is created. If config files don't exist the
+          default config files are copied into the directory.
+        * :obj:`str`
+          If `config_path` is a string configs will be loaded from the
+          directory specified by `config_path`. If the directory
+          does not exist it is created. If config files don't exist the
+          default config files are copied into the directory.
+        * :obj:`dict`
+          A dictionary can be used to specify different paths to the
+          different config files. The dictionary must have the following
+          keys:
+          * 'config_db_tables'
+          * 'config_grid'
+          * 'config_grid_expansion'
+          * 'config_timeseries'
+
+          Values of the dictionary are paths to the corresponding
+          config file. In contrast to the other two options the directories
+          and config files must exist and are not automatically created.
+
+        Default: None.
+
+    Notes
+    -----
+    The Config object can be used like a dictionary. See example on how to use
+    it.
+
+    Examples
+    --------
+    Create Config object from default config files
+
+    >>> from edisgo.grid.network import Config
+    >>> config = Config()
+
+    Get reactive power factor for generators in the MV grid
+
+    >>> config['reactive_power_factor']['mv_gen']
 
     """
-    #ToDo: add docstring
     def __init__(self, **kwargs):
-        self._data = self._load_config()
+        self._data = self._load_config(kwargs.get('config_path', None))
 
     @staticmethod
-    def _load_config():
-        """Load config files
+    def _load_config(config_path=None):
+        """
+        Load config files.
+
+        Parameters
+        -----------
+        config_path : None or :obj:`str` or dict
+            See class definition for more information.
 
         Returns
         -------
-        config object
+        :obj:`collections.OrderedDict`
+            eDisGo configuration data from config files.
+
         """
 
-        # load config
-        config.load_config('config_db_tables.cfg')
-        config.load_config('config_data.cfg')
-        config.load_config('config_flexopt.cfg')
-        config.load_config('config_misc.cfg')
-        config.load_config('config_scenario.cfg')
-        config.load_config('config_costs.cfg')
+        config_files = ['config_db_tables', 'config_grid',
+                        'config_grid_expansion', 'config_timeseries']
 
-        confic_dict = config.cfg._sections
+        # load configs
+        if isinstance(config_path, dict):
+            for conf in config_files:
+                config.load_config(filename='{}.cfg'.format(conf),
+                                   config_dir=config_path[conf],
+                                   copy_default_config=False)
+        else:
+            for conf in config_files:
+                config.load_config(filename='{}.cfg'.format(conf),
+                                   config_dir=config_path)
+
+        config_dict = config.cfg._sections
 
         # convert numeric values to float
-        for sec, subsecs in confic_dict.items():
+        for sec, subsecs in config_dict.items():
             for subsec, val in subsecs.items():
                 # try str -> float conversion
                 try:
-                    confic_dict[sec][subsec] = float(val)
+                    config_dict[sec][subsec] = float(val)
                 except:
                     pass
 
-        # modify structure of config data
-        confic_dict['data']['peakload_consumption_ratio'] = {
-            'residential': confic_dict['data'][
-                'residential_peakload_consumption'],
-            'retail': confic_dict['data'][
-                'retail_peakload_consumption'],
-            'industrial': confic_dict['data'][
-                'residential_peakload_consumption'],
-            'agricultural': confic_dict['data'][
-                'agricultural_peakload_consumption']}
+        # convert to time object
+        config_dict['demandlib']['day_start'] = datetime.datetime.strptime(
+            config_dict['demandlib']['day_start'], "%H:%M")
+        config_dict['demandlib']['day_start'] = datetime.time(
+            config_dict['demandlib']['day_start'].hour,
+            config_dict['demandlib']['day_start'].minute)
+        config_dict['demandlib']['day_end'] = datetime.datetime.strptime(
+            config_dict['demandlib']['day_end'], "%H:%M")
+        config_dict['demandlib']['day_end'] = datetime.time(
+            config_dict['demandlib']['day_end'].hour,
+            config_dict['demandlib']['day_end'].minute)
 
-        del (confic_dict['data']['residential_peakload_consumption'])
-        del (confic_dict['data']['retail_peakload_consumption'])
-        del (confic_dict['data']['industrial_peakload_consumption'])
-        del (confic_dict['data']['agricultural_peakload_consumption'])
+        return config_dict
 
-        return confic_dict
+    def __getitem__(self, key1, key2=None):
+        if key2 is None:
+            try:
+                return self._data[key1]
+            except:
+                raise KeyError(
+                    "Config does not contain section {}.".format(key1))
+        else:
+            try:
+                return self._data[key1][key2]
+            except:
+                raise KeyError("Config does not contain value for {} or "
+                               "section {}.".format(key2, key1))
 
-    @property
-    def data(self):
-        return self._data
+    def __setitem__(self, key, value):
+        self._data[key] = value
+
+    def __delitem__(self, key):
+        del self._data[key]
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __len__(self):
+        return len(self._data)
 
 
-class Scenario:
-    """Defines an eDisGo scenario
-
-    It contains parameters and links to further data that is used for
-    calculations within eDisGo.
+class TimeSeriesControl:
+    """
+    Sets up TimeSeries Object.
 
     Parameters
     ----------
-    power_flow : str or tuple of two :obj:`datetime` objects.
-        Define time range of power flow analysis. Either choose 'worst-case' to
-        analyze feedin worst-case. Or analyze a timerange based on actual power
-        generation and demand data.
+    mode : :obj:`str`, optional
+        Mode must be set in case of worst-case analyses and can either be
+        'worst-case' (both feed-in and load case), 'worst-case-feedin' (only
+        feed-in case) or 'worst-case-load' (only load case). All other
+        parameters except of `config-data` will be ignored. Default: None.
+    timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
+        Parameter used to obtain time series for active power feed-in of
+        fluctuating renewables wind and solar.
+        Possible options are:
 
-        For input of type str only 'worst-case' is a valid input.
-        To specify the time range for a power flow analysis provide the start
-        and end time as 2-tuple of :obj:`datetime`
+        * 'oedb'
+          Time series for 2011 are obtained from the OpenEnergy DataBase.
+          `mv_grid_id` and `scenario_description` have to be provided when
+          choosing this option.
+        * :pandas:`pandas.DataFrame<dataframe>`
+          DataFrame with time series, normalized with corresponding capacity.
+          Time series can either be aggregated by technology type or by type
+          and weather cell ID. In the first case columns of the DataFrame are
+          'solar' and 'wind'; in the second case columns need to be a
+          :pandas:`pandas.MultiIndex<multiindex>` with the first level
+          containing the type and the second level the weather cell ID.
 
-    Optional Parameters
-    --------------------
-    timeseries : :obj:`list` of :class:`~.grid.grids.TimeSeries`
-        Time series associated with a scenario. Only specify if you don't
-        want to do a worst-case analysis and are not using etrago
-        specifications.
-    pfac_mv_gen : :obj:`float`
-        Power factor for medium voltage generators
-    pfac_mv_load : :obj:`float`
-        Power factor for medium voltage loads
-    pfac_lv_gen : :obj:`float`
-        Power factor for low voltage generators
-    pfac_lv_load : :obj:`float`
-        Power factor for low voltage loads
+        Default: None.
+    timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series for active power of each (aggregated)
+        type of dispatchable generator normalized with corresponding capacity.
+        Columns represent generator type:
 
-    Attributes
-    ----------
-    _name : :obj:`str`
-        Scenario name (e.g. "feedin case weather 2011")
-    _mv_grid_id : :obj:`str`
-        ID of MV grid district
-    _mode : :obj:`str`
-        'worst-case' or 'time-range'
-    _config : :class:~.grid.network.Config`
-        Configuration parameters
-    _timeseries : :obj:`list` of :class:`~.grid.grids.TimeSeries`
-        Time series associated with a scenario.
-    _etrago_specs : :class:`~.grid.grids.ETraGoSpecs`
-        Specifications which are to be fulfilled at transition point (HV-MV
-        substation)
-    _parameters : :class:`~.grid.network.Parameters`
-        Parameters for power flow analysis and grid expansion.
-    scenario_name : str
-        Specify a scenario that is used to distinguish data, assumptions and
-        parameter.
+        * 'gas'
+        * 'coal'
+        * 'biomass'
+        * 'other'
+        * ...
+
+        Use 'other' if you don't want to explicitly provide every possible
+        type. Default: None.
+    timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
+        Parameter used to obtain time series of active power of (cumulative)
+        loads.
+        Possible options are:
+
+        * 'demandlib'
+          Time series are generated using the oemof demandlib.
+        * :pandas:`pandas.DataFrame<dataframe>`
+          DataFrame with load time series of each (cumulative) type of load
+          normalized with corresponding annual energy demand.
+          Columns represent load type:
+
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
+
+        Default: None.
+    config_data : dict, optional
+        Dictionary containing config data from config files. See
+        :class:`~.grid.network.Config` data attribute for more information.
+        Default: None.
+    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+        Can be used to define a time range for which to obtain load time series
+        and feed-in time series of fluctuating renewables or to define time
+        ranges of the given time series that will be used in the analysis.
+    mv_grid_id : :obj:`str`, optional
+        MV grid ID as used in oedb. Default: None.
+    generator_scenario : :obj:`str`
+        Defines which scenario of future generator park to use. Possible
+        options are 'nep2035' and 'ego100'. Default: None.
 
     """
+    def __init__(self, **kwargs):
 
-    def __init__(self, power_flow, mv_grid_id, **kwargs):
-        self._mv_grid_id = mv_grid_id
-        self._name = kwargs.get('name', None)
-        self._config = kwargs.get('config', None)
-        self._timeseries = kwargs.get('timeseries', None)
-        self._etrago_specs = kwargs.get('etrago_specs', None)
-        self._parameters = Parameters(self, **kwargs)
-        self.scenario_name = kwargs.get('scenario_name', None)
-        self._curtailment = kwargs.get('curtailment', None)
+        self.timeseries = TimeSeries()
+        mode = kwargs.get('mode', None)
+        config_data = kwargs.get('config_data', None)
 
-        # get config parameters if not provided
-        if self._config is None:
-            self._config = Config()
-        # populate timeseries attribute
-        self.set_timeseries(power_flow)
-
-    @property
-    def mv_grid_id(self):
-        return self._mv_grid_id
-
-    @property
-    def timeseries(self):
-        return self._timeseries
-
-    @property
-    def parameters(self):
-        return self._parameters
-
-    @property
-    def config(self):
-        return self._config
-
-    @property
-    def mode(self):
-        return self._mode
-
-    @property
-    def etrago_specs(self):
-        return self._etrago_specs
-
-    def set_timeseries(self, power_flow):
-        if isinstance(power_flow, str):
-            if power_flow != 'worst-case':
-                raise ValueError(
-                    "{} is not a valid specification for type of power flow "
-                    "analysis. Try 'worst-case'".format(power_flow))
+        if mode:
+            if mode == 'worst-case':
+                modes = ['feedin_case', 'load_case']
+            elif mode == 'worst-case-feedin' or mode == 'worst-case-load':
+                modes = ['{}_case'.format(mode.split('-')[-1])]
             else:
-                self._mode = 'worst-case'
-                if self._etrago_specs:
-                    logger.warning("Dispatch specifications from etrago are "
-                                   "overwritten when power_flow is set to "
-                                   "'worst-case'.")
-                if self._timeseries:
-                    logger.warning("Timeseries are overwritten when "
-                                   "power_flow is set to 'worst-case'.")
-                self._timeseries = TimeSeries()
-                self._timeseries.generation = \
-                    self._timeseries.worst_case_generation_ts()
-                self._timeseries.load = self._timeseries.worst_case_load_ts(
-                    self)
-        elif isinstance(power_flow, tuple):
-            if self._etrago_specs:
-                if self._etrago_specs.dispatch is not None:
-                    self._mode = 'time-range'
-                    self._timeseries = TimeSeries()
-                    if not power_flow:
-                        self._timeseries.timeindex = \
-                            self._etrago_specs.dispatch.index
-                        self._timeseries.generation = \
-                            self._etrago_specs.dispatch
-                        self._timeseries.load = \
-                            self._timeseries.import_load_timeseries(self)
-                    else:
-                        self._timeseries.timeindex = pd.date_range(
-                            power_flow[0], power_flow[1], freq='H')
-                        self._timeseries.generation = \
-                            self._etrago_specs.dispatch.loc[
-                                self._timeseries.timeindex]
-                        self._timeseries.load = \
-                            self._timeseries.import_load_timeseries(self).loc[
-                                self._timeseries.timeindex]
-                else:
-                    logger.error("Etrago specifications must contain dispatch "
-                                 "timeseries. Please provide them.")
-            elif not self._timeseries:
-                self._mode = 'time-range'
-                self._timeseries = TimeSeries()
-                if not power_flow:
-                    self._timeseries.generation = \
-                        self._timeseries.import_feedin_timeseries(self)
-                    self._timeseries.load = \
-                        self._timeseries.import_load_timeseries(self)
-                    self._timeseries.timeindex = \
-                        self._timeseries.generation.index
-                else:
-                    self._timeseries.timeindex = pd.date_range(
-                        power_flow[0], power_flow[1], freq='H')
-                    self._timeseries.generation = \
-                        self._timeseries.import_feedin_timeseries(self).loc[
-                            self._timeseries.timeindex]
-                    self._timeseries.load = \
-                        self._timeseries.import_load_timeseries(self).loc[
-                            self._timeseries.timeindex]
+                raise ValueError('{} is not a valid mode.'.format(mode))
 
-    @property
-    def curtailment(self):
+            # set random timeindex
+            self.timeseries.timeindex = pd.date_range(
+                '1/1/1970', periods=len(modes), freq='H')
+            self._worst_case_generation(config_data['worst_case_scale_factor'],
+                                        modes)
+            self._worst_case_load(config_data['worst_case_scale_factor'],
+                                  config_data['peakload_consumption_ratio'],
+                                  modes)
+
+        else:
+            # feed-in time series of fluctuating renewables
+            ts = kwargs.get('timeseries_generation_fluctuating', None)
+            if isinstance(ts, pd.DataFrame):
+                self.timeseries.generation_fluctuating = ts
+            elif isinstance(ts, str) and ts == 'oedb':
+                self.timeseries.generation_fluctuating = \
+                    import_feedin_timeseries(config_data,
+                                             kwargs.get('mv_grid_id', None),
+                                             kwargs.get('generator_scenario',
+                                                        None))
+            else:
+                raise ValueError('Your input for '
+                                 '"timeseries_generation_fluctuating" is not '
+                                 'valid.'.format(mode))
+            # feed-in time series for dispatchable generators
+            ts = kwargs.get('timeseries_generation_dispatchable', None)
+            if isinstance(ts, pd.DataFrame):
+                self.timeseries.generation_dispatchable = ts
+            else:
+                raise ValueError('Your input for '
+                                 '"timeseries_generation_dispatchable" is not '
+                                 'valid.'.format(mode))
+            # set time index
+            if kwargs.get('timeindex', None) is not None:
+                self.timeseries.timeindex = kwargs.get('timeindex')
+            else:
+                self.timeseries.timeindex = \
+                    self.timeseries._generation_fluctuating.index
+            # load time series
+            ts = kwargs.get('timeseries_load', None)
+            if isinstance(ts, pd.DataFrame):
+                self.timeseries.load = ts
+            elif ts == 'demandlib':
+                self.timeseries.load = import_load_timeseries(
+                    config_data, ts, year=self.timeseries.timeindex[0].year)
+            else:
+                raise ValueError('Your input for "timeseries_load" is not '
+                                 'valid.'.format(mode))
+
+
+
+            # check if time series for the set time index can be obtained
+            self._check_timeindex()
+
+    def _check_timeindex(self):
         """
-        Return technology specific curtailment factors
+        Check function to check if all feed-in and load time series contain
+        values for the specified time index.
+
         """
-        return self._curtailment
+        try:
+            self.timeseries.generation_fluctuating
+            self.timeseries.generation_dispatchable
+            self.timeseries.load
+        except:
+            message = 'Time index of feed-in and load time series does ' \
+                      'not match.'
+            logging.error(message)
+            raise KeyError(message)
 
-    def __repr__(self):
-        return 'Scenario ' + self._name
+    def _worst_case_generation(self, worst_case_scale_factors, modes):
+        """
+        Define worst case generation time series for fluctuating and
+        dispatchable generators.
+
+        Parameters
+        ----------
+        worst_case_scale_factors : dict
+            Scale factors defined in config file 'config_timeseries.cfg'.
+            Scale factors describe actual power to nominal power ratio of in
+            worst-case scenarios.
+        modes : list
+            List with worst-cases to generate time series for. Can be
+            'feedin_case', 'load_case' or both.
+
+        """
+
+        self.timeseries.generation_fluctuating = pd.DataFrame(
+            {'solar': [worst_case_scale_factors[
+                           '{}_feedin_pv'.format(mode)] for mode in modes],
+             'wind': [worst_case_scale_factors[
+                          '{}_feedin_other'.format(mode)] for mode in modes]},
+            index=self.timeseries.timeindex)
+
+        self.timeseries.generation_dispatchable = pd.DataFrame(
+            {'other': [worst_case_scale_factors[
+                          '{}_feedin_other'.format(mode)] for mode in modes]},
+            index=self.timeseries.timeindex)
+
+    def _worst_case_load(self, worst_case_scale_factors,
+                           peakload_consumption_ratio, modes):
+        """
+        Define worst case load time series for each sector.
+
+        Parameters
+        ----------
+        worst_case_scale_factors : dict
+            Scale factors defined in config file 'config_timeseries.cfg'.
+            Scale factors describe actual power to nominal power ratio of in
+            worst-case scenarios.
+        peakload_consumption_ratio : dict
+            Ratios of peak load to annual consumption per sector, defined in
+            config file 'config_timeseries.cfg'
+        modes : list
+            List with worst-cases to generate time series for. Can be
+            'feedin_case', 'load_case' or both.
+
+        """
+
+        sectors = ['residential', 'retail', 'industrial', 'agricultural']
+        lv_power_scaling = np.array(
+            [worst_case_scale_factors['lv_{}_load'.format(mode)]
+             for mode in modes])
+        mv_power_scaling = np.array(
+            [worst_case_scale_factors['mv_{}_load'.format(mode)]
+             for mode in modes])
+        
+        lv = {(sector, 'lv'): peakload_consumption_ratio[sector] *
+                              lv_power_scaling
+              for sector in sectors}
+        mv = {(sector, 'mv'): peakload_consumption_ratio[sector] *
+                              mv_power_scaling
+              for sector in sectors}
+        self.timeseries.load = pd.DataFrame({**lv, **mv},
+                                            index=self.timeseries.timeindex)
 
 
-class Parameters:
+class CurtailmentControl:
     """
-    Contains model parameters for power flow analysis and grid expansion.
+    Sets up curtailment time series for solar and wind generators.
 
-    Attributes
+    Parameters
     ----------
-    _pfac_mv_gen : :obj:`float`
-        Power factor for medium voltage generators
-    _pfac_mv_load : :obj:`float`
-        Power factor for medium voltage loads
-    _pfac_lv_gen : :obj:`float`
-        Power factor for low voltage generators
-    _pfac_lv_load : :obj:`float`
-        Power factor for low voltage loads
-    _hv_mv_trafo_offset : :obj:`float`
-        Offset at substation
-    _hv_mv_trafo_control_deviation : :obj:`float`
-        Voltage control deviation at substation
-    _load_factor_hv_mv_transformer : :obj:`float`
-        Allowed load of transformers at substation, retrieved from config
-        files depending on analyzed case (feed-in or load).
-    _load_factor_mv_lv_transformer : :obj:`float`
-        Allowed load of transformers at distribution substation, retrieved from
-        config files depending on analyzed case (feed-in or load).
-    _load_factor_mv_line : :obj:`float`
-        Allowed load of MV line, retrieved from config files depending on
-        analyzed case (feed-in or load).
-    _load_factor_lv_line : :obj:`float`
-        Allowed load of LV line, retrieved from config files depending on
-        analyzed case (feed-in or load).
-    _mv_max_v_deviation : :obj:`float`
-        Allowed voltage deviation in MV grid, retrieved from config files
-        depending on analyzed case (feed-in or load).
-    _lv_max_v_deviation : :obj:`float`
-        Allowed voltage deviation in LV grid, retrieved from config files
-        depending on analyzed case (feed-in or load).
+    mode : :obj:`str`
+        Mode defines the curtailment strategy. Possible options are:
+
+        * 'curtail_all'
+          The curtailment that has to be met in each time step is allocated
+          equally to all generators depending on their share of total
+          feed-in in that time step.
+
+    network : :class:`~.grid.network.Network`
+    total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
+        Series or DataFrame containing the curtailment time series in kW. Index
+        needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Provide a Series if the curtailment time series applies to wind and
+        solar generators. Provide a DataFrame if the curtailment time series
+        applies to a specific technology and/or weather cell. In the first case
+        columns of the DataFrame are e.g. 'solar' and 'wind'; in the second
+        case columns need to be a :pandas:`pandas.MultiIndex<multiindex>` with
+        the first level containing the type and the second level the weather
+        cell ID.
+        Curtailment time series cannot be more specific than the feed-in time
+        series (e.g. if feed-in is given by technology curtailment cannot be
+        given by technology and weather cell).
+        Default: None.
 
     """
+    def __init__(self, mode, network, **kwargs):
 
-    def __init__(self, scenario_class, **kwargs):
-        self._scenario = scenario_class
-        self._pfac_mv_gen = kwargs.get('pfac_mv_gen', None)
-        self._pfac_mv_load = kwargs.get('pfac_mv_load', None)
-        self._pfac_lv_gen = kwargs.get('pfac_lv_gen', None)
-        self._pfac_lv_load = kwargs.get('pfac_lv_load', None)
-        self._hv_mv_transformer_offset = None
-        self._hv_mv_transformer_control_deviation = None
-        self._load_factor_hv_mv_transformer = None
-        self._load_factor_mv_lv_transformer = None
-        self._load_factor_mv_line = None
-        self._load_factor_lv_line = None
-        self._mv_max_v_deviation = None
-        self._lv_max_v_deviation = None
+        self.network = network
 
-    @property
-    def scenario(self):
-        return self._scenario
+        curtailment_ts = kwargs.get('total_curtailment_ts', None)
+        if curtailment_ts is not None:
+            self._check_timeindex(curtailment_ts)
+        if mode == 'curtail_all':
+            curtailment.curtail_all(curtailment_ts, network)
+        else:
+            raise ValueError('{} is not a valid mode.'.format(mode))
 
-    @property
-    def pfac_mv_gen(self):
-        if not self._pfac_mv_gen:
-            self._pfac_mv_gen = float(
-                self.scenario.network.config['scenario']['pfac_mv_gen'])
-        return self._pfac_mv_gen
-    
-    @property
-    def pfac_mv_load(self):
-        if not self._pfac_mv_load:
-            self._pfac_mv_load = float(
-                self.scenario.network.config['scenario']['pfac_mv_load'])
-        return self._pfac_mv_load
-    
-    @property
-    def pfac_lv_gen(self):
-        if not self._pfac_lv_gen:
-            self._pfac_lv_gen = float(
-                self.scenario.network.config['scenario']['pfac_lv_gen'])
-        return self._pfac_lv_gen
-    
-    @property
-    def pfac_lv_load(self):
-        if not self._pfac_lv_load:
-            self._pfac_lv_load = float(
-                self.scenario.network.config['scenario']['pfac_lv_load'])
-        return self._pfac_lv_load
+    def _check_timeindex(self, curtailment_ts):
+        """
+        Raises an error if time index of curtailment time series does not
+        comply with the time index of load and feed-in time series.
 
-    @property
-    def hv_mv_transformer_offset(self):
-        if not self._hv_mv_transformer_offset:
-            self._hv_mv_transformer_offset = float(
-                self.scenario.network.config['grid_expansion'][
-                    'hv_mv_trafo_offset'])
-        return self._hv_mv_transformer_offset
+        Parameters
+        -----------
+        curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
+            See parameter `total_curtailment_ts` in class definition for more
+            information.
 
-    @property
-    def hv_mv_transformer_control_deviation(self):
-        if not self._hv_mv_transformer_control_deviation:
-            self._hv_mv_transformer_control_deviation = float(
-                self.scenario.network.config['grid_expansion'][
-                    'hv_mv_trafo_control_deviation'])
-        return self._hv_mv_transformer_control_deviation
+        """
+        try:
+            curtailment_ts.loc[self.network.timeseries.timeindex]
+        except:
+            message = 'Time index of curtailment time series does not match ' \
+                      'with load and feed-in time series.'
+            logging.error(message)
+            raise KeyError(message)
+        # raise warning if time indexes do not have the same entries
+        if pd.Series(self.network.timeseries._generation_fluctuating.
+                             index).equals(pd.Series(
+            curtailment_ts.index)) is False:
+            logging.warning('Time index of curtailment time series is not '
+                            'equal to the feed-in time series index.')
 
-    @property
-    # ToDo: for now only feed-in case is considered
-    def load_factor_hv_mv_transformer(self):
-        if not self._load_factor_hv_mv_transformer:
-            self._load_factor_hv_mv_transformer = float(
-                self.scenario.network.config['grid_expansion'][
-                    'load_factor_hv_mv_transformer'])
-        return self._load_factor_hv_mv_transformer
 
-    @property
-    # ToDo: for now only feed-in case is considered
-    def load_factor_mv_lv_transformer(self):
-        if not self._load_factor_mv_lv_transformer:
-            self._load_factor_mv_lv_transformer = float(
-                self.scenario.network.config['grid_expansion'][
-                    'load_factor_mv_lv_transformer'])
-        return self._load_factor_mv_lv_transformer
+class StorageControl:
+    """
+    Integrates storages into the grid.
 
-    @property
-    # ToDo: for now only feed-in case is considered
-    def load_factor_mv_line(self):
-        if not self._load_factor_mv_line:
-            self._load_factor_mv_line = float(
-                self.scenario.network.config['grid_expansion'][
-                    'load_factor_mv_line'])
-        return self._load_factor_mv_line
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+    timeseries_battery : :obj:`str` or :pandas:`pandas.Series<series>` or :obj:`dict`
+        Parameter used to obtain time series of active power the battery
+        storage(s) is/are charged (negative) or discharged (positive) with. Can
+        either be a given time series or an operation strategy.
+        Possible options are:
 
-    @property
-    # ToDo: for now only feed-in case is considered
-    def load_factor_lv_line(self):
-        if not self._load_factor_lv_line:
-            self._load_factor_lv_line = float(
-                self.scenario.network.config['grid_expansion'][
-                    'load_factor_lv_line'])
-        return self._load_factor_lv_line
+        * Time series
+          Time series the storage will be charged and discharged with can be
+          set directly by providing a :pandas:`pandas.Series<series>` with
+          time series of active charge (negative) and discharge (positive)
+          power, normalized with corresponding storage capacity. Index needs
+          to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+          In case of more than one storage provide a :obj:`dict` where each
+          entry represents a storage. Keys of the dictionary have to match
+          the keys of the `battery_parameters dictionary`, values must
+          contain the corresponding time series as
+          :pandas:`pandas.Series<series>`.
+        * 'fifty-fifty'
+          Storage operation depends on actual power of generators. If
+          cumulative generation exceeds 50% of the nominal power, the storage
+          will charge. Otherwise, the storage will discharge.
 
-    @property
-    # ToDo: for now only voltage deviation for the combined calculation of MV
-    # and LV is considered (load and feed-in case for seperate consideration
-    # of MV and LV needs to be implemented)
-    def mv_max_v_deviation(self):
-        if not self._mv_max_v_deviation:
-            self._mv_max_v_deviation = float(
-                self.scenario.network.config['grid_expansion'][
-                    'mv_lv_max_v_deviation'])
-        return self._mv_max_v_deviation
+        Default: None.
+    battery_parameters : :obj:`dict`
+        Dictionary with storage parameters. Format must be as follows:
 
-    @property
-    # ToDo: for now only voltage deviation for the combined calculation of MV
-    # and LV is considered (load and feed-in case for seperate consideration
-    # of MV and LV needs to be implemented)
-    def lv_max_v_deviation(self):
-        if not self._lv_max_v_deviation:
-            self._lv_max_v_deviation = float(
-                self.scenario.network.config['grid_expansion'][
-                    'mv_lv_max_v_deviation'])
-        return self._lv_max_v_deviation
+        .. code-block:: python
+
+            {
+                'nominal_capacity': <float>, # in kWh
+                'soc_initial': <float>, # in kWh
+                'efficiency_in': <float>, # in per unit 0..1
+                'efficiency_out': <float>, # in per unit 0..1
+                'standing_loss': <float> # in per unit 0..1
+            }
+
+        In case of more than one storage provide a :obj:`dict` where each
+        entry represents a storage. Keys of the dictionary have to match
+        the keys of the `timeseries_battery` dictionary, values must
+        contain the corresponding parameters dictionary specified above.
+    battery_position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :obj:`dict`
+        To position the storage a positioning strategy can be used or a
+        node in the grid can be directly specified. Possible options are:
+
+        * 'hvmv_substation_busbar'
+          Places a storage unit directly at the HV/MV station's bus bar.
+        * :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
+          Specifies a node the storage should be connected to.
+
+        In case of more than one storage provide a :obj:`dict` where each
+        entry represents a storage. Keys of the dictionary have to match
+        the keys of the `timeseries_battery` and `battery_parameters`
+        dictionaries, values must contain the corresponding positioning
+        strategy or node to connect the storage to.
+
+    """
+    def __init__(self, network, timeseries_battery, battery_parameters,
+                 battery_position):
+
+        self.network = network
+
+        if isinstance(timeseries_battery, dict):
+            for storage, ts in timeseries_battery.items():
+                try:
+                    params = battery_parameters[storage]
+                    position = battery_position[storage]
+                except KeyError:
+                    message = 'Please provide storage parameters or ' \
+                              'position for storage {}.'.format(storage)
+                    logging.error(message)
+                    raise KeyError(message)
+                self._integrate_storage(ts, params, position)
+        else:
+            self._integrate_storage(timeseries_battery, battery_parameters,
+                                    battery_position)
+
+    def _integrate_storage(self, timeseries, params, position):
+        """
+        Integrate storage units in the grid and specify its operational mode.
+
+        Parameters
+        ----------
+        timeseries : :obj:`str` or :pandas:`pandas.Series<series>`
+            Parameter used to obtain time series of active power the battery
+            storage is charged (negative) or discharged (positive) with. Can
+            either be a given time series or an operation strategy. See class
+            definition for more information
+        params : :obj:`dict`
+            Dictionary with storage parameters for one storage. See class
+            definition for more information on what parameters must be
+            provided.
+        position : :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
+            Parameter used to place the storage. See class definition for more
+            information.
+
+        """
+        # place storage
+        if position == 'hvmv_substation_busbar':
+            storage = storage_integration.storage_at_hvmv_substation(
+                self.network.mv_grid, params)
+        elif isinstance(position, Station) or isinstance(position, BranchTee):
+            storage = storage_integration.set_up_storage(
+                params, position)
+            storage_integration.connect_storage(storage, position)
+        else:
+            message = 'Provided battery position option {} is not ' \
+                      'valid.'.format(timeseries)
+            logging.error(message)
+            raise KeyError(message)
+
+        # implement operation strategy
+        if isinstance(timeseries, pd.Series):
+            # ToDo: Eingabe von Blindleistung auch ermöglichen?
+            timeseries = pd.DataFrame(data={'p': timeseries,
+                                            'q': [0] * len(timeseries)},
+                                      index=timeseries.index)
+            self._check_timeindex(timeseries)
+            storage.timeseries = timeseries
+        elif timeseries == 'fifty-fifty':
+                storage_operation.fifty_fifty(storage)
+        else:
+            message = 'Provided battery timeseries option {} is not ' \
+                      'valid.'.format(timeseries)
+            logging.error(message)
+            raise KeyError(message)
+
+    def _check_timeindex(self, timeseries):
+        """
+        Raises an error if time index of battery time series does not
+        comply with the time index of load and feed-in time series.
+
+        Parameters
+        -----------
+        timeseries : :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame containing active power the storage is charged (negative)
+            and discharged (positive) with in kW in column 'p' and
+            reactive power in kVA in column 'q'.
+
+        """
+        try:
+            timeseries.loc[self.network.timeseries.timeindex]
+        except:
+            message = 'Time index of battery time series does not match ' \
+                      'with load and feed-in time series.'
+            logging.error(message)
+            raise KeyError(message)
 
 
 class TimeSeries:
@@ -750,26 +1295,53 @@ class TimeSeries:
 
     Attributes
     ----------
-    _generation : :pandas:`pandas.DataFrame<dataframe>`
-        Time series of active power of generators. Columns represent generator
-        type:
+    generation_fluctuating : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with active power feed-in time series for fluctuating
+        renewables solar and wind, normalized with corresponding capacity.
+        Time series can either be aggregated by technology type or by type
+        and weather cell ID. In the first case columns of the DataFrame are
+        'solar' and 'wind'; in the second case columns need to be a
+        :pandas:`pandas.MultiIndex<multiindex>` with the first level
+        containing the type and the second level the weather cell ID.
+        Default: None.
+    generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series for active power of each (aggregated)
+        type of dispatchable generator normalized with corresponding capacity.
+        Columns represent generator type:
 
-         * 'solar'
-         * 'wind'
-         * 'coal'
-         * ...
+        * 'gas'
+        * 'coal'
+        * 'biomass'
+        * 'other'
+        * ...
 
-        In case of worst-case analysis generator type is distinguished so that
-        the DataFrame contains only one column for all generators.
+        Use 'other' if you don't want to explicitly provide every possible
+        type. Default: None.
+    load : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with active power of load time series of each (cumulative)
+        type of load, normalized with corresponding annual energy demand.
+        Columns represent load type:
 
-    _load : :pandas:`pandas.DataFrame<dataframe>`
-        Time series of active power of (cumulative) loads. Columns represent
-        load sectors:
+        * 'residential'
+        * 'retail'
+        * 'industrial'
+        * 'agricultural'
 
-         * 'residential'
-         * 'retail'
-         * 'industrial'
-         * 'agricultural'
+         Default: None.
+    curtailment : :pandas:`pandas.DataFrame<dataframe>` or List, optional
+        In the case curtailment is applied to all fluctuating renewables
+        this needs to be a DataFrame with active power curtailment time series.
+        Time series can either be aggregated by technology type or by type
+        and weather cell ID. In the first case columns of the DataFrame are
+        'solar' and 'wind'; in the second case columns need to be a
+        :pandas:`pandas.MultiIndex<multiindex>` with the first level
+        containing the type and the second level the weather cell ID.
+        In the case curtailment is only applied to specific generators, this
+        parameter needs to be a list of all generators that are curtailed.
+        Default: None.
+    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`, optional
+        Can be used to define a time range for which to obtain the provided
+        time series and run power flow analysis. Default: None.
 
     See also
     --------
@@ -779,33 +1351,59 @@ class TimeSeries:
     """
 
     def __init__(self, **kwargs):
-        self._generation = kwargs.get('generation', None)
+        self._generation_dispatchable = kwargs.get('generation_dispatchable',
+                                                   None)
+        self._generation_fluctuating = kwargs.get('generation_fluctuating',
+                                                  None)
         self._load = kwargs.get('load', None)
+        self._curtailment = kwargs.get('curtailment', None)
         self._timeindex = kwargs.get('timeindex', None)
 
     @property
-    def generation(self):
+    def generation_dispatchable(self):
         """
-        Get generation timeseries (only active power)
+        Get generation time series of dispatchable generators (only active
+        power)
 
         Returns
         -------
-        dict or :pandas:`pandas.Series<series>`
+        :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
         """
-        return self._generation
+        try:
+            return self._generation_dispatchable.loc[[self.timeindex], :]
+        except:
+            return self._generation_dispatchable.loc[self.timeindex, :]
 
-    @generation.setter
-    def generation(self, generation_timeseries):
-        self._generation = generation_timeseries
+    @generation_dispatchable.setter
+    def generation_dispatchable(self, generation_dispatchable_timeseries):
+        self._generation_dispatchable = generation_dispatchable_timeseries
+
+    @property
+    def generation_fluctuating(self):
+        """
+        Get generation time series of fluctuating renewables (only active
+        power)
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            See class definition for details.
+
+        """
+        try:
+            return self._generation_fluctuating.loc[[self.timeindex], :]
+        except:
+            return self._generation_fluctuating.loc[self.timeindex, :]
+
+    @generation_fluctuating.setter
+    def generation_fluctuating(self, generation_fluc_timeseries):
+        self._generation_fluctuating = generation_fluc_timeseries
         
     @property
     def load(self):
         """
         Get load timeseries (only active power)
-
-        Provides normalized load for each sector. Simply access sectoral load
-        time series by :code:`Timeseries.load['residential']`.
 
         Returns
         -------
@@ -813,7 +1411,10 @@ class TimeSeries:
             See class definition for details.
 
         """
-        return self._load
+        try:
+            return self._load.loc[[self.timeindex], :]
+        except:
+            return self._load.loc[self.timeindex, :]
 
     @load.setter
     def load(self, load_timeseries):
@@ -824,13 +1425,13 @@ class TimeSeries:
         """
         Parameters
         ----------
-        timerange : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+        time_range : :pandas:`pandas.DatetimeIndex<datetimeindex>`
             Time range of power flow analysis
 
         Returns
         -------
         :pandas:`pandas.DatetimeIndex<datetimeindex>`
-            Time range of power flow analysis
+            See class definition for details.
 
         """
         return self._timeindex
@@ -839,176 +1440,203 @@ class TimeSeries:
     def timeindex(self, time_range):
         self._timeindex = time_range
 
-    def worst_case_generation_ts(self):
+    @property
+    def curtailment(self):
         """
-        Define worst case generation time series.
+        Get curtailment time series of dispatchable generators (only active
+        power)
 
         Parameters
         ----------
-        network : :class:~.grid.network.Network`
+        curtailment : list or :pandas:`pandas.DataFrame<dataframe>`
+            See class definition for details.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Normalized active power (1 kW) in column 'p' with random time index
+            In the case curtailment is applied to all solar and wind generators
+            curtailment time series either aggregated by technology type or by
+            type and weather cell ID are returnded. In the first case columns
+            of the DataFrame are 'solar' and 'wind'; in the second case columns
+            need to be a :pandas:`pandas.MultiIndex<multiindex>` with the
+            first level containing the type and the second level the weather
+            cell ID.
+            In the case curtailment is only applied to specific generators,
+            curtailment time series of all curtailed generators, specified in
+            by the column name are returned.
 
         """
-        # set random timeindex
-        self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
-        return pd.DataFrame({'p': 1}, index=self.timeindex)
+        if self._curtailment is not None:
+            if isinstance(self._curtailment, pd.DataFrame):
+                try:
+                    return self._curtailment.loc[[self.timeindex], :]
+                except:
+                    return self._curtailment.loc[self.timeindex, :]
+            elif isinstance(self._curtailment, list):
+                try:
+                    curtailment = pd.DataFrame()
+                    for gen in self._curtailment:
+                        curtailment[gen] = gen.curtailment
+                    return curtailment
+                except:
+                    raise
+        else:
+            return None
 
-    def worst_case_load_ts(self, scenario):
-        """
-        Define worst case load time series
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Normalized active power (1 kW) for each load sector with
-            random time index
-
-        """
-        # set random timeindex
-        self.timeindex = pd.date_range('1/1/1970', periods=1, freq='H')
-        #ToDo: remove hard coded sectors?
-        return pd.DataFrame({
-            'residential': 1 * float(
-                scenario.config.data['data']['peakload_consumption_ratio'][
-                    'residential']),
-            'retail': 1 * float(
-                scenario.config.data['data']['peakload_consumption_ratio'][
-                    'retail']),
-            'industrial': 1 * float(
-                scenario.config.data['data']['peakload_consumption_ratio'][
-                    'industrial']),
-            'agricultural': 1 * float(
-                scenario.config.data['data']['peakload_consumption_ratio'][
-                    'agricultural'])},
-            index=self.timeindex)
-
-    def import_feedin_timeseries(self, scenario):
-        """
-        Import feedin timeseries from oedb
-        """
-        #ToDo: add docstring
-        generation_df = import_feedin_timeseries(scenario)
-        #ToDo: remove hard coded value
-        if generation_df is not None:
-            generation_df = pd.concat(
-                [generation_df, pd.DataFrame({'other': 0.9},
-                                             index=generation_df.index)],
-                axis=1)
-        #ToDo remove hard coded index?
-        generation_df.index = pd.date_range('1/1/2011', periods=8760, freq='H')
-        return generation_df
-
-    def import_load_timeseries(self, scenario, data_source='demandlib'):
-        """
-        Import load timeseries
-
-        Parameters
-        ----------
-        data_source : str
-            Specify type of data source. Available data sources are
-
-             * 'oedb': retrieves load time series cumulated across sectors
-             * 'demandlib': determine a load time series with the use of the
-                demandlib. This calculated standard load profiles for 4
-                different sectors.
-
-        """
-        # ToDo: add docstring
-        #ToDo: find better place for input data_source (in config?)
-        return import_load_timeseries(scenario, data_source)
+    @curtailment.setter
+    def curtailment(self, curtailment):
+        self._curtailment = curtailment
 
 
 class ETraGoSpecs:
     """Defines an eTraGo object used in project open_eGo
 
     Contains specifications which are to be fulfilled at transition point
-    (superiorHV-MV substation) for a specific scenario.
+    (superior HV-MV substation) for a specific scenario.
 
-    Attributes
+    Parameters
     ----------
-    _battery_capacity: :obj:`float`
+    battery_capacity: :obj:`float`, optional
         Capacity of virtual battery at Transition Point in kWh.
-    _battery_active_power : :pandas:`pandas.Series<series>`
+    battery_active_power : :pandas:`pandas.Series<series>`, optional
         Time series of active power the (virtual) battery (at Transition Point)
         is charged (negative) or discharged (positive) with in kW.
-    _conv_dispatch : :pandas:`pandas.DataFrame<dataframe>`
+    conv_dispatch : :pandas:`pandas.DataFrame<dataframe>`, optional
         Time series of active power for each (aggregated) type of flexible
         generators normalized with corresponding capacity.
         Columns represent generator type:
-         * 'gas'
-         * 'coal'
-         * 'biomass'
-         * ...
-    _ren_dispatch : :pandas:`pandas.DataFrame<dataframe>`
+
+        * 'gas'
+        * 'coal'
+        * 'biomass'
+        * ...
+
+    ren_dispatch : :pandas:`pandas.DataFrame<dataframe>`, optional
         Time series of active power of wind and solar aggregates,
         normalized with corresponding capacity.
         Columns represent ren_id (see _renewables):
-         * '0'
-         * '1'
-         * ...
-    _curtailment : :pandas:`pandas.DataFrame<dataframe>`
+
+        * '0'
+        * '1'
+        * ...
+
+    curtailment : :pandas:`pandas.DataFrame<dataframe>`, optional
         Time series of curtailed power for wind and solar aggregates,
         normalized with corresponding capacity.
         Columns represent ren_id (see _renewables):
-         * '0'
-         * '1'
-         * ...
-    _renewables : :pandas:`pandas.DataFrame<dataframe>`
+
+        * '0'
+        * '1'
+        * ...
+
+    renewables : :pandas:`pandas.DataFrame<dataframe>`, optional
         Dataframe containing `ren_id` specifying type (wind or solar) and
         weather cell ID.
         Columns are:
-         * 'name' (type, e.g. 'solar')
-         * 'w_id' (weather cell ID)
-         * 'ren_id'
+
+        * 'name' (type, e.g. 'solar')
+        * 'w_id' (weather cell ID)
+        * 'ren_id'
+
+    ding0_grid : file: :obj:`str` or :class:`ding0.core.NetworkDing0`
+        If a str is provided it is assumed it points to a pickle with Ding0
+        grid data. This file will be read. If an object of the type
+        :class:`ding0.core.NetworkDing0` data will be used directly from this
+        object.
+
+    Notes
+    ------
+    What has changed to before:
+
+    * ding0_grid has to be provided here
 
     """
 
     def __init__(self, **kwargs):
-        self._battery_capacity = kwargs.get('battery_capacity', None)
-        self._battery_active_power = kwargs.get('battery_active_power', None)
-        self._conv_dispatch = kwargs.get('conv_dispatch', None)
-        self._ren_dispatch = kwargs.get('ren_dispatch', None)
-        self._curtailment = kwargs.get('curtailment', None)
-        self._renewables = kwargs.get('renewables', None)
 
-    @property
-    def battery_capacity(self):
-        return self._battery_capacity
+        # get feed-in time series of renewables
+        timeseries_generation_fluc = self._get_feedin_fluctuating(
+            ren_dispatch=kwargs.get('ren_dispatch', None),
+            curtailment=kwargs.get('curtailment', None),
+            renewables=kwargs.get('renewables', None))
+        timeseries_generation_disp = kwargs.get('conv_dispatch', None)
 
-    @property
-    def battery_active_power(self):
-        return self._battery_active_power
+        # set up EDisGo object
+        self.edisgo = EDisGo(
+            ding0_grid=kwargs.get('ding0_grid', None),
+            timeseries_generation_fluctuating=timeseries_generation_fluc,
+            timeseries_generation_dispatchable=timeseries_generation_disp,
+            timeseries_load='demandlib',
+            timeindex=timeseries_generation_disp.index)
 
-    @property
-    def dispatch(self):
-        """
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Time series of active power for each type of generator normalized
-            with corresponding capacity.
-            Columns represent generator type:
-             * 'solar'
-             * 'wind'
-             * 'coal'
-             * ...
+        # get curtailment time series in kW and hand it over to EDisGo
+        timeseries_curtailment = self._get_curtailment(
+            curtailment=kwargs.get('curtailment', None),
+            renewables=kwargs.get('renewables', None))
+        self.edisgo.curtail(curtailment_methodology='curtail_all',
+                            timeseries_curtailment=timeseries_curtailment)
 
-        """
-        # this is temporary until feed-in of renewables is distinguished by
-        # weather ID
-        wind = self._renewables[self._renewables['name'] == 'wind']['ren_id']
-        solar = self._renewables[self._renewables['name'] == 'solar']['ren_id']
-        ren_dispatch_aggr_wind = self._ren_dispatch[wind].mean(axis=1).rename(
-            'wind')
-        ren_dispatch_aggr_solar = self._ren_dispatch[solar].mean(
-            axis=1).rename('solar')
-        ren_dispatch_aggr = pd.DataFrame(ren_dispatch_aggr_wind).join(
-            ren_dispatch_aggr_solar)
-        return ren_dispatch_aggr.join(self._conv_dispatch)
+        # integrate storage
+        battery_params = {
+            'nominal_capacity': kwargs.get('battery_capacity', None),
+            'soc_initial': 0.0,
+            'efficiency_in': 1.0,
+            'efficiency_out': 1.0,
+            'standing_loss': 0.0}
+        self.edisgo.integrate_storage(
+            timeseries_battery=kwargs.get('battery_active_power', None),
+            battery_parameters=battery_params,
+            battery_position='hvmv_substation_busbar')
+
+    def _get_feedin_fluctuating(self, ren_dispatch, curtailment, renewables):
+        # get feed-in without curtailment
+        if curtailment is not None:
+            feedin = ren_dispatch + curtailment
+        else:
+            feedin = ren_dispatch
+        # change column names
+        new_columns = [
+            (renewables[renewables.ren_id == col].name.iloc[0],
+             renewables[renewables.ren_id == col].w_id.iloc[0])
+            for col in feedin.columns]
+        feedin.columns = pd.MultiIndex.from_tuples(new_columns)
+        # aggregate wind and solar time series until generators get a weather
+        # ID
+        # ToDo: Remove when generators have weather cell ID
+        feedin = pd.DataFrame(data={'wind': feedin.wind.sum(axis=1),
+                                    'solar': feedin.solar.sum(axis=1)})
+        return feedin
+
+    def _get_curtailment(self, curtailment, renewables):
+
+        # get installed capacities of wind and solar generators
+        # ToDo: Differentiate by weather cell ID once generators have one
+        gens = list(self.edisgo.network.mv_grid.graph.nodes_by_attribute(
+            'generator'))
+        for lv_grid in self.edisgo.network.mv_grid.lv_grids:
+            gens.extend(list(lv_grid.graph.nodes_by_attribute('generator')))
+        dict_capacities = {'solar': 0, 'wind': 0}
+        for gen in gens:
+            if gen.type in ['solar', 'wind']:
+                dict_capacities[gen.type] = gen.nominal_capacity
+
+        # change column names of curtailment DataFrame to
+        new_columns = [
+            (renewables[renewables.ren_id == col].name.iloc[0],
+             renewables[renewables.ren_id == col].w_id.iloc[0])
+            for col in curtailment.columns]
+        curtailment.columns = pd.MultiIndex.from_tuples(new_columns)
+        # aggregate wind and solar time series until generators get a weather
+        # ID
+        # ToDo: Remove when generators have weather cell ID
+        curtailment = pd.DataFrame(data={'wind': curtailment.wind.sum(axis=1),
+                                    'solar': curtailment.solar.sum(axis=1)})
+
+        # calculate absolute curtailment
+        timeseries_curtailment = curtailment.multiply(
+            pd.Series(dict_capacities))
+
+        return timeseries_curtailment
 
 
 class Results:
@@ -1022,8 +1650,9 @@ class Results:
     ----------
     measures: list
         A stack that details the history of measures to increase grid's hosting
-        capacity. The last item refers to the latest measure. The key `original`
-        refers to the state of the grid topology as it was initially imported.
+        capacity. The last item refers to the latest measure. The key
+        `original` refers to the state of the grid topology as it was initially
+        imported.
 
     """
 
@@ -1145,7 +1774,6 @@ class Results:
         the time period the power flow analysis was conducted for; columns
         of the DataFrame are the edges as well as stations of the grid
         topology.
-        ToDo: add unit
 
         Parameters
         ----------
@@ -1231,7 +1859,8 @@ class Results:
             grid_expansion_costs. For retrieval of costs do not pass an
             argument.
 
-            The DataFrame has the following columns:
+            Index of the DataFrame is the representation of the respective
+            object, columns are the following:
 
             type: String
                 Transformer size or cable name

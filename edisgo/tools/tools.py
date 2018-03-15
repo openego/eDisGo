@@ -43,8 +43,8 @@ def select_worstcase_snapshots(network):
         0).sum(axis=1)
 
     residual_load = (
-    (network.scenario.timeseries.load * peak_load).sum(axis=1) - (
-        network.scenario.timeseries.generation * peak_generation).sum(
+    (network.timeseries.load * peak_load).sum(axis=1) - (
+        network.timeseries.generation * peak_generation).sum(
         axis=1))
 
     return residual_load.idxmax(), residual_load.idxmin()

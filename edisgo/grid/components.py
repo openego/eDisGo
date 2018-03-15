@@ -13,9 +13,6 @@ logger = logging.getLogger('edisgo')
 class Component:
     """Generic component
 
-    _id : :obj:`int`
-        Unique ID
-
     Notes
     -----
     In case of a MV-LV voltage station, :attr:`grid` refers to the LV grid.
@@ -27,7 +24,15 @@ class Component:
 
     @property
     def id(self):
-        """Returns id of component"""
+        """
+        Unique ID of component
+
+        Returns
+        --------
+        :obj:`int`
+            Unique ID of component
+
+        """
         return self._id
 
     @id.setter
@@ -36,9 +41,15 @@ class Component:
 
     @property
     def geom(self):
-        """:shapely:`Shapely Point object<points>` or
-        :shapely:`Shapely LineString object<linestrings>` : Location of the
-        :class:`Component` as Shapely Point or LineString"""
+        """
+        Location of component
+
+        Returns
+        --------
+        :shapely:`Shapely Point object<points>` or :shapely:`Shapely LineString object<linestrings>`
+            Location of the :class:`Component` as Shapely Point or LineString
+
+        """
         return self._geom
 
     @geom.setter
@@ -47,7 +58,15 @@ class Component:
 
     @property
     def grid(self):
-        """:class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid` : The MV or LV grid this component belongs to"""
+        """
+        Grid the component belongs to
+
+        Returns
+        --------
+        :class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid`
+            The MV or LV grid the component belongs to
+
+        """
         return self._grid
 
     @grid.setter
@@ -130,6 +149,7 @@ class Load(Component):
     ----------
     _timeseries : :pandas:`pandas.Series<series>`
         Contains time series for load
+
     """
 
     def __init__(self, **kwargs):
@@ -139,33 +159,22 @@ class Load(Component):
 
     @property
     def timeseries(self):
-        """Return time series of load
+        """
+        Load time series
 
         It returns the actual time series used in power flow analysis. If
         :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
         :meth:`timeseries()` looks for time series of the according sector in
         :class:`~.grid.network.TimeSeries` object.
 
-        See also
-        --------
-        edisgo.network.TimeSeries : Details of global TimeSeries
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame containing active power in kW in column 'p' and
+            reactive power in kVA in column 'q'.
+
         """
         if self._timeseries is None:
-            sector = list(self.consumption.keys())[0]
-            peak_load_consumption_ratio = float(self.grid.network.config['data'][
-                'peakload_consumption_ratio'][sector])
-
-            if isinstance(self.grid, MVGrid):
-                q_factor = tan(acos(
-                    self.grid.network.scenario.parameters.pfac_mv_load))
-                power_scaling = float(self.grid.network.config['scenario'][
-                                          'scale_factor_mv_load'])
-            elif isinstance(self.grid, LVGrid):
-                q_factor = tan(acos(
-                    self.grid.network.scenario.parameters.pfac_lv_load))
-                power_scaling = float(self.grid.network.config['scenario'][
-                                          'scale_factor_lv_load'])
-
             # work around until retail and industrial are separate sectors
             # TODO: remove once Ding0 data changed to single sector consumption
             sector = list(self.consumption.keys())[0]
@@ -174,30 +183,30 @@ class Load(Component):
             else:
                 consumption = self.consumption[sector]
 
-            # set timeseries for active and reactive power
-            if self.grid.network.scenario.mode == 'worst-case':
-                if isinstance(self.grid, MVGrid):
-                    power_scaling = float(self.grid.network.config['scenario'][
-                                              'scale_factor_mv_load'])
-                elif isinstance(self.grid, LVGrid):
-                    power_scaling = float(self.grid.network.config['scenario'][
-                                              'scale_factor_lv_load'])
-                ts = (self.grid.network.scenario.timeseries.load[
-                          sector]).to_frame('p')
-                ts['q'] = (self.grid.network.scenario.timeseries.load[sector] *
-                           q_factor)
-                self._timeseries = (ts * consumption * power_scaling)
-            else:
+            if isinstance(self.grid, MVGrid):
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor']['mv_load']))
+                voltage_level = 'mv'
+            elif isinstance(self.grid, LVGrid):
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor']['lv_load']))
+                voltage_level = 'lv'
+            # check if load time series for MV and LV are differentiated
+            try:
+                ts = self.grid.network.timeseries.load[
+                    sector, voltage_level].to_frame('p')
+            except KeyError:
                 try:
-                    ts = pd.DataFrame()
-                    ts['p'] = self.grid.network.scenario.timeseries.load[
-                        sector]
-                    ts['q'] = ts['p'] * q_factor
-                    self._timeseries = ts * consumption
+                    ts = self.grid.network.timeseries.load[
+                        sector].to_frame('p')
                 except KeyError:
-                    logger.exception("No timeseries for load of type {}"
-                                     "given.".format(sector))
+                    logger.exception(
+                        "No timeseries for load of type {} "
+                        "given.".format(sector))
                     raise
+            ts['q'] = ts['p'] * q_factor
+            self._timeseries = ts * consumption
+
         return self._timeseries
 
     def pypsa_timeseries(self, attr):
@@ -240,8 +249,8 @@ class Load(Component):
         Get sectoral peak load
         """
         peak_load = pd.Series(self.consumption).mul(pd.Series(
-            self.grid.network.config['data'][
-                'peakload_consumption_ratio']).astype(float), fill_value=0)
+            self.grid.network.config['peakload_consumption_ratio']).astype(
+            float), fill_value=0)
 
         return peak_load
 
@@ -270,6 +279,7 @@ class Generator(Component):
     --------
     edisgo.network.TimeSeries : Details of global
         :class:`~.grid.network.TimeSeries`
+
     """
 
     def __init__(self, **kwargs):
@@ -283,57 +293,45 @@ class Generator(Component):
 
     @property
     def timeseries(self):
-        """Return time series of generator
+        """
+        Feed-in time series of generator
 
         It returns the actual time series used in power flow analysis. If
         :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
-        :meth:`timeseries` looks for time series of the according weather cell
-        and type of technology in :class:`~.grid.network.TimeSeries` object and
-        considers for predefined curtailment as well.
+        :meth:`timeseries` looks for time series of the according type of
+        technology in :class:`~.grid.network.TimeSeries`.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame containing active power in kW in column 'p' and
+            reactive power in kVA in column 'q'.
+
         """
         if self._timeseries is None:
             # calculate share of reactive power
             if isinstance(self.grid, MVGrid):
-                q_factor = tan(acos(
-                    self.grid.network.scenario.parameters.pfac_mv_gen))
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor']['mv_gen']))
             elif isinstance(self.grid, LVGrid):
-                q_factor = tan(acos(
-                    self.grid.network.scenario.parameters.pfac_lv_gen))
-            # set timeseries for active and reactive power
-            if self.grid.network.scenario.mode == 'worst-case':
-                ts = self.grid.network.scenario.timeseries.generation.copy()
-                ts['q'] = ts['p'] * q_factor
-                if self.type == 'solar':
-                    power_scaling = float(self.grid.network.config['scenario'][
-                                              'scale_factor_feedin_pv'])
-                else:
-                    power_scaling = float(self.grid.network.config['scenario'][
-                                              'scale_factor_feedin_other'])
-                self._timeseries = ts * self.nominal_capacity * power_scaling
-            else:
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor']['lv_gen']))
+            # set time series for active and reactive power
+            try:
+                ts = self.grid.network.timeseries.generation_dispatchable[
+                    self.type].to_frame('p')
+            except KeyError:
                 try:
-                    ts = pd.DataFrame()
-                    ts['p'] = self.grid.network.scenario.timeseries.generation[
-                        self.type]
-                    ts['q'] = ts['p'] * q_factor
-                    self._timeseries = ts * self.nominal_capacity
+                    ts = self.grid.network.timeseries.generation_dispatchable[
+                        'other'].to_frame('p')
                 except KeyError:
-                    try:
-                        ts['p'] = self.grid.network.scenario.timeseries.\
-                            generation['other']
-                        ts['q'] = ts['p'] * q_factor
-                        self._timeseries = ts * self.nominal_capacity
-                    except KeyError:
-                        logger.exception("No timeseries for type {} "
-                                         "given.".format(self.type))
-                        raise
+                    logger.exception("No time series for type {} "
+                                     "given.".format(self.type))
+                    raise
+            ts['q'] = ts['p'] * q_factor
+            self._timeseries = ts * self.nominal_capacity
 
-        curtailment = self.grid.network.scenario.curtailment
-        if curtailment:
-            if self.type in list(curtailment.keys()):
-                self._timeseries = self._timeseries * curtailment[self._type]
-
-        return self._timeseries
+        return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -372,28 +370,192 @@ class Generator(Component):
         return self._v_level
 
 
+class GeneratorFluctuating(Generator):
+    """
+    Generator object for fluctuating renewables.
+
+    Attributes
+    ----------
+    _curtailment : :pandas:`pandas.Series<series>`
+        Contains time series for curtailment in kW
+    _weather_cell_id : :obj:`str`
+        ID of the weather cell used to generate feed-in time series
+
+    Notes
+    -----
+    The attributes :attr:`_type` and :attr:`_subtype` have to match the
+    corresponding types in :class:`~.grid.network.Timeseries` to
+    allow allocation of time series to generators.
+
+    See also
+    --------
+    edisgo.network.TimeSeries : Details of global
+        :class:`~.grid.network.TimeSeries`
+
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self._curtailment = kwargs.get('curtailment', None)
+        self._weather_cell_id = kwargs.get('weather_cell_id', None)
+
+    @property
+    def timeseries(self):
+        """
+        Feed-in time series of generator
+
+        It returns the actual time series used in power flow analysis. If
+        :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
+        :meth:`timeseries` looks for generation and curtailment time series
+        of the according type of technology (and weather cell) in
+        :class:`~.grid.network.TimeSeries`.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame containing active power in kW in column 'p' and
+            reactive power in kVA in column 'q'.
+
+        """
+        if self._timeseries is None:
+
+            # get time series for active power depending on if they are
+            # differentiated by weather cell ID or not
+            if isinstance(self.grid.network.timeseries.generation_fluctuating.
+                          columns, pd.MultiIndex):
+                if self.weather_cell_id:
+                    try:
+                        ts = self.grid.network.timeseries.\
+                            generation_fluctuating[
+                                self.type, self.weather_cell_id].to_frame('p')
+                    except KeyError:
+                        logger.exception("No time series for type {} and "
+                                         "weather cell ID {} given.".format(
+                                            self.type, self.weather_cell_id))
+                        raise
+                else:
+                    logger.exception("No weather cell ID provided for "
+                                     "fluctuating generator {}.".format(
+                                        repr(self)))
+                    raise KeyError
+            else:
+                try:
+                    ts = self.grid.network.timeseries.generation_fluctuating[
+                        self.type].to_frame('p')
+                except KeyError:
+                    logger.exception("No time series for type {} "
+                                     "given.".format(self.type))
+                    raise
+
+            # subtract curtailment
+            if self.curtailment is not None:
+                ts = ts.join(self.curtailment.to_frame('curtailment'),
+                             how='left')
+                ts.p = ts.p - ts.curtailment.fillna(0)
+
+            # calculate share of reactive power
+            if isinstance(self.grid, MVGrid):
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor'][
+                                        'mv_gen']))
+            elif isinstance(self.grid, LVGrid):
+                q_factor = tan(acos(self.grid.network.config[
+                                        'reactive_power_factor'][
+                                        'lv_gen']))
+            ts['q'] = ts['p'] * q_factor
+            self._timeseries = ts * self.nominal_capacity
+
+        return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
+
+    @property
+    def curtailment(self):
+        """
+        Parameters
+        ----------
+        curtailment_ts : :pandas:`pandas.Series<series>`
+            See class definition for details.
+
+        Returns
+        -------
+        :pandas:`pandas.Series<series>`
+            If self._curtailment is set it returns that. Otherwise, if
+            curtailment in :class:`~.grid.network.TimeSeries` for the
+            corresponding technology type (and if given, weather cell ID)
+            is set this is returned.
+
+        """
+        if self._curtailment:
+            return self._curtailment
+        elif isinstance(self.grid.network.timeseries.curtailment,
+                        pd.DataFrame):
+            if isinstance(self.grid.network.timeseries.curtailment.
+                          columns, pd.MultiIndex):
+                if self.weather_cell_id:
+                    try:
+                        return self.grid.network.timeseries.curtailment[
+                            self.type, self.weather_cell_id]
+                    except KeyError:
+                        logger.exception("No curtailment time series for type "
+                                         "{} and  weather cell ID {} "
+                                         "given.".format(self.type,
+                                                         self.weather_cell_id))
+                        raise
+                else:
+                    logger.exception("No weather cell ID provided for "
+                                     "fluctuating generator {}.".format(
+                                        repr(self)))
+                    raise KeyError
+        else:
+            return None
+
+    @curtailment.setter
+    def curtailment(self, curtailment_ts):
+        self._curtailment = curtailment_ts
+
+    @property
+    def weather_cell_id(self):
+        """
+        Get weather cell ID
+
+        Returns
+        -------
+        :obj:`str`
+            See class definition for details.
+
+        """
+        return self._weather_cell_id
+
+    @weather_cell_id.setter
+    def weather_cell_id(self, weather_cell):
+        self._weather_cell_id = weather_cell
+
+
 class Storage(Component):
     """Storage object
 
     Describes a single storage instance in the eDisGo grid. Includes technical
-    parameters like :attr:`Storage.efficiency_in` or
-    :attr:`Storage.standing_loss` as
-    well as its time series of operation :meth:`Storage.timeseries`.
-    The storage's operation is defined by :class:`StorageOperation`.
+    parameters such as :attr:`Storage.efficiency_in` or
+    :attr:`Storage.standing_loss` as well as its time series of operation
+    :meth:`Storage.timeseries`.
 
     Examples
     --------
     In order to define a storage that operates in mode "fifty-fifty"
-    (see :ref:`storage-operation` for details about modes)
-    provide the following when instantiating a storage.
+    (see :class:`~.grid.network.StorageControl` `timeseries_battery` parameter
+    for details about modes) provide the following when instantiating a
+    storage:
 
     >>> from edisgo.grid.components import Storage
-    >>> storage_parameters = {'soc_initial': 0,
+    >>> from edisgo.flex_opt import storage_operation
+    >>> storage_parameters = {'nominal_capacity': 100,
+    >>>                       'soc_initial': 0,
     >>>                       'efficiency_in': .9,
     >>>                       'efficiency_out': .9,
     >>>                       'standing_loss': 0}
-    >>> network.integrate_storage(position='hvmv_substation_busbar',
-    >>>                           parameters=storage_parameters)
+    >>> storage = Storage(storage_parameters)
+    >>> storage_operation.fifty_fifty(storage)
+
     """
 
     def __init__(self, **kwargs):
@@ -404,33 +566,32 @@ class Storage(Component):
         self._efficiency_in = kwargs.get('efficiency_in', None)
         self._efficiency_out = kwargs.get('efficiency_out', None)
         self._standing_loss = kwargs.get('standing_loss', None)
-
-        operation = kwargs.get('operation', None)
-        if operation is not None:
-            self._operation = StorageOperation(storage=self,
-                                               mode=operation['mode'])
-        else:
-            self._operation = None
+        self._operation = kwargs.get('operation', None)
 
     @property
     def timeseries(self):
         """
-        Get time series of storage operation
+        Time series of storage operation
 
-        Returns time series defined by :attr:`StorageOperation.timeseries` if
-        :attr:`operation` is available. Otherwise, time series stored in
-        :attr:`timeseries` is returned.
+        Parameters
+        ----------
+        timeseries : :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame containing active power the storage is charged (negative)
+            and discharged (positive) with in kW in column 'p' and
+            reactive power in kVA in column 'q'.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Storage operational time series
-        """
-        if self._operation is not None:
-            return self._operation.timeseries
-        else:
-            return self._timeseries
+            See parameter `timeseries`.
 
+        """
+        # ToDo: Consider efficiencies
+        return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
+
+    @timeseries.setter
+    def timeseries(self, timeseries):
+        self._timeseries = timeseries
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -441,51 +602,56 @@ class Storage(Component):
         ----------
         attr : str
             Attribute name (PyPSA conventions). Choose from {p_set, q_set}
+
         """
         return self.timeseries[attr] / 1e3
 
     @property
     def nominal_capacity(self):
         """
-        Get nominal capacity of storage instance
+        Nominal capacity of storage instance in kW.
 
         Returns
         -------
         float
             Storage nominal capacity
+
         """
         return self._nominal_capacity
 
     @property
     def soc_initial(self):
-        """Initial state of charge in kWh
+        """Initial state of charge in kWh.
 
         Returns
         -------
         float
             Initial state of charge
+
         """
         return self._soc_initial
 
     @property
     def efficiency_in(self):
-        """Storage charging efficiency in per unit
+        """Storage charging efficiency in per unit.
 
         Returns
         -------
         float
             Charging efficiency in range of 0..1
+
         """
         return self._efficiency_in
 
     @property
     def efficiency_out(self):
-        """Storage discharging efficiency in per unit
+        """Storage discharging efficiency in per unit.
 
         Returns
         -------
         float
             Discharging efficiency in range of 0..1
+
         """
         return self._efficiency_out
 
@@ -500,6 +666,7 @@ class Storage(Component):
         -------
         float
             Standing losses in pu.
+
         """
         return self._standing_loss
 
@@ -510,102 +677,10 @@ class Storage(Component):
 
         Returns
         -------
-        StorageOperation
-            Class defining operation of a :class:`Storage`
-        """
-
-
-class StorageOperation():
-    """
-    Define storage operation mode and time series for power flow analysis
-    """
-
-    def __init__(self, **kwargs):
-        self._timeseries = kwargs.get('timeseries', None)
-        self._storage = kwargs.get('storage', None)
-
-        mode = kwargs.get('mode', None)
-
-        if mode is not None:
-            self.define_timeseries(mode)
-
-    def define_timeseries(self, mode, feedin_threshold=.5):
-        """
-        Define time series for :class:`Storage`
-
-        Determine the actual storage time series and save it to
-        :attr:`timeseries`.
-
-        Parameters
-        ----------
-        mode : str
-            Choose way of time series definition. Available ``mode`` 's are
-
-             * **'fifty-fifty'**: the storage operation depends on actual power
-               by generators. If cumulative generation exceeds 50 % of nominal
-               power, the storage will charge. Otherwise, the storage will
-               charge.
-             * **'etrago-specs'**: the storage operation is given by ETraGo
-               specification
+        :obj:`str`
 
         """
-        if mode == 'etrago-specs':
-            if self._timeseries is None:
-                self._timeseries = pd.DataFrame()
-                self._timeseries['p'] = self.storage.grid.network.scenario.\
-                    etrago_specs.battery_active_power
-                self._timeseries['q'] = (self.storage.grid.network.scenario.\
-                                            etrago_specs.battery_active_power *
-                                         0)
-        elif 'fifty-fifty':
-            # determine generators cumulative apparent power output
-            generators = self.storage.grid.graph.nodes_by_attribute(
-                'generator') + [generators for lv_grid in
-                                self.storage.grid.lv_grids for generators in
-                                lv_grid.graph.nodes_by_attribute('generator')]
-            generators_p = pd.concat([_.timeseries['p'] for _ in generators],
-                                     axis=1).sum(axis=1).rename('p')
-            generators_q = pd.concat([_.timeseries['q'] for _ in generators],
-                                     axis=1).sum(axis=1).rename('q')
-            generation = pd.concat([generators_p, generators_q], axis=1)
-            generation['s'] = generation.apply(
-                lambda x: sqrt(x['p'] ** 2 + x['q'] ** 2), axis=1)
-            generators_nom_capacity = sum(
-                [_.nominal_capacity for _ in generators])
-            feedin_bool = generation['s'] > (
-                feedin_threshold * generators_nom_capacity)
-            feedin = feedin_bool.apply(
-                lambda x: self.storage.nominal_capacity if x
-                else -self.storage.nominal_capacity).rename('p').to_frame()
-            feedin['q'] = 0
-            self._timeseries = feedin * self.storage.nominal_capacity
-        else:
-            raise ValueError('The mode {} is not know as valid storage '
-                             'operational mode'.format(mode))
-
-    @property
-    def timeseries(self):
-        """
-        Storage's operational time series
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Storage's operational time series as p and q
-        """
-        return self._timeseries
-
-    @property
-    def storage(self):
-        """
-        Reference to storage instance
-
-        Returns
-        -------
-        Storage
-            Storage instance this object is associated to
-        """
-        return self._storage
+        self._operation
 
 
 class MVDisconnectingPoint(Component):
@@ -629,13 +704,14 @@ class MVDisconnectingPoint(Component):
 
     def open(self):
         """Toggle state to open switch disconnector"""
-        if self._line is not None:
-            self._state = 'open'
-            self._nodes = self.grid.graph.nodes_from_line(self._line)
-            self.grid.graph.remove_edge(
-                self._nodes[0], self._nodes[1])
-        else:
-            raise ValueError('``line`` is not set')
+        if self._state != 'open':
+            if self._line is not None:
+                self._state = 'open'
+                self._nodes = self.grid.graph.nodes_from_line(self._line)
+                self.grid.graph.remove_edge(
+                    self._nodes[0], self._nodes[1])
+            else:
+                raise ValueError('``line`` is not set')
 
     def close(self):
         """Toggle state to closed switch disconnector"""
