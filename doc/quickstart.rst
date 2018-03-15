@@ -52,6 +52,14 @@ A minimum working example
 
 Assuming you have file name "ding0_grids__42.pkl" in current working directory run a worst-case scenario as follows:
 
+Using package included command-line script
+
+.. code-block:: bash
+
+    edisgo_run -f ding0_grids__42.pkl -wc
+
+Or coding the script yourself with finer control of details
+
 .. code-block:: python
 
     from edisgo import EDisGo

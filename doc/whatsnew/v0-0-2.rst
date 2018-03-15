@@ -18,4 +18,8 @@ Changes
   input and measures are now handled. The EDisGo class thereby replaces the former Scenario class and parts of the Network class.
   See :ref:`edisgo-mwe` for a quick overview of how to use the EDisGo class or :ref:`usage-details` for a more comprehensive
   introduction to the edisgo structure and usage.
+* We introduce a CLI script to use basic functionality of eDisGo including
+  parallelization. CLI uses higher level functions to run eDisGo. Consult
+  :mod:`~.tools.edisgo_run` for further details.
+  `#93 <https://github.com/openego/eDisGo/issues/93>`_.
 

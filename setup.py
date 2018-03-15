@@ -48,5 +48,8 @@ setup(
             os.path.join('equipment', '*.csv')]
     },
     cmdclass={
-        'install': InstallSetup}
+        'install': InstallSetup},
+        entry_points={
+            'console_scripts': ['edisgo_run = edisgo.tools.edisgo_run:edisgo_run']
+        }
 )
