@@ -8,4 +8,5 @@ Changelog for each release.
     :local:
     :backlinks: top
 
+.. include::  whatsnew/v0-0-3.rst
 .. include::  whatsnew/v0-0-2.rst
