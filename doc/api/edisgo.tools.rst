@@ -1,35 +1,43 @@
-edisgo\.tools package
-=====================
+edisgo.tools package
+====================
 
 Submodules
 ----------
 
-edisgo\.tools\.config module
-----------------------------
+edisgo.tools.config module
+--------------------------
 
 .. automodule:: edisgo.tools.config
     :members:
     :undoc-members:
     :show-inheritance:
 
-edisgo\.tools\.geo module
--------------------------
+edisgo.tools.edisgo\_run module
+-------------------------------
+
+.. automodule:: edisgo.tools.edisgo_run
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+edisgo.tools.geo module
+-----------------------
 
 .. automodule:: edisgo.tools.geo
     :members:
     :undoc-members:
     :show-inheritance:
 
-edisgo\.tools\.pypsa\_io module
--------------------------------
+edisgo.tools.pypsa\_io module
+-----------------------------
 
 .. automodule:: edisgo.tools.pypsa_io
     :members:
     :undoc-members:
     :show-inheritance:
 
-edisgo\.tools\.tools module
----------------------------
+edisgo.tools.tools module
+-------------------------
 
 .. automodule:: edisgo.tools.tools
     :members:
