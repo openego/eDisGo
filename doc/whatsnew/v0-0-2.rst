@@ -1,7 +1,11 @@
 Release v0.0.2
 ==============
 
-Release data: March XX 2018
+Release date: March 15 2018
+
+The code was heavily revised. Now, eDisGo provides the top-level API class
+:class:`~.grid.network.EDisGo` for user interaction. See below for details and
+other small changes.
 
 Changes
 -------
