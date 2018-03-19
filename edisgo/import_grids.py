@@ -2,8 +2,11 @@ from pandas import DataFrame, read_csv
 import matplotlib.pyplot as plt
 import pandas as pd
 from edisgo.grid.components import *
+from shapely.geometry import shapely
+from shapely.wkt import dumps as wkt_dumps
 
-run_id = '/example/'; #20180308094106
+
+run_id = '/20180312091327/'; #example
 grid_id = '76';
 base_path = "/home/local/RL-INSTITUT/inga.loeser/ding0/20170922152523/ding0_grids__"
 path = ''.join([base_path, grid_id, run_id])
@@ -63,7 +66,7 @@ def _build_lv_grid_from_csv( lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_
                   lvgrids.update({row['id_db']: LVGrid(
                         id=row['LV_grid_id'],
                         grid_district={
-                            'geom': row['id_db'],
+                            'geom': shapely.wkt.loads(row['geom']),
                             'population': row['population']},
                         voltage_nom=row['voltage_nom'],#in kV
                         network=row['network'],
@@ -79,7 +82,7 @@ def _build_lv_grid_from_csv( lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_
     lv_stations.apply(lambda row:
                    lvstations.update({row['id_db']: Station(
                      id=row['id_db'],
-                     geom=row['geom'],
+                     geom = wkt_dumps(row['geom']),#(lv_load_area.geo_area)shapely.wkb.loads(row['geom']),
                      grid=row['LV_grid_id'],
                 )})
                 ,axis = 1)
@@ -95,7 +98,7 @@ def _build_lv_grid_from_csv( lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_
     lv_trafos.apply(lambda row:
                     lvtrafos.update({row['id_db']: Transformer(
                         id=row['id_db'],
-                        geom=row['geom'],
+                        geom=shapely.wkb.loads(row['geom'], hex=True),#shapely.wkt.loads(row['geom']),
                         grid=row['LV_grid_id'],
                         mv_grid=None,
                         voltage_op=row['voltage_op'],
@@ -117,7 +120,7 @@ def _build_lv_grid_from_csv( lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_
     lv_gen.apply(lambda row:
                  lvgens.update({row['id_db']: Generator(
                      id=row['id_db'],
-                     geom=row['geom'],
+                     geom=shapely.wkt.loads(row['geom']),
                      grid=row['LV_grid_id'],
                      nominal_capacity=row['nominal_capacity'],
                      type = row['type'],
@@ -134,7 +137,7 @@ def _build_lv_grid_from_csv( lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_
     lv_loads.apply(lambda row:
                 lvloads.update({row['id_db']: Load(
                      id=row['id_db'],
-                     geom=row['geom'],
+                     geom=shapely.wkt.loads(row['geom']),
                      grid=row['LV_grid_id'],
                      consumption=row['consumption'],
                     #ToDo: Timeseries
@@ -249,7 +252,7 @@ def _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafo
                      grid=row['MV_grid_id'],
                      consumption=row['consumption'],
                     # type=row['type'],
-                    # peak_load=row['peak_load']
+                     peak_load=row['peak_load']
                 )})
                 ,axis = 1)
     add_node_to_grid(mvgrids, mvloads, 'load')
@@ -272,7 +275,7 @@ def _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafo
 mvgrids, mvstations, mvtrafos, mvgens, mvloads, mvcds = _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafos, mv_loads)
 
 
-def _build_mvlv_lines_from_csv(lvstations, lvtrafos, lvgens, lvloads, lvcds, mvgrids, mvstations, mvtrafos, mvgens, mvloads, mvcds):
+def _build_mvlv_lines_from_csv(lvgrids, lvstations, lvtrafos, lvgens, lvloads, lvcds, mvgrids, mvstations, mvtrafos, mvgens, mvloads, mvcds, edges):
 # Merge node defined above to a single dict
     nodes = {**lvstations,
              **lvtrafos,
@@ -296,97 +299,12 @@ def _build_mvlv_lines_from_csv(lvstations, lvtrafos, lvgens, lvloads, lvcds, mvg
                   grid=row['grid']
              )}))
             ,axis = 1)
-    add_edge_to_grid(lvgrids, lines , 'line') #ToDo: Check mv/lvgrids
-
+    add_edge_to_grid(lvgrids, lines , 'line') #ToDo: Check what happens if mvgrid_id == lvgrid_id
+    add_edge_to_grid(mvgrids, lines , 'line')
     return lines, lvgrids, mvgrids
 
-# def add_edge_to_grid(grids, lines, item_type):
-#     for g in grids: # for every grid
-#         list = []     # make a list
-#         for l in lines: # write all lines in this list that are part of the grid
-#             n1 , n2, e = l
-#             if e['line'].grid == grids[g].id:
-#                 list.append(l)                    # lines contain tuple {node1, node2, edge}
-#         grids[g].graph.add_edges_from(list, type=item_type) # add lines of list to corresponding grid
-
-# def add_edges_from(self, ebunch, attr_dict=None, **attr):
-#     """Add all the edges in ebunch.
-#
-#     Parameters
-#     ----------
-#     ebunch : container of edges
-#         Each edge given in the container will be added to the
-#         graph. The edges must be given as as 2-tuples (u,v) or
-#         3-tuples (u,v,d) where d is a dictionary containing edge
-#         data.
-#     attr_dict : dictionary, optional (default= no attributes)
-#         Dictionary of edge attributes.  Key/value pairs will
-#         update existing data associated with each edge.
-#     attr : keyword arguments, optional
-#         Edge data (or labels or objects) can be assigned using
-#         keyword arguments.
-#
-#
-#     See Also
-#     --------
-#     add_edge : add a single edge
-#     add_weighted_edges_from : convenient way to add weighted edges
-#
-#     Notes
-#     -----
-#     Adding the same edge twice has no effect but any edge data
-#     will be updated when each duplicate edge is added.
-#
-#     Edge attributes specified in edges take precedence
-#     over attributes specified generally.
-#
-#     Examples
-#     --------
-#     >>> G = nx.Graph()   # or DiGraph, MultiGraph, MultiDiGraph, etc
-#     >>> G.add_edges_from([(0,1),(1,2)]) # using a list of edge tuples
-#     >>> e = zip(range(0,3),range(1,4))
-#     >>> G.add_edges_from(e) # Add the path graph 0-1-2-3
-#
-#     Associate data to edges
-#
-#     >>> G.add_edges_from([(1,2),(2,3)], weight=3)
-#     >>> G.add_edges_from([(3,4),(1,4)], label='WN2898')
-#     """
-#     # set up attribute dict
-#     if attr_dict is None:
-#         attr_dict = attr
-#     else:
-#         try:
-#             attr_dict.update(attr)
-#         except AttributeError:
-#             raise NetworkXError(
-#                 "The attr_dict argument must be a dictionary.")
-#     # process ebunch
-#     for e in ebunch:
-#         ne = len(e)
-#         if ne == 3:
-#             u, v, dd = e
-#         elif ne == 2:
-#             u, v = e
-#             dd = {}  # doesnt need edge_attr_dict_factory
-#         else:
-#             raise NetworkXError(
-#                 "Edge tuple %s must be a 2-tuple or 3-tuple." % (e,))
-#         if u not in self.node:
-#             self.adj[u] = self.adjlist_dict_factory()
-#             self.node[u] = {}
-#         if v not in self.node:
-#             self.adj[v] = self.adjlist_dict_factory()
-#             self.node[v] = {}
-#         datadict = self.adj[u].get(v, self.edge_attr_dict_factory())
-#         datadict.update(attr_dict)
-#         datadict.update(dd)
-#         self.adj[u][v] = datadict
-#         self.adj[v][u] = datadict
-
-lines, lvgrids, mvgrids = _build_mvlv_lines_from_csv(lvstations, lvtrafos, lvgens, lvloads, lvcds, mvgrids, mvstations, mvtrafos, mvgens, mvloads, mvcds)
-
-
+lines, lvgrids, mvgrids = _build_mvlv_lines_from_csv(lvgrids, lvstations, lvtrafos, lvgens, lvloads, lvcds, mvgrids, mvstations, mvtrafos, mvgens, mvloads, mvcds, edges)
+print(mvgrids.keys())
 print(mv_trafos['S_nom'])
 
-print(source)
+print(source) #lvgrids[list(lvgrids.keys())[0]].graph.nodes()
