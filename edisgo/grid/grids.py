@@ -128,8 +128,6 @@ class Grid:
             self._peak_load = sum(
                 [_.peak_load.sum()
                  for _ in self.graph.nodes_by_attribute('load')])
-        else:
-            self._peak_load = -1
 
         return self._peak_load
 
