@@ -1569,24 +1569,26 @@ class ETraGoSpecs:
             timeseries_load='demandlib',
             timeindex=timeseries_generation_disp.index)
 
-        # get curtailment time series in kW and hand it over to EDisGo
-        timeseries_curtailment = self._get_curtailment(
-            curtailment=kwargs.get('curtailment', None),
-            renewables=kwargs.get('renewables', None))
-        self.edisgo.curtail(curtailment_methodology='curtail_all',
-                            timeseries_curtailment=timeseries_curtailment)
+        if kwargs.get('curtailment', None) is not None:
+            # get curtailment time series in kW and hand it over to EDisGo
+            timeseries_curtailment = self._get_curtailment(
+                curtailment=kwargs.get('curtailment', None),
+                renewables=kwargs.get('renewables', None))
+            self.edisgo.curtail(curtailment_methodology='curtail_all',
+                                timeseries_curtailment=timeseries_curtailment)
 
-        # integrate storage
-        battery_params = {
-            'nominal_capacity': kwargs.get('battery_capacity', None),
-            'soc_initial': 0.0,
-            'efficiency_in': 1.0,
-            'efficiency_out': 1.0,
-            'standing_loss': 0.0}
-        self.edisgo.integrate_storage(
-            timeseries_battery=kwargs.get('battery_active_power', None),
-            battery_parameters=battery_params,
-            battery_position='hvmv_substation_busbar')
+        if kwargs.get('battery_active_power', None) is not None:
+            # integrate storage
+            battery_params = {
+                'nominal_capacity': kwargs.get('battery_capacity', None),
+                'soc_initial': 0.0,
+                'efficiency_in': 1.0,
+                'efficiency_out': 1.0,
+                'standing_loss': 0.0}
+            self.edisgo.integrate_storage(
+                timeseries_battery=kwargs.get('battery_active_power', None),
+                battery_parameters=battery_params,
+                battery_position='hvmv_substation_busbar')
 
     def _get_feedin_fluctuating(self, ren_dispatch, curtailment, renewables):
         # get feed-in without curtailment
