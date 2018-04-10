@@ -1,5 +1,6 @@
 import networkx as nx
 import os
+import pandas as pd
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import Point
 from .components import LVStation, BranchTee, Generator, Load, \
@@ -333,3 +334,76 @@ def select_cable(network, level, apparent_power):
         raise ValueError('Please supply a level (either \'mv\' or \'lv\').')
 
     return cable_type, cable_count
+
+
+def get_capacities_by_type_and_weather_cell(network):
+    """
+    Gets installed capacities of wind and solar generators by weather
+    cell ID.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+
+    Returns
+    --------
+    dict
+        Dictionary with keys being a tuple of technology and weather
+        cell ID (e.g. ('solar', '1')) and the values containing the
+        corresponding installed capacity.
+
+    """
+
+    # get all generators
+    gens = list(network.mv_grid.graph.nodes_by_attribute('generator'))
+    for lv_grid in network.mv_grid.lv_grids:
+        gens.extend(list(lv_grid.graph.nodes_by_attribute('generator')))
+
+    dict_capacities = {}
+    for gen in gens:
+        if gen.type in ['solar', 'wind']:
+            if gen.weather_cell_id:
+                if (gen.type, gen.weather_cell_id) in \
+                        dict_capacities.keys():
+                    dict_capacities[
+                        (gen.type, gen.weather_cell_id)] = \
+                        dict_capacities[
+                            (gen.type, gen.weather_cell_id)] + \
+                        gen.nominal_capacity
+                else:
+                    dict_capacities[
+                        (gen.type, gen.weather_cell_id)] = \
+                        gen.nominal_capacity
+            else:
+                message = 'Please provide a weather cell ID for ' \
+                          'generator {}.'.format(repr(gen))
+                logging.error(message)
+                raise KeyError(message)
+    return pd.Series(dict_capacities)
+
+
+def get_capacities_by_type(network):
+    """
+    Gets installed capacities of wind and solar generators.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+
+    Returns
+    --------
+    dict
+        Dictionary with keys 'solar' and 'wind' and the values
+        containing the corresponding installed capacity.
+
+    """
+    # get all generators
+    gens = list(network.mv_grid.graph.nodes_by_attribute('generator'))
+    for lv_grid in network.mv_grid.lv_grids:
+        gens.extend(list(lv_grid.graph.nodes_by_attribute('generator')))
+
+    dict_capacities = {'solar': 0, 'wind': 0}
+    for gen in gens:
+        if gen.type in ['solar', 'wind']:
+            dict_capacities[gen.type] = gen.nominal_capacity
+    return pd.Series(dict_capacities)
