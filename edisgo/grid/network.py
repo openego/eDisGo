@@ -299,11 +299,8 @@ class EDisGo:
             See class definition for more information. Default: None.
 
         """
-        CurtailmentControl(mode=kwargs.get('curtailment_methodology',
-                                           None),
-                           network=self.network,
-                           total_curtailment_ts=kwargs.get(
-                               'timeseries_curtailment', None))
+        CurtailmentControl(network=self.network,
+                           **kwargs)
 
     def import_from_ding0(self, file, **kwargs):
         """Import grid data from DINGO file
@@ -1094,9 +1091,11 @@ class CurtailmentControl:
         Default: None.
 
     """
-    def __init__(self, mode, network, **kwargs):
+    def __init__(self, network, **kwargs):
 
-        self.curtailment_ts = kwargs.get('total_curtailment_ts', None)
+        self.mode = kwargs.get('curtailment_methodology', None)
+        self.curtailment_ts = kwargs.get('timeseries_curtailment', None)
+
         if self.curtailment_ts is not None:
             self._check_timeindex(network)
 
@@ -1113,28 +1112,34 @@ class CurtailmentControl:
             self.capacities_series)
         self.feedin_df.dropna(axis=1, how='all', inplace=True)
 
-        if mode == 'curtail_all':
+        # get mode of curtailment and the arguments necessary
+        if self.mode == 'curtail_all':
             curtail_function = curtailment.curtail_all
             if isinstance(self.curtailment_ts, pd.Series):
                 args_if_curtail_series = [self.feedin_df,
-                                   self.curtailment_ts]
+                                          self.curtailment_ts,
+                                          network]
             elif isinstance(self.curtailment_ts, pd.DataFrame):
                 args_if_curtail_df_wind = [self.feedin_df.loc[:, 'wind': 'wind'],
-                                           self.curtailment_ts['wind']]
+                                           self.curtailment_ts['wind'],
+                                           network]
                 args_if_curtail_df_solar = [self.feedin_df.loc[:, 'solar': 'solar'],
-                                            self.curtailment_ts['solar']]
+                                            self.curtailment_ts['solar'],
+                                            network]
             else:
                 message = 'Unallowed type {} of provided curtailment time ' \
                           'series. Must either be pandas.Series or ' \
                           'pandas.DataFrame.'.format(type(self.curtailment_ts))
                 logging.error(message)
                 raise TypeError(message)
-
         else:
             raise ValueError('{} is not a valid mode.'.format(mode))
 
+        # perform the mode of curtailment with some relevant checks
+        # as to what the inputs are
         if isinstance(self.curtailment_ts, pd.Series):
-            network.timeseries.curtailment = curtail_function(*args_if_curtail_series)
+            network.timeseries.curtailment = curtail_function(*args_if_curtail_series,
+                                                              **kwargs)
         elif isinstance(self.curtailment_ts, pd.DataFrame):
             if isinstance(self.curtailment_ts.columns, pd.MultiIndex):
                 # if both feed-in and curtailment are differentiated by
@@ -1153,7 +1158,8 @@ class CurtailmentControl:
                     # allocate curtailment to weather cells
                     if 'wind' in self.curtailment_ts.columns:
                         try:
-                            curtailment_wind = curtail_function(*args_if_curtail_df_wind)
+                            curtailment_wind = curtail_function(*args_if_curtail_df_wind,
+                                                                **kwargs)
                         except:
                             message = 'Curtailment time series for wind ' \
                                       'generators provided but no wind ' \
@@ -1164,7 +1170,8 @@ class CurtailmentControl:
                         curtailment_wind = pd.DataFrame()
                     if 'solar' in self.curtailment_ts.columns:
                         try:
-                            curtailment_solar = curtail_function(*args_if_curtail_df_solar)
+                            curtailment_solar = curtail_function(*args_if_curtail_df_solar,
+                                                                 **kwargs)
                         except:
                             message = 'Curtailment time series for solar ' \
                                       'generators provided but no solar ' \
