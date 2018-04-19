@@ -1,5 +1,6 @@
 import networkx as nx
 import os
+import numpy as np
 import pandas as pd
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import Point
@@ -335,6 +336,72 @@ def select_cable(network, level, apparent_power):
 
     return cable_type, cable_count
 
+def get_gen_info(network, level='mvlv'):
+    """
+    Gets all the installed generators under both mv and the lv grids.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+        the network data
+    level : :string
+        'mv' for generators in mv level
+        'lv' for generators in lv level
+        'mvlv' for generators in both mv and lv levels
+
+    Returns
+    --------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Generators and Generator information
+    """
+    # get all generators
+    gens = []
+    gens_w_id = []
+    gens_voltage_level = []
+    gens_node = []
+    gens_type = []
+    gens_rating = []
+
+    if 'mv' in level:
+        gens = network.mv_grid.generators
+        gens_voltage_level = ['mv']*len(gens)
+        gens_node = [gen.grid.station for gen in gens]
+        gens_type = [gen.type for gen in gens]
+        gens_rating = [gen.nominal_capacity for gen in gens]
+        try:
+            gens_w_id = [gen.weather_cell_id for gen in gens]
+        except AttributeError:
+            gens_w_id = [np.nan]*len(gens)
+
+    else:
+        pass
+
+    if 'lv' in level:
+        for lv_grid in network.mv_grid.lv_grids:
+            gens_lv = lv_grid.generators
+            gens.extend(gens_lv)
+            gens_voltage_level.extend(['lv']*len(gens_lv))
+            gens_node.extend([gen.grid.station for gen in gens_lv])
+            gens_type.extend([gen.type for gen in gens_lv])
+            gens_rating.extend([gen.nominal_capacity for gen in gens_lv])
+            try:
+                gens_w_id.extend([gen.weather_cell_id for gen in gens_lv])
+            except AttributeError:
+                gens_w_id.extend([np.nan]*len(gens_lv))
+
+    else:
+        pass
+
+    gen_df = pd.DataFrame({'gen_repr': list(map(lambda x: repr(x),gens)),
+                           'generator': gens,
+                           'type': gens_type,
+                           'voltage_level': gens_voltage_level,
+                           'connected_node': gens_node,
+                           'nominal_capacity': gens_rating,
+                           'weather_cell_id': gens_w_id})
+
+    return gen_df
+
 
 def get_capacities_by_type_and_weather_cell(network):
     """
@@ -354,11 +421,9 @@ def get_capacities_by_type_and_weather_cell(network):
 
     """
 
-    # get all generators
-    gens = list(network.mv_grid.graph.nodes_by_attribute('generator'))
-    for lv_grid in network.mv_grid.lv_grids:
-        gens.extend(list(lv_grid.graph.nodes_by_attribute('generator')))
-
+    # mv_peak_generation = \
+    #  network.mv_grid.peak_generation_peak_generation_per_technology_and_weather_cell.loc[['solar', 'wind']]
+    # lv_accumulated_peak_generation = pd.Series({})
     dict_capacities = {}
     for gen in gens:
         if gen.type in ['solar', 'wind']:
@@ -397,13 +462,19 @@ def get_capacities_by_type(network):
         containing the corresponding installed capacity.
 
     """
-    # get all generators
-    gens = list(network.mv_grid.graph.nodes_by_attribute('generator'))
+    mv_peak_generation = network.mv_grid.peak_generation_per_technology.loc[['solar', 'wind']]
+    lv_accumulated_peak_generation = pd.Series({'solar': 0,
+                                                'wind': 0})
     for lv_grid in network.mv_grid.lv_grids:
-        gens.extend(list(lv_grid.graph.nodes_by_attribute('generator')))
+        try:
+            lv_accumulated_peak_generation.loc['solar'] += \
+                lv_grid.peak_generation_per_technology.loc['solar']
+        except KeyError:
+            pass
+        try:
+            lv_accumulated_peak_generation.loc['wind'] += \
+                lv_grid.peak_generation_per_technology.loc['wind']
+        except KeyError:
+            pass
+    return mv_peak_generation + lv_accumulated_peak_generation
 
-    dict_capacities = {'solar': 0, 'wind': 0}
-    for gen in gens:
-        if gen.type in ['solar', 'wind']:
-            dict_capacities[gen.type] = gen.nominal_capacity
-    return pd.Series(dict_capacities)

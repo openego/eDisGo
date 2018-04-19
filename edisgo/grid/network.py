@@ -13,7 +13,9 @@ from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, curtailment
 from edisgo.grid.components import Station, BranchTee
-from edisgo.grid.tools import get_capacities_by_type, get_capacities_by_type_and_weather_cell
+from edisgo.grid.tools import get_capacities_by_type,\
+    get_capacities_by_type_and_weather_cell, \
+    get_gen_info
 
 logger = logging.getLogger('edisgo')
 
@@ -1096,19 +1098,26 @@ class CurtailmentControl:
         self.mode = kwargs.get('curtailment_methodology', None)
         self.curtailment_ts = kwargs.get('timeseries_curtailment', None)
 
+        # renaming the variable for simplicity
+        gen_fluct_ts = network.timeseries._generation_fluctuating
+
         if self.curtailment_ts is not None:
             self._check_timeindex(network)
 
         # get aggregated capacities either by technology or technology and
         # weather cell
+        gens = get_gen_info(network, 'mvlv')
+        gens = gens.loc[(gens.type == 'solar') | (gens.type == 'wind')]
+        gens.set_index(['gen_repr', 'type'], inplace=True)
+
         if isinstance(network.timeseries.generation_fluctuating.columns,
                       pd.MultiIndex):
             self.capacities_series = get_capacities_by_type_and_weather_cell(network)
         else:
-            self.capacities_series = get_capacities_by_type(network)
+            self.capacities_series = gens.nominal_capacity
 
         # calculate absolute feed-in
-        self.feedin_df = network.timeseries._generation_fluctuating.multiply(
+        self.feedin_df = gen_fluct_ts.multiply(
             self.capacities_series)
         self.feedin_df.dropna(axis=1, how='all', inplace=True)
 
@@ -1133,7 +1142,7 @@ class CurtailmentControl:
                 logging.error(message)
                 raise TypeError(message)
         else:
-            raise ValueError('{} is not a valid mode.'.format(mode))
+            raise ValueError('{} is not a valid mode.'.format(self.mode))
 
         # perform the mode of curtailment with some relevant checks
         # as to what the inputs are
