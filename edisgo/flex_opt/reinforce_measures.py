@@ -279,7 +279,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
 
     Returns
     -------
-    Dictionary with :class:`~.grid.components.Line` and the number of Lines
+    Dictionary with :class:`~.grid.components.Line` and the number of lines
     added.
 
     Notes
@@ -304,7 +304,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     References
     ----------
 
-    The method of grid reinforce as implemented here bases on
+    The method of grid reinforcement as implemented here bases on
     [VerteilnetzstudieBW]_ and [EAMS]_.
 
     """

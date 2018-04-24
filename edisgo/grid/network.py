@@ -1805,21 +1805,21 @@ class Results:
         :class:`~.grid.components.Line`, :class:`~.grid.components.Station`,
         etc.) and has the following columns:
 
-        equipment: detailing what was changed (line, station, battery,
+        equipment : detailing what was changed (line, station, battery,
         curtailment). For ease of referencing we take the component itself.
         For lines we take the line-dict, for stations the transformers, for
         batteries the battery-object itself and for curtailment
         either a dict providing the details of curtailment or a curtailment
         object if this makes more sense (has to be defined).
 
-        change: string {'added' | 'removed'}
+        change : :obj:`str` {'added' | 'removed'}
             says if something was added or removed
 
-        iteration_step: int
+        iteration_step : int
             Used for the update of the pypsa network to only consider changes
             since the last power flow analysis.
 
-        quantity: int
+        quantity : int
             Number of components added or removed. Only relevant for
             calculation of grid expansion costs to keep track of how many
             new standard lines were added.

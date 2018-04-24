@@ -95,7 +95,8 @@ def grid_expansion_costs(network):
             network.results.equipment_changes['equipment'].apply(
                 isinstance, args=(Transformer,))]
         added_transformers = transformers[transformers['change'] == 'added']
-        removed_transformers = transformers[transformers['change'] == 'removed']
+        removed_transformers = transformers[
+            transformers['change'] == 'removed']
         # check if any of the added transformers were later removed
         added_removed_transformers = added_transformers.loc[
             added_transformers['equipment'].isin(
