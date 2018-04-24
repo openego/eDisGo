@@ -485,7 +485,7 @@ class GeneratorFluctuating(Generator):
             is set this is returned.
 
         """
-        if self._curtailment:
+        if self._curtailment is not None:
             return self._curtailment
         elif isinstance(self.grid.network.timeseries.curtailment,
                         pd.DataFrame):
