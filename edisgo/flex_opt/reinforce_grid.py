@@ -60,6 +60,7 @@ def reinforce_grid(edisgo, max_while_iterations=10):
 
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
     iteration_step = 1
+    edisgo.analyze()
 
     logger.debug('==> Check station load.')
     overloaded_mv_station = checks.hv_mv_station_load(edisgo.network)

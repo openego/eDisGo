@@ -63,8 +63,6 @@ if __name__ == '__main__':
             # Calculate grid expansion costs before generator import
             logging.info('Grid expansion before generator import.')
             before_geno_import = True
-            # Do non-linear power flow analysis with PyPSA
-            edisgo.analyze()
             # Do grid reinforcement
             edisgo.reinforce()
             # Get costs
@@ -86,8 +84,6 @@ if __name__ == '__main__':
             before_geno_import = False
             # Import generators
             edisgo.import_generators(generator_scenario=scenario)
-            # Do non-linear power flow analysis with PyPSA
-            edisgo.analyze()
             # Do grid reinforcement
             edisgo.reinforce()
             costs_grouped = \
