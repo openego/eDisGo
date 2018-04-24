@@ -1,4 +1,3 @@
-import sys
 import pandas as pd
 import pyproj
 from functools import partial
@@ -8,6 +7,7 @@ if not 'READTHEDOCS' in os.environ:
 
 from edisgo.grid.components import Transformer, Line
 from edisgo.grid.grids import LVGrid, MVGrid
+from edisgo.grid.tools import get_mv_feeder
 
 
 def grid_expansion_costs(network):
@@ -40,6 +40,13 @@ def grid_expansion_costs(network):
 
         line_length: float
             Length of line or in case of parallel lines all lines in km.
+
+        voltage_level : :obj:`str` {'lv' | 'mv' | 'mv/lv'}
+            Specifies voltage level the equipment is in.
+
+        mv_feeder : :class:`~.grid.components.Line`
+            First line segment of half-ring used to identify in which
+            feeder the grid expansion was conducted in.
 
     Notes
     -------
@@ -109,7 +116,9 @@ def grid_expansion_costs(network):
             costs = costs.append(pd.DataFrame(
                 {'type': t.type.name,
                  'total_costs': _get_transformer_costs(t),
-                 'quantity': 1},
+                 'quantity': 1,
+                 'voltage_level': 'mv/lv',
+                 'mv_feeder': get_mv_feeder(t.grid.station)},
                 index=[repr(t)]))
 
         # costs for lines
@@ -134,7 +143,10 @@ def grid_expansion_costs(network):
                     {'type': l.type.name,
                      'total_costs': _get_line_costs(l, number_lines_added),
                      'length': l.length * number_lines_added,
-                     'quantity': number_lines_added},
+                     'quantity': number_lines_added,
+                     'voltage_level': ('lv' if isinstance(l.grid, LVGrid)
+                                       else 'mv'),
+                     'mv_feeder': get_mv_feeder(l.grid.station)},
                     index=[repr(l)]))
 
     # if no costs incurred write zero costs to DataFrame
@@ -143,7 +155,10 @@ def grid_expansion_costs(network):
             {'type': ['N/A'],
              'total_costs': [0],
              'length': [0],
-             'quantity': [0]},
+             'quantity': [0],
+             'voltage_level': '',
+             'mv_feeder': ''
+             },
             index=['No reinforced equipment.']))
 
     return costs

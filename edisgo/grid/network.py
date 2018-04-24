@@ -1877,6 +1877,13 @@ class Results:
             line_length: float
                 Length of line or in case of parallel lines all lines in km.
 
+            voltage_level : :obj:`str` {'lv' | 'mv' | 'mv/lv'}
+                Specifies voltage level the equipment is in.
+
+            mv_feeder : :class:`~.grid.components.Line`
+                First line segment of half-ring used to identify in which
+                feeder the grid expansion was conducted in.
+
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`

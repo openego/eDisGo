@@ -2,8 +2,9 @@ import networkx as nx
 import os
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import Point
-from .components import LVStation, BranchTee, Generator, Load, \
+from edisgo.grid.components import LVStation, BranchTee, Generator, Load, \
     MVDisconnectingPoint, Line
+from edisgo.grid.grids import LVGrid
 
 import logging
 logger = logging.getLogger('edisgo')
@@ -333,3 +334,40 @@ def select_cable(network, level, apparent_power):
         raise ValueError('Please supply a level (either \'mv\' or \'lv\').')
 
     return cable_type, cable_count
+
+
+def get_mv_feeder(node):
+    """
+    Determines MV feeder the given node is in.
+
+    MV feeders are identified by the first line segment of the half-ring.
+
+    Parameters
+    ----------
+    node : :class:`~.grid.components.Component`
+        Node to find the MV feeder for. Can be any kind of
+        :class:`~.grid.components.Component` except
+        :class:`~.grid.components.Line`.
+
+    Returns
+    -------
+    :class:`~.grid.components.Line`
+        MV feeder identifier (representative of the first line segment
+        of the half-ring)
+
+    """
+    # if node is in LV grid, get LV station of that grid
+    if isinstance(node.grid, LVGrid):
+        node = node.grid.station
+
+    # find path from MV station to node in MV grid to assign MV feeder
+    if isinstance(node, LVStation):
+        path = nx.shortest_path(node.mv_grid.graph, node.mv_grid.station, node)
+    else:
+        path = nx.shortest_path(node.grid.graph, node.grid.station, node)
+
+    # MV feeder identifier is the representative of the first line segment
+    # of the half-ring
+    mv_feeder = repr(path[0].grid.graph.line_from_nodes(path[0], path[1]))
+
+    return mv_feeder
