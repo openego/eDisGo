@@ -13,7 +13,7 @@ from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, curtailment
 from edisgo.grid.components import Station, BranchTee
-from edisgo.grid.tools import get_capacities_by_type,\
+from edisgo.grid.tools import get_capacities_by_type, \
     get_capacities_by_type_and_weather_cell, \
     get_gen_info
 
@@ -301,7 +301,7 @@ class EDisGo:
             See class definition for more information. Default: None.
 
         """
-        CurtailmentControl(network=self.network,
+        CurtailmentControl(edisgo_object=self,
                            **kwargs)
 
     def import_from_ding0(self, file, **kwargs):
@@ -750,6 +750,7 @@ class Config:
     >>> config['reactive_power_factor']['mv_gen']
 
     """
+
     def __init__(self, **kwargs):
         self._data = self._load_config(kwargs.get('config_path', None))
 
@@ -911,6 +912,7 @@ class TimeSeriesControl:
         options are 'nep2035' and 'ego100'. Default: None.
 
     """
+
     def __init__(self, **kwargs):
 
         self.timeseries = TimeSeries()
@@ -974,8 +976,6 @@ class TimeSeriesControl:
                 raise ValueError('Your input for "timeseries_load" is not '
                                  'valid.'.format(mode))
 
-
-
             # check if time series for the set time index can be obtained
             self._check_timeindex()
 
@@ -1021,11 +1021,11 @@ class TimeSeriesControl:
 
         self.timeseries.generation_dispatchable = pd.DataFrame(
             {'other': [worst_case_scale_factors[
-                          '{}_feedin_other'.format(mode)] for mode in modes]},
+                           '{}_feedin_other'.format(mode)] for mode in modes]},
             index=self.timeseries.timeindex)
 
     def _worst_case_load(self, worst_case_scale_factors,
-                           peakload_consumption_ratio, modes):
+                         peakload_consumption_ratio, modes):
         """
         Define worst case load time series for each sector.
 
@@ -1051,7 +1051,7 @@ class TimeSeriesControl:
         mv_power_scaling = np.array(
             [worst_case_scale_factors['mv_{}_load'.format(mode)]
              for mode in modes])
-        
+
         lv = {(sector, 'lv'): peakload_consumption_ratio[sector] *
                               lv_power_scaling
               for sector in sectors}
@@ -1075,8 +1075,19 @@ class CurtailmentControl:
           The curtailment that has to be met in each time step is allocated
           equally to all generators depending on their share of total
           feed-in in that time step.
+        * 'curtail_voltage'
+          The curtailment that has to be met in each time step is allocated
+          based on the voltages at the generator connection points and the
+          defined 'voltage_threshold_lower'. Generators at higher voltages
+          are curtailed more.
+        * 'curtail_loading'
+          The curtailment that has to be met in each time step is allocated
+          based on the line loading in the network. Generators at the node
+          with the higher voltage of an over-loaded line are curtailed more
 
     network : :class:`~.grid.network.Network`
+        The graph object describing the network.
+
     total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Series or DataFrame containing the curtailment time series in kW. Index
         needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
@@ -1092,70 +1103,63 @@ class CurtailmentControl:
         given by technology and weather cell).
         Default: None.
 
+    **kwargs : :
+
+
     """
-    def __init__(self, network, **kwargs):
+
+    def __init__(self, edisgo_object, **kwargs):
 
         self.mode = kwargs.get('curtailment_methodology', None)
         self.curtailment_ts = kwargs.get('timeseries_curtailment', None)
 
         # renaming the variable for simplicity
-        gen_fluct_ts = network.timeseries._generation_fluctuating
+        gen_fluct_ts = edisgo_object.network.timeseries._generation_fluctuating
 
         if self.curtailment_ts is not None:
-            self._check_timeindex(network)
+            self._check_timeindex(edisgo_object.network)
 
         # get aggregated capacities either by technology or technology and
         # weather cell
-        gens = get_gen_info(network, 'mvlv')
+        gens = get_gen_info(edisgo_object.network, 'mvlv')
         gens = gens.loc[(gens.type == 'solar') | (gens.type == 'wind')]
         gens.set_index(['gen_repr', 'type'], inplace=True)
 
-        if isinstance(network.timeseries.generation_fluctuating.columns,
+        if isinstance(edisgo_object.network.timeseries.generation_fluctuating.columns,
                       pd.MultiIndex):
-            self.capacities_series = get_capacities_by_type_and_weather_cell(network)
+            self.capacities_series = get_capacities_by_type_and_weather_cell(edisgo_object.network)
         else:
             self.capacities_series = gens.nominal_capacity
 
         # calculate absolute feed-in
         self.feedin_df = gen_fluct_ts.multiply(
-            self.capacities_series)
+            self.capacities_series, level=1)
         self.feedin_df.dropna(axis=1, how='all', inplace=True)
 
         # get mode of curtailment and the arguments necessary
         if self.mode == 'curtail_all':
             curtail_function = curtailment.curtail_all
-            if isinstance(self.curtailment_ts, pd.Series):
-                args_if_curtail_series = [self.feedin_df,
-                                          self.curtailment_ts,
-                                          network]
-            elif isinstance(self.curtailment_ts, pd.DataFrame):
-                args_if_curtail_df_wind = [self.feedin_df.loc[:, 'wind': 'wind'],
-                                           self.curtailment_ts['wind'],
-                                           network]
-                args_if_curtail_df_solar = [self.feedin_df.loc[:, 'solar': 'solar'],
-                                            self.curtailment_ts['solar'],
-                                            network]
-            else:
-                message = 'Unallowed type {} of provided curtailment time ' \
-                          'series. Must either be pandas.Series or ' \
-                          'pandas.DataFrame.'.format(type(self.curtailment_ts))
-                logging.error(message)
-                raise TypeError(message)
+        elif self.mode == 'curtail_voltage':
+            curtail_function = curtailment.curtail_voltage
+        elif self.mode == 'curtail_loading':
+            curtail_function = curtailment.curtail_loading
         else:
             raise ValueError('{} is not a valid mode.'.format(self.mode))
 
         # perform the mode of curtailment with some relevant checks
         # as to what the inputs are
         if isinstance(self.curtailment_ts, pd.Series):
-            network.timeseries.curtailment = curtail_function(*args_if_curtail_series,
-                                                              **kwargs)
+            curtail_function(self.feedin_df,
+                             self.curtailment_ts,
+                             edisgo_object,
+                             **kwargs)
         elif isinstance(self.curtailment_ts, pd.DataFrame):
             if isinstance(self.curtailment_ts.columns, pd.MultiIndex):
                 # if both feed-in and curtailment are differentiated by
                 # technology and weather cell the curtailment time series
                 # can be used directly
                 if isinstance(self.feedin_df.columns, pd.MultiIndex):
-                    network.timeseries.curtailment = self.curtailment_ts
+                    edisgo_object.network.timeseries.curtailment = self.curtailment_ts
                 else:
                     message = 'Curtailment time series are provided for ' \
                               'different weather cells but feed-in time ' \
@@ -1163,39 +1167,50 @@ class CurtailmentControl:
                     logging.error(message)
                     raise KeyError(message)
             else:
-                if isinstance(self.feedin_df.columns, pd.MultiIndex):
-                    # allocate curtailment to weather cells
-                    if 'wind' in self.curtailment_ts.columns:
-                        try:
-                            curtailment_wind = curtail_function(*args_if_curtail_df_wind,
-                                                                **kwargs)
-                        except:
-                            message = 'Curtailment time series for wind ' \
-                                      'generators provided but no wind ' \
-                                      'feed-in time series.'
-                            logging.error(message)
-                            raise KeyError(message)
+                # TODO : Need to review this part of the code when the weather_cell_ids are integrated
+                if self.mode == 'curtail_all':
+                    if isinstance(self.feedin_df.columns, pd.MultiIndex):
+                        # allocate curtailment to weather cells
+                        if 'wind' in self.curtailment_ts.columns:
+                            try:
+                                curtailment_wind = curtail_function(self.feedin_df.loc[:, 'wind': 'wind'],
+                                                                    self.curtailment_ts['wind'],
+                                                                    edisgo_object,
+                                                                    **kwargs)
+                            except:
+                                message = 'Curtailment time series for wind ' \
+                                          'generators provided but no wind ' \
+                                          'feed-in time series.'
+                                logging.error(message)
+                                raise KeyError(message)
+                        else:
+                            curtailment_wind = pd.DataFrame()
+                        if 'solar' in self.curtailment_ts.columns:
+                            try:
+                                curtailment_solar = curtail_function(self.feedin_df.loc[:, 'solar': 'solar'],
+                                                                     self.curtailment_ts['solar'],
+                                                                     edisgo_object,
+                                                                     **kwargs)
+                            except:
+                                message = 'Curtailment time series for solar ' \
+                                          'generators provided but no solar ' \
+                                          'feed-in time series.'
+                                logging.error(message)
+                                raise KeyError(message)
+                        else:
+                            curtailment_solar = pd.DataFrame()
+                        edisgo_object.network.timeseries.curtailment = \
+                            curtailment_wind.join(curtailment_solar, how='outer')
                     else:
-                        curtailment_wind = pd.DataFrame()
-                    if 'solar' in self.curtailment_ts.columns:
-                        try:
-                            curtailment_solar = curtail_function(*args_if_curtail_df_solar,
-                                                                 **kwargs)
-                        except:
-                            message = 'Curtailment time series for solar ' \
-                                      'generators provided but no solar ' \
-                                      'feed-in time series.'
-                            logging.error(message)
-                            raise KeyError(message)
-                    else:
-                        curtailment_solar = pd.DataFrame()
-                    network.timeseries.curtailment = \
-                        curtailment_wind.join(curtailment_solar, how='outer')
+                        # if both feed-in and curtailment are only differentiated
+                        # by technology the curtailment time series can be used
+                        # directly
+                        edisgo_object.network.timeseries.curtailment = self.curtailment_ts
                 else:
-                    # if both feed-in and curtailment are only differentiated
-                    # by technology the curtailment time series can be used
-                    # directly
-                    network.timeseries.curtailment = self.curtailment_ts
+                    curtail_function(self.feedin_df,
+                                     self.curtailment_ts,
+                                     edisgo_object,
+                                     **kwargs)
         else:
             message = 'Unallowed type {} of provided curtailment time ' \
                       'series. Must either be pandas.Series or ' \
@@ -1204,7 +1219,7 @@ class CurtailmentControl:
             raise TypeError(message)
 
         # check if curtailment exceeds feed-in
-        self._check_curtailment(network)
+        self._check_curtailment(edisgo_object.network)
 
     def _check_timeindex(self, network):
         """
@@ -1229,7 +1244,7 @@ class CurtailmentControl:
         # raise warning if time indexes do not have the same entries
         if pd.Series(network.timeseries._generation_fluctuating.
                              index).equals(pd.Series(
-                self.curtailment_ts.index)) is False:
+            self.curtailment_ts.index)) is False:
             logging.warning('Time index of curtailment time series is not '
                             'equal to the feed-in time series index.')
 
@@ -1317,6 +1332,7 @@ class StorageControl:
         strategy or node to connect the storage to.
 
     """
+
     def __init__(self, network, timeseries_battery, battery_parameters,
                  battery_position):
 
@@ -1380,7 +1396,7 @@ class StorageControl:
             self._check_timeindex(timeseries)
             storage.timeseries = timeseries
         elif timeseries == 'fifty-fifty':
-                storage_operation.fifty_fifty(storage)
+            storage_operation.fifty_fifty(storage)
         else:
             message = 'Provided battery timeseries option {} is not ' \
                       'valid.'.format(timeseries)
@@ -1521,7 +1537,7 @@ class TimeSeries:
     @generation_fluctuating.setter
     def generation_fluctuating(self, generation_fluc_timeseries):
         self._generation_fluctuating = generation_fluc_timeseries
-        
+
     @property
     def load(self):
         """
@@ -1754,7 +1770,7 @@ class ETraGoSpecs:
         # ID
         # ToDo: Remove when generators have weather cell ID
         curtailment = pd.DataFrame(data={'wind': curtailment.wind.sum(axis=1),
-                                    'solar': curtailment.solar.sum(axis=1)})
+                                         'solar': curtailment.solar.sum(axis=1)})
 
         # calculate absolute curtailment
         timeseries_curtailment = curtailment.multiply(
@@ -2093,7 +2109,7 @@ class Results:
             labels = [repr(l) for l in components]
             for label in labels:
                 if (label in list(self.pfa_p.columns) and
-                            label in list(self.pfa_q.columns)):
+                        label in list(self.pfa_q.columns)):
                     labels_included.append(label)
                 else:
                     labels_not_included.append(label)
@@ -2154,6 +2170,4 @@ class Results:
             print("Voltage levels for {nodes} are not returned from PFA".format(
                 nodes=not_included))
 
-
         return self.pfa_v_mag_pu[level][labels_included]
-
