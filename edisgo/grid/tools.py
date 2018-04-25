@@ -392,13 +392,21 @@ def get_gen_info(network, level='mvlv'):
     else:
         pass
 
-    gen_df = pd.DataFrame({'gen_repr': list(map(lambda x: repr(x),gens)),
-                           'generator': gens,
+    gen_df = pd.DataFrame({'gen_repr': list(map(lambda x: repr(x), gens)),
+                           'generator_uncat': gens,
                            'type': gens_type,
                            'voltage_level': gens_voltage_level,
                            'connected_node': gens_node,
                            'nominal_capacity': gens_rating,
                            'weather_cell_id': gens_w_id})
+
+    gen_df.sort_values('nominal_capacity', ascending=False, inplace=True)
+
+    gen_df['generator'] = pd.Categorical(gen_df.loc[:, 'generator_uncat'],
+                                         gen_df.loc[:, 'generator_uncat'])
+
+    gen_df.set_index('generator', inplace=True)
+    gen_df.drop('generator_uncat', axis=1, inplace=True)
 
     return gen_df
 

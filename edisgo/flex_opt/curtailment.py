@@ -8,43 +8,7 @@ from edisgo.grid.tools import get_gen_info, \
 
 
 
-def curtail_all(feedin_df, total_curtailment_ts, edisgo_object, **kwargs):
-    """
-    Implements curtailment methodology 'curtail_all'.
-
-    The curtailment that has to be met in each time step is allocated
-    equally to all generators depending on their share of total
-    feed-in in that time step.
-
-    Parameters
-    ----------
-    feedin_df : : pandas:`pandas.DataFrame<dataframe>`
-        See class definition for further information.
-    total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
-        See class definition for further information.
-    network : :class:`~.grid.network.Network`
-    **kwargs : :class:`~.grid.network.Network`
-
-    """
-    if 'curtailment_factor' in kwargs:
-        curtailment_factor = kwargs.get('curtailment_factor')
-    else:
-        curtailment_factor = total_curtailment_ts.copy()
-        curtailment_factor = curtailment_factor / curtailment_factor
-        curtailment_factor.fillna(1.0, inplace=True)
-
-    feedin_df = feedin_df.T.groupby('type').sum().T
-
-    total_curtailment = total_curtailment_ts.multiply(curtailment_factor)
-    curtailment = (feedin_df.divide(
-        feedin_df.sum(axis=1), axis=0)).multiply(
-        total_curtailment, axis=0)
-
-    # write the curtailment timeseries in the right location
-    edisgo_object.network.timeseries.curtailment = curtailment
-
-
-def curtail_voltage(feedin_df, total_curtailment_ts, edisgo_object, **kwargs):
+def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     """
     Implements curtailment methodology 'curtail_voltage'.
 
@@ -53,11 +17,12 @@ def curtail_voltage(feedin_df, total_curtailment_ts, edisgo_object, **kwargs):
 
     Parameters
     ----------
-    feedin_df : : pandas:`pandas.DataFrame<dataframe>`
+    feedin : : pandas:`pandas.DataFrame<dataframe>`
         See class definition for further information.
     total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
         See class definition for further information.
-    network : :class:`~.grid.network.Network`
+    edisgo_object : :class:`edisgo.EDisGo`
+        The edisgo object created
     voltage_threshold_lower: :float
 
     **kwargs : :class:`~.grid.network.Network`
@@ -78,7 +43,7 @@ def curtail_voltage(feedin_df, total_curtailment_ts, edisgo_object, **kwargs):
     # get only the GeneratorFluctuating objects
     gen_columns = list(filter(lambda x: 'GeneratorFluctuating' in x, v_pu.columns.levels[1]))
     v_pu.sort_index(axis=1, inplace=True)
-    v_pu_gen = v_pu.loc[:, (['mv', 'lv'], gen_columns)]
+    v_pu_gen = v_pu.loc[:, (slice(None), gen_columns)]
 
     # curtailment calculation by inducing a reduced or increased feedin
     # find out the difference from lower threshold
@@ -86,27 +51,22 @@ def curtail_voltage(feedin_df, total_curtailment_ts, edisgo_object, **kwargs):
     feedin_factor.columns = feedin_factor.columns.droplevel(0)  # drop the 'mv' 'lv' labels
 
     # multiply feedin_factor to feedin to modify the amount of curtailment
-    modified_feedin = feedin_factor.multiply(feedin_df, level=0)
+    modified_feedin = feedin_factor.multiply(feedin, level=1)
 
     # total_curtailment
     curtailment = modified_feedin.divide(modified_feedin.sum(axis=1), axis=0).\
         multiply(total_curtailment_ts, axis=0)
     curtailment.columns = curtailment.columns.droplevel(1)
-
-    # get all generators from the network
-    gens = get_gen_info(edisgo_object.network, 'mvlv')
-    gens = gens.loc[(gens.type == 'solar') | (gens.type == 'wind')]
-    gens.set_index('gen_repr', inplace=True)
+    curtailment.columns = curtailment.columns.droplevel(1)
 
     # assign curtailment to individual generators
     for gen in curtailment.columns:
-        gens.loc[gen, 'generator'].curtailment = curtailment.loc[:, gen]
+        gen.curtailment = curtailment.loc[:, gen]
 
-    edisgo_object.network.timeseries.curtailment = list(gens.loc[curtailment.columns,
-                                                                 'generator'])
+    edisgo_object.network.timeseries.curtailment = list(curtailment.columns)
 
 
-def curtail_loading(feedin_df, total_curtailment_ts, network, **kwargs):
+def curtail_loading(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     """
         Implements curtailment methodology 'curtail_loading'.
 
@@ -115,13 +75,50 @@ def curtail_loading(feedin_df, total_curtailment_ts, network, **kwargs):
 
         Parameters
         ----------
-        feedin_df : : pandas:`pandas.DataFrame<dataframe>`
+        feedin : : pandas:`pandas.DataFrame<dataframe>`
             See class definition for further information.
         total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
             See class definition for further information.
-        network : :class:`~.grid.network.Network`
-
+        edisgo_object : :class:`edisgo.EDisGo`
+            The edisgo object created
         **kwargs : :class:`~.grid.network.Network`
         """
 
     return None
+
+
+def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
+    """
+    Implements curtailment methodology 'curtail_all'.
+
+    The curtailment that has to be met in each time step is allocated
+    equally to all generators depending on their share of total
+    feed-in in that time step.
+
+    Parameters
+    ----------
+    feedin : : pandas:`pandas.DataFrame<dataframe>`
+        See class definition for further information.
+    total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
+        See class definition for further information.
+    edisgo_object : :class:`edisgo.EDisGo`
+        The edisgo object created
+    **kwargs : :class:`~.grid.network.Network`
+
+    """
+    if 'feedin_factor' in kwargs:
+        feedin_factor = kwargs.get('feedin_factor')
+    else:
+        feedin_factor = total_curtailment_ts.copy()
+        feedin_factor = feedin_factor / feedin_factor
+        feedin_factor.fillna(1.0, inplace=True)
+
+    feedin = feedin.sum(axis=1, level='type')
+
+    feedin = feedin.multiply(feedin_factor)
+    curtailment = (feedin.divide(
+        feedin.sum(axis=1), axis=0)).multiply(
+        total_curtailment, axis=0)
+
+    # write the curtailment timeseries in the right location
+    edisgo_object.network.timeseries.curtailment = curtailment
