@@ -7,7 +7,6 @@ from edisgo.grid.tools import get_gen_info, \
     get_capacities_by_type_and_weather_cell
 
 
-
 def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     """
     Implements curtailment methodology 'curtail_voltage'.
@@ -54,16 +53,13 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     modified_feedin = feedin_factor.multiply(feedin, level=1)
 
     # total_curtailment
-    curtailment = modified_feedin.divide(modified_feedin.sum(axis=1), axis=0).\
+    curtailment = modified_feedin.divide(modified_feedin.sum(axis=1), axis=0). \
         multiply(total_curtailment_ts, axis=0)
     curtailment.columns = curtailment.columns.droplevel(1)
     curtailment.columns = curtailment.columns.droplevel(1)
 
     # assign curtailment to individual generators
-    for gen in curtailment.columns:
-        gen.curtailment = curtailment.loc[:, gen]
-
-    edisgo_object.network.timeseries.curtailment = list(curtailment.columns)
+    assign_curtailment(curtailment, edisgo_object)
 
 
 def curtail_loading(feedin, total_curtailment_ts, edisgo_object, **kwargs):
@@ -123,7 +119,30 @@ def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     curtailment.columns = curtailment.columns.droplevel(1)
 
     # assign curtailment to individual generators
+    assign_curtailment(curtailment, edisgo_object)
+
+
+def assign_curtailment(curtailment, edisgo_object):
+    """
+    Implements curtailment helper function to assign the curtailment time series
+    to each and every individual generator and ensure that they get processed
+    and included in the edisgo_object.timeseries.curtailment correctly
+
+    Parameters
+    ----------
+    curtailment : : pandas:`pandas.DataFrame<dataframe>`
+        final curtailment dataframe with generator objects as column
+        labels and a DatetimeIndex as the index
+    edisgo_object : :class:`edisgo.EDisGo`
+        The edisgo object created
+    **kwargs : :class:`~.grid.network.Network`
+
+    """
+    # assign curtailment to individual generators
     for gen in curtailment.columns:
         gen.curtailment = curtailment.loc[:, gen]
 
-    edisgo_object.network.timeseries.curtailment = list(curtailment.columns)
+    if not edisgo_object.network.timeseries._curtailment:
+        edisgo_object.network.timeseries._curtailment = list(curtailment.columns)
+    else:
+        edisgo_object.network.timeseries._curtailment.extend(list(curtailment.columns))

@@ -1188,34 +1188,33 @@ class CurtailmentControl:
                         # allocate curtailment to weather cells
                         if 'wind' in self.curtailment_ts.columns:
                             try:
-                                curtailment_wind = curtail_function(self.feedin.loc[:, 'wind': 'wind'],
-                                                                    self.curtailment_ts['wind'],
-                                                                    edisgo_object,
-                                                                    **kwargs)
+                                curtail_function(self.feedin.loc[:, (slice(None),
+                                                                     slice(None),
+                                                                     'wind')],
+                                                 self.curtailment_ts['wind'],
+                                                 edisgo_object,
+                                                 **kwargs)
                             except:
                                 message = 'Curtailment time series for wind ' \
                                           'generators provided but no wind ' \
                                           'feed-in time series.'
                                 logging.error(message)
                                 raise KeyError(message)
-                        else:
-                            curtailment_wind = pd.DataFrame()
+
                         if 'solar' in self.curtailment_ts.columns:
                             try:
-                                curtailment_solar = curtail_function(self.feedin.loc[:, 'solar': 'solar'],
-                                                                     self.curtailment_ts['solar'],
-                                                                     edisgo_object,
-                                                                     **kwargs)
+                                curtail_function(self.feedin.loc[:, (slice(None),
+                                                                     slice(None),
+                                                                     'solar')],
+                                                 self.curtailment_ts['solar'],
+                                                 edisgo_object,
+                                                 **kwargs)
                             except:
                                 message = 'Curtailment time series for solar ' \
                                           'generators provided but no solar ' \
                                           'feed-in time series.'
                                 logging.error(message)
                                 raise KeyError(message)
-                        else:
-                            curtailment_solar = pd.DataFrame()
-                        edisgo_object.network.timeseries.curtailment = \
-                            curtailment_wind.join(curtailment_solar, how='outer')
                     else:
                         # if both feed-in and curtailment are only differentiated
                         # by technology the curtailment time series can be used
