@@ -38,6 +38,8 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         # do it!
         edisgo_object.analyze()
         v_pu = edisgo_object.network.results.v_res()
+        #TODO : This is a temporary fix but this must be fixed for later
+        edisgo_object.network.pypsa = None
 
     # get only the GeneratorFluctuating objects
     gen_columns = list(filter(lambda x: 'GeneratorFluctuating' in x, v_pu.columns.levels[1]))
