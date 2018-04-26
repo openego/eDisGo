@@ -113,12 +113,17 @@ def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         feedin_factor = feedin_factor / feedin_factor
         feedin_factor.fillna(1.0, inplace=True)
 
-    feedin = feedin.sum(axis=1, level='type')
+    # feedin = feedin.sum(axis=1, level='type')
+    feedin.mul(feedin_factor, axis=0, level=1)
 
-    feedin = feedin.multiply(feedin_factor)
-    curtailment = (feedin.divide(
-        feedin.sum(axis=1), axis=0)).multiply(
-        total_curtailment, axis=0)
+    # total_curtailment
+    curtailment = feedin.divide(feedin.sum(axis=1), axis=0). \
+        multiply(total_curtailment_ts, axis=0)
+    curtailment.columns = curtailment.columns.droplevel(1)
+    curtailment.columns = curtailment.columns.droplevel(1)
 
-    # write the curtailment timeseries in the right location
-    edisgo_object.network.timeseries.curtailment = curtailment
+    # assign curtailment to individual generators
+    for gen in curtailment.columns:
+        gen.curtailment = curtailment.loc[:, gen]
+
+    edisgo_object.network.timeseries.curtailment = list(curtailment.columns)
