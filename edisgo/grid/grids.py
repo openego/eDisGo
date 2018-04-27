@@ -26,6 +26,10 @@ class Grid:
         The station the grid is fed by
     _weather_cell : :obj:`list`
         Contains a list of weather_cells within the grid
+    _generators : :obj:'edisgo.components.Generator'
+        Contains a list of the generators
+    _loads : :obj:'edisgo.components.Load'
+        Contains a list of the loads
     """
 
     def __init__(self, **kwargs):
@@ -38,7 +42,7 @@ class Grid:
         self._station = kwargs.get('station', None)
         self._weather_cells = kwargs.get('weather_cell', None)
         self._generators = None
-
+        self._loads = None
         self._graph = Graph()
 
     def connect_generators(self, generators):
@@ -221,7 +225,24 @@ class Grid:
             List of Generator Objects
         """
         if not self._generators:
-            return list(self.graph.nodes_by_attribute('generator'))
+            generators = list(self.graph.nodes_by_attribute('generator'))
+            generators.extend(list(self.graph.nodes_by_attribute('generator_aggr')))
+            return generators
+        else:
+            pass
+
+    @property
+    def loads(self):
+        """
+        Connected Generators within the grid
+
+        Returns
+        -------
+        list
+            List of Generator Objects
+        """
+        if not self._loads:
+            return list(self.graph.nodes_by_attribute('load'))
         else:
             pass
 
