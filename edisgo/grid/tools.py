@@ -411,6 +411,79 @@ def get_gen_info(network, level='mvlv'):
     return gen_df
 
 
+def get_load_info(network, level='mvlv'):
+    """
+    Gets all the installed generators under both mv and the lv grids.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+        the network data
+    level : :string
+        'mv' for generators in mv level
+        'lv' for generators in lv level
+        'mvlv' for generators in both mv and lv levels
+
+    Returns
+    --------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Generators and Generator information
+    """
+    # get all generators
+    load = []
+    load_voltage_level = []
+    load_node = []
+    load_peak_agr = []
+    load_peak_ind = []
+    load_peak_res = []
+    load_peak_com = []
+
+    if 'mv' in level:
+        load = network.mv_grid.loads
+        load_voltage_level = ['mv']*len(load)
+        load_node = [ld.grid.station for ld in load]
+        load_peak_agr = [ld.peak_load.loc['agricultural'] for ld in load]
+        load_peak_ind = [ld.peak_load.loc['industrial'] for ld in load]
+        load_peak_res = [ld.peak_load.loc['residential'] for ld in load]
+        load_peak_com = [ld.peak_load.loc['retail'] for ld in load]
+
+    else:
+        pass
+
+    if 'lv' in level:
+        for lv_grid in network.mv_grid.lv_grids:
+            loads_lv = lv_grid.loads
+            load.extend(loads_lv)
+            load_voltage_level.extend(['lv']*len(loads_lv))
+            load_node.extend([ld.grid.station for ld in loads_lv])
+            load_peak_agr.extend([ld.peak_load.loc['agricultural'] for ld in loads_lv])
+            load_peak_ind.extend([ld.peak_load.loc['industrial'] for ld in loads_lv])
+            load_peak_res.extend([ld.peak_load.loc['residential'] for ld in loads_lv])
+            load_peak_com.extend([ld.peak_load.loc['retail'] for ld in loads_lv])
+
+    else:
+        pass
+
+    load_df = pd.DataFrame({'load_repr': list(map(lambda x: repr(x), load)),
+                            'load_uncat': load,
+                            'voltage_level': load_voltage_level,
+                            'connected_node': load_node,
+                            'agricultural': load_peak_agr,
+                            'industrial': load_peak_ind,
+                            'residential': load_peak_res,
+                            'retail': load_peak_com})
+
+    load_df.sort_values('residential', ascending=False, inplace=True)
+
+    load_df['load'] = pd.Categorical(load_df.loc[:, 'load_uncat'],
+                                     load_df.loc[:, 'load_uncat'])
+
+    load_df.set_index('load', inplace=True)
+    load_df.drop('load_uncat', axis=1, inplace=True)
+
+    return load_df
+
+
 def get_capacities_by_type_and_weather_cell(network):
     """
     Gets installed capacities of wind and solar generators by weather
