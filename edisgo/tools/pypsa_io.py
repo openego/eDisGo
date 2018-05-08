@@ -1329,7 +1329,6 @@ def update_pypsa(network):
                    's_nom': [],
                    'tap_ratio': []}
 
-
     for idx, row in added_transformers.iterrows():
 
         if isinstance(idx, LVStation):

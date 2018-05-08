@@ -377,8 +377,10 @@ class EDisGo:
             # Translate eDisGo grid topology representation to PyPSA format
             self.network.pypsa = pypsa_io.to_pypsa(self.network, mode)
         else:
-            # Update PyPSA data with equipment changes
-            pypsa_io.update_pypsa(self.network)
+            if self.network.results.equipment_changes is not None:
+                # Update PyPSA data with equipment changes
+                pypsa_io.update_pypsa(self.network)
+            # ToDo: add option to change generator time series
 
         # run power flow analysis
         pf_results = self.network.pypsa.pf(self.network.pypsa.snapshots)
