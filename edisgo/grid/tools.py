@@ -368,10 +368,11 @@ def get_gen_info(network, level='mvlv'):
         gens_node = [gen.grid.station for gen in gens]
         gens_type = [gen.type for gen in gens]
         gens_rating = [gen.nominal_capacity for gen in gens]
-        try:
-            gens_w_id = [gen.weather_cell_id for gen in gens]
-        except AttributeError:
-            gens_w_id = [np.nan]*len(gens)
+        for gen in gens:
+            try:
+                gens_w_id.append(gen.weather_cell_id)
+            except AttributeError:
+                gens_w_id.append(np.nan)
 
     else:
         pass
@@ -384,10 +385,11 @@ def get_gen_info(network, level='mvlv'):
             gens_node.extend([gen.grid.station for gen in gens_lv])
             gens_type.extend([gen.type for gen in gens_lv])
             gens_rating.extend([gen.nominal_capacity for gen in gens_lv])
-            try:
-                gens_w_id.extend([gen.weather_cell_id for gen in gens_lv])
-            except AttributeError:
-                gens_w_id.extend([np.nan]*len(gens_lv))
+            for gen in gens_lv:
+                try:
+                    gens_w_id.append(gen.weather_cell_id)
+                except AttributeError:
+                    gens_w_id.append(np.nan)
 
     else:
         pass
