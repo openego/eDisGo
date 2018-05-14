@@ -1994,11 +1994,10 @@ def import_feedin_timeseries(config_data, mv_grid_id, generator_scenario):
 
         # TODO: add option to retrieve subset of time series
         feedin_sqla = session.query(
-            orm_feedin.hour,
-            orm_feedin.coastdat_id,
-            orm_feedin.sub_id.label('subst_id'),
-            orm_feedin.generation_type,
             orm_feedin.scenario,
+            orm_feedin.weather_scenario_id,
+            orm_feedin.w_id,
+            orm_feedin.source,
             orm_feedin.feedin). \
             filter(orm_feedin.sub_id == mv_grid_id). \
             filter(orm_feedin.scenario.in_(generator_scenario)). \
