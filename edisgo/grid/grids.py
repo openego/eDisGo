@@ -24,6 +24,12 @@ class Grid:
         format: #TODO: DEFINE FORMAT
     _station : :class:`~.grid.components.Station`
         The station the grid is fed by
+    _weather_cell : :obj:`list`
+        Contains a list of weather_cells within the grid
+    _generators : :obj:'edisgo.components.Generator'
+        Contains a list of the generators
+    _loads : :obj:'edisgo.components.Load'
+        Contains a list of the loads
     """
 
     def __init__(self, **kwargs):
@@ -34,7 +40,9 @@ class Grid:
         self._peak_generation = kwargs.get('peak_generation', None)
         self._grid_district = kwargs.get('grid_district', None)
         self._station = kwargs.get('station', None)
-
+        self._weather_cells = kwargs.get('weather_cell', None)
+        self._generators = None
+        self._loads = None
         self._graph = Graph()
 
     def connect_generators(self, generators):
@@ -82,6 +90,36 @@ class Grid:
         return self._grid_district
 
     @property
+    def weather_cells(self):
+        """
+        Weather cells contained in grid
+
+        Returns
+        -------
+        list
+            list of weather cell ids contained in grid
+        """
+        if not self._weather_cells:
+
+            # get all the weather cell ids
+            self._weather_cells = []
+            for gen in self.graph.nodes_by_attribute('generator'):
+                if hasattr(gen, 'weather_cell_id'):
+                    self._weather_cells.append(gen.weather_cell_id)
+                else:
+                    pass  # DO NOTHING IF THERE IS NO weather_cell_id!
+
+            # drop the duplicates
+            self._weather_cells = list(set(self._weather_cells))
+
+            if len(self._weather_cells) == 1 and \
+                    self._weather_cells[0]:
+                self._weather_cells.pop()
+                raise Warning("There seem to be no weather_cell_ids in in the generators")
+
+            return self._weather_cells
+
+    @property
     def peak_generation(self):
         """
         Cumulative peak generation capacity of generators of this grid
@@ -93,8 +131,8 @@ class Grid:
         """
         if self._peak_generation is None:
             self._peak_generation = sum(
-                [_.nominal_capacity
-                 for _ in self.graph.nodes_by_attribute('generator')])
+                [gen.nominal_capacity
+                 for gen in self.generators])
 
         return self._peak_generation
 
@@ -109,10 +147,38 @@ class Grid:
             Peak generation index by technology
         """
         peak_generation = defaultdict(float)
-        for gen in self.graph.nodes_by_attribute('generator'):
+        for gen in self.generators:
             peak_generation[gen.type] += gen.nominal_capacity
 
         return pd.Series(peak_generation)
+
+    @property
+    def peak_generation_per_technology_and_weather_cell(self):
+        """
+        Peak generation of each technology and the 
+        corresponding weather cell in the grid 
+
+        Returns
+        -------
+        :pandas:`pandas.Series<series>`
+            Peak generation index by technology
+        """
+        peak_generation = defaultdict(float)
+        for gen in self.generators:
+            if hasattr(gen, 'weather_cell_id'):
+                if (gen.type, gen.weather_cell_id) in peak_generation.keys():
+                    peak_generation[gen.type, gen.weather_cell_id] += gen.nominal_capacity
+                else:
+                    peak_generation[gen.type, gen.weather_cell_id] = gen.nominal_capacity
+            else:
+                message = 'No weather cell ID found for ' \
+                          'generator {}.'.format(repr(gen))
+                raise KeyError(message)
+
+        series_index = pd.MultiIndex.from_tuples(list(peak_generation.keys()),
+                                                 names=['type', 'weather_cell_id'])
+
+        return pd.Series(peak_generation, index=series_index)
 
     @property
     def peak_load(self):
@@ -148,9 +214,41 @@ class Grid:
 
         return pd.Series(consumption)
 
+    @property
+    def generators(self):
+        """
+        Connected Generators within the grid
+
+        Returns
+        -------
+        list
+            List of Generator Objects
+        """
+        if not self._generators:
+            generators = list(self.graph.nodes_by_attribute('generator'))
+            generators.extend(list(self.graph.nodes_by_attribute('generator_aggr')))
+            return generators
+        else:
+            pass
+
+    @property
+    def loads(self):
+        """
+        Connected Generators within the grid
+
+        Returns
+        -------
+        list
+            List of Generator Objects
+        """
+        if not self._loads:
+            return list(self.graph.nodes_by_attribute('load'))
+        else:
+            pass
 
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
+
 
 
 class MVGrid(Grid):
@@ -209,12 +307,12 @@ class MVGrid(Grid):
 
 
 class LVGrid(Grid):
-        """Defines a low voltage grid in eDisGo
+    """Defines a low voltage grid in eDisGo
 
         """
 
-        def __init__(self, **kwargs):
-            super().__init__(**kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
 
 class Graph(nx.Graph):
@@ -243,7 +341,7 @@ class Graph(nx.Graph):
         """
 
         return dict([(v, k) for k, v in
-              nx.get_edge_attributes(self, 'line').items()])[line]
+                     nx.get_edge_attributes(self, 'line').items()])[line]
 
     def line_from_nodes(self, u, v):
         """

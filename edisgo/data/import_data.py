@@ -170,6 +170,7 @@ def _build_lv_grid(ding0_grid, network):
                     type=_.type,
                     subtype=_.subtype,
                     grid=lv_grid,
+                    weather_cell_id=_.weather_cell_id,
                     v_level=_.v_level) if _.type in ['wind', 'solar'] else
                                   Generator(
                                       id=_.id_db,
@@ -298,6 +299,7 @@ def _build_mv_grid(ding0_grid, network):
         type=_.type,
         subtype=_.subtype,
         grid=grid,
+        weather_cell_id=_.weather_cell_id,
         v_level=_.v_level) if _.type in ['wind', 'solar'] else
                       Generator(
                           id=_.id_db,

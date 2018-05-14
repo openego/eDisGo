@@ -448,12 +448,6 @@ class GeneratorFluctuating(Generator):
                                      "given.".format(self.type))
                     raise
 
-            # subtract curtailment
-            if self.curtailment is not None:
-                ts = ts.join(self.curtailment.to_frame('curtailment'),
-                             how='left')
-                ts.p = ts.p - ts.curtailment.fillna(0)
-
             # calculate share of reactive power
             if isinstance(self.grid, MVGrid):
                 q_factor = tan(acos(self.grid.network.config[
@@ -464,7 +458,15 @@ class GeneratorFluctuating(Generator):
                                         'reactive_power_factor'][
                                         'lv_gen']))
             ts['q'] = ts['p'] * q_factor
-            self._timeseries = ts * self.nominal_capacity
+            timeseries = ts * self.nominal_capacity
+
+            # subtract curtailment
+            if self.curtailment is not None:
+                timeseries = timeseries.join(self.curtailment.to_frame('curtailment'),
+                             how='left')
+                timeseries.p = timeseries.p - timeseries.curtailment.fillna(0)
+
+            return timeseries.loc[self.grid.network.timeseries.timeindex, :]
 
         return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
 
@@ -485,7 +487,7 @@ class GeneratorFluctuating(Generator):
             is set this is returned.
 
         """
-        if self._curtailment:
+        if self._curtailment is not None:
             return self._curtailment
         elif isinstance(self.grid.network.timeseries.curtailment,
                         pd.DataFrame):
