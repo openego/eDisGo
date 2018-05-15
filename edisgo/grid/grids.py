@@ -40,7 +40,7 @@ class Grid:
         self._peak_generation = kwargs.get('peak_generation', None)
         self._grid_district = kwargs.get('grid_district', None)
         self._station = kwargs.get('station', None)
-        self._weather_cells = kwargs.get('weather_cell', None)
+        self._weather_cells = kwargs.get('weather_cells', None)
         self._generators = None
         self._loads = None
         self._graph = Graph()
