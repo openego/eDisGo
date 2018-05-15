@@ -1941,7 +1941,7 @@ def _build_lv_grid_dict(network):
     return lv_grid_dict
 
 
-def import_feedin_timeseries(config_data, mv_grid_id, generator_scenario):
+def import_feedin_timeseries(config_data, weather_cell_ids):
     """
     Import RES feed-in time series data and process
 
@@ -1960,8 +1960,7 @@ def import_feedin_timeseries(config_data, mv_grid_id, generator_scenario):
         Feedin time series
     """
 
-    def _retrieve_timeseries_from_oedb(config_data, mv_grid_id,
-                                       generator_scenario):
+    def _retrieve_timeseries_from_oedb(config_data, weather_cell_ids):
         """Retrieve time series from oedb
 
         Parameters
@@ -1994,43 +1993,51 @@ def import_feedin_timeseries(config_data, mv_grid_id, generator_scenario):
         Session = sessionmaker(bind=conn)
         session = Session()
 
+
+
         # TODO: add option to retrieve subset of time series
+        # TODO: find the reference power class for mvgrid/w_id and insert instead of 4
         feedin_sqla = session.query(
-            orm_feedin.scenario,
-            orm_feedin.weather_scenario_id,
             orm_feedin.w_id,
             orm_feedin.source,
             orm_feedin.feedin). \
-            filter(orm_feedin.sub_id == mv_grid_id). \
-            filter(orm_feedin.scenario.in_(generator_scenario)). \
+            filter(orm_feedin.w_id.in_(weather_cell_ids)). \
+            filter(orm_feedin.power_class.in_([0, 4])). \
             filter(orm_feedin_version)
 
         feedin = pd.read_sql_query(feedin_sqla.statement,
                                    session.bind,
-                                   index_col='subst_id')
+                                   index_col=['source', 'w_id'])
+
+        feedin.sort_index(axis=0, inplace=True)
+
+        timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
+
+        recasted_feedin_lists = []
+        for ty in feedin.index.levels[0]:
+            for w_id in feedin.index.levels[1]:
+                recasted_feedin_lists.append(feedin.loc[(ty, w_id), :].values[0])
+
+        feedin = pd.DataFrame(np.array(recasted_feedin_lists).transpose(),
+                              index=timeindex,
+                              columns=feedin.index.copy())
+
+
 
         # rename 'windonshore' to 'wind'
-        feedin = feedin.replace({'generation_type': {'windonshore': 'wind'}})
+        feedin.columns.set_levels(list(map(lambda x: x.replace('wind_onshore', 'wind') if x == 'wind_onshore' else x,
+                                           feedin.columns.levels[0].values)),
+                                  level=0,
+                                  inplace=True)
 
-        # average across different weather cells in grid district
-        # TODO: replace this by using the specific time series for each generator when input tables are replaced are information on weather cells is available
-        feedin = feedin.groupby(['hour', 'generation_type'],
-                                as_index=False).mean()
-        feedin.index = pd.date_range('1/1/2011', periods=8760, freq='H')
+        feedin.columns.rename('type', level=0, inplace=True)
+        feedin.columns.rename('weather_cell_id', level=1, inplace=True)
+
         return feedin
 
-    feedin = _retrieve_timeseries_from_oedb(config_data, mv_grid_id,
-                                            generator_scenario)
-    gen_dict = {}
-    for gen_type in feedin.generation_type.unique():
-        gen_dict[gen_type] = feedin[
-            feedin.generation_type==gen_type].sort_values(by='hour').set_index(
-            'hour').feedin
-    if gen_dict:
-        return pd.DataFrame(gen_dict, index=gen_dict[gen_type].index)
-    else:
-        return None
+    feedin = _retrieve_timeseries_from_oedb(config_data, weather_cell_ids)
 
+    return feedin
 
 def import_load_timeseries(config_data, data_source, mv_grid_id=None,
                            year=None):
