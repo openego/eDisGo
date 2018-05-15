@@ -269,6 +269,7 @@ class EDisGo:
                     'timeseries_generation_dispatchable', None),
                 timeseries_load=kwargs.get(
                     'timeseries_load', None),
+                weather_cell_ids=self.network.mv_grid.weather_cells,
                 config_data=self.network.config,
                 timeindex=kwargs.get('timeindex', None)).timeseries
 
@@ -920,6 +921,7 @@ class TimeSeriesControl:
         self.timeseries = TimeSeries()
         mode = kwargs.get('mode', None)
         config_data = kwargs.get('config_data', None)
+        weather_cell_ids = kwargs.get('weather_cell_ids', None)
 
         if mode:
             if mode == 'worst-case':
@@ -946,9 +948,7 @@ class TimeSeriesControl:
             elif isinstance(ts, str) and ts == 'oedb':
                 self.timeseries.generation_fluctuating = \
                     import_feedin_timeseries(config_data,
-                                             kwargs.get('mv_grid_id', None),
-                                             kwargs.get('generator_scenario',
-                                                        None))
+                                             weather_cell_ids)
             else:
                 raise ValueError('Your input for '
                                  '"timeseries_generation_fluctuating" is not '
@@ -1764,9 +1764,6 @@ class ETraGoSpecs:
         feedin.columns = pd.MultiIndex.from_tuples(new_columns)
         # aggregate wind and solar time series until generators get a weather
         # ID
-        # ToDo: Remove when generators have weather cell ID
-        feedin = pd.DataFrame(data={'wind': feedin.wind.sum(axis=1),
-                                    'solar': feedin.solar.sum(axis=1)})
         return feedin
 
     def _get_curtailment(self, curtailment, renewables):
