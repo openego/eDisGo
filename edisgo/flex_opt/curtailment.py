@@ -57,8 +57,8 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     # total_curtailment
     curtailment = modified_feedin.divide(modified_feedin.sum(axis=1), axis=0). \
         multiply(total_curtailment_ts, axis=0)
-    curtailment.columns = curtailment.columns.droplevel(1)
-    curtailment.columns = curtailment.columns.droplevel(1)
+    for r in range(len(curtailment.columns.levels)-1):
+        curtailment.columns = curtailment.columns.droplevel(1)
 
     # assign curtailment to individual generators
     assign_curtailment(curtailment, edisgo_object)
@@ -117,8 +117,16 @@ def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     # total_curtailment
     curtailment = feedin.divide(feedin.sum(axis=1), axis=0). \
         multiply(total_curtailment_ts, axis=0)
-    curtailment.columns = curtailment.columns.droplevel(1)
-    curtailment.columns = curtailment.columns.droplevel(1)
+
+    # Drop columns where there were 0/0 divisions due to feedin being 0
+    curtailment.dropna(axis=1, how='all', inplace=True)
+    # fill the remaining nans if there are any with 0s
+    curtailment.fillna(0, inplace=True)
+
+    # drop all the feedin column multiindex levels keeping the
+    # Generator Objects as the only column label
+    for r in range(len(curtailment.columns.levels)-1):
+        curtailment.columns = curtailment.columns.droplevel(1)
 
     # assign curtailment to individual generators
     assign_curtailment(curtailment, edisgo_object)
