@@ -1119,39 +1119,30 @@ class CurtailmentControl:
         if self.curtailment_ts is not None:
             self._check_timeindex(edisgo_object.network)
 
-        # get aggregated capacities either by technology or technology and
-        # weather cell
-        self.gen_info = get_gen_info(edisgo_object.network, 'mvlv')
-        self.gen_info = self.gen_info.loc[(self.gen_info.type == 'solar') | (self.gen_info.type == 'wind')]
-
         # get generation fluctuating time series
-        gen_fluct_ts = edisgo_object.network.timeseries._generation_fluctuating.copy()
+        gen_fluct_ts = edisgo_object.network.timeseries.generation_fluctuating.copy()
 
-        if isinstance(edisgo_object.network.timeseries.generation_fluctuating.columns,
-                      pd.MultiIndex):
-            self.capacities = get_capacities_by_type_and_weather_cell(edisgo_object.network)
-        else:
-            self.capacities = self.gen_info.reset_index()
-            self.capacities.set_index(['generator', 'gen_repr', 'type'], inplace=True)
-            self.capacities = self.capacities.loc[:, 'nominal_capacity']
+        # get aggregated capacities by technology and weather cell id
+        self.capacities = get_gen_info(edisgo_object.network, 'mvlv')
+        self.capacities = self.capacities.loc[(self.capacities.type == 'solar') | (self.capacities.type == 'wind')]
+        self.capacities = self.capacities.reset_index()
+        self.capacities.set_index(['generator', 'gen_repr', 'type', 'weather_cell_id'], inplace=True)
+        self.capacities = self.capacities.loc[:, 'nominal_capacity']
 
-        # This code is meant to replace the above code when weather_cell_ids are being tested
-        # check if it has weather_cell_ids -> currently the easiest check is if there is a MultiIndex-column
-        # if not then extend it else use it directly
-        # if not(type(gen_fluct_ts.columns) == pd.MultiIndex):
-        #     gen_fluct_ts.columns.rename('type', inplace=True)
-        #     gen_fluct_ts_index_temp = gen_fluct_ts.index.copy()
-        #     gen_fluct_ts = gen_fluct_ts.T.reset_index()
-        #     gen_fluct_ts['weather_cell_id'] = np.nan
-        #     gen_fluct_ts.set_index(['type','weather_cell_id'], inplace=True)
-        #     gen_fluct_ts = gen_fluct_ts.T
-        #     gen_fluct_ts.index = gen_fluct_ts_index_temp
-
-
-        # calculate absolute feed-in
-        self.feedin = gen_fluct_ts.multiply(
-            self.capacities, level=2)
-        self.feedin.dropna(axis=1, how='all', inplace=True)
+        # calculate absolute feed-in timeseries including technology and weather cell id
+        self.feedin = pd.DataFrame(self.capacities).T
+        self.feedin = self.feedin.append([self.feedin] * (gen_fluct_ts.index.size - 1),
+                                         ignore_index=True)
+        self.feedin.index = gen_fluct_ts.index.copy()
+        for x in self.feedin.columns.levels[0]:
+            try:
+                self.feedin.loc[:, (x, str(x), x.type, x.weather_cell_id)] = \
+                    self.feedin.loc[:, (x, str(x), x.type, x.weather_cell_id)] * \
+                    gen_fluct_ts.loc[:, (x.type, x.weather_cell_id)]
+            except AttributeError:
+                pass
+            except KeyError:
+                pass
 
         # get mode of curtailment and the arguments necessary
         if self.mode == 'curtail_all':
@@ -1172,68 +1163,61 @@ class CurtailmentControl:
                              **kwargs)
         elif isinstance(self.curtailment_ts, pd.DataFrame):
             if isinstance(self.curtailment_ts.columns, pd.MultiIndex):
-                # if both feed-in and curtailment are differentiated by
-                # technology and weather cell the curtailment time series
-                # can be used directly
-                # TODO : Need to review this part of the code when the weather_cell_ids are integrated
-                # if isinstance(self.feedin.columns, pd.MultiIndex):
-                edisgo_object.network.timeseries.curtailment = self.curtailment_ts
-                # else:
-                #   message = 'Curtailment time series are provided for ' \
-                #             'different weather cells but feed-in time ' \
-                #             'series are not.'
-                #   logging.error(message)
-                #   raise KeyError(message)
+                col_tuple_list = self.curtailment_ts.columns.tolist()
+                for col_slice in col_tuple_list:
+                        curtail_function(self.feedin.loc[:, (slice(None),
+                                                             slice(None),
+                                                             col_slice[0],
+                                                             col_slice[1])],
+                                         self.curtailment_ts[col_slice],
+                                         edisgo_object,
+                                         **kwargs)
             else:
-                # TODO : Need to review this part of the code when the weather_cell_ids are integrated
-                if self.mode == 'curtail_all':
-                    if isinstance(self.feedin.columns, pd.MultiIndex):
-                        # allocate curtailment to weather cells
-                        if 'wind' in self.curtailment_ts.columns:
-                            try:
-                                curtail_function(self.feedin.loc[:, (slice(None),
-                                                                     slice(None),
-                                                                     'wind')],
-                                                 self.curtailment_ts['wind'],
-                                                 edisgo_object,
-                                                 **kwargs)
-                            except:
-                                message = 'Curtailment time series for wind ' \
-                                          'generators provided but no wind ' \
-                                          'feed-in time series.'
-                                logging.error(message)
-                                raise KeyError(message)
-
-                        if 'solar' in self.curtailment_ts.columns:
-                            try:
-                                curtail_function(self.feedin.loc[:, (slice(None),
-                                                                     slice(None),
-                                                                     'solar')],
-                                                 self.curtailment_ts['solar'],
-                                                 edisgo_object,
-                                                 **kwargs)
-                            except:
-                                message = 'Curtailment time series for solar ' \
-                                          'generators provided but no solar ' \
-                                          'feed-in time series.'
-                                logging.error(message)
-                                raise KeyError(message)
-                    else:
-                        # if both feed-in and curtailment are only differentiated
-                        # by technology the curtailment time series can be used
-                        # directly
-                        edisgo_object.network.timeseries.curtailment = self.curtailment_ts
+                # when there is no multi-index then we assume that this is only
+                # curtailed through technology or with weather cell id only
+                if self.curtailment_ts.columns.dtype == object:
+                    # this is when technology is given as strings
+                    for tech in self.curtailment_ts.columns:
+                        curtail_function(self.feedin.loc[:, (slice(None),
+                                                             slice(None),
+                                                             tech,
+                                                             slice(None))],
+                                         self.curtailment_ts[tech],
+                                         edisgo_object,
+                                         **kwargs)
+                elif self.curtailment_ts.columns.dtype == int:
+                    # this is when weather_cell_id is given as strings
+                    for w_id in self.curtailment_ts.columns:
+                        curtail_function(self.feedin.loc[:, (slice(None),
+                                                             slice(None),
+                                                             slice(None),
+                                                             w_id)],
+                                         self.curtailment_ts[w_id],
+                                         edisgo_object,
+                                         **kwargs)
                 else:
-                    curtail_function(self.feedin,
-                                     self.curtailment_ts,
-                                     edisgo_object,
-                                     **kwargs)
+                    message = 'Unallowed type {} of provided curtailment time ' \
+                              'series labels. Must either be string (like \'solar\') or ' \
+                              'integer (like w_id 933).'.format(type(self.curtailment_ts))
+                    logging.error(message)
+                    raise TypeError(message)
         else:
             message = 'Unallowed type {} of provided curtailment time ' \
                       'series. Must either be pandas.Series or ' \
                       'pandas.DataFrame.'.format(type(self.curtailment_ts))
             logging.error(message)
             raise TypeError(message)
+
+                # else:
+                #     # if both feed-in and curtailment are only differentiated
+                #     # by technology the curtailment time series can be used
+                #     # directly
+                #     edisgo_object.network.timeseries.curtailment = self.curtailment_ts
+                # else:
+                #     curtail_function(self.feedin,
+                #                      self.curtailment_ts,
+                #                      edisgo_object,
+                #                      **kwargs)
 
         # check if curtailment exceeds feed-in
         self._check_curtailment(edisgo_object.network)
@@ -1259,7 +1243,7 @@ class CurtailmentControl:
             logging.error(message)
             raise KeyError(message)
         # raise warning if time indexes do not have the same entries
-        if pd.Series(network.timeseries._generation_fluctuating.
+        if pd.Series(network.timeseries.generation_fluctuating.
                              index).equals(pd.Series(
             self.curtailment_ts.index)) is False:
             logging.warning('Time index of curtailment time series is not '
@@ -1280,9 +1264,8 @@ class CurtailmentControl:
         """
 
         feedin_ts_compare = self.feedin.copy()
-        feedin_ts_compare.columns = feedin_ts_compare.columns.droplevel(1)
-        feedin_ts_compare.columns = feedin_ts_compare.columns.droplevel(1)
-
+        for r in range(len(feedin_ts_compare.columns.levels)-1):
+            feedin_ts_compare.columns = feedin_ts_compare.columns.droplevel(1)
         # need an if condition to remove the weather_cell_id level too
 
         if not (feedin_ts_compare.loc[:, network.timeseries.curtailment.columns]
