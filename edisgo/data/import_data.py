@@ -102,6 +102,16 @@ def import_from_ding0(file, network):
     # Set more params
     network._id = network.mv_grid.id
 
+    # Update the weather_cell_ids in mv_grid to include the ones in lv_grids
+    # TODO: maybe get a better solution to push the weather_cell_ids in lv_grids but not in mv_grid but into the
+    # mv_grid.weather_cell_ids from within the Grid() object or the MVGrid() or LVGrid()
+    mv_weather_cell_id = network.mv_grid.weather_cells
+    for lvg in lv_grids:
+        if lvg.weather_cells:
+            for lv_w_id in lvg._weather_cells:
+                if not (lv_w_id in mv_weather_cell_id):
+                    network.mv_grid._weather_cells.append(lv_w_id)
+
 
 def _build_lv_grid(ding0_grid, network):
     """
