@@ -106,16 +106,12 @@ class Grid:
             for gen in self.graph.nodes_by_attribute('generator'):
                 if hasattr(gen, 'weather_cell_id'):
                     self._weather_cells.append(gen.weather_cell_id)
-                else:
-                    pass  # DO NOTHING IF THERE IS NO weather_cell_id!
+                    # DO NOTHING IF THERE IS NO weather_cell_id!
 
             # drop the duplicates
             self._weather_cells = list(set(self._weather_cells))
-
-            if len(self._weather_cells) == 1 and \
-                    self._weather_cells[0]:
-                self._weather_cells.pop()
-                raise Warning("There seem to be no weather_cell_ids in in the generators")
+            # no need to check for Nones in the list because None in gen.weather_cell_id
+            # is kicked out by the if hasattr() before
 
             return self._weather_cells
 
