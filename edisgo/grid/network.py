@@ -260,6 +260,7 @@ class EDisGo:
         if kwargs.get('worst_case_analysis', None):
             self.network.timeseries = TimeSeriesControl(
                 mode=kwargs.get('worst_case_analysis', None),
+                weather_cell_ids=self.network.mv_grid._weather_cells,
                 config_data=self.network.config).timeseries
         else:
             self.network.timeseries = TimeSeriesControl(
@@ -269,7 +270,7 @@ class EDisGo:
                     'timeseries_generation_dispatchable', None),
                 timeseries_load=kwargs.get(
                     'timeseries_load', None),
-                weather_cell_ids=self.network.mv_grid.weather_cells,
+                weather_cell_ids=self.network.mv_grid._weather_cells,
                 config_data=self.network.config,
                 timeindex=kwargs.get('timeindex', None)).timeseries
 
