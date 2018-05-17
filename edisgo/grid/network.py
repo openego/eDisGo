@@ -1165,6 +1165,10 @@ class CurtailmentControl:
             if isinstance(self.curtailment_ts.columns, pd.MultiIndex):
                 col_tuple_list = self.curtailment_ts.columns.tolist()
                 for col_slice in col_tuple_list:
+                    if self.feedin.loc[:, (slice(None),
+                                           slice(None),
+                                           col_slice[0],
+                                           col_slice[1])].size > 0:
                         curtail_function(self.feedin.loc[:, (slice(None),
                                                              slice(None),
                                                              col_slice[0],
@@ -1172,6 +1176,10 @@ class CurtailmentControl:
                                          self.curtailment_ts[col_slice],
                                          edisgo_object,
                                          **kwargs)
+                    else:
+                        message = "There seems to be no feedin time series" +\
+                            " corresponding to the combination of {}".format(col_slice)
+                        logging.warning(message)
             else:
                 # when there is no multi-index then we assume that this is only
                 # curtailed through technology or with weather cell id only
@@ -2127,7 +2135,7 @@ class Results:
 
         return s_res
 
-    def v_res(self, nodes=None, level=None):
+    def v_res(self, nodes=None, generators=None, level=None):
         """
         Get resulting voltage level at node
 
@@ -2162,15 +2170,18 @@ class Results:
         if nodes is None:
             labels = list(self.pfa_v_mag_pu[level])
         else:
-            labels = [repr(_) for _ in nodes]
+            labels = list(map(repr, nodes.copy()))
 
         not_included = [_ for _ in labels
                         if _ not in list(self.pfa_v_mag_pu[level].columns)]
 
         labels_included = [_ for _ in labels if _ not in not_included]
 
+        # unless index is lexsorted, it cannot be sliced
+        self.pfa_v_mag_pu.sort_index(axis=1, inplace=True)
+
         if not_included:
-            print("Voltage levels for {nodes} are not returned from PFA".format(
+            logging.info("Voltage levels for {nodes} are not returned from PFA".format(
                 nodes=not_included))
 
-        return self.pfa_v_mag_pu[level][labels_included]
+        return self.pfa_v_mag_pu.loc[:, (level, labels_included)]
