@@ -26,29 +26,29 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
 
     **kwargs : :class:`~.grid.network.Network`
     """
-    voltage_threshold_lower = kwargs.get('voltage_threshold_lower', 0.96)
+    voltage_threshold_lower = kwargs.get('voltage_threshold_lower', 1.0)
 
     # get the results of a load flow
     # get the voltages at the nodes
     try:
-        v_pu = edisgo_object.network.results.v_res()
+        v_pu = edisgo_object.network.results.v_res(nodes=feedin.columns.levels[0])
 
     except TypeError:
         # if the load flow hasn't been done,
         # do it!
         edisgo_object.analyze()
-        v_pu = edisgo_object.network.results.v_res()
+        v_pu = edisgo_object.network.results.v_res(nodes=feedin.columns.levels[0])
         #TODO : This is a temporary fix but this must be fixed for later
         edisgo_object.network.pypsa = None
 
     # get only the GeneratorFluctuating objects
-    gen_columns = list(filter(lambda x: 'GeneratorFluctuating' in x, v_pu.columns.levels[1]))
-    v_pu.sort_index(axis=1, inplace=True)
-    v_pu_gen = v_pu.loc[:, (slice(None), gen_columns)]
+    # gen_columns = list(filter(lambda x: 'GeneratorFluctuating' in x, v_pu.columns.levels[1]))
+    # v_pu.sort_index(axis=1, inplace=True)
+    # v_pu_gen = v_pu.loc[:, (slice(None), gen_columns)]
 
     # curtailment calculation by inducing a reduced or increased feedin
     # find out the difference from lower threshold
-    feedin_factor = v_pu_gen - voltage_threshold_lower + 1
+    feedin_factor = v_pu - voltage_threshold_lower + 1
     feedin_factor.columns = feedin_factor.columns.droplevel(0)  # drop the 'mv' 'lv' labels
 
     # multiply feedin_factor to feedin to modify the amount of curtailment
