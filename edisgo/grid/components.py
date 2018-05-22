@@ -464,9 +464,11 @@ class GeneratorFluctuating(Generator):
                                         'reactive_power_factor'][
                                         'lv_gen']))
             ts['q'] = ts['p'] * q_factor
-            self._timeseries = ts * self.nominal_capacity
+            return ts.loc[self.grid.network.timeseries.timeindex, :]
 
-        return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
+        else:
+            return self._timeseries.loc[
+                   self.grid.network.timeseries.timeindex, :]
 
     @property
     def curtailment(self):

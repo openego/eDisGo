@@ -1,5 +1,6 @@
 import pandas as pd
 
+
 def one_storage_per_feeder(edisgo):
 
     def feeder_ranking(grid_expansion_costs):
@@ -35,7 +36,7 @@ def one_storage_per_feeder(edisgo):
         ranked_feeders = feeder_ranking(
             edisgo.network.results.grid_expansion_costs)
         # reset edisgo object (new grid -> moved to reinforce_grid)
-        edisgo.import_from_ding0(kwargs.get('ding0_grid', None))
+        #edisgo.import_from_ding0(kwargs.get('ding0_grid', None))
     # for every feeder:
     # ** install storage at the node of the overloaded lines farthest away from the HV/MV transformer
     # ** estimate residual line load (neglect grid losses) to identify all time steps where line is over-loaded

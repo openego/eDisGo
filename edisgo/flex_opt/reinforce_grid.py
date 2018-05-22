@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger('edisgo')
 
 
-def reinforce_grid(edisgo, max_while_iterations=10):
+def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False):
     """
     Evaluates grid reinforcement needs and performs measures.
 
@@ -18,6 +18,8 @@ def reinforce_grid(edisgo, max_while_iterations=10):
         The eDisGo API object
     max_while_iterations : int
         Maximum number of times each while loop is conducted.
+    copy_graph : :obj:`Boolean`
+        If True reinforcement is conducted on a copied graph and discarded
 
     Notes
     -----

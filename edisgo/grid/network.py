@@ -976,8 +976,6 @@ class TimeSeriesControl:
                 raise ValueError('Your input for "timeseries_load" is not '
                                  'valid.'.format(mode))
 
-
-
             # check if time series for the set time index can be obtained
             self._check_timeindex()
 
