@@ -30,38 +30,41 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
 
     # get the results of a load flow
     # get the voltages at the nodes
-    try:
-        v_pu = edisgo_object.network.results.v_res(nodes=feedin.columns.levels[0])
 
-    except TypeError:
+    feedin_gens = feedin.columns.levels[0].values.copy()
+    feedin_gen_reprs = feedin.columns.levels[1].values.copy()
+
+    try:
+        v_pu = edisgo_object.network.results.v_res()
+
+    except AttributeError:
         # if the load flow hasn't been done,
         # do it!
         edisgo_object.analyze()
-        v_pu = edisgo_object.network.results.v_res(nodes=feedin.columns.levels[0])
-        #TODO : This is a temporary fix but this must be fixed for later
-        edisgo_object.network.pypsa = None
+        # TODO: Figure out the problem with putting feedin_gens inside of v_res()
+        v_pu = edisgo_object.network.results.v_res()
 
-    # get only the GeneratorFluctuating objects
-    # gen_columns = list(filter(lambda x: 'GeneratorFluctuating' in x, v_pu.columns.levels[1]))
-    # v_pu.sort_index(axis=1, inplace=True)
-    # v_pu_gen = v_pu.loc[:, (slice(None), gen_columns)]
+    if not(v_pu.empty):
+        # get only the specific feedin objects
+        v_pu = v_pu.loc[:, (slice(None), feedin_gen_reprs)]
 
-    # curtailment calculation by inducing a reduced or increased feedin
-    # find out the difference from lower threshold
-    feedin_factor = v_pu - voltage_threshold_lower + 1
-    feedin_factor.columns = feedin_factor.columns.droplevel(0)  # drop the 'mv' 'lv' labels
+        # curtailment calculation by inducing a reduced or increased feedin
+        # find out the difference from lower threshold
+        feedin_factor = v_pu - voltage_threshold_lower + 1
+        feedin_factor.columns = feedin_factor.columns.droplevel(0)  # drop the 'mv' 'lv' labels
 
-    # multiply feedin_factor to feedin to modify the amount of curtailment
-    modified_feedin = feedin_factor.multiply(feedin, level=1)
+        # multiply feedin_factor to feedin to modify the amount of curtailment
+        modified_feedin = feedin_factor.multiply(feedin, level=1)
 
-    # total_curtailment
-    curtailment = modified_feedin.divide(modified_feedin.sum(axis=1), axis=0). \
-        multiply(total_curtailment_ts, axis=0)
-    for r in range(len(curtailment.columns.levels)-1):
-        curtailment.columns = curtailment.columns.droplevel(1)
+        # total_curtailment
+        curtailment = modified_feedin.divide(modified_feedin.sum(axis=1), axis=0). \
+            multiply(total_curtailment_ts, axis=0)
 
-    # assign curtailment to individual generators
-    assign_curtailment(curtailment, edisgo_object)
+        # assign curtailment to individual generators
+        assign_curtailment(curtailment, edisgo_object)
+    else:
+        message = "The Generators not present in load_flow"
+        logging.warning(message)
 
 
 def curtail_loading(feedin, total_curtailment_ts, edisgo_object, **kwargs):
@@ -118,16 +121,6 @@ def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     curtailment = feedin.divide(feedin.sum(axis=1), axis=0). \
         multiply(total_curtailment_ts, axis=0)
 
-    # Drop columns where there were 0/0 divisions due to feedin being 0
-    curtailment.dropna(axis=1, how='all', inplace=True)
-    # fill the remaining nans if there are any with 0s
-    curtailment.fillna(0, inplace=True)
-
-    # drop all the feedin column multiindex levels keeping the
-    # Generator Objects as the only column label
-    for r in range(len(curtailment.columns.levels)-1):
-        curtailment.columns = curtailment.columns.droplevel(1)
-
     # assign curtailment to individual generators
     assign_curtailment(curtailment, edisgo_object)
 
@@ -148,6 +141,16 @@ def assign_curtailment(curtailment, edisgo_object):
     **kwargs : :class:`~.grid.network.Network`
 
     """
+    # pre-process curtailment before assigning it to generatos
+    # Drop columns where there were 0/0 divisions due to feedin being 0
+    curtailment.dropna(axis=1, how='all', inplace=True)
+    # fill the remaining nans if there are any with 0s
+    curtailment.fillna(0, inplace=True)
+
+    # drop extra column levels that were present in feedin
+    for r in range(len(curtailment.columns.levels) - 1):
+        curtailment.columns = curtailment.columns.droplevel(1)
+
     # assign curtailment to individual generators
     for gen in curtailment.columns:
         gen.curtailment = curtailment.loc[:, gen]
