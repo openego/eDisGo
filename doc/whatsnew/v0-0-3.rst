@@ -1,9 +1,18 @@
 Release v0.0.3
 ==============
 
-Release date: March ?? 2018
+Release date: May 24 2018
 
+New features have been included in this release. Major changes being the use of the weather_cell_id and
+the inclusion of new methods for distributing the curtailment to be more suitable to network operations.
 
 Changes
 -------
 
+* Weather cell information was of importance due to the change in the source of data available from oedb.
+  The table  `ego_renewable_feedin` is now used to provide this feedin time series indexed using the weather cells.
+  Changes were made to ego.io and ding0 to correspondingly allow the use of this table by eDisGo.
+
+* A new curtailment method have been included based on the voltages at the nodes with `GeneratorFluctuating` objects.
+  The method is called `curtail_voltage` and its objective is to increase curtailment at locations where voltages
+  are very high, thereby alleviating over-voltage issues and also reducing the need for network reinforcement.
