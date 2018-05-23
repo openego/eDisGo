@@ -1165,14 +1165,13 @@ class CurtailmentControl:
             if isinstance(self.curtailment_ts.columns, pd.MultiIndex):
                 col_tuple_list = self.curtailment_ts.columns.tolist()
                 for col_slice in col_tuple_list:
-                    if self.feedin.loc[:, (slice(None),
-                                           slice(None),
-                                           col_slice[0],
-                                           col_slice[1])].size > 0:
-                        curtail_function(self.feedin.loc[:, (slice(None),
-                                                             slice(None),
-                                                             col_slice[0],
-                                                             col_slice[1])],
+                    feedin_slice = self.feedin.loc[:, (slice(None),
+                                                       slice(None),
+                                                       col_slice[0],
+                                                       col_slice[1])]
+                    feedin_slice.columns = feedin_slice.columns.remove_unused_levels()
+                    if feedin_slice.size > 0:
+                        curtail_function(feedin_slice,
                                          self.curtailment_ts[col_slice],
                                          edisgo_object,
                                          **kwargs)
@@ -1216,16 +1215,8 @@ class CurtailmentControl:
             logging.error(message)
             raise TypeError(message)
 
-                # else:
-                #     # if both feed-in and curtailment are only differentiated
-                #     # by technology the curtailment time series can be used
-                #     # directly
-                #     edisgo_object.network.timeseries.curtailment = self.curtailment_ts
-                # else:
-                #     curtail_function(self.feedin,
-                #                      self.curtailment_ts,
-                #                      edisgo_object,
-                #                      **kwargs)
+        # clear the pypsa object so that it doesn't interfere with further calculations
+        edisgo_object.network.pypsa = None
 
         # check if curtailment exceeds feed-in
         self._check_curtailment(edisgo_object.network)
@@ -2164,24 +2155,26 @@ class Results:
         voltage at secondary side busbar and not at load/generator.
 
         """
+        # First check if results are available:
+        if hasattr(self, 'pfa_v_mag_pu'):
+            # unless index is lexsorted, it cannot be sliced
+            self.pfa_v_mag_pu.sort_index(axis=1, inplace=True)
+        else:
+            message = "No Power Flow Calculation has be done yet, so there are no results yet."
+            raise AttributeError
+
         if level is None:
             level = ['mv', 'lv']
 
         if nodes is None:
-            labels = list(self.pfa_v_mag_pu[level])
+            return self.pfa_v_mag_pu.loc[:, (level, slice(None))]
         else:
             labels = list(map(repr, nodes.copy()))
+            not_included = [_ for _ in labels
+                            if _ not in list(self.pfa_v_mag_pu[level].columns)]
+            labels_included = [_ for _ in labels if _ not in not_included]
 
-        not_included = [_ for _ in labels
-                        if _ not in list(self.pfa_v_mag_pu[level].columns)]
-
-        labels_included = [_ for _ in labels if _ not in not_included]
-
-        # unless index is lexsorted, it cannot be sliced
-        self.pfa_v_mag_pu.sort_index(axis=1, inplace=True)
-
-        if not_included:
-            logging.info("Voltage levels for {nodes} are not returned from PFA".format(
+            if not_included:
+                logging.info("Voltage levels for {nodes} are not returned from PFA".format(
                 nodes=not_included))
-
-        return self.pfa_v_mag_pu.loc[:, (level, labels_included)]
+            return self.pfa_v_mag_pu.loc[:, (level, labels_included)]
