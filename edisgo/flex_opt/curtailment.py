@@ -85,6 +85,8 @@ def curtail_loading(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         **kwargs : :class:`~.grid.network.Network`
         """
 
+    raise NotImplementedError
+
     return None
 
 
