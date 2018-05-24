@@ -312,20 +312,24 @@ class Generator(Component):
         if self._timeseries is None:
             # set time series for active and reactive power
             try:
-                ts = self.grid.network.timeseries.generation_dispatchable[
-                    self.type].to_frame('p')
+                timeseries = \
+                    self.grid.network.timeseries.generation_dispatchable[
+                        self.type].to_frame('p')
             except KeyError:
                 try:
-                    ts = self.grid.network.timeseries.generation_dispatchable[
-                        'other'].to_frame('p')
+                    timeseries = \
+                        self.grid.network.timeseries.generation_dispatchable[
+                            'other'].to_frame('p')
                 except KeyError:
                     logger.exception("No time series for type {} "
                                      "given.".format(self.type))
                     raise
-            self._timeseries = ts * self.nominal_capacity
-
-        return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
-            ts['q'] = ts['p'] * tan(acos(self.power_factor))
+            timeseries['q'] = timeseries['p'] * tan(acos(self.power_factor))
+            timeseries = timeseries * self.nominal_capacity
+            return timeseries.loc[self.grid.network.timeseries.timeindex, :]
+        else:
+            return self._timeseries.loc[
+                   self.grid.network.timeseries.timeindex, :]
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
