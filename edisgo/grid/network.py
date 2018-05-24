@@ -48,7 +48,7 @@ class EDisGo:
 
     mv_grid_id : :obj:`str`
         MV grid ID used in import of ding0 grid.
-        ToDo: explain where MV grid IDs come from
+         ToDo: explain where MV grid IDs come from
     ding0_grid : file: :obj:`str` or :class:`ding0.core.NetworkDing0`
         If a str is provided it is assumed it points to a pickle with Ding0
         grid data. This file will be read. If an object of the type
@@ -102,8 +102,8 @@ class EDisGo:
           containing the type and the second level the weather cell ID.
           Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
-        ToDo: explain how to obtain weather cell ID, add link to explanation
-        of worst-case analyses
+         ToDo: explain how to obtain weather cell ID, add link to explanation
+        .. of worst-case analyses
     timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`
         DataFrame with time series for active power of each (aggregated)
         type of dispatchable generator normalized with corresponding capacity.
@@ -205,12 +205,16 @@ class EDisGo:
         Specifies the methodology used to allocate the curtailment time
         series to single generators. Needs to be set when curtailment time
         series are given. Default: None.
-        #ToDo: Add possible options and links to them once we defined them.
+
+         ToDo: Add possible options and links to them once we defined them.
+
     generator_scenario : None or :obj:`str`
         If provided defines which scenario of future generator park to use
         and invokes import of these generators. Possible options are 'nep2035'
         and 'ego100'.
-        #ToDo: Add link to explanation of scenarios.
+
+         ToDo: Add link to explanation of scenarios.
+
     timeindex : None or :pandas:`pandas.DatetimeIndex<datetimeindex>`
         Can be used to select time ranges of the feed-in and load time series
         that will be used in the power flow analysis. Also defines the year
@@ -363,7 +367,7 @@ class EDisGo:
         representation to the PyPSA format and stores it to
         :attr:`self.network.pypsa`.
 
-        TODO: extend docstring by
+         ToDo: extend docstring by
 
         * How power plants are modeled, if possible use a link
         * Where to find and adjust power flow analysis defining parameters
@@ -1798,7 +1802,7 @@ class Results:
 
     """
 
-    # TODO: maybe add setter to alter list of measures
+    # ToDo: maybe add setter to alter list of measures
 
     def __init__(self):
         self._measures = ['original']

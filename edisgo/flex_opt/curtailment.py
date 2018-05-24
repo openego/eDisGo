@@ -41,7 +41,7 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         # if the load flow hasn't been done,
         # do it!
         edisgo_object.analyze()
-        # TODO: Figure out the problem with putting feedin_gens inside of v_res()
+        # ToDo: Figure out the problem with putting feedin_gens inside of v_res()
         v_pu = edisgo_object.network.results.v_res()
 
     if not(v_pu.empty):

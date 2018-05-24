@@ -21,7 +21,7 @@ class Grid:
         Cumulative peak generation of grid
     _grid_district : :obj:`dict`
         Contains information about grid district (supplied region) of grid,
-        format: #TODO: DEFINE FORMAT
+        format:  ToDo: DEFINE FORMAT
     _station : :class:`~.grid.components.Station`
         The station the grid is fed by
     _weather_cell : :obj:`list`

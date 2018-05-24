@@ -103,7 +103,7 @@ def import_from_ding0(file, network):
     network._id = network.mv_grid.id
 
     # Update the weather_cell_ids in mv_grid to include the ones in lv_grids
-    # TODO: maybe get a better solution to push the weather_cell_ids in lv_grids but not in mv_grid but into the
+    # ToDo: maybe get a better solution to push the weather_cell_ids in lv_grids but not in mv_grid but into the
     # mv_grid.weather_cell_ids from within the Grid() object or the MVGrid() or LVGrid()
     mv_weather_cell_id = network.mv_grid.weather_cells
     for lvg in lv_grids:
@@ -242,7 +242,7 @@ def _build_lv_grid(ding0_grid, network):
                 # Put all LV grid to a list of LV grids
                 lv_grids.append(lv_grid)
 
-    # TODO: don't forget to adapt lv stations creation in MV grid
+    # ToDo: don't forget to adapt lv stations creation in MV grid
     return lv_grids, lv_station_mapping, lv_grid_mapping
 
 
@@ -276,7 +276,7 @@ def _build_mv_grid(ding0_grid, network):
         voltage_nom=ding0_grid.v_level)
 
     # Special treatment of LVLoadAreaCenters see ...
-    # TODO: add a reference above for explanation of how these are treated
+    # ToDo: add a reference above for explanation of how these are treated
     la_centers = [_ for _ in ding0_grid._graph.nodes()
                   if isinstance(_, LVLoadAreaCentreDing0)]
     if la_centers:
@@ -516,7 +516,7 @@ def _determine_aggregated_nodes(la_centers):
     aggregated = {}
     aggr_stations = []
 
-    # TODO: The variable generation_aggr is further used -> delete this code
+    # ToDo: The variable generation_aggr is further used -> delete this code
     generation_aggr = {}
     for la in la_centers[0].grid.grid_district._lv_load_areas:
         for lvgd in la._lv_grid_districts:
@@ -964,7 +964,7 @@ def import_generators(network, data_source=None, file=None):
     The generator data include
 
         * nom. capacity
-        * type (TODO: specify!)
+        * type   ToDo: specify!
         * timeseries
 
     Additional data which can be processed (e.g. used in OEDB data) are
@@ -1732,7 +1732,7 @@ def _import_genos_from_oedb(network):
 
         The validation uses the cumulative capacity of all generators.
         """
-        # TODO: Valdate conv. genos too!
+        # ToDo: Valdate conv. genos too!
 
         # set capacity difference threshold
         cap_diff_threshold = 10 ** -4
@@ -1994,7 +1994,7 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
         else:
             orm_feedin_name = config_data['versioned']['res_feedin_data']
             # orm_feedin = supply.__getattribute__(orm_feedin_name)
-            # TODO: remove workaround
+            # ToDo: remove workaround
             orm_feedin = model_draft.__getattribute__(orm_feedin_name)
             orm_feedin_version = 1 == 1
             # orm_feedin_version = orm_feedin.columns.version == scenario.config.data['versioned']['version']
@@ -2005,8 +2005,8 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
 
 
 
-        # TODO: add option to retrieve subset of time series
-        # TODO: find the reference power class for mvgrid/w_id and insert instead of 4
+        # ToDo: add option to retrieve subset of time series
+        # ToDo: find the reference power class for mvgrid/w_id and insert instead of 4
         feedin_sqla = session.query(
             orm_feedin.w_id,
             orm_feedin.source,
@@ -2110,13 +2110,13 @@ def import_load_timeseries(config_data, data_source, mv_grid_id=None,
         else:
             orm_load_name = config_data['versioned']['load_data']
             # orm_load = supply.__getattribute__(orm_load_name)
-            # TODO: remove workaround
+            # ToDo: remove workaround
             orm_load = model_draft.__getattribute__(orm_load_name)
             # orm_load_version = orm_load.version == config.data['versioned']['version']
 
             orm_load_areas_name = config_data['versioned']['load_areas']
             # orm_load_areas = supply.__getattribute__(orm_load_areas_name)
-            # TODO: remove workaround
+            # ToDo: remove workaround
             orm_load_areas = model_draft.__getattribute__(orm_load_areas_name)
             # orm_load_areas_version = orm_load.version == config.data['versioned']['version']
 
