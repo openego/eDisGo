@@ -9,8 +9,8 @@ the inclusion of new methods for distributing the curtailment to be more suitabl
 Changes
 -------
 
-* As part of the solution to github issues `#86 <https://github.com/openego/eDisGo/issues/86>`,
-  `#98 <https://github.com/openego/eDisGo/issues/98>`, Weather cell information was of importance due to the changes
+* As part of the solution to github issues `#86 <https://github.com/openego/eDisGo/issues/86>`_,
+  `#98 <https://github.com/openego/eDisGo/issues/98>`_, Weather cell information was of importance due to the changes
   in the source of data. The table  `ego_renewable_feedin_v031` is now used to provide this feedin time series indexed
   using the weather cell id's. Changes were made to ego.io and ding0 to correspondingly allow the use of this table
   by eDisGo.
@@ -18,3 +18,5 @@ Changes
 * A new curtailment method have been included based on the voltages at the nodes with `GeneratorFluctuating` objects.
   The method is called `curtail_voltage` and its objective is to increase curtailment at locations where voltages
   are very high, thereby alleviating over-voltage issues and also reducing the need for network reinforcement.
+
+* Bug Fixes
