@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 from setuptools.command.install import install
 import os
 
-BASEPATH='.eDisGo'
+BASEPATH = '.eDisGo'
 
 
 class InstallSetup(install):
@@ -30,7 +30,7 @@ setup(
     author='gplssm, nesnoj, birgits',
     author_email='',
     description='A python package for distribution grid analysis and optimization',
-    install_requires = [
+    install_requires=[
         'ding0 >=0.1.5',
         'networkx >=1.11, <2.0 ',
         'shapely >= 1.5.12, <= 1.6.3',
@@ -49,7 +49,7 @@ setup(
     },
     cmdclass={
         'install': InstallSetup},
-        entry_points={
-            'console_scripts': ['edisgo_run = edisgo.tools.edisgo_run:edisgo_run']
-        }
+    entry_points={
+        'console_scripts': ['edisgo_run = edisgo.tools.edisgo_run:edisgo_run']
+    }
 )
