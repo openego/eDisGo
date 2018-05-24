@@ -212,12 +212,12 @@ The curtailment time series as shown in the following examples needs to be provi
     # curtailment time series for ('wind', 1) is equally allocated to all wind generators 
     # in weather cell 1, etc. 
     curtailment = pd.DataFrame(data={('wind', 1): [0.0, 5.0, 3.0],
-    				                 ('wind', 2): [1.0, 2.0, 3.0],
-    				                 ('solar', 1): [5.0, 5.0, 3.0]},
-    				           index=timeindex)
+                                     ('wind', 2): [1.0, 2.0, 3.0],
+    		                     ('solar', 1): [5.0, 5.0, 3.0]},
+    			       index=timeindex)
 
 Set curtailment by calling the method :meth:`~.grid.network.EDisGo.curtail()` with either the
-`curtail_all`:
+`curtail_all` method:
 
 .. code-block:: python
 
