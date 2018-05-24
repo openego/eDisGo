@@ -451,9 +451,9 @@ class GeneratorFluctuating(Generator):
                           columns, pd.MultiIndex):
                 if self.weather_cell_id:
                     try:
-                        ts = self.grid.network.timeseries.\
+                        timeseries = self.grid.network.timeseries.\
                             generation_fluctuating[
-                                self.type, self.weather_cell_id].to_frame('p')
+                            self.type, self.weather_cell_id].to_frame('p')
                     except KeyError:
                         logger.exception("No time series for type {} and "
                                          "weather cell ID {} given.".format(
@@ -466,23 +466,26 @@ class GeneratorFluctuating(Generator):
                     raise KeyError
             else:
                 try:
-                    ts = self.grid.network.timeseries.generation_fluctuating[
-                        self.type].to_frame('p')
+                    timeseries = self.grid.network.timeseries.\
+                        generation_fluctuating[self.type].to_frame('p')
                 except KeyError:
                     logger.exception("No time series for type {} "
                                      "given.".format(self.type))
                     raise
 
-            ts['q'] = ts['p'] * tan(acos(self.power_factor))
+            timeseries['q'] = timeseries['p'] * tan(acos(self.power_factor))
+            timeseries = timeseries * self.nominal_capacity
 
             # subtract curtailment
             if self.curtailment is not None:
-                ts = ts.join(self.curtailment.to_frame('curtailment'),
-                             how='left')
-                self._timeseries.p = self._timeseries.p - \
-                                     ts.curtailment.fillna(0)
-
-        return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
+                timeseries = timeseries.join(
+                    self.curtailment.to_frame('curtailment'), how='left')
+                timeseries.p = timeseries.p - timeseries.curtailment.fillna(0)
+            return timeseries.loc[self.grid.network.timeseries.timeindex, :]
+        else:
+            #ToDo: should curtailment be subtracted from timeseries?
+            return self._timeseries.loc[
+                   self.grid.network.timeseries.timeindex, :]
 
     @property
     def curtailment(self):
