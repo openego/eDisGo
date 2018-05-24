@@ -290,6 +290,7 @@ class Generator(Component):
         self._subtype = kwargs.get('subtype', None)
         self._v_level = kwargs.get('v_level', None)
         self._timeseries = kwargs.get('timeseries', None)
+        self._power_factor = kwargs.get('power_factor', None)
 
     @property
     def timeseries(self):
@@ -309,29 +310,26 @@ class Generator(Component):
 
         """
         if self._timeseries is None:
-            # calculate share of reactive power
-            if isinstance(self.grid, MVGrid):
-                q_factor = tan(acos(self.grid.network.config[
-                                        'reactive_power_factor']['mv_gen']))
-            elif isinstance(self.grid, LVGrid):
-                q_factor = tan(acos(self.grid.network.config[
-                                        'reactive_power_factor']['lv_gen']))
             # set time series for active and reactive power
             try:
-                ts = self.grid.network.timeseries.generation_dispatchable[
-                    self.type].to_frame('p')
+                timeseries = \
+                    self.grid.network.timeseries.generation_dispatchable[
+                        self.type].to_frame('p')
             except KeyError:
                 try:
-                    ts = self.grid.network.timeseries.generation_dispatchable[
-                        'other'].to_frame('p')
+                    timeseries = \
+                        self.grid.network.timeseries.generation_dispatchable[
+                            'other'].to_frame('p')
                 except KeyError:
                     logger.exception("No time series for type {} "
                                      "given.".format(self.type))
                     raise
-            ts['q'] = ts['p'] * q_factor
-            self._timeseries = ts * self.nominal_capacity
-
-        return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
+            timeseries['q'] = timeseries['p'] * tan(acos(self.power_factor))
+            timeseries = timeseries * self.nominal_capacity
+            return timeseries.loc[self.grid.network.timeseries.timeindex, :]
+        else:
+            return self._timeseries.loc[
+                   self.grid.network.timeseries.timeindex, :]
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -368,6 +366,33 @@ class Generator(Component):
     def v_level(self):
         """:obj:`int` : Voltage level"""
         return self._v_level
+
+    @property
+    def power_factor(self):
+        """
+        Power factor of generator
+
+        If power factor is not set it is retrieved from the network config
+        object depending on the grid level the generator is in.
+
+        Returns
+        --------
+        :obj:`float` : Power factor
+            Ratio of real power to apparent power.
+
+        """
+        if self._power_factor is None:
+            if isinstance(self.grid, MVGrid):
+                self._power_factor = self.grid.network.config[
+                    'reactive_power_factor']['mv_gen']
+            elif isinstance(self.grid, LVGrid):
+                self._power_factor = self.grid.network.config[
+                    'reactive_power_factor']['lv_gen']
+        return self._power_factor
+
+    @power_factor.setter
+    def power_factor(self, power_factor):
+        self._power_factor = power_factor
 
 
 class GeneratorFluctuating(Generator):
@@ -426,9 +451,9 @@ class GeneratorFluctuating(Generator):
                           columns, pd.MultiIndex):
                 if self.weather_cell_id:
                     try:
-                        ts = self.grid.network.timeseries.\
+                        timeseries = self.grid.network.timeseries.\
                             generation_fluctuating[
-                                self.type, self.weather_cell_id].to_frame('p')
+                            self.type, self.weather_cell_id].to_frame('p')
                     except KeyError:
                         logger.exception("No time series for type {} and "
                                          "weather cell ID {} given.".format(
@@ -441,34 +466,26 @@ class GeneratorFluctuating(Generator):
                     raise KeyError
             else:
                 try:
-                    ts = self.grid.network.timeseries.generation_fluctuating[
-                        self.type].to_frame('p')
+                    timeseries = self.grid.network.timeseries.\
+                        generation_fluctuating[self.type].to_frame('p')
                 except KeyError:
                     logger.exception("No time series for type {} "
                                      "given.".format(self.type))
                     raise
 
-            # calculate share of reactive power
-            if isinstance(self.grid, MVGrid):
-                q_factor = tan(acos(self.grid.network.config[
-                                        'reactive_power_factor'][
-                                        'mv_gen']))
-            elif isinstance(self.grid, LVGrid):
-                q_factor = tan(acos(self.grid.network.config[
-                                        'reactive_power_factor'][
-                                        'lv_gen']))
-            ts['q'] = ts['p'] * q_factor
-            timeseries = ts * self.nominal_capacity
+            timeseries['q'] = timeseries['p'] * tan(acos(self.power_factor))
+            timeseries = timeseries * self.nominal_capacity
 
             # subtract curtailment
             if self.curtailment is not None:
-                timeseries = timeseries.join(self.curtailment.to_frame('curtailment'),
-                             how='left')
+                timeseries = timeseries.join(
+                    self.curtailment.to_frame('curtailment'), how='left')
                 timeseries.p = timeseries.p - timeseries.curtailment.fillna(0)
-
             return timeseries.loc[self.grid.network.timeseries.timeindex, :]
-
-        return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
+        else:
+            #ToDo: should curtailment be subtracted from timeseries?
+            return self._timeseries.loc[
+                   self.grid.network.timeseries.timeindex, :]
 
     @property
     def curtailment(self):
@@ -508,6 +525,13 @@ class GeneratorFluctuating(Generator):
                                      "fluctuating generator {}.".format(
                                         repr(self)))
                     raise KeyError
+            else:
+                try:
+                    return self.grid.network.timeseries.curtailment[self.type]
+                except KeyError:
+                    logger.exception("No curtailment time series for type "
+                                     "{} given.".format(self.type))
+                    raise
         else:
             return None
 
