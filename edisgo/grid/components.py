@@ -290,6 +290,7 @@ class Generator(Component):
         self._subtype = kwargs.get('subtype', None)
         self._v_level = kwargs.get('v_level', None)
         self._timeseries = kwargs.get('timeseries', None)
+        self._power_factor = kwargs.get('power_factor', None)
 
     @property
     def timeseries(self):
@@ -309,13 +310,6 @@ class Generator(Component):
 
         """
         if self._timeseries is None:
-            # calculate share of reactive power
-            if isinstance(self.grid, MVGrid):
-                q_factor = tan(acos(self.grid.network.config[
-                                        'reactive_power_factor']['mv_gen']))
-            elif isinstance(self.grid, LVGrid):
-                q_factor = tan(acos(self.grid.network.config[
-                                        'reactive_power_factor']['lv_gen']))
             # set time series for active and reactive power
             try:
                 ts = self.grid.network.timeseries.generation_dispatchable[
@@ -328,10 +322,10 @@ class Generator(Component):
                     logger.exception("No time series for type {} "
                                      "given.".format(self.type))
                     raise
-            ts['q'] = ts['p'] * q_factor
             self._timeseries = ts * self.nominal_capacity
 
         return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
+            ts['q'] = ts['p'] * tan(acos(self.power_factor))
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -368,6 +362,33 @@ class Generator(Component):
     def v_level(self):
         """:obj:`int` : Voltage level"""
         return self._v_level
+
+    @property
+    def power_factor(self):
+        """
+        Power factor of generator
+
+        If power factor is not set it is retrieved from the network config
+        object depending on the grid level the generator is in.
+
+        Returns
+        --------
+        :obj:`float` : Power factor
+            Ratio of real power to apparent power.
+
+        """
+        if self._power_factor is None:
+            if isinstance(self.grid, MVGrid):
+                self._power_factor = self.grid.network.config[
+                    'reactive_power_factor']['mv_gen']
+            elif isinstance(self.grid, LVGrid):
+                self._power_factor = self.grid.network.config[
+                    'reactive_power_factor']['lv_gen']
+        return self._power_factor
+
+    @power_factor.setter
+    def power_factor(self, power_factor):
+        self._power_factor = power_factor
 
 
 class GeneratorFluctuating(Generator):
@@ -448,17 +469,7 @@ class GeneratorFluctuating(Generator):
                                      "given.".format(self.type))
                     raise
 
-            # calculate share of reactive power
-            if isinstance(self.grid, MVGrid):
-                q_factor = tan(acos(self.grid.network.config[
-                                        'reactive_power_factor'][
-                                        'mv_gen']))
-            elif isinstance(self.grid, LVGrid):
-                q_factor = tan(acos(self.grid.network.config[
-                                        'reactive_power_factor'][
-                                        'lv_gen']))
-            ts['q'] = ts['p'] * q_factor
-            self._timeseries = ts * self.nominal_capacity
+            ts['q'] = ts['p'] * tan(acos(self.power_factor))
 
             # subtract curtailment
             if self.curtailment is not None:
