@@ -501,7 +501,7 @@ class GeneratorFluctuating(Generator):
             is set this is returned.
 
         """
-        if self._curtailment:
+        if self._curtailment is not None:
             return self._curtailment
         elif isinstance(self.grid.network.timeseries.curtailment,
                         pd.DataFrame):
@@ -522,6 +522,13 @@ class GeneratorFluctuating(Generator):
                                      "fluctuating generator {}.".format(
                                         repr(self)))
                     raise KeyError
+            else:
+                try:
+                    return self.grid.network.timeseries.curtailment[self.type]
+                except KeyError:
+                    logger.exception("No curtailment time series for type "
+                                     "{} given.".format(self.type))
+                    raise
         else:
             return None
 
