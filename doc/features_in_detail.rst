@@ -113,8 +113,6 @@ Reinforce lines due to over-voltage
   or until the maximum number of allowed iterations is reached.
 
 
-
-
 Grid expansion costs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -128,6 +126,19 @@ The population density is calculated by the population and area of the grid dist
 
 Costs for lines of aggregated loads and generators are not considered in the costs calculation since grids of
 aggregated areas are not modeled but aggregated loads and generators are directly connected to the MV busbar.
+
+Curtailment
+-----------
+
+The Curtailment methodology is conducted in :py:mod:`~edisgo.flex_opt.curtailment`.
+
+Curtailing all generators
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Voltage based decentralized curtailment
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
 
 References
 ----------
