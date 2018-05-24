@@ -216,13 +216,19 @@ The curtailment time series as shown in the following examples needs to be provi
     				                 ('solar', 1): [5.0, 5.0, 3.0]},
     				           index=timeindex)
 
-Set curtailment by calling the method :meth:`~.grid.network.EDisGo.curtail()`:
+Set curtailment by calling the method :meth:`~.grid.network.EDisGo.curtail()` with either the
+`curtail_all`:
 
 .. code-block:: python
 
     # curtail all
     edisgo.curtail(curtailment_methodology='curtail_all',
                    timeseries_curtailment=curtailment)
+
+
+or with `curtail_voltage` method:
+
+.. code-block:: python
 
     # curtailment based on voltage
     edisgo.curtail(curtailment_methodology='curtail_voltage',
