@@ -60,7 +60,7 @@ def import_from_ding0(file, network):
     file: :obj:`str` or :class:`ding0.core.NetworkDing0`
         If a str is provided it is assumed it points to a pickle with Ding0
         grid data. This file will be read.
-        If a object of the type :class:`ding0.core.NetworkDing0` data will be
+        If an object of the type :class:`ding0.core.NetworkDing0` data will be
         used directly from this object.
     network: :class:`~.grid.network.Network`
         The eDisGo data container object
