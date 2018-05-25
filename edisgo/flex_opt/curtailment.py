@@ -12,7 +12,22 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     Implements curtailment methodology 'curtail_voltage'.
 
     The curtailment that has to be met in each step is allocated
-    depending on the voltage at the nodes of the generators
+    depending on the voltage at the nodes of the generators. The voltage
+    at the nodes are used as an input provide a feedin_factor that changes
+    the curtailment by modifiying the multiplied feedin at the points where
+    there are very high voltages.
+
+    The lower voltage threshold is the node voltage below which no
+    curtailment is assigned to the respective generator connected
+    to the node. This assignment can be done by using the keyword
+    argument 'voltage_threshold_lower'. By default, this voltage
+    is set to 1.0 per unit. Lowering this voltage will increase
+    the amount of curtailment to generators with higher node
+    voltages.
+
+    This method runs an edisgo_object.analyze internally to find out
+    the voltage at the nodes if an ediso_object.analyze has not already
+    performed and the results saved in edisgo_object.network.results.v_res()
 
     Parameters
     ----------
@@ -23,8 +38,6 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     edisgo_object : :class:`edisgo.EDisGo`
         The edisgo object created
     voltage_threshold_lower: :float
-
-    **kwargs : :class:`~.grid.network.Network`
     """
     voltage_threshold_lower = kwargs.get('voltage_threshold_lower', 1.0)
 
@@ -63,27 +76,27 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         # assign curtailment to individual generators
         assign_curtailment(curtailment, edisgo_object)
     else:
-        message = "The Generators not present in load_flow"
+        message = "There is no resulting node voltages after the PFA calculation" +\
+            " which correspond to the generators in the columns of the given feedin data"
         logging.warning(message)
 
 
 def curtail_loading(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     """
-        Implements curtailment methodology 'curtail_loading'.
+    Implements curtailment methodology 'curtail_loading'.
+    This method has not been implemented yet.
+    The curtailment that has to be met in each step is allocated
+    depending on the voltage at the nodes of the generators
 
-        The curtailment that has to be met in each step is allocated
-        depending on the voltage at the nodes of the generators
-
-        Parameters
-        ----------
-        feedin : : pandas:`pandas.DataFrame<dataframe>`
-            See class definition for further information.
-        total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
-            See class definition for further information.
-        edisgo_object : :class:`edisgo.EDisGo`
-            The edisgo object created
-        **kwargs : :class:`~.grid.network.Network`
-        """
+    Parameters
+    ----------
+    feedin : : pandas:`pandas.DataFrame<dataframe>`
+        See class definition for further information.
+    total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
+        See class definition for further information.
+    edisgo_object : :class:`edisgo.EDisGo`
+        The edisgo object created
+    """
 
     raise NotImplementedError
 
@@ -92,22 +105,21 @@ def curtail_loading(feedin, total_curtailment_ts, edisgo_object, **kwargs):
 
 def curtail_droop(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     """
-        Implements curtailment methodology 'curtail_loading'.
+    Implements curtailment methodology 'curtail_loading'.
+    This method has not been implemented yet.
+    The curtailment that has to be met in each step is allocated
+    depending on the voltage at the nodes of the generators and given a specific
+    droop characteristic
 
-        The curtailment that has to be met in each step is allocated
-        depending on the voltage at the nodes of the generators and given a specific
-        droop characteristic
-
-        Parameters
-        ----------
-        feedin : : pandas:`pandas.DataFrame<dataframe>`
-            See class definition for further information.
-        total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
-            See class definition for further information.
-        edisgo_object : :class:`edisgo.EDisGo`
-            The edisgo object created
-        **kwargs : :class:`~.grid.network.Network`
-        """
+    Parameters
+    ----------
+    feedin : : pandas:`pandas.DataFrame<dataframe>`
+        See class definition for further information.
+    total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
+        See class definition for further information.
+    edisgo_object : :class:`edisgo.EDisGo`
+        The edisgo object created
+    """
 
     raise NotImplementedError
 
@@ -116,21 +128,20 @@ def curtail_droop(feedin, total_curtailment_ts, edisgo_object, **kwargs):
 
 def curtail_selected(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     """
-        Implements curtailment methodology 'curtail_selected'.
+    Implements curtailment methodology 'curtail_selected'.
+    This method has not been implemented yet.
+    The curtailment that has to be met in each step is allocated
+    to specific selected generators.
 
-        The curtailment that has to be met in each step is allocated
-        to specific selected generators.
-
-        Parameters
-        ----------
-        feedin : : pandas:`pandas.DataFrame<dataframe>`
-            See class definition for further information.
-        total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
-            See class definition for further information.
-        edisgo_object : :class:`edisgo.EDisGo`
-            The edisgo object created
-        **kwargs : :class:`~.grid.network.Network`
-        """
+    Parameters
+    ----------
+    feedin : : pandas:`pandas.DataFrame<dataframe>`
+        See class definition for further information.
+    total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
+        See class definition for further information.
+    edisgo_object : :class:`edisgo.EDisGo`
+        The edisgo object created
+    """
 
     raise NotImplementedError
 
@@ -143,7 +154,10 @@ def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
 
     The curtailment that has to be met in each time step is allocated
     equally to all generators depending on their share of total
-    feed-in in that time step.
+    feed-in in that time step. This is a simple curtailment method where
+    the feedin is summed up and normalized, multiplied with `total_curtailment_ts`
+    and assigned to each generator directly based on the columns in
+    `total_curtailment_ts`.
 
     Parameters
     ----------
@@ -153,17 +167,13 @@ def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         See class definition for further information.
     edisgo_object : :class:`edisgo.EDisGo`
         The edisgo object created
-    **kwargs : :class:`~.grid.network.Network`
-
     """
-    if 'feedin_factor' in kwargs:
-        feedin_factor = kwargs.get('feedin_factor')
-    else:
-        feedin_factor = total_curtailment_ts.copy()
-        feedin_factor = feedin_factor / feedin_factor
-        feedin_factor.fillna(1.0, inplace=True)
+    # create a feedin factor of 1
+    # make sure the nans are filled an
+    feedin_factor = total_curtailment_ts.copy()
+    feedin_factor = feedin_factor / feedin_factor
+    feedin_factor.fillna(1.0, inplace=True)
 
-    # feedin = feedin.sum(axis=1, level='type')
     feedin.mul(feedin_factor, axis=0, level=1)
 
     # total_curtailment
@@ -187,8 +197,6 @@ def assign_curtailment(curtailment, edisgo_object):
         labels and a DatetimeIndex as the index
     edisgo_object : :class:`edisgo.EDisGo`
         The edisgo object created
-    **kwargs : :class:`~.grid.network.Network`
-
     """
     # pre-process curtailment before assigning it to generatos
     # Drop columns where there were 0/0 divisions due to feedin being 0

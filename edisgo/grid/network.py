@@ -48,7 +48,9 @@ class EDisGo:
 
     mv_grid_id : :obj:`str`
         MV grid ID used in import of ding0 grid.
-         ToDo: explain where MV grid IDs come from
+
+        .. ToDo: explain where MV grid IDs come from
+
     ding0_grid : file: :obj:`str` or :class:`ding0.core.NetworkDing0`
         If a str is provided it is assumed it points to a pickle with Ding0
         grid data. This file will be read. If an object of the type
@@ -72,14 +74,15 @@ class EDisGo:
           A dictionary can be used to specify different paths to the
           different config files. The dictionary must have the following
           keys:
+
           * 'config_db_tables'
           * 'config_grid'
           * 'config_grid_expansion'
           * 'config_timeseries'
 
-          Values of the dictionary are paths to the corresponding
-          config file. In contrast to the other two options the directories
-          and config files must exist and are not automatically created.
+        Values of the dictionary are paths to the corresponding
+        config file. In contrast to the other two options the directories
+        and config files must exist and are not automatically created.
 
         Default: None.
     scenario_description : None or :obj:`str`
@@ -99,11 +102,13 @@ class EDisGo:
           and weather cell ID. In the first case columns of the DataFrame are
           'solar' and 'wind'; in the second case columns need to be a
           :pandas:`pandas.MultiIndex<multiindex>` with the first level
-          containing the type and the second level the weather cell ID.
+          containing the type and the second level the weather cell id.
           Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
-         ToDo: explain how to obtain weather cell ID, add link to explanation
-        .. of worst-case analyses
+         .. ToDo: explain how to obtain weather cell id,
+
+         .. ToDo: add link to explanation of weather cell id
+
     timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`
         DataFrame with time series for active power of each (aggregated)
         type of dispatchable generator normalized with corresponding capacity.
@@ -197,7 +202,7 @@ class EDisGo:
         and weather cell ID. In the first case columns of the DataFrame are
         'solar' and 'wind'; in the second case columns need to be a
         :pandas:`pandas.MultiIndex<multiindex>` with the first level
-        containing the type and the second level the weather cell ID. See
+        containing the type and the second level the weather cell IDs. See
         `timeseries_generation_fluctuating` parameter for further explanation
         of the weather cell ID. Index needs to be a
         :pandas:`pandas.DatetimeIndex<datetimeindex>`. Default: None.
@@ -206,14 +211,24 @@ class EDisGo:
         series to single generators. Needs to be set when curtailment time
         series are given. Default: None.
 
-         ToDo: Add possible options and links to them once we defined them.
+        * 'curtail_all' : distribute the curtailed power to all the generators
+          equally under the weather cell IDs or of types defined
+          by the columns of `timeseries_curtailment`.
+          See :py:mod:`edisgo.flex_opt.curtailment.curtail_all` for more details.
+        * 'curtail_voltage': distribute the curtailed power to the generators
+          based on the voltage at their nodes. Use the keyword argument
+          `voltage_threshold_lower` to control the voltage below which no
+          curtailment should be assigned. Here too the curtailed power
+          is distributed differently depending on the input provided
+          in the columns of `timeseries_curtailment`.
+          See :py:mod:`edisgo.flex_opt.curtailment.curtail_voltage` for more details.
 
     generator_scenario : None or :obj:`str`
         If provided defines which scenario of future generator park to use
         and invokes import of these generators. Possible options are 'nep2035'
         and 'ego100'.
 
-         ToDo: Add link to explanation of scenarios.
+        .. ToDo: Add link to explanation of scenarios.
 
     timeindex : None or :pandas:`pandas.DatetimeIndex<datetimeindex>`
         Can be used to select time ranges of the feed-in and load time series
@@ -367,10 +382,8 @@ class EDisGo:
         representation to the PyPSA format and stores it to
         :attr:`self.network.pypsa`.
 
-         ToDo: extend docstring by
-
-        * How power plants are modeled, if possible use a link
-        * Where to find and adjust power flow analysis defining parameters
+         .. ToDo: explain how power plants are modeled, if possible use a link
+         .. ToDo: explain where to find and adjust power flow analysis defining parameters
 
         See Also
         --------
@@ -1087,11 +1100,6 @@ class CurtailmentControl:
           based on the voltages at the generator connection points and the
           defined 'voltage_threshold_lower'. Generators at higher voltages
           are curtailed more.
-        * 'curtail_loading'
-          The curtailment that has to be met in each time step is allocated
-          based on the line loading in the network. Generators at the node
-          with the higher voltage of an over-loaded line are curtailed more
-
     network : :class:`~.grid.network.Network`
         The graph object describing the network.
 
@@ -1138,14 +1146,20 @@ class CurtailmentControl:
         self.feedin = self.feedin.append([self.feedin] * (gen_fluct_ts.index.size - 1),
                                          ignore_index=True)
         self.feedin.index = gen_fluct_ts.index.copy()
+
+        # multiply feedin per type/weather cell id or both to capacities
+        # this is a workaround for pandas currently not allowing multiindex dataframes
+        # to be multiplied  and broadcast on two levels (type and weather_cell_id)
         for x in self.feedin.columns.levels[0]:
             try:
                 self.feedin.loc[:, (x, str(x), x.type, x.weather_cell_id)] = \
                     self.feedin.loc[:, (x, str(x), x.type, x.weather_cell_id)] * \
                     gen_fluct_ts.loc[:, (x.type, x.weather_cell_id)]
             except AttributeError:
+                # when either weather_cell_id or type attribute is missing
                 pass
             except KeyError:
+                # when one of the keys are missing in either the feedin or the capacities
                 pass
 
         # get mode of curtailment and the arguments necessary
@@ -1180,8 +1194,8 @@ class CurtailmentControl:
                                          edisgo_object,
                                          **kwargs)
                     else:
-                        message = "There seems to be no feedin time series" +\
-                            " corresponding to the combination of {}".format(col_slice)
+                        message = "In this grid there seems to be no feedin time series" +\
+                            " or generators corresponding to the combination of {}".format(col_slice)
                         logging.warning(message)
             else:
                 # when there is no multi-index then we assume that this is only
