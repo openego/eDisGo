@@ -20,7 +20,8 @@ import os
 import sys
 import pandas as pd
 
-from edisgo.grid.network import Network, Scenario, Results
+from edisgo import EDisGo
+from edisgo.grid.network import Results
 from edisgo.flex_opt.exceptions import MaximumIterationError
 
 import logging
@@ -41,8 +42,7 @@ if __name__ == '__main__':
             grids.append(file)
 
     # set scenario to define future power plant capacities
-    scenario_name = 'NEP 2035'
-    technologies = ['wind', 'solar']
+    scenario = 'nep2035'
 
     # initialize containers that will hold grid expansion costs and, in the
     # case of any errors during the run, the error messages
@@ -56,71 +56,69 @@ if __name__ == '__main__':
         logging.info('Grid expansion for {}'.format(dingo_grid))
 
         # set up worst-case scenario
-        mv_grid_id = dingo_grid.split('_')[-1].split('.')[0]
-        scenario = Scenario(power_flow='worst-case', mv_grid_id=mv_grid_id)
-
-        # initialize network
-        network = Network.import_from_ding0(
-            os.path.join('data', dingo_grid),
-            id='Test grid',
-            scenario=scenario)
+        edisgo = EDisGo(ding0_grid=os.path.join('data', dingo_grid),
+                        worst_case_analysis='worst-case-feedin')
 
         try:
             # Calculate grid expansion costs before generator import
             logging.info('Grid expansion before generator import.')
             before_geno_import = True
             # Do non-linear power flow analysis with PyPSA
-            network.analyze()
+            edisgo.analyze()
             # Do grid reinforcement
-            network.reinforce()
+            edisgo.reinforce()
             # Get costs
-            costs_grouped = network.results.grid_expansion_costs.groupby(
-                ['type']).sum()
+            costs_grouped = \
+                edisgo.network.results.grid_expansion_costs.groupby(
+                    ['type']).sum()
             costs_before_geno_import = costs_before_geno_import.append(
                 pd.DataFrame(costs_grouped.values,
                              columns=costs_grouped.columns,
-                             index=[[network.id] * len(costs_grouped),
+                             index=[[edisgo.network.id] * len(costs_grouped),
                                     costs_grouped.index]))
 
             # Clear results
-            network.results = Results()
-            network.pypsa = None
+            edisgo.network.results = Results()
+            edisgo.network.pypsa = None
 
             # Calculate grid expansion costs after generator import
             logging.info('Grid expansion after generator import.')
             before_geno_import = False
             # Import generators
-            network.import_generators(types=technologies)
+            edisgo.import_generators(generator_scenario=scenario)
             # Do non-linear power flow analysis with PyPSA
-            network.analyze()
+            edisgo.analyze()
             # Do grid reinforcement
-            network.reinforce()
-            costs_grouped = network.results.grid_expansion_costs.groupby(
-                ['type']).sum()
+            edisgo.reinforce()
+            costs_grouped = \
+                edisgo.network.results.grid_expansion_costs.groupby(
+                    ['type']).sum()
             costs = costs.append(
                 pd.DataFrame(costs_grouped.values,
                              columns=costs_grouped.columns,
-                             index=[[network.id] * len(costs_grouped),
+                             index=[[edisgo.network.id] * len(costs_grouped),
                                     costs_grouped.index]))
             logging.info('SUCCESS!')
 
         except MaximumIterationError:
             if before_geno_import:
-                faulty_grids_before_geno_import['grid'].append(network.id)
+                faulty_grids_before_geno_import['grid'].append(
+                    edisgo.network.id)
                 faulty_grids_before_geno_import['msg'].append(
-                    str(network.results.unresolved_issues))
+                    str(edisgo.network.results.unresolved_issues))
             else:
-                faulty_grids['grid'].append(network.id)
+                faulty_grids['grid'].append(edisgo.network.id)
                 faulty_grids['msg'].append(
-                    str(network.results.unresolved_issues))
+                    str(edisgo.network.results.unresolved_issues))
             logging.info('Unresolved issues left after grid expansion.')
 
         except Exception as e:
             if before_geno_import:
-                faulty_grids_before_geno_import['grid'].append(network.id)
+                faulty_grids_before_geno_import['grid'].append(
+                    edisgo.network.id)
                 faulty_grids_before_geno_import['msg'].append(repr(e))
             else:
-                faulty_grids['grid'].append(network.id)
+                faulty_grids['grid'].append(edisgo.network.id)
                 faulty_grids['msg'].append(repr(e))
             logging.info('Something went wrong.')
 

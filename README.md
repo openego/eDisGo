@@ -1,6 +1,5 @@
 # eDisGo
-Optimization of flexibility options and grid expansion for distribution grids based on PyPSA
-
+Optimization of flexibility options and grid expansion for distribution grids based on PyPSA. See [documentation](http://edisgo.readthedocs.io/en/dev/) for further information.
 
 LICENSE
 -------
@@ -19,3 +18,4 @@ details.
 
 You should have received a copy of the GNU General Public License along with
 this program. If not, see https://www.gnu.org/licenses/.
+
