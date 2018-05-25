@@ -14,6 +14,9 @@ from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, curtailment
 from edisgo.grid.components import Station, BranchTee
 
+if not 'READTHEDOCS' in os.environ:
+    from ding0.core import GridDing0
+
 logger = logging.getLogger('edisgo')
 
 
@@ -46,11 +49,16 @@ class EDisGo:
     mv_grid_id : :obj:`str`
         MV grid ID used in import of ding0 grid.
         ToDo: explain where MV grid IDs come from
-    ding0_grid : file: :obj:`str` or :class:`ding0.core.NetworkDing0`
-        If a str is provided it is assumed it points to a pickle with Ding0
-        grid data. This file will be read. If an object of the type
-        :class:`ding0.core.NetworkDing0` data will be used directly from this
-        object.
+    ding0_grid : :obj:`str` or :class:`ding0.core.GridDing0`
+        This parameter defines how the MV and LV grid topology and necessary
+        equipment, generator and load parameters are set up. At the moment
+        there are only options to import grids from
+        `Ding0 <https://github.com/openego/ding0>`_.
+        If a string is provided it is checked whether it points to a pickle
+        file or a directory with Ding0 grid data. If an object of the type
+        :class:`ding0.core.GridDing0` is provided data will be used directly
+        from this object. For details see
+        :func:`edisgo.grid.network.import_from_ding0`.
         This will probably be removed when ding0 grids are in oedb.
     config_path : None or :obj:`str` or :obj:`dict`
         Path to the config directory. Options are:
@@ -304,46 +312,41 @@ class EDisGo:
                            total_curtailment_ts=kwargs.get(
                                'timeseries_curtailment', None))
 
-    def import_from_ding0(self, file, **kwargs):
-        """Import grid data from DINGO file
+    def import_from_ding0(self, ding0_grid, **kwargs):
+        """Import grid data from DINGO
 
-        For details see
-        :func:`edisgo.data.import_data.import_from_ding0`
+        Parameters
+        -----------
+        ding0_grid : :obj:`str` or :class:`ding0.core.NetworkDing0`
+             If a string is provided it is checked whether it points to a
+             pickle file or a directory with Ding0 grid data. In the case of
+             a pickle file :func:`edisgo.data.import_data.import_from_ding0` is
+             used to import the grid, in the case of a directory
+             :func:`edisgo.data.import_data.import_from_csv` is used to import
+             from csv files.
+             If an object of the type :class:`ding0.core.NetworkDing0` is
+             provided data will be used directly from this object.
 
         """
-        import_from_ding0(file=file,
-                          network=self.network)
-
-    def import_from_csv(cls, path, **kwargs):
-        """Import grid data from csv file
-
-        For details see
-        :func:`edisgo.data.import_data.import_from_csv`
-        """
-
-        # create the network instance
-        network = cls(**kwargs)
-
-        # call the importer
-        import_from_csv(path=path,
-                          network=network)
-
-        # integrate storage into grid in case ETraGo Specs are given
-        scenario = kwargs.get('scenario', None)
-        if scenario and scenario.etrago_specs and \
-            scenario.etrago_specs.battery_capacity:
-            integrate_storage(network,
-                              position='hvmv_substation_busbar',
-                              operational_mode='etrago-specs',
-                              parameters={
-                                  'nominal_capacity': \
-                                      scenario.etrago_specs.battery_capacity,
-                                  'soc_initial': 0.0,
-                                  'efficiency_in': 1.0,
-                                  'efficiency_out': 1.0,
-                                  'standing_loss': 0})
-
-        return network
+        if isinstance(ding0_grid, str):
+            if os.path.isfile(ding0_grid):
+                try:
+                    import_from_ding0(file=ding0_grid, network=self.network)
+                except:
+                    raise RuntimeError(
+                        "Couldn't import ding0 grid from pickle file.")
+            elif os.path.isdir(ding0_grid):
+                try:
+                    import_from_csv(path=ding0_grid, network=self.network)
+                except:
+                    raise RuntimeError(
+                        "Couldn't import ding0 grid from csv files.")
+        elif isinstance(ding0_grid, GridDing0):
+            try:
+                import_from_ding0(file=ding0_grid, network=self.network)
+            except:
+                raise RuntimeError(
+                    "Couldn't import ding0 grid from GridDing0.")
 
     def import_generators(self, generator_scenario=None):
         """Import generators
