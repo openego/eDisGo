@@ -130,14 +130,89 @@ aggregated areas are not modeled but aggregated loads and generators are directl
 Curtailment
 -----------
 
+Implementation
+^^^^^^^^^^^^^^
 The Curtailment methodology is conducted in :py:mod:`~edisgo.flex_opt.curtailment`.
 
-Curtailing all generators
-^^^^^^^^^^^^^^^^^^^^^^^^^
+The curtailment function is essentially used to spatially distribute the power required to be curtailed (henceforth
+referred to as 'curtailed power') to the various generating units inside the grid. This provides a simple interface
+to curtailing the power of generators of either a certain type (eg. solar or wind) or generators in a give weather
+cell or both.
 
-Voltage based decentralized curtailment
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The current implementations of this are:
 
+* `curtail_all`
+* `curtail_voltage`
+
+with other more complex and finer methodologies in development. The focus of these methods is to try and reduce the
+requirement for network reinforcement by alleviating either node over-voltage or line loading issues or both. While
+it is possible to curtail specific generators internally, a user friendly implementation is still in the works.
+
+Concept
+^^^^^^^
+
+.. _curtailment-basic-label:
+
+Basic curtailment
+"""""""""""""""""""""""
+In each of the curtailment methods, first the feedin of each of the individual fluctuating generators are
+calculated based on the normalized feedin time series per technology and weather cell id from the OpenEnergy
+database and the individual generators' nominal capacities.
+
+.. math::
+    feedin = feedin_{\text{normalized per type or weather cell}} \times \\
+    nominal\_power_{\text{single generators}}
+
+Once the feedin is calculated, both the feedin per generator and curtailed power are normalized and multiplied to get
+the curtailed power per generator.
+
+.. math::
+    curtailment =
+        \frac{feedin}{\sum feedin} \times  total\_curtailment_{\text{normalized per type or weather cell}}
+
+This curtailment is subtracted from the feedin of the generator to obtain the power output of the generator after
+curtailment.
+_{\text{single generators}}
+
+Feedin factor
+"""""""""""""
+The case discussed in :ref:`curtailment-basic-label` is for equally curtailing all generators
+of a given type or weather cell. To induce a bias in the curtailment of the generators based on a parameter
+of our choosing like voltage or line loading, we use a feedin factor, which is essentially a scalar value which
+is used to modify the feedin based on this parameter.
+
+.. math::
+    modified\_feedin = feedin \times feedin\_factor
+
+and the resulting curtailment is:
+
+.. math::
+    curtailment = \frac{modified\_feedin}{\sum modified\_feedin} \times
+            total\_curtailment_{\text{normalized per type or weather cell}}
+
+The way this influences the curtailment is that when the the feedin for a particular generator is increased by
+multiplication, it results in a higher curtailment of power in this specific generator. Similarly the converse,
+where when the feedin for a particular generator is reduced the curtailment for this specific generator is also
+reduced. The modified feedin also allows the total curtailed power to remain the same even with the inclusion of
+the biasing due to the feedin factor.
+
+The feedin factor is only used as a weighing factor to increase or decrease the curtailment and this in no way
+affects the base feedin of the generator.
+
+Spatially biased curtailment methods
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Curtailment biased by node voltage
+""""""""""""""""""""""""""""""""""
+
+This is implemented in the methodology using the keyword argument :py:mod:`edisgo.flex_opt.curtailment.curtail_voltage`.
+Here the feedin factor is used to bias the curtailment such that there more power is curtailed at nodes with higher
+voltages and lesser power is curtailed at nodes with lower voltages. This essentially is a linear characterisitc
+between curtailed power and voltage, the higher the voltage, the higher the curtailed power.
+
+A lower voltage threshold is defined, where no curtailment is assigned if the voltage at the node is lower than this
+threshold voltage. The assigned curtailment to the other nodes is directly proportional to the difference of the
+voltage at the node to the lower voltage threshold.
 
 
 References
