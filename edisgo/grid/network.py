@@ -1,4 +1,4 @@
-from os import path
+import os
 import pandas as pd
 import numpy as np
 from math import sqrt
@@ -513,8 +513,8 @@ class Network:
                 equipment_parameters = self.config['equipment'][
                     'equipment_{}_parameters_{}'.format(voltage_level, i)]
                 data['{}_{}'.format(voltage_level, i)] = pd.read_csv(
-                    path.join(package_path, equipment_dir,
-                              equipment_parameters),
+                    os.path.join(package_path, equipment_dir,
+                                 equipment_parameters),
                     comment='#', index_col='name',
                     delimiter=',', decimal='.')
 
