@@ -90,6 +90,53 @@ def curtail_loading(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     return None
 
 
+def curtail_droop(feedin, total_curtailment_ts, edisgo_object, **kwargs):
+    """
+        Implements curtailment methodology 'curtail_loading'.
+
+        The curtailment that has to be met in each step is allocated
+        depending on the voltage at the nodes of the generators and given a specific
+        droop characteristic
+
+        Parameters
+        ----------
+        feedin : : pandas:`pandas.DataFrame<dataframe>`
+            See class definition for further information.
+        total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
+            See class definition for further information.
+        edisgo_object : :class:`edisgo.EDisGo`
+            The edisgo object created
+        **kwargs : :class:`~.grid.network.Network`
+        """
+
+    raise NotImplementedError
+
+    return None
+
+
+def curtail_selected(feedin, total_curtailment_ts, edisgo_object, **kwargs):
+    """
+        Implements curtailment methodology 'curtail_selected'.
+
+        The curtailment that has to be met in each step is allocated
+        to specific selected generators.
+
+        Parameters
+        ----------
+        feedin : : pandas:`pandas.DataFrame<dataframe>`
+            See class definition for further information.
+        total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
+            See class definition for further information.
+        edisgo_object : :class:`edisgo.EDisGo`
+            The edisgo object created
+        **kwargs : :class:`~.grid.network.Network`
+        """
+
+    raise NotImplementedError
+
+    return None
+
+
 def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     """
     Implements curtailment methodology 'curtail_all'.
