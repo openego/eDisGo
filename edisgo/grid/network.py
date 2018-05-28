@@ -1149,7 +1149,7 @@ class CurtailmentControl:
           the weather_cell_id that the generator object belongs to.
     feedin : :pandas:`pandas.DataFrame<dataframe>`
         This is a dataframe that is essentially a multiplication of the feedin timeseries
-        obtained from the attribute `timeseries_generation_fluctuating` in :class:`edisgo.EDisGo`
+        obtained from the parameter `timeseries_generation_fluctuating` in :class:`edisgo.grid.network.EDisGo`
         and the *capacities* attribute above. Upon multiplication, this dataframe's
         columns come from the indexes of *capacities* and the dataframe's index comes
         from the `timeseries_generation_fluctuating`'s Datetimeindex. This dataframe
