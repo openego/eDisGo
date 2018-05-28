@@ -32,12 +32,33 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     Parameters
     ----------
     feedin : : pandas:`pandas.DataFrame<dataframe>`
-        See class definition for further information.
+        Obtains the feedin of each and every generator in the grid from the
+        : :class:`edisgo.network.CurtailmentControl` class. The feedin dataframe
+        has a Datetimeindex which is the same as the timeindex
+        in the edisgo_object for simulation. The columns of the feedin dataframe
+        is a MultiIndex column which consists of the following levels:
+
+        * generator : :class:`edisgo.grid.components.GeneratorFluctuating`,
+          essentially all the generator objects in the MV grid and the LV grid
+        * gen_repr : :obj:`str`
+          the repr strings of the generator objects from above
+        * type : :obj:`str`
+          the type of the generator object e.g. 'solar' or 'wind'
+        * weather_cell_id : :obj:`int`
+          the weather_cell_id that the generator object belongs to.
+
+        All the information is gathered in the :class:`edisgo.network.CurtailmentControl`
+        class and available through the :meth:`edisgo.network.CurtailmentControl.feedin`
+        attribute. See :class:`edisgo.network.CurtailmentControl` for more details.
     total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
-        See class definition for further information.
+        The curtailment to be distributed amongst the generators in the edisgo_objects'
+        network. This is input through the edisgo_object. See class definition for further information.
     edisgo_object : :class:`edisgo.EDisGo`
-        The edisgo object created
+        The edisgo object in which this function was called through the respective
+        :class:`edisgo.network.CurtailmentControl` instance.
     voltage_threshold_lower: :float
+        the node voltage below which no curtailment would be assigned to the respective
+        generator.
     """
     voltage_threshold_lower = kwargs.get('voltage_threshold_lower', 1.0)
 
@@ -91,11 +112,30 @@ def curtail_loading(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     Parameters
     ----------
     feedin : : pandas:`pandas.DataFrame<dataframe>`
-        See class definition for further information.
+        Obtains the feedin of each and every generator in the grid from the
+        : :class:`edisgo.network.CurtailmentControl` class. The feedin dataframe
+        has a Datetimeindex which is the same as the timeindex
+        in the edisgo_object for simulation. The columns of the feedin dataframe
+        is a MultiIndex column which consists of the following levels:
+
+        * generator : :class:`edisgo.grid.components.GeneratorFluctuating`,
+          essentially all the generator objects in the MV grid and the LV grid
+        * gen_repr : :obj:`str`
+          the repr strings of the generator objects from above
+        * type : :obj:`str`
+          the type of the generator object e.g. 'solar' or 'wind'
+        * weather_cell_id : :obj:`int`
+          the weather_cell_id that the generator object belongs to.
+
+        All the information is gathered in the :class:`edisgo.network.CurtailmentControl`
+        class and available through the :meth:`edisgo.network.CurtailmentControl.feedin`
+        attribute. See :class:`edisgo.network.CurtailmentControl` for more details.
     total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
-        See class definition for further information.
+        The curtailment to be distributed amongst the generators in the edisgo_objects'
+        network. This is input through the edisgo_object. See class definition for further information.
     edisgo_object : :class:`edisgo.EDisGo`
-        The edisgo object created
+        The edisgo object in which this function was called through the respective
+        :class:`edisgo.network.CurtailmentControl` instance.
     """
 
     raise NotImplementedError
@@ -114,11 +154,30 @@ def curtail_droop(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     Parameters
     ----------
     feedin : : pandas:`pandas.DataFrame<dataframe>`
-        See class definition for further information.
+        Obtains the feedin of each and every generator in the grid from the
+        : :class:`edisgo.network.CurtailmentControl` class. The feedin dataframe
+        has a Datetimeindex which is the same as the timeindex
+        in the edisgo_object for simulation. The columns of the feedin dataframe
+        is a MultiIndex column which consists of the following levels:
+
+        * generator : :class:`edisgo.grid.components.GeneratorFluctuating`,
+          essentially all the generator objects in the MV grid and the LV grid
+        * gen_repr : :obj:`str`
+          the repr strings of the generator objects from above
+        * type : :obj:`str`
+          the type of the generator object e.g. 'solar' or 'wind'
+        * weather_cell_id : :obj:`int`
+          the weather_cell_id that the generator object belongs to.
+
+        All the information is gathered in the :class:`edisgo.network.CurtailmentControl`
+        class and available through the :meth:`edisgo.network.CurtailmentControl.feedin`
+        attribute. See :class:`edisgo.network.CurtailmentControl` for more details.
     total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
-        See class definition for further information.
+        The curtailment to be distributed amongst the generators in the edisgo_objects'
+        network. This is input through the edisgo_object. See class definition for further information.
     edisgo_object : :class:`edisgo.EDisGo`
-        The edisgo object created
+        The edisgo object in which this function was called through the respective
+        :class:`edisgo.network.CurtailmentControl` instance.
     """
 
     raise NotImplementedError
@@ -136,11 +195,30 @@ def curtail_selected(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     Parameters
     ----------
     feedin : : pandas:`pandas.DataFrame<dataframe>`
-        See class definition for further information.
+        Obtains the feedin of each and every generator in the grid from the
+        : :class:`edisgo.network.CurtailmentControl` class. The feedin dataframe
+        has a Datetimeindex which is the same as the timeindex
+        in the edisgo_object for simulation. The columns of the feedin dataframe
+        is a MultiIndex column which consists of the following levels:
+
+        * generator : :class:`edisgo.grid.components.GeneratorFluctuating`,
+          essentially all the generator objects in the MV grid and the LV grid
+        * gen_repr : :obj:`str`
+          the repr strings of the generator objects from above
+        * type : :obj:`str`
+          the type of the generator object e.g. 'solar' or 'wind'
+        * weather_cell_id : :obj:`int`
+          the weather_cell_id that the generator object belongs to.
+
+        All the information is gathered in the :class:`edisgo.network.CurtailmentControl`
+        class and available through the :meth:`edisgo.network.CurtailmentControl.feedin`
+        attribute. See :class:`edisgo.network.CurtailmentControl` for more details.
     total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
-        See class definition for further information.
+        The curtailment to be distributed amongst the generators in the edisgo_objects'
+        network. This is input through the edisgo_object. See class definition for further information.
     edisgo_object : :class:`edisgo.EDisGo`
-        The edisgo object created
+        The edisgo object in which this function was called through the respective
+        :class:`edisgo.network.CurtailmentControl` instance.
     """
 
     raise NotImplementedError
@@ -162,11 +240,30 @@ def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     Parameters
     ----------
     feedin : : pandas:`pandas.DataFrame<dataframe>`
-        See class definition for further information.
+        Obtains the feedin of each and every generator in the grid from the
+        : :class:`edisgo.network.CurtailmentControl` class. The feedin dataframe
+        has a Datetimeindex which is the same as the timeindex
+        in the edisgo_object for simulation. The columns of the feedin dataframe
+        is a MultiIndex column which consists of the following levels:
+
+        * generator : :class:`edisgo.grid.components.GeneratorFluctuating`,
+          essentially all the generator objects in the MV grid and the LV grid
+        * gen_repr : :obj:`str`
+          the repr strings of the generator objects from above
+        * type : :obj:`str`
+          the type of the generator object e.g. 'solar' or 'wind'
+        * weather_cell_id : :obj:`int`
+          the weather_cell_id that the generator object belongs to.
+
+        All the information is gathered in the :class:`edisgo.network.CurtailmentControl`
+        class and available through the :meth:`edisgo.network.CurtailmentControl.feedin`
+        attribute. See :class:`edisgo.network.CurtailmentControl` for more details.
     total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
-        See class definition for further information.
+        The curtailment to be distributed amongst the generators in the edisgo_objects'
+        network. This is input through the edisgo_object. See class definition for further information.
     edisgo_object : :class:`edisgo.EDisGo`
-        The edisgo object created
+        The edisgo object in which this function was called through the respective
+        :class:`edisgo.network.CurtailmentControl` instance.
     """
     # create a feedin factor of 1
     # make sure the nans are filled an

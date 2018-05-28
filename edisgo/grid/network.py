@@ -1088,7 +1088,7 @@ class CurtailmentControl:
 
     Parameters
     ----------
-    mode : :obj:`str`
+    curtailment_methodology : :obj:`str`
         Mode defines the curtailment strategy. Possible options are:
 
         * 'curtail_all'
@@ -1100,8 +1100,8 @@ class CurtailmentControl:
           based on the voltages at the generator connection points and the
           defined 'voltage_threshold_lower'. Generators at higher voltages
           are curtailed more.
-    network : :class:`~.grid.network.Network`
-        The graph object describing the network.
+    edisgo_object : :class:`edisgo.EDisGo`
+        The parent EDisGo object that this instance is a part of.
 
     total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Series or DataFrame containing the curtailment time series in kW. Index
@@ -1118,9 +1118,42 @@ class CurtailmentControl:
         given by technology and weather cell).
         Default: None.
 
-    **kwargs : :
+    **kwargs
+       Optional keyword arguments depending upon the curtailment methodology.
+       The type of the data depends on the curtailment methodology as well.
+       See the documentation of the individual curtailment methods below:
 
+       * :meth:`edisgo.flex_opt.curtailment.curtail_all()`
+       * :meth:`edisgo.flex_opt.curtailment.curtail_voltage()`
 
+    Attributes
+    ----------
+
+    mode : :obj:`str`
+        Contains the string  given by the *curtailment_methodology*
+        keyword argument
+    curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`,
+        Contains the *total_curtailment_ts* input object
+    capacities : :pandas:`pandas.Series<series>`
+        This is a series containing the nominal capacities of every single
+        generator in the MV grid and the underlying LV grids. The series has a
+        MultiIndex index with the following levels:
+
+        * generator : :class:`edisgo.grid.components.GeneratorFluctuating`,
+          essentially all the generator objects in the MV grid and the LV grid
+        * gen_repr : :obj:`str`
+          the repr strings of the generator objects from above
+        * type : :obj:`str`
+          the type of the generator object e.g. 'solar' or 'wind'
+        * weather_cell_id : :obj:`int`
+          the weather_cell_id that the generator object belongs to.
+    feedin : :pandas:`pandas.DataFrame<dataframe>`
+        This is a dataframe that is essentially a multiplication of the feedin timeseries
+        obtained from the attribute `timeseries_generation_fluctuating` in :class:`edisgo.EDisGo`
+        and the *capacities* attribute above. Upon multiplication, this dataframe's
+        columns come from the indexes of *capacities* and the dataframe's index comes
+        from the `timeseries_generation_fluctuating`'s Datetimeindex. This dataframe
+        is further passed on to the curtailment methodology functions.
     """
 
     def __init__(self, edisgo_object, **kwargs):
