@@ -14,9 +14,9 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     The curtailment that has to be met in each step is allocated
     depending on the voltage at the nodes of the generators. The voltage
     at the node is used as an input to calculate a feedin_factor that changes
-    the curtailment by modifiying the feedin at the points where
+    the curtailment by modifying the feed-in at the points where
     there are very high voltages. This is only used to manipulate the resulting
-    curtailment and does not change the feedin timeseries itself.
+    curtailment and does not change the feed-in timeseries itself.
 
     The lower voltage threshold is the node voltage below which no
     curtailment is assigned to the respective generator connected
@@ -25,9 +25,9 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     is set to 1.0 per unit.
 
     Above the lower voltage threshold, the curtailment is proportional
-    to the difference between the node voltage and the  lower
-    voltage threshold. This the higher the voltage, the greater the
-    difference from the lower voltage threshold and therby a higher
+    to the difference between the node voltage and the lower
+    voltage threshold. Thus the higher the voltage, the greater the
+    difference from the lower voltage threshold and thereby the higher the
     curtailment.
 
     Lowering this voltage will increase the amount of curtailment to
@@ -35,17 +35,18 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     number of generators the curtailment is spread over.
 
     This method runs an edisgo_object.analyze internally to find out
-    the voltage at the nodes if an :meth:`edisgo.grid.network.EDisGo.analyze` has not already
-    performed and the results saved in :meth:`edisgo.grid.network.Results.v_res`
+    the voltage at the nodes if an :meth:`edisgo.grid.network.EDisGo.analyze`
+    has not already been performed and the results saved in
+    :meth:`edisgo.grid.network.Results.v_res`.
 
     Parameters
     ----------
     feedin : : pandas:`pandas.DataFrame<dataframe>`
         Obtains the feedin of each and every generator in the grid from the
-        : :class:`edisgo.grid.network.CurtailmentControl` class. The feedin dataframe
-        has a Datetimeindex which is the same as the timeindex
+        :class:`edisgo.grid.network.CurtailmentControl` class. The feedin
+        dataframe has a Datetimeindex which is the same as the timeindex
         in the edisgo_object for simulation. The columns of the feedin dataframe
-        is a MultiIndex column which consists of the following levels:
+        are a MultiIndex column which consists of the following levels:
 
         * generator : :class:`edisgo.grid.components.GeneratorFluctuating`,
           essentially all the generator objects in the MV grid and the LV grid
@@ -56,18 +57,21 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         * weather_cell_id : :obj:`int`
           the weather_cell_id that the generator object belongs to.
 
-        All the information is gathered in the :class:`edisgo.grid.network.CurtailmentControl`
-        class and available through the :class:`edisgo.grid.network.CurtailmentControl.feedin`
-        attribute. See :class:`edisgo.grid.network.CurtailmentControl` for more details.
+        All the information is gathered in the
+        :class:`edisgo.grid.network.CurtailmentControl` class and available
+        through the :class:`edisgo.grid.network.CurtailmentControl.feedin`
+        attribute. See :class:`edisgo.grid.network.CurtailmentControl` for more
+        details.
     total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
-        The curtailment to be distributed amongst the generators in the edisgo_objects'
-        network. This is input through the edisgo_object. See class definition for further information.
+        The curtailment to be distributed amongst the generators in the
+        edisgo_objects' network. This is input through the edisgo_object.
+        See class definition for further information.
     edisgo_object : :class:`edisgo.EDisGo`
-        The edisgo object in which this function was called through the respective
-        :class:`edisgo.network.CurtailmentControl` instance.
+        The edisgo object in which this function was called through the
+        respective :class:`edisgo.network.CurtailmentControl` instance.
     voltage_threshold_lower: :float
-        the node voltage below which no curtailment would be assigned to the respective
-        generator.
+        The node voltage below which no curtailment would be assigned to the
+        respective generator.
     """
     voltage_threshold_lower = kwargs.get('voltage_threshold_lower', 1.0)
 
