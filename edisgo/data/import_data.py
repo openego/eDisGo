@@ -2276,12 +2276,12 @@ def add_node_to_grid(grids, items, item_type):
 
 def add_edge_to_grid(grids, items, item_type):
     for g in grids:
-        list = []
+        lis = []
         for i in items:
             l = i
             if l['line'].grid.id == grids[g].id:
-                list.append(i)
-        grids[g].graph.add_edges_from(list, type=item_type)
+                lis.append(i)
+        grids[g].graph.add_edges_from(lis, type=item_type)
 
 
 def _build_lv_grid_from_csv(lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos,
