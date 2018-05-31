@@ -96,11 +96,6 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         # get only the specific feedin objects
         v_pu = v_pu.loc[:, (slice(None), feedin_gen_reprs)]
 
-        # just to be sure mask cells with voltages below 0.7 pu
-        # this is already a brown out situation!
-        # ToDo: Maybe this needs to be built into v_res()
-        v_pu = v_pu[v_pu >=0.7]
-
         # curtailment calculation by inducing a reduced or increased feedin
         # find out the difference from lower threshold
         feedin_factor = v_pu - voltage_threshold_lower
