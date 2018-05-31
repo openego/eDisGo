@@ -162,7 +162,12 @@ def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         :class:`edisgo.network.CurtailmentControl` instance.
     """
     # create a feedin factor of 1
-    # make sure the nans are filled an
+    # make sure the nans are filled in
+    # this is a work around to ensure the
+    # type of total_curtailment_ts (either series or dataframe)
+    # doesn't affect the calculation depending on the input
+    # and the timestamps are maintained
+
     feedin_factor = total_curtailment_ts.copy()
     feedin_factor = feedin_factor / feedin_factor
     feedin_factor.fillna(1.0, inplace=True)
