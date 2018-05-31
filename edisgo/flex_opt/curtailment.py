@@ -191,10 +191,7 @@ def assign_curtailment(curtailment, edisgo_object):
     edisgo_object : :class:`edisgo.EDisGo`
         The edisgo object created
     """
-    # pre-process curtailment before assigning it to generatos
-    # Drop columns where there were 0/0 divisions due to feedin being 0
-    curtailment.dropna(axis=1, how='all', inplace=True)
-    # fill the remaining nans if there are any with 0s
+    # pre-process curtailment before assigning it to generators
     curtailment.fillna(0, inplace=True)
 
     # drop extra column levels that were present in feedin
