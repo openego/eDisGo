@@ -1179,6 +1179,7 @@ class CurtailmentControl:
         self.feedin = self.feedin.append([self.feedin] * (gen_fluct_ts.index.size - 1),
                                          ignore_index=True)
         self.feedin.index = gen_fluct_ts.index.copy()
+        self.feedin.columns = self.feedin.columns.remove_unused_levels()
 
         # multiply feedin per type/weather cell id or both to capacities
         # this is a workaround for pandas currently not allowing multiindex dataframes
@@ -1190,9 +1191,25 @@ class CurtailmentControl:
                     gen_fluct_ts.loc[:, (x.type, x.weather_cell_id)]
             except AttributeError:
                 # when either weather_cell_id or type attribute is missing
+                # meaning this could be a Generator Object instead of a Generator Fluctuating
+                if type(x) == edisgo.grid.components.GeneratorFluctuating:
+                    message = "One or both of the attributes, \'type\' or \'weather_cell_id\'" +\
+                              "of the {} object is missing even though ".format(x) +\
+                              "its a GeneratorFluctuating Object."
+                    logging.warning(message)
+                    #raise Warning(message)
+                else:
+                    message = "Generator Object found instead of GeneratorFluctuating Object " +\
+                              "in {}".format(x)
+                    logging.warning(message)
+                    #raise Warning(message)
                 pass
             except KeyError:
                 # when one of the keys are missing in either the feedin or the capacities
+                message = "One of the keys of {} are absent in either the feedin or the".format(x) +\
+                          " generator fluctuating timeseries  object is missing"
+                logging.warning(message)
+                #raise Warning(message)
                 pass
 
         # get mode of curtailment and the arguments necessary
@@ -1200,8 +1217,6 @@ class CurtailmentControl:
             curtail_function = curtailment.curtail_all
         elif self.mode == 'curtail_voltage':
             curtail_function = curtailment.curtail_voltage
-        elif self.mode == 'curtail_loading':
-            curtail_function = curtailment.curtail_loading
         else:
             raise ValueError('{} is not a valid mode.'.format(self.mode))
 
