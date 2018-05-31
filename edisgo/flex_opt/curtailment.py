@@ -68,8 +68,13 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     voltage_threshold_lower: :float
         the node voltage below which no curtailment would be assigned to the respective
         generator.
+    difference_scaling: :float
+        the scaling factor by which the difference between the node voltages and the
+        *voltage_threshold_lower* is scaled to increase the portion of curtailment
+        to the generators at higher voltages
     """
     voltage_threshold_lower = kwargs.get('voltage_threshold_lower', 1.0)
+    difference_scaling = kwargs.get('difference_scaling',1.0)
 
     # get the results of a load flow
     # get the voltages at the nodes
@@ -91,9 +96,20 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         # get only the specific feedin objects
         v_pu = v_pu.loc[:, (slice(None), feedin_gen_reprs)]
 
+        # just to be sure mask cells with voltages below 0.7 pu
+        # this is already a brown out situation!
+        # ToDo: Maybe this needs to be built into v_res()
+        v_pu = v_pu[v_pu >=0.7]
+
         # curtailment calculation by inducing a reduced or increased feedin
         # find out the difference from lower threshold
-        feedin_factor = v_pu - voltage_threshold_lower + 1
+        feedin_factor = v_pu - voltage_threshold_lower
+        # make sure the difference is positive
+        # zero the curtailment of those generators below the voltage_threshold_lower
+        feedin_factor = feedin_factor[feedin_factor >= 0].fillna(0)
+        # and add the difference to 1 (like a scaling factor to feedin)
+        feedin_factor = difference_scaling*feedin_factor + 1
+
         feedin_factor.columns = feedin_factor.columns.droplevel(0)  # drop the 'mv' 'lv' labels
 
         # multiply feedin_factor to feedin to modify the amount of curtailment
@@ -180,9 +196,7 @@ def assign_curtailment(curtailment, edisgo_object):
     edisgo_object : :class:`edisgo.EDisGo`
         The edisgo object created
     """
-    # pre-process curtailment before assigning it to generatos
-    # Drop columns where there were 0/0 divisions due to feedin being 0
-    curtailment.dropna(axis=1, how='all', inplace=True)
+    # pre-process curtailment before assigning it to generators
     # fill the remaining nans if there are any with 0s
     curtailment.fillna(0, inplace=True)
 
