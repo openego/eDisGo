@@ -101,7 +101,8 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         feedin_factor = v_pu - voltage_threshold_lower
         # make sure the difference is positive
         # zero the curtailment of those generators below the voltage_threshold_lower
-        feedin_factor = feedin_factor[feedin_factor >= 0].fillna(0)
+        # by replacing them by -1 and later adding
+        feedin_factor = feedin_factor[feedin_factor >= 0].fillna(-1)
         # and add the difference to 1 (like a scaling factor to feedin)
         feedin_factor = difference_scaling*feedin_factor + 1
 
