@@ -74,6 +74,7 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         respective generator.
     """
     voltage_threshold_lower = kwargs.get('voltage_threshold_lower', 1.0)
+    difference_scaling = kwargs.get('difference_scaling', 1.0)
 
     # get the results of a load flow
     # get the voltages at the nodes
@@ -97,10 +98,13 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         feedin_factor = v_pu - voltage_threshold_lower
         # make sure the difference is positive
         # zero the curtailment of those generators below the voltage_threshold_lower
-        # by replacing them by -1 and later adding
-        feedin_factor = feedin_factor[feedin_factor >= 0].fillna(-1)
-        # and add the difference to 1 (like a scaling factor to feedin)
-        feedin_factor = feedin_factor + 1
+        feedin_factor = feedin_factor[feedin_factor >= 0].fillna(0)
+        # after being normalized to maximum difference being 1 and minimum being 0
+        feedin_factor = feedin_factor.divide(feedin_factor.max(axis=1), axis=0)
+        feedin_factor = difference_scaling*2.0*feedin_factor
+        # the curtailment here would be directly multplying the difference
+        # with a difference_scaling factor gi
+
 
         feedin_factor.columns = feedin_factor.columns.droplevel(0)  # drop the 'mv' 'lv' labels
 
