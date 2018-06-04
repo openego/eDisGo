@@ -72,12 +72,8 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     voltage_threshold_lower: :obj:`float`
         The node voltage below which no curtailment would be assigned to the
         respective generator.
-    difference_scaling: :obj:`float`
-        The factor which changes the slope of the per unit curtailment vs the
-        node voltage characteristic.
     """
     voltage_threshold_lower = kwargs.get('voltage_threshold_lower', 1.0)
-    difference_scaling = kwargs.get('difference_scaling', 1.0)
 
     # get the results of a load flow
     # get the voltages at the nodes
@@ -104,9 +100,7 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         feedin_factor = feedin_factor[feedin_factor >= 0].fillna(0)
         # after being normalized to maximum difference being 1 and minimum being 0
         feedin_factor = feedin_factor.divide(feedin_factor.max(axis=1), axis=0)
-        feedin_factor = difference_scaling*feedin_factor
-        # the curtailment here would be directly multplying the difference
-        # with a difference_scaling factor gi
+        # the curtailment here would be directly multplied the difference
 
 
         feedin_factor.columns = feedin_factor.columns.droplevel(0)  # drop the 'mv' 'lv' labels

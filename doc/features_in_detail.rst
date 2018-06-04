@@ -215,9 +215,6 @@ A lower voltage threshold is defined, where no curtailment is assigned if the vo
 threshold voltage. The assigned curtailment to the other nodes is directly proportional to the difference of the
 voltage at the node to the lower voltage threshold.
 
-It is also possible to change the slope of the per unit curtailment vs per unit voltage characteristic, using the the
-`differece_scaling` keyword argument.
-
 
 .. _curtailment_voltage_characteristic_label:
 .. figure:: images/curtailment_voltage_characteristic.png
