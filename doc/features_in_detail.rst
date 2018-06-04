@@ -208,11 +208,24 @@ Curtailment biased by node voltage
 This is implemented in the methodology using the keyword argument :py:mod:`edisgo.flex_opt.curtailment.curtail_voltage`.
 Here the feedin factor is used to bias the curtailment such that there more power is curtailed at nodes with higher
 voltages and lesser power is curtailed at nodes with lower voltages. This essentially is a linear characteristic
-between curtailed power and voltage, the higher the voltage, the higher the curtailed power.
+between curtailed power and voltage, the higher the voltage, the higher the curtailed power. The characteristic is
+as shown in :ref:`curtailment_voltage_characteristic_label`
 
 A lower voltage threshold is defined, where no curtailment is assigned if the voltage at the node is lower than this
 threshold voltage. The assigned curtailment to the other nodes is directly proportional to the difference of the
 voltage at the node to the lower voltage threshold.
+
+It is also possible to change the slope of the per unit curtailment vs per unit voltage characteristic, using the the
+`differece_scaling` keyword argument.
+
+
+.. _curtailment_voltage_characteristic_label:
+.. figure:: images/curtailment_voltage_characteristic.pdf
+
+    Per unit curtailment versus per unit node voltage characteristic used under the method
+    :py:mod:`edisgo.flex_opt.curtailment.curtail_voltage`
+
+
 
 
 References
