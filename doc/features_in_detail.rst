@@ -209,7 +209,7 @@ This is implemented in the methodology using the keyword argument :py:mod:`edisg
 Here the feedin factor is used to bias the curtailment such that there more power is curtailed at nodes with higher
 voltages and lesser power is curtailed at nodes with lower voltages. This essentially is a linear characteristic
 between curtailed power and voltage, the higher the voltage, the higher the curtailed power. The characteristic is
-as shown in :ref:`curtailment_voltage_characteristic_label`
+as shown in :numref:`curtailment_voltage_characteristic_label`
 
 A lower voltage threshold is defined, where no curtailment is assigned if the voltage at the node is lower than this
 threshold voltage. The assigned curtailment to the other nodes is directly proportional to the difference of the
