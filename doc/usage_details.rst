@@ -234,6 +234,14 @@ or with `curtail_voltage` method:
     edisgo.curtail(curtailment_methodology='curtail_voltage',
                    timeseries_curtailment=curtailment)
 
+The `curtail_voltage` method also allows the changing of the lower voltage threshold,
+the generator node voltage below which no curtailment will be assigned to the generator,
+using the `voltage_threshold_lower` keyword argument. By default, this voltage is set to 1.0.
+
+There is also a possibility to increase or decrease the slope of the per unit curtailment
+vs the per unit node voltage characteristic using the `difference_scaling` keyword argument.
+Once again, by default, this is set to 1.0.
+
 You can also define curtailment directly upon defining your scenario. Assuming
 you have the load and feed-in time series as well as the curtailment defined
 above you can do the following:
