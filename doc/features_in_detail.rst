@@ -220,7 +220,7 @@ It is also possible to change the slope of the per unit curtailment vs per unit 
 
 
 .. _curtailment_voltage_characteristic_label:
-.. figure:: images/curtailment_voltage_characteristic.pdf
+.. figure:: images/curtailment_voltage_characteristic.png
 
     Per unit curtailment versus per unit node voltage characteristic used under the method
     :py:mod:`edisgo.flex_opt.curtailment.curtail_voltage`
