@@ -118,7 +118,7 @@ class Transformer(Component):
     _voltage_op : :obj:`float`
         Operational voltage
     _type : :pandas:`pandas.DataFrame<dataframe>`
-        Specification of type, refers to #TODO: ADD CORRECT REF TO (STATIC) DATA
+        Specification of type, refers to  ToDo: ADD CORRECT REF TO (STATIC) DATA
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -176,7 +176,7 @@ class Load(Component):
         """
         if self._timeseries is None:
             # work around until retail and industrial are separate sectors
-            # TODO: remove once Ding0 data changed to single sector consumption
+            # ToDo: remove once Ding0 data changed to single sector consumption
             sector = list(self.consumption.keys())[0]
             if len(list(self.consumption.keys())) > 1:
                 consumption = sum([v for k, v in self.consumption.items()])
