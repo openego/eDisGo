@@ -1987,23 +1987,18 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
         :pandas:`pandas.DataFrame<dataframe>`
             Feedin time series
         """
-        if config_data['versioned']['version'] == 'model_draft':
+        if config_data['data_source']['oedb_data_source'] == 'model_draft':
             orm_feedin_name = config_data['model_draft']['res_feedin_data']
             orm_feedin = model_draft.__getattribute__(orm_feedin_name)
             orm_feedin_version = 1 == 1
         else:
             orm_feedin_name = config_data['versioned']['res_feedin_data']
-            # orm_feedin = supply.__getattribute__(orm_feedin_name)
-            # ToDo: remove workaround
-            orm_feedin = model_draft.__getattribute__(orm_feedin_name)
-            orm_feedin_version = 1 == 1
-            # orm_feedin_version = orm_feedin.columns.version == scenario.config.data['versioned']['version']
+            orm_feedin = supply.__getattribute__(orm_feedin_name)
+            orm_feedin_version = orm_feedin.columns.version == scenario.config.data['versioned']['version']
 
         conn = connection(section=config_data['db_connection']['section'])
         Session = sessionmaker(bind=conn)
         session = Session()
-
-
 
         # ToDo: add option to retrieve subset of time series
         # ToDo: find the reference power class for mvgrid/w_id and insert instead of 4
