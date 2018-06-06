@@ -1995,7 +1995,7 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
         else:
             orm_feedin_name = config_data['versioned']['res_feedin_data']
             orm_feedin = supply.__getattribute__(orm_feedin_name)
-            orm_feedin_version = orm_feedin.columns.version == scenario.config.data['versioned']['version']
+            orm_feedin_version = orm_feedin.columns.version == config_data['versioned']['version']
 
         conn = connection(section=config_data['db_connection']['section'])
         Session = sessionmaker(bind=conn)
