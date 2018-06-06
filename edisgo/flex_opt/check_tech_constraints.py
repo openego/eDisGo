@@ -317,7 +317,7 @@ def lv_voltage_deviation(network, mode=None):
         crit_nodes_min = 1 - v_min[(v_min < (1 - max_v_dev))]
         # combine critical nodes and keep highest voltage deviation at each
         # node
-        crit_nodes_grid = crit_nodes_max.append(crit_nodes_min).max(level=0)
+        crit_nodes_grid = crit_nodes_max.append(crit_nodes_min).max(level=1)
         if len(crit_nodes_grid) > 0:
             if not mode:
                 crit_nodes[lv_grid] = crit_nodes_grid.sort_values(
