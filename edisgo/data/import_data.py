@@ -20,6 +20,7 @@ import networkx as nx
 from math import isnan
 import random
 import os
+import oedialect
 
 if not 'READTHEDOCS' in os.environ:
     from ding0.tools.results import load_nd_from_pickle

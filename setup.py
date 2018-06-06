@@ -39,7 +39,8 @@ setup(
         'pyproj >= 1.9.5.1, <= 1.9.5.1',
         'geopy >= 1.11.0, <= 1.11.0',
         'workalendar',
-        'demandlib'
+        'demandlib',
+        'oedialect'
     ],
     package_data={
         'edisgo': [
