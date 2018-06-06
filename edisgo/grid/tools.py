@@ -219,9 +219,9 @@ def implement_switch_disconnector(mv_grid, node1, node2):
 
     length_sd_line = .75e-3 # in km
 
-    x_sd = node1.geom.x * (length_sd_line / line.length) * (
+    x_sd = node1.geom.x + (length_sd_line / line.length) * (
         node1.geom.x - node2.geom.x)
-    y_sd = node1.geom.y * (length_sd_line / line.length) * (
+    y_sd = node1.geom.y + (length_sd_line / line.length) * (
         node1.geom.y - node2.geom.y)
 
     # Instantiate disconnecting point
