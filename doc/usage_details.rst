@@ -179,9 +179,22 @@ above you can do the following:
 Curtailment
 -----------
 
-At the moment curtailment cannot be applied to single generators but only to all generators or
-all generators of a given type and, if provided, weather cell ID equally.
-Therefore, a curtailment time series as shown in the following examples needs to be provided.
+The curtailment function is used to spatially distribute the power that is to be curtailed.
+There are currently two options for doing this distribution:
+
+* `curtail_all`
+    Distributes the curtailed power to all the fluctuating generators depending upon
+    their nominal capacity of the unit. The input to the curtailment function can be modified to
+    curtail certain technologies differently or even further through the weather cell id's.
+* `curtail_voltage`
+    Distributes the curtailed power depending upon the voltage at the terminals
+    of the fluctuating generators
+
+At the moment further methods for curtailment are being developed (eg. `curtail_loading`) and also
+possibilities for the curtailment of single generators but these are still being developed.
+Curtailment at the moment can be input as a pandas DataFrames with time series indexes and columns
+either providing the type of generation to curtail, the weather cell id's for curtailment or both.
+The curtailment time series as shown in the following examples needs to be provided.
 
 .. code-block:: python
 
@@ -193,22 +206,37 @@ Therefore, a curtailment time series as shown in the following examples needs to
 
     # curtailment time series for 'wind' is equally allocated to all wind generators, etc.
     curtailment = pd.DataFrame(data={'wind': [0.0, 5.0, 3.0],
-			             'solar': [5.0, 5.0, 3.0]},
-			       index=timeindex)
+                                     'solar': [5.0, 5.0, 3.0]},
+                               index=timeindex)
 
     # curtailment time series for ('wind', 1) is equally allocated to all wind generators 
     # in weather cell 1, etc. 
     curtailment = pd.DataFrame(data={('wind', 1): [0.0, 5.0, 3.0],
-				     ('wind', 2): [1.0, 2.0, 3.0]
-			             ('solar', 1): [5.0, 5.0, 3.0]},
-			       index=timeindex)
+                                     ('wind', 2): [1.0, 2.0, 3.0],
+    		                     ('solar', 1): [5.0, 5.0, 3.0]},
+    			       index=timeindex)
 
-Set curtailment by calling the method :meth:`~.grid.network.EDisGo.curtail()`:
+Set curtailment by calling the method :meth:`~.grid.network.EDisGo.curtail()` with either the
+`curtail_all` method:
 
 .. code-block:: python
 
+    # curtail all
     edisgo.curtail(curtailment_methodology='curtail_all',
                    timeseries_curtailment=curtailment)
+
+
+or with `curtail_voltage` method:
+
+.. code-block:: python
+
+    # curtailment based on voltage
+    edisgo.curtail(curtailment_methodology='curtail_voltage',
+                   timeseries_curtailment=curtailment)
+
+The `curtail_voltage` method also allows the changing of the lower voltage threshold,
+the generator node voltage below which no curtailment will be assigned to the generator,
+using the `voltage_threshold_lower` keyword argument. By default, this voltage is set to 1.0.
 
 You can also define curtailment directly upon defining your scenario. Assuming
 you have the load and feed-in time series as well as the curtailment defined

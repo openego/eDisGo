@@ -13,6 +13,9 @@ from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, curtailment
 from edisgo.grid.components import Station, BranchTee
+from edisgo.grid.tools import get_capacities_by_type, \
+    get_capacities_by_type_and_weather_cell, \
+    get_gen_info
 
 logger = logging.getLogger('edisgo')
 
@@ -45,7 +48,9 @@ class EDisGo:
 
     mv_grid_id : :obj:`str`
         MV grid ID used in import of ding0 grid.
-        ToDo: explain where MV grid IDs come from
+
+        .. ToDo: explain where MV grid IDs come from
+
     ding0_grid : file: :obj:`str` or :class:`ding0.core.NetworkDing0`
         If a str is provided it is assumed it points to a pickle with Ding0
         grid data. This file will be read. If an object of the type
@@ -69,14 +74,15 @@ class EDisGo:
           A dictionary can be used to specify different paths to the
           different config files. The dictionary must have the following
           keys:
+
           * 'config_db_tables'
           * 'config_grid'
           * 'config_grid_expansion'
           * 'config_timeseries'
 
-          Values of the dictionary are paths to the corresponding
-          config file. In contrast to the other two options the directories
-          and config files must exist and are not automatically created.
+        Values of the dictionary are paths to the corresponding
+        config file. In contrast to the other two options the directories
+        and config files must exist and are not automatically created.
 
         Default: None.
     scenario_description : None or :obj:`str`
@@ -96,11 +102,13 @@ class EDisGo:
           and weather cell ID. In the first case columns of the DataFrame are
           'solar' and 'wind'; in the second case columns need to be a
           :pandas:`pandas.MultiIndex<multiindex>` with the first level
-          containing the type and the second level the weather cell ID.
+          containing the type and the second level the weather cell id.
           Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
-        ToDo: explain how to obtain weather cell ID, add link to explanation
-        of worst-case analyses
+         .. ToDo: explain how to obtain weather cell id,
+
+         .. ToDo: add link to explanation of weather cell id
+
     timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`
         DataFrame with time series for active power of each (aggregated)
         type of dispatchable generator normalized with corresponding capacity.
@@ -194,7 +202,7 @@ class EDisGo:
         and weather cell ID. In the first case columns of the DataFrame are
         'solar' and 'wind'; in the second case columns need to be a
         :pandas:`pandas.MultiIndex<multiindex>` with the first level
-        containing the type and the second level the weather cell ID. See
+        containing the type and the second level the weather cell IDs. See
         `timeseries_generation_fluctuating` parameter for further explanation
         of the weather cell ID. Index needs to be a
         :pandas:`pandas.DatetimeIndex<datetimeindex>`. Default: None.
@@ -202,12 +210,26 @@ class EDisGo:
         Specifies the methodology used to allocate the curtailment time
         series to single generators. Needs to be set when curtailment time
         series are given. Default: None.
-        #ToDo: Add possible options and links to them once we defined them.
+
+        * 'curtail_all' : distribute the curtailed power to all the generators
+          equally under the weather cell IDs or of types defined
+          by the columns of `timeseries_curtailment`.
+          See :py:mod:`edisgo.flex_opt.curtailment.curtail_all` for more details.
+        * 'curtail_voltage': distribute the curtailed power to the generators
+          based on the voltage at their nodes. Use the keyword argument
+          `voltage_threshold_lower` to control the voltage below which no
+          curtailment should be assigned. Here too the curtailed power
+          is distributed differently depending on the input provided
+          in the columns of `timeseries_curtailment`.
+          See :py:mod:`edisgo.flex_opt.curtailment.curtail_voltage` for more details.
+
     generator_scenario : None or :obj:`str`
         If provided defines which scenario of future generator park to use
         and invokes import of these generators. Possible options are 'nep2035'
         and 'ego100'.
-        #ToDo: Add link to explanation of scenarios.
+
+        .. ToDo: Add link to explanation of scenarios.
+
     timeindex : None or :pandas:`pandas.DatetimeIndex<datetimeindex>`
         Can be used to select time ranges of the feed-in and load time series
         that will be used in the power flow analysis. Also defines the year
@@ -257,6 +279,7 @@ class EDisGo:
         if kwargs.get('worst_case_analysis', None):
             self.network.timeseries = TimeSeriesControl(
                 mode=kwargs.get('worst_case_analysis', None),
+                weather_cell_ids=self.network.mv_grid._weather_cells,
                 config_data=self.network.config).timeseries
         else:
             self.network.timeseries = TimeSeriesControl(
@@ -266,6 +289,7 @@ class EDisGo:
                     'timeseries_generation_dispatchable', None),
                 timeseries_load=kwargs.get(
                     'timeseries_load', None),
+                weather_cell_ids=self.network.mv_grid._weather_cells,
                 config_data=self.network.config,
                 timeindex=kwargs.get('timeindex', None)).timeseries
 
@@ -298,11 +322,8 @@ class EDisGo:
             See class definition for more information. Default: None.
 
         """
-        CurtailmentControl(mode=kwargs.get('curtailment_methodology',
-                                           None),
-                           network=self.network,
-                           total_curtailment_ts=kwargs.get(
-                               'timeseries_curtailment', None))
+        CurtailmentControl(edisgo_object=self,
+                           **kwargs)
 
     def import_from_ding0(self, file, **kwargs):
         """Import grid data from DINGO file
@@ -361,10 +382,8 @@ class EDisGo:
         representation to the PyPSA format and stores it to
         :attr:`self.network.pypsa`.
 
-        TODO: extend docstring by
-
-        * How power plants are modeled, if possible use a link
-        * Where to find and adjust power flow analysis defining parameters
+         .. ToDo: explain how power plants are modeled, if possible use a link
+         .. ToDo: explain where to find and adjust power flow analysis defining parameters
 
         See Also
         --------
@@ -752,6 +771,7 @@ class Config:
     >>> config['reactive_power_factor']['mv_gen']
 
     """
+
     def __init__(self, **kwargs):
         self._data = self._load_config(kwargs.get('config_path', None))
 
@@ -913,11 +933,13 @@ class TimeSeriesControl:
         options are 'nep2035' and 'ego100'. Default: None.
 
     """
+
     def __init__(self, **kwargs):
 
         self.timeseries = TimeSeries()
         mode = kwargs.get('mode', None)
         config_data = kwargs.get('config_data', None)
+        weather_cell_ids = kwargs.get('weather_cell_ids', None)
 
         if mode:
             if mode == 'worst-case':
@@ -944,9 +966,7 @@ class TimeSeriesControl:
             elif isinstance(ts, str) and ts == 'oedb':
                 self.timeseries.generation_fluctuating = \
                     import_feedin_timeseries(config_data,
-                                             kwargs.get('mv_grid_id', None),
-                                             kwargs.get('generator_scenario',
-                                                        None))
+                                             weather_cell_ids)
             else:
                 raise ValueError('Your input for '
                                  '"timeseries_generation_fluctuating" is not '
@@ -975,8 +995,6 @@ class TimeSeriesControl:
             else:
                 raise ValueError('Your input for "timeseries_load" is not '
                                  'valid.'.format(mode))
-
-
 
             # check if time series for the set time index can be obtained
             self._check_timeindex()
@@ -1023,11 +1041,11 @@ class TimeSeriesControl:
 
         self.timeseries.generation_dispatchable = pd.DataFrame(
             {'other': [worst_case_scale_factors[
-                          '{}_feedin_other'.format(mode)] for mode in modes]},
+                           '{}_feedin_other'.format(mode)] for mode in modes]},
             index=self.timeseries.timeindex)
 
     def _worst_case_load(self, worst_case_scale_factors,
-                           peakload_consumption_ratio, modes):
+                         peakload_consumption_ratio, modes):
         """
         Define worst case load time series for each sector.
 
@@ -1053,7 +1071,7 @@ class TimeSeriesControl:
         mv_power_scaling = np.array(
             [worst_case_scale_factors['mv_{}_load'.format(mode)]
              for mode in modes])
-        
+
         lv = {(sector, 'lv'): peakload_consumption_ratio[sector] *
                               lv_power_scaling
               for sector in sectors}
@@ -1070,15 +1088,21 @@ class CurtailmentControl:
 
     Parameters
     ----------
-    mode : :obj:`str`
+    curtailment_methodology : :obj:`str`
         Mode defines the curtailment strategy. Possible options are:
 
         * 'curtail_all'
           The curtailment that has to be met in each time step is allocated
           equally to all generators depending on their share of total
           feed-in in that time step.
+        * 'curtail_voltage'
+          The curtailment that has to be met in each time step is allocated
+          based on the voltages at the generator connection points and the
+          defined 'voltage_threshold_lower'. Generators at higher voltages
+          are curtailed more.
+    edisgo_object : :class:`edisgo.EDisGo`
+        The parent EDisGo object that this instance is a part of.
 
-    network : :class:`~.grid.network.Network`
     total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Series or DataFrame containing the curtailment time series in kW. Index
         needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
@@ -1094,20 +1118,176 @@ class CurtailmentControl:
         given by technology and weather cell).
         Default: None.
 
+    **kwargs
+       Optional keyword arguments depending upon the curtailment methodology.
+       The type of the data depends on the curtailment methodology as well.
+       See the documentation of the individual curtailment methods below:
+
+       * :meth:`edisgo.flex_opt.curtailment.curtail_all()`
+       * :meth:`edisgo.flex_opt.curtailment.curtail_voltage()`
+
+    Attributes
+    ----------
+
+    mode : :obj:`str`
+        Contains the string  given by the *curtailment_methodology*
+        keyword argument
+    curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`,
+        Contains the *total_curtailment_ts* input object
+    capacities : :pandas:`pandas.Series<series>`
+        This is a series containing the nominal capacities of every single
+        generator in the MV grid and the underlying LV grids. The series has a
+        MultiIndex index with the following levels:
+
+        * generator : :class:`edisgo.grid.components.GeneratorFluctuating`,
+          essentially all the generator objects in the MV grid and the LV grid
+        * gen_repr : :obj:`str`
+          the repr strings of the generator objects from above
+        * type : :obj:`str`
+          the type of the generator object e.g. 'solar' or 'wind'
+        * weather_cell_id : :obj:`int`
+          the weather_cell_id that the generator object belongs to.
+    feedin : :pandas:`pandas.DataFrame<dataframe>`
+        This is a dataframe that is essentially a multiplication of the feedin timeseries
+        obtained from the parameter `timeseries_generation_fluctuating` in :class:`edisgo.grid.network.EDisGo`
+        and the *capacities* attribute above. Upon multiplication, this dataframe's
+        columns come from the indexes of *capacities* and the dataframe's index comes
+        from the `timeseries_generation_fluctuating`'s Datetimeindex. This dataframe
+        is further passed on to the curtailment methodology functions.
     """
-    def __init__(self, mode, network, **kwargs):
 
-        self.network = network
+    def __init__(self, edisgo_object, **kwargs):
 
-        curtailment_ts = kwargs.get('total_curtailment_ts', None)
-        if curtailment_ts is not None:
-            self._check_timeindex(curtailment_ts)
-        if mode == 'curtail_all':
-            curtailment.curtail_all(curtailment_ts, network)
+        self.mode = kwargs.get('curtailment_methodology', None)
+        self.curtailment_ts = kwargs.get('timeseries_curtailment', None)
+
+        if self.curtailment_ts is not None:
+            self._check_timeindex(edisgo_object.network)
+
+        # get generation fluctuating time series
+        gen_fluct_ts = edisgo_object.network.timeseries.generation_fluctuating.copy()
+
+        # get aggregated capacities by technology and weather cell id
+        self.capacities = get_gen_info(edisgo_object.network, 'mvlv')
+        self.capacities = self.capacities.loc[(self.capacities.type == 'solar') | (self.capacities.type == 'wind')]
+        self.capacities = self.capacities.reset_index()
+        self.capacities.set_index(['generator', 'gen_repr', 'type', 'weather_cell_id'], inplace=True)
+        self.capacities = self.capacities.loc[:, 'nominal_capacity']
+
+        # calculate absolute feed-in timeseries including technology and weather cell id
+        self.feedin = pd.DataFrame(self.capacities).T
+        self.feedin = self.feedin.append([self.feedin] * (gen_fluct_ts.index.size - 1),
+                                         ignore_index=True)
+        self.feedin.index = gen_fluct_ts.index.copy()
+        self.feedin.columns = self.feedin.columns.remove_unused_levels()
+
+        # multiply feedin per type/weather cell id or both to capacities
+        # this is a workaround for pandas currently not allowing multiindex dataframes
+        # to be multiplied  and broadcast on two levels (type and weather_cell_id)
+        for x in self.feedin.columns.levels[0]:
+            try:
+                self.feedin.loc[:, (x, str(x), x.type, x.weather_cell_id)] = \
+                    self.feedin.loc[:, (x, str(x), x.type, x.weather_cell_id)] * \
+                    gen_fluct_ts.loc[:, (x.type, x.weather_cell_id)]
+            except AttributeError:
+                # when either weather_cell_id or type attribute is missing
+                # meaning this could be a Generator Object instead of a Generator Fluctuating
+                if type(x) == edisgo.grid.components.GeneratorFluctuating:
+                    message = "One or both of the attributes, \'type\' or \'weather_cell_id\'" +\
+                              "of the {} object is missing even though ".format(x) +\
+                              "its a GeneratorFluctuating Object."
+                    logging.warning(message)
+                    #raise Warning(message)
+                else:
+                    message = "Generator Object found instead of GeneratorFluctuating Object " +\
+                              "in {}".format(x)
+                    logging.warning(message)
+                    #raise Warning(message)
+                pass
+            except KeyError:
+                # when one of the keys are missing in either the feedin or the capacities
+                message = "One of the keys of {} are absent in either the feedin or the".format(x) +\
+                          " generator fluctuating timeseries  object is missing"
+                logging.warning(message)
+                #raise Warning(message)
+                pass
+
+        # get mode of curtailment and the arguments necessary
+        if self.mode == 'curtail_all':
+            curtail_function = curtailment.curtail_all
+        elif self.mode == 'curtail_voltage':
+            curtail_function = curtailment.curtail_voltage
         else:
-            raise ValueError('{} is not a valid mode.'.format(mode))
+            raise ValueError('{} is not a valid mode.'.format(self.mode))
 
-    def _check_timeindex(self, curtailment_ts):
+        # perform the mode of curtailment with some relevant checks
+        # as to what the inputs are
+        if isinstance(self.curtailment_ts, pd.Series):
+            curtail_function(self.feedin,
+                             self.curtailment_ts,
+                             edisgo_object,
+                             **kwargs)
+        elif isinstance(self.curtailment_ts, pd.DataFrame):
+            if isinstance(self.curtailment_ts.columns, pd.MultiIndex):
+                col_tuple_list = self.curtailment_ts.columns.tolist()
+                for col_slice in col_tuple_list:
+                    feedin_slice = self.feedin.loc[:, (slice(None),
+                                                       slice(None),
+                                                       col_slice[0],
+                                                       col_slice[1])]
+                    feedin_slice.columns = feedin_slice.columns.remove_unused_levels()
+                    if feedin_slice.size > 0:
+                        curtail_function(feedin_slice,
+                                         self.curtailment_ts[col_slice],
+                                         edisgo_object,
+                                         **kwargs)
+                    else:
+                        message = "In this grid there seems to be no feedin time series" +\
+                            " or generators corresponding to the combination of {}".format(col_slice)
+                        logging.warning(message)
+            else:
+                # when there is no multi-index then we assume that this is only
+                # curtailed through technology or with weather cell id only
+                if self.curtailment_ts.columns.dtype == object:
+                    # this is when technology is given as strings
+                    for tech in self.curtailment_ts.columns:
+                        curtail_function(self.feedin.loc[:, (slice(None),
+                                                             slice(None),
+                                                             tech,
+                                                             slice(None))],
+                                         self.curtailment_ts[tech],
+                                         edisgo_object,
+                                         **kwargs)
+                elif self.curtailment_ts.columns.dtype == int:
+                    # this is when weather_cell_id is given as strings
+                    for w_id in self.curtailment_ts.columns:
+                        curtail_function(self.feedin.loc[:, (slice(None),
+                                                             slice(None),
+                                                             slice(None),
+                                                             w_id)],
+                                         self.curtailment_ts[w_id],
+                                         edisgo_object,
+                                         **kwargs)
+                else:
+                    message = 'Unallowed type {} of provided curtailment time ' \
+                              'series labels. Must either be string (like \'solar\') or ' \
+                              'integer (like w_id 933).'.format(type(self.curtailment_ts))
+                    logging.error(message)
+                    raise TypeError(message)
+        else:
+            message = 'Unallowed type {} of provided curtailment time ' \
+                      'series. Must either be pandas.Series or ' \
+                      'pandas.DataFrame.'.format(type(self.curtailment_ts))
+            logging.error(message)
+            raise TypeError(message)
+
+        # clear the pypsa object so that it doesn't interfere with further calculations
+        edisgo_object.network.pypsa = None
+
+        # check if curtailment exceeds feed-in
+        self._check_curtailment(edisgo_object.network)
+
+    def _check_timeindex(self, network):
         """
         Raises an error if time index of curtailment time series does not
         comply with the time index of load and feed-in time series.
@@ -1119,19 +1299,45 @@ class CurtailmentControl:
             information.
 
         """
+
         try:
-            curtailment_ts.loc[self.network.timeseries.timeindex]
+            self.curtailment_ts.loc[network.timeseries.timeindex]
         except:
             message = 'Time index of curtailment time series does not match ' \
                       'with load and feed-in time series.'
             logging.error(message)
             raise KeyError(message)
         # raise warning if time indexes do not have the same entries
-        if pd.Series(self.network.timeseries._generation_fluctuating.
+        if pd.Series(network.timeseries.generation_fluctuating.
                              index).equals(pd.Series(
-            curtailment_ts.index)) is False:
+            self.curtailment_ts.index)) is False:
             logging.warning('Time index of curtailment time series is not '
                             'equal to the feed-in time series index.')
+
+    def _check_curtailment(self, network):
+        """
+        Raises an error if the curtailment at any time step exceeds the
+        feed-in at that time.
+
+        Parameters
+        -----------
+        feedin : :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with feed-in time series in kW. The DataFrame needs to have
+            the same columns as the curtailment DataFrame.
+        network : :class:`~.grid.network.Network`
+
+        """
+
+        feedin_ts_compare = self.feedin.copy()
+        for r in range(len(feedin_ts_compare.columns.levels)-1):
+            feedin_ts_compare.columns = feedin_ts_compare.columns.droplevel(1)
+        # need an if condition to remove the weather_cell_id level too
+
+        if not (feedin_ts_compare.loc[:, network.timeseries.curtailment.columns]
+                >= network.timeseries.curtailment).all().all():
+            message = 'Curtailment exceeds feed-in.'
+            logging.error(message)
+            raise TypeError(message)
 
 
 class StorageControl:
@@ -1197,6 +1403,7 @@ class StorageControl:
         strategy or node to connect the storage to.
 
     """
+
     def __init__(self, network, timeseries_battery, battery_parameters,
                  battery_position):
 
@@ -1260,7 +1467,7 @@ class StorageControl:
             self._check_timeindex(timeseries)
             storage.timeseries = timeseries
         elif timeseries == 'fifty-fifty':
-                storage_operation.fifty_fifty(storage)
+            storage_operation.fifty_fifty(storage)
         else:
             message = 'Provided battery timeseries option {} is not ' \
                       'valid.'.format(timeseries)
@@ -1401,7 +1608,7 @@ class TimeSeries:
     @generation_fluctuating.setter
     def generation_fluctuating(self, generation_fluc_timeseries):
         self._generation_fluctuating = generation_fluc_timeseries
-        
+
     @property
     def load(self):
         """
@@ -1606,9 +1813,6 @@ class ETraGoSpecs:
         feedin.columns = pd.MultiIndex.from_tuples(new_columns)
         # aggregate wind and solar time series until generators get a weather
         # ID
-        # ToDo: Remove when generators have weather cell ID
-        feedin = pd.DataFrame(data={'wind': feedin.wind.sum(axis=1),
-                                    'solar': feedin.solar.sum(axis=1)})
         return feedin
 
     def _get_curtailment(self, curtailment, renewables):
@@ -1634,7 +1838,7 @@ class ETraGoSpecs:
         # ID
         # ToDo: Remove when generators have weather cell ID
         curtailment = pd.DataFrame(data={'wind': curtailment.wind.sum(axis=1),
-                                    'solar': curtailment.solar.sum(axis=1)})
+                                         'solar': curtailment.solar.sum(axis=1)})
 
         # calculate absolute curtailment
         timeseries_curtailment = curtailment.multiply(
@@ -1660,7 +1864,7 @@ class Results:
 
     """
 
-    # TODO: maybe add setter to alter list of measures
+    # ToDo: maybe add setter to alter list of measures
 
     def __init__(self):
         self._measures = ['original']
@@ -1973,7 +2177,7 @@ class Results:
             labels = [repr(l) for l in components]
             for label in labels:
                 if (label in list(self.pfa_p.columns) and
-                            label in list(self.pfa_q.columns)):
+                        label in list(self.pfa_q.columns)):
                     labels_included.append(label)
                 else:
                     labels_not_included.append(label)
@@ -1988,7 +2192,7 @@ class Results:
 
         return s_res
 
-    def v_res(self, nodes=None, level=None):
+    def v_res(self, nodes=None, generators=None, level=None):
         """
         Get resulting voltage level at node
 
@@ -2017,23 +2221,26 @@ class Results:
         voltage at secondary side busbar and not at load/generator.
 
         """
+        # First check if results are available:
+        if hasattr(self, 'pfa_v_mag_pu'):
+            # unless index is lexsorted, it cannot be sliced
+            self.pfa_v_mag_pu.sort_index(axis=1, inplace=True)
+        else:
+            message = "No Power Flow Calculation has be done yet, so there are no results yet."
+            raise AttributeError
+
         if level is None:
             level = ['mv', 'lv']
 
         if nodes is None:
-            labels = list(self.pfa_v_mag_pu[level])
+            return self.pfa_v_mag_pu.loc[:, (level, slice(None))]
         else:
-            labels = [repr(_) for _ in nodes]
+            labels = list(map(repr, nodes.copy()))
+            not_included = [_ for _ in labels
+                            if _ not in list(self.pfa_v_mag_pu[level].columns)]
+            labels_included = [_ for _ in labels if _ not in not_included]
 
-        not_included = [_ for _ in labels
-                        if _ not in list(self.pfa_v_mag_pu[level].columns)]
-
-        labels_included = [_ for _ in labels if _ not in not_included]
-
-        if not_included:
-            print("Voltage levels for {nodes} are not returned from PFA".format(
+            if not_included:
+                logging.info("Voltage levels for {nodes} are not returned from PFA".format(
                 nodes=not_included))
-
-
-        return self.pfa_v_mag_pu[level][labels_included]
-
+            return self.pfa_v_mag_pu.loc[:, (level, labels_included)]
