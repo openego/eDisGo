@@ -254,13 +254,11 @@ class Load(Component):
 
         return peak_load
 
-    #def __repr__(self):
-    #    return '_'.join(['Load',
-    #                     sorted(list(self.consumption.keys()))[0],
-    #                     repr(self.grid),
-    #                     str(self.id)])
     def __repr__(self):
-        return str(self._id)
+       return '_'.join(['Load',
+                        sorted(list(self.consumption.keys()))[0],
+                        repr(self.grid),
+                        str(self.id)])
 
 
 class Generator(Component):
