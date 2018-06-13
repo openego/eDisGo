@@ -25,18 +25,30 @@ def one_storage_per_feeder(edisgo):
             reset_index().sort_values(by=['total_costs'], ascending=False)[
             'mv_feeder']
 
-    # rank MV feeders by grid expansion costs calculated with feed-in case
-    if edisgo.network.results.grid_expansion_costs is not None:
-        ranked_feeders = feeder_ranking(
-            edisgo.network.results.grid_expansion_costs)
-    else:
-        # conduct grid reinforcement
-        edisgo.reinforce()
-        # rank feeders
-        ranked_feeders = feeder_ranking(
-            edisgo.network.results.grid_expansion_costs)
-        # reset edisgo object (new grid -> moved to reinforce_grid)
-        #edisgo.import_from_ding0(kwargs.get('ding0_grid', None))
+    # # rank MV feeders by grid expansion costs calculated with feed-in case
+    # if edisgo.network.results.grid_expansion_costs is not None:
+    #     ranked_feeders = feeder_ranking(
+    #         edisgo.network.results.grid_expansion_costs)
+    # else:
+    #     # conduct grid reinforcement
+    #     edisgo.reinforce()
+    #     # rank feeders
+    #     ranked_feeders = feeder_ranking(
+    #         edisgo.network.results.grid_expansion_costs)
+    #     # reset edisgo object (new grid -> moved to reinforce_grid)
+    #     #edisgo.import_from_ding0(kwargs.get('ding0_grid', None))
+
+    # work around for now: random feeder ranking
+    # get nodes adjacent to HV/MV station
+    station_adj_nodes = list(edisgo.network.mv_grid.graph.edge[
+        edisgo.network.mv_grid.station].keys())
+    # for each adjacent node check if
+    ranked_feeders = []
+    for node in station_adj_nodes:
+        if len(edisgo.network.mv_grid.graph.edge[node])  > 1:
+            ranked_feeders.append(edisgo.network.mv_grid.graph.line_from_nodes(
+                edisgo.network.mv_grid.station, node))
+
     # for every feeder:
     # ** install storage at the node of the overloaded lines farthest away from the HV/MV transformer
     # ** estimate residual line load (neglect grid losses) to identify all time steps where line is over-loaded
