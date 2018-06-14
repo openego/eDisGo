@@ -355,7 +355,9 @@ class EDisGo:
                         "Couldn't import ding0 grid from pickle file.")
             elif os.path.isdir(ding0_grid):
                 try:
-                    import_from_csv(path=ding0_grid, network=self.network)
+                    sep = kwargs.get('sep', ',')
+                    index_col = kwargs.get('index_col', 0)
+                    import_from_csv(path=ding0_grid, network=self.network, sep=sep, index_col=index_col)
                 except:
                     raise RuntimeError(
                         "Couldn't import ding0 grid from csv files.")
