@@ -2204,30 +2204,30 @@ def import_load_timeseries(config_data, data_source, mv_grid_id=None,
     return load
 
 
-def import_from_csv(path, network):
+def import_from_csv(path, network, sep=',', index_col=0):
 
     # import grid data from csv files
-    lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_loads, mv_grid, \
-    mv_gen, mv_cb, mv_cd, mv_stations, mv_trafos, mv_loads, edges, \
-    mapping = _read_network(path)
+    lv_grid, lv_gen, lv_cd, lv_station, mvlv_trafo, lv_load,\
+    mv_grid, mv_gen, mv_cb, mv_cd, mv_station, hvmv_trafo, mv_load,\
+    line, mvlv_mapping = _read_network(path, sep=sep, index_col=index_col)
 
     # build MV grid
     mvgrid, mvstations, mvtrafos, lvstations, lvtrafos, mvgens, mvloads, mvcds = \
-        _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_stations,
-                                mv_trafos, lv_stations, lv_trafos, mv_loads, network)
+        _build_mv_grid_from_csv(mv_grid, mv_gen, mv_cb, mv_cd, mv_station,
+                                hvmv_trafo, lv_station, mvlv_trafo, mv_load, network)
 
     # update network with MV grids
     network.mv_grid = mvgrid
 
     # build LV grids
     lvgrids, lvgens, lvloads, lvcds = \
-        _build_lv_grid_from_csv(lv_grid, lv_gen, lv_cd, lv_stations,
-                                lv_loads, network)
+        _build_lv_grid_from_csv(lv_grid, lv_gen, lv_cd, lv_station,
+                                lv_load, network)
 
     # build lines in MV and LV grids
     lines, lvgrids = _build_mvlv_lines_from_csv(
         lvgrids, lvstations, lvtrafos, lvgens, lvloads, lvcds, mvgrid,
-        mvstations, mvtrafos, mvgens, mvloads, mvcds, edges)
+        mvstations, mvtrafos, mvgens, mvloads, mvcds, line)
 
     # update network with LV grids
     network.mv_grid.lv_grids = list(lvgrids.values())
@@ -2248,35 +2248,35 @@ def import_from_csv(path, network):
     network._id = network.mv_grid.id
 
 
-def _read_network_as_pd(path, tablename):
+def _read_network_as_pd(path, tablename, sep=',', index_col=0):
     # reads csv files and loads data in a pandas dataframe
-    file = '/'.join([path, tablename])
-    table = pd.read_csv(file, sep=';')
+    file = os.path.join(path, tablename)
+    table = pd.read_csv(file, sep=sep, index_col=index_col)
     return table
 
 
-def _read_network(path):
+def _read_network(path, sep=',', index_col=0):
     # LV
-    lv_grid = _read_network_as_pd(path, 'lv_grid.csv')
-    lv_gen = _read_network_as_pd(path, 'lv_generator.csv')
-    lv_cd = _read_network_as_pd(path, 'lv_branchtee.csv')
-    lv_stations = _read_network_as_pd(path, 'lvmv_station.csv')
-    lv_trafos = _read_network_as_pd(path, 'lv_transformer.csv')
-    lv_loads = _read_network_as_pd(path, 'lv_load.csv')
+    lv_grid = _read_network_as_pd(path, 'lv_grid.csv', sep=sep, index_col=index_col)
+    lv_gen = _read_network_as_pd(path, 'lv_generator.csv', sep=sep, index_col=index_col)
+    lv_cd = _read_network_as_pd(path, 'lv_branchtee.csv', sep=sep, index_col=index_col)
+    lv_station = _read_network_as_pd(path, 'lv_station.csv', sep=sep, index_col=index_col)
+    mvlv_trafo = _read_network_as_pd(path, 'mvlv_transformer.csv', sep=sep, index_col=index_col)
+    lv_load = _read_network_as_pd(path, 'lv_load.csv', sep=sep, index_col=0)
     # MV
-    mv_grid = _read_network_as_pd(path, 'mv_grid.csv')
-    mv_gen = _read_network_as_pd(path, 'mv_generator.csv')
-    mv_cb = _read_network_as_pd(path, 'mv_circuitbreaker.csv')
-    mv_cd = _read_network_as_pd(path, 'mv_branchtee.csv')
-    mv_stations = _read_network_as_pd(path, 'mvhv_station.csv')
-    mv_trafos = _read_network_as_pd(path, 'mv_transformer.csv')
-    mv_loads = _read_network_as_pd(path, 'mv_load.csv')
+    mv_grid = _read_network_as_pd(path, 'mv_grid.csv', sep=sep, index_col=index_col)
+    mv_gen = _read_network_as_pd(path, 'mv_generator.csv', sep=sep, index_col=index_col)
+    mv_cb = _read_network_as_pd(path, 'mv_circuitbreaker.csv', sep=sep, index_col=index_col)
+    mv_cd = _read_network_as_pd(path, 'mv_branchtee.csv', sep=sep, index_col=index_col)
+    mv_station = _read_network_as_pd(path, 'mv_station.csv', sep=sep, index_col=index_col)
+    hvmv_trafo = _read_network_as_pd(path, 'hvmv_transformer.csv', sep=sep, index_col=index_col)
+    mv_load = _read_network_as_pd(path, 'mv_load.csv', sep=sep, index_col=index_col)
     # Lines
-    edges = _read_network_as_pd(path, 'line.csv')
-    mapping = _read_network_as_pd(path, 'mvlv_mapping.csv')
-    return lv_grid, lv_gen, lv_cd, lv_stations, lv_trafos, lv_loads, \
-           mv_grid, mv_gen, mv_cb, mv_cd, mv_stations, mv_trafos, mv_loads, \
-           edges, mapping
+    line = _read_network_as_pd(path, 'line.csv', sep=sep, index_col=index_col)
+    mvlv_mapping = _read_network_as_pd(path, 'mvlv_mapping.csv', sep=sep, index_col=index_col)
+    return lv_grid, lv_gen, lv_cd, lv_station, mvlv_trafo, lv_load,\
+        mv_grid, mv_gen, mv_cb, mv_cd, mv_station, hvmv_trafo, mv_load,\
+        line, mvlv_mapping
 
 
 def add_node_to_grid(grids, items, item_type):
@@ -2344,15 +2344,24 @@ def _build_lv_grid_from_csv(lv_grid, lv_gen, lv_cd, lv_stations_df,
     # LV generators
     lvgens = {}
     lv_gen.apply(lambda row:
-                 lvgens.update({row['id_db']: Generator(
+                 lvgens.update({row['id_db']: GeneratorFluctuating(
                      id=row['id_db'],
                      geom=wkt_loads(row['geom']),
-                     grid=lvgrids[row['LV_grid_id_db']],
                      nominal_capacity=row['nominal_capacity'],
-                     type = row['type'],
+                     type=row['type'],
                      subtype=row['subtype'],
-                     v_level=row['v_level']
-                      )}), axis=1)
+                     grid=lvgrids[row['LV_grid_id_db']],
+                     v_level=row['v_level'],
+                     weather_cell_id=row['weather_cell_id'])} if row['type'] in ['wind', 'solar'] else
+                               {row['id_db']: Generator(
+                                   id=row['id_db'],
+                                   geom=wkt_loads(row['geom']),
+                                   nominal_capacity=row['nominal_capacity'],
+                                   type=row['type'],
+                                   subtype=row['subtype'],
+                                   grid=lvgrids[row['LV_grid_id_db']],
+                                   v_level=row['v_level'])}
+                               ), axis=1)
     add_node_to_grid(lvgrids, lvgens, 'generator')
 
     # LV loads
@@ -2442,7 +2451,7 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
     for idx, row in lv_stations.iterrows():
         count = 1
         lvstations[row['id_db']]._transformers = []
-        for idx2,row2 in lv_trafos[lv_trafos['LV_grid_id_db'] == row['LV_grid_id_db']].iterrows():
+        for idx2, row2 in lv_trafos[lv_trafos['LV_grid_id_db'] == row['LV_grid_id_db']].iterrows():
             trafo = lvtrafos[row2['id_db']]
             trafo.id = 'LVStation_' + str(row.id_db) + '_transformer_' + str(count)
             lvstations[row['id_db']]._transformers.append(trafo)
@@ -2452,16 +2461,36 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
 
     # MV generators
     mvgens = {}
+    # mv_gen.apply(lambda row:
+    #              mvgens.update({row['id_db']: GeneratorFluctuating(
+    #                  id=row['id_db'],
+    #                  geom=wkt_loads(row['geom']),
+    #                  nominal_capacity=row['nominal_capacity'],
+    #                  type=row['type'],
+    #                  subtype=row['subtype'],
+    #                  grid=mv_grid,
+    #                  v_level=row['v_level']
+    #               )}), axis=1)
+
     mv_gen.apply(lambda row:
-                 mvgens.update({row['id_db']: Generator(
+                 mvgens.update({row['id_db']: GeneratorFluctuating(
                      id=row['id_db'],
                      geom=wkt_loads(row['geom']),
                      nominal_capacity=row['nominal_capacity'],
                      type=row['type'],
                      subtype=row['subtype'],
                      grid=mv_grid,
-                     v_level=row['v_level']
-                  )}),axis=1)
+                     v_level=row['v_level'],
+                     weather_cell_id=row['weather_cell_id'])} if row['type'] in ['wind', 'solar'] else
+                               {row['id_db']: Generator(
+                                   id=row['id_db'],
+                                   geom=wkt_loads(row['geom']),
+                                   nominal_capacity=row['nominal_capacity'],
+                                   type=row['type'],
+                                   subtype=row['subtype'],
+                                   grid=mv_grid,
+                                   v_level=row['v_level'])}
+                               ), axis=1)
     add_node_to_grid(mv_grid, mvgens, 'generator')
 
     # MV loads
