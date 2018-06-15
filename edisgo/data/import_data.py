@@ -2519,14 +2519,14 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
 
 def _build_mvlv_lines_from_csv(lvgrids, lvstations, lvtrafos, lvgens, lvloads,
                                lvcds, mv_grid, mv_stations, mvtrafos, mvgens,
-                               mvloads, mvcds, edges):
+                               mvloads, mvcds, lines):
 
     # merge nodes defined above to a single dict
     nodes = {**lvstations, **lvtrafos, **lvgens, **lvloads, **lvcds,
              **mvtrafos, **mvgens, **mvloads, **mvcds, **mv_stations}
 
     # LV lines
-    lv_edges = edges[edges['U_n'] == 0.4]
+    lv_edges = lines[lines['U_n'] == 0.4]
     lv_lines = []
     lv_edges.apply(lambda row: lv_lines.append(
         (nodes[row['node1']], nodes[row['node2']],
@@ -2536,14 +2536,14 @@ def _build_mvlv_lines_from_csv(lvgrids, lvstations, lvtrafos, lvgens, lvloads,
                                   row['I_max_th'], row['R'], row['L'],
                                   row['C']],
                             index=['name', 'U_n', 'I_max_th', 'R', 'L', 'C']),
-             length=row['length'] / 1e3,  # ToDo: Check if all edges, that are exported from Ding0, have the same scale
+             length=row['length'],  # ToDo: Check if all lines, that are exported from Ding0, have the same scale
              kind=row['type_kind'],
              grid=lvgrids[row['grid_id_db']])
          })), axis=1)
     add_edge_to_grid(lvgrids, lv_lines, 'line')
 
     # MV lines
-    mv_edges = edges[edges['U_n'] >= 10]
+    mv_edges = lines[lines['U_n'] >= 10]
     mv_lines = []
     mv_edges.apply(lambda row: mv_lines.append(
         (nodes[row['node1']], nodes[row['node2']],
@@ -2553,8 +2553,8 @@ def _build_mvlv_lines_from_csv(lvgrids, lvstations, lvtrafos, lvgens, lvloads,
                                   row['I_max_th'], row['R'], row['L'],
                                   row['C']],
                             index=['name', 'U_n', 'I_max_th', 'R', 'L', 'C']),
-             length=row['length'] / 1e3,
-             # ToDo: Check if all edges, that are exported from Ding0, have the same scale
+             length=row['length'],
+             # ToDo: Check if all lines, that are exported from Ding0, have the same scale
              kind=row['type_kind'],
              grid=mv_grid)
          })), axis=1)
