@@ -30,18 +30,42 @@ def mv_line_load(network):
     load_factor_mv_line = network.config['grid_expansion_load_factors'][
         'mv_feedin_case_line']
 
+    # TESTING
+    # line_list = []
+    # line_length = []
+    # connected_nodes = []
+    # i_max = []
+    # i_pfa = []
+
     for line in list(network.mv_grid.graph.lines()):
         i_line_max = line['line'].type['I_max_th'] * \
                      load_factor_mv_line * line['line'].quantity
+
+        # TESTING
+        # line_list.append(line['line'].id)
+        # line_length.append(line['line'].length)
+        # connected_nodes.append("-".join(list(map(str, line['adj_nodes']))))
+        # i_max.append(i_line_max)
         try:
             # check if maximum current from power flow analysis exceeds
             # allowed maximum current
             i_line_pfa = max(network.results.i_res[repr(line['line'])])
+            # TESTING
+            # i_pfa.append(i_line_pfa)
             if i_line_pfa > float(i_line_max):
                 crit_lines[line['line']] = i_line_pfa / i_line_max
         except KeyError:
             logger.debug('No results for line {} '.format(str(line)) +
                          'to check overloading.')
+
+    # TESTING
+    # import pandas as pd
+    # a = pd.DataFrame({'line': line_list,
+    #                   'connected_node': connected_nodes,
+    #                   'length': line_length,
+    #                   'i_max': i_max,
+    #                   'i_pfa': i_pfa})
+    # a.to_csv('mv_line_pfa_test.csv')
 
     if crit_lines:
         logger.debug('==> {} line(s) in MV grid has/have load issues.'.format(
@@ -83,19 +107,44 @@ def lv_line_load(network):
     load_factor_lv_line = network.config['grid_expansion_load_factors'][
         'lv_feedin_case_line']
 
+    # TESTING
+    # lv_grid_list = []
+    # line_list = []
+    # line_length = []
+    # connected_nodes = []
+    # i_max = []
+    # i_pfa = []
     for lv_grid in network.mv_grid.lv_grids:
         for line in list(lv_grid.graph.lines()):
             i_line_max = line['line'].type['I_max_th'] * \
                          load_factor_lv_line * line['line'].quantity
+            # TESTING
+            # lv_grid_list.append(lv_grid)
+            # line_list.append(line['line'].id)
+            # line_length.append(line['line'].length)
+            # connected_nodes.append("-".join(list(map(str, line['adj_nodes']))))
+            # i_max.append(i_line_max)
             try:
                 # check if maximum current from power flow analysis exceeds
                 # allowed maximum current
                 i_line_pfa = max(network.results.i_res[repr(line['line'])])
+                # TESTING
+                # i_pfa.append(i_line_pfa)
                 if i_line_pfa > i_line_max:
                     crit_lines[line['line']] = i_line_pfa / i_line_max
             except KeyError:
                 logger.debug('No results for line {} '.format(str(line)) +
                              'to check overloading.')
+
+    # TESTING
+    # import pandas as pd
+    # a = pd.DataFrame({'grid': lv_grid_list,
+    #                   'line': line_list,
+    #                   'connected_node': connected_nodes,
+    #                   'length': line_length,
+    #                   'i_max': i_max,
+    #                   'i_pfa': i_pfa})
+    # a.to_csv('lv_line_pfa_test.csv')
 
     if crit_lines:
         logger.debug('==> {} line(s) in LV grids has/have load issues.'.format(
