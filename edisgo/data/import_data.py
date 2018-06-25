@@ -1,6 +1,6 @@
 from ..grid.components import Load, Generator, BranchTee, MVStation, Line, \
     Transformer, LVStation, GeneratorFluctuating
-from ..grid.grids import MVGrid, LVGrid
+from ..grid.grids import MVGrid, LVGrid, Grid
 from ..grid.connect import connect_mv_generators, connect_lv_generators
 from ..grid.tools import select_cable, position_switch_disconnectors
 from ..tools.geo import proj2equidistant
@@ -21,6 +21,13 @@ from math import isnan
 import random
 import os
 import oedialect
+import json
+
+from pandas import DataFrame, read_csv
+import matplotlib.pyplot as plt
+from ding0.core import GeneratorFluctuatingDing0
+from edisgo.grid.components import *
+
 
 if not 'READTHEDOCS' in os.environ:
     from ding0.tools.results import load_nd_from_pickle
@@ -55,7 +62,7 @@ def import_from_ding0(file, network):
     file: :obj:`str` or :class:`ding0.core.NetworkDing0`
         If a str is provided it is assumed it points to a pickle with Ding0
         grid data. This file will be read.
-        If a object of the type :class:`ding0.core.NetworkDing0` data will be
+        If an object of the type :class:`ding0.core.NetworkDing0` data will be
         used directly from this object.
     network: :class:`~.grid.network.Network`
         The eDisGo data container object
@@ -274,7 +281,7 @@ def _build_mv_grid(ding0_grid, network):
                                 for _ in
                                 ding0_grid.grid_district._lv_load_areas
                                 if not np.isnan(_.zensus_sum)])},
-        voltage_nom=ding0_grid.v_level)
+        voltage_nom=ding0_grid.v_level) #ToDo: voltagenom vs. v_level?
 
     # Special treatment of LVLoadAreaCenters see ...
     # ToDo: add a reference above for explanation of how these are treated
@@ -538,13 +545,32 @@ def _determine_aggregated_nodes(la_centers):
 
         # Determine aggregated generation in LV grid
         for lvgd in la_center.lv_load_area._lv_grid_districts:
+            weather_cell_ids = {}
             for gen in lvgd.lv_grid.generators():
                 aggr = aggregate_generators(gen, aggr)
+
+                # Get the aggregated weather cell id of the area
+                # b
+                if isinstance(gen, GeneratorFluctuatingDing0):
+                    if gen.weather_cell_id not in weather_cell_ids.keys():
+                        weather_cell_ids[gen.weather_cell_id] = 1
+                    else:
+                        weather_cell_ids[gen.weather_cell_id] += 1
 
                 dingo_import_data.loc[len(dingo_import_data)] = \
                     [int(gen.id_db),
                      gen.capacity,
                      None]
+
+            # Get the weather cell id that occurs the most
+            weather_cell_id = list(weather_cell_ids.keys())[
+                list(weather_cell_ids.values()).index(max(weather_cell_ids.values()))]
+
+            for v_level in aggr['generation']:
+                for type in aggr['generation'][v_level]:
+                    for subtype in aggr['generation'][v_level][type]:
+                        aggr['generation'][v_level][type][subtype]['weather_cell_id'] = \
+                            weather_cell_id
 
         # Determine aggregated load in MV grid
         # -> Implement once laods in Ding0 MV grids exist
@@ -600,11 +626,12 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                             id='agg-' + str(la_id) + '-' + '_'.join(
                                 [str(_) for _ in val3['ids']]),
                             nominal_capacity=val3['capacity'],
+                            weather_cell_id=val3['weather_cell_id'],
                             type=type,
                             subtype=subtype,
                             geom=grid.station.geom,
                             grid=grid,
-                            v_level=4)
+                            v_level=v_level)
                     else:
                         gen = Generator(
                             id='agg-' + str(la_id) + '-' + '_'.join(
@@ -614,7 +641,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                             subtype=subtype,
                             geom=grid.station.geom,
                             grid=grid,
-                            v_level=4)
+                            v_level=v_level)
                     grid.graph.add_node(gen, type='generator_aggr')
 
                     # backup reference of geno to LV geno list (save geno
@@ -1978,11 +2005,8 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
         ----------
         config_data : dict
             Dictionary containing config data from config files.
-        mv_grid_id : :obj:`str`
-            MV grid ID as used in oedb.
-        generator_scenario : None or :obj:`str`
-            Defines which scenario of future generator park to use.
-
+        weather_cell_ids : :obj:`list`
+            list of weather cell ids in mv grid district.
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
@@ -1995,7 +2019,7 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
         else:
             orm_feedin_name = config_data['versioned']['res_feedin_data']
             orm_feedin = supply.__getattribute__(orm_feedin_name)
-            orm_feedin_version = orm_feedin.columns.version == config_data['versioned']['version']
+            orm_feedin_version = orm_feedin.version == config_data['versioned']['version']
 
         conn = connection(section=config_data['db_connection']['section'])
         Session = sessionmaker(bind=conn)
