@@ -22,4 +22,7 @@ Changes
 * Add parallelization for custon functions
   `#130 <https://github.com/openego/eDisGo/issues/130>`_
 
+* Update `ding0 version to v0.1.6 <https://github.com/openego/ding0/releases/tag/v0.1.6>`_ and include
+  `data processing v.4.2 data <https://github.com/openego/data_processing/releases/tag/v0.4.2>`_
+
 * Bug Fixes
