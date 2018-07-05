@@ -409,14 +409,15 @@ class EDisGo:
 
     def reinforce(self, **kwargs):
         """
-        Reinforces the grid and calculates grid expansion costs
+        Reinforces the grid and calculates grid expansion costs.
+
+        See :meth:`~.flex_opt.reinforce_grid` for more information.
 
         """
         reinforce_grid(
             self, max_while_iterations=kwargs.get(
-                'max_while_iterations', 10))
-        self.network.results.grid_expansion_costs = grid_expansion_costs(
-            self.network)
+                'max_while_iterations', 10),
+            copy_graph=kwargs.get('copy_graph', False))
 
     def integrate_storage(self, **kwargs):
         """
