@@ -19,4 +19,7 @@ Changes
   The method is called `curtail_voltage` and its objective is to increase curtailment at locations where voltages
   are very high, thereby alleviating over-voltage issues and also reducing the need for network reinforcement.
 
+* Add parallelization for custon functions
+  `#130 <https://github.com/openego/eDisGo/issues/130>`_
+
 * Bug Fixes
