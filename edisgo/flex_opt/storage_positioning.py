@@ -1,4 +1,6 @@
 import pandas as pd
+import networkx as nx
+from edisgo.flex_opt.check_tech_constraints import mv_line_load
 
 
 def one_storage_per_feeder(edisgo):
@@ -45,9 +47,39 @@ def one_storage_per_feeder(edisgo):
     # for each adjacent node check if
     ranked_feeders = []
     for node in station_adj_nodes:
-        if len(edisgo.network.mv_grid.graph.edge[node])  > 1:
+        if len(edisgo.network.mv_grid.graph.edge[node]) > 1:
             ranked_feeders.append(edisgo.network.mv_grid.graph.line_from_nodes(
                 edisgo.network.mv_grid.station, node))
+
+    # get list of overloaded lines
+    critical_lines = mv_line_load(edisgo.network)
+
+    print(critical_lines)
+
+    # find the longest nx. shortest path from all the nodes
+    # get all nodes in the mv_grid
+    graph_without_station = edisgo.network.mv_grid.graph.copy()
+    mv_station = graph_without_station.nodes_by_attribute('mv_station')
+    station_nearest_nodes = list(graph_without_station.edge[
+                                     mv_station.keys()])
+
+    graph_without_station.remove_node(mv_station)
+    all_nodes = list(graph_without_station.nodes)
+    shortest_paths = {}
+    for node in all_nodes:
+        for station_near_node in station_nearest_nodes:
+            shortest_paths[(station_near_node, node)] = \
+                nx.shortest_path(graph_without_station, station_near_node, node)
+
+    print(shortest_paths)
+
+
+
+
+    # for feeder in ranked_feeders:
+        # get the nodes farthest away from HV/MV transformer
+
+
 
     # for every feeder:
     # ** install storage at the node of the overloaded lines farthest away from the HV/MV transformer
