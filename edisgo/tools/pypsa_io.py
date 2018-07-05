@@ -715,12 +715,12 @@ def _pypsa_load_timeseries(network, mode=None):
             for load in lv_grid.graph.nodes_by_attribute('load'):
                 for sector in list(load.consumption.keys()):
                 # for sector in list(list(load.consumption.keys())[0]):
-                    # TODO: remove consideration of only industrial sector
+                    # ToDo: remove consideration of only industrial sector
                     # now, if a load object has consumption in multiple sectors
                     # (like currently only industrial/retail) the consumption is
                     # implicitly assigned to the industrial sector when being
                     # exported to pypsa.
-                    # TODO: resolve this in the importer
+                    # ToDo: resolve this in the importer
                     if sector != 'retail':
                         lv_load_timeseries_q.append(
                             load.pypsa_timeseries('q').rename(
@@ -960,7 +960,7 @@ def _pypsa_timeseries_aggregated_at_lv_station(network):
                     lo.pypsa_timeseries('p').rename(repr(lo)).to_frame())
                 load[sector]['timeseries_q'].append(
                     lo.pypsa_timeseries('q').rename(repr(lo)).to_frame())
-                # TODO: now, there are single loads from eDisGo topology. Summarize these by sector and LV grid
+                # ToDo: now, there are single loads from eDisGo topology. Summarize these by sector and LV grid
 
         for sector, val in load.items():
             load_p.append(
@@ -1329,7 +1329,6 @@ def update_pypsa(network):
                    's_nom': [],
                    'tap_ratio': []}
 
-
     for idx, row in added_transformers.iterrows():
 
         if isinstance(idx, LVStation):
@@ -1369,7 +1368,7 @@ def update_pypsa(network):
             idx.type['R'] / idx.quantity * idx.length)
         network.pypsa.lines.loc[repr(idx), 'x'] = (
             idx.type['L'] / 1e3 * omega / idx.quantity * idx.length)
-        #ToDo remove s_nom?
+        # ToDo remove s_nom?
         network.pypsa.lines.loc[repr(idx), 's_nom'] = (
             sqrt(3) * idx.type['I_max_th'] * idx.type[
                 'U_n'] * idx.quantity / 1e3)

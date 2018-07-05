@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 from setuptools.command.install import install
 import os
 
-BASEPATH='.eDisGo'
+BASEPATH = '.eDisGo'
 
 
 class InstallSetup(install):
@@ -23,15 +23,15 @@ class InstallSetup(install):
 
 setup(
     name='eDisGo',
-    version='0.0.2',
+    version='0.0.3',
     packages=find_packages(),
     url='https://github.com/openego/eDisGo',
     license='GNU Affero General Public License v3.0',
-    author='gplssm, nesnoj, birgits',
+    author='gplssm, nesnoj, birgits, boltbeard',
     author_email='',
     description='A python package for distribution grid analysis and optimization',
-    install_requires = [
-        'ding0==0.1.4',
+    install_requires=[
+        'ding0 >=0.1.6',
         'networkx >=1.11, <2.0 ',
         'shapely >= 1.5.12, <= 1.6.3',
         'pandas >=0.20.3, <=0.20.3',
@@ -39,7 +39,8 @@ setup(
         'pyproj >= 1.9.5.1, <= 1.9.5.1',
         'geopy >= 1.11.0, <= 1.11.0',
         'workalendar',
-        'demandlib'
+        'demandlib',
+        'oedialect'
     ],
     package_data={
         'edisgo': [
@@ -49,7 +50,7 @@ setup(
     },
     cmdclass={
         'install': InstallSetup},
-        entry_points={
-            'console_scripts': ['edisgo_run = edisgo.tools.edisgo_run:edisgo_run']
-        }
+    entry_points={
+        'console_scripts': ['edisgo_run = edisgo.tools.edisgo_run:edisgo_run']
+    }
 )
