@@ -1,7 +1,7 @@
 import os
 import logging
 import pandas as pd
-from math import acos, tan, sqrt
+from math import acos, tan
 
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString
