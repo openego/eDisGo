@@ -9,3 +9,4 @@ geopy >=1.11.0, <=1.11.0
 oemof.db >=0.0.4, <=0.0.4
 workalendar
 demandlib
+oedialect
