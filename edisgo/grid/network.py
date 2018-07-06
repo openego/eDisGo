@@ -2066,8 +2066,9 @@ class Results:
             grid_expansion_costs. For retrieval of costs do not pass an
             argument.
 
-            Index of the DataFrame is the representation of the respective
-            object, columns are the following:
+            Index of the DataFrame is the respective object
+            that can either be a :class:`~.grid.components.Line` or a
+            :class:`~.grid.components.Transformer`. Columns are the following:
 
             type: String
                 Transformer size or cable name

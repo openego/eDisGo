@@ -24,8 +24,9 @@ def grid_expansion_costs(network):
     `pandas.DataFrame<dataframe>`
         DataFrame containing type and costs plus in the case of lines the
         line length and number of parallel lines of each reinforced
-        transformer and line. Index of the DataFrame is the representation of
-        the respective object, columns are the following:
+        transformer and line. Index of the DataFrame is the respective object
+        that can either be a :class:`~.grid.components.Line` or a
+        :class:`~.grid.components.Transformer`. Columns are the following:
 
         type: String
             Transformer size or cable name
@@ -119,7 +120,7 @@ def grid_expansion_costs(network):
                  'quantity': 1,
                  'voltage_level': 'mv/lv',
                  'mv_feeder': get_mv_feeder_from_node(t.grid.station)},
-                index=[repr(t)]))
+                index=[t]))
 
         # costs for lines
         # get changed lines
@@ -147,7 +148,7 @@ def grid_expansion_costs(network):
                      'voltage_level': ('lv' if isinstance(l.grid, LVGrid)
                                        else 'mv'),
                      'mv_feeder': get_mv_feeder_from_line(l)},
-                    index=[repr(l)]))
+                    index=[l]))
 
     # if no costs incurred write zero costs to DataFrame
     if costs.empty:
