@@ -279,6 +279,69 @@ def run_edisgo_pool(ding0_file_list, run_args_opt,
            all_costs, all_grid_issues
 
 
+def run_edisgo_pool_flexible(ding0_id_list, func, func_arguments,
+                    workers=mp.cpu_count(), worker_lifetime=1):
+    """
+    Use python multiprocessing toolbox for parallelization
+
+    Several grids are analyzed in parallel based on your custom function that
+    defines the specific application of eDisGo.
+
+    Parameters
+    ----------
+    ding0_id_list : list of int
+        List of ding0 grid data IDs (also known as HV/MV substation IDs)
+    func : any function
+        Your custom function that shall be parallelized
+    func_arguments : tuple
+        Arguments to custom function ``func``
+    workers: int
+        Number of parallel process
+    worker_lifetime : int
+        Bunch of grids sequentially analyzed by a worker
+
+    Notes
+    -----
+    Please note, the following requirements for the custom function which is to
+    be executed in parallel
+
+    #. It must return an instance of the type :class:`~.edisgo.EDisGo`.
+    #. The first positional argument is the MV grid district id (as int). It is
+       prepended to the tuple of arguments ``func_arguments``
+
+
+    Returns
+    -------
+    containers : dict of :class:`~.edisgo.EDisGo`
+        Dict of EDisGo instances keyed by its ID
+    """
+    def collect_pool_results(result):
+        """
+        Store results from parallelized calculation in structured manner
+
+        Parameters
+        ----------
+        result: :class:`~.edisgo.EDisGo`
+        """
+        results.update({result.network.id: result})
+
+    results = {}
+
+    pool = mp.Pool(workers,
+                   maxtasksperchild=worker_lifetime)
+
+    for id in ding0_id_list:
+        edisgo_args = (id, *func_arguments)
+        pool.apply_async(func=func,
+                         args=edisgo_args,
+                         callback=collect_pool_results)
+
+    pool.close()
+    pool.join()
+
+    return results
+
+
 def edisgo_run():
     # create the argument parser
     example_text = '''Examples

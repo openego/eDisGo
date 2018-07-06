@@ -13,11 +13,11 @@ The toolbox currently includes
 * Data import from data sources of the open_eGo project
 * Power flow analysis for grid issue identification (enabled by `PyPSA <https://pypsa.org>`_)
 * Automatic grid reinforcement solving overloading and overvoltage issues
+* Grid operation optimized curtailment
 
 Features to be included
 
 * Battery storage integration
-* Grid operation optimized curtailment
 * Cluster based analyses
 
 See :ref:`quickstart` for the first steps. A deeper guide is provided in :ref:`usage-details`.
@@ -30,7 +30,7 @@ For those of you who want to contribute see :ref:`dev-notes` and the
 LICENSE
 -------
 
-Copyright (C) 2017 Reiner Lemoine Institut gGmbH
+Copyright (C) 2018 Reiner Lemoine Institut gGmbH
 
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU Affero General Public License as published by the Free
