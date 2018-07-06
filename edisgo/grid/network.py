@@ -139,88 +139,6 @@ class EDisGo:
           * 'industrial'
           * 'agricultural'
 
-    timeseries_battery : None or :obj:`str` or :pandas:`pandas.Series<series>` or :obj:`dict`
-        Parameter used to obtain time series of active power the battery
-        storage(s) is/are charged (negative) or discharged (positive) with. Can
-        either be a given time series or an operation strategy.
-        Possible options are:
-
-        * Time series
-          Time series the storage will be charged and discharged with can be
-          set directly by providing a :pandas:`pandas.Series<series>` with
-          time series of active charge (negative) and discharge (positive)
-          power, normalized with corresponding storage capacity. Index needs
-          to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-          In case of more than one storage provide a :obj:`dict` where each
-          entry represents a storage. Keys of the dictionary have to match
-          the keys of the `battery_parameters` dictionary, values must
-          contain the corresponding time series as
-          :pandas:`pandas.Series<series>`.
-        * 'fifty-fifty'
-          Storage operation depends on actual power of generators. If
-          cumulative generation exceeds 50% of the nominal power, the storage
-          will charge. Otherwise, the storage will discharge.
-
-        Default: None.
-    battery_parameters : None or :obj:`dict`
-        Dictionary with storage parameters. Format must be as follows:
-
-        .. code-block:: python
-
-            {
-                'nominal_capacity': <float>, # in kWh
-                'soc_initial': <float>, # in kWh
-                'efficiency_in': <float>, # in per unit 0..1
-                'efficiency_out': <float>, # in per unit 0..1
-                'standing_loss': <float> # in per unit 0..1
-            }
-
-        In case of more than one storage provide a :obj:`dict` where each
-        entry represents a storage. Keys of the dictionary have to match
-        the keys of the `timeseries_battery` dictionary, values must
-        contain the corresponding parameters dictionary specified above.
-    battery_position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :obj:`dict`
-        To position the storage a positioning strategy can be used or a
-        node in the grid can be directly specified. Possible options are:
-
-        * 'hvmv_substation_busbar'
-          Places a storage unit directly at the HV/MV station's bus bar.
-        * :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
-          Specifies a node the storage should be connected to.
-
-        In case of more than one storage provide a :obj:`dict` where each
-        entry represents a storage. Keys of the dictionary have to match
-        the keys of the `timeseries_battery` and `battery_parameters`
-        dictionaries, values must contain the corresponding positioning
-        strategy or node to connect the storage to.
-    timeseries_curtailment : None or :pandas:`pandas.DataFrame<dataframe>`
-        DataFrame with time series of curtailed power of wind and solar
-        aggregates in kW.
-        Time series can either be aggregated by technology type or by type
-        and weather cell ID. In the first case columns of the DataFrame are
-        'solar' and 'wind'; in the second case columns need to be a
-        :pandas:`pandas.MultiIndex<multiindex>` with the first level
-        containing the type and the second level the weather cell IDs. See
-        `timeseries_generation_fluctuating` parameter for further explanation
-        of the weather cell ID. Index needs to be a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`. Default: None.
-    curtailment_methodology : None or :obj:`str`
-        Specifies the methodology used to allocate the curtailment time
-        series to single generators. Needs to be set when curtailment time
-        series are given. Default: None.
-
-        * 'curtail_all' : distribute the curtailed power to all the generators
-          equally under the weather cell IDs or of types defined
-          by the columns of `timeseries_curtailment`.
-          See :py:mod:`edisgo.flex_opt.curtailment.curtail_all` for more details.
-        * 'curtail_voltage': distribute the curtailed power to the generators
-          based on the voltage at their nodes. Use the keyword argument
-          `voltage_threshold_lower` to control the voltage below which no
-          curtailment should be assigned. Here too the curtailed power
-          is distributed differently depending on the input provided
-          in the columns of `timeseries_curtailment`.
-          See :py:mod:`edisgo.flex_opt.curtailment.curtail_voltage` for more details.
-
     generator_scenario : None or :obj:`str`
         If provided defines which scenario of future generator park to use
         and invokes import of these generators. Possible options are 'nep2035'
@@ -291,14 +209,6 @@ class EDisGo:
                 config_data=self.network.config,
                 timeindex=kwargs.get('timeindex', None)).timeseries
 
-        # set up curtailment
-        if kwargs.get('curtailment_methodology', None) is not None:
-            self.curtail(**kwargs)
-
-        # include battery
-        if kwargs.get('timeseries_battery', None) is not None:
-            self.integrate_storage(**kwargs)
-
         # import new generators
         if self.network.generator_scenario is not None:
             self.import_generators()
@@ -312,16 +222,8 @@ class EDisGo:
         :class:`~.grid.network.CurtailmentControl` for more information on
         parameters and methodologies.
 
-        Parameters
-        -----------
-        curtailment_methodology : :obj:`str`, optional
-            See class definition for more information. Default: None.
-        timeseries_curtailment : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
-            See class definition for more information. Default: None.
-
         """
-        CurtailmentControl(edisgo_object=self,
-                           **kwargs)
+        CurtailmentControl(edisgo_object=self, **kwargs)
 
     def import_from_ding0(self, file, **kwargs):
         """Import grid data from DINGO file
@@ -1087,22 +989,26 @@ class CurtailmentControl:
 
     Parameters
     ----------
+    edisgo_object : :class:`edisgo.EDisGo`
+        The parent EDisGo object that this instance is a part of.
     curtailment_methodology : :obj:`str`
         Mode defines the curtailment strategy. Possible options are:
 
         * 'curtail_all'
           The curtailment that has to be met in each time step is allocated
           equally to all generators depending on their share of total
-          feed-in in that time step.
+          feed-in in that time step. For more information see
+          :meth:`edisgo.flex_opt.curtailment.curtail_all()`.
         * 'curtail_voltage'
           The curtailment that has to be met in each time step is allocated
-          based on the voltages at the generator connection points and the
-          defined 'voltage_threshold_lower'. Generators at higher voltages
-          are curtailed more.
-    edisgo_object : :class:`edisgo.EDisGo`
-        The parent EDisGo object that this instance is a part of.
+          based on the voltages at the generator connection points and a
+          defined voltage threshold. Generators at higher voltages
+          are curtailed more. The default voltage threshold is 1.0 but
+          can be changed by providing the argument 'voltage_threshold'. For
+          more information see
+          :meth:`edisgo.flex_opt.curtailment.curtail_voltage()`.
 
-    total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
+    timeseries_curtailment : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Series or DataFrame containing the curtailment time series in kW. Index
         needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
         Provide a Series if the curtailment time series applies to wind and
@@ -1117,20 +1023,12 @@ class CurtailmentControl:
         given by technology and weather cell).
         Default: None.
 
-    **kwargs
-       Optional keyword arguments depending upon the curtailment methodology.
-       The type of the data depends on the curtailment methodology as well.
-       See the documentation of the individual curtailment methods below:
-
-       * :meth:`edisgo.flex_opt.curtailment.curtail_all()`
-       * :meth:`edisgo.flex_opt.curtailment.curtail_voltage()`
-
     Attributes
     ----------
 
     mode : :obj:`str`
-        Contains the string  given by the *curtailment_methodology*
-        keyword argument
+        Contains the string given by the `curtailment_methodology`
+        keyword argument.
     curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`,
         Contains the *total_curtailment_ts* input object
     capacities : :pandas:`pandas.Series<series>`

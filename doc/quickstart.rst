@@ -130,3 +130,9 @@ If you want to provide eTraGo specifications:
 
     # Determine cost for each line/transformer that was reinforced
     costs = edisgo.network.results.grid_expansion_costs
+
+Parallelization
+---------------
+
+Try :func:`~.edisgo.tools.edisgo_run.run_edisgo_pool_flexible` for
+parallelization of your custom function.

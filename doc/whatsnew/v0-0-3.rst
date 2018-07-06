@@ -1,7 +1,7 @@
 Release v0.0.3
 ==============
 
-Release date: June 06 2018
+Release date: July 6 2018
 
 New features have been included in this release. Major changes being the use of the weather_cell_id and
 the inclusion of new methods for distributing the curtailment to be more suitable to network operations.
@@ -18,5 +18,11 @@ Changes
 * A new curtailment method have been included based on the voltages at the nodes with `GeneratorFluctuating` objects.
   The method is called `curtail_voltage` and its objective is to increase curtailment at locations where voltages
   are very high, thereby alleviating over-voltage issues and also reducing the need for network reinforcement.
+
+* Add parallelization for custon functions
+  `#130 <https://github.com/openego/eDisGo/issues/130>`_
+
+* Update `ding0 version to v0.1.6 <https://github.com/openego/ding0/releases/tag/v0.1.6>`_ and include
+  `data processing v.4.2 data <https://github.com/openego/data_processing/releases/tag/v0.4.2>`_
 
 * Bug Fixes
