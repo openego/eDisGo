@@ -1,9 +1,12 @@
 import pandas as pd
 import networkx as nx
-from edisgo.flex_opt.check_tech_constraints import mv_line_load
+from math import sqrt
+from edisgo.grid.grids import LVGrid
+from edisgo.grid.components import LVStation
+from edisgo.flex_opt import storage_integration
 
 
-def one_storage_per_feeder(edisgo):
+def one_storage_per_feeder(edisgo, storage_parameters):
 
     def feeder_ranking(grid_expansion_costs):
         """
@@ -27,57 +30,89 @@ def one_storage_per_feeder(edisgo):
             reset_index().sort_values(by=['total_costs'], ascending=False)[
             'mv_feeder']
 
-    # # rank MV feeders by grid expansion costs calculated with feed-in case
-    # if edisgo.network.results.grid_expansion_costs is not None:
-    #     ranked_feeders = feeder_ranking(
-    #         edisgo.network.results.grid_expansion_costs)
-    # else:
-    #     # conduct grid reinforcement
-    #     edisgo.reinforce()
-    #     # rank feeders
-    #     ranked_feeders = feeder_ranking(
-    #         edisgo.network.results.grid_expansion_costs)
-    #     # reset edisgo object (new grid -> moved to reinforce_grid)
-    #     #edisgo.import_from_ding0(kwargs.get('ding0_grid', None))
+    # rank MV feeders by grid expansion costs
+    if edisgo.network.results.grid_expansion_costs is not None:
+        grid_expansion_results = edisgo.network.results
+    else:
+        # conduct grid reinforcement
+        #grid_expansion_results = edisgo.reinforce(copy_graph=True)
+        import pickle
+        edisgo_reinforce = pickle.load(open('edisgo.pkl', 'rb'))
+        grid_expansion_results = edisgo_reinforce.network.results
 
-    # work around for now: random feeder ranking
-    # get nodes adjacent to HV/MV station
-    station_adj_nodes = list(edisgo.network.mv_grid.graph.edge[
-        edisgo.network.mv_grid.station].keys())
-    # for each adjacent node check if
-    ranked_feeders = []
-    for node in station_adj_nodes:
-        if len(edisgo.network.mv_grid.graph.edge[node]) > 1:
-            ranked_feeders.append(edisgo.network.mv_grid.graph.line_from_nodes(
-                edisgo.network.mv_grid.station, node))
+    # rank feeders
+    ranked_feeders = feeder_ranking(
+        grid_expansion_results.grid_expansion_costs)
 
-    # get list of overloaded lines
-    critical_lines = mv_line_load(edisgo.network)
+    for feeder in ranked_feeders.values:
+        ### install storage at the node of the overloaded lines farthest away
+        ### from the HV/MV transformer
 
-    print(critical_lines)
-
-    # find the longest nx. shortest path from all the nodes
-    # get all nodes in the mv_grid
-    graph_without_station = edisgo.network.mv_grid.graph.copy()
-    mv_station = graph_without_station.nodes_by_attribute('mv_station')
-    station_nearest_nodes = list(graph_without_station.edge[
-                                     mv_station.keys()])
-
-    graph_without_station.remove_node(mv_station)
-    all_nodes = list(graph_without_station.nodes)
-    shortest_paths = {}
-    for node in all_nodes:
-        for station_near_node in station_nearest_nodes:
-            shortest_paths[(station_near_node, node)] = \
-                nx.shortest_path(graph_without_station, station_near_node, node)
-
-    print(shortest_paths)
-
-
-
-
-    # for feeder in ranked_feeders:
         # get the nodes farthest away from HV/MV transformer
+        lines = grid_expansion_results.grid_expansion_costs.loc[
+            grid_expansion_results.grid_expansion_costs.mv_feeder==feeder].\
+            index
+        nodes_mv = []
+        lv_stations = []
+        for line in lines:
+            if isinstance(line.grid, LVGrid):
+                lv_stations.append(line.grid.station)
+            else:
+                nodes_mv.extend(list(line.grid.graph.nodes_from_line(line)))
+        # if there are nodes with issues in the MV grid find node farthest away from station
+        if nodes_mv:
+            # dictionary with path length as key and corresponding node as value
+            path_length_dict = {}
+            for node in nodes_mv:
+                if isinstance(node, LVStation):
+                    path_length_dict[node] = len(nx.shortest_path(node.mv_grid.graph, node.mv_grid.station, node))
+                else:
+                    path_length_dict[node] = len(nx.shortest_path(node.grid.graph, node.grid.station, node))
+            # find node farthest away
+            battery_node = [_ for _ in path_length_dict.keys()
+                            if path_length_dict[_]==
+                            max(path_length_dict.values())][0]
+        # if there are only issues in the LV grids find LV station with issues closest to
+        # MV station
+        else:
+            # dictionary with path lengths
+            path_length_dict = {}
+            for node in lv_stations:
+                path_length_dict[node] = len(nx.shortest_path(
+                    node.mv_grid.graph, node.mv_grid.station, node))
+            # find closest node
+            battery_node = [_ for _ in path_length_dict.keys()
+                            if path_length_dict[_] ==
+                            min(path_length_dict.values())][0]
+
+        ### estimate residual line load (neglect grid losses) to identify all time steps where line is over-loaded
+        # get line
+        line = None
+        counter = 0
+        while line is None:
+            if battery_node in lines[counter].grid.graph.nodes_from_line(lines[counter]):
+                line = lines[counter]
+            counter += 1
+        # analyze
+        edisgo.analyze()
+        # ToDo: Differentiate between load and feedin case
+        load_factor_line = edisgo.network.config['grid_expansion_load_factors'][
+            'mv_feedin_case_line']
+        i_allowed = line.type['I_max_th'] * load_factor_line * line.quantity
+        u_allowed = line.type['U_n']
+        i_pf = edisgo.network.results.i_res[repr(line)]
+
+        # to calculate max p of line before last reinforcement
+        S_ol_line_nom = sqrt(3) * i_allowed * u_allowed  # rated apparent power S of line kVA
+
+        # maximum power of the line
+        pfa_q = edisgo.network.results.pfa_q[repr(line)]
+        # ToDo: storage efficiency
+        p_max = sqrt(S_ol_line_nom ** 2 - pfa_q ** 2)
+
+        # integrate storage
+        storage_parameters['nominal_capacity'] = p_max
+        storage_integration.set_up_storage(storage_parameters, battery_node)
 
 
 

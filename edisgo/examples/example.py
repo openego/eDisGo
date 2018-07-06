@@ -195,9 +195,15 @@ if __name__ == '__main__':
             before_geno_import = False
             # Import generators
             edisgo.import_generators(generator_scenario=scenario)
-            # # test storage positioning
-            # from edisgo.flex_opt import storage_positioning
-            # storage_positioning.one_storage_per_feeder(edisgo)
+            # test storage positioning
+            from edisgo.flex_opt import storage_positioning
+            storage_parameters = {
+                'soc_initial': 0,
+                'efficiency_in': 1.0,
+                'efficiency_out': 1.0,
+                'standing_loss': 0.0}
+            storage_positioning.one_storage_per_feeder(
+                edisgo, storage_parameters=storage_parameters)
             # Do grid reinforcement
             edisgo.reinforce(copy_graph=True)
             costs_grouped = \

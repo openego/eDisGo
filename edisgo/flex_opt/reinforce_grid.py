@@ -363,4 +363,8 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False):
     edisgo_reinforce.network.results.grid_expansion_costs = \
         grid_expansion_costs(edisgo_reinforce.network)
 
+    import pickle
+    edisgo_reinforce.network.pypsa = None
+    pickle.dump(edisgo_reinforce, open('edisgo.pkl', 'wb'))
+
     return edisgo_reinforce.network.results
