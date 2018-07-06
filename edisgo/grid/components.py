@@ -1,6 +1,7 @@
 import os
 import logging
 import pandas as pd
+import re
 from math import acos, tan, sqrt
 
 if not 'READTHEDOCS' in os.environ:
@@ -291,6 +292,8 @@ class Generator(Component):
         self._v_level = kwargs.get('v_level', None)
         self._timeseries = kwargs.get('timeseries', None)
         self._power_factor = kwargs.get('power_factor', None)
+        self._power_factor_mode = kwargs.get('power_factor_mode', None)
+        self._q_sign = None
 
     @property
     def timeseries(self):
@@ -324,7 +327,9 @@ class Generator(Component):
                     logger.exception("No time series for type {} "
                                      "given.".format(self.type))
                     raise
-            timeseries['q'] = timeseries['p'] * tan(acos(self.power_factor))
+
+
+            timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(self.power_factor))
             timeseries = timeseries * self.nominal_capacity
             return timeseries.loc[self.grid.network.timeseries.timeindex, :]
         else:
@@ -390,9 +395,58 @@ class Generator(Component):
                     'reactive_power_factor']['lv_gen']
         return self._power_factor
 
+    @property
+    def power_factor_mode(self):
+        """
+        Power factor mode of generator.
+
+        If the power factor is set, then it is necessary to know whether the
+        it is leading or lagging. In other words this information is necessary
+        to make the generator behave in an inductive or capacitive manner.
+        Essentially this changes the sign of the reactive power Q.
+
+        The convention used here in a generator is that:
+        - when `power_factor_mode` is 'capacitive' then Q is positive
+        - when `power_factor_mode` is 'inductive' then Q is negative
+
+        In the case that this attribute is not set, it is retrieved from the
+        network config object depending on the voltage level the generator
+        is in.
+
+        Returns
+        :obj: `str` : Power factor mode
+            Either 'inductive' or 'capacitive'
+
+        """
+        if self._power_factor_mode is None:
+            if isinstance(self.grid, MVGrid):
+                self._power_factor_mode = self.grid.network.config[
+                    'reactive_power_factor_mode']['mv_gen']
+            elif isinstance(self.grid, LVGrid):
+                self._power_factor_mode = self.grid.network.config[
+                    'reactive_power_factor_mode']['lv_gen']
+
+        return self._power_factor_mode[1:-1]
+
     @power_factor.setter
     def power_factor(self, power_factor):
         self._power_factor = power_factor
+
+    @power_factor_mode.setter
+    def power_factor_mode(self, power_factor_mode):
+        self._power_factor_mode = power_factor_mode
+
+    @property
+    def q_sign(self):
+        comparestr = self.power_factor_mode
+        comparestr = comparestr.lower()
+        if re.fullmatch('inductive', comparestr):
+            return -1
+        elif re.fullmatch('capacitive', comparestr):
+                return 1
+        else:
+            raise ValueError("Unknown value {} in power_factor_mode".format(self.power_factor_mode))
+
 
 
 class GeneratorFluctuating(Generator):
