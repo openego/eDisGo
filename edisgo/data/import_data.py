@@ -1,6 +1,6 @@
 from ..grid.components import Load, Generator, BranchTee, MVStation, Line, \
     Transformer, LVStation, GeneratorFluctuating
-from ..grid.grids import MVGrid, LVGrid, Grid
+from ..grid.grids import MVGrid, LVGrid
 from ..grid.connect import connect_mv_generators, connect_lv_generators
 from ..grid.tools import select_cable, position_switch_disconnectors
 from ..tools.geo import proj2equidistant
@@ -21,12 +21,8 @@ from math import isnan
 import random
 import os
 import oedialect
-import json
 
-from pandas import DataFrame, read_csv
-import matplotlib.pyplot as plt
 from ding0.core import GeneratorFluctuatingDing0
-from edisgo.grid.components import *
 
 
 if not 'READTHEDOCS' in os.environ:
@@ -281,7 +277,7 @@ def _build_mv_grid(ding0_grid, network):
                                 for _ in
                                 ding0_grid.grid_district._lv_load_areas
                                 if not np.isnan(_.zensus_sum)])},
-        voltage_nom=ding0_grid.v_level) #ToDo: voltagenom vs. v_level?
+        voltage_nom=ding0_grid.v_level)
 
     # Special treatment of LVLoadAreaCenters see ...
     # ToDo: add a reference above for explanation of how these are treated
@@ -631,7 +627,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                             subtype=subtype,
                             geom=grid.station.geom,
                             grid=grid,
-                            v_level=v_level)
+                            v_level=4)
                     else:
                         gen = Generator(
                             id='agg-' + str(la_id) + '-' + '_'.join(
@@ -641,7 +637,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                             subtype=subtype,
                             geom=grid.station.geom,
                             grid=grid,
-                            v_level=v_level)
+                            v_level=4)
                     grid.graph.add_node(gen, type='generator_aggr')
 
                     # backup reference of geno to LV geno list (save geno
