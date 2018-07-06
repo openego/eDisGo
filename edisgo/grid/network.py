@@ -414,7 +414,7 @@ class EDisGo:
         See :meth:`~.flex_opt.reinforce_grid` for more information.
 
         """
-        reinforce_grid(
+        return reinforce_grid(
             self, max_while_iterations=kwargs.get(
                 'max_while_iterations', 10),
             copy_graph=kwargs.get('copy_graph', False))
