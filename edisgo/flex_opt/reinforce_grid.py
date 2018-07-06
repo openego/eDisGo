@@ -23,6 +23,12 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False):
     copy_graph : :obj:`Boolean`
         If True reinforcement is conducted on a copied graph and discarded
 
+    Returns
+    -------
+    :class:`~.grid.network.Results`
+        Returns the Results object holding grid expansion costs, equipment
+        changes, etc.
+
     Notes
     -----
     See :ref:`features-in-detail` for more information on how grid
@@ -357,4 +363,4 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False):
     edisgo_reinforce.network.results.grid_expansion_costs = \
         grid_expansion_costs(edisgo_reinforce.network)
 
-    return edisgo_reinforce.network.results.grid_expansion_costs
+    return edisgo_reinforce.network.results
