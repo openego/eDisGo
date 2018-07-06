@@ -2366,16 +2366,21 @@ def _build_lv_grid_from_csv(lv_grid, lv_gen, lv_cd, lv_stations_df,
     # LV generators
     lvgens = {}
     lv_gen.apply(lambda row:
-                 lvgens.update({row['id_db']: GeneratorFluctuating(
+                 lvgens.update({'GeneratorFluctuatingDing0_LV_{}_'.format(
+                     lvgrids[row['LV_grid_id_db']].id) + str(row['id_db']):
+                     GeneratorFluctuating(
                      id=row['id_db'],
                      geom=wkt_loads(row['geom']),
                      nominal_capacity=row['nominal_capacity'],
-                     type=row['type'],
-                     subtype=row['subtype'],
-                     grid=lvgrids[row['LV_grid_id_db']],
-                     v_level=row['v_level'],
-                     weather_cell_id=row['weather_cell_id'])} if row['type'] in ['wind', 'solar'] else
-                               {row['id_db']: Generator(
+                         type=row['type'],
+                         subtype=row['subtype'],
+                         grid=lvgrids[row['LV_grid_id_db']],
+                         v_level=row['v_level'],
+                         weather_cell_id=row['weather_cell_id'])}
+                               if row['type'] in ['wind', 'solar'] else
+                               {'GeneratorDing0_LV_{}_'.format(
+                                   lvgrids[row['LV_grid_id_db']].id) + str(row[
+                                    'id_db']): Generator(
                                    id=row['id_db'],
                                    geom=wkt_loads(row['geom']),
                                    nominal_capacity=row['nominal_capacity'],
@@ -2484,7 +2489,9 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
     # MV generators
     mvgens = {}
     mv_gen.apply(lambda row:
-                 mvgens.update({row['id_db']: GeneratorFluctuating(
+                 mvgens.update({'GeneratorFluctuatingDing0_MV_{}_'.format(
+                     mv_grid.id) + str(row['id_db']):
+                     GeneratorFluctuating(
                      id=row['id_db'],
                      geom=wkt_loads(row['geom']),
                      nominal_capacity=row['nominal_capacity'],
@@ -2492,8 +2499,10 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
                      subtype=row['subtype'],
                      grid=mv_grid,
                      v_level=row['v_level'],
-                     weather_cell_id=row['weather_cell_id'])} if row['type'] in ['wind', 'solar'] else
-                               {row['id_db']: Generator(
+                         weather_cell_id=row['weather_cell_id'])} if
+                               row['type'] in ['wind', 'solar'] else
+                               {'GeneratorDing0_MV_{}_'.format(
+                                   mv_grid.id) + str(row['id_db']): Generator(
                                    id=row['id_db'],
                                    geom=wkt_loads(row['geom']),
                                    nominal_capacity=row['nominal_capacity'],
