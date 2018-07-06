@@ -2208,10 +2208,27 @@ def import_load_timeseries(config_data, data_source, mv_grid_id=None,
 
 def import_from_csv(path, network, sep=',', index_col=0):
 
+    # create empty DF for imported agg. generators
+    network.dingo_import_data = pd.DataFrame(columns=('id',
+                                                      'capacity',
+                                                      'agg_geno'))
+
     # import grid data from csv files
-    lv_grid, lv_gen, lv_cd, lv_station, mvlv_trafo, lv_load,\
-    mv_grid, mv_gen, mv_cb, mv_cd, mv_station, hvmv_trafo, mv_load,\
+    lv_grid, lv_gen_all, lv_cd, lv_station, mvlv_trafo, lv_load,\
+    mv_grid, mv_gen_all, mv_cb, mv_cd, mv_station, hvmv_trafo, mv_load,\
     line, mvlv_mapping = _read_network(path, sep=sep, index_col=index_col)
+    
+    # separate aggregated generation units
+    if not lv_gen_all.empty:
+        lv_gen = lv_gen_all[~lv_gen_all['is_aggregated']]
+        lv_gen_aggr = lv_gen_all[lv_gen_all['is_aggregated']]
+    else:
+        lv_gen = lv_gen_aggr = lv_gen_all
+    if not mv_gen_all.empty:
+        mv_gen = mv_gen_all[~mv_gen_all['is_aggregated']]
+        mv_gen_aggr = mv_gen_all[mv_gen_all['is_aggregated']]
+    else:
+        mv_gen = mv_gen_aggr = mv_gen_all
 
     # build MV grid
     mvgrid, mvstations, mvtrafos, lvstations, lvtrafos, mvgens, mvloads, mvcds = \
@@ -2230,6 +2247,9 @@ def import_from_csv(path, network, sep=',', index_col=0):
     lines, lvgrids = _build_mvlv_lines_from_csv(
         lvgrids, lvstations, lvtrafos, lvgens, lvloads, lvcds, mvgrid,
         mvstations, mvtrafos, mvgens, mvloads, mvcds, line)
+
+    # connect aggregated generation units
+    _build_aggregated_from_table(lv_gen_aggr, mvgrid)
 
     # update network with LV grids
     network.mv_grid.lv_grids = list(lvgrids.values())
@@ -2463,17 +2483,6 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
 
     # MV generators
     mvgens = {}
-    # mv_gen.apply(lambda row:
-    #              mvgens.update({row['id_db']: GeneratorFluctuating(
-    #                  id=row['id_db'],
-    #                  geom=wkt_loads(row['geom']),
-    #                  nominal_capacity=row['nominal_capacity'],
-    #                  type=row['type'],
-    #                  subtype=row['subtype'],
-    #                  grid=mv_grid,
-    #                  v_level=row['v_level']
-    #               )}), axis=1)
-
     mv_gen.apply(lambda row:
                  mvgens.update({row['id_db']: GeneratorFluctuating(
                      id=row['id_db'],
@@ -2567,6 +2576,69 @@ def _build_mvlv_lines_from_csv(lvgrids, lvstations, lvtrafos, lvgens, lvloads,
     lines = lv_lines + mv_lines
 
     return lines, lvgrids
+
+
+def _build_aggregated_from_table(generators, mv_grid):
+    aggr_line_type = mv_grid.network.equipment_data['mv_cables'].loc[
+        mv_grid.network.equipment_data['mv_cables']['I_max_th'].idxmax()]
+
+    # group generators by voltage level, type, subtype(, and weather cell)
+    generators_grp = generators.groupby(
+        ['v_level', 'type', 'subtype', 'weather_cell_id'])
+
+    # create generator instances
+    for name, grp in generators_grp:
+        grp_sum = grp.agg(
+            {'id_db': lambda x: '_'.join([str(_) for _ in x.values]),
+             'nominal_capacity': 'sum',
+             'type': 'min',
+             'subtype': 'min',
+             'weather_cell_id': 'min',
+             'la_id': 'min',
+             'v_level': 'min'})
+        if grp_sum['type'] in ['solar', 'wind']:
+            gen = GeneratorFluctuating(
+                id='agg-' + str(grp_sum['la_id']) + '-' + grp_sum['id_db'],
+                nominal_capacity=grp_sum['nominal_capacity'],
+                type=grp_sum['type'],
+                subtype=grp_sum['subtype'],
+                geom=mv_grid.station.geom,
+                grid=mv_grid,
+                v_level=4,
+                weather_cell_id=grp_sum['weather_cell_id'])
+        else:
+            gen = Generator(
+                id='agg-' + str(grp_sum['la_id']) + '-' + grp_sum['id_db'],
+                nominal_capacity=grp_sum['nominal_capacity'],
+                type=grp_sum['type'],
+                subtype=grp_sum['subtype'],
+                geom=mv_grid.station.geom,
+                grid=mv_grid,
+                v_level=4)
+        mv_grid.graph.add_node(gen, type='generator_aggr')
+
+        # Add aggregated generators to backup reference
+        dingo_import_data = pd.DataFrame({
+            'id': grp['id_db'],
+            'capacity': grp['nominal_capacity'],
+            'agg_geno': gen})
+        mv_grid.network.dingo_import_data = pd.concat([mv_grid.network.dingo_import_data, dingo_import_data])
+
+        # connect to HV/MV substation
+        line = Line(
+            id='line_aggr_generator_la_' + str(
+                grp_sum['la_id']) + '_vlevel_{v_level}_'
+                                    '{subtype}'.format(
+                v_level=grp_sum['v_level'],
+                subtype=grp_sum['subtype']),
+            type=aggr_line_type,
+            kind='cable',
+                    length=1e-3,
+                    grid=mv_grid)
+        mv_grid.graph.add_edge(mv_grid.station,
+                            gen,
+                            line=line,
+                            type='line_aggr')
 
 
 def _validate_csv_grid_import(network, path):
