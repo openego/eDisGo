@@ -626,6 +626,6 @@ def get_mv_feeder_from_line(line):
     nodes = line.grid.graph.nodes_from_line(line)
     # if one of the nodes is an MV station the line is an MV feeder itself
     if isinstance(nodes[0], MVStation) or isinstance(nodes[1], MVStation):
-        return line
+        return repr(line)
     else:
         return get_mv_feeder_from_node(nodes[0])
