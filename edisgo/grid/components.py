@@ -157,11 +157,14 @@ class Load(Component):
         super().__init__(**kwargs)
         self._timeseries = kwargs.get('timeseries', None)
         self._consumption = kwargs.get('consumption', None)
+        self._power_factor_mode = kwargs.get('power_factor_mode', None)
+        self._q_sign = None
 
     @property
     def timeseries(self):
         """
-        Load time series
+        Load time seriesself._power_factor_mode = kwargs.get('power_factor_mode', None)
+        self._q_sign = None
 
         It returns the actual time series used in power flow analysis. If
         :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
@@ -185,11 +188,11 @@ class Load(Component):
                 consumption = self.consumption[sector]
 
             if isinstance(self.grid, MVGrid):
-                q_factor = tan(acos(self.grid.network.config[
+                q_factor = self.q_sign * tan(acos(self.grid.network.config[
                                         'reactive_power_factor']['mv_load']))
                 voltage_level = 'mv'
             elif isinstance(self.grid, LVGrid):
-                q_factor = tan(acos(self.grid.network.config[
+                q_factor = self.q_sign * tan(acos(self.grid.network.config[
                                         'reactive_power_factor']['lv_load']))
                 voltage_level = 'lv'
             # check if load time series for MV and LV are differentiated
@@ -254,6 +257,54 @@ class Load(Component):
             float), fill_value=0)
 
         return peak_load
+
+    @property
+    def power_factor_mode(self):
+        """
+        Power factor mode of generator.
+
+        If the power factor is set, then it is necessary to know whether the
+        it is leading or lagging. In other words this information is necessary
+        to make the generator behave in an inductive or capacitive manner.
+        Essentially this changes the sign of the reactive power Q.
+
+        The convention used here in a generator is that:
+        - when `power_factor_mode` is 'capacitive' then Q is positive
+        - when `power_factor_mode` is 'inductive' then Q is negative
+
+        In the case that this attribute is not set, it is retrieved from the
+        network config object depending on the voltage level the generator
+        is in.
+
+        Returns
+        :obj: `str` : Power factor mode
+            Either 'inductive' or 'capacitive'
+
+        """
+        if self._power_factor_mode is None:
+            if isinstance(self.grid, MVGrid):
+                self._power_factor_mode = self.grid.network.config[
+                    'reactive_power_factor_mode']['mv_load']
+            elif isinstance(self.grid, LVGrid):
+                self._power_factor_mode = self.grid.network.config[
+                    'reactive_power_factor_mode']['lv_load']
+
+        return self._power_factor_mode[1:-1]
+
+    @power_factor_mode.setter
+    def power_factor_mode(self, power_factor_mode):
+        self._power_factor_mode = power_factor_mode
+
+    @property
+    def q_sign(self):
+        comparestr = self.power_factor_mode
+        comparestr = comparestr.lower()
+        if re.fullmatch('inductive', comparestr):
+            return 1
+        elif re.fullmatch('capacitive', comparestr):
+                return -1
+        else:
+            raise ValueError("Unknown value {} in power_factor_mode".format(self.power_factor_mode))
 
     def __repr__(self):
         return '_'.join(['Load',
@@ -478,6 +529,8 @@ class GeneratorFluctuating(Generator):
 
         self._curtailment = kwargs.get('curtailment', None)
         self._weather_cell_id = kwargs.get('weather_cell_id', None)
+        self._power_factor_mode = kwargs.get('power_factor_mode', None)
+        self._q_sign = None
 
     @property
     def timeseries(self):
@@ -527,7 +580,7 @@ class GeneratorFluctuating(Generator):
                                      "given.".format(self.type))
                     raise
 
-            timeseries['q'] = timeseries['p'] * tan(acos(self.power_factor))
+            timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(self.power_factor))
             timeseries = timeseries * self.nominal_capacity
 
             # subtract curtailment
@@ -610,6 +663,54 @@ class GeneratorFluctuating(Generator):
     def weather_cell_id(self, weather_cell):
         self._weather_cell_id = weather_cell
 
+    @property
+    def power_factor_mode(self):
+        """
+        Power factor mode of generator.
+
+        If the power factor is set, then it is necessary to know whether the
+        it is leading or lagging. In other words this information is necessary
+        to make the generator behave in an inductive or capacitive manner.
+        Essentially this changes the sign of the reactive power Q.
+
+        The convention used here in a generator is that:
+        - when `power_factor_mode` is 'capacitive' then Q is positive
+        - when `power_factor_mode` is 'inductive' then Q is negative
+
+        In the case that this attribute is not set, it is retrieved from the
+        network config object depending on the voltage level the generator
+        is in.
+
+        Returns
+        :obj: `str` : Power factor mode
+            Either 'inductive' or 'capacitive'
+
+        """
+        if self._power_factor_mode is None:
+            if isinstance(self.grid, MVGrid):
+                self._power_factor_mode = self.grid.network.config[
+                    'reactive_power_factor_mode']['mv_gen']
+            elif isinstance(self.grid, LVGrid):
+                self._power_factor_mode = self.grid.network.config[
+                    'reactive_power_factor_mode']['lv_gen']
+
+        return self._power_factor_mode[1:-1]
+
+    @power_factor_mode.setter
+    def power_factor_mode(self, power_factor_mode):
+        self._power_factor_mode = power_factor_mode
+
+    @property
+    def q_sign(self):
+        comparestr = self.power_factor_mode
+        comparestr = comparestr.lower()
+        if re.fullmatch('inductive', comparestr):
+            return -1
+        elif re.fullmatch('capacitive', comparestr):
+                return 1
+        else:
+            raise ValueError("Unknown value {} in power_factor_mode".format(self.power_factor_mode))
+
 
 class Storage(Component):
     """Storage object
@@ -647,6 +748,8 @@ class Storage(Component):
         self._efficiency_out = kwargs.get('efficiency_out', None)
         self._standing_loss = kwargs.get('standing_loss', None)
         self._operation = kwargs.get('operation', None)
+        self._power_factor_mode = kwargs.get('power_factor_mode', None)
+        self._q_sign = None
 
     @property
     def timeseries(self):
@@ -761,6 +864,21 @@ class Storage(Component):
 
         """
         self._operation
+
+    @power_factor_mode.setter
+    def power_factor_mode(self, power_factor_mode):
+        self._power_factor_mode = power_factor_mode
+
+    @property
+    def q_sign(self):
+        comparestr = self.power_factor_mode
+        comparestr = comparestr.lower()
+        if re.fullmatch('inductive', comparestr):
+            return -1
+        elif re.fullmatch('capacitive', comparestr):
+            return 1
+        else:
+            raise ValueError("Unknown value {} in power_factor_mode".format(self.power_factor_mode))
 
 
 class MVDisconnectingPoint(Component):
