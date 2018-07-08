@@ -79,7 +79,7 @@ The grid data and results can e.g. be accessed via
     edisgo.network.mv_grid
 
     # List of LV grid instances
-    edisgo.network.lv_grids
+    edisgo.network.mv_grid.lv_grids
 
     # Results of network analysis
     edisgo.network.results
