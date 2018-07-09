@@ -3,12 +3,14 @@ import copy
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import reinforce_measures, exceptions
 from edisgo.flex_opt.costs import grid_expansion_costs
+from edisgo.tools import tools
 import logging
 
 logger = logging.getLogger('edisgo')
 
 
-def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False):
+def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
+                   snapshot_analysis=False):
     """
     Evaluates grid reinforcement needs and performs measures.
 
@@ -22,6 +24,15 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False):
         Maximum number of times each while loop is conducted.
     copy_graph : :obj:`Boolean`
         If True reinforcement is conducted on a copied graph and discarded
+    snapshot_analysis : :obj:`Boolean`
+        If True reinforcement is conducted for two worst-case snapshots. See
+        :meth:`edisgo.tools.tools.select_worstcase_snapshots()` for further
+        explanation on how worst-case snapshots are chosen.
+        If you have large time series setting this to True will save
+        calculation time since power flow analysis then only needs to be
+        conducted for two time steps. If your time series already represents
+        the worst-case keep the default value False because finding the
+        worst-case snapshots takes some time. Default: False.
 
     Returns
     -------
@@ -68,15 +79,29 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False):
                          'quantity': [1] * len(transformer_list)},
                         index=[station] * len(transformer_list)))
 
-    iteration_step = 1
-    edisgo.analyze()
-
     # in case reinforcement needs to be conducted on a copied graph the
     # edisgo object is deep copied
     if copy_graph is True:
         edisgo_reinforce = copy.deepcopy(edisgo)
     else:
         edisgo_reinforce = edisgo
+
+    # in case reinforcement needs to be conducted for worst-case snapshots
+    # these are identified and temporarily written to
+    # edisgo_reinforce.network.timeseries.timeindex to only retrieve generator
+    # and load time series for these time steps
+    if snapshot_analysis:
+        snapshots = tools.select_worstcase_snapshots(edisgo_reinforce.network)
+        # copy current timeindex to reset it at the end of the reinforcement
+        original_timeindex = copy.deepcopy(
+            edisgo_reinforce.network.timeseries.timeindex)
+        # manipulate timeindex; drop None values in case any of the two
+        # snapshots does not exist
+        edisgo_reinforce.network.timeseries.timeindex = pd.DatetimeIndex(
+            data=[snapshots['load_case'], snapshots['feedin_case']]).dropna()
+
+    iteration_step = 1
+    edisgo.analyze()
 
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
 
@@ -120,6 +145,11 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False):
         # run power flow analysis again and check if all over-loading
         # problems were solved
         logger.debug('==> Run power flow analysis.')
+        tools.pypsa_io.update_pypsa_grid_reinforcement(
+            edisgo_reinforce.network, equipment_changes = network.results.equipment_changes[
+        network.results.equipment_changes['iteration_step'] ==
+        network.results.equipment_changes['iteration_step'].max()])
+
         edisgo_reinforce.analyze()
         logger.debug('==> Recheck station load.')
         overloaded_mv_station = checks.hv_mv_station_load(
@@ -364,8 +394,13 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False):
     edisgo_reinforce.network.results.grid_expansion_costs = \
         grid_expansion_costs(edisgo_reinforce.network)
 
-    import pickle
-    edisgo_reinforce.network.pypsa = None
-    pickle.dump(edisgo_reinforce, open('edisgo.pkl', 'wb'))
+    # in case of snapshot analysis reset timeindex
+    if snapshot_analysis:
+        edisgo_reinforce.network.timeseries.timeindex = original_timeindex
+
+    # ToDo: delete at some point
+    # import pickle
+    # edisgo_reinforce.network.pypsa = None
+    # pickle.dump(edisgo_reinforce, open('edisgo.pkl', 'wb'))
 
     return edisgo_reinforce.network.results

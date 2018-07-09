@@ -319,7 +319,8 @@ class EDisGo:
         return reinforce_grid(
             self, max_while_iterations=kwargs.get(
                 'max_while_iterations', 10),
-            copy_graph=kwargs.get('copy_graph', False))
+            copy_graph=kwargs.get('copy_graph', False),
+            snapshot_analysis=kwargs.get('snapshot_analysis', False))
 
     def integrate_storage(self, **kwargs):
         """
