@@ -68,6 +68,9 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False):
                          'quantity': [1] * len(transformer_list)},
                         index=[station] * len(transformer_list)))
 
+    iteration_step = 1
+    edisgo.analyze()
+
     # in case reinforcement needs to be conducted on a copied graph the
     # edisgo object is deep copied
     if copy_graph is True:
@@ -76,8 +79,6 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False):
         edisgo_reinforce = edisgo
 
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
-    iteration_step = 1
-    edisgo_reinforce.analyze()
 
     logger.debug('==> Check station load.')
     overloaded_mv_station = checks.hv_mv_station_load(edisgo_reinforce.network)
