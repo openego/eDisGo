@@ -1284,9 +1284,9 @@ def process_pfa_results(network, pypsa):
         {'mv': pfa_v_mag_pu_mv, 'lv': pfa_v_mag_pu_lv}, axis=1)
 
 
-def update_pypsa(network):
+def update_pypsa_grid_reinforcement(network, equipment_changes):
     """
-    Update equipment data of lines and transformers
+    Update equipment data of lines and transformers after grid reinforcement.
 
     During grid reinforcement (cf.
     :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`) grid topology and
@@ -1303,12 +1303,12 @@ def update_pypsa(network):
     ----------
     network : Network
         eDisGo grid container
-    """
+    equipment_changes : `pandas.DataFrame<dataframe>`
+        Dataframe with latest equipment changes (of latest iteration step)
+        from grid reinforcement. See `equipment_changes` property of
+        :class:`~.grid.network.Results` for more information on the Dataframe.
 
-    # Filter equipment changes: take only last iteration step
-    equipment_changes = network.results.equipment_changes[
-        network.results.equipment_changes['iteration_step'] ==
-        network.results.equipment_changes['iteration_step'].max()]
+    """
 
     # Step 1: Update transformers
     transformers = equipment_changes[

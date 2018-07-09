@@ -3,7 +3,7 @@ import copy
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import reinforce_measures, exceptions
 from edisgo.flex_opt.costs import grid_expansion_costs
-from edisgo.tools import tools
+from edisgo.tools import tools, pypsa_io
 import logging
 
 logger = logging.getLogger('edisgo')
@@ -142,14 +142,14 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
             # write changed lines to results.equipment_changes
             _add_lines_changes_to_equipment_changes()
 
-        # run power flow analysis again and check if all over-loading
-        # problems were solved
+        # run power flow analysis again (after updating pypsa object) and check
+        # if all over-loading problems were solved
         logger.debug('==> Run power flow analysis.')
-        tools.pypsa_io.update_pypsa_grid_reinforcement(
-            edisgo_reinforce.network, equipment_changes = network.results.equipment_changes[
-        network.results.equipment_changes['iteration_step'] ==
-        network.results.equipment_changes['iteration_step'].max()])
-
+        pypsa_io.update_pypsa_grid_reinforcement(
+            edisgo_reinforce.network,
+            edisgo_reinforce.network.results.equipment_changes[
+                edisgo_reinforce.network.results.equipment_changes.
+                    iteration_step==iteration_step])
         edisgo_reinforce.analyze()
         logger.debug('==> Recheck station load.')
         overloaded_mv_station = checks.hv_mv_station_load(
@@ -210,9 +210,14 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
         # write changed lines to results.equipment_changes
         _add_lines_changes_to_equipment_changes()
 
-        # run power flow analysis again and check if all over-voltage
-        # problems were solved
+        # run power flow analysis again (after updating pypsa object) and check
+        # if all over-voltage problems were solved
         logger.debug('==> Run power flow analysis.')
+        pypsa_io.update_pypsa_grid_reinforcement(
+            edisgo_reinforce.network,
+            edisgo_reinforce.network.results.equipment_changes[
+                edisgo_reinforce.network.results.equipment_changes.
+                    iteration_step == iteration_step])
         edisgo_reinforce.analyze()
         logger.debug('==> Recheck voltage in MV grid.')
         crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce.network)
@@ -248,7 +253,14 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
         # write added transformers to results.equipment_changes
         _add_transformer_changes_to_equipment_changes('added')
 
+        # run power flow analysis again (after updating pypsa object) and check
+        # if all over-voltage problems were solved
         logger.debug('==> Run power flow analysis.')
+        pypsa_io.update_pypsa_grid_reinforcement(
+            edisgo_reinforce.network,
+            edisgo_reinforce.network.results.equipment_changes[
+                edisgo_reinforce.network.results.equipment_changes.
+                    iteration_step == iteration_step])
         edisgo_reinforce.analyze()
         logger.debug('==> Recheck voltage at secondary side of LV stations.')
         crit_stations = checks.lv_voltage_deviation(edisgo_reinforce.network,
@@ -295,7 +307,14 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
             # write changed lines to results.equipment_changes
             _add_lines_changes_to_equipment_changes()
 
+        # run power flow analysis again (after updating pypsa object) and check
+        # if all over-voltage problems were solved
         logger.debug('==> Run power flow analysis.')
+        pypsa_io.update_pypsa_grid_reinforcement(
+            edisgo_reinforce.network,
+            edisgo_reinforce.network.results.equipment_changes[
+                edisgo_reinforce.network.results.equipment_changes.
+                    iteration_step == iteration_step])
         edisgo_reinforce.analyze()
         logger.debug('==> Recheck voltage in LV grids.')
         crit_nodes = checks.lv_voltage_deviation(edisgo_reinforce.network)
@@ -356,9 +375,14 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
             # write changed lines to results.equipment_changes
             _add_lines_changes_to_equipment_changes()
 
-        # run power flow analysis again and check if all over-loading
-        # problems were solved
+        # run power flow analysis again (after updating pypsa object) and check
+        # if all over-loading problems were solved
         logger.debug('==> Run power flow analysis.')
+        pypsa_io.update_pypsa_grid_reinforcement(
+            edisgo_reinforce.network,
+            edisgo_reinforce.network.results.equipment_changes[
+                edisgo_reinforce.network.results.equipment_changes.
+                    iteration_step == iteration_step])
         edisgo_reinforce.analyze()
         logger.debug('==> Recheck station load.')
         overloaded_mv_station = checks.hv_mv_station_load(
