@@ -261,20 +261,19 @@ class Load(Component):
     @property
     def power_factor_mode(self):
         """
-        Power factor mode of generator.
+        Power factor mode of Load.
 
         If the power factor is set, then it is necessary to know whether the
         it is leading or lagging. In other words this information is necessary
         to make the generator behave in an inductive or capacitive manner.
         Essentially this changes the sign of the reactive power Q.
 
-        The convention used here in a generator is that:
-        - when `power_factor_mode` is 'capacitive' then Q is positive
-        - when `power_factor_mode` is 'inductive' then Q is negative
+        The convention used here in a load is that:
+        - when `power_factor_mode` is 'inductive' then Q is positive
+        - when `power_factor_mode` is 'capacitive' then Q is negative
 
         In the case that this attribute is not set, it is retrieved from the
-        network config object depending on the voltage level the generator
-        is in.
+        network config object depending on the voltage level the load is in.
 
         Returns
         :obj: `str` : Power factor mode
