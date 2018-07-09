@@ -599,7 +599,7 @@ def get_mv_feeder_from_node(node):
 
     # MV feeder identifier is the representative of the first line segment
     # of the half-ring
-    mv_feeder = repr(path[0].grid.graph.line_from_nodes(path[0], path[1]))
+    mv_feeder = path[0].grid.graph.line_from_nodes(path[0], path[1])
 
     return mv_feeder
 
@@ -626,6 +626,6 @@ def get_mv_feeder_from_line(line):
     nodes = line.grid.graph.nodes_from_line(line)
     # if one of the nodes is an MV station the line is an MV feeder itself
     if isinstance(nodes[0], MVStation) or isinstance(nodes[1], MVStation):
-        return repr(line)
+        return line
     else:
         return get_mv_feeder_from_node(nodes[0])
