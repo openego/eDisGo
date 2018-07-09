@@ -24,7 +24,7 @@ class Grid:
         format:  ToDo: DEFINE FORMAT
     _station : :class:`~.grid.components.Station`
         The station the grid is fed by
-    _weather_cell : :obj:`list`
+    _weather_cells : :obj:`list`
         Contains a list of weather_cells within the grid
     _generators : :obj:'edisgo.components.Generator'
         Contains a list of the generators

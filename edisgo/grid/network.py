@@ -195,7 +195,6 @@ class EDisGo:
         if kwargs.get('worst_case_analysis', None):
             self.network.timeseries = TimeSeriesControl(
                 mode=kwargs.get('worst_case_analysis', None),
-                weather_cell_ids=self.network.mv_grid._weather_cells,
                 config_data=self.network.config).timeseries
         else:
             self.network.timeseries = TimeSeriesControl(
@@ -205,7 +204,7 @@ class EDisGo:
                     'timeseries_generation_dispatchable', None),
                 timeseries_load=kwargs.get(
                     'timeseries_load', None),
-                weather_cell_ids=self.network.mv_grid._weather_cells,
+                weather_cell_ids=self.network.mv_grid.weather_cells,
                 config_data=self.network.config,
                 timeindex=kwargs.get('timeindex', None)).timeseries
 
@@ -828,6 +827,8 @@ class TimeSeriesControl:
     generator_scenario : :obj:`str`
         Defines which scenario of future generator park to use. Possible
         options are 'nep2035' and 'ego100'. Default: None.
+    weather_cell_ids : :obj:`list`
+        Contains a list of weather cells within the grid. Default: None.
 
     """
 
@@ -836,7 +837,6 @@ class TimeSeriesControl:
         self.timeseries = TimeSeries()
         mode = kwargs.get('mode', None)
         config_data = kwargs.get('config_data', None)
-        weather_cell_ids = kwargs.get('weather_cell_ids', None)
 
         if mode:
             if mode == 'worst-case':
@@ -862,8 +862,8 @@ class TimeSeriesControl:
                 self.timeseries.generation_fluctuating = ts
             elif isinstance(ts, str) and ts == 'oedb':
                 self.timeseries.generation_fluctuating = \
-                    import_feedin_timeseries(config_data,
-                                             weather_cell_ids)
+                    import_feedin_timeseries(
+                        config_data, kwargs.get('weather_cell_ids', None))
             else:
                 raise ValueError('Your input for '
                                  '"timeseries_generation_fluctuating" is not '
