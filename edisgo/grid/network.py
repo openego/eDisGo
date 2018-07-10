@@ -595,15 +595,14 @@ class Network:
 
         A grid topology representation based on
         :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
-        this data model the :pypsa:`pypsa.Network<network>`
+        this data model, the :pypsa:`pypsa.Network<network>`,
         is assigned to this attribute.
-        This allows as well to overwrite data.
 
         Parameters
         ----------
-        pypsa:
+        pypsa : :pypsa:`pypsa.Network<network>`
             The `PyPSA network
-            <https://www.pypsa.org/doc/components.html#network>`_ container
+            <https://www.pypsa.org/doc/components.html#network>`_ container.
 
         Returns
         -------
