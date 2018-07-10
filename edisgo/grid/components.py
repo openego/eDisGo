@@ -205,9 +205,9 @@ class Load(Component):
                         "given.".format(sector))
                     raise
             ts['q'] = ts['p'] * q_factor
-            self._timeseries = ts * consumption
-
-        return self._timeseries
+            return ts * consumption
+        else:
+            return self._timeseries
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
