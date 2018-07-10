@@ -256,9 +256,8 @@ class EDisGo:
         stations/transformers and branch tees) and active/reactive power at
         lines.
 
-        The power flow analysis can be performed for both grid levels MV and LV
-        and for both of them individually. Use `mode` to choose (defaults to
-        MV + LV).
+        The power flow analysis can currently only be performed for both grid
+        levels MV and LV. See ToDos section for more information.
 
         A static `non-linear power flow analysis is performed using PyPSA
         <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
@@ -271,10 +270,10 @@ class EDisGo:
         ----------
         mode : str
             Allows to toggle between power flow analysis (PFA) on the whole
-            grid topology (MV + LV), only MV or only LV. Therefore, either
-            specify `mode='mv'` for PFA of the MV grid topology or `mode='lv'`
-            for PFA of the LV grid topology.
-            Defaults to None which equals power flow analysis for MV + LV.
+            grid topology (MV + LV), only MV or only LV. Defaults to None which
+            equals power flow analysis for MV + LV which is the only
+            implemented option at the moment. See ToDos section for
+            more information.
 
         Notes
         -----
@@ -282,8 +281,22 @@ class EDisGo:
         representation to the PyPSA format and stores it to
         :attr:`self.network.pypsa`.
 
-         .. ToDo: explain how power plants are modeled, if possible use a link
-         .. ToDo: explain where to find and adjust power flow analysis defining parameters
+        ToDo
+        ----
+        The option to export only the edisgo MV grid (mode = 'mv') to conduct
+        a power flow analysis is implemented in
+        :func:`~.tools.pypsa_io.to_pypsa` but NotImplementedError is raised
+        since the rest of edisgo does not handle this option yet. The analyze
+        function will throw an error since
+        :func:`~.tools.pypsa_io.process_pfa_results`
+        does not handle aggregated loads and generators in the LV grids. Also,
+        grid reinforcement, pypsa update of time series, and probably other
+        functionalities do not work when only the MV grid is analysed.
+
+        Further ToDos are:
+        * explain how power plants are modeled, if possible use a link
+        * explain where to find and adjust power flow analysis defining
+        parameters
 
         See Also
         --------
@@ -292,14 +305,14 @@ class EDisGo:
 
         """
         # ToDo: Should timeindex be an input to this as well?
+        # ToDo: check if mode changed!
         if self.network.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
             self.network.pypsa = pypsa_io.to_pypsa(self.network, mode)
         else:
-            if self.network.results.equipment_changes is not None:
-                # Update PyPSA data with equipment changes
-                pypsa_io.update_pypsa(self.network)
-            # ToDo: add option to change generator time series
+            if self.network.pypsa.edisgo_mode is not mode:
+                # Translate eDisGo grid topology representation to PyPSA format
+                self.network.pypsa = pypsa_io.to_pypsa(self.network, mode)
 
         # run power flow analysis
         pf_results = self.network.pypsa.pf(self.network.pypsa.snapshots)

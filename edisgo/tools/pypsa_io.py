@@ -76,8 +76,8 @@ def to_pypsa(network, mode):
 
     Returns
     -------
-
         PyPSA Network
+
     """
 
     # get topology and time series data
@@ -103,6 +103,10 @@ def to_pypsa(network, mode):
                 _pypsa_storage_timeseries(network, mode=mode)
 
     elif mode is 'mv':
+        # the pypsa export works but NotImplementedError is raised since the
+        # rest of edisgo (handling of results from pfa, grid expansion, etc.)
+        # does not yet work
+        raise NotImplementedError
         mv_components = mv_to_pypsa(network)
         components = add_aggregated_lv_components(network, mv_components)
 
@@ -124,7 +128,7 @@ def to_pypsa(network, mode):
 
     elif mode is 'lv':
         raise NotImplementedError
-        lv_to_pypsa(network)
+        #lv_to_pypsa(network)
     else:
         raise ValueError("Provide proper mode or leave it empty to export "
                          "entire grid topology.")
