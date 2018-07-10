@@ -8,6 +8,7 @@ from edisgo.grid.components import Transformer, Line, LVStation
 
 import numpy as np
 import pandas as pd
+import itertools
 from math import pi, sqrt
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
@@ -1391,3 +1392,69 @@ def update_pypsa(network):
 
         network.pypsa.lines.loc[repr(idx), 'bus0'] = bus0
         network.pypsa.lines.loc[repr(idx), 'bus1'] = bus1
+
+
+def update_pypsa_load_timeseries(network, loads_to_update=None,
+                                  timesteps=None):
+    """
+    Updates load time series in pypsa representation.
+
+    This function will raise an error when a load that is currently not in
+    the pypsa representation is added.
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+    loads_to_update : :obj:`list`, optional
+        List with all loads (of type :class:`~.grid.components.Load`) that need
+        to be updated. If None all loads are updated depending on mode. See
+        :meth:`~.tools.pypsa_io.to_pypsa` for more information.
+    timesteps : array-like
+        If None all time steps currently existing in pypsa representation are
+        updated. If not None current time steps are overwritten by given
+        time steps. Default: None.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Load time series table in PyPSA format
+
+    """
+
+    # MV and LV loads
+    if network.pypsa.edisgo_mode is None:
+        # if no loads are specified get all loads in whole grid
+        if loads_to_update is None:
+            grids = [network.mv_grid] + list(network.mv_grid.lv_grids)
+            loads_to_update = list(itertools.chain(
+                *[grid.graph.nodes_by_attribute('load') for grid in grids]))
+        # if no time steps are specified update all time steps currently
+        # contained in pypsa representation
+        if timesteps is None:
+            timesteps = network.pypsa.loads_t.p_set.index
+
+        loads_in_pypsa = network.pypsa.loads_t.p_set.columns
+        p_set = pd.DataFrame()
+        q_set = pd.DataFrame()
+        for load in loads_to_update:
+            if repr(load) in loads_in_pypsa:
+                p_set[repr(load)] = \
+                    load.pypsa_timeseries('p').loc[timesteps]
+                q_set[repr(load)] = \
+                    load.pypsa_timeseries('q').loc[timesteps]
+            else:
+                raise KeyError("Tried to update load {} but could not find it "
+                               "in pypsa network.").format(load)
+        network.pypsa.loads_t.p_set = p_set
+        network.pypsa.loads_t.q_set = q_set
+
+    # MV and aggregated LV loads
+    elif network.pypsa.edisgo_mode is 'mv':
+        raise NotImplementedError
+
+    # LV only
+    elif network.pypsa.edisgo_mode is 'lv':
+        raise NotImplementedError
+
+
