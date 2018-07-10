@@ -152,6 +152,7 @@ def to_pypsa(network, mode):
 
     # create power flow problem
     pypsa_network = PyPSANetwork()
+    pypsa_network.edisgo_mode = mode
     pypsa_network.set_snapshots(network.timeseries.timeindex)
 
     # import grid topology to PyPSA network

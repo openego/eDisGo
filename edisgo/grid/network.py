@@ -608,7 +608,11 @@ class Network:
         Returns
         -------
         :pypsa:`pypsa.Network<network>`
-            PyPSA grid representation
+            PyPSA grid representation. The attribute `edisgo_mode` is added
+            to specify if pypsa representation of the edisgo network
+            was created for the whole grid topology (MV + LV), only MV or only
+            LV. See parameter `mode` in
+            :meth:`~.grid.network.EDisGo.analyze` for more information.
 
         """
         return self._pypsa
