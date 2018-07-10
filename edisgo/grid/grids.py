@@ -106,14 +106,13 @@ class Grid:
             for gen in self.graph.nodes_by_attribute('generator'):
                 if hasattr(gen, 'weather_cell_id'):
                     self._weather_cells.append(gen.weather_cell_id)
-                    # DO NOTHING IF THERE IS NO weather_cell_id!
 
-            # drop the duplicates
+            # drop duplicates
             self._weather_cells = list(set(self._weather_cells))
-            # no need to check for Nones in the list because None in gen.weather_cell_id
-            # is kicked out by the if hasattr() before
+            # no need to check for Nones in the list because None in
+            # gen.weather_cell_id is kicked out by the if hasattr() before
 
-            return self._weather_cells
+        return self._weather_cells
 
     @property
     def peak_generation(self):
