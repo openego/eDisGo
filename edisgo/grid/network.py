@@ -255,9 +255,8 @@ class EDisGo:
         stations/transformers and branch tees) and active/reactive power at
         lines.
 
-        The power flow analysis can be performed for both grid levels MV and LV
-        and for both of them individually. Use `mode` to choose (defaults to
-        MV + LV).
+        The power flow analysis can currently only be performed for both grid
+        levels MV and LV. See ToDos section for more information.
 
         A static `non-linear power flow analysis is performed using PyPSA
         <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
@@ -270,10 +269,10 @@ class EDisGo:
         ----------
         mode : str
             Allows to toggle between power flow analysis (PFA) on the whole
-            grid topology (MV + LV), only MV or only LV. Therefore, either
-            specify `mode='mv'` for PFA of the MV grid topology or `mode='lv'`
-            for PFA of the LV grid topology.
-            Defaults to None which equals power flow analysis for MV + LV.
+            grid topology (MV + LV), only MV or only LV. Defaults to None which
+            equals power flow analysis for MV + LV which is the only
+            implemented option at the moment. See ToDos section for
+            more information.
 
         Notes
         -----
@@ -281,8 +280,22 @@ class EDisGo:
         representation to the PyPSA format and stores it to
         :attr:`self.network.pypsa`.
 
-         .. ToDo: explain how power plants are modeled, if possible use a link
-         .. ToDo: explain where to find and adjust power flow analysis defining parameters
+        ToDo
+        ----
+        The option to export only the edisgo MV grid (mode = 'mv') to conduct
+        a power flow analysis is implemented in
+        :func:`~.tools.pypsa_io.to_pypsa` but NotImplementedError is raised
+        since the rest of edisgo does not handle this option yet. The analyze
+        function will throw an error since
+        :func:`~.tools.pypsa_io.process_pfa_results`
+        does not handle aggregated loads and generators in the LV grids. Also,
+        grid reinforcement, pypsa update of time series, and probably other
+        functionalities do not work when only the MV grid is analysed.
+
+        Further ToDos are:
+        * explain how power plants are modeled, if possible use a link
+        * explain where to find and adjust power flow analysis defining
+        parameters
 
         See Also
         --------
@@ -294,6 +307,10 @@ class EDisGo:
         if self.network.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
             self.network.pypsa = pypsa_io.to_pypsa(self.network, mode)
+        else:
+            if self.network.pypsa.edisgo_mode is not mode:
+                # Translate eDisGo grid topology representation to PyPSA format
+                self.network.pypsa = pypsa_io.to_pypsa(self.network, mode)
 
         # run power flow analysis
         pf_results = self.network.pypsa.pf(self.network.pypsa.snapshots)
@@ -590,20 +607,23 @@ class Network:
 
         A grid topology representation based on
         :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
-        this data model the :pypsa:`pypsa.Network<network>`
+        this data model, the :pypsa:`pypsa.Network<network>`,
         is assigned to this attribute.
-        This allows as well to overwrite data.
 
         Parameters
         ----------
-        pypsa:
+        pypsa : :pypsa:`pypsa.Network<network>`
             The `PyPSA network
-            <https://www.pypsa.org/doc/components.html#network>`_ container
+            <https://www.pypsa.org/doc/components.html#network>`_ container.
 
         Returns
         -------
         :pypsa:`pypsa.Network<network>`
-            PyPSA grid representation
+            PyPSA grid representation. The attribute `edisgo_mode` is added
+            to specify if pypsa representation of the edisgo network
+            was created for the whole grid topology (MV + LV), only MV or only
+            LV. See parameter `mode` in
+            :meth:`~.grid.network.EDisGo.analyze` for more information.
 
         """
         return self._pypsa
@@ -827,8 +847,6 @@ class TimeSeriesControl:
     generator_scenario : :obj:`str`
         Defines which scenario of future generator park to use. Possible
         options are 'nep2035' and 'ego100'. Default: None.
-    weather_cell_ids : :obj:`list`
-        Contains a list of weather cells within the grid. Default: None.
 
     """
 
@@ -837,6 +855,7 @@ class TimeSeriesControl:
         self.timeseries = TimeSeries()
         mode = kwargs.get('mode', None)
         config_data = kwargs.get('config_data', None)
+        weather_cell_ids = kwargs.get('weather_cell_ids', None)
 
         if mode:
             if mode == 'worst-case':
@@ -862,8 +881,8 @@ class TimeSeriesControl:
                 self.timeseries.generation_fluctuating = ts
             elif isinstance(ts, str) and ts == 'oedb':
                 self.timeseries.generation_fluctuating = \
-                    import_feedin_timeseries(
-                        config_data, kwargs.get('weather_cell_ids', None))
+                    import_feedin_timeseries(config_data,
+                                             weather_cell_ids)
             else:
                 raise ValueError('Your input for '
                                  '"timeseries_generation_fluctuating" is not '
