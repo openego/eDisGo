@@ -124,22 +124,10 @@ def to_pypsa(network, mode):
                 network,
                 components['Bus'].index.tolist())
 
-        ts_gen_lv_aggr_p, \
-        ts_gen_lv_aggr_q, \
-        ts_load_lv_aggr_p, ts_load_lv_aggr_q = _pypsa_timeseries_aggregated_at_lv_station(
-            network)
+        if len(list(components['StorageUnit'].index.values)) > 0:
+            timeseries_storage_p, timeseries_storage_q = \
+                _pypsa_storage_timeseries(network, mode=mode)
 
-        # Concat MV and LV (aggregated) time series
-        if list(components['Load'].index.values):
-            timeseries_load_p = pd.concat([timeseries_load_p, ts_load_lv_aggr_p],
-                                          axis=1)
-            timeseries_load_q = pd.concat([timeseries_load_q, ts_load_lv_aggr_q],
-                                          axis=1)
-        if len(list(components['Generator'].index.values)) > 1:
-            timeseries_gen_p = pd.concat([timeseries_gen_p, ts_gen_lv_aggr_p],
-                                         axis=1)
-            timeseries_gen_q = pd.concat([timeseries_gen_q, ts_gen_lv_aggr_q],
-                                         axis=1)
     elif mode is 'lv':
         raise NotImplementedError
         lv_to_pypsa(network)
@@ -709,6 +697,9 @@ def _pypsa_load_timeseries(network, mode=None):
                 load.pypsa_timeseries('q').rename(repr(load)).to_frame())
             mv_load_timeseries_p.append(
                 load.pypsa_timeseries('p').rename(repr(load)).to_frame())
+        if mode is 'mv':
+            lv_load_timeseries_p, lv_load_timeseries_q = \
+                _pypsa_load_timeseries_aggregated_at_lv_station(network)
 
     # add LV grid's loads
     if mode is 'lv' or mode is None:
@@ -768,6 +759,9 @@ def _pypsa_generator_timeseries(network, mode=None):
                 gen.pypsa_timeseries('q').rename(repr(gen)).to_frame())
             mv_gen_timeseries_p.append(
                 gen.pypsa_timeseries('p').rename(repr(gen)).to_frame())
+        if mode is 'mv':
+            lv_gen_timeseries_p, lv_gen_timeseries_q = \
+                _pypsa_generator_timeseries_aggregated_at_lv_station(network)
 
     # LV generator timeseries
     if mode is 'lv' or mode is None:
@@ -893,8 +887,9 @@ def _pypsa_bus_timeseries(network, buses, mode=None):
     return v_set_df
 
 
-def _pypsa_timeseries_aggregated_at_lv_station(network):
+def _pypsa_generator_timeseries_aggregated_at_lv_station(network):
     """
+    Aggregates generator time series per generator subtype and LV grid.
 
     Parameters
     ----------
@@ -904,19 +899,15 @@ def _pypsa_timeseries_aggregated_at_lv_station(network):
     Returns
     -------
     tuple of :pandas:`pandas.DataFrame<dataframe>`
-        Altered time series DataFrames. Tuple of size for containing DataFrames
-        that represent
+        Tuple of size two containing DataFrames that represent
 
-            1. 'p_set' of aggregated Generation at each LV station
-            2. 'q_set' of aggregated Generation at each LV station
-            3. 'p_set' of aggregated Load at each LV station
-            4. 'q_set' of aggregated Load at each LV station
+            1. 'p_set' of aggregated Generation per subtype at each LV station
+            2. 'q_set' of aggregated Generation per subtype at each LV station
+
     """
 
     generation_p = []
     generation_q = []
-    load_p = []
-    load_q = []
 
     for lv_grid in network.mv_grid.lv_grids:
         # Determine aggregated generation at LV stations
@@ -949,6 +940,32 @@ def _pypsa_timeseries_aggregated_at_lv_station(network):
                     pd.concat(v_subtype['timeseries_q'], axis=1).sum(
                         axis=1).rename(col_name).to_frame())
 
+    return generation_p, generation_q
+
+
+def _pypsa_load_timeseries_aggregated_at_lv_station(network):
+    """
+    Aggregates load time series per sector and LV grid.
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+
+    Returns
+    -------
+    tuple of :pandas:`pandas.DataFrame<dataframe>`
+        Tuple of size two containing DataFrames that represent
+
+            1. 'p_set' of aggregated Load per sector at each LV station
+            2. 'q_set' of aggregated Load per sector at each LV station
+
+    """
+
+    load_p = []
+    load_q = []
+
+    for lv_grid in network.mv_grid.lv_grids:
         # Determine aggregated load at LV stations
         load = {}
         for lo in lv_grid.graph.nodes_by_attribute('load'):
