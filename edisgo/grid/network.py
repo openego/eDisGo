@@ -273,14 +273,11 @@ class EDisGo:
             equals power flow analysis for MV + LV which is the only
             implemented option at the moment. See ToDos section for
             more information.
-        timesteps : array_like
-            Timesteps is an array-like object (list, DatetimeIndex, etc.) of
-            :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
-            to export to pypsa representation and use in power flow analysis.
-            If None all time steps currently existing in pypsa representation are
-            updated. If not None current time steps are overwritten by given
-            time steps. Default: None.
-
+        timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+            Timesteps specifies for which time steps to conduct the power flow
+            analysis. It defaults to None in which case the time steps in
+            timeseries.timeindex (see :class:`~.grid.network.TimeSeries`) are
+            used.
 
         Notes
         -----
@@ -313,8 +310,7 @@ class EDisGo:
         """
         if timesteps is None:
             timesteps = self.network.timeseries.timeindex
-        # check if timesteps is array-like, otherwise convert to list (necessary
-        # to obtain a dataframe when using .loc in time series functions)
+        # check if timesteps is array-like, otherwise convert to list
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
 
