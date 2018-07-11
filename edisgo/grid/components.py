@@ -326,7 +326,7 @@ class Generator(Component):
                     raise
             timeseries['q'] = timeseries['p'] * tan(acos(self.power_factor))
             timeseries = timeseries * self.nominal_capacity
-            return timeseries.loc[self.grid.network.timeseries.timeindex, :]
+            return timeseries
         else:
             return self._timeseries.loc[
                    self.grid.network.timeseries.timeindex, :]
@@ -481,7 +481,7 @@ class GeneratorFluctuating(Generator):
                 timeseries = timeseries.join(
                     self.curtailment.to_frame('curtailment'), how='left')
                 timeseries.p = timeseries.p - timeseries.curtailment.fillna(0)
-            return timeseries.loc[self.grid.network.timeseries.timeindex, :]
+            return timeseries
         else:
             #ToDo: should curtailment be subtracted from timeseries?
             return self._timeseries.loc[
