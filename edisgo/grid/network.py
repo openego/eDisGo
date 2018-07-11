@@ -1236,12 +1236,6 @@ class CurtailmentControl:
                       'with load and feed-in time series.'
             logging.error(message)
             raise KeyError(message)
-        # raise warning if time indexes do not have the same entries
-        if pd.Series(network.timeseries.generation_fluctuating.
-                             index).equals(pd.Series(
-            self.curtailment_ts.index)) is False:
-            logging.warning('Time index of curtailment time series is not '
-                            'equal to the feed-in time series index.')
 
     def _check_curtailment(self, network):
         """
