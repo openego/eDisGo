@@ -9,7 +9,6 @@ import edisgo
 from edisgo.tools import config, pypsa_io
 from edisgo.data.import_data import import_from_ding0, import_generators, \
     import_feedin_timeseries, import_load_timeseries
-from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, curtailment
 from edisgo.grid.components import Station, BranchTee
@@ -348,7 +347,7 @@ class EDisGo:
             self, max_while_iterations=kwargs.get(
                 'max_while_iterations', 10),
             copy_graph=kwargs.get('copy_graph', False),
-            snapshot_analysis=kwargs.get('snapshot_analysis', False))
+            timesteps_pfa=kwargs.get('timesteps_pfa', None))
 
     def integrate_storage(self, **kwargs):
         """

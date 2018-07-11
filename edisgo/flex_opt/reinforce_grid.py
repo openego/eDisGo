@@ -1,5 +1,6 @@
 import pandas as pd
 import copy
+import datetime
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import reinforce_measures, exceptions
 from edisgo.flex_opt.costs import grid_expansion_costs
@@ -9,8 +10,8 @@ import logging
 logger = logging.getLogger('edisgo')
 
 
-def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
-                   snapshot_analysis=False):
+def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
+                   max_while_iterations=10):
     """
     Evaluates grid reinforcement needs and performs measures.
 
@@ -20,19 +21,33 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
     ----------
     edisgo : :class:`~.grid.network.EDisGo`
         The eDisGo API object
-    max_while_iterations : int
-        Maximum number of times each while loop is conducted.
+    timesteps_pfa : :obj:`str` or :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+        timesteps_pfa specifies for which time steps power flow analysis is
+        conducted and therefore which time steps to consider when checking
+        for over-loading and over-voltage issues.
+        It defaults to None in which case all timesteps in
+        timeseries.timeindex (see :class:`~.grid.network.TimeSeries`) are used.
+        Possible options are:
+
+        * None
+          Time steps in timeseries.timeindex (see
+          :class:`~.grid.network.TimeSeries`) are used.
+        * 'snapshot_analysis'
+          Reinforcement is conducted for two worst-case snapshots. See
+          :meth:`edisgo.tools.tools.select_worstcase_snapshots()` for further
+          explanation on how worst-case snapshots are chosen.
+          Note: If you have large time series choosing this option will save
+          calculation time since power flow analysis is only conducted for two
+          time steps. If your time series already represents the worst-case
+          keep the default value of None because finding the worst-case
+          snapshots takes some time.
+        * :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+          Use this option to explicitly choose which time steps to consider.
+
     copy_graph : :obj:`Boolean`
         If True reinforcement is conducted on a copied graph and discarded
-    snapshot_analysis : :obj:`Boolean`
-        If True reinforcement is conducted for two worst-case snapshots. See
-        :meth:`edisgo.tools.tools.select_worstcase_snapshots()` for further
-        explanation on how worst-case snapshots are chosen.
-        If you have large time series setting this to True will save
-        calculation time since power flow analysis then only needs to be
-        conducted for two time steps. If your time series already represents
-        the worst-case keep the default value False because finding the
-        worst-case snapshots takes some time. Default: False.
+    max_while_iterations : int
+        Maximum number of times each while loop is conducted.
 
     Returns
     -------
@@ -86,22 +101,31 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
     else:
         edisgo_reinforce = edisgo
 
-    # in case reinforcement needs to be conducted for worst-case snapshots
-    # these are identified and temporarily written to
-    # edisgo_reinforce.network.timeseries.timeindex to only retrieve generator
-    # and load time series for these time steps
-    if snapshot_analysis:
-        snapshots = tools.select_worstcase_snapshots(edisgo_reinforce.network)
-        # copy current timeindex to reset it at the end of the reinforcement
-        original_timeindex = copy.deepcopy(
-            edisgo_reinforce.network.timeseries.timeindex)
-        # manipulate timeindex; drop None values in case any of the two
-        # snapshots does not exist
-        edisgo_reinforce.network.timeseries.timeindex = pd.DatetimeIndex(
-            data=[snapshots['load_case'], snapshots['feedin_case']]).dropna()
+    if timesteps_pfa is not None:
+        # if timesteps_pfa = 'snapshot_analysis' get snapshots
+        if (isinstance(timesteps_pfa, str) and
+                    timesteps_pfa == 'snapshot_analysis'):
+            snapshots = tools.select_worstcase_snapshots(
+                edisgo_reinforce.network)
+            # drop None values in case any of the two snapshots does not exist
+            timesteps_pfa = pd.DatetimeIndex(data=[
+                snapshots['load_case'], snapshots['feedin_case']]).dropna()
+        # if timesteps_pfa is not of type datetime or does not contain
+        # datetimes throw an error
+        elif not isinstance(timesteps_pfa, datetime.datetime):
+            if hasattr(timesteps_pfa, '__iter__'):
+                if not all(isinstance(_, datetime.datetime)
+                           for _ in timesteps_pfa):
+                    raise ValueError(
+                        'Input {} for timesteps_pfa is not valid.'.format(
+                        timesteps_pfa))
+            else:
+                raise ValueError(
+                    'Input {} for timesteps_pfa is not valid.'.format(
+                        timesteps_pfa))
 
     iteration_step = 1
-    edisgo.analyze()
+    edisgo_reinforce.analyze(timesteps=timesteps_pfa)
 
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
 
@@ -150,7 +174,7 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
             edisgo_reinforce.network.results.equipment_changes[
                 edisgo_reinforce.network.results.equipment_changes.
                     iteration_step==iteration_step])
-        edisgo_reinforce.analyze()
+        edisgo_reinforce.analyze(timesteps=timesteps_pfa)
         logger.debug('==> Recheck station load.')
         overloaded_mv_station = checks.hv_mv_station_load(
             edisgo_reinforce.network)
@@ -218,7 +242,7 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
             edisgo_reinforce.network.results.equipment_changes[
                 edisgo_reinforce.network.results.equipment_changes.
                     iteration_step == iteration_step])
-        edisgo_reinforce.analyze()
+        edisgo_reinforce.analyze(timesteps=timesteps_pfa)
         logger.debug('==> Recheck voltage in MV grid.')
         crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce.network)
 
@@ -261,7 +285,7 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
             edisgo_reinforce.network.results.equipment_changes[
                 edisgo_reinforce.network.results.equipment_changes.
                     iteration_step == iteration_step])
-        edisgo_reinforce.analyze()
+        edisgo_reinforce.analyze(timesteps=timesteps_pfa)
         logger.debug('==> Recheck voltage at secondary side of LV stations.')
         crit_stations = checks.lv_voltage_deviation(edisgo_reinforce.network,
                                                     mode='stations')
@@ -315,7 +339,7 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
             edisgo_reinforce.network.results.equipment_changes[
                 edisgo_reinforce.network.results.equipment_changes.
                     iteration_step == iteration_step])
-        edisgo_reinforce.analyze()
+        edisgo_reinforce.analyze(timesteps=timesteps_pfa)
         logger.debug('==> Recheck voltage in LV grids.')
         crit_nodes = checks.lv_voltage_deviation(edisgo_reinforce.network)
 
@@ -383,7 +407,7 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
             edisgo_reinforce.network.results.equipment_changes[
                 edisgo_reinforce.network.results.equipment_changes.
                     iteration_step == iteration_step])
-        edisgo_reinforce.analyze()
+        edisgo_reinforce.analyze(timesteps=timesteps_pfa)
         logger.debug('==> Recheck station load.')
         overloaded_mv_station = checks.hv_mv_station_load(
             edisgo_reinforce.network)
@@ -417,10 +441,6 @@ def reinforce_grid(edisgo, max_while_iterations=10, copy_graph=False,
     # calculate grid expansion costs
     edisgo_reinforce.network.results.grid_expansion_costs = \
         grid_expansion_costs(edisgo_reinforce.network)
-
-    # in case of snapshot analysis reset timeindex
-    if snapshot_analysis:
-        edisgo_reinforce.network.timeseries.timeindex = original_timeindex
 
     # ToDo: delete at some point
     # import pickle
