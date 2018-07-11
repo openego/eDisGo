@@ -311,7 +311,13 @@ class EDisGo:
             Translator to PyPSA data format
 
         """
-        # ToDo: Update timesteps docstring once it is defined
+        if timesteps is None:
+            timesteps = self.network.timeseries.timeindex
+        # check if timesteps is array-like, otherwise convert to list (necessary
+        # to obtain a dataframe when using .loc in time series functions)
+        if not hasattr(timesteps, "__len__"):
+            timesteps = [timesteps]
+
         if self.network.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
             self.network.pypsa = pypsa_io.to_pypsa(
@@ -322,8 +328,13 @@ class EDisGo:
                 self.network.pypsa = pypsa_io.to_pypsa(
                     self.network, mode, timesteps)
 
+        # check if all timesteps are in pypsa.snapshots, if not update time
+        # series
+        if False in [True if _ in self.network.pypsa.snapshots else False
+                     for _ in timesteps]:
+            pypsa_io.update_pypsa_timeseries(self.network, timesteps=timesteps)
         # run power flow analysis
-        pf_results = self.network.pypsa.pf(self.network.pypsa.snapshots)
+        pf_results = self.network.pypsa.pf(timesteps)
 
         if all(pf_results['converged']['0'].tolist()) == True:
             pypsa_io.process_pfa_results(self.network, self.network.pypsa)
