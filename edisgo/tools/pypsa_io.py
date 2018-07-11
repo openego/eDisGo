@@ -1434,7 +1434,7 @@ def update_pypsa_grid_reinforcement(network, equipment_changes):
 
 
 def update_pypsa_load_timeseries(network, loads_to_update=None,
-                                  timesteps=None):
+                                 timesteps=None):
     """
     Updates load time series in pypsa representation.
 
@@ -1449,15 +1449,12 @@ def update_pypsa_load_timeseries(network, loads_to_update=None,
         List with all loads (of type :class:`~.grid.components.Load`) that need
         to be updated. If None all loads are updated depending on mode. See
         :meth:`~.tools.pypsa_io.to_pypsa` for more information.
-    timesteps : array-like
+    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+        Timesteps specifies which time steps of the load time series to export
+        to pypsa representation and use in power flow analysis.
         If None all time steps currently existing in pypsa representation are
         updated. If not None current time steps are overwritten by given
         time steps. Default: None.
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Load time series table in PyPSA format
 
     """
 
@@ -1472,6 +1469,10 @@ def update_pypsa_load_timeseries(network, loads_to_update=None,
         # contained in pypsa representation
         if timesteps is None:
             timesteps = network.pypsa.loads_t.p_set.index
+        # check if timesteps is array-like, otherwise convert to list
+        # (necessary to avoid getting a scalar using .loc)
+        if not hasattr(timesteps, "__len__"):
+            timesteps = [timesteps]
 
         loads_in_pypsa = network.pypsa.loads_t.p_set.columns
         p_set = pd.DataFrame()
