@@ -247,7 +247,7 @@ class EDisGo:
         import_generators(network=self.network,
                           data_source=data_source)
 
-    def analyze(self, mode=None):
+    def analyze(self, mode=None, timesteps=None):
         """Analyzes the grid by power flow analysis
 
         Analyze the grid for violations of hosting capacity. Means, perform a
@@ -273,6 +273,14 @@ class EDisGo:
             equals power flow analysis for MV + LV which is the only
             implemented option at the moment. See ToDos section for
             more information.
+        timesteps : array_like
+            Timesteps is an array-like object (list, DatetimeIndex, etc.) of
+            :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
+            to export to pypsa representation and use in power flow analysis.
+            If None all time steps currently existing in pypsa representation are
+            updated. If not None current time steps are overwritten by given
+            time steps. Default: None.
+
 
         Notes
         -----
@@ -280,8 +288,8 @@ class EDisGo:
         representation to the PyPSA format and stores it to
         :attr:`self.network.pypsa`.
 
-        ToDo
-        ----
+        ToDos
+        ------
         The option to export only the edisgo MV grid (mode = 'mv') to conduct
         a power flow analysis is implemented in
         :func:`~.tools.pypsa_io.to_pypsa` but NotImplementedError is raised
@@ -303,14 +311,16 @@ class EDisGo:
             Translator to PyPSA data format
 
         """
-        # ToDo: Should timeindex be an input to this as well?
+        # ToDo: Update timesteps docstring once it is defined
         if self.network.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
-            self.network.pypsa = pypsa_io.to_pypsa(self.network, mode)
+            self.network.pypsa = pypsa_io.to_pypsa(
+                self.network, mode, timesteps)
         else:
             if self.network.pypsa.edisgo_mode is not mode:
                 # Translate eDisGo grid topology representation to PyPSA format
-                self.network.pypsa = pypsa_io.to_pypsa(self.network, mode)
+                self.network.pypsa = pypsa_io.to_pypsa(
+                    self.network, mode, timesteps)
 
         # run power flow analysis
         pf_results = self.network.pypsa.pf(self.network.pypsa.snapshots)

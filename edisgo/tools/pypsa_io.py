@@ -16,7 +16,7 @@ from networkx import connected_component_subgraphs
 import collections
 
 
-def to_pypsa(network, mode):
+def to_pypsa(network, mode, timesteps=None):
     """
     Translate graph based grid representation to PyPSA Network
 
@@ -80,6 +80,12 @@ def to_pypsa(network, mode):
         PyPSA Network
 
     """
+    if timesteps is None:
+        timesteps = network.timeseries.timeindex
+    # check if timesteps is array-like, otherwise convert to list (necessary
+    # to obtain a dataframe when using .loc in time series functions)
+    if not hasattr(timesteps, "__len__"):
+        timesteps = [timesteps]
 
     # get topology and time series data
     if mode is None:
@@ -89,19 +95,20 @@ def to_pypsa(network, mode):
 
         if list(components['Load'].index.values):
             timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
-                network, mode=mode)
+                network, mode=mode, timesteps=timesteps)
 
         if len(list(components['Generator'].index.values)) > 1:
             timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
-                network, mode=mode)
+                network, mode=mode, timesteps=timesteps)
 
         if list(components['Bus'].index.values):
             timeseries_bus_v_set = _pypsa_bus_timeseries(
-                network, components['Bus'].index.tolist())
+                network, components['Bus'].index.tolist(), timesteps=timesteps)
 
         if len(list(components['StorageUnit'].index.values)) > 0:
             timeseries_storage_p, timeseries_storage_q = \
-                _pypsa_storage_timeseries(network, mode=mode)
+                _pypsa_storage_timeseries(
+                    network, mode=mode, timesteps=timesteps)
 
     elif mode is 'mv':
         # the pypsa export works but NotImplementedError is raised since the
@@ -113,19 +120,20 @@ def to_pypsa(network, mode):
 
         if list(components['Load'].index.values):
             timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
-                network, mode=mode)
+                network, mode=mode, timesteps=timesteps)
 
         if len(list(components['Generator'].index.values)) > 1:
             timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
-                network, mode=mode)
+                network, mode=mode, timesteps=timesteps)
 
         if list(components['Bus'].index.values):
             timeseries_bus_v_set = _pypsa_bus_timeseries(
-                network, components['Bus'].index.tolist())
+                network, components['Bus'].index.tolist(), timesteps=timesteps)
 
         if len(list(components['StorageUnit'].index.values)) > 0:
             timeseries_storage_p, timeseries_storage_q = \
-                _pypsa_storage_timeseries(network, mode=mode)
+                _pypsa_storage_timeseries(
+                    network, mode=mode, timesteps=timesteps)
 
     elif mode is 'lv':
         raise NotImplementedError
@@ -140,7 +148,7 @@ def to_pypsa(network, mode):
     # create power flow problem
     pypsa_network = PyPSANetwork()
     pypsa_network.edisgo_mode = mode
-    pypsa_network.set_snapshots(network.timeseries.timeindex)
+    pypsa_network.set_snapshots(timesteps)
 
     # import grid topology to PyPSA network
     # buses are created first to avoid warnings
@@ -650,7 +658,7 @@ def add_aggregated_lv_components(network, components):
     return components
 
 
-def _pypsa_load_timeseries(network, mode=None):
+def _pypsa_load_timeseries(network, timesteps, mode=None):
     """
     Time series in PyPSA compatible format for load instances
 
@@ -658,6 +666,10 @@ def _pypsa_load_timeseries(network, mode=None):
     ----------
     network : Network
         The eDisGo grid topology model overall container
+    timesteps : array_like
+        Timesteps is an array-like object with entries of type
+        :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
+        to export to pypsa representation and use in power flow analysis.
     mode : str, optional
         Specifically retrieve load time series for MV or LV grid level or both.
         Either choose 'mv' or 'lv'.
@@ -677,13 +689,14 @@ def _pypsa_load_timeseries(network, mode=None):
     # add MV grid loads
     if mode is 'mv' or mode is None:
         for load in network.mv_grid.graph.nodes_by_attribute('load'):
-            mv_load_timeseries_q.append(
-                load.pypsa_timeseries('q').rename(repr(load)).to_frame())
-            mv_load_timeseries_p.append(
-                load.pypsa_timeseries('p').rename(repr(load)).to_frame())
+            mv_load_timeseries_q.append(load.pypsa_timeseries('q').rename(
+                repr(load)).to_frame().loc[timesteps])
+            mv_load_timeseries_p.append(load.pypsa_timeseries('p').rename(
+                repr(load)).to_frame().loc[timesteps])
         if mode is 'mv':
             lv_load_timeseries_p, lv_load_timeseries_q = \
-                _pypsa_load_timeseries_aggregated_at_lv_station(network)
+                _pypsa_load_timeseries_aggregated_at_lv_station(
+                    network, timesteps)
 
     # add LV grid's loads
     if mode is 'lv' or mode is None:
@@ -700,10 +713,10 @@ def _pypsa_load_timeseries(network, mode=None):
                     if sector != 'retail':
                         lv_load_timeseries_q.append(
                             load.pypsa_timeseries('q').rename(
-                                repr(load)).to_frame())
+                                repr(load)).to_frame().loc[timesteps])
                         lv_load_timeseries_p.append(
                             load.pypsa_timeseries('p').rename(
-                                repr(load)).to_frame())
+                                repr(load)).to_frame().loc[timesteps])
 
     load_df_p = pd.concat(mv_load_timeseries_p + lv_load_timeseries_p, axis=1)
     load_df_q = pd.concat(mv_load_timeseries_q + lv_load_timeseries_q, axis=1)
@@ -711,13 +724,17 @@ def _pypsa_load_timeseries(network, mode=None):
     return load_df_p, load_df_q
 
 
-def _pypsa_generator_timeseries(network, mode=None):
+def _pypsa_generator_timeseries(network, timesteps, mode=None):
     """Timeseries in PyPSA compatible format for generator instances
 
     Parameters
     ----------
     network : Network
         The eDisGo grid topology model overall container
+    timesteps : array_like
+        Timesteps is an array-like object with entries of type
+        :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
+        to export to pypsa representation and use in power flow analysis.
     mode : str, optional
         Specifically retrieve generator time series for MV or LV grid level or
         both. Either choose 'mv' or 'lv'.
@@ -739,22 +756,23 @@ def _pypsa_generator_timeseries(network, mode=None):
     if mode is 'mv' or mode is None:
         for gen in network.mv_grid.graph.nodes_by_attribute('generator') + \
                 network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
-            mv_gen_timeseries_q.append(
-                gen.pypsa_timeseries('q').rename(repr(gen)).to_frame())
-            mv_gen_timeseries_p.append(
-                gen.pypsa_timeseries('p').rename(repr(gen)).to_frame())
+            mv_gen_timeseries_q.append(gen.pypsa_timeseries('q').rename(
+                repr(gen)).to_frame().loc[timesteps])
+            mv_gen_timeseries_p.append(gen.pypsa_timeseries('p').rename(
+                repr(gen)).to_frame().loc[timesteps])
         if mode is 'mv':
             lv_gen_timeseries_p, lv_gen_timeseries_q = \
-                _pypsa_generator_timeseries_aggregated_at_lv_station(network)
+                _pypsa_generator_timeseries_aggregated_at_lv_station(
+                    network, timesteps)
 
     # LV generator timeseries
     if mode is 'lv' or mode is None:
         for lv_grid in network.mv_grid.lv_grids:
             for gen in lv_grid.graph.nodes_by_attribute('generator'):
-                lv_gen_timeseries_q.append(
-                    gen.pypsa_timeseries('q').rename(repr(gen)).to_frame())
-                lv_gen_timeseries_p.append(
-                    gen.pypsa_timeseries('p').rename(repr(gen)).to_frame())
+                lv_gen_timeseries_q.append(gen.pypsa_timeseries('q').rename(
+                    repr(gen)).to_frame().loc[timesteps])
+                lv_gen_timeseries_p.append(gen.pypsa_timeseries('p').rename(
+                    repr(gen)).to_frame().loc[timesteps])
 
     gen_df_p = pd.concat(mv_gen_timeseries_p + lv_gen_timeseries_p, axis=1)
     gen_df_q = pd.concat(mv_gen_timeseries_q + lv_gen_timeseries_q, axis=1)
@@ -762,7 +780,7 @@ def _pypsa_generator_timeseries(network, mode=None):
     return gen_df_p, gen_df_q
 
 
-def _pypsa_storage_timeseries(network, mode=None):
+def _pypsa_storage_timeseries(network, timesteps, mode=None):
     """
     Timeseries in PyPSA compatible format for storage instances
 
@@ -770,6 +788,10 @@ def _pypsa_storage_timeseries(network, mode=None):
     ----------
     network : Network
         The eDisGo grid topology model overall container
+    timesteps : array_like
+        Timesteps is an array-like object with entries of type
+        :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
+        to export to pypsa representation and use in power flow analysis.
     mode : str, optional
         Specifically retrieve generator time series for MV or LV grid level or
         both. Either choose 'mv' or 'lv'.
@@ -791,9 +813,11 @@ def _pypsa_storage_timeseries(network, mode=None):
     if mode is 'mv' or mode is None:
         for storage in network.mv_grid.graph.nodes_by_attribute('storage'):
             mv_storage_timeseries_q.append(
-                storage.pypsa_timeseries('q').rename(repr(storage)).to_frame())
+                storage.pypsa_timeseries('q').rename(
+                    repr(storage)).to_frame().loc[timesteps])
             mv_storage_timeseries_p.append(
-                storage.pypsa_timeseries('p').rename(repr(storage)).to_frame())
+                storage.pypsa_timeseries('p').rename(
+                    repr(storage)).to_frame().loc[timesteps])
 
     # LV storage time series
     if mode is 'lv' or mode is None:
@@ -801,10 +825,10 @@ def _pypsa_storage_timeseries(network, mode=None):
             for storage in lv_grid.graph.nodes_by_attribute('storage'):
                 lv_storage_timeseries_q.append(
                     storage.pypsa_timeseries('q').rename(
-                        repr(storage)).to_frame())
+                        repr(storage)).to_frame().loc[timesteps])
                 lv_storage_timeseries_p.append(
                     storage.pypsa_timeseries('p').rename(
-                        repr(storage)).to_frame())
+                        repr(storage)).to_frame().loc[timesteps])
 
     storage_df_p = pd.concat(
         mv_storage_timeseries_p + lv_storage_timeseries_p, axis=1)
@@ -814,7 +838,7 @@ def _pypsa_storage_timeseries(network, mode=None):
     return storage_df_p, storage_df_q
 
 
-def _pypsa_bus_timeseries(network, buses):
+def _pypsa_bus_timeseries(network, buses, timesteps):
     """
     Time series in PyPSA compatible format for bus instances
 
@@ -838,6 +862,10 @@ def _pypsa_bus_timeseries(network, buses):
     ----------
     network : Network
         The eDisGo grid topology model overall container
+    timesteps : array_like
+        Timesteps is an array-like object with entries of type
+        :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
+        to export to pypsa representation and use in power flow analysis.
     buses : list
         Buses names
 
@@ -866,13 +894,12 @@ def _pypsa_bus_timeseries(network, buses):
     v_set_dict.update({slack_bus: slack_voltage_pu})
 
     # Convert to PyPSA compatible dataframe
-    v_set_df = pd.DataFrame(v_set_dict,
-                            index=network.timeseries.timeindex)
+    v_set_df = pd.DataFrame(v_set_dict, index=timesteps)
 
     return v_set_df
 
 
-def _pypsa_generator_timeseries_aggregated_at_lv_station(network):
+def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
     """
     Aggregates generator time series per generator subtype and LV grid.
 
@@ -880,6 +907,10 @@ def _pypsa_generator_timeseries_aggregated_at_lv_station(network):
     ----------
     network : Network
         The eDisGo grid topology model overall container
+    timesteps : array_like
+        Timesteps is an array-like object with entries of type
+        :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
+        to export to pypsa representation and use in power flow analysis.
 
     Returns
     -------
@@ -911,9 +942,11 @@ def _pypsa_generator_timeseries_aggregated_at_lv_station(network):
             generation[gen.type][gen.subtype].setdefault('timeseries_p', [])
             generation[gen.type][gen.subtype].setdefault('timeseries_q', [])
             generation[gen.type][gen.subtype]['timeseries_p'].append(
-                gen.pypsa_timeseries('p').rename(gen_name).to_frame())
+                gen.pypsa_timeseries('p').rename(gen_name).to_frame().loc[
+                    timesteps])
             generation[gen.type][gen.subtype]['timeseries_q'].append(
-                gen.pypsa_timeseries('q').rename(gen_name).to_frame())
+                gen.pypsa_timeseries('q').rename(gen_name).to_frame().loc[
+                    timesteps])
 
         for k_type, v_type in generation.items():
             for k_type, v_subtype in v_type.items():
@@ -928,7 +961,7 @@ def _pypsa_generator_timeseries_aggregated_at_lv_station(network):
     return generation_p, generation_q
 
 
-def _pypsa_load_timeseries_aggregated_at_lv_station(network):
+def _pypsa_load_timeseries_aggregated_at_lv_station(network, timesteps):
     """
     Aggregates load time series per sector and LV grid.
 
@@ -936,6 +969,10 @@ def _pypsa_load_timeseries_aggregated_at_lv_station(network):
     ----------
     network : Network
         The eDisGo grid topology model overall container
+    timesteps : array_like
+        Timesteps is an array-like object with entries of type
+        :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
+        to export to pypsa representation and use in power flow analysis.
 
     Returns
     -------
@@ -960,9 +997,11 @@ def _pypsa_load_timeseries_aggregated_at_lv_station(network):
                 load[sector].setdefault('timeseries_q', [])
 
                 load[sector]['timeseries_p'].append(
-                    lo.pypsa_timeseries('p').rename(repr(lo)).to_frame())
+                    lo.pypsa_timeseries('p').rename(repr(lo)).to_frame().loc[
+                        timesteps])
                 load[sector]['timeseries_q'].append(
-                    lo.pypsa_timeseries('q').rename(repr(lo)).to_frame())
+                    lo.pypsa_timeseries('q').rename(repr(lo)).to_frame().loc[
+                        timesteps])
 
         for sector, val in load.items():
             load_p.append(
