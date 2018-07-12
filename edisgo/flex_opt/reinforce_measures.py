@@ -43,20 +43,20 @@ def extend_distribution_substation_overloading(network, critical_stations):
     except KeyError:
         print('Standard MV/LV transformer is not in equipment list.')
 
-    #ToDo: differentiate between load and feed-in case!
-    load_factor = network.config['grid_expansion_load_factors'][
-        'lv_feedin_case_transformer']
-
     transformers_changes = {'added': {}, 'removed': {}}
-    for station in critical_stations:
+    for station in critical_stations.index:
 
         # list of maximum power of each transformer in the station
         s_max_per_trafo = [_.type.S_nom for _ in station.transformers]
 
         # maximum station load from power flow analysis
-        s_station_pfa = critical_stations[station]
+        s_station_pfa = critical_stations.s_pfa[station]
 
         # determine missing transformer power to solve overloading issue
+        case = network.timeseries.timesteps_load_feedin_case.case[
+            critical_stations.time_index[station]]
+        load_factor = network.config['grid_expansion_load_factors'][
+            'lv_{}_transformer'.format(case)]
         s_trafo_missing = s_station_pfa - (sum(s_max_per_trafo) * load_factor)
 
         # check if second transformer of the same kind is sufficient
