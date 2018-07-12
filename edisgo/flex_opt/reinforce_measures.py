@@ -468,10 +468,14 @@ def reinforce_branches_overloading(network, crit_lines):
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-    crit_lines : dict
-        Dictionary of critical :class:`~.grid.components.Line` with max.
-        relative overloading
-        Format: {line_1: rel_overloading_1, ..., line_n: rel_overloading_n}
+    crit_lines : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe containing over-loaded lines, their maximum relative
+        over-loading and the corresponding time step.
+        Index of the dataframe are the over-loaded lines of type
+        :class:`~.grid.components.Line`. Columns are 'max_rel_overload'
+        containing the maximum relative over-loading as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<timestamp>`.
 
     Returns
     -------
@@ -503,7 +507,8 @@ def reinforce_branches_overloading(network, crit_lines):
         print('Chosen standard MV line is not in equipment list.')
 
     lines_changes = {}
-    for crit_line, rel_overload in crit_lines.items():
+    for crit_line in crit_lines.index:
+        rel_overload = crit_lines.max_rel_overload[crit_line]
         # check if line is in LV or MV and set standard line accordingly
         if isinstance(crit_line.grid, LVGrid):
             standard_line = standard_line_lv
@@ -532,8 +537,8 @@ def reinforce_branches_overloading(network, crit_lines):
                 crit_line.quantity = number_parallel_lines
                 crit_line.kind = 'cable'
 
-    if crit_lines:
+    if not crit_lines.empty:
         logger.debug('==> {} branche(s) was/were reinforced '.format(
-            str(len(crit_lines))) + 'due to over-loading issues.')
+            crit_lines.shape[0]) + 'due to over-loading issues.')
 
     return lines_changes

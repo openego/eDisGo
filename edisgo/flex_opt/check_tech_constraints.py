@@ -1,4 +1,7 @@
+import pandas as pd
 import logging
+
+from edisgo.grid.grids import LVGrid
 
 logger = logging.getLogger('edisgo')
 
@@ -13,39 +16,29 @@ def mv_line_load(network):
 
     Returns
     -------
-    Dictionary of critical :class:`~.grid.components.Line` with max. relative
-    overloading
-    Format: {line_1: rel_overloading_1, ..., line_n: rel_overloading_n}
+    :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe containing over-loaded MV lines, their maximum relative
+        over-loading and the corresponding time step.
+        Index of the dataframe are the over-loaded lines of type
+        :class:`~.grid.components.Line`. Columns are 'max_rel_overload'
+        containing the maximum relative over-loading as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<timestamp>`.
 
     Notes
     -----
-    According to [VerteilnetzstudieBW]_ load factors in feed-in case of all
-    cables and lines in MV grids are set to 1.
+    Line over-load is determined based on allowed load factors for feed-in and
+    load cases that are defined in the config file 'config_grid_expansion' in
+    section 'grid_expansion_load_factors'.
 
     """
 
-    crit_lines = {}
+    crit_lines = pd.DataFrame()
+    crit_lines = _line_load(network, network.mv_grid, crit_lines)
 
-    #ToDo: differentiate between load and feed-in case!
-    load_factor_mv_line = network.config['grid_expansion_load_factors'][
-        'mv_feedin_case_line']
-
-    for line in list(network.mv_grid.graph.lines()):
-        i_line_max = line['line'].type['I_max_th'] * \
-                     load_factor_mv_line * line['line'].quantity
-        try:
-            # check if maximum current from power flow analysis exceeds
-            # allowed maximum current
-            i_line_pfa = max(network.results.i_res[repr(line['line'])])
-            if i_line_pfa > float(i_line_max):
-                crit_lines[line['line']] = i_line_pfa / i_line_max
-        except KeyError:
-            logger.debug('No results for line {} '.format(str(line)) +
-                         'to check overloading.')
-
-    if crit_lines:
+    if not crit_lines.empty:
         logger.debug('==> {} line(s) in MV grid has/have load issues.'.format(
-            len(crit_lines)))
+            crit_lines.shape[0]))
     else:
         logger.debug('==> No line load issues in MV grid.')
 
@@ -62,46 +55,99 @@ def lv_line_load(network):
 
     Returns
     -------
-    Dictionary of critical :class:`~.grid.components.Line` with max. relative
-    overloading
-    Format: {line_1: rel_overloading_1, ..., line_n: rel_overloading_n}
+    :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe containing over-loaded LV lines, their maximum relative
+        over-loading and the corresponding time step.
+        Index of the dataframe are the over-loaded lines of type
+        :class:`~.grid.components.Line`. Columns are 'max_rel_overload'
+        containing the maximum relative over-loading as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<timestamp>`.
 
     Notes
     -----
-    According to [1]_ load factors in feed-in case of all cables and lines in
-    LV grids are set to 1.
-
-    References
-    ----------
-    .. [1] Verteilnetzstudie für das Land Baden-Württemberg
+    Line over-load is determined based on allowed load factors for feed-in and
+    load cases that are defined in the config file 'config_grid_expansion' in
+    section 'grid_expansion_load_factors'.
 
     """
 
-    crit_lines = {}
-
-    #ToDo: differentiate between load and feed-in case!
-    load_factor_lv_line = network.config['grid_expansion_load_factors'][
-        'lv_feedin_case_line']
+    crit_lines = pd.DataFrame()
 
     for lv_grid in network.mv_grid.lv_grids:
-        for line in list(lv_grid.graph.lines()):
-            i_line_max = line['line'].type['I_max_th'] * \
-                         load_factor_lv_line * line['line'].quantity
-            try:
-                # check if maximum current from power flow analysis exceeds
-                # allowed maximum current
-                i_line_pfa = max(network.results.i_res[repr(line['line'])])
-                if i_line_pfa > i_line_max:
-                    crit_lines[line['line']] = i_line_pfa / i_line_max
-            except KeyError:
-                logger.debug('No results for line {} '.format(str(line)) +
-                             'to check overloading.')
+        crit_lines = _line_load(network, lv_grid, crit_lines)
 
-    if crit_lines:
+    if not crit_lines.empty:
         logger.debug('==> {} line(s) in LV grids has/have load issues.'.format(
-            len(crit_lines)))
+            crit_lines.shape[0]))
     else:
         logger.debug('==> No line load issues in LV grids.')
+
+    return crit_lines
+
+
+def _line_load(network, grid, crit_lines):
+    """
+    Checks for over-loading issues in MV grid.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+    grid : :class:`~.grid.grids.LVGrid` or :class:`~.grid.grids.MVGrid`
+    crit_lines : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe containing over-loaded lines, their maximum relative
+        over-loading and the corresponding time step.
+        Index of the dataframe are the over-loaded lines of type
+        :class:`~.grid.components.Line`. Columns are 'max_rel_overload'
+        containing the maximum relative over-loading as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<timestamp>`.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe containing over-loaded lines, their maximum relative
+        over-loading and the corresponding time step.
+        Index of the dataframe are the over-loaded lines of type
+        :class:`~.grid.components.Line`. Columns are 'max_rel_overload'
+        containing the maximum relative over-loading as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<timestamp>`.
+
+    """
+    if isinstance(grid, LVGrid):
+        grid_level = 'lv'
+    else:
+        grid_level = 'mv'
+
+    for line in list(grid.graph.lines()):
+        i_line_allowed_per_case = {}
+        i_line_allowed_per_case['feedin_case'] = \
+            line['line'].type['I_max_th'] * line['line'].quantity * \
+            network.config['grid_expansion_load_factors'][
+                '{}_feedin_case_line'.format(grid_level)]
+        i_line_allowed_per_case['load_case'] = \
+            line['line'].type['I_max_th'] * line['line'].quantity * \
+            network.config['grid_expansion_load_factors'][
+                '{}_load_case_line'.format(grid_level)]
+        # maximum allowed apparent power of station in each time step
+        i_line_allowed = \
+            network.timeseries.timesteps_load_feedin_case.case.apply(
+                lambda _: i_line_allowed_per_case[_])
+        try:
+            # check if maximum current from power flow analysis exceeds
+            # allowed maximum current
+            i_line_pfa = network.results.i_res[repr(line['line'])]
+            if any((i_line_allowed - i_line_pfa) < 0):
+                # find out largest relative deviation
+                relative_i_res = i_line_pfa / i_line_allowed
+                crit_lines = crit_lines.append(pd.DataFrame(
+                    {'max_rel_overload': relative_i_res.max(),
+                     'time_index': relative_i_res.idxmax()},
+                    index=[line['line']]))
+        except KeyError:
+            logger.debug('No results for line {} '.format(str(line)) +
+                         'to check overloading.')
 
     return crit_lines
 

@@ -135,10 +135,10 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     logger.debug('==> Check line load.')
     crit_lines_lv = checks.lv_line_load(edisgo_reinforce.network)
     crit_lines_mv = checks.mv_line_load(edisgo_reinforce.network)
-    crit_lines = {**crit_lines_lv, **crit_lines_mv}
+    crit_lines = crit_lines_lv.append(crit_lines_mv)
 
     while_counter = 0
-    while ((overloaded_mv_station or overloaded_stations or crit_lines) and
+    while ((overloaded_mv_station or overloaded_stations or not crit_lines.empty) and
             while_counter < max_while_iterations):
 
         if overloaded_mv_station:
@@ -159,7 +159,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
             _add_transformer_changes_to_equipment_changes('added')
             _add_transformer_changes_to_equipment_changes('removed')
 
-        if crit_lines:
+        if not crit_lines.empty:
             # reinforce lines
             lines_changes = reinforce_measures.reinforce_branches_overloading(
                 edisgo_reinforce.network, crit_lines)
@@ -183,7 +183,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         logger.debug('==> Recheck line load.')
         crit_lines_lv = checks.lv_line_load(edisgo_reinforce.network)
         crit_lines_mv = checks.mv_line_load(edisgo_reinforce.network)
-        crit_lines = {**crit_lines_lv, **crit_lines_mv}
+        crit_lines = crit_lines_lv.append(crit_lines_mv)
 
         iteration_step += 1
         while_counter += 1
@@ -368,10 +368,10 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     logger.debug('==> Recheck line load.')
     crit_lines_lv = checks.lv_line_load(edisgo_reinforce.network)
     crit_lines_mv = checks.mv_line_load(edisgo_reinforce.network)
-    crit_lines = {**crit_lines_lv, **crit_lines_mv}
+    crit_lines = crit_lines_lv.append(crit_lines_mv)
 
     while_counter = 0
-    while ((overloaded_mv_station or overloaded_stations or crit_lines) and
+    while ((overloaded_mv_station or overloaded_stations or not crit_lines.empty) and
             while_counter < max_while_iterations):
 
         if overloaded_mv_station:
@@ -416,7 +416,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         logger.debug('==> Recheck line load.')
         crit_lines_lv = checks.lv_line_load(edisgo_reinforce.network)
         crit_lines_mv = checks.mv_line_load(edisgo_reinforce.network)
-        crit_lines = {**crit_lines_lv, **crit_lines_mv}
+        crit_lines = crit_lines_lv.append(crit_lines_mv)
 
         iteration_step += 1
         while_counter += 1
