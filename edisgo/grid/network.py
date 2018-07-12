@@ -193,18 +193,17 @@ class EDisGo:
         # worst-case time series
         if kwargs.get('worst_case_analysis', None):
             self.network.timeseries = TimeSeriesControl(
-                mode=kwargs.get('worst_case_analysis', None),
-                config_data=self.network.config).timeseries
+                network=self.network,
+                mode=kwargs.get('worst_case_analysis', None)).timeseries
         else:
             self.network.timeseries = TimeSeriesControl(
+                network=self.network,
                 timeseries_generation_fluctuating=kwargs.get(
                     'timeseries_generation_fluctuating', None),
                 timeseries_generation_dispatchable=kwargs.get(
                     'timeseries_generation_dispatchable', None),
                 timeseries_load=kwargs.get(
                     'timeseries_load', None),
-                weather_cell_ids=self.network.mv_grid.weather_cells,
-                config_data=self.network.config,
                 timeindex=kwargs.get('timeindex', None)).timeseries
 
         # import new generators
@@ -796,6 +795,8 @@ class TimeSeriesControl:
 
     Parameters
     ----------
+    network : :class:`~.grid.network.Network`
+        The eDisGo data container
     mode : :obj:`str`, optional
         Mode must be set in case of worst-case analyses and can either be
         'worst-case' (both feed-in and load case), 'worst-case-feedin' (only
@@ -850,28 +851,19 @@ class TimeSeriesControl:
           * 'agricultural'
 
         Default: None.
-    config_data : dict, optional
-        Dictionary containing config data from config files. See
-        :class:`~.grid.network.Config` data attribute for more information.
-        Default: None.
     timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
         Can be used to define a time range for which to obtain load time series
         and feed-in time series of fluctuating renewables or to define time
         ranges of the given time series that will be used in the analysis.
-    mv_grid_id : :obj:`str`, optional
-        MV grid ID as used in oedb. Default: None.
-    generator_scenario : :obj:`str`
-        Defines which scenario of future generator park to use. Possible
-        options are 'nep2035' and 'ego100'. Default: None.
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, network, **kwargs):
 
-        self.timeseries = TimeSeries()
+        self.timeseries = TimeSeries(network=network)
         mode = kwargs.get('mode', None)
-        config_data = kwargs.get('config_data', None)
-        weather_cell_ids = kwargs.get('weather_cell_ids', None)
+        config_data = network.config
+        weather_cell_ids = network.mv_grid.weather_cells
 
         if mode:
             if mode == 'worst-case':
@@ -1481,7 +1473,8 @@ class TimeSeries:
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, network, **kwargs):
+        self.network = network
         self._generation_dispatchable = kwargs.get('generation_dispatchable',
                                                    None)
         self._generation_fluctuating = kwargs.get('generation_fluctuating',
