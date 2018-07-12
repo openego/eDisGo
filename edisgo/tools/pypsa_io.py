@@ -1697,7 +1697,7 @@ def _update_pypsa_timeseries_by_type(network, type, components_to_update=None,
                 q_set[repr(comp)] = comp.pypsa_timeseries('q').loc[timesteps]
             else:
                 raise KeyError("Tried to update component {} but could not "
-                               "find it in pypsa network.").format(comp)
+                               "find it in pypsa network.".format(comp))
         # overwrite pypsa time series
         pypsa_ts.p_set = p_set
         pypsa_ts.q_set = q_set
