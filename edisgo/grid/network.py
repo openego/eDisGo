@@ -229,8 +229,7 @@ class EDisGo:
         :func:`edisgo.data.import_data.import_from_ding0`
 
         """
-        import_from_ding0(file=file,
-                          network=self.network)
+        import_from_ding0(file=file, network=self.network)
 
     def import_generators(self, generator_scenario=None):
         """Import generators
@@ -242,8 +241,7 @@ class EDisGo:
         if generator_scenario:
             self.network.generator_scenario = generator_scenario
         data_source = 'oedb'
-        import_generators(network=self.network,
-                          data_source=data_source)
+        import_generators(network=self.network, data_source=data_source)
 
     def analyze(self, mode=None, timesteps=None):
         """Analyzes the grid by power flow analysis
@@ -1411,10 +1409,11 @@ class StorageControl:
 
 
 class TimeSeries:
-    """Defines an eDisGo time series
+    """
+    Defines time series for all loads and generators in network (if set).
 
-    Contains time series for loads (sector-specific) and generators
-    (technology-specific), e.g. tech. solar.
+    Contains time series for loads (sector-specific), generators
+    (technology-specific), and curtailment (technology-specific).
 
     Attributes
     ----------
@@ -1808,8 +1807,8 @@ class Results:
             Results time series of active power P in kW from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
-            Provide this if you want to set values. For retrieval of data do not
-            pass an argument
+            Provide this if you want to set values. For retrieval of data do
+            not pass an argument
 
         Returns
         -------
