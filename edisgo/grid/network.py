@@ -6,7 +6,7 @@ import logging
 import datetime
 
 import edisgo
-from edisgo.tools import config, pypsa_io
+from edisgo.tools import config, pypsa_io, tools
 from edisgo.data.import_data import import_from_ding0, import_generators, \
     import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
@@ -1481,6 +1481,7 @@ class TimeSeries:
         self._load = kwargs.get('load', None)
         self._curtailment = kwargs.get('curtailment', None)
         self._timeindex = kwargs.get('timeindex', None)
+        self._timesteps_load_feedin_case = None
 
     @property
     def generation_dispatchable(self):
@@ -1609,6 +1610,50 @@ class TimeSeries:
     @curtailment.setter
     def curtailment(self, curtailment):
         self._curtailment = curtailment
+
+    @property
+    def timesteps_load_feedin_case(self):
+        """
+        Contains residual load and information on feed-in and load case.
+
+        Residual load is calculated from total (load - generation) in the grid.
+        Grid losses are not considered.
+
+        Feed-in and load case are identified based on the
+        generation and load time series and defined as follows:
+
+        1. Load case: positive (load - generation) at HV/MV substation
+        2. Feed-in case: negative (load - generation) at HV/MV substation
+
+        See also :func:`~.tools.tools.assign_load_feedin_case`.
+
+        Parameters
+        -----------
+        timeseries_load_feedin_case : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with information on whether time step is handled as load
+            case ('load_case') or feed-in case ('feedin_case') for each time
+            step in :py:attr:`~timeindex`. Index of the series is the
+            :py:attr:`~timeindex`.
+
+        Returns
+        -------
+        :pandas:`pandas.Series<series>`
+            Series with information on whether time step is handled as load
+            case ('load_case') or feed-in case ('feedin_case') for each time
+            step in :py:attr:`~timeindex`.
+            Index of the dataframe is :py:attr:`~timeindex`. Columns of the
+            dataframe are 'residual_load' with (load - generation) in kW at
+            HV/MV substation and 'case' with 'load_case' for positive residual
+            load and 'feedin_case' for negative residual load.
+
+        """
+        if self._timesteps_load_feedin_case is None:
+            tools.assign_load_feedin_case(self.network)
+        return self._timesteps_load_feedin_case
+
+    @timesteps_load_feedin_case.setter
+    def timesteps_load_feedin_case(self, timeseries_load_feedin_case):
+        self._timesteps_load_feedin_case = timeseries_load_feedin_case
 
 
 class ETraGoSpecs:
