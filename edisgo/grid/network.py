@@ -872,7 +872,7 @@ class TimeSeriesControl:
                 raise ValueError('{} is not a valid mode.'.format(mode))
 
             # set random timeindex
-            self.timeseries.timeindex = pd.date_range(
+            self.timeseries._timeindex = pd.date_range(
                 '1/1/1970', periods=len(modes), freq='H')
             self._worst_case_generation(config_data['worst_case_scale_factor'],
                                         modes)
@@ -903,9 +903,9 @@ class TimeSeriesControl:
                                  'valid.'.format(mode))
             # set time index
             if kwargs.get('timeindex', None) is not None:
-                self.timeseries.timeindex = kwargs.get('timeindex')
+                self.timeseries._timeindex = kwargs.get('timeindex')
             else:
-                self.timeseries.timeindex = \
+                self.timeseries._timeindex = \
                     self.timeseries._generation_fluctuating.index
             # load time series
             ts = kwargs.get('timeseries_load', None)
@@ -1559,10 +1559,6 @@ class TimeSeries:
 
         """
         return self._timeindex
-
-    @timeindex.setter
-    def timeindex(self, time_range):
-        self._timeindex = time_range
 
     @property
     def curtailment(self):
