@@ -1200,7 +1200,8 @@ class CurtailmentControl:
             raise TypeError(message)
 
         # update generator time series in pypsa network
-        pypsa_io.update_pypsa_generator_timeseries(edisgo_object.network)
+        if edisgo_object.network.pypsa is not None:
+            pypsa_io.update_pypsa_generator_timeseries(edisgo_object.network)
 
         # check if curtailment exceeds feed-in
         self._check_curtailment(edisgo_object.network)
