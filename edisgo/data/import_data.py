@@ -2344,15 +2344,17 @@ def _build_lv_grid_from_csv(lv_grid, lv_gen, lv_cd, lv_stations_df,
     lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
 
     lv_grid.apply(lambda row:
-                  lvgrids.update({row['id_db']: LVGrid(
-                        id=row['LV_grid_id'],
+                  lvgrids.update({row['name']: LVGrid(
+                        id=row['id'],
                         grid_district={
                             'geom': wkt_loads(row['geom']),
                             'population': row['population']},
                         voltage_nom=row['voltage_nom'],#in kV
                         network=network,
-                        station={_.id: _ for _ in lv_stations}[lv_stations_df[lv_stations_df['LV_grid_id_db'] == row['id_db']]['id_db'].iloc[0]],
+                        station={_.id: _ for _ in lv_stations}[lv_stations_df[lv_stations_df['id'] == row['id']]['id'].iloc[0]],
                         )}), axis=1)
+
+    lv_grid_mapping = {_.id: _ for _ in lvgrids.values()}
 
     # LV stations
     for k, grid in lvgrids.items():
@@ -2366,38 +2368,36 @@ def _build_lv_grid_from_csv(lv_grid, lv_gen, lv_cd, lv_stations_df,
     # LV generators
     lvgens = {}
     lv_gen.apply(lambda row:
-                 lvgens.update({'GeneratorFluctuatingDing0_LV_{}_'.format(
-                     lvgrids[row['LV_grid_id_db']].id) + str(row['id_db']):
+                 lvgens.update({row['name']:
                      GeneratorFluctuating(
-                     id=row['id_db'],
-                     geom=wkt_loads(row['geom']),
-                     nominal_capacity=row['nominal_capacity'],
+                         id=row['id'],
+                         geom=wkt_loads(row['geom']),
+                         nominal_capacity=row['nominal_capacity'],
                          type=row['type'],
                          subtype=row['subtype'],
-                         grid=lvgrids[row['LV_grid_id_db']],
+                         grid=lv_grid_mapping[row['lv_grid_id']],
                          v_level=row['v_level'],
                          weather_cell_id=row['weather_cell_id'])}
-                               if row['type'] in ['wind', 'solar'] else
-                               {'GeneratorDing0_LV_{}_'.format(
-                                   lvgrids[row['LV_grid_id_db']].id) + str(row[
-                                    'id_db']): Generator(
-                                   id=row['id_db'],
-                                   geom=wkt_loads(row['geom']),
-                                   nominal_capacity=row['nominal_capacity'],
-                                   type=row['type'],
-                                   subtype=row['subtype'],
-                                   grid=lvgrids[row['LV_grid_id_db']],
-                                   v_level=row['v_level'])}
-                               ), axis=1)
+                               if row['type'] in ['wind', 'solar']
+                               else
+                               {row['name']:
+                                   Generator(
+                                       id=row['id'],
+                                       geom=wkt_loads(row['geom']),
+                                       nominal_capacity=row['nominal_capacity'],
+                                       type=row['type'],
+                                       subtype=row['subtype'],
+                                       grid=lv_grid_mapping[row['lv_grid_id']],
+                                       v_level=row['v_level'])}), axis=1)
     add_node_to_grid(lvgrids, lvgens, 'generator')
 
     # LV loads
     lvloads = {}
     lv_loads.apply(lambda row:
-                lvloads.update({row['id_db']: Load(
-                     id=row['id_db'],
+                lvloads.update({row['name']: Load(
+                     id=row['id'],
                      geom=row['geom'],
-                     grid=lvgrids[row['LV_grid_id_db']],
+                     grid=lv_grid_mapping[row['lv_grid_id']],
                      consumption=json.loads(row['consumption']),
                 )}), axis=1)
     add_node_to_grid(lvgrids, lvloads, 'load')
@@ -2405,11 +2405,12 @@ def _build_lv_grid_from_csv(lv_grid, lv_gen, lv_cd, lv_stations_df,
     # LV cable distributors
     lvcds = {}
     lv_cd.apply(lambda row:
-                lvcds.update({row['id_db']: BranchTee(
-                     id=row['id_db'],
-                     geom=row['geom'],
-                     grid=lvgrids[row['LV_grid_id_db']],
-                  )}), axis=1)
+                lvcds.update({row['name']:
+                    BranchTee(
+                        id=row['id'],
+                        geom=row['geom'],
+                        grid=lv_grid_mapping[row['lv_grid_id']],
+                    )}), axis=1)
     add_node_to_grid(lvgrids, lvcds, 'branch_tee')
 
     return lvgrids, lvgens, lvloads, lvcds
@@ -2423,9 +2424,9 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
     mv_grid_series = mv_grids.iloc[0]
     
     mv_grid = MVGrid(
-        id=mv_grid_series['MV_grid_id'],
+        id=mv_grid_series['id'],
         network=network,
-        voltage_nom=mv_grid_series['voltage_nom'],  # TODO: check MV/kv/V
+        voltage_nom=mv_grid_series['voltage_nom'],
         grid_district={
             'geom': wkt_loads(mv_grid_series['geom']),
             'population': mv_grid_series['population']},
@@ -2433,18 +2434,18 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
 
     # MV stations
     mv_station = MVStation(
-        id=mv_station_series['id_db'],
+        id=mv_station_series['id'],
         geom=wkt_loads(mv_station_series['geom']),
         grid=mv_grid)
     mv_grid.graph.add_node(mv_station, type='mv_station')
     mv_grid._station = mv_station
-    mv_stations = {mv_station_series['id_db']: mv_station}
+    mv_stations = {mv_station_series['name']: mv_station}
 
     # MV transformer
     mvtrafos = {}
     mv_trafos.apply(lambda row:
-                    mvtrafos.update({row['id_db']: Transformer(
-                        id=row['id_db'],
+                    mvtrafos.update({row['name']: Transformer(
+                        id=row['id'],
                         geom=wkt_loads(row['geom']),
                         grid=mv_grid,
                         mv_grid=mv_grid,
@@ -2458,8 +2459,8 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
     # LV stations
     lvstations = {}
     lv_stations.apply(lambda row:
-                      lvstations.update({row['id_db']: LVStation(
-                          id=row['id_db'],
+                      lvstations.update({row['name']: LVStation(
+                          id=row['id'],
                           geom=wkt_loads(row['geom']),
                           mv_grid=mv_grid,
                       )}), axis=1)
@@ -2467,32 +2468,32 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
     # LV transformer
     lvtrafos = {}
     lv_trafos.apply(lambda row:
-                    lvtrafos.update({row['id_db']: Transformer(
-                        # id=row['id_db'],
+                    lvtrafos.update({row['name']: Transformer(
+                        id=row['id'],
                         geom=wkt_loads(row['geom']),
                         mv_grid=mv_grid,
                         voltage_op=row['voltage_op'],
                         type=pd.Series(data=[row['X'], row['R'], row['S_nom']],
                                        index=['X', 'R', 'S_nom']),
                     )}), axis=1)
+
+    # Update LV transformer names
     for idx, row in lv_stations.iterrows():
         count = 1
-        lvstations[row['id_db']]._transformers = []
-        for idx2, row2 in lv_trafos[lv_trafos['LV_grid_id_db'] == row['LV_grid_id_db']].iterrows():
-            trafo = lvtrafos[row2['id_db']]
-            trafo.id = 'LVStation_' + str(row.id_db) + '_transformer_' + str(count)
-            lvstations[row['id_db']]._transformers.append(trafo)
+        lvstations[row['name']]._transformers = []
+        for idx2, row2 in lv_trafos[lv_trafos['id'] == row['id']].iterrows():
+            trafo = lvtrafos[row2['name']]
+            trafo.id = 'LVStation_' + str(row.id) + '_transformer_' + str(count)
+            lvstations[row['name']]._transformers.append(trafo)
             count += 1
-    # add_node_to_grid(mv_grid, lvstations, 'lv_station')
     mv_grid.graph.add_nodes_from(lvstations.values(), type='lv_station')
 
     # MV generators
     mvgens = {}
     mv_gen.apply(lambda row:
-                 mvgens.update({'GeneratorFluctuatingDing0_MV_{}_'.format(
-                     mv_grid.id) + str(row['id_db']):
+                 mvgens.update({row['name']:
                      GeneratorFluctuating(
-                     id=row['id_db'],
+                     id=row['id'],
                      geom=wkt_loads(row['geom']),
                      nominal_capacity=row['nominal_capacity'],
                      type=row['type'],
@@ -2501,9 +2502,8 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
                      v_level=row['v_level'],
                          weather_cell_id=row['weather_cell_id'])} if
                                row['type'] in ['wind', 'solar'] else
-                               {'GeneratorDing0_MV_{}_'.format(
-                                   mv_grid.id) + str(row['id_db']): Generator(
-                                   id=row['id_db'],
+                               {row['name']: Generator(
+                                   id=row['id'],
                                    geom=wkt_loads(row['geom']),
                                    nominal_capacity=row['nominal_capacity'],
                                    type=row['type'],
@@ -2516,8 +2516,8 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
     # MV loads
     mvloads = {}
     mv_loads.apply(lambda row:
-                mvloads.update({row['id_db']: Load(
-                     id=row['id_db'],
+                mvloads.update({row['name']: Load(
+                     id=row['id'],
                      geom=wkt_loads(row['geom']),
                      grid=mv_grid,
                      consumption=json.loads(row['consumption']),
@@ -2527,11 +2527,12 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
     # MV cable distributors
     mvcds = {}
     mv_cd.apply(lambda row:
-                mvcds.update({row['id_db']: BranchTee(
-                     id=row['id_db'],
-                     geom=wkt_loads(row['geom']),
-                     grid=mv_grid,
-                  )}), axis=1)
+                mvcds.update({row['name']:
+                    BranchTee(
+                        id=row['id'],
+                        geom=wkt_loads(row['geom']),
+                        grid=mv_grid,
+                    )}), axis=1)
     add_node_to_grid(mv_grid, mvcds, 'branch_tee')
 
     return mv_grid, mv_stations, mvtrafos, lvstations, lvtrafos, mvgens, mvloads, mvcds
@@ -2551,14 +2552,14 @@ def _build_mvlv_lines_from_csv(lvgrids, lvstations, lvtrafos, lvgens, lvloads,
     lv_edges.apply(lambda row: lv_lines.append(
         (nodes[row['node1']], nodes[row['node2']],
          {'line': Line(
-             id=row['edge_name'],
+             id=row['id'],
              type=pd.Series(data=[row['type_name'], row['U_n'],
                                   row['I_max_th'], row['R'], row['L'],
                                   row['C']],
                             index=['name', 'U_n', 'I_max_th', 'R', 'L', 'C']),
-             length=row['length'],  # ToDo: Check if all lines, that are exported from Ding0, have the same scale
+             length=row['length'],
              kind=row['type_kind'],
-             grid=lvgrids[row['grid_id_db']])
+             grid=lvgrids[row['grid_name']])
          })), axis=1)
     add_edge_to_grid(lvgrids, lv_lines, 'line')
 
@@ -2568,21 +2569,17 @@ def _build_mvlv_lines_from_csv(lvgrids, lvstations, lvtrafos, lvgens, lvloads,
     mv_edges.apply(lambda row: mv_lines.append(
         (nodes[row['node1']], nodes[row['node2']],
          {'line': Line(
-             id=row['edge_name'],
+             id=row['id'],
              type=pd.Series(data=[row['type_name'], row['U_n'],
                                   row['I_max_th'], row['R'], row['L'],
                                   row['C']],
                             index=['name', 'U_n', 'I_max_th', 'R', 'L', 'C']),
              length=row['length'],
-             # ToDo: Check if all lines, that are exported from Ding0, have the same scale
              kind=row['type_kind'],
              grid=mv_grid)
          })), axis=1)
-    add_edge_to_grid(lvgrids, mv_lines, 'line')
 
     add_edge_to_grid(mv_grid, mv_lines, 'line')
-
-    lines = lv_lines + mv_lines
 
     return lines, lvgrids
 
@@ -2597,17 +2594,19 @@ def _build_aggregated_from_table(generators, mv_grid):
 
     # create generator instances
     for name, grp in generators_grp:
-        grp_sum = grp.agg(
-            {'id_db': lambda x: '_'.join([str(_) for _ in x.values]),
-             'nominal_capacity': 'sum',
-             'type': 'min',
-             'subtype': 'min',
-             'weather_cell_id': 'min',
-             'la_id': 'min',
+        grp_sum = grp[
+            ['id', 'nominal_capacity', 'type', 'subtype', 'weather_cell_id',
+             'la_id', 'v_level']].agg({
+            'id': lambda x: '_'.join([str(_) for _ in x.values]),
+            'nominal_capacity': 'sum',
+            'type': 'min',
+            'subtype': 'min',
+            'weather_cell_id': 'min',
+            'la_id': 'min',
              'v_level': 'min'})
         if grp_sum['type'] in ['solar', 'wind']:
             gen = GeneratorFluctuating(
-                id='agg-' + str(grp_sum['la_id']) + '-' + grp_sum['id_db'],
+                id='agg-' + str(grp_sum['la_id']) + '-' + str(grp_sum['id']),
                 nominal_capacity=grp_sum['nominal_capacity'],
                 type=grp_sum['type'],
                 subtype=grp_sum['subtype'],
@@ -2617,7 +2616,7 @@ def _build_aggregated_from_table(generators, mv_grid):
                 weather_cell_id=grp_sum['weather_cell_id'])
         else:
             gen = Generator(
-                id='agg-' + str(grp_sum['la_id']) + '-' + grp_sum['id_db'],
+                id='agg-' + str(grp_sum['la_id']) + '-' + str(grp_sum['id']),
                 nominal_capacity=grp_sum['nominal_capacity'],
                 type=grp_sum['type'],
                 subtype=grp_sum['subtype'],
@@ -2628,7 +2627,7 @@ def _build_aggregated_from_table(generators, mv_grid):
 
         # Add aggregated generators to backup reference
         dingo_import_data = pd.DataFrame({
-            'id': grp['id_db'],
+            'id': grp['id'],
             'capacity': grp['nominal_capacity'],
             'agg_geno': gen})
         mv_grid.network.dingo_import_data = pd.concat([mv_grid.network.dingo_import_data, dingo_import_data])
@@ -2637,9 +2636,11 @@ def _build_aggregated_from_table(generators, mv_grid):
         line = Line(
             id='line_aggr_generator_la_' + str(
                 grp_sum['la_id']) + '_vlevel_{v_level}_'
-                                    '{subtype}'.format(
+                                    '{subtype}_'
+                                    'w_id_{w_id}'.format(
                 v_level=grp_sum['v_level'],
-                subtype=grp_sum['subtype']),
+                subtype=grp_sum['subtype'],
+                w_id=grp_sum['weather_cell_id']),
             type=aggr_line_type,
             kind='cable',
                     length=1e-3,
