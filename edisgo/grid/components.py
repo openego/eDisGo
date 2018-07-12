@@ -760,7 +760,9 @@ class Storage(Component):
         timeseries : :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power the storage is charged (negative)
             and discharged (positive) with in kW in column 'p' and
-            reactive power in kVA in column 'q'.
+            reactive power in kVAr in column 'q'. When 'q' is positive,
+            reactive power is supplied (behaving as a capacitor) and when
+            'q' is negative reactive power is consumed (behaving as a inductor).
 
         Returns
         -------
@@ -773,7 +775,21 @@ class Storage(Component):
 
     @timeseries.setter
     def timeseries(self, timeseries):
-        self._timeseries = timeseries
+        if 'q' in timeseries.columns:
+            self._timeseries = timeseries
+        else:
+            message = "There seems to be no \'q\' defined, it will be generated with the assumed" + \
+                " power_factor for generators"
+            logger.warning(message)
+            try:
+                self._timeseries = timeseries
+                self._timeseries['q'] = self.q_sign * self._timeseries['p']
+            except KeyError:
+                message = "There seems to be no column \'p\' in the timeseries dataframe"
+                logger.error(message)
+                raise KeyError(message)
+
+
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -863,6 +879,39 @@ class Storage(Component):
 
         """
         self._operation
+
+    @property
+    def power_factor_mode(self):
+        """
+        Power factor mode of generator.
+
+        If the power factor is set, then it is necessary to know whether the
+        it is leading or lagging. In other words this information is necessary
+        to make the generator behave in an inductive or capacitive manner.
+        Essentially this changes the sign of the reactive power Q.
+
+        The convention used here in a generator is that:
+        - when `power_factor_mode` is 'capacitive' then Q is positive
+        - when `power_factor_mode` is 'inductive' then Q is negative
+
+        In the case that this attribute is not set, it is retrieved from the
+        network config object depending on the voltage level the generator
+        is in.
+
+        Returns
+        :obj: `str` : Power factor mode
+            Either 'inductive' or 'capacitive'
+
+        """
+        if self._power_factor_mode is None:
+            if isinstance(self.grid, MVGrid):
+                self._power_factor_mode = self.grid.network.config[
+                    'reactive_power_factor_mode']['mv_gen']
+            elif isinstance(self.grid, LVGrid):
+                self._power_factor_mode = self.grid.network.config[
+                    'reactive_power_factor_mode']['lv_gen']
+
+        return self._power_factor_mode[1:-1]
 
     @power_factor_mode.setter
     def power_factor_mode(self, power_factor_mode):
