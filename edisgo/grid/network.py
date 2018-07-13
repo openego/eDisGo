@@ -9,13 +9,10 @@ import edisgo
 from edisgo.tools import config, pypsa_io, tools
 from edisgo.data.import_data import import_from_ding0, import_generators, \
     import_feedin_timeseries, import_load_timeseries
-from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, curtailment
 from edisgo.grid.components import Station, BranchTee
-from edisgo.grid.tools import get_capacities_by_type, \
-    get_capacities_by_type_and_weather_cell, \
-    get_gen_info
+from edisgo.grid.tools import get_gen_info
 
 logger = logging.getLogger('edisgo')
 
