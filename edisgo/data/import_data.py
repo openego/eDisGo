@@ -558,15 +558,24 @@ def _determine_aggregated_nodes(la_centers):
                      gen.capacity,
                      None]
 
-            # Get the weather cell id that occurs the most
-            weather_cell_id = list(weather_cell_ids.keys())[
-                list(weather_cell_ids.values()).index(max(weather_cell_ids.values()))]
+            # Get the weather cell id that occurs the most if there are any generators
+            if not(list(lvgd.lv_grid.generators())):
+                weather_cell_id = None
+            else:
+                weather_cell_id = list(weather_cell_ids.keys())[
+                    list(weather_cell_ids.values()).index(max(weather_cell_ids.values()))]
+
 
             for v_level in aggr['generation']:
                 for type in aggr['generation'][v_level]:
                     for subtype in aggr['generation'][v_level][type]:
-                        aggr['generation'][v_level][type][subtype]['weather_cell_id'] = \
-                            weather_cell_id
+                        # make sure to check if there are any generators before assigning
+                        # a weather cell id
+                        if not(list(lvgd.lv_grid.generators())):
+                            pass
+                        else:
+                            aggr['generation'][v_level][type][subtype]['weather_cell_id'] = \
+                                weather_cell_id
 
         # Determine aggregated load in MV grid
         # -> Implement once laods in Ding0 MV grids exist
