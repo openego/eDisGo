@@ -276,9 +276,9 @@ class Load(Component):
         network config object depending on the voltage level the load is in.
 
         Returns
+        -------
         :obj: `str` : Power factor mode
             Either 'inductive' or 'capacitive'
-
         """
         if self._power_factor_mode is None:
             if isinstance(self.grid, MVGrid):
@@ -292,10 +292,22 @@ class Load(Component):
 
     @power_factor_mode.setter
     def power_factor_mode(self, power_factor_mode):
+        """
+        Set the power factor mode of the generator.
+        Should be either 'inductive' or 'capacitive'
+        """
         self._power_factor_mode = power_factor_mode
 
     @property
     def q_sign(self):
+        """
+        Get the sign reactive power based on the
+        :attr: `_power_factor_mode`
+
+        Returns
+        -------
+        :obj: `int` : +1 or -1
+        """
         comparestr = self.power_factor_mode
         comparestr = comparestr.lower()
         if re.fullmatch('inductive', comparestr):
@@ -371,7 +383,6 @@ class Generator(Component):
         :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power in kW in column 'p' and
             reactive power in kVAr in column 'q'.
-
         """
         if self._timeseries is None:
             # set time series for active and reactive power
@@ -445,7 +456,6 @@ class Generator(Component):
         --------
         :obj:`float` : Power factor
             Ratio of real power to apparent power.
-
         """
         if self._power_factor is None:
             if isinstance(self.grid, MVGrid):
@@ -478,7 +488,6 @@ class Generator(Component):
         -------
         :obj: `str` : Power factor mode
             Either 'inductive' or 'capacitive'
-
         """
         if self._power_factor_mode is None:
             if isinstance(self.grid, MVGrid):
@@ -708,9 +717,9 @@ class GeneratorFluctuating(Generator):
         is in.
 
         Returns
+        -------
         :obj: `str` : Power factor mode
             Either 'inductive' or 'capacitive'
-
         """
         if self._power_factor_mode is None:
             if isinstance(self.grid, MVGrid):
@@ -724,10 +733,22 @@ class GeneratorFluctuating(Generator):
 
     @power_factor_mode.setter
     def power_factor_mode(self, power_factor_mode):
+        """
+        Set the power factor mode of the generator.
+        Should be either 'inductive' or 'capacitive'
+        """
         self._power_factor_mode = power_factor_mode
 
     @property
     def q_sign(self):
+        """
+        Get the sign reactive power based on the
+        :attr: `_power_factor_mode`
+
+        Returns
+        -------
+        :obj: `int` : +1 or -1
+        """
         comparestr = self.power_factor_mode
         comparestr = comparestr.lower()
         if re.fullmatch('inductive', comparestr):
@@ -926,9 +947,9 @@ class Storage(Component):
         is in.
 
         Returns
+        -------
         :obj: `str` : Power factor mode
             Either 'inductive' or 'capacitive'
-
         """
         if self._power_factor_mode is None:
             if isinstance(self.grid, MVGrid):
@@ -942,10 +963,22 @@ class Storage(Component):
 
     @power_factor_mode.setter
     def power_factor_mode(self, power_factor_mode):
+        """
+        Set the power factor mode of the generator.
+        Should be either 'inductive' or 'capacitive'
+        """
         self._power_factor_mode = power_factor_mode
 
     @property
     def q_sign(self):
+        """
+        Get the sign reactive power based on the
+        :attr: `_power_factor_mode`
+
+        Returns
+        -------
+        :obj: `int` : +1 or -1
+        """
         comparestr = self.power_factor_mode
         comparestr = comparestr.lower()
         if re.fullmatch('inductive', comparestr):
