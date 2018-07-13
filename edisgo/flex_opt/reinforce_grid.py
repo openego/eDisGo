@@ -219,23 +219,10 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     while_counter = 0
     while crit_nodes and while_counter < max_while_iterations:
 
-        # ToDo: get crit_nodes as objects instead of string
-        # for now iterate through grid to find node for repr
-        crit_nodes_objects = pd.Series()
-        for node in edisgo_reinforce.network.mv_grid.graph.nodes():
-            if repr(node) in \
-                    crit_nodes[edisgo_reinforce.network.mv_grid].index:
-                crit_nodes_objects = pd.concat(
-                    [crit_nodes_objects,
-                     pd.Series(
-                         crit_nodes[edisgo_reinforce.network.mv_grid].loc[
-                             repr(node)], index=[node])])
-        crit_nodes_objects.sort_values(ascending=False, inplace=True)
-
         # reinforce lines
         lines_changes = reinforce_measures.reinforce_branches_overvoltage(
             edisgo_reinforce.network, edisgo_reinforce.network.mv_grid,
-            crit_nodes_objects)
+            crit_nodes[edisgo_reinforce.network.mv_grid])
         # write changed lines to results.equipment_changes
         _add_lines_changes_to_equipment_changes()
 
@@ -258,9 +245,9 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # iterations allowed
     if while_counter == max_while_iterations and crit_nodes:
         for k, v in crit_nodes.items():
-            for i, d in v.iteritems():
+            for node in v.index:
                 edisgo_reinforce.network.results.unresolved_issues.update(
-                    {repr(i): d})
+                    {repr(node): v.loc[node, 'v_mag_pu']})
         raise exceptions.MaximumIterationError(
             "Over-voltage issues for the following nodes in MV grid could "
             "not be solved: {}".format(crit_nodes))
@@ -302,8 +289,9 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # iterations allowed
     if while_counter == max_while_iterations and crit_stations:
         for k, v in crit_stations.items():
-            edisgo_reinforce.network.results.unresolved_issues.update(
-                {repr(k.station): v})
+            for node in v.index:
+                edisgo_reinforce.network.results.unresolved_issues.update(
+                    {repr(node): v.loc[node, 'v_mag_pu']})
         raise exceptions.MaximumIterationError(
             "Over-voltage issues at busbar could not be solved for the "
             "following LV grids: {}".format(crit_stations))
@@ -319,20 +307,9 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     while crit_nodes and while_counter < max_while_iterations:
         # for every grid in crit_nodes do reinforcement
         for grid in crit_nodes:
-
-            # for now iterate through grid to find node for repr
-            crit_nodes_objects = pd.Series()
-            for node in grid.graph.nodes():
-                if repr(node) in crit_nodes[grid].index:
-                    crit_nodes_objects = pd.concat(
-                        [crit_nodes_objects,
-                         pd.Series(crit_nodes[grid].loc[repr(node)],
-                                   index=[node])])
-            crit_nodes_objects.sort_values(ascending=False, inplace=True)
-
             # reinforce lines
             lines_changes = reinforce_measures.reinforce_branches_overvoltage(
-                edisgo_reinforce.network, grid, crit_nodes_objects)
+                edisgo_reinforce.network, grid, crit_nodes[grid])
             # write changed lines to results.equipment_changes
             _add_lines_changes_to_equipment_changes()
 
@@ -355,9 +332,9 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # iterations allowed
     if while_counter == max_while_iterations and crit_nodes:
         for k, v in crit_nodes.items():
-            for i, d in v.iteritems():
+            for node in v.index:
                 edisgo_reinforce.network.results.unresolved_issues.update(
-                    {repr(i): d})
+                    {repr(node): v.loc[node, 'v_mag_pu']})
         raise exceptions.MaximumIterationError(
             "Over-voltage issues for the following nodes in LV grids could "
             "not be solved: {}".format(crit_nodes))
