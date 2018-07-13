@@ -319,6 +319,11 @@ class Generator(Component):
     ----------
     _timeseries : :pandas:`pandas.Series<series>`
         Contains time series for generator
+    _power_factor: :obj: `str`
+        Contains the power factor of the generator
+    _power_factor_mode: :obj: `str`
+        Contains the reactive power behaviour of the generator,
+        either 'inductive' or 'capacitive'
 
     Notes
     -----
@@ -353,13 +358,19 @@ class Generator(Component):
         It returns the actual time series used in power flow analysis. If
         :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
         :meth:`timeseries` looks for time series of the according type of
-        technology in :class:`~.grid.network.TimeSeries`.
+        technology in :class:`~.grid.network.TimeSeries`. The reactive
+        power is also claculated in :attr:`_timeseries` depending upon the
+        :attr:`power_factor` and :attr:`power_factor_mode`. The
+        :attr:`power_factor` determines the magnitude of the reactive power
+        based on the power factor and active power provided and the
+        :attr:`power_factor_mode` determines if the reactive power is either
+        consumed (inductive behaviour) or provided (capacitive behaviour)
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power in kW in column 'p' and
-            reactive power in kVA in column 'q'.
+            reactive power in kVAr in column 'q'.
 
         """
         if self._timeseries is None:
@@ -393,7 +404,7 @@ class Generator(Component):
 
         Parameters
         ----------
-        attr : str
+        attr : :obj:`str`
             Attribute name (PyPSA conventions). Choose from {p_set, q_set}
         """
         return self.timeseries[attr] / 1e3
@@ -464,6 +475,7 @@ class Generator(Component):
         is in.
 
         Returns
+        -------
         :obj: `str` : Power factor mode
             Either 'inductive' or 'capacitive'
 
@@ -480,14 +492,29 @@ class Generator(Component):
 
     @power_factor.setter
     def power_factor(self, power_factor):
+        """
+        Set the power factor of the generator.
+        """
         self._power_factor = power_factor
 
     @power_factor_mode.setter
     def power_factor_mode(self, power_factor_mode):
+        """
+        Set the power factor mode of the generator.
+        Should be either 'inductive' or 'capacitive'
+        """
         self._power_factor_mode = power_factor_mode
 
     @property
     def q_sign(self):
+        """
+        Get the sign reactive power based on the
+        :attr: `_power_factor_mode`
+
+        Returns
+        -------
+        :obj: `int` : +1 or -1
+        """
         comparestr = self.power_factor_mode
         comparestr = comparestr.lower()
         if re.fullmatch('inductive', comparestr):
@@ -1153,4 +1180,3 @@ class Line(Component):
     @kind.setter
     def kind(self, new_kind):
         self._kind = new_kind
-
