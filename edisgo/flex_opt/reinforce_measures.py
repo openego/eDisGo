@@ -285,9 +285,14 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     ----------
     network : :class:`~.grid.network.Network`
     grid : :class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid`
-    crit_nodes : :pandas:`pandas.Series<series>`
-        Series with critical nodes of one grid and corresponding voltage
-        deviation, sorted descending by voltage deviation.
+    crit_nodes : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe with critical nodes, sorted descending by voltage deviation.
+        Index of the dataframe are nodes (of type
+        :class:`~.grid.components.Generator`, :class:`~.grid.components.Load`,
+        etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
+        maximum voltage deviation as float and 'time_index' containing the
+        corresponding time step the over-voltage occured in as
+        :pandas:`pandas.Timestamp<timestamp>`.
 
     Returns
     -------
@@ -343,9 +348,8 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     main_line_reinforced = []
 
     lines_changes = {}
-    for i in range(len(crit_nodes)):
-        path = nx.shortest_path(grid.graph, grid.station,
-                                crit_nodes.index[i])
+    for node in crit_nodes.index:
+        path = nx.shortest_path(grid.graph, grid.station, node)
         # raise exception if voltage issue occurs at station's secondary side
         # because voltage issues should have been solved during extension of
         # distribution substations due to overvoltage issues.
@@ -363,13 +367,11 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                 # get path length from station to critical node
                 get_weight = lambda u, v, data: data['line'].length
                 path_length = dijkstra_shortest_path_length(
-                    grid.graph, grid.station, get_weight,
-                    target=crit_nodes.index[i])
+                    grid.graph, grid.station, get_weight, target=node)
                 # find first node in path that exceeds 2/3 of the line length
                 # from station to critical node farthest away from the station
                 node_2_3 = next(j for j in path if
-                                path_length[j] >= path_length[
-                                    crit_nodes.index[i]] * 2 / 3)
+                                path_length[j] >= path_length[node] * 2 / 3)
 
                 # if LVGrid: check if node_2_3 is outside of a house
                 # and if not find next BranchTee outside the house
@@ -410,7 +412,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                             # if no LVStation between node_2_3 and node with
                             # voltage problem, connect node directly to
                             # MVStation
-                            node_2_3 = crit_nodes.index[i]
+                            node_2_3 = node
 
                 # if node_2_3 is a representative (meaning it is already
                 # directly connected to the station), line cannot be
@@ -463,7 +465,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
             else:
                 logger.debug(
                     '==> Main line of node {} in grid {} '.format(
-                        str(crit_nodes.index[i]), str(grid)) +
+                        repr(node), str(grid)) +
                     'has already been reinforced.')
 
     if main_line_reinforced:

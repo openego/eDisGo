@@ -518,8 +518,7 @@ def _voltage_deviation(network, nodes, v_dev_allowed, voltage_level):
     Returns
     -------
     :pandas:`pandas.DataFrame<dataframe>`
-        Dataframe with its critical nodes, sorted descending by voltage
-        deviation.
+        Dataframe with critical nodes, sorted descending by voltage deviation.
         Index of the dataframe are all nodes (of type
         :class:`~.grid.components.Generator`, :class:`~.grid.components.Load`,
         etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
