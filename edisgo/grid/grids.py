@@ -113,7 +113,7 @@ class Grid:
             # no need to check for Nones in the list because None in gen.weather_cell_id
             # is kicked out by the if hasattr() before
 
-            return self._weather_cells
+        return self._weather_cells
 
     @property
     def peak_generation(self):

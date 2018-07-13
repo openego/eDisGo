@@ -558,15 +558,24 @@ def _determine_aggregated_nodes(la_centers):
                      gen.capacity,
                      None]
 
-            # Get the weather cell id that occurs the most
-            weather_cell_id = list(weather_cell_ids.keys())[
-                list(weather_cell_ids.values()).index(max(weather_cell_ids.values()))]
+            # Get the weather cell id that occurs the most if there are any generators
+            if not(list(lvgd.lv_grid.generators())):
+                weather_cell_id = None
+            else:
+                weather_cell_id = list(weather_cell_ids.keys())[
+                    list(weather_cell_ids.values()).index(max(weather_cell_ids.values()))]
+
 
             for v_level in aggr['generation']:
                 for type in aggr['generation'][v_level]:
                     for subtype in aggr['generation'][v_level][type]:
-                        aggr['generation'][v_level][type][subtype]['weather_cell_id'] = \
-                            weather_cell_id
+                        # make sure to check if there are any generators before assigning
+                        # a weather cell id
+                        if not(list(lvgd.lv_grid.generators())):
+                            pass
+                        else:
+                            aggr['generation'][v_level][type][subtype]['weather_cell_id'] = \
+                                weather_cell_id
 
         # Determine aggregated load in MV grid
         # -> Implement once laods in Ding0 MV grids exist
@@ -1020,6 +1029,7 @@ def import_generators(network, data_source=None, file=None):
         logging.warning('Right now only solar and wind generators can be '
                         'imported from the oedb.')
         _import_genos_from_oedb(network=network)
+        network.mv_grid._weather_cells = None
     elif data_source == 'pypsa':
         _import_genos_from_pypsa(network=network, file=file)
     else:
@@ -1111,6 +1121,7 @@ def _import_genos_from_oedb(network):
             orm_re_generators.columns.generation_type,
             orm_re_generators.columns.generation_subtype,
             orm_re_generators.columns.voltage_level,
+            orm_re_generators.columns.w_id,
             func.ST_AsText(func.ST_Transform(
                 orm_re_generators.columns.rea_geom_new, srid)).label('geom'),
             func.ST_AsText(func.ST_Transform(
@@ -1294,6 +1305,7 @@ def _import_genos_from_oedb(network):
                         type=row['generation_type'],
                         subtype=row['generation_subtype'],
                         v_level=int(row['voltage_level']),
+                        weather_cell_id=row['w_id'],
                         geom=wkt_loads(geom)),
                     type='generator')
             else:
@@ -1554,6 +1566,7 @@ def _import_genos_from_oedb(network):
                         type=row['generation_type'],
                         subtype=row['generation_subtype'],
                         v_level=int(row['voltage_level']),
+                        weather_cell_id=row['w_id'],
                         geom=wkt_loads(geom) if geom else geom)
                 else:
                     gen = Generator(id=id,
