@@ -268,8 +268,7 @@ def _station_load(network, station, crit_stations):
         grid_level = 'mv'
 
     # maximum allowed apparent power of station for feed-in and load case
-    s_station = sum(
-        [_.type.S_nom for _ in network.mv_grid.station.transformers])
+    s_station = sum([_.type.S_nom for _ in station.transformers])
     s_station_allowed_per_case = {}
     s_station_allowed_per_case['feedin_case'] = s_station * network.config[
         'grid_expansion_load_factors']['{}_feedin_case_transformer'.format(
@@ -283,8 +282,12 @@ def _station_load(network, station, crit_stations):
             lambda _: s_station_allowed_per_case[_])
 
     try:
-        s_station_pfa = network.results.s_res([network.mv_grid.station])
-        s_res = s_station_allowed - s_station_pfa.iloc[:, 0]
+        if isinstance(station, LVStation):
+            s_station_pfa = network.results.s_res(
+                station.transformers).sum(axis=1)
+        else:
+            s_station_pfa = network.results.s_res([station]).iloc[:, 0]
+        s_res = s_station_allowed - s_station_pfa
         s_res = s_res[s_res < 0]
         # check if maximum allowed apparent power of station exceeds
         # apparent power from power flow analysis at any time step
@@ -297,10 +300,9 @@ def _station_load(network, station, crit_stations):
                         '{}_{}_transformer'.format(grid_level, _)])
             relative_s_res = load_factor * s_res
             crit_stations = crit_stations.append(pd.DataFrame(
-                {'s_pfa': s_station_pfa.loc[relative_s_res.idxmin(),
-                                            repr(network.mv_grid.station)],
+                {'s_pfa': s_station_pfa.loc[relative_s_res.idxmin()],
                  'time_index': relative_s_res.idxmin()},
-                index=[network.mv_grid.station]))
+                index=[station]))
 
     except KeyError:
         logger.debug('No results for {} station to check overloading.'.format(
