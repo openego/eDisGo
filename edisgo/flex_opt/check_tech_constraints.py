@@ -311,53 +311,108 @@ def _station_load(network, station, crit_stations):
     return crit_stations
 
 
-def mv_voltage_deviation(network):
+def mv_voltage_deviation(network, voltage_levels='mv_lv'):
     """
     Checks for voltage stability issues in MV grid.
 
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
+    voltage_levels : :obj:`str`
+        Specifies which allowed voltage deviations to use. Possible options
+        are:
+
+        * 'mv_lv'
+          This is the default. The allowed voltage deviation for nodes in the
+          MV grid is the same as for nodes in the LV grid. Further load and
+          feed-in case are not distinguished.
+        * 'mv'
+          Use this to handle allowed voltage deviations in the MV and LV grid
+          differently. Here, load and feed-in case are differentiated as well.
 
     Returns
     -------
-    Dict with :class:`~.grid.grids.MVGrid` with critical nodes as
-    :pandas:`pandas.Series<series>`, sorted descending by voltage deviation.
-    Format: {MV_grid: pd.Series(data=[v_mag_pu_node_A, v_mag_pu_node_B, ...],
-                                index=[node_A, node_B, ...])}
+    :obj:`dict`
+        Dictionary with :class:`~.grid.grids.MVGrid` as key and a
+        :pandas:`pandas.DataFrame<dataframe>` with its critical nodes, sorted
+        descending by voltage deviation, as value.
+        Index of the dataframe are all nodes (of type
+        :class:`~.grid.components.Generator`, :class:`~.grid.components.Load`,
+        etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
+        maximum voltage deviation as float and 'time_index' containing the
+        corresponding time step the over-voltage occured in as
+        :pandas:`pandas.Timestamp<timestamp>`.
 
     Notes
     -----
-    The voltage is checked against a max. allowed voltage deviation.
+    Over-voltage is determined based on allowed voltage deviations defined in
+    the config file 'config_grid_expansion' in section
+    'grid_expansion_allowed_voltage_deviations'.
 
     """
 
+    def _append_crit_node(series):
+        return pd.DataFrame({'v_mag_pu': series.max(),
+                             'time_index': series.idxmax()},
+                            index=[node])
+
     crit_nodes = {}
+    crit_nodes_grid = pd.DataFrame()
 
-    # load max. voltage deviation
-    #ToDo: for now only voltage deviation for the combined calculation of MV
-    # and LV is considered (load and feed-in case for seperate consideration
-    # of MV and LV needs to be implemented)
-    max_v_dev = network.config['grid_expansion_allowed_voltage_deviations'][
-        'mv_lv_max_v_deviation']
+    v_dev_allowed_per_case = {}
+    if voltage_levels == 'mv_lv':
+        v_dev_allowed_per_case['feedin_case'] = network.config[
+            'grid_expansion_allowed_voltage_deviations'][
+            'mv_lv_max_v_deviation']
+        v_dev_allowed_per_case['load_case'] = v_dev_allowed_per_case[
+            'feedin_case']
+    elif voltage_levels == 'mv':
+        v_dev_allowed_per_case['feedin_case'] = network.config[
+            'grid_expansion_allowed_voltage_deviations'][
+            '{}_feedin_case_max_v_deviation'.format(voltage_levels)]
+        v_dev_allowed_per_case['load_case'] = network.config[
+            'grid_expansion_allowed_voltage_deviations'][
+            '{}_load_case_max_v_deviation'.format(voltage_levels)]
+    else:
+        raise ValueError(
+            'Specified mode {} is not a valid option.'.format(voltage_levels))
+    # maximum allowed apparent power of station in each time step
+    v_dev_allowed = \
+        network.timeseries.timesteps_load_feedin_case.case.apply(
+            lambda _: v_dev_allowed_per_case[_])
 
-    v_mag_pu_pfa = network.results.v_res(nodes=network.mv_grid.graph.nodes(),
-                                         level='mv')
-    # check for over-voltage
-    v_max = v_mag_pu_pfa.max()
-    crit_nodes_max = v_max[(v_max > (1 + max_v_dev))] - 1
-    # check for under-voltage
-    v_min = v_mag_pu_pfa.min()
-    crit_nodes_min = 1 - v_min[(v_min < (1 - max_v_dev))]
-    # combine critical nodes and keep highest voltage deviation at each
-    # node
-    crit_nodes_grid = crit_nodes_max.append(crit_nodes_min).max(level=0)
-    if len(crit_nodes_grid) > 0:
+    nodes = network.mv_grid.graph.nodes()
+    v_mag_pu_pfa = network.results.v_res(nodes=nodes, level='mv')
+
+    for node in nodes:
+        # check for over- and under-voltage (both Series)
+        overvoltage = v_mag_pu_pfa[repr(node)][
+            (v_mag_pu_pfa[repr(node)] > (1 + v_dev_allowed))] - 1
+        undervoltage = 1 - v_mag_pu_pfa[repr(node)][
+            (v_mag_pu_pfa[repr(node)] < (1 - v_dev_allowed))]
+
+        # write greatest voltage deviation to dataframe
+        if not overvoltage.empty:
+            if not undervoltage.empty:
+                if overvoltage.max() > undervoltage.max():
+                    crit_nodes_grid = crit_nodes_grid.append(
+                        _append_crit_node(overvoltage))
+                else:
+                    crit_nodes_grid = crit_nodes_grid.append(
+                        _append_crit_node(undervoltage))
+            else:
+                crit_nodes_grid = crit_nodes_grid.append(
+                    _append_crit_node(overvoltage))
+        elif not undervoltage.empty:
+            crit_nodes_grid = crit_nodes_grid.append(
+                _append_crit_node(undervoltage))
+
+    if not crit_nodes_grid.empty:
         crit_nodes[network.mv_grid] = crit_nodes_grid.sort_values(
-            ascending=False)
+            by=['v_mag_pu'], ascending=False)
         logger.debug(
             '==> {} node(s) in MV grid has/have voltage issues.'.format(
-                len(crit_nodes[network.mv_grid])))
+                crit_nodes[network.mv_grid].shape[0]))
     else:
         crit_nodes = None
         logger.debug('==> No voltage issues in MV grid.')
@@ -365,7 +420,7 @@ def mv_voltage_deviation(network):
     return crit_nodes
 
 
-def lv_voltage_deviation(network, mode=None):
+def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
     """
     Checks for voltage stability issues in LV grids.
 
@@ -375,9 +430,31 @@ def lv_voltage_deviation(network, mode=None):
     mode : None or String
         If None voltage at all nodes in LV grid is checked. If mode is set to
         'stations' only voltage at busbar is checked.
+    voltage_levels : :obj:`str`
+        Specifies which allowed voltage deviations to use. Possible options
+        are:
+
+        * 'mv_lv'
+          This is the default. The allowed voltage deviation for nodes in the
+          MV grid is the same as for nodes in the LV grid. Further load and
+          feed-in case are not distinguished.
+        * 'lv'
+          Use this to handle allowed voltage deviations in the MV and LV grid
+          differently. Here, load and feed-in case are differentiated as well.
 
     Returns
     -------
+    :obj:`dict`
+        Dictionary with :class:`~.grid.grids.MVGrid` as key and a
+        :pandas:`pandas.DataFrame<dataframe>` with its critical nodes, sorted
+        descending by voltage deviation, as value.
+        Index of the dataframe are all nodes (of type
+        :class:`~.grid.components.Generator`, :class:`~.grid.components.Load`,
+        etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
+        maximum voltage deviation as float and 'time_index' containing the
+        corresponding time step the over-voltage occured in as
+        :pandas:`pandas.Timestamp<timestamp>`.
+
     Dict with :class:`~.grid.grids.LVGrid` as keys.
     If mode is None values of dictionary are critical nodes of grid as
     :pandas:`pandas.Series<series>`, sorted descending by voltage deviation.
@@ -389,49 +466,86 @@ def lv_voltage_deviation(network, mode=None):
 
     Notes
     -----
-    The voltage is checked against a max. allowed voltage deviation.
+    Over-voltage is determined based on allowed voltage deviations defined in
+    the config file 'config_grid_expansion' in section
+    'grid_expansion_allowed_voltage_deviations'.
 
     """
 
-    #ToDo: devide this function into several functions to not have so many
-    # if statements
+    def _append_crit_node(series):
+        return pd.DataFrame({'v_mag_pu': series.max(),
+                             'time_index': series.idxmax()},
+                            index=[node])
+
     crit_nodes = {}
 
-    # load max. voltage deviation
-    # ToDo: for now only voltage deviation for the combined calculation of MV
-    # and LV is considered (load and feed-in case for seperate consideration
-    # of MV and LV needs to be implemented)
-    max_v_dev = network.config['grid_expansion_allowed_voltage_deviations'][
-        'mv_lv_max_v_deviation']
+    v_dev_allowed_per_case = {}
+    if voltage_levels == 'mv_lv':
+        v_dev_allowed_per_case['feedin_case'] = network.config[
+            'grid_expansion_allowed_voltage_deviations'][
+            'mv_lv_max_v_deviation']
+        v_dev_allowed_per_case['load_case'] = v_dev_allowed_per_case[
+            'feedin_case']
+    elif voltage_levels == 'lv':
+        v_dev_allowed_per_case['feedin_case'] = network.config[
+            'grid_expansion_allowed_voltage_deviations'][
+            '{}_feedin_case_max_v_deviation'.format(voltage_levels)]
+        v_dev_allowed_per_case['load_case'] = network.config[
+            'grid_expansion_allowed_voltage_deviations'][
+            '{}_load_case_max_v_deviation'.format(voltage_levels)]
+    else:
+        raise ValueError(
+            'Specified mode {} is not a valid option.'.format(voltage_levels))
+    # maximum allowed apparent power of station in each time step
+    v_dev_allowed = \
+        network.timeseries.timesteps_load_feedin_case.case.apply(
+            lambda _: v_dev_allowed_per_case[_])
 
     for lv_grid in network.mv_grid.lv_grids:
+
+        crit_nodes_grid = pd.DataFrame()
+
         if mode:
             if mode == 'stations':
-                v_mag_pu_pfa = network.results.v_res(
-                    nodes=[lv_grid.station], level='lv')
+                nodes = [lv_grid.station]
             else:
                 raise ValueError(
                     "{} is not a valid option for input variable 'mode' in "
                     "function lv_voltage_deviation. Try 'stations' or "
                     "None".format(mode))
         else:
-            v_mag_pu_pfa = network.results.v_res(nodes=lv_grid.graph.nodes(),
-                                                 level='lv')
-        # check for overvoltage
-        v_max = v_mag_pu_pfa.max()
-        crit_nodes_max = v_max[(v_max > (1 + max_v_dev))] - 1
-        # check for undervoltage
-        v_min = v_mag_pu_pfa.min()
-        crit_nodes_min = 1 - v_min[(v_min < (1 - max_v_dev))]
-        # combine critical nodes and keep highest voltage deviation at each
-        # node
-        crit_nodes_grid = crit_nodes_max.append(crit_nodes_min).max(level=0)
-        if len(crit_nodes_grid) > 0:
-            if not mode:
-                crit_nodes[lv_grid] = crit_nodes_grid.sort_values(
-                    ascending=False)
-            else:
-                crit_nodes[lv_grid] = crit_nodes_grid[repr(lv_grid.station)]
+            nodes = lv_grid.graph.nodes()
+
+        v_mag_pu_pfa = network.results.v_res(nodes=nodes, level='lv')
+        for node in nodes:
+            # check for over- and under-voltage (both Series)
+            overvoltage = v_mag_pu_pfa[repr(node)][
+                              (v_mag_pu_pfa[repr(node)] > (
+                              1 + v_dev_allowed))] - 1
+            undervoltage = 1 - v_mag_pu_pfa[repr(node)][
+                (v_mag_pu_pfa[repr(node)] < (1 - v_dev_allowed))]
+
+            # write greatest voltage deviation to dataframe
+            if not overvoltage.empty:
+                if not undervoltage.empty:
+                    if overvoltage.max() > undervoltage.max():
+                        crit_nodes_grid = crit_nodes_grid.append(
+                            _append_crit_node(overvoltage))
+                    else:
+                        crit_nodes_grid = crit_nodes_grid.append(
+                            _append_crit_node(undervoltage))
+                else:
+                    crit_nodes_grid = crit_nodes_grid.append(
+                        _append_crit_node(overvoltage))
+            elif not undervoltage.empty:
+                crit_nodes_grid = crit_nodes_grid.append(
+                    _append_crit_node(undervoltage))
+
+        if not crit_nodes_grid.empty:
+            crit_nodes[lv_grid] = crit_nodes_grid.sort_values(
+                by=['v_mag_pu'], ascending=False)
+        else:
+            crit_nodes = None
 
     if crit_nodes:
         logger.debug(
