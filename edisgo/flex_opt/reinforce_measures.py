@@ -24,9 +24,16 @@ def extend_distribution_substation_overloading(network, critical_stations):
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-    critical_stations : dict
-        Dictionary with critical :class:`~.grid.components.LVStation`
-        Format: {lv_station_1: overloading_1, ..., lv_station_n: overloading_n}
+    critical_stations : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe containing over-loaded MV/LV stations, their apparent power
+        at maximal over-loading and the corresponding time step.
+        Index of the dataframe are the over-loaded stations of type
+        :class:`~.grid.components.LVStation`. Columns are 's_pfa'
+        containing the apparent power at maximal over-loading as float and
+        'time_index' containing the corresponding time step the over-loading
+        occured in as :pandas:`pandas.Timestamp<timestamp>`. See
+        :func:`~.flex_opt.check_tech_constraints.mv_lv_station_load` for more
+        information.
 
     Returns
     -------
@@ -175,10 +182,16 @@ def extend_substation_overloading(network, critical_stations):
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-    critical_stations : dict
-        Dictionary with critical :class:`~.grid.components.MVStation` and
-        maximum apparent power from power flow analysis.
-        Format: {MVStation: S_max}
+    critical_stations : pandas:`pandas.DataFrame<dataframe>`
+        Dataframe containing over-loaded HV/MV stations, their apparent power
+        at maximal over-loading and the corresponding time step.
+        Index of the dataframe are the over-loaded stations of type
+        :class:`~.grid.components.MVStation`. Columns are 's_pfa'
+        containing the apparent power at maximal over-loading as float and
+        'time_index' containing the corresponding time step the over-loading
+        occured in as :pandas:`pandas.Timestamp<timestamp>`. See
+        :func:`~.flex_opt.check_tech_constraints.hv_mv_station_load` for more
+        information.
 
     Returns
     -------
@@ -194,21 +207,20 @@ def extend_substation_overloading(network, critical_stations):
     except KeyError:
         print('Standard HV/MV transformer is not in equipment list.')
 
-    # ToDo: differentiate between load and feed-in case!
-    load_factor = \
-        network.config['grid_expansion_load_factors'][
-            'mv_feedin_case_transformer']
-
     transformers_changes = {'added': {}, 'removed': {}}
-    for station in critical_stations:
+    for station in critical_stations.index:
 
         # list of maximum power of each transformer in the station
         s_max_per_trafo = [_.type.S_nom for _ in station.transformers]
 
         # maximum station load from power flow analysis
-        s_station_pfa = critical_stations[station]
+        s_station_pfa = critical_stations.s_pfa[station]
 
         # determine missing transformer power to solve overloading issue
+        case = network.timeseries.timesteps_load_feedin_case.case[
+            critical_stations.time_index[station]]
+        load_factor = network.config['grid_expansion_load_factors'][
+            'mv_{}_transformer'.format(case)]
         s_trafo_missing = s_station_pfa - (sum(s_max_per_trafo) * load_factor)
 
         # check if second transformer of the same kind is sufficient
