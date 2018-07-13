@@ -126,9 +126,15 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-    critical_stations : dict
-        Dictionary with critical :class:`~.grid.components.LVStation`
-        Format: {lv_station_1: overloading_1, ..., lv_station_n: overloading_n}
+    critical_stations : :obj:`dict`
+        Dictionary with :class:`~.grid.grids.LVGrid` as key and a
+        :pandas:`pandas.DataFrame<dataframe>` with its critical station and
+        maximum voltage deviation as value.
+        Index of the dataframe is the :class:`~.grid.components.LVStation`
+        with over-voltage issues. Columns are 'v_mag_pu' containing the
+        maximum voltage deviation as float and 'time_index' containing the
+        corresponding time step the over-voltage occured in as
+        :pandas:`pandas.Timestamp<timestamp>`.
 
     Returns
     -------
@@ -145,7 +151,7 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
         print('Standard MV/LV transformer is not in equipment list.')
 
     transformers_changes = {'added': {}}
-    for grid, voltage_deviation in critical_stations.items():
+    for grid in critical_stations.keys():
 
         # get any transformer to get attributes for new transformer from
         station_transformer = grid.station.transformers[0]
