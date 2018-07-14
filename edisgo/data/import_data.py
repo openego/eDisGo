@@ -1605,15 +1605,28 @@ def _import_genos_from_oedb(network):
                 for v_level, val2 in val.items():
                     for type, val3 in val2.items():
                         for subtype, val4 in val3.items():
-                            gen = Generator(
-                                id='agg-' + str(la_id) + '-' + '_'.join([
-                                    str(_) for _ in val4['ids']]),
-                                nominal_capacity=val4['capacity'],
-                                type=type,
-                                subtype=subtype,
-                                geom=network.mv_grid.station.geom,
-                                grid=network.mv_grid,
-                                v_level=4)
+                            if type in ['solar', 'wind']:
+                                gen = GeneratorFluctuating(
+                                    id='agg-' + str(la_id) + '-' + '_'.join([
+                                        str(_) for _ in val4['ids']]),
+                                    grid=network.mv_grid,
+                                    nominal_capacity=val4['capacity'],
+                                    type=type,
+                                    subtype=subtype,
+                                    v_level=4,
+                                    # ToDo: get correct w_id
+                                    weather_cell_id=row['w_id'],
+                                    geom=network.mv_grid.station.geom)
+                            else:
+                                gen = Generator(
+                                    id='agg-' + str(la_id) + '-' + '_'.join([
+                                        str(_) for _ in val4['ids']]),
+                                    nominal_capacity=val4['capacity'],
+                                    type=type,
+                                    subtype=subtype,
+                                    geom=network.mv_grid.station.geom,
+                                    grid=network.mv_grid,
+                                    v_level=4)
 
                             network.mv_grid.graph.add_node(
                                 gen, type='generator_aggr')
