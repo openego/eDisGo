@@ -41,16 +41,16 @@ You can also provide your own time series for load and feed-in for the analysis.
 
     # set up load and feed-in time series
     timeindex = pd.date_range('1/1/1970', periods=3, freq='H')
-    feedin_renewables = pd.DataFrame(data={'solar': [10, 20, 30], 
-	                                   'wind': [10, 10, 15]},
+    feedin_renewables = pd.DataFrame(data={'solar': [0.1, 0.2, 0.3], 
+	                                   'wind': [0.3, 0.15, 0.15]},
 	                             index=timeindex)
-    feedin_dispatchable = pd.DataFrame(data={'coal': [5, 10, 5],
-	                                     'other': [3, 10, 7]},
+    feedin_dispatchable = pd.DataFrame(data={'coal': [0.5, 0.1, 0.5],
+	                                     'other': [0.3, 0.1, 0.7]},
 	                               index=timeindex)
-    load = pd.DataFrame(data={'residential': [10, 20, 20],
-	                      'retail': [5, 5, 5],
-	                      'industrial': [2, 2, 2],
-	                      'agricultural': [10, 10, 10]},
+    load = pd.DataFrame(data={'residential': [0.00001, 0.00002, 0.00002],
+	                      'retail': [0.00005, 0.00005, 0.00005],
+	                      'industrial': [0.00002, 0.00003, 0.00002],
+	                      'agricultural': [0.00001, 0.000015, 0.00001]},
 	                index=timeindex)
 
     edisgo = EDisGo(ding0_grid="ding0_grids__42.pkl",
