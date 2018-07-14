@@ -157,14 +157,13 @@ class Load(Component):
         super().__init__(**kwargs)
         self._timeseries = kwargs.get('timeseries', None)
         self._consumption = kwargs.get('consumption', None)
-        self._power_factor_mode = kwargs.get('power_factor_mode', None)
+        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
         self._q_sign = None
 
     @property
     def timeseries(self):
         """
-        Load time seriesself._power_factor_mode = kwargs.get('power_factor_mode', None)
-        self._q_sign = None
+        Load time series
 
         It returns the actual time series used in power flow analysis. If
         :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
@@ -259,7 +258,7 @@ class Load(Component):
         return peak_load
 
     @property
-    def power_factor_mode(self):
+    def reactive_power_mode(self):
         """
         Power factor mode of Load.
 
@@ -269,8 +268,8 @@ class Load(Component):
         Essentially this changes the sign of the reactive power Q.
 
         The convention used here in a load is that:
-        - when `power_factor_mode` is 'inductive' then Q is positive
-        - when `power_factor_mode` is 'capacitive' then Q is negative
+        - when `reactive_power_mode` is 'inductive' then Q is positive
+        - when `reactive_power_mode` is 'capacitive' then Q is negative
 
         In the case that this attribute is not set, it is retrieved from the
         network config object depending on the voltage level the load is in.
@@ -280,42 +279,42 @@ class Load(Component):
         :obj: `str` : Power factor mode
             Either 'inductive' or 'capacitive'
         """
-        if self._power_factor_mode is None:
+        if self._reactive_power_mode is None:
             if isinstance(self.grid, MVGrid):
-                self._power_factor_mode = self.grid.network.config[
-                    'reactive_power_factor_mode']['mv_load']
+                self._reactive_power_mode = self.grid.network.config[
+                    'reactive_power_mode']['mv_load']
             elif isinstance(self.grid, LVGrid):
-                self._power_factor_mode = self.grid.network.config[
-                    'reactive_power_factor_mode']['lv_load']
+                self._reactive_power_mode = self.grid.network.config[
+                    'reactive_power_mode']['lv_load']
 
-        return self._power_factor_mode[1:-1]
+        return self._reactive_power_mode[1:-1]
 
-    @power_factor_mode.setter
-    def power_factor_mode(self, power_factor_mode):
+    @reactive_power_mode.setter
+    def reactive_power_mode(self, reactive_power_mode):
         """
         Set the power factor mode of the generator.
         Should be either 'inductive' or 'capacitive'
         """
-        self._power_factor_mode = power_factor_mode
+        self._reactive_power_mode = reactive_power_mode
 
     @property
     def q_sign(self):
         """
         Get the sign reactive power based on the
-        :attr: `_power_factor_mode`
+        :attr: `_reactive_power_mode`
 
         Returns
         -------
         :obj: `int` : +1 or -1
         """
-        comparestr = self.power_factor_mode
+        comparestr = self.reactive_power_mode
         comparestr = comparestr.lower()
         if re.fullmatch('inductive', comparestr):
             return 1
         elif re.fullmatch('capacitive', comparestr):
                 return -1
         else:
-            raise ValueError("Unknown value {} in power_factor_mode".format(self.power_factor_mode))
+            raise ValueError("Unknown value {} in reactive_power_mode".format(self.reactive_power_mode))
 
     def __repr__(self):
         return '_'.join(['Load',
@@ -333,7 +332,7 @@ class Generator(Component):
         Contains time series for generator
     _power_factor: :obj: `str`
         Contains the power factor of the generator
-    _power_factor_mode: :obj: `str`
+    _reactive_power_mode: :obj: `str`
         Contains the reactive power behaviour of the generator,
         either 'inductive' or 'capacitive'
 
@@ -359,7 +358,7 @@ class Generator(Component):
         self._v_level = kwargs.get('v_level', None)
         self._timeseries = kwargs.get('timeseries', None)
         self._power_factor = kwargs.get('power_factor', None)
-        self._power_factor_mode = kwargs.get('power_factor_mode', None)
+        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
         self._q_sign = None
 
     @property
@@ -372,10 +371,10 @@ class Generator(Component):
         :meth:`timeseries` looks for time series of the according type of
         technology in :class:`~.grid.network.TimeSeries`. The reactive
         power is also claculated in :attr:`_timeseries` depending upon the
-        :attr:`power_factor` and :attr:`power_factor_mode`. The
+        :attr:`power_factor` and :attr:`reactive_power_mode`. The
         :attr:`power_factor` determines the magnitude of the reactive power
         based on the power factor and active power provided and the
-        :attr:`power_factor_mode` determines if the reactive power is either
+        :attr:`reactive_power_mode` determines if the reactive power is either
         consumed (inductive behaviour) or provided (capacitive behaviour)
 
         Returns
@@ -467,7 +466,7 @@ class Generator(Component):
         return self._power_factor
 
     @property
-    def power_factor_mode(self):
+    def reactive_power_mode(self):
         """
         Power factor mode of generator.
 
@@ -477,8 +476,8 @@ class Generator(Component):
         Essentially this changes the sign of the reactive power Q.
 
         The convention used here in a generator is that:
-        - when `power_factor_mode` is 'capacitive' then Q is positive
-        - when `power_factor_mode` is 'inductive' then Q is negative
+        - when `reactive_power_mode` is 'capacitive' then Q is positive
+        - when `reactive_power_mode` is 'inductive' then Q is negative
 
         In the case that this attribute is not set, it is retrieved from the
         network config object depending on the voltage level the generator
@@ -489,15 +488,15 @@ class Generator(Component):
         :obj: `str` : Power factor mode
             Either 'inductive' or 'capacitive'
         """
-        if self._power_factor_mode is None:
+        if self._reactive_power_mode is None:
             if isinstance(self.grid, MVGrid):
-                self._power_factor_mode = self.grid.network.config[
-                    'reactive_power_factor_mode']['mv_gen']
+                self._reactive_power_mode = self.grid.network.config[
+                    'reactive_power_mode']['mv_gen']
             elif isinstance(self.grid, LVGrid):
-                self._power_factor_mode = self.grid.network.config[
-                    'reactive_power_factor_mode']['lv_gen']
+                self._reactive_power_mode = self.grid.network.config[
+                    'reactive_power_mode']['lv_gen']
 
-        return self._power_factor_mode[1:-1]
+        return self._reactive_power_mode[1:-1]
 
     @power_factor.setter
     def power_factor(self, power_factor):
@@ -506,32 +505,32 @@ class Generator(Component):
         """
         self._power_factor = power_factor
 
-    @power_factor_mode.setter
-    def power_factor_mode(self, power_factor_mode):
+    @reactive_power_mode.setter
+    def reactive_power_mode(self, reactive_power_mode):
         """
         Set the power factor mode of the generator.
         Should be either 'inductive' or 'capacitive'
         """
-        self._power_factor_mode = power_factor_mode
+        self._reactive_power_mode = reactive_power_mode
 
     @property
     def q_sign(self):
         """
         Get the sign reactive power based on the
-        :attr: `_power_factor_mode`
+        :attr: `_reactive_power_mode`
 
         Returns
         -------
         :obj: `int` : +1 or -1
         """
-        comparestr = self.power_factor_mode
+        comparestr = self.reactive_power_mode
         comparestr = comparestr.lower()
         if re.fullmatch('inductive', comparestr):
             return -1
         elif re.fullmatch('capacitive', comparestr):
                 return 1
         else:
-            raise ValueError("Unknown value {} in power_factor_mode".format(self.power_factor_mode))
+            raise ValueError("Unknown value {} in reactive_power_mode".format(self.reactive_power_mode))
 
 
 
@@ -564,8 +563,6 @@ class GeneratorFluctuating(Generator):
 
         self._curtailment = kwargs.get('curtailment', None)
         self._weather_cell_id = kwargs.get('weather_cell_id', None)
-        self._power_factor_mode = kwargs.get('power_factor_mode', None)
-        self._q_sign = None
 
     @property
     def timeseries(self):
@@ -625,7 +622,6 @@ class GeneratorFluctuating(Generator):
                 timeseries.p = timeseries.p - timeseries.curtailment.fillna(0)
             return timeseries.loc[self.grid.network.timeseries.timeindex, :]
         else:
-            #ToDo: should curtailment be subtracted from timeseries?
             return self._timeseries.loc[
                    self.grid.network.timeseries.timeindex, :]
 
@@ -698,66 +694,6 @@ class GeneratorFluctuating(Generator):
     def weather_cell_id(self, weather_cell):
         self._weather_cell_id = weather_cell
 
-    @property
-    def power_factor_mode(self):
-        """
-        Power factor mode of generator.
-
-        If the power factor is set, then it is necessary to know whether the
-        it is leading or lagging. In other words this information is necessary
-        to make the generator behave in an inductive or capacitive manner.
-        Essentially this changes the sign of the reactive power Q.
-
-        The convention used here in a generator is that:
-        - when `power_factor_mode` is 'capacitive' then Q is positive
-        - when `power_factor_mode` is 'inductive' then Q is negative
-
-        In the case that this attribute is not set, it is retrieved from the
-        network config object depending on the voltage level the generator
-        is in.
-
-        Returns
-        -------
-        :obj: `str` : Power factor mode
-            Either 'inductive' or 'capacitive'
-        """
-        if self._power_factor_mode is None:
-            if isinstance(self.grid, MVGrid):
-                self._power_factor_mode = self.grid.network.config[
-                    'reactive_power_factor_mode']['mv_gen']
-            elif isinstance(self.grid, LVGrid):
-                self._power_factor_mode = self.grid.network.config[
-                    'reactive_power_factor_mode']['lv_gen']
-
-        return self._power_factor_mode[1:-1]
-
-    @power_factor_mode.setter
-    def power_factor_mode(self, power_factor_mode):
-        """
-        Set the power factor mode of the generator.
-        Should be either 'inductive' or 'capacitive'
-        """
-        self._power_factor_mode = power_factor_mode
-
-    @property
-    def q_sign(self):
-        """
-        Get the sign reactive power based on the
-        :attr: `_power_factor_mode`
-
-        Returns
-        -------
-        :obj: `int` : +1 or -1
-        """
-        comparestr = self.power_factor_mode
-        comparestr = comparestr.lower()
-        if re.fullmatch('inductive', comparestr):
-            return -1
-        elif re.fullmatch('capacitive', comparestr):
-                return 1
-        else:
-            raise ValueError("Unknown value {} in power_factor_mode".format(self.power_factor_mode))
-
 
 class Storage(Component):
     """Storage object
@@ -795,7 +731,7 @@ class Storage(Component):
         self._efficiency_out = kwargs.get('efficiency_out', None)
         self._standing_loss = kwargs.get('standing_loss', None)
         self._operation = kwargs.get('operation', None)
-        self._power_factor_mode = kwargs.get('power_factor_mode', None)
+        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
         self._q_sign = None
 
     @property
@@ -929,7 +865,7 @@ class Storage(Component):
         self._operation
 
     @property
-    def power_factor_mode(self):
+    def reactive_power_mode(self):
         """
         Power factor mode of generator.
 
@@ -939,8 +875,8 @@ class Storage(Component):
         Essentially this changes the sign of the reactive power Q.
 
         The convention used here in a generator is that:
-        - when `power_factor_mode` is 'capacitive' then Q is positive
-        - when `power_factor_mode` is 'inductive' then Q is negative
+        - when `reactive_power_mode` is 'capacitive' then Q is positive
+        - when `reactive_power_mode` is 'inductive' then Q is negative
 
         In the case that this attribute is not set, it is retrieved from the
         network config object depending on the voltage level the generator
@@ -951,42 +887,42 @@ class Storage(Component):
         :obj: `str` : Power factor mode
             Either 'inductive' or 'capacitive'
         """
-        if self._power_factor_mode is None:
+        if self._reactive_power_mode is None:
             if isinstance(self.grid, MVGrid):
-                self._power_factor_mode = self.grid.network.config[
-                    'reactive_power_factor_mode']['mv_gen']
+                self._reactive_power_mode = self.grid.network.config[
+                    'reactive_power_mode']['mv_gen']
             elif isinstance(self.grid, LVGrid):
-                self._power_factor_mode = self.grid.network.config[
-                    'reactive_power_factor_mode']['lv_gen']
+                self._reactive_power_mode = self.grid.network.config[
+                    'reactive_power_mode']['lv_gen']
 
-        return self._power_factor_mode[1:-1]
+        return self._reactive_power_mode[1:-1]
 
-    @power_factor_mode.setter
-    def power_factor_mode(self, power_factor_mode):
+    @reactive_power_mode.setter
+    def reactive_power_mode(self, reactive_power_mode):
         """
         Set the power factor mode of the generator.
         Should be either 'inductive' or 'capacitive'
         """
-        self._power_factor_mode = power_factor_mode
+        self._reactive_power_mode = reactive_power_mode
 
     @property
     def q_sign(self):
         """
         Get the sign reactive power based on the
-        :attr: `_power_factor_mode`
+        :attr: `_reactive_power_mode`
 
         Returns
         -------
         :obj: `int` : +1 or -1
         """
-        comparestr = self.power_factor_mode
+        comparestr = self.reactive_power_mode
         comparestr = comparestr.lower()
         if re.fullmatch('inductive', comparestr):
             return -1
         elif re.fullmatch('capacitive', comparestr):
             return 1
         else:
-            raise ValueError("Unknown value {} in power_factor_mode".format(self.power_factor_mode))
+            raise ValueError("Unknown value {} in reactive_power_mode".format(self.reactive_power_mode))
 
 
 class MVDisconnectingPoint(Component):
