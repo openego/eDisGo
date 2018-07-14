@@ -541,9 +541,11 @@ def _voltage_deviation(network, nodes, v_dev_allowed, voltage_level):
     for node in nodes:
         # check for over- and under-voltage
         overvoltage = v_mag_pu_pfa[repr(node)][
-            (v_mag_pu_pfa[repr(node)] > (1 + v_dev_allowed))] - 1
+            (v_mag_pu_pfa[repr(node)] > (1 + v_dev_allowed.loc[
+                v_mag_pu_pfa.index]))] - 1
         undervoltage = 1 - v_mag_pu_pfa[repr(node)][
-            (v_mag_pu_pfa[repr(node)] < (1 - v_dev_allowed))]
+            (v_mag_pu_pfa[repr(node)] < (1 - v_dev_allowed.loc[
+                v_mag_pu_pfa.index]))]
 
         # write greatest voltage deviation to dataframe
         if not overvoltage.empty:
