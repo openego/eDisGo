@@ -7,7 +7,7 @@ if not 'READTHEDOCS' in os.environ:
 
 from edisgo.grid.components import Transformer, Line
 from edisgo.grid.grids import LVGrid, MVGrid
-from edisgo.grid.tools import get_mv_feeder_from_node, get_mv_feeder_from_line
+from edisgo.grid.tools import get_mv_feeder_from_line
 
 
 def grid_expansion_costs(network):
@@ -119,7 +119,8 @@ def grid_expansion_costs(network):
                  'total_costs': _get_transformer_costs(t),
                  'quantity': 1,
                  'voltage_level': 'mv/lv',
-                 'mv_feeder': get_mv_feeder_from_node(t.grid.station)},
+                 'mv_feeder': t.mv_feeder if isinstance(t.grid, LVGrid)
+                              else None},
                 index=[t]))
 
         # costs for lines
@@ -147,7 +148,7 @@ def grid_expansion_costs(network):
                      'quantity': number_lines_added,
                      'voltage_level': ('lv' if isinstance(l.grid, LVGrid)
                                        else 'mv'),
-                     'mv_feeder': None}, #get_mv_feeder_from_line(l)},
+                     'mv_feeder': get_mv_feeder_from_line(l)},
                     index=[l]))
 
     # if no costs incurred write zero costs to DataFrame

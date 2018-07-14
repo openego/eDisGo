@@ -5,6 +5,7 @@ from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import reinforce_measures, exceptions
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.tools import tools, pypsa_io
+from edisgo.grid.tools import assign_mv_feeder_to_nodes
 import logging
 
 logger = logging.getLogger('edisgo')
@@ -123,6 +124,10 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                 raise ValueError(
                     'Input {} for timesteps_pfa is not valid.'.format(
                         timesteps_pfa))
+
+    # assign MV feeder to every generator, LV station, load, and branch tee
+    # to assign grid expansion costs to an MV feeder
+    assign_mv_feeder_to_nodes(edisgo_reinforce.network.mv_grid)
 
     iteration_step = 1
     edisgo_reinforce.analyze(timesteps=timesteps_pfa)

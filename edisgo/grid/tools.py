@@ -563,45 +563,37 @@ def get_capacities_by_type(network):
     return mv_peak_generation + lv_accumulated_peak_generation
 
 
-def get_mv_feeder_from_node(node):
+def assign_mv_feeder_to_nodes(mv_grid):
     """
-    Determines MV feeder the given node is in.
-
-    MV feeders are identified by the first line segment of the half-ring.
+    Assigns an MV feeder to every generator, LV station, load, and branch tee
 
     Parameters
-    ----------
-    node : :class:`~.grid.components.Component`
-        Node to find the MV feeder for. Can be any kind of
-        :class:`~.grid.components.Component` except
-        :class:`~.grid.components.Line`.
-
-    Returns
-    -------
-    :class:`~.grid.components.Line`
-        MV feeder identifier (representative of the first line segment
-        of the half-ring)
+    -----------
+    mv_grid : :class:`~.grid.grids.MVGrid`
 
     """
-    # if node is MV station no MV feeder can be attributed and None is returned
-    if isinstance(node, MVStation):
-        return None
+    mv_station_neighbors = mv_grid.graph.neighbors(mv_grid.station)
+    # get all nodes in MV grid and remove MV station to get separate subgraphs
+    mv_graph_nodes = mv_grid.graph.nodes()
+    mv_graph_nodes.remove(mv_grid.station)
+    subgraph = mv_grid.graph.subgraph(mv_graph_nodes)
 
-    # if node is in LV grid, get LV station of that grid
-    if isinstance(node.grid, LVGrid):
-        node = node.grid.station
-
-    # find path from MV station to node in MV grid to assign MV feeder
-    if isinstance(node, LVStation):
-        path = nx.shortest_path(node.mv_grid.graph, node.mv_grid.station, node)
-    else:
-        path = nx.shortest_path(node.grid.graph, node.grid.station, node)
-
-    # MV feeder identifier is the representative of the first line segment
-    # of the half-ring
-    mv_feeder = path[0].grid.graph.line_from_nodes(path[0], path[1])
-
-    return mv_feeder
+    for neighbor in mv_station_neighbors:
+        # determine feeder
+        mv_feeder = mv_grid.graph.line_from_nodes(mv_grid.station, neighbor)
+        # get all nodes in that feeder by doing a DFS in the disconnected
+        # subgraph starting from the node adjacent to the MVStation `neighbor`
+        subgraph_neighbor = nx.dfs_tree(subgraph, source=neighbor)
+        for node in subgraph_neighbor.nodes():
+            # in case of an LV station assign feeder to all nodes in that LV
+            # grid
+            if isinstance(node, LVStation):
+                for lv_node in node.grid.graph.nodes():
+                    lv_node.mv_feeder = mv_feeder
+                for transformer in node.transformers:
+                    transformer.mv_feeder = mv_feeder
+            else:
+                node.mv_feeder = mv_feeder
 
 
 def get_mv_feeder_from_line(line):
@@ -625,7 +617,18 @@ def get_mv_feeder_from_line(line):
     # get nodes of line
     nodes = line.grid.graph.nodes_from_line(line)
     # if one of the nodes is an MV station the line is an MV feeder itself
-    if isinstance(nodes[0], MVStation) or isinstance(nodes[1], MVStation):
-        return line
+    if isinstance(nodes[0], MVStation):
+        feeder_1 = None
     else:
-        return get_mv_feeder_from_node(nodes[0])
+        feeder_1 = nodes[0].mv_feeder
+    if isinstance(nodes[1], MVStation):
+        feeder_2 = None
+    else:
+        feeder_2 = nodes[1].mv_feeder
+    if not feeder_1 is None and not feeder_2 is None:
+        if feeder_1 == feeder_2:
+            return feeder_1
+        else:
+            print('Different feeders for line {}'.format(line))
+    else:
+        return feeder_1 if not None else feeder_2
