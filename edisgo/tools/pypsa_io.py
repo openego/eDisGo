@@ -1479,6 +1479,8 @@ def update_pypsa_timeseries(network, loads_to_update=None,
         network, storages_to_update=storages_to_update, timesteps=timesteps)
     update_pypsa_bus_timeseries(network, timesteps=timesteps)
     # update pypsa snapshots
+    if timesteps is None:
+        timesteps = network.pypsa.buses_t.v_mag_pu_set.index
     network.pypsa.set_snapshots(timesteps)
 
 
