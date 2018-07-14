@@ -445,6 +445,7 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
         v_dev_allowed_per_case['load_case'] = v_dev_allowed_per_case[
             'feedin_case']
     elif voltage_levels == 'lv':
+        # ToDo: allowed voltage deviation lv + mv?
         v_dev_allowed_per_case['feedin_case'] = network.config[
             'grid_expansion_allowed_voltage_deviations'][
             '{}_feedin_case_max_v_deviation'.format(voltage_levels)]
