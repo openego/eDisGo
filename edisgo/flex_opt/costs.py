@@ -119,7 +119,7 @@ def grid_expansion_costs(network):
                  'total_costs': _get_transformer_costs(t),
                  'quantity': 1,
                  'voltage_level': 'mv/lv',
-                 'mv_feeder': t.mv_feeder if isinstance(t.grid, LVGrid)
+                 'mv_feeder': t.grid.station.mv_feeder if isinstance(t.grid, LVGrid)
                               else None},
                 index=[t]))
 

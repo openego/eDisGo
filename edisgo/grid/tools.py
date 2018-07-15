@@ -590,8 +590,6 @@ def assign_mv_feeder_to_nodes(mv_grid):
             if isinstance(node, LVStation):
                 for lv_node in node.grid.graph.nodes():
                     lv_node.mv_feeder = mv_feeder
-                for transformer in node.transformers:
-                    transformer.mv_feeder = mv_feeder
             else:
                 node.mv_feeder = mv_feeder
 
@@ -629,6 +627,6 @@ def get_mv_feeder_from_line(line):
         if feeder_1 == feeder_2:
             return feeder_1
         else:
-            print('Different feeders for line {}'.format(line))
+            logging.warning('Different feeders for line {}'.format(line))
     else:
-        return feeder_1 if not None else feeder_2
+        return feeder_1 if feeder_1 is not None else feeder_2
