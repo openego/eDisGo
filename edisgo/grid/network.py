@@ -1392,7 +1392,7 @@ class StorageControl:
                                       index=timeseries.index)
             self._check_timeindex(timeseries)
             storage.timeseries = timeseries
-        elif timeseries == 'fifty-fifty':
+        elif isinstance(timeseries, str) and timeseries == 'fifty-fifty':
             storage_operation.fifty_fifty(storage)
         else:
             message = 'Provided battery timeseries option {} is not ' \
