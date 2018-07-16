@@ -2133,13 +2133,11 @@ class Results:
 
         Parameters
         ----------
-        components : :class:`~.grid.components.Line` or
-            :class:`~.grid.components.Transformer`
-            Could be a list of instances of these classes
-
-            Line or Transformers objects of grid topology. If not provided
-            (respectively None) defaults to return `s_res` of all lines and
-            transformers in the grid.
+        components : :obj:`list`
+            List with all components (of type :class:`~.grid.components.Line`
+            or :class:`~.grid.components.Transformer`) to get apparent power
+            for. If not provided defaults to return apparent power of all lines
+            and transformers in the grid.
 
         Returns
         -------
