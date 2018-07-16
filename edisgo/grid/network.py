@@ -1307,21 +1307,29 @@ class StorageControl:
         * 'hvmv_substation_busbar'
           Places a storage unit directly at the HV/MV station's bus bar.
         * :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
-          Specifies a node the storage should be connected to.
+          Specifies a node the storage should be connected to. In the case
+          this parameter is of type :class:`~.grid.components.LVStation` an
+          additional parameter, `voltage_level`, has to be provided to define
+          which side of the LV station the storage is connected to.
 
         In case of more than one storage provide a :obj:`dict` where each
         entry represents a storage. Keys of the dictionary have to match
         the keys of the `timeseries_battery` and `battery_parameters`
         dictionaries, values must contain the corresponding positioning
         strategy or node to connect the storage to.
+    voltage_level : :obj:`str`, optional
+        This parameter only needs to be provided if `battery_position` is of
+        type :class:`~.grid.components.LVStation`. In that case `voltage_level`
+        defines which side of the LV station the storage is connected to. Valid
+        options are 'lv' and 'mv'. Default: None.
 
     """
 
     def __init__(self, network, timeseries_battery, battery_parameters,
-                 battery_position):
+                 battery_position, **kwargs):
 
         self.network = network
-
+        voltage_level = kwargs.get('voltage_level', None)
         if isinstance(timeseries_battery, dict):
             for storage, ts in timeseries_battery.items():
                 try:
@@ -1332,12 +1340,12 @@ class StorageControl:
                               'position for storage {}.'.format(storage)
                     logging.error(message)
                     raise KeyError(message)
-                self._integrate_storage(ts, params, position)
+                self._integrate_storage(ts, params, position, voltage_level)
         else:
             self._integrate_storage(timeseries_battery, battery_parameters,
-                                    battery_position)
+                                    battery_position, voltage_level)
 
-    def _integrate_storage(self, timeseries, params, position):
+    def _integrate_storage(self, timeseries, params, position, voltage_level):
         """
         Integrate storage units in the grid and specify its operational mode.
 
@@ -1355,6 +1363,10 @@ class StorageControl:
         position : :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
             Parameter used to place the storage. See class definition for more
             information.
+        voltage_level : :obj:`str`
+            `voltage_level` defines which side of the LV station the storage is
+            connected to. Valid options are 'lv' and 'mv'. Default: None. See
+            class definition for more information.
 
         """
         # place storage
@@ -1363,7 +1375,7 @@ class StorageControl:
                 self.network.mv_grid, params)
         elif isinstance(position, Station) or isinstance(position, BranchTee):
             storage = storage_integration.set_up_storage(
-                params, position)
+                params, position, voltage_level)
             storage_integration.connect_storage(storage, position)
         else:
             message = 'Provided battery position option {} is not ' \

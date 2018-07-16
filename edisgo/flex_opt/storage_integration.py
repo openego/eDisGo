@@ -1,4 +1,4 @@
-from edisgo.grid.components import Storage, Line
+from edisgo.grid.components import Storage, Line, LVStation
 from edisgo.grid.grids import MVGrid
 from edisgo.grid.tools import select_cable
 
@@ -29,7 +29,8 @@ def storage_at_hvmv_substation(mv_grid, parameters, mode=None):
     return storage
 
 
-def set_up_storage(parameters, node, operational_mode=None):
+def set_up_storage(parameters, node,
+                   voltage_level=None, operational_mode=None):
     """
     Sets up a storage instance.
 
@@ -40,17 +41,37 @@ def set_up_storage(parameters, node, operational_mode=None):
         :class:`~.grid.network.StorageControl` for more information.
     node : :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
         Node the storage will be connected to.
-    operational_mode : :obj:`str`
+    voltage_level : :obj:`str`, optional
+        This parameter only needs to be provided if `node` is of type
+        :class:`~.grid.components.LVStation`. In that case `voltage_level`
+        defines which side of the LV station the storage is connected to. Valid
+        options are 'lv' and 'mv'. Default: None.
+    operational_mode : :obj:`str`, optional
         Operational mode. See :class:`~.grid.network.StorageControl` for
         possible options and more information. Default: None.
 
     """
 
-    # define storage instance and define it's operational mode
+    # if node the storage is connected to is an LVStation voltage_level
+    # defines which side the storage is connected to
+    if isinstance(node, LVStation):
+        if voltage_level == 'lv':
+            grid = node.grid
+        elif voltage_level == 'mv':
+            grid = node.mv_grid
+        else:
+            raise ValueError(
+                "{} is not a valid option for voltage_level.".format(
+                    voltage_level))
+    else:
+        grid = node.grid
+
     return Storage(operation=operational_mode,
-                   id=len(node.grid.graph.nodes_by_attribute('storage')) + 1,
+                   id='{}_storage_{}'.format(
+                       grid,
+                       len(grid.graph.nodes_by_attribute('storage')) + 1),
                    nominal_capacity=parameters['nominal_capacity'],
-                   grid=node.grid,
+                   grid=grid,
                    soc_initial=parameters['soc_initial'],
                    efficiency_in=parameters['efficiency_in'],
                    efficiency_out=parameters['efficiency_out'],
