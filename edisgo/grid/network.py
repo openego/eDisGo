@@ -360,7 +360,9 @@ class EDisGo:
                        battery_parameters=kwargs.get('battery_parameters',
                                                      None),
                        battery_position=kwargs.get('battery_position',
-                                                   None))
+                                                   None),
+                       voltage_level=kwargs.get('voltage_level', None)
+                       )
 
 
 class Network:
