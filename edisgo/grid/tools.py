@@ -337,6 +337,7 @@ def select_cable(network, level, apparent_power):
 
     return cable_type, cable_count
 
+
 def get_gen_info(network, level='mvlv'):
     """
     Gets all the installed generators under both mv and the lv grids.
