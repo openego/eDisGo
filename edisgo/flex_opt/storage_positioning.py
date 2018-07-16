@@ -9,7 +9,7 @@ logger = logging.getLogger('edisgo')
 
 
 def one_storage_per_feeder(edisgo, storage_parameters,
-                           storage_timeseries, total_storage_capacity):
+                           storage_timeseries, storage_capacity):
     # ToDo: add parameters from etrago specs
     # ToDo: document
 
@@ -131,15 +131,18 @@ def one_storage_per_feeder(edisgo, storage_parameters,
     # rank MV feeders by grid expansion costs
     # conduct grid reinforcement on copied edisgo object on worst-case time
     # steps
-    # grid_expansion_results = edisgo.reinforce(
-    #     copy_graph=True, timesteps_pfa='snapshot_analysis')
+    grid_expansion_results = edisgo.reinforce(
+        copy_graph=True, timesteps_pfa='snapshot_analysis')
     # ToDo: delete once implementation is finished
-    import pickle
-    edisgo_reinforce = pickle.load(open('edisgo_reinforce_294.pkl', 'rb'))
-    grid_expansion_results = edisgo_reinforce.network.results
+    # import pickle
+    # edisgo_reinforce = pickle.load(open('edisgo_reinforce_294.pkl', 'rb'))
+    # grid_expansion_results = edisgo_reinforce.network.results
     ranked_feeders = feeder_ranking(
         grid_expansion_results.grid_expansion_costs)
 
+    # maximum storage power available for the feeder
+    p_storage_total = storage_capacity / storage_parameters['c_rate']
+    p_storage_max = storage_capacity / storage_parameters['c_rate']
     for feeder in ranked_feeders.values:
 
         # first step: find node where storage will be installed
@@ -158,6 +161,7 @@ def one_storage_per_feeder(edisgo, storage_parameters,
         # analyze for all time steps
         edisgo.analyze()
 
+        # ToDo: kann weg?
         # allowed line load
         i_line_allowed_per_case = {}
         i_line_allowed_per_case['feedin_case'] = \
@@ -174,18 +178,42 @@ def one_storage_per_feeder(edisgo, storage_parameters,
                 lambda _: i_line_allowed_per_case[_])
         u_allowed = battery_line.type['U_n']
         # ToDo: correct?
-        s_allowed = sqrt(3) * i_allowed * u_allowed
+        s_allowed = sqrt(3) / 1000 * i_allowed * u_allowed
 
-        # maximum power of the line
+        # actual apparent power
+        pfa_p = edisgo.network.results.pfa_p[repr(battery_line)]
         pfa_q = edisgo.network.results.pfa_q[repr(battery_line)]
-        # ToDo: storage efficiency
-        # ToDo: p_max as time series
-        p_max = sqrt(s_allowed ** 2 - pfa_q ** 2)
+
+        s_line_max = max((pfa_p ** 2 + pfa_q ** 2).apply(sqrt))
+        # start iteration at 20 kW
+        p_storage = 20
+        # set very high value to go into while loop
+        s_line_max_old = 10 ** 4
+
+        while s_line_max < s_line_max_old and p_storage < p_storage_max:
+            # calculate share of storage of whole storage
+            share = p_storage / p_storage_total
+            # calculate storage p and q
+            p = storage_timeseries.p * share
+            q = storage_timeseries.q * share
+            # calculate new line p and q
+            line_p = pfa_p + p
+            line_q = pfa_q + q
+            s_line_max_old = s_line_max
+            s_line_max = max((line_p ** 2 + line_q ** 2).apply(sqrt))
+            # if apparent power of line decreased
+            if s_line_max < s_line_max_old:
+                # continue iteration process
+                # increase storage capacity
+                p_storage += 10
 
         # third step: integrate storage
-        # ToDo: check if that much storage capacity is left
-        storage_parameters['nominal_capacity'] = p_max
-        storage = storage_integration.set_up_storage(storage_parameters, battery_node)
+        storage_parameters['nominal_capacity'] = p_storage
+        storage = storage_integration.set_up_storage(
+            storage_parameters, battery_node, voltage_level='mv')
+        storage.timeseries = storage_timeseries * p_storage / p_storage_total
+        storage_integration.connect_storage(storage, battery_node)
+        # update pypsa
 
         # fourth step: check if storage integration reduced grid reinforcement
         # costs
@@ -208,6 +236,7 @@ def one_storage_per_feeder(edisgo, storage_parameters,
 
         # fifth step: if there is storage capacity left, rerun the past steps
         # for the next feeder in the ranking list
-        total_storage_capacity = total_storage_capacity - \
+        total_storage_capacity = storage_capacity - \
                                  storage_parameters['nominal_capacity']
+        # p_storage_max anpassen
 

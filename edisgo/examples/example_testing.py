@@ -35,36 +35,36 @@ for dingo_grid in grids:
 
     logging.info('Grid expansion for {}'.format(dingo_grid))
 
-    # set up worst-case scenario
-    edisgo = EDisGo(ding0_grid=os.path.join(
-        'data', 'ding0_grids__{}_with_w_id.pkl'.format(dingo_grid)),
-                    worst_case_analysis='worst-case-feedin')
-
-    # timeindex = pd.date_range('1/1/1971', periods=3, freq='H')
-    # conv_dispatch = pd.DataFrame({'biomass': [1] * len(timeindex),
-    #                               'coal': [1] * len(timeindex),
-    #                               'other': [1] * len(timeindex)},
-    #                              index=timeindex)
-    # ren_dispatch = pd.DataFrame({('solar', 1124078): [0.2, 0.8, 0.5],
-    #                              ('solar', 1125078): [0.2, 0.8, 0.5],
-    #                              ('solar', 1124077): [0.2, 0.8, 0.5],
-    #                              ('wind', 1124078): [0.3, 0.8, 0.5],
-    #                              ('wind', 1125078): [0.3, 0.8, 0.5],
-    #                              ('wind', 1124077): [0.3, 0.8, 0.5]
-    #                              },
-    #                             index=timeindex)
-    # load = pd.DataFrame({'residential': [0.00002] * len(timeindex),
-    #                      'retail': [0.00003] * len(timeindex),
-    #                      'industrial': [0.00002] * len(timeindex),
-    #                      'agricultural': [0.00003] * len(timeindex)},
-    #                     index=timeindex)
-    #
+    # # set up worst-case scenario
     # edisgo = EDisGo(ding0_grid=os.path.join(
-    #     'data', 'ding0_grids__{}.pkl'.format(dingo_grid)),
-    #                 timeseries_generation_fluctuating=ren_dispatch,
-    #                 timeseries_generation_dispatchable=conv_dispatch,
-    #                 timeseries_load=load)
+    #     'data', 'ding0_grids__{}_with_w_id.pkl'.format(dingo_grid)),
+    #                 worst_case_analysis='worst-case-feedin')
 
+    timeindex = pd.date_range('1/1/1971', periods=3, freq='H')
+    conv_dispatch = pd.DataFrame({'biomass': [1] * len(timeindex),
+                                  'coal': [1] * len(timeindex),
+                                  'other': [1] * len(timeindex)},
+                                 index=timeindex)
+    ren_dispatch = pd.DataFrame({'solar': [0.2, 0.8, 0.5],
+                                 'wind': [0.3, 0.8, 0.5]
+                                 },
+                                index=timeindex)
+    load = pd.DataFrame({'residential': [0.00021372] * len(timeindex),
+                         'retail': [0.0002404] * len(timeindex),
+                         'industrial': [0.000132] * len(timeindex),
+                         'agricultural': [0.00024036] * len(timeindex)},
+                        index=timeindex)
+
+    edisgo = EDisGo(ding0_grid=os.path.join(
+        'data', 'ding0_grids__{}.pkl'.format(dingo_grid)),
+                    timeseries_generation_fluctuating=ren_dispatch,
+                    timeseries_generation_dispatchable=conv_dispatch,
+                    timeseries_load=load)
+
+    # # export to pypsa
+    # edisgo.analyze()
+    # edisgo.network.pypsa.export_to_csv_folder('pypsa_network_294_feedin_case')
+    # import from pypsa
     from pypsa import Network as PyPSANetwork
     edisgo.network.pypsa = PyPSANetwork()
     edisgo.network.pypsa.import_from_csv_folder(
@@ -78,10 +78,17 @@ for dingo_grid in grids:
         'soc_initial': 0,
         'efficiency_in': 1.0,
         'efficiency_out': 1.0,
-        'standing_loss': 0.0}
+        'standing_loss': 0.0,
+        'c_rate': 6}
+    storage_timeseries = pd.DataFrame({'p': [200, -300, 400],
+                                 'q': [0.3, 0.8, 0.5]
+                                 },
+                                index=timeindex)
+    storage_capacity = 1000
     storage_positioning.one_storage_per_feeder(
-        edisgo, storage_parameters=storage_parameters)
+        edisgo, storage_parameters=storage_parameters,
+        storage_timeseries=storage_timeseries,
+        storage_capacity=storage_capacity)
 
-    # edisgo.reinforce()
     #
     # edisgo.network.results.grid_expansion_costs.to_csv('costs.csv')
