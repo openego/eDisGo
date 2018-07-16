@@ -131,7 +131,7 @@ def _line_load(network, grid, crit_lines):
             line['line'].type['I_max_th'] * line['line'].quantity * \
             network.config['grid_expansion_load_factors'][
                 '{}_load_case_line'.format(grid_level)]
-        # maximum allowed apparent power of station in each time step
+        # maximum allowed line load in each time step
         i_line_allowed = \
             network.timeseries.timesteps_load_feedin_case.case.apply(
                 lambda _: i_line_allowed_per_case[_])
