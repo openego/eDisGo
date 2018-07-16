@@ -93,21 +93,22 @@ def connect_storage(storage, node):
     """
 
     # add storage itself to graph
-    node.grid.graph.add_node(storage, type='storage')
+    storage.grid.graph.add_node(storage, type='storage')
 
     # add 1m connecting line to node the storage is connected to
-    if isinstance(node.grid, MVGrid):
+    if isinstance(storage.grid, MVGrid):
         voltage_level = 'mv'
     else:
         voltage_level = 'lv'
-    line_type, line_count = select_cable(node.grid.network, voltage_level,
+    # ToDo: nominal_capacity is not quite right here
+    line_type, line_count = select_cable(storage.grid.network, voltage_level,
                                          storage.nominal_capacity)
     line = Line(
         id=storage.id,
         type=line_type,
         kind='cable',
         length=1e-3,
-        grid=node.grid,
+        grid=storage.grid,
         quantity=line_count)
 
-    node.grid.graph.add_edge(node, storage, line=line, type='line')
+    storage.grid.graph.add_edge(node, storage, line=line, type='line')
