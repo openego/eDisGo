@@ -1169,7 +1169,7 @@ def _check_integrity_of_pypsa(pypsa_network):
             labels=duplicate_v_mag_set))
 
 
-def process_pfa_results(network, pypsa):
+def process_pfa_results(network, pypsa, timesteps):
     """
     Assing values from PyPSA to
     :meth:`results <edisgo.grid.network.Network.results>`
@@ -1178,9 +1178,12 @@ def process_pfa_results(network, pypsa):
     ----------
     network : Network
         The eDisGo grid topology model overall container
-    pypsa :
-        `Network container <https://www.pypsa.org/doc/components.html#network>`_
-        of PyPSA
+    pypsa : :pypsa:`pypsa.Network<network>`
+        The PyPSA `Network container
+        <https://www.pypsa.org/doc/components.html#network>`_
+    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+        Time steps for which latest power flow analysis was conducted for and
+        for which to retrieve pypsa results.
 
     Notes
     -----
@@ -1205,22 +1208,22 @@ def process_pfa_results(network, pypsa):
         [np.abs(pypsa.lines_t['q0']),
          np.abs(pypsa.transformers_t['q0']),
          np.abs(pypsa.generators_t['q']['Generator_slack'].rename(
-             repr(network.mv_grid.station)))], axis=1)
+             repr(network.mv_grid.station)))], axis=1).loc[timesteps, :]
     q1 = pd.concat(
         [np.abs(pypsa.lines_t['q1']),
          np.abs(pypsa.transformers_t['q1']),
          np.abs(pypsa.generators_t['q']['Generator_slack'].rename(
-             repr(network.mv_grid.station)))], axis=1)
+             repr(network.mv_grid.station)))], axis=1).loc[timesteps, :]
     p0 = pd.concat(
         [np.abs(pypsa.lines_t['p0']),
          np.abs(pypsa.transformers_t['p0']),
          np.abs(pypsa.generators_t['p']['Generator_slack'].rename(
-            repr(network.mv_grid.station)))], axis=1)
+            repr(network.mv_grid.station)))], axis=1).loc[timesteps, :]
     p1 = pd.concat(
         [np.abs(pypsa.lines_t['p1']),
          np.abs(pypsa.transformers_t['p1']),
          np.abs(pypsa.generators_t['p']['Generator_slack'].rename(
-             repr(network.mv_grid.station)))], axis=1)
+             repr(network.mv_grid.station)))], axis=1).loc[timesteps, :]
 
     # determine apparent power and line endings/transformers' side
     s0 = np.hypot(p0, q0)
@@ -1231,14 +1234,17 @@ def process_pfa_results(network, pypsa):
     network.results.pfa_q = q0.where(s0 > s1, q1) * 1e3
 
     lines_bus0 = pypsa.lines['bus0'].to_dict()
-    bus0_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[list(lines_bus0.values()), :].copy()
+    bus0_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[
+                    list(lines_bus0.values()), :].copy()
     bus0_v_mag_pu.index = list(lines_bus0.keys())
 
     lines_bus1 = pypsa.lines['bus1'].to_dict()
-    bus1_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[list(lines_bus1.values()), :].copy()
+    bus1_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[
+                    list(lines_bus1.values()), :].copy()
     bus1_v_mag_pu.index = list(lines_bus1.keys())
 
-    line_voltage_avg = 0.5 * (bus0_v_mag_pu + bus1_v_mag_pu)
+    line_voltage_avg = 0.5 * (bus0_v_mag_pu.loc[:, timesteps] +
+                              bus1_v_mag_pu.loc[:, timesteps])
 
     # Get voltage levels at line (avg. of buses at both sides)
     network.results._i_res = s0[pypsa.lines_t['q0'].columns].truediv(
@@ -1246,7 +1252,8 @@ def process_pfa_results(network, pypsa):
     # process results at nodes
     generators_names = [repr(g) for g in
                         network.mv_grid.graph.nodes_by_attribute('generator') +
-                        network.mv_grid.graph.nodes_by_attribute('generator_aggr')]
+                        network.mv_grid.graph.nodes_by_attribute(
+                            'generator_aggr')]
     generators_mapping = {v: k for k, v in
                           pypsa.generators.loc[generators_names][
                               'bus'].to_dict().items()}
@@ -1261,8 +1268,7 @@ def process_pfa_results(network, pypsa):
                                         'mv_disconnecting_point')]
     mv_switch_disconnector_mapping = {'_'.join(['Bus', v]): v for v in
                                       mv_switch_disconnector_names}
-    lv_station_names = [repr(l) for l in
-                        network.mv_grid.graph.nodes_by_attribute('lv_station')]
+
     lv_station_mapping_pri = {
         '_'.join(['Bus', l.__repr__('mv')]): repr(l)
         for l in network.mv_grid.graph.nodes_by_attribute('lv_station')}
@@ -1321,7 +1327,8 @@ def process_pfa_results(network, pypsa):
         list(lv_branch_t_mapping) +
         list(lv_loads_mapping)]).rename(columns=names_mapping)
     network.results.pfa_v_mag_pu = pd.concat(
-        {'mv': pfa_v_mag_pu_mv, 'lv': pfa_v_mag_pu_lv}, axis=1)
+        {'mv': pfa_v_mag_pu_mv.loc[timesteps, :],
+         'lv': pfa_v_mag_pu_lv.loc[timesteps, :]}, axis=1)
 
 
 def update_pypsa_grid_reinforcement(network, equipment_changes):
