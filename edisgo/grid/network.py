@@ -329,7 +329,8 @@ class EDisGo:
         pf_results = self.network.pypsa.pf(timesteps)
 
         if all(pf_results['converged']['0'].tolist()):
-            pypsa_io.process_pfa_results(self.network, self.network.pypsa)
+            pypsa_io.process_pfa_results(
+                self.network, self.network.pypsa, timesteps)
         else:
             raise ValueError("Power flow analysis did not converge.")
 
