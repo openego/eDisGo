@@ -708,6 +708,9 @@ class Storage(Component):
         """
         self._operation
 
+    def __repr__(self):
+        return str(self._id)
+
 
 class MVDisconnectingPoint(Component):
     """Disconnecting point object
