@@ -376,9 +376,6 @@ def get_gen_info(network, level='mvlv'):
             except AttributeError:
                 gens_w_id.append(np.nan)
 
-    else:
-        pass
-
     if 'lv' in level:
         for lv_grid in network.mv_grid.lv_grids:
             gens_lv = lv_grid.generators
@@ -392,9 +389,6 @@ def get_gen_info(network, level='mvlv'):
                     gens_w_id.append(gen.weather_cell_id)
                 except AttributeError:
                     gens_w_id.append(np.nan)
-
-    else:
-        pass
 
     gen_df = pd.DataFrame({'gen_repr': list(map(lambda x: repr(x), gens)),
                            'generator_uncat': gens,
