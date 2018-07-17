@@ -297,8 +297,8 @@ class Generator(Component):
         """
         Feed-in time series of generator
 
-        It returns the actual time series used in power flow analysis. If
-        :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
+        It returns the actual dispatch time series used in power flow analysis.
+        If :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
         :meth:`timeseries` looks for time series of the according type of
         technology in :class:`~.grid.network.TimeSeries`.
 
@@ -355,7 +355,7 @@ class Generator(Component):
 
     @property
     def nominal_capacity(self):
-        """:obj:`float` : Nominal generation capacity"""
+        """:obj:`float` : Nominal generation capacity in kW"""
         return self._nominal_capacity
 
     @nominal_capacity.setter
@@ -570,7 +570,8 @@ class Storage(Component):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._timeseries = kwargs.get('timeseries', None)
-        self._nominal_capacity = kwargs.get('nominal_capacity', None)
+        self._nominal_power = kwargs.get('nominal_power', None)
+        self._max_hours = kwargs.get('max_hours', None)
         self._soc_initial = kwargs.get('soc_initial', None)
         self._efficiency_in = kwargs.get('efficiency_in', None)
         self._efficiency_out = kwargs.get('efficiency_out', None)
@@ -586,8 +587,8 @@ class Storage(Component):
         ----------
         timeseries : :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power the storage is charged (negative)
-            and discharged (positive) with in kW in column 'p' and
-            reactive power in kVA in column 'q'.
+            and discharged (positive) with (on the grid side) in kW in column
+            'p' and reactive power in kVA in column 'q'.
 
         Returns
         -------
@@ -595,7 +596,6 @@ class Storage(Component):
             See parameter `timeseries`.
 
         """
-        # ToDo: Consider efficiencies
         return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
 
     @timeseries.setter
@@ -616,9 +616,36 @@ class Storage(Component):
         return self.timeseries[attr] / 1e3
 
     @property
+    def nominal_power(self):
+        """
+        Nominal charging and discharging power of storage instance in kW.
+
+        Returns
+        -------
+        float
+            Storage nominal power
+
+        """
+        return self._nominal_power
+
+    @property
+    def max_hours(self):
+        """
+        Maximum state of charge capacity in terms of hours at full discharging
+        power `nominal_power`.
+
+        Returns
+        -------
+        float
+            Hours storage can be discharged for at nominal power
+
+        """
+        return self._max_hours
+
+    @property
     def nominal_capacity(self):
         """
-        Nominal capacity of storage instance in kW.
+        Nominal storage capacity in kWh.
 
         Returns
         -------
@@ -626,7 +653,7 @@ class Storage(Component):
             Storage nominal capacity
 
         """
-        return self._nominal_capacity
+        return self._max_hours * self._nominal_power
 
     @property
     def soc_initial(self):

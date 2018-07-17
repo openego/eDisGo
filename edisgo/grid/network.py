@@ -1292,13 +1292,16 @@ class StorageControl:
         .. code-block:: python
 
             {
-                'nominal_capacity': <float>, # in kWh
+                'nominal_power': <float>, # in kW
+                'max_hours': <float>, # in h
                 'soc_initial': <float>, # in kWh
                 'efficiency_in': <float>, # in per unit 0..1
                 'efficiency_out': <float>, # in per unit 0..1
                 'standing_loss': <float> # in per unit 0..1
             }
 
+        See :class:`~.grid.components.Storage` for more information on storage
+        parameters.
         In case of more than one storage provide a :obj:`dict` where each
         entry represents a storage. Keys of the dictionary have to match
         the keys of the `timeseries_battery` dictionary, values must
@@ -1395,7 +1398,7 @@ class StorageControl:
             self._check_timeindex(timeseries)
             storage.timeseries = timeseries
         elif isinstance(timeseries, str) and timeseries == 'fifty-fifty':
-            storage_operation.fifty_fifty(storage)
+            storage_operation.fifty_fifty(self.network, storage)
         else:
             message = 'Provided battery timeseries option {} is not ' \
                       'valid.'.format(timeseries)

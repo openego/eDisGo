@@ -70,7 +70,8 @@ def set_up_storage(parameters, node,
                    id='{}_storage_{}'.format(
                        grid,
                        len(grid.graph.nodes_by_attribute('storage')) + 1),
-                   nominal_capacity=parameters['nominal_capacity'],
+                   nominal_power=parameters['nominal_power'],
+                   max_hours=parameters['max_hours'],
                    grid=grid,
                    soc_initial=parameters['soc_initial'],
                    efficiency_in=parameters['efficiency_in'],
@@ -100,9 +101,8 @@ def connect_storage(storage, node):
         voltage_level = 'mv'
     else:
         voltage_level = 'lv'
-    # ToDo: nominal_capacity is not quite right here
     line_type, line_count = select_cable(storage.grid.network, voltage_level,
-                                         storage.nominal_capacity)
+                                         storage.nominal_power)
     line = Line(
         id=storage.id,
         type=line_type,
