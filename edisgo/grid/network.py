@@ -2172,7 +2172,7 @@ class Results:
 
         return s_res
 
-    def v_res(self, nodes=None, generators=None, level=None):
+    def v_res(self, nodes=None, level=None):
         """
         Get resulting voltage level at node
 
