@@ -18,50 +18,28 @@ def one_storage_per_feeder(edisgo, storage_parameters,
         Get feeder ranking from grid expansion costs DataFrame.
 
         MV feeders are ranked descending by grid expansion costs that are
-        attributed to that feeder. Since grid expansion costs are calculated
-        on a copied graph, the MV feeders from the copied graph are in a
-        second step over-written by the MV feeders from the original graph.
+        attributed to that feeder.
 
         Parameters
         ----------
         grid_expansion_costs : :pandas:`pandas.DataFrame<dataframe>`
             grid_expansion_costs DataFrame from :class:`~.grid.network.Results`
+            of the copied edisgo object.
 
         Returns
         -------
         :pandas:`pandas.Series<series>`
-            Series with ranked MV feeders (in the original graph) of type
+            Series with ranked MV feeders (in the copied graph) of type
             :class:`~.grid.components.Line`. Feeders are ranked by total grid
             expansion costs of all measures conducted in the feeder. The
             feeder with the highest costs is in the first row and the feeder
             with the lowest costs in the last row.
 
         """
-        # ranked feeders in copied graph
-        ranked_feeders = grid_expansion_costs.groupby(
+        return grid_expansion_costs.groupby(
             ['mv_feeder'], sort=False).sum().reset_index().sort_values(
             by=['total_costs'], ascending=False)['mv_feeder']
 
-        # # get feeders in original graph
-        # mv_station_adj_nodes = edisgo.network.mv_grid.graph.neighbors(
-        #     edisgo.network.mv_grid.station)
-        # feeders_original_graph = []
-        # for neighbor in mv_station_adj_nodes:
-        #     feeders_original_graph.append(
-        #         edisgo.network.mv_grid.graph.line_from_nodes(
-        #             edisgo.network.mv_grid.station, neighbor))
-        #
-        # # assign feeders of original graph
-        # for ind in ranked_feeders.index:
-        #     for feeder in feeders_original_graph:
-        #         if repr(feeder) == repr(ranked_feeders.loc[ind]):
-        #             ranked_feeders.loc[ind] = feeder
-        #     # if no feeder from original graph could be assign raise error
-        #     if ranked_feeders.loc[ind] not in feeders_original_graph:
-        #         raise ValueError("Could not assign ranked feeder {} from the "
-        #                          "copied graph to a feeder in the original "
-        #                          "graph.".format(ranked_feeders.loc[ind]))
-        return ranked_feeders
 
     def find_battery_node(components, edisgo_original):
         """
