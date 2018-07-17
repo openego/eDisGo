@@ -139,25 +139,6 @@ def one_storage_per_feeder(edisgo, storage_parameters,
         # analyze for all time steps
         edisgo.analyze()
 
-        # ToDo: kann weg?
-        # allowed line load
-        i_line_allowed_per_case = {}
-        i_line_allowed_per_case['feedin_case'] = \
-            battery_line.type['I_max_th'] * battery_line.quantity * \
-            edisgo.network.config['grid_expansion_load_factors'][
-                'mv_feedin_case_line']
-        i_line_allowed_per_case['load_case'] = \
-            battery_line.type['I_max_th'] * battery_line.quantity * \
-            edisgo.network.config['grid_expansion_load_factors'][
-                'mv_load_case_line']
-        # maximum allowed line load in each time step
-        i_allowed = \
-            edisgo.network.timeseries.timesteps_load_feedin_case.case.apply(
-                lambda _: i_line_allowed_per_case[_])
-        u_allowed = battery_line.type['U_n']
-        # ToDo: correct?
-        s_allowed = sqrt(3) / 1000 * i_allowed * u_allowed
-
         # actual apparent power
         pfa_p = edisgo.network.results.pfa_p[repr(battery_line)]
         pfa_q = edisgo.network.results.pfa_q[repr(battery_line)]
