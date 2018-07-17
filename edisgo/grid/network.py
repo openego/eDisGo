@@ -1405,6 +1405,11 @@ class StorageControl:
             logging.error(message)
             raise KeyError(message)
 
+        # update pypsa representation
+        if self.network.pypsa is not None:
+            pypsa_io.update_pypsa_storage(
+                self.network.pypsa, storages=[storage], storages_lines=[line])
+
     def _check_timeindex(self, timeseries):
         """
         Raises an error if time index of battery time series does not
