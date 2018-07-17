@@ -4,8 +4,6 @@ topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA grid
 container.
 """
 
-from edisgo.grid.components import Transformer, Line, LVStation
-
 import numpy as np
 import pandas as pd
 import itertools
@@ -14,6 +12,9 @@ from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
 from networkx import connected_component_subgraphs
 import collections
+
+from edisgo.grid.components import Transformer, Line, LVStation, MVStation
+from edisgo.grid.grids import LVGrid
 
 
 def to_pypsa(network, mode, timesteps):
@@ -1456,6 +1457,125 @@ def update_pypsa_grid_reinforcement(network, equipment_changes):
 
         network.pypsa.lines.loc[repr(idx), 'bus0'] = bus0
         network.pypsa.lines.loc[repr(idx), 'bus1'] = bus1
+
+
+def update_pypsa_storage(pypsa, storages, storages_lines):
+    """
+    Adds storages and their lines to pypsa representation of the edisgo graph.
+
+    This function effects the following attributes of the pypsa network:
+    components ('StorageUnit'), storage_units, storage_units_t (p_set, q_set),
+    buses, lines
+
+    Parameters
+    -----------
+    pypsa : :pypsa:`pypsa.Network<network>`
+    storages : :obj:`list`
+        List with storages of type :class:`~.grid.components.Storage` to add
+        to pypsa network.
+    storages_lines : :obj:`list`
+        List with lines of type :class:`~.grid.components.Line` that connect
+        storages to the grid.
+
+    """
+    bus = {'name': [], 'v_nom': []}
+
+    line = {'name': [],
+            'bus0': [],
+            'bus1': [],
+            'type': [],
+            'x': [],
+            'r': [],
+            's_nom': [],
+            'length': []}
+
+    storage = {
+        'name': [],
+        'bus': [],
+        'p_nom': [],
+        'state_of_charge_initial': [],
+        'efficiency_store': [],
+        'efficiency_dispatch': [],
+        'standing_loss': []}
+
+    for s in storages:
+        bus_name = '_'.join(['Bus', repr(s)])
+
+        storage['name'].append(repr(s))
+        storage['bus'].append(bus_name)
+        storage['p_nom'].append(s.nominal_power / 1e3)
+        storage['state_of_charge_initial'].append(s.soc_initial)
+        storage['efficiency_store'].append(s.efficiency_in)
+        storage['efficiency_dispatch'].append(s.efficiency_out)
+        storage['standing_loss'].append(s.standing_loss)
+
+        bus['name'].append(bus_name)
+        bus['v_nom'].append(s.grid.voltage_nom)
+
+    omega = 2 * pi * 50
+    for l in storages_lines:
+        line['name'].append(repr(l))
+
+        adj_nodes = l.grid.graph.nodes_from_line(l)
+        if isinstance(l.grid, LVGrid):
+            if isinstance(adj_nodes[0], LVStation):
+                line['bus0'].append(
+                    '_'.join(['Bus', adj_nodes[0].__repr__(side='lv')]))
+            else:
+                line['bus0'].append('_'.join(['Bus', repr(adj_nodes[0])]))
+
+            if isinstance(adj_nodes[1], LVStation):
+                line['bus1'].append(
+                    '_'.join(['Bus', adj_nodes[1].__repr__(side='lv')]))
+            else:
+                line['bus1'].append('_'.join(['Bus', repr(adj_nodes[1])]))
+        else:
+            if isinstance(adj_nodes[0], LVStation):
+                line['bus0'].append(
+                    '_'.join(['Bus', adj_nodes[0].__repr__(side='mv')]))
+            elif isinstance(adj_nodes[0], MVStation):
+                line['bus0'].append(
+                    '_'.join(['Bus', adj_nodes[0].__repr__(side='lv')]))
+            else:
+                line['bus0'].append('_'.join(['Bus', repr(adj_nodes[0])]))
+
+            if isinstance(adj_nodes[1], LVStation):
+                line['bus1'].append(
+                    '_'.join(['Bus', adj_nodes[1].__repr__(side='mv')]))
+            elif isinstance(adj_nodes[1], MVStation):
+                line['bus1'].append(
+                    '_'.join(['Bus', adj_nodes[1].__repr__(side='lv')]))
+            else:
+                line['bus1'].append('_'.join(['Bus', repr(adj_nodes[1])]))
+
+        line['type'].append("")
+        line['x'].append(l.type['L'] * omega / 1e3 * l.length)
+        line['r'].append(l.type['R'] * l.length)
+        line['s_nom'].append(
+            sqrt(3) * l.type['I_max_th'] * l.type['U_n'] / 1e3)
+        line['length'].append(l.length)
+
+    # import new components to pypsa
+    pypsa.import_components_from_dataframe(
+        pd.DataFrame(bus).set_index('name'), 'Bus')
+    pypsa.import_components_from_dataframe(
+        pd.DataFrame(storage).set_index('name'), 'StorageUnit')
+    pypsa.import_components_from_dataframe(
+        pd.DataFrame(line).set_index('name'), 'Line')
+
+    # import time series of storages and buses to pypsa
+    timeseries_storage_p = pd.DataFrame()
+    timeseries_storage_q = pd.DataFrame()
+    for s in storages:
+        timeseries_storage_p[repr(s)] = s.pypsa_timeseries('p').loc[
+            pypsa.storage_units_t.p_set.index]
+        timeseries_storage_q[repr(s)] = s.pypsa_timeseries('q').loc[
+            pypsa.storage_units_t.q_set.index]
+
+    import_series_from_dataframe(pypsa, timeseries_storage_p,
+                                 'StorageUnit', 'p_set')
+    import_series_from_dataframe(pypsa, timeseries_storage_q,
+                                 'StorageUnit', 'q_set')
 
 
 def update_pypsa_timeseries(network, loads_to_update=None,
