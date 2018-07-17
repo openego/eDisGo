@@ -1249,8 +1249,9 @@ class CurtailmentControl:
             feedin_ts_compare.columns = feedin_ts_compare.columns.droplevel(1)
         # need an if condition to remove the weather_cell_id level too
 
-        if not (feedin_ts_compare.loc[:, network.timeseries.curtailment.columns]
-                >= network.timeseries.curtailment).all().all():
+        if not ((feedin_ts_compare.loc[
+                 :, network.timeseries.curtailment.columns] -
+                     network.timeseries.curtailment) > -1e-3).all().all():
             message = 'Curtailment exceeds feed-in.'
             logging.error(message)
             raise TypeError(message)

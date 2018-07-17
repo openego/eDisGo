@@ -9,9 +9,19 @@ logger = logging.getLogger('edisgo')
 
 
 def one_storage_per_feeder(edisgo, storage_parameters,
-                           storage_timeseries, storage_capacity):
-    # ToDo: add parameters from etrago specs
-    # ToDo: document
+                           storage_timeseries, storage_power):
+    """
+    Parameters
+    -----------
+    edisgo : :class:`~.grid.network.EDisGo`
+    storage_parameters : :obj:`dict`
+        Dictionary with storage parameters. See
+        :class:`~.grid.network.StorageControl` class definition for more
+        information.
+    storage_timeseries : p and q in kW and kvar of total storage
+    storage_power : in kW of total storage
+
+    """
 
     def feeder_ranking(grid_expansion_costs):
         """
@@ -39,7 +49,6 @@ def one_storage_per_feeder(edisgo, storage_parameters,
         return grid_expansion_costs.groupby(
             ['mv_feeder'], sort=False).sum().reset_index().sort_values(
             by=['total_costs'], ascending=False)['mv_feeder']
-
 
     def find_battery_node(components, edisgo_original):
         """
@@ -119,26 +128,31 @@ def one_storage_per_feeder(edisgo, storage_parameters,
         grid_expansion_results.grid_expansion_costs)
 
     # maximum storage power available for the feeder
-    p_storage_total = storage_capacity / storage_parameters['c_rate']
-    p_storage_max = storage_capacity / storage_parameters['c_rate']
+    p_storage_total = storage_power
+    p_storage_max = storage_power
     for feeder in ranked_feeders.values:
 
         # first step: find node where storage will be installed
+
         # get all reinforced components in respective feeder
         components = grid_expansion_results.grid_expansion_costs.loc[
             grid_expansion_results.grid_expansion_costs.mv_feeder == feeder]. \
             index
+        # get node the storage will be connected to (in original graph)
         battery_node = find_battery_node(components, edisgo)
 
         # second step: estimate residual line load to calculate size of battery
+
+        # get line (in original graph) from node the storage will be connected
+        # to to next node towards the MV station
         path_to_battery_node = nx.shortest_path(
             edisgo.network.mv_grid.graph, edisgo.network.mv_grid.station,
             battery_node)
         battery_line = edisgo.network.mv_grid.graph.line_from_nodes(
             path_to_battery_node[-1], path_to_battery_node[-2])
+
         # analyze for all time steps
         edisgo.analyze()
-
         # actual apparent power
         pfa_p = edisgo.network.results.pfa_p[repr(battery_line)]
         pfa_q = edisgo.network.results.pfa_q[repr(battery_line)]
@@ -167,7 +181,7 @@ def one_storage_per_feeder(edisgo, storage_parameters,
                 p_storage += 10
 
         # third step: integrate storage
-        storage_parameters['nominal_capacity'] = p_storage
+        storage_parameters['nominal_power'] = p_storage
         storage = storage_integration.set_up_storage(
             storage_parameters, battery_node, voltage_level='mv')
         storage.timeseries = storage_timeseries * p_storage / p_storage_total
@@ -195,7 +209,7 @@ def one_storage_per_feeder(edisgo, storage_parameters,
 
         # fifth step: if there is storage capacity left, rerun the past steps
         # for the next feeder in the ranking list
-        total_storage_capacity = storage_capacity - \
-                                 storage_parameters['nominal_capacity']
+        # total_storage_capacity = storage_capacity - \
+        #                          storage_parameters['nominal_capacity']
         # p_storage_max anpassen
 
