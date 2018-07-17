@@ -70,13 +70,13 @@ def set_up_storage(parameters, node,
                    id='{}_storage_{}'.format(
                        grid,
                        len(grid.graph.nodes_by_attribute('storage')) + 1),
-                   nominal_power=parameters['nominal_power'],
-                   max_hours=parameters['max_hours'],
+                   nominal_power=parameters.get('nominal_power', None),
+                   max_hours=parameters.get('max_hours', None),
                    grid=grid,
-                   soc_initial=parameters['soc_initial'],
-                   efficiency_in=parameters['efficiency_in'],
-                   efficiency_out=parameters['efficiency_out'],
-                   standing_loss=parameters['standing_loss'],
+                   soc_initial=parameters.get('soc_initial', None),
+                   efficiency_in=parameters.get('efficiency_in', None),
+                   efficiency_out=parameters.get('efficiency_out', None),
+                   standing_loss=parameters.get('standing_loss', None),
                    geom=node.geom)
 
 
