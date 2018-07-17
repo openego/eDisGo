@@ -6,16 +6,13 @@ import logging
 import datetime
 
 import edisgo
-from edisgo.tools import config, pypsa_io
+from edisgo.tools import config, pypsa_io, tools
 from edisgo.data.import_data import import_from_ding0, import_generators, \
     import_feedin_timeseries, import_load_timeseries
-from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, curtailment
 from edisgo.grid.components import Station, BranchTee
-from edisgo.grid.tools import get_capacities_by_type, \
-    get_capacities_by_type_and_weather_cell, \
-    get_gen_info
+from edisgo.grid.tools import get_gen_info
 
 logger = logging.getLogger('edisgo')
 
@@ -196,19 +193,17 @@ class EDisGo:
         # worst-case time series
         if kwargs.get('worst_case_analysis', None):
             self.network.timeseries = TimeSeriesControl(
-                mode=kwargs.get('worst_case_analysis', None),
-                weather_cell_ids=self.network.mv_grid.weather_cells,
-                config_data=self.network.config).timeseries
+                network=self.network,
+                mode=kwargs.get('worst_case_analysis', None)).timeseries
         else:
             self.network.timeseries = TimeSeriesControl(
+                network=self.network,
                 timeseries_generation_fluctuating=kwargs.get(
                     'timeseries_generation_fluctuating', None),
                 timeseries_generation_dispatchable=kwargs.get(
                     'timeseries_generation_dispatchable', None),
                 timeseries_load=kwargs.get(
                     'timeseries_load', None),
-                weather_cell_ids=self.network.mv_grid.weather_cells,
-                config_data=self.network.config,
                 timeindex=kwargs.get('timeindex', None)).timeseries
 
         # import new generators
@@ -234,8 +229,7 @@ class EDisGo:
         :func:`edisgo.data.import_data.import_from_ding0`
 
         """
-        import_from_ding0(file=file,
-                          network=self.network)
+        import_from_ding0(file=file, network=self.network)
 
     def import_generators(self, generator_scenario=None):
         """Import generators
@@ -247,10 +241,9 @@ class EDisGo:
         if generator_scenario:
             self.network.generator_scenario = generator_scenario
         data_source = 'oedb'
-        import_generators(network=self.network,
-                          data_source=data_source)
+        import_generators(network=self.network, data_source=data_source)
 
-    def analyze(self, mode=None):
+    def analyze(self, mode=None, timesteps=None):
         """Analyzes the grid by power flow analysis
 
         Analyze the grid for violations of hosting capacity. Means, perform a
@@ -258,9 +251,8 @@ class EDisGo:
         stations/transformers and branch tees) and active/reactive power at
         lines.
 
-        The power flow analysis can be performed for both grid levels MV and LV
-        and for both of them individually. Use `mode` to choose (defaults to
-        MV + LV).
+        The power flow analysis can currently only be performed for both grid
+        levels MV and LV. See ToDos section for more information.
 
         A static `non-linear power flow analysis is performed using PyPSA
         <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
@@ -273,10 +265,15 @@ class EDisGo:
         ----------
         mode : str
             Allows to toggle between power flow analysis (PFA) on the whole
-            grid topology (MV + LV), only MV or only LV. Therefore, either
-            specify `mode='mv'` for PFA of the MV grid topology or `mode='lv'`
-            for PFA of the LV grid topology.
-            Defaults to None which equals power flow analysis for MV + LV.
+            grid topology (MV + LV), only MV or only LV. Defaults to None which
+            equals power flow analysis for MV + LV which is the only
+            implemented option at the moment. See ToDos section for
+            more information.
+        timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+            Timesteps specifies for which time steps to conduct the power flow
+            analysis. It defaults to None in which case the time steps in
+            timeseries.timeindex (see :class:`~.grid.network.TimeSeries`) are
+            used.
 
         Notes
         -----
@@ -284,8 +281,22 @@ class EDisGo:
         representation to the PyPSA format and stores it to
         :attr:`self.network.pypsa`.
 
-         .. ToDo: explain how power plants are modeled, if possible use a link
-         .. ToDo: explain where to find and adjust power flow analysis defining parameters
+        ToDos
+        ------
+        The option to export only the edisgo MV grid (mode = 'mv') to conduct
+        a power flow analysis is implemented in
+        :func:`~.tools.pypsa_io.to_pypsa` but NotImplementedError is raised
+        since the rest of edisgo does not handle this option yet. The analyze
+        function will throw an error since
+        :func:`~.tools.pypsa_io.process_pfa_results`
+        does not handle aggregated loads and generators in the LV grids. Also,
+        grid reinforcement, pypsa update of time series, and probably other
+        functionalities do not work when only the MV grid is analysed.
+
+        Further ToDos are:
+        * explain how power plants are modeled, if possible use a link
+        * explain where to find and adjust power flow analysis defining
+        parameters
 
         See Also
         --------
@@ -293,34 +304,47 @@ class EDisGo:
             Translator to PyPSA data format
 
         """
-        # ToDo: Should timeindex be an input to this as well?
+        if timesteps is None:
+            timesteps = self.network.timeseries.timeindex
+        # check if timesteps is array-like, otherwise convert to list
+        if not hasattr(timesteps, "__len__"):
+            timesteps = [timesteps]
+
         if self.network.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
-            self.network.pypsa = pypsa_io.to_pypsa(self.network, mode)
+            self.network.pypsa = pypsa_io.to_pypsa(
+                self.network, mode, timesteps)
         else:
-            if self.network.results.equipment_changes is not None:
-                # Update PyPSA data with equipment changes
-                pypsa_io.update_pypsa(self.network)
-            # ToDo: add option to change generator time series
+            if self.network.pypsa.edisgo_mode is not mode:
+                # Translate eDisGo grid topology representation to PyPSA format
+                self.network.pypsa = pypsa_io.to_pypsa(
+                    self.network, mode, timesteps)
 
+        # check if all timesteps are in pypsa.snapshots, if not update time
+        # series
+        if False in [True if _ in self.network.pypsa.snapshots else False
+                     for _ in timesteps]:
+            pypsa_io.update_pypsa_timeseries(self.network, timesteps=timesteps)
         # run power flow analysis
-        pf_results = self.network.pypsa.pf(self.network.pypsa.snapshots)
+        pf_results = self.network.pypsa.pf(timesteps)
 
-        if all(pf_results['converged']['0'].tolist()) == True:
+        if all(pf_results['converged']['0'].tolist()):
             pypsa_io.process_pfa_results(self.network, self.network.pypsa)
         else:
             raise ValueError("Power flow analysis did not converge.")
 
     def reinforce(self, **kwargs):
         """
-        Reinforces the grid and calculates grid expansion costs
+        Reinforces the grid and calculates grid expansion costs.
+
+        See :meth:`~.flex_opt.reinforce_grid` for more information.
 
         """
-        reinforce_grid(
+        return reinforce_grid(
             self, max_while_iterations=kwargs.get(
-                'max_while_iterations', 10))
-        self.network.results.grid_expansion_costs = grid_expansion_costs(
-            self.network)
+                'max_while_iterations', 10),
+            copy_graph=kwargs.get('copy_graph', False),
+            timesteps_pfa=kwargs.get('timesteps_pfa', None))
 
     def integrate_storage(self, **kwargs):
         """
@@ -596,20 +620,23 @@ class Network:
 
         A grid topology representation based on
         :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
-        this data model the :pypsa:`pypsa.Network<network>`
+        this data model, the :pypsa:`pypsa.Network<network>`,
         is assigned to this attribute.
-        This allows as well to overwrite data.
 
         Parameters
         ----------
-        pypsa:
+        pypsa : :pypsa:`pypsa.Network<network>`
             The `PyPSA network
-            <https://www.pypsa.org/doc/components.html#network>`_ container
+            <https://www.pypsa.org/doc/components.html#network>`_ container.
 
         Returns
         -------
         :pypsa:`pypsa.Network<network>`
-            PyPSA grid representation
+            PyPSA grid representation. The attribute `edisgo_mode` is added
+            to specify if pypsa representation of the edisgo network
+            was created for the whole grid topology (MV + LV), only MV or only
+            LV. See parameter `mode` in
+            :meth:`~.grid.network.EDisGo.analyze` for more information.
 
         """
         return self._pypsa
@@ -766,6 +793,8 @@ class TimeSeriesControl:
 
     Parameters
     ----------
+    network : :class:`~.grid.network.Network`
+        The eDisGo data container
     mode : :obj:`str`, optional
         Mode must be set in case of worst-case analyses and can either be
         'worst-case' (both feed-in and load case), 'worst-case-feedin' (only
@@ -820,28 +849,19 @@ class TimeSeriesControl:
           * 'agricultural'
 
         Default: None.
-    config_data : dict, optional
-        Dictionary containing config data from config files. See
-        :class:`~.grid.network.Config` data attribute for more information.
-        Default: None.
     timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
         Can be used to define a time range for which to obtain load time series
         and feed-in time series of fluctuating renewables or to define time
         ranges of the given time series that will be used in the analysis.
-    mv_grid_id : :obj:`str`, optional
-        MV grid ID as used in oedb. Default: None.
-    generator_scenario : :obj:`str`
-        Defines which scenario of future generator park to use. Possible
-        options are 'nep2035' and 'ego100'. Default: None.
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, network, **kwargs):
 
-        self.timeseries = TimeSeries()
+        self.timeseries = TimeSeries(network=network)
         mode = kwargs.get('mode', None)
-        config_data = kwargs.get('config_data', None)
-        weather_cell_ids = kwargs.get('weather_cell_ids', None)
+        config_data = network.config
+        weather_cell_ids = network.mv_grid.weather_cells
 
         if mode:
             if mode == 'worst-case':
@@ -852,7 +872,7 @@ class TimeSeriesControl:
                 raise ValueError('{} is not a valid mode.'.format(mode))
 
             # set random timeindex
-            self.timeseries.timeindex = pd.date_range(
+            self.timeseries._timeindex = pd.date_range(
                 '1/1/1970', periods=len(modes), freq='H')
             self._worst_case_generation(config_data['worst_case_scale_factor'],
                                         modes)
@@ -883,9 +903,9 @@ class TimeSeriesControl:
                                  'valid.'.format(mode))
             # set time index
             if kwargs.get('timeindex', None) is not None:
-                self.timeseries.timeindex = kwargs.get('timeindex')
+                self.timeseries._timeindex = kwargs.get('timeindex')
             else:
-                self.timeseries.timeindex = \
+                self.timeseries._timeindex = \
                     self.timeseries._generation_fluctuating.index
             # load time series
             ts = kwargs.get('timeseries_load', None)
@@ -1179,8 +1199,9 @@ class CurtailmentControl:
             logging.error(message)
             raise TypeError(message)
 
-        # clear the pypsa object so that it doesn't interfere with further calculations
-        edisgo_object.network.pypsa = None
+        # update generator time series in pypsa network
+        if edisgo_object.network.pypsa is not None:
+            pypsa_io.update_pypsa_generator_timeseries(edisgo_object.network)
 
         # check if curtailment exceeds feed-in
         self._check_curtailment(edisgo_object.network)
@@ -1205,12 +1226,6 @@ class CurtailmentControl:
                       'with load and feed-in time series.'
             logging.error(message)
             raise KeyError(message)
-        # raise warning if time indexes do not have the same entries
-        if pd.Series(network.timeseries.generation_fluctuating.
-                             index).equals(pd.Series(
-            self.curtailment_ts.index)) is False:
-            logging.warning('Time index of curtailment time series is not '
-                            'equal to the feed-in time series index.')
 
     def _check_curtailment(self, network):
         """
@@ -1395,10 +1410,11 @@ class StorageControl:
 
 
 class TimeSeries:
-    """Defines an eDisGo time series
+    """
+    Defines time series for all loads and generators in network (if set).
 
-    Contains time series for loads (sector-specific) and generators
-    (technology-specific), e.g. tech. solar.
+    Contains time series for loads (sector-specific), generators
+    (technology-specific), and curtailment (technology-specific).
 
     Attributes
     ----------
@@ -1457,7 +1473,8 @@ class TimeSeries:
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, network, **kwargs):
+        self.network = network
         self._generation_dispatchable = kwargs.get('generation_dispatchable',
                                                    None)
         self._generation_fluctuating = kwargs.get('generation_fluctuating',
@@ -1465,6 +1482,7 @@ class TimeSeries:
         self._load = kwargs.get('load', None)
         self._curtailment = kwargs.get('curtailment', None)
         self._timeindex = kwargs.get('timeindex', None)
+        self._timesteps_load_feedin_case = None
 
     @property
     def generation_dispatchable(self):
@@ -1543,10 +1561,6 @@ class TimeSeries:
         """
         return self._timeindex
 
-    @timeindex.setter
-    def timeindex(self, time_range):
-        self._timeindex = time_range
-
     @property
     def curtailment(self):
         """
@@ -1593,6 +1607,50 @@ class TimeSeries:
     @curtailment.setter
     def curtailment(self, curtailment):
         self._curtailment = curtailment
+
+    @property
+    def timesteps_load_feedin_case(self):
+        """
+        Contains residual load and information on feed-in and load case.
+
+        Residual load is calculated from total (load - generation) in the grid.
+        Grid losses are not considered.
+
+        Feed-in and load case are identified based on the
+        generation and load time series and defined as follows:
+
+        1. Load case: positive (load - generation) at HV/MV substation
+        2. Feed-in case: negative (load - generation) at HV/MV substation
+
+        See also :func:`~.tools.tools.assign_load_feedin_case`.
+
+        Parameters
+        -----------
+        timeseries_load_feedin_case : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with information on whether time step is handled as load
+            case ('load_case') or feed-in case ('feedin_case') for each time
+            step in :py:attr:`~timeindex`. Index of the series is the
+            :py:attr:`~timeindex`.
+
+        Returns
+        -------
+        :pandas:`pandas.Series<series>`
+            Series with information on whether time step is handled as load
+            case ('load_case') or feed-in case ('feedin_case') for each time
+            step in :py:attr:`~timeindex`.
+            Index of the dataframe is :py:attr:`~timeindex`. Columns of the
+            dataframe are 'residual_load' with (load - generation) in kW at
+            HV/MV substation and 'case' with 'load_case' for positive residual
+            load and 'feedin_case' for negative residual load.
+
+        """
+        if self._timesteps_load_feedin_case is None:
+            tools.assign_load_feedin_case(self.network)
+        return self._timesteps_load_feedin_case
+
+    @timesteps_load_feedin_case.setter
+    def timesteps_load_feedin_case(self, timeseries_load_feedin_case):
+        self._timesteps_load_feedin_case = timeseries_load_feedin_case
 
 
 class ETraGoSpecs:
@@ -1791,8 +1849,8 @@ class Results:
             Results time series of active power P in kW from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
-            Provide this if you want to set values. For retrieval of data do not
-            pass an argument
+            Provide this if you want to set values. For retrieval of data do
+            not pass an argument
 
         Returns
         -------
@@ -1911,21 +1969,21 @@ class Results:
         :class:`~.grid.components.Line`, :class:`~.grid.components.Station`,
         etc.) and has the following columns:
 
-        equipment: detailing what was changed (line, station, battery,
+        equipment : detailing what was changed (line, station, battery,
         curtailment). For ease of referencing we take the component itself.
         For lines we take the line-dict, for stations the transformers, for
         batteries the battery-object itself and for curtailment
         either a dict providing the details of curtailment or a curtailment
         object if this makes more sense (has to be defined).
 
-        change: string {'added' | 'removed'}
+        change : :obj:`str` {'added' | 'removed'}
             says if something was added or removed
 
-        iteration_step: int
+        iteration_step : int
             Used for the update of the pypsa network to only consider changes
             since the last power flow analysis.
 
-        quantity: int
+        quantity : int
             Number of components added or removed. Only relevant for
             calculation of grid expansion costs to keep track of how many
             new standard lines were added.
@@ -1965,8 +2023,9 @@ class Results:
             grid_expansion_costs. For retrieval of costs do not pass an
             argument.
 
-            Index of the DataFrame is the representation of the respective
-            object, columns are the following:
+            Index of the DataFrame is the respective object
+            that can either be a :class:`~.grid.components.Line` or a
+            :class:`~.grid.components.Transformer`. Columns are the following:
 
             type: String
                 Transformer size or cable name
@@ -1982,6 +2041,13 @@ class Results:
 
             line_length: float
                 Length of line or in case of parallel lines all lines in km.
+
+            voltage_level : :obj:`str` {'lv' | 'mv' | 'mv/lv'}
+                Specifies voltage level the equipment is in.
+
+            mv_feeder : :class:`~.grid.components.Line`
+                First line segment of half-ring used to identify in which
+                feeder the grid expansion was conducted in.
 
         Returns
         -------

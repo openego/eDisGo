@@ -1030,6 +1030,10 @@ def import_generators(network, data_source=None, file=None):
                         'imported from the oedb.')
         _import_genos_from_oedb(network=network)
         network.mv_grid._weather_cells = None
+        # ToDo: Implement update of pypsa network after generator import
+        # work-around for now: reset pypsa network to make sure it is
+        # generated again with new and decommissioned generators
+        network.pypsa = None
     elif data_source == 'pypsa':
         _import_genos_from_pypsa(network=network, file=file)
     else:
@@ -1996,15 +2000,14 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
     ----------
     config_data : dict
         Dictionary containing config data from config files.
-    mv_grid_id : :obj:`str`
-        MV grid ID as used in oedb.
-    generator_scenario : None or :obj:`str`
-        Defines which scenario of future generator park to use.
+    weather_cell_ids : :obj:`list`
+        List of weather cell id's (integers) to obtain feed-in data for.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<dataframe>`
         Feedin time series
+
     """
 
     def _retrieve_timeseries_from_oedb(config_data, weather_cell_ids):
@@ -2015,7 +2018,8 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
         config_data : dict
             Dictionary containing config data from config files.
         weather_cell_ids : :obj:`list`
-            list of weather cell ids in mv grid district.
+        List of weather cell id's (integers) to obtain feed-in data for.
+
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
@@ -2061,8 +2065,6 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
                               index=timeindex,
                               columns=feedin.index.copy())
 
-
-
         # rename 'windonshore' to 'wind'
         feedin.columns.set_levels(list(map(lambda x: x.replace('wind_onshore', 'wind') if x == 'wind_onshore' else x,
                                            feedin.columns.levels[0].values)),
@@ -2077,6 +2079,7 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
     feedin = _retrieve_timeseries_from_oedb(config_data, weather_cell_ids)
 
     return feedin
+
 
 def import_load_timeseries(config_data, data_source, mv_grid_id=None,
                            year=None):

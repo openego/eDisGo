@@ -381,7 +381,7 @@ class Generator(Component):
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power in kW in column 'p' and
-            reactive power in kVAr in column 'q'.
+            reactive power in kvar in column 'q'.
         """
         if self._timeseries is None:
             # set time series for active and reactive power
@@ -402,7 +402,7 @@ class Generator(Component):
 
             timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(self.power_factor))
             timeseries = timeseries * self.nominal_capacity
-            return timeseries.loc[self.grid.network.timeseries.timeindex, :]
+            return timeseries
         else:
             return self._timeseries.loc[
                    self.grid.network.timeseries.timeindex, :]
@@ -542,7 +542,7 @@ class GeneratorFluctuating(Generator):
     ----------
     _curtailment : :pandas:`pandas.Series<series>`
         Contains time series for curtailment in kW
-    _weather_cell_id : :obj:`str`
+    _weather_cell_id : :obj:`int`
         ID of the weather cell used to generate feed-in time series
 
     Notes
@@ -620,7 +620,7 @@ class GeneratorFluctuating(Generator):
                 timeseries = timeseries.join(
                     self.curtailment.to_frame('curtailment'), how='left')
                 timeseries.p = timeseries.p - timeseries.curtailment.fillna(0)
-            return timeseries.loc[self.grid.network.timeseries.timeindex, :]
+            return timeseries
         else:
             return self._timeseries.loc[
                    self.grid.network.timeseries.timeindex, :]
@@ -744,7 +744,7 @@ class Storage(Component):
         timeseries : :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power the storage is charged (negative)
             and discharged (positive) with in kW in column 'p' and
-            reactive power in kVAr in column 'q'. When 'q' is positive,
+            reactive power in kvar in column 'q'. When 'q' is positive,
             reactive power is supplied (behaving as a capacitor) and when
             'q' is negative reactive power is consumed (behaving as a inductor).
 
@@ -1149,3 +1149,4 @@ class Line(Component):
     @kind.setter
     def kind(self, new_kind):
         self._kind = new_kind
+
