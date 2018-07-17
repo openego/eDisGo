@@ -1257,6 +1257,11 @@ def process_pfa_results(network, pypsa, timesteps):
     generators_mapping = {v: k for k, v in
                           pypsa.generators.loc[generators_names][
                               'bus'].to_dict().items()}
+    storages_names = [repr(g) for g in
+                      network.mv_grid.graph.nodes_by_attribute('storage')]
+    storages_mapping = {v: k for k, v in
+                        pypsa.storage_units.loc[storages_names][
+                            'bus'].to_dict().items()}
     branch_t_names = [repr(bt) for bt in
                       network.mv_grid.graph.nodes_by_attribute('branch_tee')]
     branch_t_mapping = {'_'.join(['Bus', v]): v for v in branch_t_names}
@@ -1282,12 +1287,16 @@ def process_pfa_results(network, pypsa, timesteps):
                          'bus'].to_dict().items()}
 
     lv_generators_names = []
+    lv_storages_names = []
     lv_branch_t_names = []
     lv_loads_names = []
     for lv_grid in network.mv_grid.lv_grids:
         lv_generators_names.extend([repr(g) for g in
                                     lv_grid.graph.nodes_by_attribute(
                                         'generator')])
+        lv_storages_names.extend([repr(g) for g in
+                                  lv_grid.graph.nodes_by_attribute(
+                                      'storage')])
         lv_branch_t_names.extend([repr(bt) for bt in
                              lv_grid.graph.nodes_by_attribute('branch_tee')])
         lv_loads_names.extend([repr(lo) for lo in
@@ -1296,12 +1305,16 @@ def process_pfa_results(network, pypsa, timesteps):
     lv_generators_mapping = {v: k for k, v in
                              pypsa.generators.loc[lv_generators_names][
                                  'bus'].to_dict().items()}
+    lv_storages_mapping = {v: k for k, v in
+                           pypsa.storage_units.loc[lv_storages_names][
+                               'bus'].to_dict().items()}
     lv_branch_t_mapping = {'_'.join(['Bus', v]): v for v in lv_branch_t_names}
     lv_loads_mapping = {v: k for k, v in pypsa.loads.loc[lv_loads_names][
         'bus'].to_dict().items()}
 
     names_mapping = {
         **generators_mapping,
+        **storages_mapping,
         **branch_t_mapping,
         **mv_station_mapping_sec,
         **lv_station_mapping_pri,
@@ -1309,6 +1322,7 @@ def process_pfa_results(network, pypsa, timesteps):
         **mv_switch_disconnector_mapping,
         **loads_mapping,
         **lv_generators_mapping,
+        **lv_storages_mapping,
         **lv_loads_mapping,
         **lv_branch_t_mapping
     }
@@ -1316,6 +1330,7 @@ def process_pfa_results(network, pypsa, timesteps):
     # write voltage levels obtained from power flow to results object
     pfa_v_mag_pu_mv = (pypsa.buses_t['v_mag_pu'][
         list(generators_mapping) +
+        list(storages_mapping) +
         list(branch_t_mapping) +
         list(mv_station_mapping_sec) +
         list(mv_switch_disconnector_mapping) +
@@ -1324,6 +1339,7 @@ def process_pfa_results(network, pypsa, timesteps):
     pfa_v_mag_pu_lv = (pypsa.buses_t['v_mag_pu'][
         list(lv_station_mapping_sec) +
         list(lv_generators_mapping) +
+        list(lv_storages_mapping) +
         list(lv_branch_t_mapping) +
         list(lv_loads_mapping)]).rename(columns=names_mapping)
     network.results.pfa_v_mag_pu = pd.concat(
