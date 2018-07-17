@@ -20,13 +20,13 @@ def storage_at_hvmv_substation(mv_grid, parameters, mode=None):
 
     Returns
     -------
-    :class:`~.grid.components.Storage`
-        Created storage instance
+    :class:`~.grid.components.Storage`, :class:`~.grid.components.Line`
+        Created storage instance and newly added line to connect storage.
 
     """
     storage = set_up_storage(parameters, mv_grid.station, mode)
-    connect_storage(storage, mv_grid.station)
-    return storage
+    line = connect_storage(storage, mv_grid.station)
+    return storage, line
 
 
 def set_up_storage(parameters, node,
@@ -91,6 +91,11 @@ def connect_storage(storage, node):
     node : :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
         Node the storage will be connected to.
 
+    Returns
+    -------
+    :class:`~.grid.components.Line`
+        Newly added line to connect storage.
+
     """
 
     # add storage itself to graph
@@ -112,3 +117,5 @@ def connect_storage(storage, node):
         quantity=line_count)
 
     storage.grid.graph.add_edge(node, storage, line=line, type='line')
+
+    return line

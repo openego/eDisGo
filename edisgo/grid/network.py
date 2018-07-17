@@ -1377,12 +1377,12 @@ class StorageControl:
         """
         # place storage
         if position == 'hvmv_substation_busbar':
-            storage = storage_integration.storage_at_hvmv_substation(
+            storage, line = storage_integration.storage_at_hvmv_substation(
                 self.network.mv_grid, params)
         elif isinstance(position, Station) or isinstance(position, BranchTee):
             storage = storage_integration.set_up_storage(
                 params, position, voltage_level)
-            storage_integration.connect_storage(storage, position)
+            line = storage_integration.connect_storage(storage, position)
         else:
             message = 'Provided battery position option {} is not ' \
                       'valid.'.format(timeseries)
