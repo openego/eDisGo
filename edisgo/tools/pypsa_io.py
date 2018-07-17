@@ -295,7 +295,7 @@ def mv_to_pypsa(network):
         generator['name'].append(repr(gen))
         generator['bus'].append(bus_name)
         generator['control'].append('PQ')
-        generator['p_nom'].append(gen.nominal_capacity / 1e3)
+        generator['p_nom'].append(gen.nominal_power / 1e3)
         generator['type'].append('_'.join([gen.type, gen.subtype]))
 
         bus['name'].append(bus_name)
@@ -545,7 +545,7 @@ def lv_to_pypsa(network):
 
         storage['name'].append(repr(sto))
         storage['bus'].append(bus_name)
-        storage['p_nom'].append(sto.nominal_capacity)
+        storage['p_nom'].append(sto.nominal_power)
         storage['state_of_charge_initial'].append(sto.soc_inital)
         storage['efficiency_store'].append(sto.efficiency_in)
         storage['efficiency_dispatch'].append(sto.efficiency_out)
