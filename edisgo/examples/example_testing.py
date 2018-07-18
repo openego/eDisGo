@@ -37,8 +37,21 @@ for dingo_grid in grids:
 
     # # set up worst-case scenario
     # edisgo = EDisGo(ding0_grid=os.path.join(
-    #     'data', 'ding0_grids__{}_with_w_id.pkl'.format(dingo_grid)),
+    #     'data', 'ding0_grids__{}.pkl'.format(dingo_grid)),
     #                 worst_case_analysis='worst-case-feedin')
+    # timeindex = pd.date_range('1/1/1970', periods=2, freq='H')
+    # curtailment = pd.DataFrame({('solar', 1125096): [0.2, 0.8],
+    #                              ('solar', 1126096): [0.2, 0.8],
+    #                              ('solar', 1126095): [0.2, 0.8],
+    #                              ('wind', 1125096): [0.3, 0.8],
+    #                              ('wind', 1126096): [0.3, 0.8],
+    #                              ('wind', 1126095): [0.3, 0.8]
+    #                              },
+    #                             index=timeindex)
+    # print(edisgo.network.mv_grid.weather_cells)
+    # edisgo.curtail(curtailment_methodology='curtail_all',
+    #                timeseries_curtailment=curtailment)
+    # edisgo.analyze()
 
     timeindex = pd.date_range('1/1/1971', periods=3, freq='H')
     conv_dispatch = pd.DataFrame({'biomass': [1] * len(timeindex),
@@ -85,14 +98,7 @@ for dingo_grid in grids:
 
     # edisgo.import_generators(generator_scenario='nep2035')
 
-    # from edisgo.flex_opt import storage_positioning
-    storage_parameters = {
-        #'soc_initial': 0,
-        'efficiency_in': 1.0,
-        'efficiency_out': 1.0,
-        'standing_loss': 0.0,
-        'max_hours': 6,
-        'nominal_power': 400}
+    from edisgo.flex_opt import storage_positioning
     # # storage_timeseries = pd.DataFrame({'p': [-200, -300, 400],
     # #                                    'q': [0.3, 0.8, 0.5]},
     # #                                   index=timeindex)
@@ -102,17 +108,23 @@ for dingo_grid in grids:
     #     lv_station)
     # print(lv_station)
     # print(line)
-    storage_timeseries = pd.Series([-20000, -3000, 4000], index=timeindex)
+    # storage_timeseries = pd.Series([-20000, -3000, 4000], index=timeindex)
+    # storage_timeseries_q = pd.Series([10, -3000, 4000], index=timeindex)
+    storage_timeseries = pd.DataFrame({'p': [-2000, -3000, 4000],
+                                       'q': [0, 0, 0]},
+                                      index=timeindex)
     #
     # storage_power = 1000
-    # storage_positioning.one_storage_per_feeder(
-    #     edisgo, storage_parameters=storage_parameters,
-    #     storage_timeseries=storage_timeseries,
-    #     storage_power=storage_power)
-    edisgo.integrate_storage(timeseries_battery=storage_timeseries,
-                             battery_parameters=storage_parameters,
-                             battery_position=lv_station,
-                             voltage_level='mv')
+    storage_positioning.one_storage_per_feeder(
+        edisgo, storage_timeseries=storage_timeseries)
 
+    # storage_parameters = {'nominal_power': 400}
+    # edisgo.integrate_storage(timeseries='fifty-fifty',
+    #                          parameters=storage_parameters,
+    #                          position='hvmv_substation_busbar',#lv_station,
+    #                          voltage_level='mv',
+    #                          timeseries_reactive_power=storage_timeseries_q)
+    # edisgo.analyze()
+    # edisgo.network.pypsa.export_to_csv_folder('test_none_parameters')
     #
     # edisgo.network.results.grid_expansion_costs.to_csv('costs.csv')
