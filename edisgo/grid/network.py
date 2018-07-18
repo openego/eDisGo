@@ -347,18 +347,15 @@ class EDisGo:
             copy_graph=kwargs.get('copy_graph', False),
             timesteps_pfa=kwargs.get('timesteps_pfa', None))
 
-    def integrate_storage(self, timeseries_battery, battery_position,
-                          **kwargs):
+    def integrate_storage(self, timeseries, position, **kwargs):
         """
         Integrates storage into grid.
 
         See :class:`~.grid.network.StorageControl` for more information.
 
         """
-        StorageControl(network=self.network,
-                       timeseries_battery=timeseries_battery,
-                       battery_position=battery_position,
-                       **kwargs)
+        StorageControl(network=self.network, timeseries=timeseries,
+                       position=position, **kwargs)
 
 
 class Network:
@@ -1260,8 +1257,8 @@ class StorageControl:
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-    timeseries_battery : :obj:`str` or :pandas:`pandas.Series<series>` or :obj:`dict`
-        Parameter used to obtain time series of active power the battery
+    timeseries : :obj:`str` or :pandas:`pandas.Series<series>` or :obj:`dict`
+        Parameter used to obtain time series of active power the
         storage(s) is/are charged (negative) or discharged (positive) with. Can
         either be a given time series or an operation strategy.
         Possible options are:
@@ -1273,11 +1270,11 @@ class StorageControl:
           power, normalized with corresponding storage capacity. Index needs
           to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
           If no nominal power for the storage is provided in
-          `battery_parameters` parameter, the maximum of the time series is
+          `parameters` parameter, the maximum of the time series is
           used as nominal power.
           In case of more than one storage provide a :obj:`dict` where each
           entry represents a storage. Keys of the dictionary have to match
-          the keys of the `battery_parameters dictionary`, values must
+          the keys of the `parameters dictionary`, values must
           contain the corresponding time series as
           :pandas:`pandas.Series<series>`.
         * 'fifty-fifty'
@@ -1285,10 +1282,10 @@ class StorageControl:
           cumulative generation exceeds 50% of the nominal power, the storage
           will charge. Otherwise, the storage will discharge.
           If you choose this option you have to provide a nominal power for
-          the storage. See `battery_parameters` for more information.
+          the storage. See `parameters` for more information.
 
         Default: None.
-    battery_position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :obj:`dict`
+    position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :obj:`dict`
         To position the storage a positioning strategy can be used or a
         node in the grid can be directly specified. Possible options are:
 
@@ -1302,10 +1299,10 @@ class StorageControl:
 
         In case of more than one storage provide a :obj:`dict` where each
         entry represents a storage. Keys of the dictionary have to match
-        the keys of the `timeseries_battery` and `battery_parameters`
+        the keys of the `timeseries` and `parameters`
         dictionaries, values must contain the corresponding positioning
         strategy or node to connect the storage to.
-    battery_parameters : :obj:`dict`, optional
+    parameters : :obj:`dict`, optional
         Dictionary with the following optional storage parameters:
 
         .. code-block:: python
@@ -1323,42 +1320,41 @@ class StorageControl:
         parameters.
         In case of more than one storage provide a :obj:`dict` where each
         entry represents a storage. Keys of the dictionary have to match
-        the keys of the `timeseries_battery` dictionary, values must
+        the keys of the `timeseries` dictionary, values must
         contain the corresponding parameters dictionary specified above.
         Note: As edisgo currently only provides a power flow analysis storage
         parameters don't have any effect on the calculations.
         Default: {}.
     voltage_level : :obj:`str`, optional
-        This parameter only needs to be provided if `battery_position` is of
+        This parameter only needs to be provided if `position` is of
         type :class:`~.grid.components.LVStation`. In that case `voltage_level`
         defines which side of the LV station the storage is connected to. Valid
         options are 'lv' and 'mv'. Default: None.
 
     """
 
-    def __init__(self, network, timeseries_battery,
-                 battery_position, **kwargs):
+    def __init__(self, network, timeseries, position, **kwargs):
 
         self.network = network
         voltage_level = kwargs.get('voltage_level', None)
-        battery_parameters = kwargs.get('battery_parameters', {})
-        if isinstance(timeseries_battery, dict):
-            for storage, ts in timeseries_battery.items():
+        parameters = kwargs.get('parameters', {})
+        if isinstance(timeseries, dict):
+            for storage, ts in timeseries.items():
                 try:
-                    position = battery_position[storage]
+                    position = position[storage]
                 except KeyError:
                     message = 'Please provide storage parameters or ' \
                               'position for storage {}.'.format(storage)
                     logging.error(message)
                     raise KeyError(message)
                 try:
-                    params = battery_parameters[storage]
+                    params = parameters[storage]
                 except:
                     params = {}
                 self._integrate_storage(ts, position, params, voltage_level)
         else:
-            self._integrate_storage(timeseries_battery, battery_position,
-                                    battery_parameters, voltage_level)
+            self._integrate_storage(timeseries, position,
+                                    parameters, voltage_level)
 
     def _integrate_storage(self, timeseries, position, params, voltage_level):
         """
@@ -1367,7 +1363,7 @@ class StorageControl:
         Parameters
         ----------
         timeseries : :obj:`str` or :pandas:`pandas.Series<series>`
-            Parameter used to obtain time series of active power the battery
+            Parameter used to obtain time series of active power the storage
             storage is charged (negative) or discharged (positive) with. Can
             either be a given time series or an operation strategy. See class
             definition for more information
@@ -1395,7 +1391,7 @@ class StorageControl:
                 node=position, parameters=params, voltage_level=voltage_level)
             line = storage_integration.connect_storage(storage, position)
         else:
-            message = 'Provided battery position option {} is not ' \
+            message = 'Provided storage position option {} is not ' \
                       'valid.'.format(timeseries)
             logging.error(message)
             raise KeyError(message)
@@ -1411,7 +1407,7 @@ class StorageControl:
         elif isinstance(timeseries, str) and timeseries == 'fifty-fifty':
             storage_operation.fifty_fifty(self.network, storage)
         else:
-            message = 'Provided battery timeseries option {} is not ' \
+            message = 'Provided storage timeseries option {} is not ' \
                       'valid.'.format(timeseries)
             logging.error(message)
             raise KeyError(message)
@@ -1432,10 +1428,10 @@ class StorageControl:
         Parameters
         ----------
         timeseries : :obj:`str` or :pandas:`pandas.Series<series>`
-            See parameter `timeseries_battery` in class definition for more
+            See parameter `timeseries` in class definition for more
             information.
         storage_parameters : :obj:`dict`
-            See parameter `battery_parameters` in class definition for more
+            See parameter `parameters` in class definition for more
             information.
 
         Returns
@@ -1456,7 +1452,7 @@ class StorageControl:
 
     def _check_timeindex(self, timeseries):
         """
-        Raises an error if time index of battery time series does not
+        Raises an error if time index of storage time series does not
         comply with the time index of load and feed-in time series.
 
         Parameters
@@ -1470,7 +1466,7 @@ class StorageControl:
         try:
             timeseries.loc[self.network.timeseries.timeindex]
         except:
-            message = 'Time index of battery time series does not match ' \
+            message = 'Time index of storage time series does not match ' \
                       'with load and feed-in time series.'
             logging.error(message)
             raise KeyError(message)
@@ -2036,10 +2032,10 @@ class Results:
         :class:`~.grid.components.Line`, :class:`~.grid.components.Station`,
         etc.) and has the following columns:
 
-        equipment : detailing what was changed (line, station, battery,
+        equipment : detailing what was changed (line, station, storage,
         curtailment). For ease of referencing we take the component itself.
         For lines we take the line-dict, for stations the transformers, for
-        batteries the battery-object itself and for curtailment
+        storages the storage-object itself and for curtailment
         either a dict providing the details of curtailment or a curtailment
         object if this makes more sense (has to be defined).
 

@@ -5,7 +5,7 @@ from edisgo.grid.tools import select_cable
 
 def storage_at_hvmv_substation(mv_grid, parameters, mode=None):
     """
-    Place battery at HV/MV substation bus bar.
+    Place storage at HV/MV substation bus bar.
 
     Parameters
     ----------
