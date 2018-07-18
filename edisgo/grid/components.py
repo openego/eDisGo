@@ -314,7 +314,8 @@ class Load(Component):
         elif re.fullmatch('capacitive', comparestr):
                 return -1
         else:
-            raise ValueError("Unknown value {} in reactive_power_mode".format(self.reactive_power_mode))
+            raise ValueError("Unknown value {} in reactive_power_mode".format(
+                self.reactive_power_mode))
 
     def __repr__(self):
         return '_'.join(['Load',
@@ -399,8 +400,8 @@ class Generator(Component):
                                      "given.".format(self.type))
                     raise
 
-
-            timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(self.power_factor))
+            timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(
+                self.power_factor))
             timeseries = timeseries * self.nominal_capacity
             return timeseries
         else:
@@ -465,6 +466,13 @@ class Generator(Component):
                     'reactive_power_factor']['lv_gen']
         return self._power_factor
 
+    @power_factor.setter
+    def power_factor(self, power_factor):
+        """
+        Set the power factor of the generator.
+        """
+        self._power_factor = power_factor
+
     @property
     def reactive_power_mode(self):
         """
@@ -498,13 +506,6 @@ class Generator(Component):
 
         return self._reactive_power_mode[1:-1]
 
-    @power_factor.setter
-    def power_factor(self, power_factor):
-        """
-        Set the power factor of the generator.
-        """
-        self._power_factor = power_factor
-
     @reactive_power_mode.setter
     def reactive_power_mode(self, reactive_power_mode):
         """
@@ -530,8 +531,8 @@ class Generator(Component):
         elif re.fullmatch('capacitive', comparestr):
                 return 1
         else:
-            raise ValueError("Unknown value {} in reactive_power_mode".format(self.reactive_power_mode))
-
+            raise ValueError("Unknown value {} in reactive_power_mode".format(
+                self.reactive_power_mode))
 
 
 class GeneratorFluctuating(Generator):
@@ -612,7 +613,8 @@ class GeneratorFluctuating(Generator):
                                      "given.".format(self.type))
                     raise
 
-            timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(self.power_factor))
+            timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(
+                self.power_factor))
             timeseries = timeseries * self.nominal_capacity
 
             # subtract curtailment
@@ -774,7 +776,6 @@ class Storage(Component):
                 raise KeyError(message)
 
 
-
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
 
@@ -922,7 +923,8 @@ class Storage(Component):
         elif re.fullmatch('capacitive', comparestr):
             return 1
         else:
-            raise ValueError("Unknown value {} in reactive_power_mode".format(self.reactive_power_mode))
+            raise ValueError("Unknown value {} in reactive_power_mode".format(
+                self.reactive_power_mode))
 
 
 class MVDisconnectingPoint(Component):
@@ -1026,7 +1028,8 @@ class BranchTee(Component):
                 self._id = 1
 
     def __repr__(self):
-        return '_'.join([self.__class__.__name__, repr(self.grid), str(self._id)])
+        return '_'.join(
+            [self.__class__.__name__, repr(self.grid), str(self._id)])
 
 
 class MVStation(Station):
