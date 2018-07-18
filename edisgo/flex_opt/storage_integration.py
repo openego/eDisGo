@@ -1,3 +1,4 @@
+from math import sqrt
 from edisgo.grid.components import Storage, Line, LVStation
 from edisgo.grid.grids import MVGrid
 from edisgo.grid.tools import select_cable
@@ -82,6 +83,11 @@ def connect_storage(storage, node):
     """
     Connects storage to the given node.
 
+    The storage is connected by a cable
+    The cable the storage is connected with is selected to be able to carry
+    the storages nominal power and equal amount of reactive power.
+    No load factor is considered.
+
     Parameters
     ----------
     storage : :class:`~.grid.components.Storage`
@@ -104,8 +110,12 @@ def connect_storage(storage, node):
         voltage_level = 'mv'
     else:
         voltage_level = 'lv'
+
+    # necessary apparent power the line must be able to carry is set to be
+    # the storages nominal power and equal amount of reactive power
+    apparent_power_line = sqrt(2) * storage.nominal_power
     line_type, line_count = select_cable(storage.grid.network, voltage_level,
-                                         storage.nominal_power)
+                                         apparent_power_line)
     line = Line(
         id=storage.id,
         type=line_type,
