@@ -2477,16 +2477,21 @@ def _build_mv_grid_from_csv(mv_grids, mv_gen, mv_cb, mv_cd, mv_stations,
 
     # MV transformer
     mvtrafos = {}
-    mv_trafos.apply(lambda row:
-                    mvtrafos.update({row['name']: Transformer(
-                        id=row['id'],
-                        geom=wkt_loads(row['geom']),
-                        grid=mv_grid,
-                        mv_grid=mv_grid,
-                        voltage_op=row['voltage_op'],
-                        type=pd.Series(data=[row['X'], row['R'], row['S_nom']],
-                                       index=['X', 'R', 'S_nom']),
-                    )}), axis=1)
+    count = 1
+    for idx, row in mv_trafos.iterrows():
+        mv_trafo_name = '_'.join(['MVStation',
+                  str(mv_station.id),
+                  'transformer',
+                  str(count)])
+        mvtrafos[mv_trafo_name] = Transformer(
+            id=mv_trafo_name,
+            geom=wkt_loads(row['geom']),
+            grid=mv_grid,
+            mv_grid=mv_grid,
+            voltage_op=row['voltage_op'],
+            type=pd.Series(data=[row['X'], row['R'], row['S_nom']],
+                           index=['X', 'R', 'S_nom']))
+        count +=1
 
     mv_station.transformers = list(mvtrafos.values())
 
