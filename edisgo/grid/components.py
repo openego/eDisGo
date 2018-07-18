@@ -733,13 +733,16 @@ class Storage(Component):
         super().__init__(**kwargs)
         self._timeseries = kwargs.get('timeseries', None)
         self._nominal_power = kwargs.get('nominal_power', None)
+        self._power_factor = kwargs.get('power_factor', None)
+        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
+
         self._max_hours = kwargs.get('max_hours', None)
         self._soc_initial = kwargs.get('soc_initial', None)
         self._efficiency_in = kwargs.get('efficiency_in', None)
         self._efficiency_out = kwargs.get('efficiency_out', None)
         self._standing_loss = kwargs.get('standing_loss', None)
         self._operation = kwargs.get('operation', None)
-        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
+
         self._q_sign = None
 
     @property
@@ -749,37 +752,31 @@ class Storage(Component):
 
         Parameters
         ----------
-        timeseries : :pandas:`pandas.DataFrame<dataframe>`
+        ts : :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power the storage is charged (negative)
             and discharged (positive) with (on the grid side) in kW in column 
             'p' and reactive power in kvar in column 'q'. When 'q' is positive,
-            reactive power is supplied (behaving as a capacitor) and when
-            'q' is negative reactive power is consumed (behaving as an inductor).
+            reactive power is supplied (behaving as a capacitor) and when 'q'
+            is negative reactive power is consumed (behaving as an inductor).
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            See parameter `timeseries`.
 
         """
-        return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
+        # check if time series for reactive power is given, otherwise
+        # calculate it
+        if 'q' in self._timeseries.columns:
+            return self._timeseries
+        else:
+            self._timeseries['q'] = abs(self._timeseries.p) * self.q_sign * \
+                                    tan(acos(self.power_factor))
+            return self._timeseries.loc[
+                   self.grid.network.timeseries.timeindex, :]
 
     @timeseries.setter
-    def timeseries(self, timeseries):
-        if 'q' in timeseries.columns:
-            self._timeseries = timeseries
-        else:
-            message = "There seems to be no \'q\' defined, it will be generated with the assumed" + \
-                " power_factor for generators"
-            logger.warning(message)
-            try:
-                self._timeseries = timeseries
-                self._timeseries['q'] = self.q_sign * self._timeseries['p']
-            except KeyError:
-                message = "There seems to be no column \'p\' in the timeseries dataframe"
-                logger.error(message)
-                raise KeyError(message)
-
+    def timeseries(self, ts):
+        self._timeseries = ts
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -898,35 +895,63 @@ class Storage(Component):
         self._operation
 
     @property
+    def power_factor(self):
+        """
+        Power factor of storage
+
+        If power factor is not set it is retrieved from the network config
+        object depending on the grid level the storage is in.
+
+        Returns
+        --------
+        :obj:`float` : Power factor
+            Ratio of real power to apparent power.
+
+        """
+        if self._power_factor is None:
+            if isinstance(self.grid, MVGrid):
+                self._power_factor = self.grid.network.config[
+                    'reactive_power_factor']['mv_storage']
+            elif isinstance(self.grid, LVGrid):
+                self._power_factor = self.grid.network.config[
+                    'reactive_power_factor']['lv_storage']
+        return self._power_factor
+
+    @power_factor.setter
+    def power_factor(self, power_factor):
+        self._power_factor = power_factor
+
+    @property
     def reactive_power_mode(self):
         """
-        Power factor mode of generator.
+        Power factor mode of storage.
 
-        If the power factor is set, then it is necessary to know whether the
+        If the power factor is set, then it is necessary to know whether
         it is leading or lagging. In other words this information is necessary
-        to make the generator behave in an inductive or capacitive manner.
+        to make the storage behave in an inductive or capacitive manner.
         Essentially this changes the sign of the reactive power Q.
 
-        The convention used here in a generator is that:
+        The convention used here in a storage is that:
         - when `reactive_power_mode` is 'capacitive' then Q is positive
         - when `reactive_power_mode` is 'inductive' then Q is negative
 
         In the case that this attribute is not set, it is retrieved from the
-        network config object depending on the voltage level the generator
+        network config object depending on the voltage level the storage
         is in.
 
         Returns
         -------
         :obj: `str` : Power factor mode
             Either 'inductive' or 'capacitive'
+
         """
         if self._reactive_power_mode is None:
             if isinstance(self.grid, MVGrid):
                 self._reactive_power_mode = self.grid.network.config[
-                    'reactive_power_mode']['mv_gen']
+                    'reactive_power_mode']['mv_storage']
             elif isinstance(self.grid, LVGrid):
                 self._reactive_power_mode = self.grid.network.config[
-                    'reactive_power_mode']['lv_gen']
+                    'reactive_power_mode']['lv_storage']
 
         return self._reactive_power_mode
 

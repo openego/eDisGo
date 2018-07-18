@@ -1267,8 +1267,8 @@ class StorageControl:
           Time series the storage will be charged and discharged with can be
           set directly by providing a :pandas:`pandas.Series<series>` with
           time series of active charge (negative) and discharge (positive)
-          power, normalized with corresponding storage capacity. Index needs
-          to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+          power in kW. Index needs to be a
+          :pandas:`pandas.DatetimeIndex<datetimeindex>`.
           If no nominal power for the storage is provided in
           `parameters` parameter, the maximum of the time series is
           used as nominal power.
@@ -1330,6 +1330,20 @@ class StorageControl:
         type :class:`~.grid.components.LVStation`. In that case `voltage_level`
         defines which side of the LV station the storage is connected to. Valid
         options are 'lv' and 'mv'. Default: None.
+    timeseries_reactive_power : :pandas:`pandas.Series<series>` or :obj:`dict`
+        By default reactive power is set through the config file
+        `config_timeseries` in sections `reactive_power_factor` specifying
+        the power factor and `reactive_power_mode` specifying if inductive
+        or capacitive reactive power is provided.
+        If you want to over-write this behavior you can provide a reactive
+        power time series in kvar here. Be aware that eDisGo uses the generator
+        sign convention for storages (see `Definitions and units` section of
+        the documentation for more information). Index of the series needs to
+        be a  :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        In case of more than one storage provide a :obj:`dict` where each
+        entry represents a storage. Keys of the dictionary have to match
+        the keys of the `timeseries` dictionary, values must contain the
+        corresponding time series as :pandas:`pandas.Series<series>`.
 
     """
 
@@ -1338,6 +1352,8 @@ class StorageControl:
         self.network = network
         voltage_level = kwargs.get('voltage_level', None)
         parameters = kwargs.get('parameters', {})
+        timeseries_reactive_power = kwargs.get(
+            'timeseries_reactive_power', None)
         if isinstance(timeseries, dict):
             for storage, ts in timeseries.items():
                 try:
@@ -1351,14 +1367,20 @@ class StorageControl:
                     params = parameters[storage]
                 except:
                     params = {}
-                self._integrate_storage(ts, position, params, voltage_level)
+                try:
+                    reactive_power = timeseries_reactive_power[storage]
+                except:
+                    reactive_power = None
+                self._integrate_storage(ts, position, params,
+                                        voltage_level, reactive_power)
         else:
-            self._integrate_storage(timeseries, position,
-                                    parameters, voltage_level)
+            self._integrate_storage(timeseries, position, parameters,
+                                    voltage_level, timeseries_reactive_power)
 
-    def _integrate_storage(self, timeseries, position, params, voltage_level):
+    def _integrate_storage(self, timeseries, position, params, voltage_level,
+                           reactive_power_timeseries):
         """
-        Integrate storage units in the grid and specify its operational mode.
+        Integrate storage units in the grid.
 
         Parameters
         ----------
@@ -1378,6 +1400,10 @@ class StorageControl:
             `voltage_level` defines which side of the LV station the storage is
             connected to. Valid options are 'lv' and 'mv'. Default: None. See
             class definition for more information.
+        reactive_power_timeseries : :pandas:`pandas.Series<series>` or None
+            Reactive power time series in kvar (generator sign convention).
+            Index of the series needs to be a
+            :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         """
         # place storage
@@ -1396,11 +1422,9 @@ class StorageControl:
             logging.error(message)
             raise KeyError(message)
 
-        # implement operation strategy
+        # implement operation strategy (active power)
         if isinstance(timeseries, pd.Series):
-            # ToDo: Eingabe von Blindleistung auch ermöglichen?
-            timeseries = pd.DataFrame(data={'p': timeseries,
-                                            'q': [0] * len(timeseries)},
+            timeseries = pd.DataFrame(data={'p': timeseries},
                                       index=timeseries.index)
             self._check_timeindex(timeseries)
             storage.timeseries = timeseries
@@ -1411,6 +1435,14 @@ class StorageControl:
                       'valid.'.format(timeseries)
             logging.error(message)
             raise KeyError(message)
+
+        # reactive power
+        if reactive_power_timeseries is not None:
+            self._check_timeindex(reactive_power_timeseries)
+            storage.timeseries = pd.DataFrame(
+                {'p': storage.timeseries.p,
+                 'q': reactive_power_timeseries.loc[storage.timeseries.index]},
+                index=storage.timeseries.index)
 
         # update pypsa representation
         if self.network.pypsa is not None:

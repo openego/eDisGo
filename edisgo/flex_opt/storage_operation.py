@@ -7,8 +7,7 @@ def fifty_fifty(network, storage, feedin_threshold=0.5):
     Operational mode where the storage operation depends on actual power by
     generators. If cumulative generation exceeds 50% of nominal power, the
     storage is charged. Otherwise, the storage is discharged.
-    The time series for active and reactive power are written into the
-    storage.
+    The time series for active power is written into the storage.
 
     Parameters
     -----------
@@ -42,5 +41,4 @@ def fifty_fifty(network, storage, feedin_threshold=0.5):
     feedin = feedin_bool.apply(
         lambda x: storage.nominal_power if x
         else -storage.nominal_power).rename('p').to_frame()
-    feedin['q'] = 0
     storage.timeseries = feedin
