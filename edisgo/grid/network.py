@@ -201,6 +201,7 @@ class EDisGo:
         # worst-case time series
         if kwargs.get('worst_case_analysis', None):
             self.network.timeseries = TimeSeriesControl(
+                network=self.network,
                 mode=kwargs.get('worst_case_analysis', None),
                 weather_cell_ids=self.network.mv_grid._weather_cells,
                 config_data=self.network.config).timeseries
