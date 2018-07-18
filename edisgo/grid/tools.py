@@ -6,7 +6,7 @@ if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import Point
 from edisgo.grid.components import LVStation, BranchTee, Generator, Load, \
     MVDisconnectingPoint, Line, MVStation
-from edisgo.grid.grids import LVGrid
+from edisgo.flex_opt import exceptions
 
 import logging
 logger = logging.getLogger('edisgo')
@@ -306,7 +306,7 @@ def select_cable(network, level, apparent_power):
 
     """
 
-    cable_count = 1
+    cable_count = 0
 
     if level == 'mv':
 
@@ -319,12 +319,16 @@ def select_cable(network, level, apparent_power):
             network.mv_grid.voltage_nom > apparent_power]
 
         # increase cable count until appropriate cable type is found
-        while suitable_cables.empty:
+        while suitable_cables.empty and cable_count < 20:
             cable_count += 1
             suitable_cables = available_cables[
                 available_cables['I_max_th'] *
                 network.mv_grid.voltage_nom *
                 cable_count > apparent_power]
+        if suitable_cables.empty and cable_count == 20:
+            raise exceptions.MaximumIterationError(
+                "Could not find a suitable cable for apparent power of "
+                "{} kVA.".format(apparent_power))
 
         cable_type = suitable_cables.ix[suitable_cables['I_max_th'].idxmin()]
 
@@ -335,12 +339,16 @@ def select_cable(network, level, apparent_power):
             network.equipment_data['lv_cables']['U_n'] > apparent_power]
 
         # increase cable count until appropriate cable type is found
-        while suitable_cables.empty:
+        while suitable_cables.empty and cable_count < 20:
             cable_count += 1
             suitable_cables = network.equipment_data['lv_cables'][
                 network.equipment_data['lv_cables']['I_max_th'] *
                 network.equipment_data['lv_cables']['U_n'] *
                 cable_count > apparent_power]
+        if suitable_cables.empty and cable_count == 20:
+            raise exceptions.MaximumIterationError(
+                "Could not find a suitable cable for apparent power of "
+                "{} kVA.".format(apparent_power))
 
         cable_type = suitable_cables.ix[suitable_cables['I_max_th'].idxmin()]
 
