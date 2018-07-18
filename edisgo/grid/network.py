@@ -347,7 +347,8 @@ class EDisGo:
             copy_graph=kwargs.get('copy_graph', False),
             timesteps_pfa=kwargs.get('timesteps_pfa', None))
 
-    def integrate_storage(self, **kwargs):
+    def integrate_storage(self, timeseries_battery, battery_position,
+                          **kwargs):
         """
         Integrates storage into grid.
 
@@ -355,14 +356,9 @@ class EDisGo:
 
         """
         StorageControl(network=self.network,
-                       timeseries_battery=kwargs.get('timeseries_battery',
-                                                     None),
-                       battery_parameters=kwargs.get('battery_parameters',
-                                                     None),
-                       battery_position=kwargs.get('battery_position',
-                                                   None),
-                       voltage_level=kwargs.get('voltage_level', None)
-                       )
+                       timeseries_battery=timeseries_battery,
+                       battery_position=battery_position,
+                       **kwargs)
 
 
 class Network:
@@ -1276,6 +1272,9 @@ class StorageControl:
           time series of active charge (negative) and discharge (positive)
           power, normalized with corresponding storage capacity. Index needs
           to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+          If no nominal power for the storage is provided in
+          `battery_parameters` parameter, the maximum of the time series is
+          used as nominal power.
           In case of more than one storage provide a :obj:`dict` where each
           entry represents a storage. Keys of the dictionary have to match
           the keys of the `battery_parameters dictionary`, values must
@@ -1285,10 +1284,29 @@ class StorageControl:
           Storage operation depends on actual power of generators. If
           cumulative generation exceeds 50% of the nominal power, the storage
           will charge. Otherwise, the storage will discharge.
+          If you choose this option you have to provide a nominal power for
+          the storage. See `battery_parameters` for more information.
 
         Default: None.
-    battery_parameters : :obj:`dict`
-        Dictionary with storage parameters. Format must be as follows:
+    battery_position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :obj:`dict`
+        To position the storage a positioning strategy can be used or a
+        node in the grid can be directly specified. Possible options are:
+
+        * 'hvmv_substation_busbar'
+          Places a storage unit directly at the HV/MV station's bus bar.
+        * :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
+          Specifies a node the storage should be connected to. In the case
+          this parameter is of type :class:`~.grid.components.LVStation` an
+          additional parameter, `voltage_level`, has to be provided to define
+          which side of the LV station the storage is connected to.
+
+        In case of more than one storage provide a :obj:`dict` where each
+        entry represents a storage. Keys of the dictionary have to match
+        the keys of the `timeseries_battery` and `battery_parameters`
+        dictionaries, values must contain the corresponding positioning
+        strategy or node to connect the storage to.
+    battery_parameters : :obj:`dict`, optional
+        Dictionary with the following optional storage parameters:
 
         .. code-block:: python
 
@@ -1307,23 +1325,9 @@ class StorageControl:
         entry represents a storage. Keys of the dictionary have to match
         the keys of the `timeseries_battery` dictionary, values must
         contain the corresponding parameters dictionary specified above.
-    battery_position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :obj:`dict`
-        To position the storage a positioning strategy can be used or a
-        node in the grid can be directly specified. Possible options are:
-
-        * 'hvmv_substation_busbar'
-          Places a storage unit directly at the HV/MV station's bus bar.
-        * :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
-          Specifies a node the storage should be connected to. In the case
-          this parameter is of type :class:`~.grid.components.LVStation` an
-          additional parameter, `voltage_level`, has to be provided to define
-          which side of the LV station the storage is connected to.
-
-        In case of more than one storage provide a :obj:`dict` where each
-        entry represents a storage. Keys of the dictionary have to match
-        the keys of the `timeseries_battery` and `battery_parameters`
-        dictionaries, values must contain the corresponding positioning
-        strategy or node to connect the storage to.
+        Note: As edisgo currently only provides a power flow analysis storage
+        parameters don't have any effect on the calculations.
+        Default: {}.
     voltage_level : :obj:`str`, optional
         This parameter only needs to be provided if `battery_position` is of
         type :class:`~.grid.components.LVStation`. In that case `voltage_level`
@@ -1332,27 +1336,31 @@ class StorageControl:
 
     """
 
-    def __init__(self, network, timeseries_battery, battery_parameters,
+    def __init__(self, network, timeseries_battery,
                  battery_position, **kwargs):
 
         self.network = network
         voltage_level = kwargs.get('voltage_level', None)
+        battery_parameters = kwargs.get('battery_parameters', {})
         if isinstance(timeseries_battery, dict):
             for storage, ts in timeseries_battery.items():
                 try:
-                    params = battery_parameters[storage]
                     position = battery_position[storage]
                 except KeyError:
                     message = 'Please provide storage parameters or ' \
                               'position for storage {}.'.format(storage)
                     logging.error(message)
                     raise KeyError(message)
-                self._integrate_storage(ts, params, position, voltage_level)
+                try:
+                    params = battery_parameters[storage]
+                except:
+                    params = {}
+                self._integrate_storage(ts, position, params, voltage_level)
         else:
-            self._integrate_storage(timeseries_battery, battery_parameters,
-                                    battery_position, voltage_level)
+            self._integrate_storage(timeseries_battery, battery_position,
+                                    battery_parameters, voltage_level)
 
-    def _integrate_storage(self, timeseries, params, position, voltage_level):
+    def _integrate_storage(self, timeseries, position, params, voltage_level):
         """
         Integrate storage units in the grid and specify its operational mode.
 
@@ -1363,14 +1371,14 @@ class StorageControl:
             storage is charged (negative) or discharged (positive) with. Can
             either be a given time series or an operation strategy. See class
             definition for more information
+        position : :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
+            Parameter used to place the storage. See class definition for more
+            information.
         params : :obj:`dict`
             Dictionary with storage parameters for one storage. See class
             definition for more information on what parameters must be
             provided.
-        position : :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
-            Parameter used to place the storage. See class definition for more
-            information.
-        voltage_level : :obj:`str`
+        voltage_level : :obj:`str` or None
             `voltage_level` defines which side of the LV station the storage is
             connected to. Valid options are 'lv' and 'mv'. Default: None. See
             class definition for more information.
@@ -1378,11 +1386,13 @@ class StorageControl:
         """
         # place storage
         if position == 'hvmv_substation_busbar':
+            params = self._check_nominal_power(params, timeseries)
             storage, line = storage_integration.storage_at_hvmv_substation(
                 self.network.mv_grid, params)
         elif isinstance(position, Station) or isinstance(position, BranchTee):
+            params = self._check_nominal_power(params, timeseries)
             storage = storage_integration.set_up_storage(
-                params, position, voltage_level)
+                node=position, parameters=params, voltage_level=voltage_level)
             line = storage_integration.connect_storage(storage, position)
         else:
             message = 'Provided battery position option {} is not ' \
@@ -1410,6 +1420,39 @@ class StorageControl:
         if self.network.pypsa is not None:
             pypsa_io.update_pypsa_storage(
                 self.network.pypsa, storages=[storage], storages_lines=[line])
+
+    def _check_nominal_power(self, storage_parameters, timeseries):
+        """
+        Tries to assign a nominal power to the storage.
+
+        Checks if nominal power is provided through `storage_parameters`,
+        otherwise tries to return the absolute maximum of `timeseries`. Raises
+        an error if it cannot assign a nominal power.
+
+        Parameters
+        ----------
+        timeseries : :obj:`str` or :pandas:`pandas.Series<series>`
+            See parameter `timeseries_battery` in class definition for more
+            information.
+        storage_parameters : :obj:`dict`
+            See parameter `battery_parameters` in class definition for more
+            information.
+
+        Returns
+        --------
+        :obj:`dict`
+            The given `storage_parameters` is returned extended by an entry for
+            'nominal_power', if it didn't already have that key.
+
+        """
+        if storage_parameters.get('nominal_power', None) is None:
+            try:
+                storage_parameters['nominal_power'] = max(abs(timeseries))
+            except:
+                raise ValueError("Could not assign a nominal power to the "
+                                 "storage. Please provide either a nominal "
+                                 "power or an active power time series.")
+        return storage_parameters
 
     def _check_timeindex(self, timeseries):
         """

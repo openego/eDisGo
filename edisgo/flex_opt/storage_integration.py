@@ -12,9 +12,10 @@ def storage_at_hvmv_substation(mv_grid, parameters, mode=None):
     mv_grid : :class:`~.grid.grids.MVGrid`
         MV grid instance
     parameters : :obj:`dict`
-        Dictionary with storage parameters. See
-        :class:`~.grid.network.StorageControl` for more information.
-    mode : None or :obj:`str`
+        Dictionary with storage parameters. Must at least contain
+        'nominal_power'. See :class:`~.grid.network.StorageControl` for more
+        information.
+    mode : :obj:`str`, optional
         Operational mode. See :class:`~.grid.network.StorageControl` for
         possible options and more information. Default: None.
 
@@ -24,23 +25,25 @@ def storage_at_hvmv_substation(mv_grid, parameters, mode=None):
         Created storage instance and newly added line to connect storage.
 
     """
-    storage = set_up_storage(parameters, mv_grid.station, mode)
+    storage = set_up_storage(node=mv_grid.station, parameters=parameters,
+                             operational_mode=mode)
     line = connect_storage(storage, mv_grid.station)
     return storage, line
 
 
-def set_up_storage(parameters, node,
+def set_up_storage(node, parameters,
                    voltage_level=None, operational_mode=None):
     """
     Sets up a storage instance.
 
     Parameters
     ----------
-    parameters : :obj:`dict`
-        Dictionary with storage parameters. See
-        :class:`~.grid.network.StorageControl` for more information.
     node : :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
         Node the storage will be connected to.
+    parameters : :obj:`dict`, optional
+        Dictionary with storage parameters. Must at least contain
+        'nominal_power'. See :class:`~.grid.network.StorageControl` for more
+        information.
     voltage_level : :obj:`str`, optional
         This parameter only needs to be provided if `node` is of type
         :class:`~.grid.components.LVStation`. In that case `voltage_level`
@@ -67,17 +70,12 @@ def set_up_storage(parameters, node,
         grid = node.grid
 
     return Storage(operation=operational_mode,
-                   id='{}_storage_{}'.format(
-                       grid,
-                       len(grid.graph.nodes_by_attribute('storage')) + 1),
-                   nominal_power=parameters.get('nominal_power', None),
-                   max_hours=parameters.get('max_hours', None),
+                   id='{}_storage_{}'.format(grid,
+                                             len(grid.graph.nodes_by_attribute(
+                                                 'storage')) + 1),
                    grid=grid,
-                   soc_initial=parameters.get('soc_initial', None),
-                   efficiency_in=parameters.get('efficiency_in', None),
-                   efficiency_out=parameters.get('efficiency_out', None),
-                   standing_loss=parameters.get('standing_loss', None),
-                   geom=node.geom)
+                   geom=node.geom,
+                   **parameters)
 
 
 def connect_storage(storage, node):
