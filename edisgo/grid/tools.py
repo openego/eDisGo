@@ -306,7 +306,7 @@ def select_cable(network, level, apparent_power):
 
     """
 
-    cable_count = 0
+    cable_count = 1
 
     if level == 'mv':
 
