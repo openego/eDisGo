@@ -4,8 +4,9 @@ import numpy as np
 import pandas as pd
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import Point
-from .components import LVStation, BranchTee, Generator, Load, \
-    MVDisconnectingPoint, Line
+from edisgo.grid.components import LVStation, BranchTee, Generator, Load, \
+    MVDisconnectingPoint, Line, MVStation
+from edisgo.grid.grids import LVGrid
 
 import logging
 logger = logging.getLogger('edisgo')
@@ -17,7 +18,9 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
 
     Determination of the switch disconnector location is motivated by placing
     it to minimized load flows in both parts of the ring (half-rings).
-    Use the parameter mode
+    The switch disconnecter will be installed to a LV station, unless none
+    exists in a ring. In this case, a node of arbitrary type is chosen for the
+    location of the switch disconnecter.
 
     Parameters
     ----------
@@ -161,11 +164,21 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
         # Set start value for difference in ring halfs
         diff_min = 10e9
 
+        # if none of the nodes is of the type LVStation, a switch
+        # disconnecter will be installed anyways.
+        if any([isinstance(n, LVStation) for n in ring]):
+            has_lv_station = True
+        else:
+            has_lv_station = False
+            logging.debug("Ring {} does not have a LV station. "
+                          "Switch disconnecter is installed at arbitrary "
+                          "node.".format(ring))
+
         # Identify nodes where switch disconnector is located in between
         for ctr in range(len(node_peak_data)):
             # check if node that owns the switch disconnector is of type
             # LVStation
-            if isinstance(ring[ctr - 2], LVStation):
+            if isinstance(ring[ctr - 2], LVStation) or not has_lv_station:
                 # Iteratively split route and calc peak load difference
                 route_data_part1 = sum(node_peak_data[0:ctr])
                 route_data_part2 = sum(node_peak_data[ctr:len(node_peak_data)])
@@ -561,3 +574,70 @@ def get_capacities_by_type(network):
             pass
     return mv_peak_generation + lv_accumulated_peak_generation
 
+
+def get_mv_feeder_from_node(node):
+    """
+    Determines MV feeder the given node is in.
+
+    MV feeders are identified by the first line segment of the half-ring.
+
+    Parameters
+    ----------
+    node : :class:`~.grid.components.Component`
+        Node to find the MV feeder for. Can be any kind of
+        :class:`~.grid.components.Component` except
+        :class:`~.grid.components.Line`.
+
+    Returns
+    -------
+    :class:`~.grid.components.Line`
+        MV feeder identifier (representative of the first line segment
+        of the half-ring)
+
+    """
+    # if node is MV station no MV feeder can be attributed and None is returned
+    if isinstance(node, MVStation):
+        return None
+
+    # if node is in LV grid, get LV station of that grid
+    if isinstance(node.grid, LVGrid):
+        node = node.grid.station
+
+    # find path from MV station to node in MV grid to assign MV feeder
+    if isinstance(node, LVStation):
+        path = nx.shortest_path(node.mv_grid.graph, node.mv_grid.station, node)
+    else:
+        path = nx.shortest_path(node.grid.graph, node.grid.station, node)
+
+    # MV feeder identifier is the representative of the first line segment
+    # of the half-ring
+    mv_feeder = path[0].grid.graph.line_from_nodes(path[0], path[1])
+
+    return mv_feeder
+
+
+def get_mv_feeder_from_line(line):
+    """
+    Determines MV feeder the given line is in.
+
+    MV feeders are identified by the first line segment of the half-ring.
+
+    Parameters
+    ----------
+    line : :class:`~.grid.components.Line`
+        Line to find the MV feeder for.
+
+    Returns
+    -------
+    :class:`~.grid.components.Line`
+        MV feeder identifier (representative of the first line segment
+        of the half-ring)
+
+    """
+    # get nodes of line
+    nodes = line.grid.graph.nodes_from_line(line)
+    # if one of the nodes is an MV station the line is an MV feeder itself
+    if isinstance(nodes[0], MVStation) or isinstance(nodes[1], MVStation):
+        return line
+    else:
+        return get_mv_feeder_from_node(nodes[0])

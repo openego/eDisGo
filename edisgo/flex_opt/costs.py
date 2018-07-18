@@ -1,4 +1,3 @@
-import sys
 import pandas as pd
 import pyproj
 from functools import partial
@@ -8,6 +7,7 @@ if not 'READTHEDOCS' in os.environ:
 
 from edisgo.grid.components import Transformer, Line
 from edisgo.grid.grids import LVGrid, MVGrid
+from edisgo.grid.tools import get_mv_feeder_from_node, get_mv_feeder_from_line
 
 
 def grid_expansion_costs(network):
@@ -24,8 +24,9 @@ def grid_expansion_costs(network):
     `pandas.DataFrame<dataframe>`
         DataFrame containing type and costs plus in the case of lines the
         line length and number of parallel lines of each reinforced
-        transformer and line. Index of the DataFrame is the representation of
-        the respective object, columns are the following:
+        transformer and line. Index of the DataFrame is the respective object
+        that can either be a :class:`~.grid.components.Line` or a
+        :class:`~.grid.components.Transformer`. Columns are the following:
 
         type: String
             Transformer size or cable name
@@ -40,6 +41,13 @@ def grid_expansion_costs(network):
 
         line_length: float
             Length of line or in case of parallel lines all lines in km.
+
+        voltage_level : :obj:`str` {'lv' | 'mv' | 'mv/lv'}
+            Specifies voltage level the equipment is in.
+
+        mv_feeder : :class:`~.grid.components.Line`
+            First line segment of half-ring used to identify in which
+            feeder the grid expansion was conducted in.
 
     Notes
     -------
@@ -95,7 +103,8 @@ def grid_expansion_costs(network):
             network.results.equipment_changes['equipment'].apply(
                 isinstance, args=(Transformer,))]
         added_transformers = transformers[transformers['change'] == 'added']
-        removed_transformers = transformers[transformers['change'] == 'removed']
+        removed_transformers = transformers[
+            transformers['change'] == 'removed']
         # check if any of the added transformers were later removed
         added_removed_transformers = added_transformers.loc[
             added_transformers['equipment'].isin(
@@ -108,8 +117,10 @@ def grid_expansion_costs(network):
             costs = costs.append(pd.DataFrame(
                 {'type': t.type.name,
                  'total_costs': _get_transformer_costs(t),
-                 'quantity': 1},
-                index=[repr(t)]))
+                 'quantity': 1,
+                 'voltage_level': 'mv/lv',
+                 'mv_feeder': get_mv_feeder_from_node(t.grid.station)},
+                index=[t]))
 
         # costs for lines
         # get changed lines
@@ -133,8 +144,11 @@ def grid_expansion_costs(network):
                     {'type': l.type.name,
                      'total_costs': _get_line_costs(l, number_lines_added),
                      'length': l.length * number_lines_added,
-                     'quantity': number_lines_added},
-                    index=[repr(l)]))
+                     'quantity': number_lines_added,
+                     'voltage_level': ('lv' if isinstance(l.grid, LVGrid)
+                                       else 'mv'),
+                     'mv_feeder': None}, #get_mv_feeder_from_line(l)},
+                    index=[l]))
 
     # if no costs incurred write zero costs to DataFrame
     if costs.empty:
@@ -142,7 +156,10 @@ def grid_expansion_costs(network):
             {'type': ['N/A'],
              'total_costs': [0],
              'length': [0],
-             'quantity': [0]},
+             'quantity': [0],
+             'voltage_level': '',
+             'mv_feeder': ''
+             },
             index=['No reinforced equipment.']))
 
     return costs

@@ -1,7 +1,7 @@
 import os
 import logging
 import pandas as pd
-from math import acos, tan, sqrt
+from math import acos, tan
 
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString
@@ -205,9 +205,9 @@ class Load(Component):
                         "given.".format(sector))
                     raise
             ts['q'] = ts['p'] * q_factor
-            self._timeseries = ts * consumption
-
-        return self._timeseries
+            return ts * consumption
+        else:
+            return self._timeseries
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -326,7 +326,7 @@ class Generator(Component):
                     raise
             timeseries['q'] = timeseries['p'] * tan(acos(self.power_factor))
             timeseries = timeseries * self.nominal_capacity
-            return timeseries.loc[self.grid.network.timeseries.timeindex, :]
+            return timeseries
         else:
             return self._timeseries.loc[
                    self.grid.network.timeseries.timeindex, :]
@@ -403,7 +403,7 @@ class GeneratorFluctuating(Generator):
     ----------
     _curtailment : :pandas:`pandas.Series<series>`
         Contains time series for curtailment in kW
-    _weather_cell_id : :obj:`str`
+    _weather_cell_id : :obj:`int`
         ID of the weather cell used to generate feed-in time series
 
     Notes
@@ -481,7 +481,7 @@ class GeneratorFluctuating(Generator):
                 timeseries = timeseries.join(
                     self.curtailment.to_frame('curtailment'), how='left')
                 timeseries.p = timeseries.p - timeseries.curtailment.fillna(0)
-            return timeseries.loc[self.grid.network.timeseries.timeindex, :]
+            return timeseries
         else:
             #ToDo: should curtailment be subtracted from timeseries?
             return self._timeseries.loc[

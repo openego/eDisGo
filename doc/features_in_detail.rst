@@ -35,7 +35,33 @@ because the changed power flows after reinforcing the grid may lead to new over-
 Identification of over-voltage and over-loading issues
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Identification of over-voltage and over-loading issues is conducted in :py:mod:`~edisgo.flex_opt.check_tech_constraints`.
+Identification of over-voltage and over-loading issues is conducted in 
+:py:mod:`~edisgo.flex_opt.check_tech_constraints`.
+
+Over-voltage is determined based on allowed voltage deviations set in the config file 
+:any:`config_grid_expansion.cfg` in section `grid_expansion_allowed_voltage_deviations`.
+Over-load is determined based on allowed load factors that are also defined in the config file
+:any:`config_grid_expansion.cfg` in section `grid_expansion_load_factors`.
+
+Allowed voltage deviations as well as load factors are in most cases different for load and feed-in case. 
+Load and feed-in case are commonly used worst-cases for grid expansion analyses. 
+Load case defines a situation where all loads in the grid have a high demand while feed-in by generators is low
+or zero. In this case power is flowing from the high-voltage grid to the distribution grid. 
+In the feed-in case there is a high generator feed-in and a small energy demand leading to a reversed power flow.
+Load and generation assumptions for the two worst-cases are definded in the config file
+:any:`config_timeseries.cfg` in section `worst_case_scale_factor` (scale factors describe actual power
+to nominal power ratio of generators and loads).
+
+When conducting grid reinforcement based on given time series instead of worst-case assumptions, load and feed-in
+case also need to be definded to determine allowed voltage deviations and load factors. 
+Therefore, the two cases are identified based on the generation and load time series of all loads and generators
+in the grid and defined as follows:
+
+* Load case: positive ( :math:`\sum load` - :math:`\sum generation` ) 
+* Feed-in case: negative ( :math:`\sum load` - :math:`\sum generation` ) -> reverse power flow at HV/MV substation 
+
+Grid losses are not taken into account. See :func:`~edisgo.tools.tools.assign_load_feedin_case` for more
+details and implementation.
 
 Check LV and MV line load
 """""""""""""""""""""""""""""""""""""

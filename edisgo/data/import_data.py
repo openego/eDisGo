@@ -26,7 +26,7 @@ import oedialect
 from pandas import DataFrame, read_csv
 import matplotlib.pyplot as plt
 from edisgo.grid.components import *
-
+from ding0.core import GeneratorFluctuatingDing0
 
 
 if not 'READTHEDOCS' in os.environ:
@@ -545,13 +545,41 @@ def _determine_aggregated_nodes(la_centers):
 
         # Determine aggregated generation in LV grid
         for lvgd in la_center.lv_load_area._lv_grid_districts:
+            weather_cell_ids = {}
             for gen in lvgd.lv_grid.generators():
                 aggr = aggregate_generators(gen, aggr)
+
+                # Get the aggregated weather cell id of the area
+                # b
+                if isinstance(gen, GeneratorFluctuatingDing0):
+                    if gen.weather_cell_id not in weather_cell_ids.keys():
+                        weather_cell_ids[gen.weather_cell_id] = 1
+                    else:
+                        weather_cell_ids[gen.weather_cell_id] += 1
 
                 dingo_import_data.loc[len(dingo_import_data)] = \
                     [int(gen.id_db),
                      gen.capacity,
                      None]
+
+            # Get the weather cell id that occurs the most if there are any generators
+            if not(list(lvgd.lv_grid.generators())):
+                weather_cell_id = None
+            else:
+                weather_cell_id = list(weather_cell_ids.keys())[
+                    list(weather_cell_ids.values()).index(max(weather_cell_ids.values()))]
+
+
+            for v_level in aggr['generation']:
+                for type in aggr['generation'][v_level]:
+                    for subtype in aggr['generation'][v_level][type]:
+                        # make sure to check if there are any generators before assigning
+                        # a weather cell id
+                        if not(list(lvgd.lv_grid.generators())):
+                            pass
+                        else:
+                            aggr['generation'][v_level][type][subtype]['weather_cell_id'] = \
+                                weather_cell_id
 
         # Determine aggregated load in MV grid
         # -> Implement once laods in Ding0 MV grids exist
@@ -607,6 +635,7 @@ def _attach_aggregated(network, grid, aggregated, ding0_grid):
                             id='agg-' + str(la_id) + '-' + '_'.join(
                                 [str(_) for _ in val3['ids']]),
                             nominal_capacity=val3['capacity'],
+                            weather_cell_id=val3['weather_cell_id'],
                             type=type,
                             subtype=subtype,
                             geom=grid.station.geom,
@@ -1004,6 +1033,11 @@ def import_generators(network, data_source=None, file=None):
         logging.warning('Right now only solar and wind generators can be '
                         'imported from the oedb.')
         _import_genos_from_oedb(network=network)
+        network.mv_grid._weather_cells = None
+        # ToDo: Implement update of pypsa network after generator import
+        # work-around for now: reset pypsa network to make sure it is
+        # generated again with new and decommissioned generators
+        network.pypsa = None
     elif data_source == 'pypsa':
         _import_genos_from_pypsa(network=network, file=file)
     else:
@@ -1095,6 +1129,7 @@ def _import_genos_from_oedb(network):
             orm_re_generators.columns.generation_type,
             orm_re_generators.columns.generation_subtype,
             orm_re_generators.columns.voltage_level,
+            orm_re_generators.columns.w_id,
             func.ST_AsText(func.ST_Transform(
                 orm_re_generators.columns.rea_geom_new, srid)).label('geom'),
             func.ST_AsText(func.ST_Transform(
@@ -1278,6 +1313,7 @@ def _import_genos_from_oedb(network):
                         type=row['generation_type'],
                         subtype=row['generation_subtype'],
                         v_level=int(row['voltage_level']),
+                        weather_cell_id=row['w_id'],
                         geom=wkt_loads(geom)),
                     type='generator')
             else:
@@ -1538,6 +1574,7 @@ def _import_genos_from_oedb(network):
                         type=row['generation_type'],
                         subtype=row['generation_subtype'],
                         v_level=int(row['voltage_level']),
+                        weather_cell_id=row['w_id'],
                         geom=wkt_loads(geom) if geom else geom)
                 else:
                     gen = Generator(id=id,
@@ -1967,15 +2004,14 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
     ----------
     config_data : dict
         Dictionary containing config data from config files.
-    mv_grid_id : :obj:`str`
-        MV grid ID as used in oedb.
-    generator_scenario : None or :obj:`str`
-        Defines which scenario of future generator park to use.
+    weather_cell_ids : :obj:`list`
+        List of weather cell id's (integers) to obtain feed-in data for.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<dataframe>`
         Feedin time series
+
     """
 
     def _retrieve_timeseries_from_oedb(config_data, weather_cell_ids):
@@ -1985,10 +2021,8 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
         ----------
         config_data : dict
             Dictionary containing config data from config files.
-        mv_grid_id : :obj:`str`
-            MV grid ID as used in oedb.
-        generator_scenario : None or :obj:`str`
-            Defines which scenario of future generator park to use.
+        weather_cell_ids : :obj:`list`
+        List of weather cell id's (integers) to obtain feed-in data for.
 
         Returns
         -------
@@ -2002,7 +2036,7 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
         else:
             orm_feedin_name = config_data['versioned']['res_feedin_data']
             orm_feedin = supply.__getattribute__(orm_feedin_name)
-            orm_feedin_version = orm_feedin.columns.version == config_data['versioned']['version']
+            orm_feedin_version = orm_feedin.version == config_data['versioned']['version']
 
         conn = connection(section=config_data['db_connection']['section'])
         Session = sessionmaker(bind=conn)
@@ -2051,6 +2085,7 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
     feedin = _retrieve_timeseries_from_oedb(config_data, weather_cell_ids)
 
     return feedin
+
 
 def import_load_timeseries(config_data, data_source, mv_grid_id=None,
                            year=None):

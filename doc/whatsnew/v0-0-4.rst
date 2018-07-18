@@ -1,0 +1,12 @@
+Release v0.0.4
+==============
+
+Release date: July <DAY> 2018
+
+<Summary>
+
+Changes
+-------
+
+* Switch disconnecters in MV rings will now be installed, even if no LV station
+  exists in the ring `#136 <https://github.com/openego/eDisGo/issues/136>`_

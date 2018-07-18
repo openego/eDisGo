@@ -21,7 +21,7 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     The lower voltage threshold is the node voltage below which no
     curtailment is assigned to the respective generator connected
     to the node. This assignment can be done by using the keyword
-    argument 'voltage_threshold_lower'. By default, this voltage
+    argument 'voltage_threshold'. By default, this voltage
     is set to 1.0 per unit.
 
     Above the lower voltage threshold, the curtailment is proportional
@@ -69,11 +69,11 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     edisgo_object : :class:`edisgo.grid.network.EDisGo`
         The edisgo object in which this function was called through the
         respective :class:`edisgo.grid.network.CurtailmentControl` instance.
-    voltage_threshold_lower: :obj:`float`
+    voltage_threshold: :obj:`float`
         The node voltage below which no curtailment would be assigned to the
-        respective generator.
+        respective generator. Default: 1.0.
     """
-    voltage_threshold_lower = kwargs.get('voltage_threshold_lower', 1.0)
+    voltage_threshold = kwargs.get('voltage_threshold', 1.0)
 
     # get the results of a load flow
     # get the voltages at the nodes
@@ -94,9 +94,9 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
 
         # curtailment calculation by inducing a reduced or increased feedin
         # find out the difference from lower threshold
-        feedin_factor = v_pu - voltage_threshold_lower
+        feedin_factor = v_pu - voltage_threshold
         # make sure the difference is positive
-        # zero the curtailment of those generators below the voltage_threshold_lower
+        # zero the curtailment of those generators below the voltage_threshold
         feedin_factor = feedin_factor[feedin_factor >= 0].fillna(0)
         # after being normalized to maximum difference being 1 and minimum being 0
         feedin_factor = feedin_factor.divide(feedin_factor.max(axis=1), axis=0)

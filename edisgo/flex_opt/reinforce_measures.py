@@ -24,9 +24,16 @@ def extend_distribution_substation_overloading(network, critical_stations):
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-    critical_stations : dict
-        Dictionary with critical :class:`~.grid.components.LVStation`
-        Format: {lv_station_1: overloading_1, ..., lv_station_n: overloading_n}
+    critical_stations : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe containing over-loaded MV/LV stations, their apparent power
+        at maximal over-loading and the corresponding time step.
+        Index of the dataframe are the over-loaded stations of type
+        :class:`~.grid.components.LVStation`. Columns are 's_pfa'
+        containing the apparent power at maximal over-loading as float and
+        'time_index' containing the corresponding time step the over-loading
+        occured in as :pandas:`pandas.Timestamp<timestamp>`. See
+        :func:`~.flex_opt.check_tech_constraints.mv_lv_station_load` for more
+        information.
 
     Returns
     -------
@@ -43,20 +50,20 @@ def extend_distribution_substation_overloading(network, critical_stations):
     except KeyError:
         print('Standard MV/LV transformer is not in equipment list.')
 
-    #ToDo: differentiate between load and feed-in case!
-    load_factor = network.config['grid_expansion_load_factors'][
-        'lv_feedin_case_transformer']
-
     transformers_changes = {'added': {}, 'removed': {}}
-    for station in critical_stations:
+    for station in critical_stations.index:
 
         # list of maximum power of each transformer in the station
         s_max_per_trafo = [_.type.S_nom for _ in station.transformers]
 
         # maximum station load from power flow analysis
-        s_station_pfa = critical_stations[station]
+        s_station_pfa = critical_stations.s_pfa[station]
 
         # determine missing transformer power to solve overloading issue
+        case = network.timeseries.timesteps_load_feedin_case.case[
+            critical_stations.time_index[station]]
+        load_factor = network.config['grid_expansion_load_factors'][
+            'lv_{}_transformer'.format(case)]
         s_trafo_missing = s_station_pfa - (sum(s_max_per_trafo) * load_factor)
 
         # check if second transformer of the same kind is sufficient
@@ -119,9 +126,15 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-    critical_stations : dict
-        Dictionary with critical :class:`~.grid.components.LVStation`
-        Format: {lv_station_1: overloading_1, ..., lv_station_n: overloading_n}
+    critical_stations : :obj:`dict`
+        Dictionary with :class:`~.grid.grids.LVGrid` as key and a
+        :pandas:`pandas.DataFrame<dataframe>` with its critical station and
+        maximum voltage deviation as value.
+        Index of the dataframe is the :class:`~.grid.components.LVStation`
+        with over-voltage issues. Columns are 'v_mag_pu' containing the
+        maximum voltage deviation as float and 'time_index' containing the
+        corresponding time step the over-voltage occured in as
+        :pandas:`pandas.Timestamp<timestamp>`.
 
     Returns
     -------
@@ -138,7 +151,7 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
         print('Standard MV/LV transformer is not in equipment list.')
 
     transformers_changes = {'added': {}}
-    for grid, voltage_deviation in critical_stations.items():
+    for grid in critical_stations.keys():
 
         # get any transformer to get attributes for new transformer from
         station_transformer = grid.station.transformers[0]
@@ -175,10 +188,16 @@ def extend_substation_overloading(network, critical_stations):
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-    critical_stations : dict
-        Dictionary with critical :class:`~.grid.components.MVStation` and
-        maximum apparent power from power flow analysis.
-        Format: {MVStation: S_max}
+    critical_stations : pandas:`pandas.DataFrame<dataframe>`
+        Dataframe containing over-loaded HV/MV stations, their apparent power
+        at maximal over-loading and the corresponding time step.
+        Index of the dataframe are the over-loaded stations of type
+        :class:`~.grid.components.MVStation`. Columns are 's_pfa'
+        containing the apparent power at maximal over-loading as float and
+        'time_index' containing the corresponding time step the over-loading
+        occured in as :pandas:`pandas.Timestamp<timestamp>`. See
+        :func:`~.flex_opt.check_tech_constraints.hv_mv_station_load` for more
+        information.
 
     Returns
     -------
@@ -194,21 +213,20 @@ def extend_substation_overloading(network, critical_stations):
     except KeyError:
         print('Standard HV/MV transformer is not in equipment list.')
 
-    # ToDo: differentiate between load and feed-in case!
-    load_factor = \
-        network.config['grid_expansion_load_factors'][
-            'mv_feedin_case_transformer']
-
     transformers_changes = {'added': {}, 'removed': {}}
-    for station in critical_stations:
+    for station in critical_stations.index:
 
         # list of maximum power of each transformer in the station
         s_max_per_trafo = [_.type.S_nom for _ in station.transformers]
 
         # maximum station load from power flow analysis
-        s_station_pfa = critical_stations[station]
+        s_station_pfa = critical_stations.s_pfa[station]
 
         # determine missing transformer power to solve overloading issue
+        case = network.timeseries.timesteps_load_feedin_case.case[
+            critical_stations.time_index[station]]
+        load_factor = network.config['grid_expansion_load_factors'][
+            'mv_{}_transformer'.format(case)]
         s_trafo_missing = s_station_pfa - (sum(s_max_per_trafo) * load_factor)
 
         # check if second transformer of the same kind is sufficient
@@ -273,13 +291,18 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     ----------
     network : :class:`~.grid.network.Network`
     grid : :class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid`
-    crit_nodes : :pandas:`pandas.Series<series>`
-        Series with critical nodes of one grid and corresponding voltage
-        deviation, sorted descending by voltage deviation.
+    crit_nodes : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe with critical nodes, sorted descending by voltage deviation.
+        Index of the dataframe are nodes (of type
+        :class:`~.grid.components.Generator`, :class:`~.grid.components.Load`,
+        etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
+        maximum voltage deviation as float and 'time_index' containing the
+        corresponding time step the over-voltage occured in as
+        :pandas:`pandas.Timestamp<timestamp>`.
 
     Returns
     -------
-    Dictionary with :class:`~.grid.components.Line` and the number of Lines
+    Dictionary with :class:`~.grid.components.Line` and the number of lines
     added.
 
     Notes
@@ -304,7 +327,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     References
     ----------
 
-    The method of grid reinforce as implemented here bases on
+    The method of grid reinforcement as implemented here bases on
     [VerteilnetzstudieBW]_ and [EAMS]_.
 
     """
@@ -331,9 +354,8 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     main_line_reinforced = []
 
     lines_changes = {}
-    for i in range(len(crit_nodes)):
-        path = nx.shortest_path(grid.graph, grid.station,
-                                crit_nodes.index[i])
+    for node in crit_nodes.index:
+        path = nx.shortest_path(grid.graph, grid.station, node)
         # raise exception if voltage issue occurs at station's secondary side
         # because voltage issues should have been solved during extension of
         # distribution substations due to overvoltage issues.
@@ -351,13 +373,11 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                 # get path length from station to critical node
                 get_weight = lambda u, v, data: data['line'].length
                 path_length = dijkstra_shortest_path_length(
-                    grid.graph, grid.station, get_weight,
-                    target=crit_nodes.index[i])
+                    grid.graph, grid.station, get_weight, target=node)
                 # find first node in path that exceeds 2/3 of the line length
                 # from station to critical node farthest away from the station
                 node_2_3 = next(j for j in path if
-                                path_length[j] >= path_length[
-                                    crit_nodes.index[i]] * 2 / 3)
+                                path_length[j] >= path_length[node] * 2 / 3)
 
                 # if LVGrid: check if node_2_3 is outside of a house
                 # and if not find next BranchTee outside the house
@@ -398,7 +418,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                             # if no LVStation between node_2_3 and node with
                             # voltage problem, connect node directly to
                             # MVStation
-                            node_2_3 = crit_nodes.index[i]
+                            node_2_3 = node
 
                 # if node_2_3 is a representative (meaning it is already
                 # directly connected to the station), line cannot be
@@ -451,7 +471,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
             else:
                 logger.debug(
                     '==> Main line of node {} in grid {} '.format(
-                        str(crit_nodes.index[i]), str(grid)) +
+                        repr(node), str(grid)) +
                     'has already been reinforced.')
 
     if main_line_reinforced:
@@ -468,10 +488,14 @@ def reinforce_branches_overloading(network, crit_lines):
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-    crit_lines : dict
-        Dictionary of critical :class:`~.grid.components.Line` with max.
-        relative overloading
-        Format: {line_1: rel_overloading_1, ..., line_n: rel_overloading_n}
+    crit_lines : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe containing over-loaded lines, their maximum relative
+        over-loading and the corresponding time step.
+        Index of the dataframe are the over-loaded lines of type
+        :class:`~.grid.components.Line`. Columns are 'max_rel_overload'
+        containing the maximum relative over-loading as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<timestamp>`.
 
     Returns
     -------
@@ -503,7 +527,8 @@ def reinforce_branches_overloading(network, crit_lines):
         print('Chosen standard MV line is not in equipment list.')
 
     lines_changes = {}
-    for crit_line, rel_overload in crit_lines.items():
+    for crit_line in crit_lines.index:
+        rel_overload = crit_lines.max_rel_overload[crit_line]
         # check if line is in LV or MV and set standard line accordingly
         if isinstance(crit_line.grid, LVGrid):
             standard_line = standard_line_lv
@@ -532,8 +557,8 @@ def reinforce_branches_overloading(network, crit_lines):
                 crit_line.quantity = number_parallel_lines
                 crit_line.kind = 'cable'
 
-    if crit_lines:
+    if not crit_lines.empty:
         logger.debug('==> {} branche(s) was/were reinforced '.format(
-            str(len(crit_lines))) + 'due to over-loading issues.')
+            crit_lines.shape[0]) + 'due to over-loading issues.')
 
     return lines_changes
