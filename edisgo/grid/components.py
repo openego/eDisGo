@@ -403,7 +403,7 @@ class GeneratorFluctuating(Generator):
     ----------
     _curtailment : :pandas:`pandas.Series<series>`
         Contains time series for curtailment in kW
-    _weather_cell_id : :obj:`str`
+    _weather_cell_id : :obj:`int`
         ID of the weather cell used to generate feed-in time series
 
     Notes

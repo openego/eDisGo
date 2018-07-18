@@ -1030,6 +1030,10 @@ def import_generators(network, data_source=None, file=None):
                         'imported from the oedb.')
         _import_genos_from_oedb(network=network)
         network.mv_grid._weather_cells = None
+        # ToDo: Implement update of pypsa network after generator import
+        # work-around for now: reset pypsa network to make sure it is
+        # generated again with new and decommissioned generators
+        network.pypsa = None
     elif data_source == 'pypsa':
         _import_genos_from_pypsa(network=network, file=file)
     else:
