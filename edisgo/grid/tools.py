@@ -170,7 +170,6 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
             has_lv_station = True
         else:
             has_lv_station = False
-            logging.getLogger().setLevel(logging.DEBUG)
             logging.debug("Ring {} does not have a LV station. "
                           "Switch disconnecter is installed at arbitrary "
                           "node.".format(ring))
