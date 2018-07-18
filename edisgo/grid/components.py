@@ -157,6 +157,7 @@ class Load(Component):
         super().__init__(**kwargs)
         self._timeseries = kwargs.get('timeseries', None)
         self._consumption = kwargs.get('consumption', None)
+        self._power_factor = kwargs.get('power_factor', None)
         self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
         self._q_sign = None
 
@@ -187,13 +188,11 @@ class Load(Component):
                 consumption = self.consumption[sector]
 
             if isinstance(self.grid, MVGrid):
-                q_factor = self.q_sign * tan(acos(self.grid.network.config[
-                                        'reactive_power_factor']['mv_load']))
                 voltage_level = 'mv'
             elif isinstance(self.grid, LVGrid):
-                q_factor = self.q_sign * tan(acos(self.grid.network.config[
-                                        'reactive_power_factor']['lv_load']))
                 voltage_level = 'lv'
+
+            q_factor = self.q_sign * tan(acos(self.power_factor))
             # check if load time series for MV and LV are differentiated
             try:
                 ts = self.grid.network.timeseries.load[
@@ -258,6 +257,35 @@ class Load(Component):
         return peak_load
 
     @property
+    def power_factor(self):
+        """
+        Power factor of load
+
+        If power factor is not set it is retrieved from the network config
+        object depending on the grid level the load is in.
+
+        Returns
+        --------
+        :obj:`float` : Power factor
+            Ratio of real power to apparent power.
+        """
+        if self._power_factor is None:
+            if isinstance(self.grid, MVGrid):
+                self._power_factor = self.grid.network.config[
+                    'reactive_power_factor']['mv_load']
+            elif isinstance(self.grid, LVGrid):
+                self._power_factor = self.grid.network.config[
+                    'reactive_power_factor']['lv_load']
+        return self._power_factor
+
+    @power_factor.setter
+    def power_factor(self, power_factor):
+        """
+        Set the power factor of the generator.
+        """
+        self._power_factor = power_factor
+
+    @property
     def reactive_power_mode(self):
         """
         Power factor mode of Load.
@@ -287,7 +315,7 @@ class Load(Component):
                 self._reactive_power_mode = self.grid.network.config[
                     'reactive_power_mode']['lv_load']
 
-        return self._reactive_power_mode[1:-1]
+        return self._reactive_power_mode
 
     @reactive_power_mode.setter
     def reactive_power_mode(self, reactive_power_mode):
@@ -307,11 +335,9 @@ class Load(Component):
         -------
         :obj: `int` : +1 or -1
         """
-        comparestr = self.reactive_power_mode
-        comparestr = comparestr.lower()
-        if re.fullmatch('inductive', comparestr):
+        if self.reactive_power_mode.lower() == 'inductive':
             return 1
-        elif re.fullmatch('capacitive', comparestr):
+        elif self.reactive_power_mode.lower() == 'capacitive':
                 return -1
         else:
             raise ValueError("Unknown value {} in reactive_power_mode".format(
@@ -504,7 +530,7 @@ class Generator(Component):
                 self._reactive_power_mode = self.grid.network.config[
                     'reactive_power_mode']['lv_gen']
 
-        return self._reactive_power_mode[1:-1]
+        return self._reactive_power_mode
 
     @reactive_power_mode.setter
     def reactive_power_mode(self, reactive_power_mode):
@@ -524,11 +550,9 @@ class Generator(Component):
         -------
         :obj: `int` : +1 or -1
         """
-        comparestr = self.reactive_power_mode
-        comparestr = comparestr.lower()
-        if re.fullmatch('inductive', comparestr):
+        if self.reactive_power_mode.lower() == 'inductive':
             return -1
-        elif re.fullmatch('capacitive', comparestr):
+        elif self.reactive_power_mode.lower() == 'capacitive':
                 return 1
         else:
             raise ValueError("Unknown value {} in reactive_power_mode".format(
@@ -896,7 +920,7 @@ class Storage(Component):
                 self._reactive_power_mode = self.grid.network.config[
                     'reactive_power_mode']['lv_gen']
 
-        return self._reactive_power_mode[1:-1]
+        return self._reactive_power_mode
 
     @reactive_power_mode.setter
     def reactive_power_mode(self, reactive_power_mode):
@@ -916,11 +940,9 @@ class Storage(Component):
         -------
         :obj: `int` : +1 or -1
         """
-        comparestr = self.reactive_power_mode
-        comparestr = comparestr.lower()
-        if re.fullmatch('inductive', comparestr):
+        if self.reactive_power_mode.lower() == 'inductive':
             return -1
-        elif re.fullmatch('capacitive', comparestr):
+        elif self.reactive_power_mode.lower() == 'capacitive':
             return 1
         else:
             raise ValueError("Unknown value {} in reactive_power_mode".format(
