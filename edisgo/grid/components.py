@@ -156,6 +156,9 @@ class Load(Component):
         super().__init__(**kwargs)
         self._timeseries = kwargs.get('timeseries', None)
         self._consumption = kwargs.get('consumption', None)
+        self._power_factor = kwargs.get('power_factor', None)
+        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
+        self._q_sign = None
 
     @property
     def timeseries(self):
@@ -184,13 +187,11 @@ class Load(Component):
                 consumption = self.consumption[sector]
 
             if isinstance(self.grid, MVGrid):
-                q_factor = tan(acos(self.grid.network.config[
-                                        'reactive_power_factor']['mv_load']))
                 voltage_level = 'mv'
             elif isinstance(self.grid, LVGrid):
-                q_factor = tan(acos(self.grid.network.config[
-                                        'reactive_power_factor']['lv_load']))
                 voltage_level = 'lv'
+
+            q_factor = self.q_sign * tan(acos(self.power_factor))
             # check if load time series for MV and LV are differentiated
             try:
                 ts = self.grid.network.timeseries.load[
@@ -254,6 +255,93 @@ class Load(Component):
 
         return peak_load
 
+    @property
+    def power_factor(self):
+        """
+        Power factor of load
+
+        If power factor is not set it is retrieved from the network config
+        object depending on the grid level the load is in.
+
+        Returns
+        --------
+        :obj:`float` : Power factor
+            Ratio of real power to apparent power.
+        """
+        if self._power_factor is None:
+            if isinstance(self.grid, MVGrid):
+                self._power_factor = self.grid.network.config[
+                    'reactive_power_factor']['mv_load']
+            elif isinstance(self.grid, LVGrid):
+                self._power_factor = self.grid.network.config[
+                    'reactive_power_factor']['lv_load']
+        return self._power_factor
+
+    @power_factor.setter
+    def power_factor(self, power_factor):
+        """
+        Set the power factor of the generator.
+        """
+        self._power_factor = power_factor
+
+    @property
+    def reactive_power_mode(self):
+        """
+        Power factor mode of Load.
+
+        If the power factor is set, then it is necessary to know whether the
+        it is leading or lagging. In other words this information is necessary
+        to make the generator behave in an inductive or capacitive manner.
+        Essentially this changes the sign of the reactive power Q.
+
+        The convention used here in a load is that:
+        - when `reactive_power_mode` is 'inductive' then Q is positive
+        - when `reactive_power_mode` is 'capacitive' then Q is negative
+
+        In the case that this attribute is not set, it is retrieved from the
+        network config object depending on the voltage level the load is in.
+
+        Returns
+        -------
+        :obj: `str` : Power factor mode
+            Either 'inductive' or 'capacitive'
+        """
+        if self._reactive_power_mode is None:
+            if isinstance(self.grid, MVGrid):
+                self._reactive_power_mode = self.grid.network.config[
+                    'reactive_power_mode']['mv_load']
+            elif isinstance(self.grid, LVGrid):
+                self._reactive_power_mode = self.grid.network.config[
+                    'reactive_power_mode']['lv_load']
+
+        return self._reactive_power_mode
+
+    @reactive_power_mode.setter
+    def reactive_power_mode(self, reactive_power_mode):
+        """
+        Set the power factor mode of the generator.
+        Should be either 'inductive' or 'capacitive'
+        """
+        self._reactive_power_mode = reactive_power_mode
+
+    @property
+    def q_sign(self):
+        """
+        Get the sign reactive power based on the
+        :attr: `_reactive_power_mode`
+
+        Returns
+        -------
+        :obj: `int` : +1 or -1
+        """
+        if self.reactive_power_mode.lower() == 'inductive':
+            return 1
+        elif self.reactive_power_mode.lower() == 'capacitive':
+                return -1
+        else:
+            raise ValueError("Unknown value {} in reactive_power_mode".format(
+                self.reactive_power_mode))
+
     def __repr__(self):
         return '_'.join(['Load',
                          sorted(list(self.consumption.keys()))[0],
@@ -268,6 +356,11 @@ class Generator(Component):
     ----------
     _timeseries : :pandas:`pandas.Series<series>`
         Contains time series for generator
+    _power_factor: :obj: `str`
+        Contains the power factor of the generator
+    _reactive_power_mode: :obj: `str`
+        Contains the reactive power behaviour of the generator,
+        either 'inductive' or 'capacitive'
 
     Notes
     -----
@@ -291,6 +384,8 @@ class Generator(Component):
         self._v_level = kwargs.get('v_level', None)
         self._timeseries = kwargs.get('timeseries', None)
         self._power_factor = kwargs.get('power_factor', None)
+        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
+        self._q_sign = None
 
     @property
     def timeseries(self):
@@ -300,14 +395,19 @@ class Generator(Component):
         It returns the actual dispatch time series used in power flow analysis.
         If :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
         :meth:`timeseries` looks for time series of the according type of
-        technology in :class:`~.grid.network.TimeSeries`.
+        technology in :class:`~.grid.network.TimeSeries`. The reactive
+        power is also claculated in :attr:`_timeseries` depending upon the
+        :attr:`power_factor` and :attr:`reactive_power_mode`. The
+        :attr:`power_factor` determines the magnitude of the reactive power
+        based on the power factor and active power provided and the
+        :attr:`reactive_power_mode` determines if the reactive power is either
+        consumed (inductive behaviour) or provided (capacitive behaviour)
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power in kW in column 'p' and
-            reactive power in kVA in column 'q'.
-
+            reactive power in kvar in column 'q'.
         """
         if self._timeseries is None:
             # set time series for active and reactive power
@@ -324,7 +424,9 @@ class Generator(Component):
                     logger.exception("No time series for type {} "
                                      "given.".format(self.type))
                     raise
-            timeseries['q'] = timeseries['p'] * tan(acos(self.power_factor))
+
+            timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(
+                self.power_factor))
             timeseries = timeseries * self.nominal_capacity
             return timeseries
         else:
@@ -338,7 +440,7 @@ class Generator(Component):
 
         Parameters
         ----------
-        attr : str
+        attr : :obj:`str`
             Attribute name (PyPSA conventions). Choose from {p_set, q_set}
         """
         return self.timeseries[attr] / 1e3
@@ -393,6 +495,65 @@ class Generator(Component):
     @power_factor.setter
     def power_factor(self, power_factor):
         self._power_factor = power_factor
+
+    @property
+    def reactive_power_mode(self):
+        """
+        Power factor mode of generator.
+
+        If the power factor is set, then it is necessary to know whether the
+        it is leading or lagging. In other words this information is necessary
+        to make the generator behave in an inductive or capacitive manner.
+        Essentially this changes the sign of the reactive power Q.
+
+        The convention used here in a generator is that:
+        - when `reactive_power_mode` is 'capacitive' then Q is positive
+        - when `reactive_power_mode` is 'inductive' then Q is negative
+
+        In the case that this attribute is not set, it is retrieved from the
+        network config object depending on the voltage level the generator
+        is in.
+
+        Returns
+        -------
+        :obj: `str` : Power factor mode
+            Either 'inductive' or 'capacitive'
+        """
+        if self._reactive_power_mode is None:
+            if isinstance(self.grid, MVGrid):
+                self._reactive_power_mode = self.grid.network.config[
+                    'reactive_power_mode']['mv_gen']
+            elif isinstance(self.grid, LVGrid):
+                self._reactive_power_mode = self.grid.network.config[
+                    'reactive_power_mode']['lv_gen']
+
+        return self._reactive_power_mode
+
+    @reactive_power_mode.setter
+    def reactive_power_mode(self, reactive_power_mode):
+        """
+        Set the power factor mode of the generator.
+        Should be either 'inductive' or 'capacitive'
+        """
+        self._reactive_power_mode = reactive_power_mode
+
+    @property
+    def q_sign(self):
+        """
+        Get the sign reactive power based on the
+        :attr: `_reactive_power_mode`
+
+        Returns
+        -------
+        :obj: `int` : +1 or -1
+        """
+        if self.reactive_power_mode.lower() == 'inductive':
+            return -1
+        elif self.reactive_power_mode.lower() == 'capacitive':
+                return 1
+        else:
+            raise ValueError("Unknown value {} in reactive_power_mode".format(
+                self.reactive_power_mode))
 
 
 class GeneratorFluctuating(Generator):
@@ -473,7 +634,8 @@ class GeneratorFluctuating(Generator):
                                      "given.".format(self.type))
                     raise
 
-            timeseries['q'] = timeseries['p'] * tan(acos(self.power_factor))
+            timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(
+                self.power_factor))
             timeseries = timeseries * self.nominal_capacity
 
             # subtract curtailment
@@ -577,6 +739,8 @@ class Storage(Component):
         self._efficiency_out = kwargs.get('efficiency_out', None)
         self._standing_loss = kwargs.get('standing_loss', None)
         self._operation = kwargs.get('operation', None)
+        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
+        self._q_sign = None
 
     @property
     def timeseries(self):
@@ -587,8 +751,10 @@ class Storage(Component):
         ----------
         timeseries : :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power the storage is charged (negative)
-            and discharged (positive) with (on the grid side) in kW in column
-            'p' and reactive power in kVA in column 'q'.
+            and discharged (positive) with (on the grid side) in kW in column 
+            'p' and reactive power in kvar in column 'q'. When 'q' is positive,
+            reactive power is supplied (behaving as a capacitor) and when
+            'q' is negative reactive power is consumed (behaving as an inductor).
 
         Returns
         -------
@@ -600,7 +766,20 @@ class Storage(Component):
 
     @timeseries.setter
     def timeseries(self, timeseries):
-        self._timeseries = timeseries
+        if 'q' in timeseries.columns:
+            self._timeseries = timeseries
+        else:
+            message = "There seems to be no \'q\' defined, it will be generated with the assumed" + \
+                " power_factor for generators"
+            logger.warning(message)
+            try:
+                self._timeseries = timeseries
+                self._timeseries['q'] = self.q_sign * self._timeseries['p']
+            except KeyError:
+                message = "There seems to be no column \'p\' in the timeseries dataframe"
+                logger.error(message)
+                raise KeyError(message)
+
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -718,6 +897,65 @@ class Storage(Component):
         """
         self._operation
 
+    @property
+    def reactive_power_mode(self):
+        """
+        Power factor mode of generator.
+
+        If the power factor is set, then it is necessary to know whether the
+        it is leading or lagging. In other words this information is necessary
+        to make the generator behave in an inductive or capacitive manner.
+        Essentially this changes the sign of the reactive power Q.
+
+        The convention used here in a generator is that:
+        - when `reactive_power_mode` is 'capacitive' then Q is positive
+        - when `reactive_power_mode` is 'inductive' then Q is negative
+
+        In the case that this attribute is not set, it is retrieved from the
+        network config object depending on the voltage level the generator
+        is in.
+
+        Returns
+        -------
+        :obj: `str` : Power factor mode
+            Either 'inductive' or 'capacitive'
+        """
+        if self._reactive_power_mode is None:
+            if isinstance(self.grid, MVGrid):
+                self._reactive_power_mode = self.grid.network.config[
+                    'reactive_power_mode']['mv_gen']
+            elif isinstance(self.grid, LVGrid):
+                self._reactive_power_mode = self.grid.network.config[
+                    'reactive_power_mode']['lv_gen']
+
+        return self._reactive_power_mode
+
+    @reactive_power_mode.setter
+    def reactive_power_mode(self, reactive_power_mode):
+        """
+        Set the power factor mode of the generator.
+        Should be either 'inductive' or 'capacitive'
+        """
+        self._reactive_power_mode = reactive_power_mode
+
+    @property
+    def q_sign(self):
+        """
+        Get the sign reactive power based on the
+        :attr: `_reactive_power_mode`
+
+        Returns
+        -------
+        :obj: `int` : +1 or -1
+        """
+        if self.reactive_power_mode.lower() == 'inductive':
+            return -1
+        elif self.reactive_power_mode.lower() == 'capacitive':
+            return 1
+        else:
+            raise ValueError("Unknown value {} in reactive_power_mode".format(
+                self.reactive_power_mode))
+
     def __repr__(self):
         return str(self._id)
 
@@ -823,7 +1061,8 @@ class BranchTee(Component):
                 self._id = 1
 
     def __repr__(self):
-        return '_'.join([self.__class__.__name__, repr(self.grid), str(self._id)])
+        return '_'.join(
+            [self.__class__.__name__, repr(self.grid), str(self._id)])
 
 
 class MVStation(Station):
