@@ -8,8 +8,9 @@ import logging
 logger = logging.getLogger('edisgo')
 
 
-def one_storage_per_feeder(edisgo, storage_parameters,
-                           storage_timeseries, storage_power):
+def one_storage_per_feeder(edisgo, storage_timeseries,
+                           storage_nominal_power=None,
+                           storage_parameters=None):
     """
     Parameters
     -----------
@@ -18,7 +19,8 @@ def one_storage_per_feeder(edisgo, storage_parameters,
         Dictionary with storage parameters. See
         :class:`~.grid.network.StorageControl` class definition for more
         information.
-    storage_timeseries : p and q in kW and kvar of total storage
+    storage_timeseries : :pandas:`pandas.DataFrame<dataframe>`
+        p and q in kW and kvar of total storage
     storage_power : in kW of total storage
 
     """
@@ -127,9 +129,10 @@ def one_storage_per_feeder(edisgo, storage_parameters,
     ranked_feeders = feeder_ranking(
         grid_expansion_results.grid_expansion_costs)
 
-    # maximum storage power available for the feeder
-    p_storage_total = storage_power
-    p_storage_max = storage_power
+    # remaining storage nominal power available for the feeder
+    if storage_nominal_power is None:
+        storage_nominal_power = max(storage_timeseries.p)
+    p_storage_remaining = storage_nominal_power
     for feeder in ranked_feeders.values:
 
         # first step: find node where storage will be installed
@@ -161,32 +164,30 @@ def one_storage_per_feeder(edisgo, storage_parameters,
         # start iteration at 20 kW
         p_storage = 20
         # set very high value to go into while loop
-        s_line_max_old = 10 ** 4
+        s_line_max_previous_iteration = 10 ** 4
 
-        while s_line_max < s_line_max_old and p_storage < p_storage_max:
+        while s_line_max < s_line_max_previous_iteration and p_storage < p_storage_remaining:
             # calculate share of storage of whole storage
-            share = p_storage / p_storage_total
+            share = p_storage / storage_nominal_power
             # calculate storage p and q
             p = storage_timeseries.p * share
             q = storage_timeseries.q * share
             # calculate new line p and q
             line_p = pfa_p + p
             line_q = pfa_q + q
-            s_line_max_old = s_line_max
+            s_line_max_previous_iteration = s_line_max
             s_line_max = max((line_p ** 2 + line_q ** 2).apply(sqrt))
             # if apparent power of line decreased
-            if s_line_max < s_line_max_old:
+            if s_line_max < s_line_max_previous_iteration:
                 # continue iteration process
                 # increase storage capacity
                 p_storage += 10
 
         # third step: integrate storage
-        storage_parameters['nominal_power'] = p_storage
-        storage = storage_integration.set_up_storage(
-            storage_parameters, battery_node, voltage_level='mv')
-        storage.timeseries = storage_timeseries * p_storage / p_storage_total
-        storage_integration.connect_storage(storage, battery_node)
-        # update pypsa
+        edisgo.integrate_storage(timeseries=storage_timeseries.p * share,
+                                 position=battery_node,
+                                 voltage_level='mv',
+                                 timeseries_reactive_power=storage_timeseries.p * share)
 
         # fourth step: check if storage integration reduced grid reinforcement
         # costs
@@ -199,17 +200,16 @@ def one_storage_per_feeder(edisgo, storage_parameters,
         costs_diff = total_grid_expansion_costs - \
                      total_grid_expansion_costs_new
         if costs_diff > 0:
-            logging.info('Storage integration of storage {} reduced grid '
+            logging.info('Storage integration in feeder {} reduced grid '
                          'expansion costs by {} kEuro.'.format(
-                storage, costs_diff))
+                feeder, costs_diff))
         else:
-            logging.info('Storage integration of storage {} did not reduce '
+            logging.info('Storage integration in feeder {} did not reduce '
                          'grid expansion costs (costs increased by {} '
-                         'kEuro).'.format(storage, -costs_diff))
+                         'kEuro).'.format(feeder, -costs_diff))
 
         # fifth step: if there is storage capacity left, rerun the past steps
         # for the next feeder in the ranking list
-        # total_storage_capacity = storage_capacity - \
-        #                          storage_parameters['nominal_capacity']
-        # p_storage_max anpassen
-
+        p_storage_remaining = p_storage_remaining - p_storage
+        if not p_storage_remaining > 20:
+            break
