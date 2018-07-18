@@ -2289,11 +2289,10 @@ def import_from_csv(path, network, sep=',', index_col=0):
     # update network with LV grids
     network.mv_grid.lv_grids = list(lvgrids.values())
 
-    # TODO: THIS IS REQUIRED -> INCLUDE!1!!
-    # # Integrate disconnecting points
-    # position_switch_disconnectors(
-    #     network.mv_grid,
-    #     mode=network.config['scenario']['disconnecting_point_position'])
+    # Integrate disconnecting points
+    position_switch_disconnectors(
+        network.mv_grid,
+        mode=network.config['disconnecting_point']['position'])
 
     # check data integrity
     _validate_csv_grid_import(network, path)
