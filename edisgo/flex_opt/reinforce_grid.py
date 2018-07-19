@@ -434,6 +434,6 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # ToDo: delete at some point
     # import pickle
     # edisgo_reinforce.network.pypsa = None
-    # pickle.dump(edisgo_reinforce, open('edisgo.pkl', 'wb'))
+    # pickle.dump(edisgo_reinforce, open('edisgo_reinforce_274.pkl', 'wb'))
 
     return edisgo_reinforce.network.results
