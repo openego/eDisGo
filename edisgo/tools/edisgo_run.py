@@ -1,13 +1,8 @@
 import os
 import sys
-import readline
 import glob
 import re
 
-import random
-import itertools
-import time
-import queue
 import multiprocessing as mp
 
 import argparse
