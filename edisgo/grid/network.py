@@ -120,6 +120,11 @@ class EDisGo:
 
         Use 'other' if you don't want to explicitly provide every possible
         type.
+    timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of total reactive power in kvar to be distributed
+        among all available generating assets.
+
+        Default: None.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
         Parameter used to obtain time series of active power of (cumulative)
         loads.
@@ -202,8 +207,12 @@ class EDisGo:
                     'timeseries_generation_fluctuating', None),
                 timeseries_generation_dispatchable=kwargs.get(
                     'timeseries_generation_dispatchable', None),
+                timeseries_generation_reactive_power=kwargs.get(
+                    'timesereis_generation_reactive_power', None),
                 timeseries_load=kwargs.get(
                     'timeseries_load', None),
+                timeseries_load_reactive_power = kwargs.get(
+                    'timeseries_load_reactive_power', None),
                 timeindex=kwargs.get('timeindex', None)).timeseries
 
         # import new generators
@@ -831,6 +840,11 @@ class TimeSeriesControl:
 
         Use 'other' if you don't want to explicitly provide every possible
         type. Default: None.
+    timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of total reactive power in kvar to be distributed
+        among all available generating assets.
+
+        Default: None.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Parameter used to obtain time series of active power of (cumulative)
         loads.
@@ -901,6 +915,10 @@ class TimeSeriesControl:
                 raise ValueError('Your input for '
                                  '"timeseries_generation_dispatchable" is not '
                                  'valid.'.format(mode))
+            # reactive power timeseries for all generators
+            ts = kwargs.get('timeseries_generation_reactive_power', None)
+            if isinstance(ts, pd.DataFrame):
+                self.timeseries.generation_reactive_power = ts
             # set time index
             if kwargs.get('timeindex', None) is not None:
                 self.timeseries._timeindex = kwargs.get('timeindex')
@@ -917,6 +935,11 @@ class TimeSeriesControl:
             else:
                 raise ValueError('Your input for "timeseries_load" is not '
                                  'valid.'.format(mode))
+
+            # reactive power timeseries for loads
+            ts = kwargs.get('timeseries_load_reactive_power', None)
+            if isinstance(ts, pd.DataFrame):
+                self.timeseries.load_reactive_power = ts
 
             # check if time series for the set time index can be obtained
             self._check_timeindex()
@@ -1441,6 +1464,16 @@ class TimeSeries:
 
         Use 'other' if you don't want to explicitly provide every possible
         type. Default: None.
+    generation_reactive_power : :pandas: `pandasDataFrame<dataframe>`, optional
+        DataFrame with reactive power normalized with the nominal active power
+        rating or capacity which could be used to distribute the amount of
+        reactive power amongst all the available generators in the MV grid.
+        Time series can either be aggregated by technology type or by type
+        and weather cell ID. In the first case columns of the DataFrame are
+        'solar' and 'wind'; in the second case columns need to be a
+        :pandas:`pandas.MultiIndex<multiindex>` with the first level
+        containing the type and the second level the weather cell ID.
+        Default: None.
     load : :pandas:`pandas.DataFrame<dataframe>`, optional
         DataFrame with active power of load time series of each (cumulative)
         type of load, normalized with corresponding annual energy demand.
@@ -1480,7 +1513,9 @@ class TimeSeries:
                                                    None)
         self._generation_fluctuating = kwargs.get('generation_fluctuating',
                                                   None)
+        self._generation_reactive_power = kwargs.get('generation_reactive_power', None)
         self._load = kwargs.get('load', None)
+        self._load_reactive_power = kwargs.get('load_reacitve_power', None)
         self._curtailment = kwargs.get('curtailment', None)
         self._timeindex = kwargs.get('timeindex', None)
         self._timesteps_load_feedin_case = None
@@ -1527,6 +1562,22 @@ class TimeSeries:
         self._generation_fluctuating = generation_fluc_timeseries
 
     @property
+    def generation_reactive_power(self):
+        """
+        Get reactive power feedin time series normalized by active power
+        capacity.
+
+        Returns
+        -------
+        :pandas: `pandas.DataFrame<dataframe>`
+        """
+        return self._generation_reactive_power
+
+    @generation_reactive_power.setter
+    def generation_reactive_power(self, generation_reactive_power_timeseries):
+        self._generation_reactive_power = generation_reactive_power_timeseries
+
+    @property
     def load(self):
         """
         Get load timeseries (only active power)
@@ -1545,6 +1596,21 @@ class TimeSeries:
     @load.setter
     def load(self, load_timeseries):
         self._load = load_timeseries
+
+    @property
+    def load_reactive_power(self):
+        """
+        Get reactive power time series for load normalized by active power.
+
+        Returns
+        -------
+        :pandas: `pandas.DataFrame<dataframe>`
+        """
+        return self._generation_reactive_power
+
+    @load_reactive_power.setter
+    def load_reactive_power(self, load_reactive_power_timeseries):
+        self._load_reactive_power = load_reactive_power_timeseries
 
     @property
     def timeindex(self):
