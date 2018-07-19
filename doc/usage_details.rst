@@ -140,41 +140,23 @@ Battery storages
 Battery storages can be integrated into the grid as alternative to classical
 grid extension. A battery in eDisGo is represented by the class
 :class:`~.grid.components.Storage`. 
-In order integrate a storage into the grid, start from the following exemplary code:
+In order to integrate a storage into the grid, start from the following exemplary code:
 
 .. code-block:: python
 
     # define storage parameters
-    storage_parameters = {'nominal_capacity': 10,
-			  'soc_initial': 0,
-                          'efficiency_in': .9,
-                          'efficiency_out': .9,
-                          'standing_loss': 0}
+    storage_parameters = {'nominal_power': 200}
 
     # add storage instance to the grid
-    edisgo.integrate_storage(battery_position='hvmv_substation_busbar',
-                             battery_parameters=storage_parameters,
-			     timeseries_battery='fifty-fifty')
+    edisgo.integrate_storage(position='hvmv_substation_busbar',
+                             timeseries='fifty-fifty',
+                             parameters=storage_parameters)
 
 Using the method :meth:`~.grid.network.EDisGo.integrate_storage()` provides a
 high-level interface to define the position and storage operation at once,
 based on predefined rules. Thus, a limited set of storage integration rules are
 implemented. See :class:`~.grid.network.StorageControl` for
 available storage integration strategies.
-
-You can also integrate a storage directly upon defining your scenario. Assuming
-you have the load and feed-in time series as well as the storage parameters defined
-above you can do the following:
-
-.. code-block:: python
-
-    edisgo = EDisGo(ding0_grid="ding0_grids__42.pkl",
-                    timeseries_generation_fluctuating=feedin_renewables,
-		    timeseries_generation_dispatchable=feedin_dispatchable,
-		    timeseries_load=load,
-                    battery_position='hvmv_substation_busbar',
-                    battery_parameters=storage_parameters,
-		    timeseries_battery='fifty-fifty')
 
 Curtailment
 -----------
