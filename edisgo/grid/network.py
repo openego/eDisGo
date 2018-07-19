@@ -11,7 +11,7 @@ from edisgo.data.import_data import import_from_ding0, import_generators, \
     import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, curtailment
-from edisgo.grid.components import Station, BranchTee
+from edisgo.grid.components import Station, BranchTee, Load, Generator
 from edisgo.grid.tools import get_gen_info
 
 logger = logging.getLogger('edisgo')
@@ -1411,7 +1411,9 @@ class StorageControl:
             params = self._check_nominal_power(params, timeseries)
             storage, line = storage_integration.storage_at_hvmv_substation(
                 self.network.mv_grid, params)
-        elif isinstance(position, Station) or isinstance(position, BranchTee):
+        elif isinstance(position, Station) or isinstance(position, BranchTee) \
+                or isinstance(position, Generator) \
+                or isinstance(position, Load):
             params = self._check_nominal_power(params, timeseries)
             storage = storage_integration.set_up_storage(
                 node=position, parameters=params, voltage_level=voltage_level)
