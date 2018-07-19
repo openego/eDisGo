@@ -29,7 +29,7 @@ logging.basicConfig(filename='example.log',
 logger = logging.getLogger('edisgo')
 logger.setLevel(logging.DEBUG)
 
-grids = ['294']
+grids = ['274']
 
 for dingo_grid in grids:
 
@@ -58,12 +58,8 @@ for dingo_grid in grids:
                                   'coal': [1] * len(timeindex),
                                   'other': [1] * len(timeindex)},
                                  index=timeindex)
-    ren_dispatch = pd.DataFrame({('solar', 1125096): [0.2, 0.8, 0.5],
-                                 ('solar', 1126096): [0.2, 0.8, 0.5],
-                                 ('solar', 1126095): [0.2, 0.8, 0.5],
-                                 ('wind', 1125096): [0.3, 0.8, 0.5],
-                                 ('wind', 1126096): [0.3, 0.8, 0.5],
-                                 ('wind', 1126095): [0.3, 0.8, 0.5]
+    ren_dispatch = pd.DataFrame({'solar': [0.2, 0.8, 0.5],
+                                 'wind': [0.3, 0.8, 0.5],
                                  },
                                 index=timeindex)
     load = pd.DataFrame({'residential': [0.00021372] * len(timeindex),
@@ -110,7 +106,7 @@ for dingo_grid in grids:
     # print(line)
     # storage_timeseries = pd.Series([-20000, -3000, 4000], index=timeindex)
     # storage_timeseries_q = pd.Series([10, -3000, 4000], index=timeindex)
-    storage_timeseries = pd.DataFrame({'p': [-2000, -3000, 4000],
+    storage_timeseries = pd.DataFrame({'p': [-2000, -5000, -4000],
                                        'q': [0, 0, 0]},
                                       index=timeindex)
     #

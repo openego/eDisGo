@@ -120,19 +120,22 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
     # rank MV feeders by grid expansion costs
     # conduct grid reinforcement on copied edisgo object on worst-case time
     # steps
-    grid_expansion_results = edisgo.reinforce(
-        copy_graph=True, timesteps_pfa='snapshot_analysis')
+    # grid_expansion_results = edisgo.reinforce(
+    #     copy_graph=True, timesteps_pfa='snapshot_analysis')
     # ToDo: delete once implementation is finished
-    # import pickle
-    # edisgo_reinforce = pickle.load(open('edisgo_reinforce_294.pkl', 'rb'))
-    # grid_expansion_results = edisgo_reinforce.network.results
+    import pickle
+    edisgo_reinforce = pickle.load(open('edisgo_reinforce_274.pkl', 'rb'))
+    grid_expansion_results = edisgo_reinforce.network.results
     ranked_feeders = feeder_ranking(
         grid_expansion_results.grid_expansion_costs)
 
     # remaining storage nominal power available for the feeder
     if storage_nominal_power is None:
-        storage_nominal_power = max(storage_timeseries.p)
+        storage_nominal_power = max(abs(storage_timeseries.p))
     p_storage_remaining = storage_nominal_power
+    # minimum storage power to be connected to the MV grid
+    p_storage_min = 100
+    p_storage_max = 300
     for feeder in ranked_feeders.values:
 
         # first step: find node where storage will be installed
@@ -161,12 +164,13 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         pfa_q = edisgo.network.results.pfa_q[repr(battery_line)]
 
         s_line_max = max((pfa_p ** 2 + pfa_q ** 2).apply(sqrt))
-        # start iteration at 20 kW
-        p_storage = 20
+        # start iteration at minimum needed power to be connected to the MV
+        # grid
+        p_storage = p_storage_min
         # set very high value to go into while loop
         s_line_max_previous_iteration = 10 ** 4
 
-        while s_line_max < s_line_max_previous_iteration and p_storage < p_storage_remaining:
+        while s_line_max < s_line_max_previous_iteration and p_storage < p_storage_remaining and p_storage < p_storage_max:
             # calculate share of storage of whole storage
             share = p_storage / storage_nominal_power
             # calculate storage p and q
@@ -182,34 +186,49 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                 # continue iteration process
                 # increase storage capacity
                 p_storage += 10
+                print(p_storage, s_line_max)
 
         # third step: integrate storage
-        edisgo.integrate_storage(timeseries=storage_timeseries.p * share,
+
+        # if p_storage is still minimal storage power p_storage_min this means
+        # that the storage integration did not reduce apparent power and should
+        # not be integrated
+        if p_storage > p_storage_min:
+
+            edisgo.integrate_storage(timeseries=storage_timeseries.p * share,
                                  position=battery_node,
                                  voltage_level='mv',
                                  timeseries_reactive_power=storage_timeseries.p * share)
 
-        # fourth step: check if storage integration reduced grid reinforcement
-        # costs
-        total_grid_expansion_costs = \
-            grid_expansion_results.grid_expansion_costs.total_costs.sum()
-        grid_expansion_results = edisgo.reinforce(
-            copy_graph=True, timesteps_pfa='snapshot_analysis')
-        total_grid_expansion_costs_new = \
-            grid_expansion_results.grid_expansion_costs.total_costs.sum()
-        costs_diff = total_grid_expansion_costs - \
-                     total_grid_expansion_costs_new
-        if costs_diff > 0:
-            logging.info('Storage integration in feeder {} reduced grid '
-                         'expansion costs by {} kEuro.'.format(
-                feeder, costs_diff))
-        else:
-            logging.info('Storage integration in feeder {} did not reduce '
-                         'grid expansion costs (costs increased by {} '
-                         'kEuro).'.format(feeder, -costs_diff))
+            logging.debug('Storage with nominal power of {} kW connected to node '
+                          '{} (path to HV/MV station {}).'.format(
+                p_storage, battery_node, nx.shortest_path(
+                    battery_node.mv_grid.graph, battery_node.mv_grid.station,
+                    battery_node)))
 
-        # fifth step: if there is storage capacity left, rerun the past steps
-        # for the next feeder in the ranking list
-        p_storage_remaining = p_storage_remaining - p_storage
-        if not p_storage_remaining > 20:
-            break
+            # fourth step: check if storage integration reduced grid reinforcement
+            # costs
+            total_grid_expansion_costs = \
+                grid_expansion_results.grid_expansion_costs.total_costs.sum()
+            grid_expansion_results = edisgo.reinforce(
+                copy_graph=True, timesteps_pfa='snapshot_analysis')
+            total_grid_expansion_costs_new = \
+                grid_expansion_results.grid_expansion_costs.total_costs.sum()
+            costs_diff = total_grid_expansion_costs - \
+                         total_grid_expansion_costs_new
+            if costs_diff > 0:
+                logging.info('Storage integration in feeder {} reduced grid '
+                             'expansion costs by {} kEuro.'.format(
+                    feeder, costs_diff))
+            else:
+                logging.info('Storage integration in feeder {} did not reduce '
+                             'grid expansion costs (costs increased by {} '
+                             'kEuro).'.format(feeder, -costs_diff))
+
+            # fifth step: if there is storage capacity left, rerun the past steps
+            # for the next feeder in the ranking list
+            p_storage_remaining = p_storage_remaining - p_storage
+            if not p_storage_remaining > p_storage_min:
+                break
+        else:
+            logging.info('No storage integration in feeder {}.'.format(feeder))
