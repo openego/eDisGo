@@ -1291,7 +1291,7 @@ class StorageControl:
 
         * 'hvmv_substation_busbar'
           Places a storage unit directly at the HV/MV station's bus bar.
-        * :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
+        * :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :class:`~.grid.components.Generator` or :class:`~.grid.components.Load`
           Specifies a node the storage should be connected to. In the case
           this parameter is of type :class:`~.grid.components.LVStation` an
           additional parameter, `voltage_level`, has to be provided to define
