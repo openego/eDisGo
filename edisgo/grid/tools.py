@@ -18,7 +18,9 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
 
     Determination of the switch disconnector location is motivated by placing
     it to minimized load flows in both parts of the ring (half-rings).
-    Use the parameter mode
+    The switch disconnecter will be installed to a LV station, unless none
+    exists in a ring. In this case, a node of arbitrary type is chosen for the
+    location of the switch disconnecter.
 
     Parameters
     ----------
@@ -162,11 +164,21 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
         # Set start value for difference in ring halfs
         diff_min = 10e9
 
+        # if none of the nodes is of the type LVStation, a switch
+        # disconnecter will be installed anyways.
+        if any([isinstance(n, LVStation) for n in ring]):
+            has_lv_station = True
+        else:
+            has_lv_station = False
+            logging.debug("Ring {} does not have a LV station. "
+                          "Switch disconnecter is installed at arbitrary "
+                          "node.".format(ring))
+
         # Identify nodes where switch disconnector is located in between
         for ctr in range(len(node_peak_data)):
             # check if node that owns the switch disconnector is of type
             # LVStation
-            if isinstance(ring[ctr - 2], LVStation):
+            if isinstance(ring[ctr - 2], LVStation) or not has_lv_station:
                 # Iteratively split route and calc peak load difference
                 route_data_part1 = sum(node_peak_data[0:ctr])
                 route_data_part2 = sum(node_peak_data[ctr:len(node_peak_data)])
