@@ -1681,6 +1681,7 @@ class Results:
         self._i_res = None
         self._equipment_changes = pd.DataFrame()
         self._grid_expansion_costs = None
+        self._grid_losses = None
         self._unresolved_issues = {}
 
     @property
@@ -1916,6 +1917,25 @@ class Results:
     @grid_expansion_costs.setter
     def grid_expansion_costs(self, total_costs):
         self._grid_expansion_costs = total_costs
+
+    @property
+    def grid_losses(self):
+        """
+        Holds the losses in the grid obtained from the slack bus in
+        kW and kvar.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Total Losses, both active and reactive power losses
+            per timestep
+        """
+
+        return self._grid_losses
+
+    @grid_losses.setter
+    def grid_losses(self, pypsa_grid_losses):
+        self._grid_losses = pypsa_grid_losses
 
     @property
     def unresolved_issues(self):
