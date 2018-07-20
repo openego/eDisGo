@@ -500,7 +500,7 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
 
 def _voltage_deviation(network, nodes, v_dev_allowed, voltage_level):
     """
-    Checks for voltage stability issues in LV grids.
+    Checks for voltage stability issues at given nodes.
 
     Parameters
     ----------
