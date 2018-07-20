@@ -502,50 +502,6 @@ def get_load_info(network, level='mvlv'):
     return load_df
 
 
-def get_capacities_by_type_and_weather_cell(network):
-    """
-    Gets installed capacities of wind and solar generators by weather
-    cell ID.
-
-    Parameters
-    ----------
-    network : :class:`~.grid.network.Network`
-
-    Returns
-    --------
-    dict
-        Dictionary with keys being a tuple of technology and weather
-        cell ID (e.g. ('solar', '1')) and the values containing the
-        corresponding installed capacity.
-
-    """
-
-    # mv_peak_generation = \
-    #  network.mv_grid.peak_generation_peak_generation_per_technology_and_weather_cell.loc[['solar', 'wind']]
-    # lv_accumulated_peak_generation = pd.Series({})
-    dict_capacities = {}
-    for gen in gens:
-        if gen.type in ['solar', 'wind']:
-            if gen.weather_cell_id:
-                if (gen.type, gen.weather_cell_id) in \
-                        dict_capacities.keys():
-                    dict_capacities[
-                        (gen.type, gen.weather_cell_id)] = \
-                        dict_capacities[
-                            (gen.type, gen.weather_cell_id)] + \
-                        gen.nominal_capacity
-                else:
-                    dict_capacities[
-                        (gen.type, gen.weather_cell_id)] = \
-                        gen.nominal_capacity
-            else:
-                message = 'Please provide a weather cell ID for ' \
-                          'generator {}.'.format(repr(gen))
-                logging.error(message)
-                raise KeyError(message)
-    return pd.Series(dict_capacities)
-
-
 def get_capacities_by_type(network):
     """
     Gets installed capacities of wind and solar generators.
