@@ -584,7 +584,12 @@ def get_mv_feeder_from_line(line):
 
     """
     # get nodes of line
-    nodes = line.grid.graph.nodes_from_line(line)
+    # ToDo: Remove when #135 is solved
+    try:
+        nodes = line.grid.graph.nodes_from_line(line)
+    except:
+        return None
+
     # if one of the nodes is an MV station the line is an MV feeder itself
     if isinstance(nodes[0], MVStation):
         feeder_1 = None
