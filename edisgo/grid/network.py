@@ -2256,4 +2256,4 @@ class Results:
             plt.ylabel(y_label)
             plt.savefig(os.path.join(directory,
                                      'voltage_histogram_{}.svgz'.format(
-                                         timestamp.strftime('%y%m%d%H%M'))))
+                                         timestamp.strftime('%Y%m%d%H%M'))))
