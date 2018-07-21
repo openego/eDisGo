@@ -1,4 +1,4 @@
-from os import path
+import os
 import pandas as pd
 import numpy as np
 from math import sqrt
@@ -427,7 +427,7 @@ class Network:
                 equipment_parameters = self.config['equipment'][
                     'equipment_{}_parameters_{}'.format(voltage_level, i)]
                 data['{}_{}'.format(voltage_level, i)] = pd.read_csv(
-                    path.join(package_path, equipment_dir,
+                    os.path.join(package_path, equipment_dir,
                               equipment_parameters),
                     comment='#', index_col='name',
                     delimiter=',', decimal='.')
@@ -2079,3 +2079,59 @@ class Results:
                 logging.info("Voltage levels for {nodes} are not returned from PFA".format(
                 nodes=not_included))
             return self.pfa_v_mag_pu[level][ labels_included]
+
+
+    def save(self,directory):
+        """
+        Save all results to disk in a folder.
+
+        Parameters
+        ----------
+        directory: :obj:`str`
+        """
+        powerflow_results_dir = os.path.join(directory, 'powerflow_results')
+        calculated_results_dir = os.path.join(directory, 'calculated_results')
+
+
+        os.makedirs(powerflow_results_dir, exist_ok=True)
+        os.makedirs(calculated_results_dir, exist_ok=True)
+
+        # put out important information at the top level
+
+        # put out all relevant power_flow results
+        # voltage
+        voltage_pu_file = os.path.join(powerflow_results_dir, 'voltages_pu.csv')
+        self.pfa_v_mag_pu.to_csv(voltage_pu_file)
+
+        # current
+        current_file = os.path.join(powerflow_results_dir, 'currents.csv')
+        self.i_res.to_csv(current_file)
+
+        # active power
+        acitve_power_file = os.path.join(powerflow_results_dir, 'active_powers.csv')
+        self.pfa_p.to_csv(acitve_power_file)
+
+        # reactive power
+        reacitve_power_file = os.path.join(powerflow_results_dir, 'reactive_powers.csv')
+        self.pfa_q.to_csv(reacitve_power_file)
+
+        # apparent power
+        apparent_power_file = os.path.join(powerflow_results_dir, 'apparent_powers.csv')
+        self.s_res().to_csv(apparent_power_file)
+
+        # put out all relevant calculated results
+        # grid losses
+        grid_losses_file = os.path.join(calculated_results_dir, 'grid_losses.csv')
+        self.grid_losses.to_csv(grid_losses_file)
+
+        # equipment_changes
+        equipment_changes_file = os.path.join(calculated_results_dir, 'equipment_changes.csv')
+        self.equipment_changes.to_csv(equipment_changes_file)
+
+        # grid_expansion_costs
+        grid_expansion_costs_file = os.path.join(calculated_results_dir, 'grid_expansion_costs.csv')
+        self.grid_expansion_costs.to_csv(grid_expansion_costs_file)
+
+        # unresolved_issues
+        unresolved_issues_file = os.path.join(calculated_results_dir, 'unresolved_issues.csv')
+        pd.DataFrame(self.unresolved_issues).to_csv(unresolved_issues_file)
