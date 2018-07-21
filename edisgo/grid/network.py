@@ -2249,6 +2249,8 @@ class Results:
                                                 grid=True)
             plt.minorticks_on()
             plt.axvline(1.0, color='black', linestyle='--')
+            plt.axvline(voltage.loc[str(timestamp), :].mean(),
+                        color='yellow', linestyle='--')
             plt.title(plot_title)
             plt.xlabel(x_label)
             plt.ylabel(y_label)
