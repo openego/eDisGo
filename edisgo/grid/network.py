@@ -5,6 +5,8 @@ from math import sqrt
 import logging
 import datetime
 
+from matplotlib import pyplot as plt
+
 import edisgo
 from edisgo.tools import config, pypsa_io, tools
 from edisgo.data.import_data import import_from_ding0, import_generators, \
@@ -428,7 +430,7 @@ class Network:
                     'equipment_{}_parameters_{}'.format(voltage_level, i)]
                 data['{}_{}'.format(voltage_level, i)] = pd.read_csv(
                     os.path.join(package_path, equipment_dir,
-                              equipment_parameters),
+                                 equipment_parameters),
                     comment='#', index_col='name',
                     delimiter=',', decimal='.')
 
@@ -1111,23 +1113,23 @@ class CurtailmentControl:
                 # when either weather_cell_id or type attribute is missing
                 # meaning this could be a Generator Object instead of a Generator Fluctuating
                 if type(x) == edisgo.grid.components.GeneratorFluctuating:
-                    message = "One or both of the attributes, \'type\' or \'weather_cell_id\'" +\
-                              "of the {} object is missing even though ".format(x) +\
+                    message = "One or both of the attributes, \'type\' or \'weather_cell_id\'" + \
+                              "of the {} object is missing even though ".format(x) + \
                               "its a GeneratorFluctuating Object."
                     logging.warning(message)
-                    #raise Warning(message)
+                    # raise Warning(message)
                 else:
-                    message = "Generator Object found instead of GeneratorFluctuating Object " +\
+                    message = "Generator Object found instead of GeneratorFluctuating Object " + \
                               "in {}".format(x)
                     logging.warning(message)
-                    #raise Warning(message)
+                    # raise Warning(message)
                 pass
             except KeyError:
                 # when one of the keys are missing in either the feedin or the capacities
-                message = "One of the keys of {} are absent in either the feedin or the".format(x) +\
+                message = "One of the keys of {} are absent in either the feedin or the".format(x) + \
                           " generator fluctuating timeseries  object is missing"
                 logging.warning(message)
-                #raise Warning(message)
+                # raise Warning(message)
                 pass
 
         # get mode of curtailment and the arguments necessary
@@ -1160,8 +1162,8 @@ class CurtailmentControl:
                                          edisgo_object,
                                          **kwargs)
                     else:
-                        message = "In this grid there seems to be no feedin time series" +\
-                            " or generators corresponding to the combination of {}".format(col_slice)
+                        message = "In this grid there seems to be no feedin time series" + \
+                                  " or generators corresponding to the combination of {}".format(col_slice)
                         logging.warning(message)
             else:
                 # when there is no multi-index then we assume that this is only
@@ -1242,13 +1244,13 @@ class CurtailmentControl:
         """
 
         feedin_ts_compare = self.feedin.copy()
-        for r in range(len(feedin_ts_compare.columns.levels)-1):
+        for r in range(len(feedin_ts_compare.columns.levels) - 1):
             feedin_ts_compare.columns = feedin_ts_compare.columns.droplevel(1)
         # need an if condition to remove the weather_cell_id level too
 
         if not ((feedin_ts_compare.loc[
                  :, network.timeseries.curtailment.columns] -
-                     network.timeseries.curtailment) > -1e-3).all().all():
+                 network.timeseries.curtailment) > -1e-3).all().all():
             message = 'Curtailment exceeds feed-in.'
             logging.error(message)
             raise TypeError(message)
@@ -2077,21 +2079,48 @@ class Results:
 
             if not_included:
                 logging.info("Voltage levels for {nodes} are not returned from PFA".format(
-                nodes=not_included))
-            return self.pfa_v_mag_pu[level][ labels_included]
+                    nodes=not_included))
+            return self.pfa_v_mag_pu[level][labels_included]
 
-
-    def save(self,directory):
+    def save(self, directory, create_plots=False, **kwargs):
         """
         Save all results to disk in a folder.
 
         Parameters
         ----------
-        directory: :obj:`str`
+        directory: :obj:`str
+            path to save the plots
+        create_plots: :obj:`boolean`
+            Whether to create plots or not. Either True or false
+        color: :obj:`str`
+            color of plot in matplotlib standard color
+        transparency: :obj:`float`
+            transparency of the plot, a number from 0 to 1,
+            where 0 is see through and 1 is opaque.
+        xlabel: :obj:`str`
+            label for x axis. Both by default and in failing cases this
+            would be set to 'Normalized Frequency [per unit]'.
+        ylabel: :obj:`str`
+            label for y axis. Both by default and in failing cases this
+            would be set to 'Voltage [per unit]'.
+        xlim: :obj:`tuple`
+            tuple of limits of x axis (left_limit,right_limit)
+        ylim: :obj:`tuple`
+            tuple of limits of y axis (left_limit,right_limit)
+        figsize: :obj:`str` or :obj:`tuple`
+            size of the figure in inches or a string with the following options:
+             - 'a4portrait'
+             - 'a4landscape'
+             - 'a5portrait'
+             - 'a5landscape'
+
+             By default and in failing cases this would be set to 'a5landscape'.
+        binwidth: :obj:`float`
+            width of bins in per unit voltage,
+            By default and in failing cases this would be set to 0.01.
         """
         powerflow_results_dir = os.path.join(directory, 'powerflow_results')
         calculated_results_dir = os.path.join(directory, 'calculated_results')
-
 
         os.makedirs(powerflow_results_dir, exist_ok=True)
         os.makedirs(calculated_results_dir, exist_ok=True)
@@ -2129,9 +2158,100 @@ class Results:
         self.equipment_changes.to_csv(equipment_changes_file)
 
         # grid_expansion_costs
-        grid_expansion_costs_file = os.path.join(calculated_results_dir, 'grid_expansion_costs.csv')
-        self.grid_expansion_costs.to_csv(grid_expansion_costs_file)
+        if self.grid_expansion_costs is not None:
+            grid_expansion_costs_file = os.path.join(calculated_results_dir, 'grid_expansion_costs.csv')
+            self.grid_expansion_costs.to_csv(grid_expansion_costs_file)
 
         # unresolved_issues
         unresolved_issues_file = os.path.join(calculated_results_dir, 'unresolved_issues.csv')
         pd.DataFrame(self.unresolved_issues).to_csv(unresolved_issues_file)
+
+        # create standard plots
+        if create_plots:
+            voltage_plots_dir = os.path.join(directory, 'voltage_plots')
+            os.makedirs(voltage_plots_dir, exist_ok=True)
+            self.create_voltage_plots(voltage_plots_dir, **kwargs)
+
+    def create_voltage_plots(self, directory, **kwargs):
+        """
+        Function to create some standard plots
+
+        Parameters
+        ----------
+        directory: :obj:`str`
+            path to save the plots
+        color: :obj:`str`
+            color of plot in matplotlib standard color
+        transparency: :obj:`float`
+            transparency of the plot, a number from 0 to 1,
+            where 0 is see through and 1 is opaque.
+        xlabel: :obj:`str`
+            label for x axis. Both by default and in failing cases this
+            would be set to 'Normalized Frequency [per unit]'.
+        ylabel: :obj:`str`
+            label for y axis. Both by default and in failing cases this
+            would be set to 'Voltage [per unit]'.
+        xlim: :obj:`tuple`
+            tuple of limits of x axis (left_limit,right_limit)
+        ylim: :obj:`tuple`
+            tuple of limits of y axis (left_limit,right_limit)
+        figsize: :obj:`str` or :obj:`tuple`
+            size of the figure in inches or a string with the following options:
+             - 'a4portrait'
+             - 'a4landscape'
+             - 'a5portrait'
+             - 'a5landscape'
+
+             By default and in failing cases this would be set to 'a5landscape'.
+        binwidth: :obj:`float`
+            width of bins in per unit voltage,
+            By default and in failing cases this would be set to 0.01.
+        """
+        voltage = self.pfa_v_mag_pu.copy()
+        x_label = kwargs.get('xlabel', "Voltage [per unit]")
+        y_label = kwargs.get('ylabel', "Normalized Frequency [per unit]")
+        x_limits = kwargs.get('xlim', (0.9, 1.1))
+        y_limits = kwargs.get('ylim', (0, 60))
+        color = kwargs.get('color', None)
+        transparency = kwargs.get('transparency', 0)
+        binwidth = kwargs.get('binwidth', 0.01)
+        lowerlimit = x_limits[0] - binwidth / 2
+        upperlimit = x_limits[1] + binwidth / 2
+        fig_size = kwargs.get('figsize', 'a5landscape')
+        standard_sizes = {'a4portrait': (8.27, 11.69),
+                          'a4landscape': (11.69, 8.27),
+                          'a5portrait': (5.8, 8.3),
+                          'a5landscape': (8.3, 5.8)}
+        try:
+            fig_size = standard_sizes[fig_size]
+        except:
+            message = "Unknown size {}. using default a5landscape".format(fig_size)
+            logging.warning(message)
+            fig_size = standard_sizes['a5landscape']
+
+        alpha = 1 - transparency
+        if alpha >1:
+            alpha=1
+        elif alpha <0:
+            alpha=0
+
+        for timestamp in voltage.index:
+            plot_title = "Voltage Histogram at {}".format(str(timestamp))
+
+            bins = np.arange(lowerlimit, upperlimit, binwidth)
+            plt.figure(figsize=fig_size)
+            voltage.loc[str(timestamp), :].plot(kind='hist', normed=True,
+                                                color=color,
+                                                alpha=alpha,
+                                                bins=bins,
+                                                xlim=x_limits,
+                                                ylim=y_limits,
+                                                grid=True)
+            plt.minorticks_on()
+            plt.axvline(1.0, color='black', linestyle='--')
+            plt.title(plot_title)
+            plt.xlabel(x_label)
+            plt.ylabel(y_label)
+            plt.savefig(os.path.join(directory,
+                                     'voltage_histogram_{}.svgz'.format(
+                                         timestamp.strftime('%y%m%d%H%M'))))
