@@ -121,8 +121,13 @@ class EDisGo:
         Use 'other' if you don't want to explicitly provide every possible
         type.
     timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
-        DataFrame with time series of total reactive power in kvar to be distributed
-        among all available generating assets.
+        DataFrame with time series of normalized reactive power (normalized by the rated
+        nominal acitve power) per technology and weather cell. Index needs to be a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent generator type and can be a MultiIndex column containing the
+        weather cell ID in the second level. If the technology doesn't contain weather
+        cell information i.e. if it is other than solar and wind generation,
+        this second level can be left as a numpy Nan or a None.
 
         Default: None.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
@@ -1466,13 +1471,15 @@ class TimeSeries:
         type. Default: None.
     generation_reactive_power : :pandas: `pandasDataFrame<dataframe>`, optional
         DataFrame with reactive power normalized with the nominal active power
-        rating or capacity which could be used to distribute the amount of
-        reactive power amongst all the available generators in the MV grid.
+        rating or capacity per technology and weather cell ID.
         Time series can either be aggregated by technology type or by type
         and weather cell ID. In the first case columns of the DataFrame are
         'solar' and 'wind'; in the second case columns need to be a
         :pandas:`pandas.MultiIndex<multiindex>` with the first level
         containing the type and the second level the weather cell ID.
+        If the technology doesn't contain weather cell information i.e.
+        if it is other than solar and wind generation,
+        this second level can be left as a numpy Nan or a None.
         Default: None.
     load : :pandas:`pandas.DataFrame<dataframe>`, optional
         DataFrame with active power of load time series of each (cumulative)
@@ -1571,7 +1578,10 @@ class TimeSeries:
         -------
         :pandas: `pandas.DataFrame<dataframe>`
         """
-        return self._generation_reactive_power
+        if self._generation_reactive_power is not None:
+            return self._generation_reactive_power.loc[self.timeindex, :]
+        else:
+            return None
 
     @generation_reactive_power.setter
     def generation_reactive_power(self, generation_reactive_power_timeseries):
@@ -1606,7 +1616,7 @@ class TimeSeries:
         -------
         :pandas: `pandas.DataFrame<dataframe>`
         """
-        return self._generation_reactive_power
+        return self._generation_reactive_power.loc[self.timeindex, :]
 
     @load_reactive_power.setter
     def load_reactive_power(self, load_reactive_power_timeseries):

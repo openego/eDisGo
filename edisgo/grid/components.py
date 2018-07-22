@@ -243,12 +243,14 @@ class Load(Component):
 
         Attributes
         ----------
-        timeseries_reactive : :pandas:`pandas.DataFrame<dataframe>`
+        timeseries_reactive : :pandas:`pandas.Seriese<series>`
             series containing reactive power in kvar.
         """
         # do som basic sanity check
         if type(timeseries_reactive) == pd.Series:
             self._timeseries_reactive = timeseries_reactive
+            self._power_factor = 'not_applicable'
+            self._reactive_power_mode = 'not_applicable'
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -396,6 +398,8 @@ class Generator(Component):
     ----------
     _timeseries : :pandas:`pandas.Series<series>`
         Contains time series for generator
+    _timeseries_reactive : :pandas:`pandas.Series<series>`
+        Contains time series for reactive power of the generator
     _power_factor: :obj: `str`
         Contains the power factor of the generator
     _reactive_power_mode: :obj: `str`
@@ -436,9 +440,11 @@ class Generator(Component):
         It returns the actual time series used in power flow analysis. If
         :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
         :meth:`timeseries` looks for time series of the according type of
-        technology in :class:`~.grid.network.TimeSeries`. The reactive
-        power is also claculated in :attr:`_timeseries` depending upon the
-        :attr:`power_factor` and :attr:`reactive_power_mode`. The
+        technology in :class:`~.grid.network.TimeSeries`. If the reactive
+        power time series is provided through :attr:`_timeseries_reactive`,
+        this is added to :attr:`_timeseries`. When :attr:`_timeseries_reactive`
+        is not set, the reactive power is also claculated in :attr:`_timeseries`
+        using :attr:`power_factor` and :attr:`reactive_power_mode`. The
         :attr:`power_factor` determines the magnitude of the reactive power
         based on the power factor and active power provided and the
         :attr:`reactive_power_mode` determines if the reactive power is either
@@ -494,10 +500,10 @@ class Generator(Component):
                 timeseries = \
                     self.grid.network.timeseries.generation_reactive_power[
                         self.type].to_frame('q')
-                self.power_factor = None
-                self.reactive_power_mode = None
-                self._timeseries_reactive = timeseries * self.nominal_capacity
-                return self._timeseries_reactive
+                self.power_factor = 'not_applicable'
+                self.reactive_power_mode = 'not_applicable'
+                return timeseries * self.nominal_capacity
+
             except (KeyError, TypeError):
                 try:
                     timeseries = \
@@ -505,16 +511,16 @@ class Generator(Component):
                             'other'].to_frame('q')
                     self.power_factor = 'not_applicable'
                     self.reactive_power_mode = 'not_applicable'
-                    self._timeseries_reactive = timeseries * self.nominal_capacity
-                    return self._timeseries_reactive
+                    return timeseries * self.nominal_capacity
                 except (KeyError, TypeError):
                     # logger.warning("No time series for type {} ".format(self.type) +
                     #                "given. Calculating a reactive power" +
                     #                " time series based on the assumed power factor" +
                     #                ",reactive power mode and the acitve power time" +
                     #                " series.")
-                    self._timeseries_reactive = None
-        return self._timeseries_reactive
+                    return None
+        else:
+            return self._timeseries_reactive
 
     @timeseries_reactive.setter
     def timeseries_reactive(self, timeseries_reactive):
@@ -750,18 +756,18 @@ class GeneratorFluctuating(Generator):
 
             timeseries = timeseries * self.nominal_capacity
 
+            # subtract curtailment
+            if self.curtailment is not None:
+                timeseries = timeseries.join(
+                    self.curtailment.to_frame('curtailment'), how='left')
+                timeseries.p = timeseries.p - timeseries.curtailment.fillna(0)
+
             if self.timeseries_reactive is not None:
                 timeseries['q'] = self.timeseries_reactive
             else:
                 timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(
                     self.power_factor))
 
-
-            # subtract curtailment
-            if self.curtailment is not None:
-                timeseries = timeseries.join(
-                    self.curtailment.to_frame('curtailment'), how='left')
-                timeseries.p = timeseries.p - timeseries.curtailment.fillna(0)
             return timeseries
         else:
             return self._timeseries.loc[
@@ -790,7 +796,7 @@ class GeneratorFluctuating(Generator):
                             timeseries = self.grid.network.timeseries. \
                                 generation_reactive_power[self.type,
                                                           self.weather_cell_id].to_frame('q')
-                            self._timeseries_reactive = timeseries * self._nominal_capacity
+                            return timeseries * self._nominal_capacity
                         except (KeyError, TypeError):
                             logger.warning("No time series for type {} and "
                                            "weather cell ID {} given. "
@@ -806,7 +812,7 @@ class GeneratorFluctuating(Generator):
                     try:
                         timeseries = self.grid.network.timeseries. \
                             generation_reactive_power[self.type].to_frame('q')
-                        self._timeseries_reactive = timeseries * self._nominal_capacity
+                        return timeseries * self._nominal_capacity
                     except (KeyError, TypeError):
                         logger.exception("No time series for type {} "
                                          "given. "
@@ -814,11 +820,10 @@ class GeneratorFluctuating(Generator):
                                          " be calculated from assumptions"
                                          " in config files and active power"
                                          " timeseries.".format(self.type))
-                        self._timeseries_reactive = None
+                        return None
             except AttributeError:
-                self._timeseries_reactive = None
-
-        return self._timeseries_reactive
+                # when there is a NoneType somewhere
+                return None
 
     @timeseries_reactive.setter
     def timeseries_reactive(self, timeseries_reactive):
@@ -835,6 +840,8 @@ class GeneratorFluctuating(Generator):
             # check if the values in time series makes sense
             if timeseries_reactive.max() <= self._nominal_capacity:
                 self._timeseries_reactive = timeseries_reactive
+                self._power_factor = 'not_applicable'
+                self._reactive_power_mode = 'not_applicable'
             else:
                 message = "Maximum reactive power in timeseries at" + \
                           "index {} ".format(timeseries_reactive.idxmax()) + \
