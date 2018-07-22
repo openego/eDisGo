@@ -117,7 +117,14 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
         return battery_node
 
-    def calculate_storage_nominal_power():
+    def calculate_storage_nominal_power(battery_line, p_storage_remaining):
+        """
+        Parameters
+        -----------
+        battery_line : line object
+        p_storage_remaining : float
+
+        """
         # actual apparent power
         pfa_p = edisgo.network.results.pfa_p[repr(battery_line)]
         pfa_q = edisgo.network.results.pfa_q[repr(battery_line)]
@@ -129,7 +136,9 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         # set very high value to go into while loop
         s_line_max_previous_iteration = 10 ** 4
 
-        while s_line_max < s_line_max_previous_iteration and p_storage < p_storage_remaining and p_storage < p_storage_max:
+        while s_line_max < s_line_max_previous_iteration and \
+                        p_storage < p_storage_remaining and \
+                        p_storage < p_storage_max:
             # calculate share of storage of whole storage
             share = p_storage / storage_nominal_power
             # calculate storage p and q
@@ -199,41 +208,45 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                     p_storage = p_storage_max
         else:
             # allow maximal allowed line load
-            p = max(s_allowed)
+            p_storage = max(s_allowed)
         return p_storage
 
-
+    # global variables
+    # minimum and maximum storage power to be connected to the MV grid
+    p_storage_min = 300
+    p_storage_max = 4500
 
     # rank MV feeders by grid expansion costs
+
     # conduct grid reinforcement on copied edisgo object on worst-case time
     # steps
-    # grid_expansion_results = edisgo.reinforce(
+    # grid_expansion_results_init = edisgo.reinforce(
     #     copy_graph=True, timesteps_pfa='snapshot_analysis')
+
     # ToDo: delete once implementation is finished
     import pickle
     edisgo_reinforce = pickle.load(open('edisgo_reinforce_239.pkl', 'rb'))
-    grid_expansion_results = edisgo_reinforce.network.results
+    grid_expansion_results_init = edisgo_reinforce.network.results
 
-    equipment_changes_reinforcement = \
-        grid_expansion_results.equipment_changes.loc[
-            grid_expansion_results.equipment_changes.iteration_step > 0]
-    if equipment_changes_reinforcement.empty:
+    equipment_changes_reinforcement_init = \
+        grid_expansion_results_init.equipment_changes.loc[
+            grid_expansion_results_init.equipment_changes.iteration_step > 0]
+    if equipment_changes_reinforcement_init.empty:
         logging.info('No storage integration necessary since there are no '
                      'grid expansion costs.')
         return
     else:
-        network = equipment_changes_reinforcement.index[0].grid.network
-    grid_expansion_costs_reinforce = costs.grid_expansion_costs(
+        network = equipment_changes_reinforcement_init.index[0].grid.network
+    grid_expansion_costs_reinforce_init = costs.grid_expansion_costs(
         network, without_generator_import=True)
-    ranked_feeders = feeder_ranking(grid_expansion_costs_reinforce)
+
+    ranked_feeders = feeder_ranking(grid_expansion_costs_reinforce_init)
 
     # remaining storage nominal power available for the feeder
     if storage_nominal_power is None:
         storage_nominal_power = max(abs(storage_timeseries.p))
     p_storage_remaining = storage_nominal_power
-    # minimum storage power to be connected to the MV grid
-    p_storage_min = 300
-    p_storage_max = 4500
+
     count = 1
     for feeder in ranked_feeders.values:
         print('Feeder: {}'.format(count))
@@ -242,8 +255,8 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         # first step: find node where storage will be installed
 
         # get all reinforced components in respective feeder
-        components = grid_expansion_costs_reinforce.loc[
-            grid_expansion_costs_reinforce.mv_feeder == feeder].index
+        components = grid_expansion_costs_reinforce_init.loc[
+            grid_expansion_costs_reinforce_init.mv_feeder == feeder].index
         # get node the storage will be connected to (in original graph)
         battery_node = find_battery_node(components, edisgo)
 
@@ -274,7 +287,8 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         print('Check MV line load.')
         print(check_tech_constraints.mv_line_load(edisgo.network))
 
-        p_storage = calculate_storage_nominal_power()
+        p_storage = calculate_storage_nominal_power(battery_line,
+                                                    p_storage_remaining)
 
         # third step: integrate storage
 
@@ -284,13 +298,14 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         if p_storage > p_storage_min:
 
             share = p_storage / storage_nominal_power
-            edisgo.integrate_storage(timeseries=storage_timeseries.p * share,
-                                 position=battery_node,
-                                 voltage_level='mv',
-                                 timeseries_reactive_power=storage_timeseries.q * share)
+            edisgo.integrate_storage(
+                timeseries=storage_timeseries.p * share,
+                position=battery_node,
+                voltage_level='mv',
+                timeseries_reactive_power=storage_timeseries.q * share)
 
-            logging.info('Storage with nominal power of {} kW connected to node '
-                          '{} (path to HV/MV station {}).'.format(
+            logging.info('Storage with nominal power of {} kW connected to '
+                         'node {} (path to HV/MV station {}).'.format(
                 p_storage, battery_node, nx.shortest_path(
                     battery_node.grid.graph, battery_node.grid.station,
                     battery_node)))
@@ -308,23 +323,23 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             # fourth step: check if storage integration reduced grid reinforcement
             # costs
             total_grid_expansion_costs = \
-                grid_expansion_costs_reinforce.total_costs.sum()
+                grid_expansion_costs_reinforce_init.total_costs.sum()
 
             grid_expansion_results_new = edisgo.reinforce(
                 copy_graph=True, timesteps_pfa='snapshot_analysis')
 
             equipment_changes_reinforcement = \
                 grid_expansion_results_new.equipment_changes.loc[
-                    grid_expansion_results_new.equipment_changes.iteration_step > 0]
+                    grid_expansion_results_new.equipment_changes.iteration_step
+                    > 0]
             if not equipment_changes_reinforcement.empty:
                 network = equipment_changes_reinforcement.index[0].grid.network
                 grid_expansion_costs_reinforce_new = costs.grid_expansion_costs(
                     network, without_generator_import=True)
                 total_grid_expansion_costs_new = \
-                    grid_expansion_costs_reinforce.total_costs.sum()
+                    grid_expansion_costs_reinforce_new.total_costs.sum()
             else:
                 total_grid_expansion_costs_new = 0
-
 
             costs_diff = total_grid_expansion_costs - \
                          total_grid_expansion_costs_new
@@ -338,8 +353,8 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                              'grid expansion costs (costs increased by {} '
                              'kEuro).'.format(feeder, -costs_diff))
 
-            # fifth step: if there is storage capacity left, rerun the past steps
-            # for the next feeder in the ranking list
+            # fifth step: if there is storage capacity left, rerun the past
+            # steps for the next feeder in the ranking list
             p_storage_remaining = p_storage_remaining - p_storage
             if not p_storage_remaining > p_storage_min:
                 break
