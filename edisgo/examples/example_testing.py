@@ -29,7 +29,7 @@ logging.basicConfig(filename='example.log',
 logger = logging.getLogger('edisgo')
 logger.setLevel(logging.DEBUG)
 
-grids = ['274']
+grids = ['239']
 
 for dingo_grid in grids:
 
@@ -53,26 +53,26 @@ for dingo_grid in grids:
     #                timeseries_curtailment=curtailment)
     # edisgo.analyze()
 
-    timeindex = pd.date_range('1/1/1971', periods=3, freq='H')
-    conv_dispatch = pd.DataFrame({'biomass': [1] * len(timeindex),
-                                  'coal': [1] * len(timeindex),
-                                  'other': [1] * len(timeindex)},
-                                 index=timeindex)
-    ren_dispatch = pd.DataFrame({'solar': [0.2, 0.8, 0.5],
-                                 'wind': [0.3, 0.8, 0.5],
-                                 },
-                                index=timeindex)
-    load = pd.DataFrame({'residential': [0.00021372] * len(timeindex),
-                         'retail': [0.0002404] * len(timeindex),
-                         'industrial': [0.000132] * len(timeindex),
-                         'agricultural': [0.00024036] * len(timeindex)},
-                        index=timeindex)
-
-    edisgo = EDisGo(ding0_grid=os.path.join(
-        'data', 'ding0_grids__{}.pkl'.format(dingo_grid)),
-                    timeseries_generation_fluctuating=ren_dispatch,
-                    timeseries_generation_dispatchable=conv_dispatch,
-                    timeseries_load=load)
+    timeindex = pd.date_range('1/1/1971', periods=2, freq='H')
+    # conv_dispatch = pd.DataFrame({'biomass': [1] * len(timeindex),
+    #                               'coal': [1] * len(timeindex),
+    #                               'other': [1] * len(timeindex)},
+    #                              index=timeindex)
+    # ren_dispatch = pd.DataFrame({'solar': [0.9, 0.8],
+    #                              'wind': [0.9, 0.8],
+    #                              },
+    #                             index=timeindex)
+    # load = pd.DataFrame({'residential': [0.0002*0.1] * len(timeindex),
+    #                      'retail': [0.0002404*0.1] * len(timeindex),
+    #                      'industrial': [0.000132*0.1] * len(timeindex),
+    #                      'agricultural': [0.00024036*0.1] * len(timeindex)},
+    #                     index=timeindex)
+    #
+    # edisgo = EDisGo(ding0_grid=os.path.join(
+    #     'data', 'ding0_grids__{}.pkl'.format(dingo_grid)),
+    #                 timeseries_generation_fluctuating=ren_dispatch,
+    #                 timeseries_generation_dispatchable=conv_dispatch,
+    #                 timeseries_load=load)
 
     # curtailment = pd.DataFrame({'solar': [100, 200, 100],
     #                             'wind': [200, 300, 400]},
@@ -94,11 +94,16 @@ for dingo_grid in grids:
 
     # edisgo.import_generators(generator_scenario='nep2035')
 
+    import pickle
+    # edisgo.network.pypsa = None
+    # pickle.dump(edisgo, open('edisgo_274.pkl', 'wb'))
+    edisgo = pickle.load(open('edisgo_239.pkl', 'rb'))
+
     from edisgo.flex_opt import storage_positioning
     # # storage_timeseries = pd.DataFrame({'p': [-200, -300, 400],
     # #                                    'q': [0.3, 0.8, 0.5]},
     # #                                   index=timeindex)
-    lv_station = (list(edisgo.network.mv_grid.lv_grids)[0]).station
+    # lv_station = (list(edisgo.network.mv_grid.lv_grids)[0]).station
     # line = lv_station.mv_grid.graph.line_from_nodes(
     #     lv_station.mv_grid.graph.neighbors(lv_station)[0],
     #     lv_station)
@@ -106,8 +111,8 @@ for dingo_grid in grids:
     # print(line)
     # storage_timeseries = pd.Series([-20000, -3000, 4000], index=timeindex)
     # storage_timeseries_q = pd.Series([10, -3000, 4000], index=timeindex)
-    storage_timeseries = pd.DataFrame({'p': [-2000, -5000, -4000],
-                                       'q': [0, 0, 0]},
+    storage_timeseries = pd.DataFrame({'p': [-2000, -5000],
+                                       'q': [0, 0]},
                                       index=timeindex)
     #
     # storage_power = 1000
