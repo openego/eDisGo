@@ -6,6 +6,7 @@ if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import Point
 from edisgo.grid.components import LVStation, BranchTee, Generator, Load, \
     MVDisconnectingPoint, Line, MVStation
+from edisgo.grid.grids import LVGrid
 from edisgo.flex_opt import exceptions
 
 import logging
@@ -502,50 +503,6 @@ def get_load_info(network, level='mvlv'):
     return load_df
 
 
-def get_capacities_by_type_and_weather_cell(network):
-    """
-    Gets installed capacities of wind and solar generators by weather
-    cell ID.
-
-    Parameters
-    ----------
-    network : :class:`~.grid.network.Network`
-
-    Returns
-    --------
-    dict
-        Dictionary with keys being a tuple of technology and weather
-        cell ID (e.g. ('solar', '1')) and the values containing the
-        corresponding installed capacity.
-
-    """
-
-    # mv_peak_generation = \
-    #  network.mv_grid.peak_generation_peak_generation_per_technology_and_weather_cell.loc[['solar', 'wind']]
-    # lv_accumulated_peak_generation = pd.Series({})
-    dict_capacities = {}
-    for gen in gens:
-        if gen.type in ['solar', 'wind']:
-            if gen.weather_cell_id:
-                if (gen.type, gen.weather_cell_id) in \
-                        dict_capacities.keys():
-                    dict_capacities[
-                        (gen.type, gen.weather_cell_id)] = \
-                        dict_capacities[
-                            (gen.type, gen.weather_cell_id)] + \
-                        gen.nominal_capacity
-                else:
-                    dict_capacities[
-                        (gen.type, gen.weather_cell_id)] = \
-                        gen.nominal_capacity
-            else:
-                message = 'Please provide a weather cell ID for ' \
-                          'generator {}.'.format(repr(gen))
-                logging.error(message)
-                raise KeyError(message)
-    return pd.Series(dict_capacities)
-
-
 def get_capacities_by_type(network):
     """
     Gets installed capacities of wind and solar generators.
@@ -609,7 +566,7 @@ def assign_mv_feeder_to_nodes(mv_grid):
                 node.mv_feeder = mv_feeder
 
 
-def get_mv_feeder_from_line(line):
+def get_mv_feeder_from_line(line, mv_grid):
     """
     Determines MV feeder the given line is in.
 
@@ -628,16 +585,42 @@ def get_mv_feeder_from_line(line):
 
     """
     # get nodes of line
-    nodes = line.grid.graph.nodes_from_line(line)
+    # ToDo: Remove when #135 is solved
+    try:
+        nodes = line.grid.graph.nodes_from_line(line)
+    except:
+        return None
+
     # if one of the nodes is an MV station the line is an MV feeder itself
-    if isinstance(nodes[0], MVStation):
-        feeder_1 = None
-    else:
-        feeder_1 = nodes[0].mv_feeder
-    if isinstance(nodes[1], MVStation):
-        feeder_2 = None
-    else:
-        feeder_2 = nodes[1].mv_feeder
+    feeders = {}
+    for node in nodes:
+        if isinstance(node, MVStation):
+            feeders[repr(node)] = None
+        else:
+            try:
+                feeders[repr(node)] = node.mv_feeder
+            except AttributeError:
+                # in case of an AttributeError grid reinforcement was conducted
+                # on a copied graph and the line reference is a reference to
+                # the original graph
+
+                # first find grid the node is in in copied graph, then find
+                # node in copied graph
+                grid_original_graph = node.grid
+                if isinstance(grid_original_graph, LVGrid):
+                    grid_copied_graph = [
+                        _ for _ in mv_grid.lv_grids
+                        if repr(_)==repr(grid_original_graph)][0]
+                else:
+                    grid_copied_graph = mv_grid
+                node_copied_graph = [_ for _ in grid_copied_graph.graph.nodes()
+                                     if repr(_)==repr(node)][0]
+                feeders[repr(node)] = node_copied_graph.mv_feeder
+            except:
+                raise
+
+    feeder_1 = feeders[repr(nodes[0])]
+    feeder_2 = feeders[repr(nodes[1])]
     if not feeder_1 is None and not feeder_2 is None:
         if feeder_1 == feeder_2:
             return feeder_1

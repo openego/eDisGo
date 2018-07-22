@@ -211,7 +211,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
             "Overloading issues for the following lines could not be solved:"
             "{}".format(crit_lines))
     else:
-        logger.info('==> Load issues in MV grid were solved in {} iteration '
+        logger.info('==> Load issues were solved in {} iteration '
                     'step(s).'.format(while_counter))
 
     # REINFORCE BRANCHES DUE TO VOLTAGE ISSUES
