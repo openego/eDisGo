@@ -2230,10 +2230,10 @@ class Results:
             fig_size = standard_sizes['a5landscape']
 
         alpha = 1 - transparency
-        if alpha >1:
-            alpha=1
-        elif alpha <0:
-            alpha=0
+        if alpha > 1:
+            alpha = 1
+        elif alpha < 0:
+            alpha = 0
 
         for timestamp in voltage.index:
             plot_title = "Voltage Histogram at {}".format(str(timestamp))
