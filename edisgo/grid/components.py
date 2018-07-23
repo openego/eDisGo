@@ -558,6 +558,10 @@ class Generator(Component):
                           "is higher than nominal capacity."
                 logger.error(message)
                 raise ValueError(message)
+        else:
+            raise ValueError(
+                "Reactive power time series of generator {} needs to be a "
+                "pandas Series.".format(repr(self)))
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
