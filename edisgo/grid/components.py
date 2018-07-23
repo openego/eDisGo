@@ -469,12 +469,13 @@ class Generator(Component):
         technology in :class:`~.grid.network.TimeSeries`. If the reactive
         power time series is provided through :attr:`_timeseries_reactive`,
         this is added to :attr:`_timeseries`. When :attr:`_timeseries_reactive`
-        is not set, the reactive power is also claculated in :attr:`_timeseries`
-        using :attr:`power_factor` and :attr:`reactive_power_mode`. The
-        :attr:`power_factor` determines the magnitude of the reactive power
-        based on the power factor and active power provided and the
-        :attr:`reactive_power_mode` determines if the reactive power is either
-        consumed (inductive behaviour) or provided (capacitive behaviour)
+        is not set, the reactive power is also calculated in
+        :attr:`_timeseries` using :attr:`power_factor` and
+        :attr:`reactive_power_mode`. The :attr:`power_factor` determines the
+        magnitude of the reactive power based on the power factor and active
+        power provided and the :attr:`reactive_power_mode` determines if the
+        reactive power is either consumed (inductive behaviour) or provided
+        (capacitive behaviour).
 
         Returns
         -------
@@ -887,7 +888,7 @@ class GeneratorFluctuating(Generator):
                 self._power_factor = 'not_applicable'
                 self._reactive_power_mode = 'not_applicable'
             else:
-                message = "Maximum reactive power in timeseries at" + \
+                message = "Maximum reactive power in time series at " + \
                           "index {} ".format(timeseries_reactive.idxmax()) + \
                           "is higher than nominal capacity."
                 logger.error(message)
@@ -922,7 +923,7 @@ class GeneratorFluctuating(Generator):
                             self.type, self.weather_cell_id]
                     except KeyError:
                         logger.exception("No curtailment time series for type "
-                                         "{} and  weather cell ID {} "
+                                         "{} and weather cell ID {} "
                                          "given.".format(self.type,
                                                          self.weather_cell_id))
                         raise

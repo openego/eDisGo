@@ -960,7 +960,7 @@ class TimeSeriesControl:
                 raise ValueError('Your input for '
                                  '"timeseries_generation_dispatchable" is not '
                                  'valid.'.format(mode))
-            # reactive power timeseries for all generators
+            # reactive power time series for all generators
             ts = kwargs.get('timeseries_generation_reactive_power', None)
             if isinstance(ts, pd.DataFrame):
                 self.timeseries.generation_reactive_power = ts
@@ -970,6 +970,7 @@ class TimeSeriesControl:
             else:
                 self.timeseries._timeindex = \
                     self.timeseries._generation_fluctuating.index
+
             # load time series
             ts = kwargs.get('timeseries_load', None)
             if isinstance(ts, pd.DataFrame):
@@ -980,7 +981,6 @@ class TimeSeriesControl:
             else:
                 raise ValueError('Your input for "timeseries_load" is not '
                                  'valid.'.format(mode))
-
             # reactive power timeseries for loads
             ts = kwargs.get('timeseries_load_reactive_power', None)
             if isinstance(ts, pd.DataFrame):
@@ -1519,8 +1519,8 @@ class TimeSeries:
         'solar' and 'wind'; in the second case columns need to be a
         :pandas:`pandas.MultiIndex<multiindex>` with the first level
         containing the type and the second level the weather cell ID.
-        If the technology doesn't contain weather cell information i.e.
-        if it is other than solar and wind generation,
+        If the technology doesn't contain weather cell information, i.e.
+        if it is other than solar or wind generation,
         this second level can be left as a numpy Nan or a None.
         Default: None.
     load : :pandas:`pandas.DataFrame<dataframe>`, optional
@@ -1574,7 +1574,8 @@ class TimeSeries:
                                                    None)
         self._generation_fluctuating = kwargs.get('generation_fluctuating',
                                                   None)
-        self._generation_reactive_power = kwargs.get('generation_reactive_power', None)
+        self._generation_reactive_power = kwargs.get(
+            'generation_reactive_power', None)
         self._load = kwargs.get('load', None)
         self._load_reactive_power = kwargs.get('load_reacitve_power', None)
         self._curtailment = kwargs.get('curtailment', None)
@@ -1644,7 +1645,7 @@ class TimeSeries:
     @property
     def load(self):
         """
-        Get load timeseries (only active power)
+        Get load time series (only active power)
 
         Returns
         -------
