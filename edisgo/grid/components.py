@@ -219,13 +219,21 @@ class Load(Component):
     @property
     def timeseries_reactive(self):
         """
-        Load reactive power time series used to obtain a reactive power time series
-        instead of calculating it from the assumptions
+        Reactive power time series in kvar.
+
+        Parameters
+        -----------
+        timeseries_reactive : :pandas:`pandas.Seriese<series>`
+            Series containing reactive power in kvar.
 
         Returns
         -------
-        :pandas:`pandas.Series<series>`
-            series containing reactive power in kvar.
+        :pandas:`pandas.Series<series>` or None
+            Series containing reactive power time series in kvar. If it is not
+            set it is tried to be retrieved from `load_reactive_power`
+            attribute of global TimeSeries object. If that is not possible
+            None is returned.
+
         """
         if self._timeseries_reactive is None:
             
@@ -253,14 +261,6 @@ class Load(Component):
 
     @timeseries_reactive.setter
     def timeseries_reactive(self, timeseries_reactive):
-        """
-        Setting the reactive power time series in kvar.
-
-        Attributes
-        ----------
-        timeseries_reactive : :pandas:`pandas.Seriese<series>`
-            series containing reactive power in kvar.
-        """
         # do som basic sanity check
         if type(timeseries_reactive) == pd.Series:
             self._timeseries_reactive = timeseries_reactive
@@ -321,13 +321,18 @@ class Load(Component):
         """
         Power factor of load
 
-        If power factor is not set it is retrieved from the network config
-        object depending on the grid level the load is in.
+        Parameters
+        -----------
+        power_factor : :obj:`float`
+            Ratio of real power to apparent power.
 
         Returns
         --------
-        :obj:`float` : Power factor
-            Ratio of real power to apparent power.
+        :obj:`float`
+            Ratio of real power to apparent power. If power factor is not set
+            it is retrieved from the network config object depending on the
+            grid level the load is in.
+
         """
         if self._power_factor is None:
             if isinstance(self.grid, MVGrid):
@@ -340,9 +345,6 @@ class Load(Component):
 
     @power_factor.setter
     def power_factor(self, power_factor):
-        """
-        Set the power factor of the generator.
-        """
         self._power_factor = power_factor
 
     @property
@@ -350,22 +352,28 @@ class Load(Component):
         """
         Power factor mode of Load.
 
-        If the power factor is set, then it is necessary to know whether the
-        it is leading or lagging. In other words this information is necessary
-        to make the generator behave in an inductive or capacitive manner.
-        Essentially this changes the sign of the reactive power Q.
+        This information is necessary to make the load behave in an inductive
+        or capacitive manner. Essentially this changes the sign of the reactive
+        power.
 
         The convention used here in a load is that:
         - when `reactive_power_mode` is 'inductive' then Q is positive
         - when `reactive_power_mode` is 'capacitive' then Q is negative
 
-        In the case that this attribute is not set, it is retrieved from the
-        network config object depending on the voltage level the load is in.
+        Parameters
+        ----------
+        reactive_power_mode : :obj:`str` or None
+            Possible options are 'inductive', 'capacitive' and
+            'not_applicable'. In the case of 'not_applicable' a reactive
+            power time series must be given.
 
         Returns
         -------
-        :obj: `str` : Power factor mode
-            Either 'inductive' or 'capacitive'
+        :obj:`str`
+            In the case that this attribute is not set, it is retrieved from
+            the network config object depending on the voltage level the load
+            is in.
+
         """
         if self._reactive_power_mode is None:
             if isinstance(self.grid, MVGrid):
@@ -379,21 +387,20 @@ class Load(Component):
 
     @reactive_power_mode.setter
     def reactive_power_mode(self, reactive_power_mode):
-        """
-        Set the power factor mode of the generator.
-        Should be either 'inductive' or 'capacitive'
-        """
         self._reactive_power_mode = reactive_power_mode
 
     @property
     def q_sign(self):
         """
-        Get the sign reactive power based on the
-        :attr: `_reactive_power_mode`
+        Get the sign of reactive power based on :attr:`_reactive_power_mode`.
 
         Returns
         -------
-        :obj: `int` : +1 or -1
+        :obj:`int` or None
+            In case of inductive reactive power returns +1 and in case of
+            capacitive reactive power returns -1. If reactive power time
+            series is given, `q_sign` is set to None.
+
         """
         if self.reactive_power_mode.lower() == 'inductive':
             return 1
@@ -506,13 +513,21 @@ class Generator(Component):
     @property
     def timeseries_reactive(self):
         """
-        Feed-in reactive power time series used to obtain a reactive power time series
-        instead of calculating it from the assumptions
+        Reactive power time series in kvar.
+
+        Parameters
+        -----------
+        timeseries_reactive : :pandas:`pandas.Seriese<series>`
+            Series containing reactive power in kvar.
 
         Returns
         -------
-        :pandas:`pandas.Series<series>`
-            series containing reactive power in kvar.
+        :pandas:`pandas.Series<series>` or None
+            Series containing reactive power time series in kvar. If it is not
+            set it is tried to be retrieved from `generation_reactive_power`
+            attribute of global TimeSeries object. If that is not possible
+            None is returned.
+
         """
         if self._timeseries_reactive is None:
             try:
@@ -539,14 +554,6 @@ class Generator(Component):
 
     @timeseries_reactive.setter
     def timeseries_reactive(self, timeseries_reactive):
-        """
-        Setting the reactive power time series in kvar.
-
-        Attributes
-        ----------
-        timeseries_reactive : :pandas:`pandas.DataFrame<dataframe>`
-            series containing reactive power in kvar.
-        """
         # do som basic sanity check
         if type(timeseries_reactive) == pd.Series:
             # check if the values in time series makes sense
@@ -604,13 +611,17 @@ class Generator(Component):
         """
         Power factor of generator
 
-        If power factor is not set it is retrieved from the network config
-        object depending on the grid level the generator is in.
+        Parameters
+        -----------
+        power_factor : :obj:`float`
+            Ratio of real power to apparent power.
 
         Returns
         --------
-        :obj:`float` : Power factor
-            Ratio of real power to apparent power.
+        :obj:`float`
+            Ratio of real power to apparent power. If power factor is not set
+            it is retrieved from the network config object depending on the
+            grid level the generator is in.
         """
         if self._power_factor is None:
             if isinstance(self.grid, MVGrid):
@@ -623,9 +634,6 @@ class Generator(Component):
 
     @power_factor.setter
     def power_factor(self, power_factor):
-        """
-        Set the power factor of the generator.
-        """
         self._power_factor = power_factor
 
     @property
@@ -633,10 +641,9 @@ class Generator(Component):
         """
         Power factor mode of generator.
 
-        If the power factor is set, then it is necessary to know whether the
-        it is leading or lagging. In other words this information is necessary
-        to make the generator behave in an inductive or capacitive manner.
-        Essentially this changes the sign of the reactive power Q.
+        This information is necessary to make the generator behave in an
+        inductive or capacitive manner. Essentially this changes the sign of
+        the reactive power.
 
         The convention used here in a generator is that:
         - when `reactive_power_mode` is 'capacitive' then Q is positive
@@ -646,10 +653,20 @@ class Generator(Component):
         network config object depending on the voltage level the generator
         is in.
 
+        Parameters
+        ----------
+        reactive_power_mode : :obj:`str` or None
+            Possible options are 'inductive', 'capacitive' and
+            'not_applicable'. In the case of 'not_applicable' a reactive
+            power time series must be given.
+
         Returns
         -------
-        :obj: `str` : Power factor mode
-            Either 'inductive' or 'capacitive'
+        :obj:`str` : Power factor mode
+            In the case that this attribute is not set, it is retrieved from
+            the network config object depending on the voltage level the
+            generator is in.
+
         """
         if self._reactive_power_mode is None:
             if isinstance(self.grid, MVGrid):
@@ -670,21 +687,20 @@ class Generator(Component):
 
     @reactive_power_mode.setter
     def reactive_power_mode(self, reactive_power_mode):
-        """
-        Set the power factor mode of the generator.
-        Should be either 'inductive' or 'capacitive'
-        """
         self._reactive_power_mode = reactive_power_mode
 
     @property
     def q_sign(self):
         """
-        Get the sign reactive power based on the
-        :attr: `_reactive_power_mode`
+        Get the sign of reactive power based on :attr:`_reactive_power_mode`.
 
         Returns
         -------
-        :obj: `int` : +1 or -1
+        :obj:`int` or None
+            In case of inductive reactive power returns -1 and in case of
+            capacitive reactive power returns +1. If reactive power time
+            series is given, `q_sign` is set to None.
+
         """
         if self.reactive_power_mode.lower() == 'inductive':
             return -1
@@ -795,13 +811,21 @@ class GeneratorFluctuating(Generator):
     @property
     def timeseries_reactive(self):
         """
-        Feed-in reactive power time series used to obtain a reactive power time series
-        instead of calculating it from the assumptions
+        Reactive power time series in kvar.
 
-        Returns
+        Parameters
         -------
         :pandas:`pandas.Series<series>`
-            series containing reactive power in kvar.
+            Series containing reactive power time series in kvar.
+
+        Returns
+        ----------
+        :pandas:`pandas.DataFrame<dataframe>` or None
+            Series containing reactive power time series in kvar. If it is not
+            set it is tried to be retrieved from `generation_reactive_power`
+            attribute of global TimeSeries object. If that is not possible
+            None is returned.
+
         """
 
         if self._timeseries_reactive is None:
@@ -855,14 +879,6 @@ class GeneratorFluctuating(Generator):
 
     @timeseries_reactive.setter
     def timeseries_reactive(self, timeseries_reactive):
-        """
-        Setting the reactive power time series in kvar.
-
-        Attributes
-        ----------
-        timeseries_reactive : :pandas:`pandas.DataFrame<dataframe>`
-            series containing reactive power in kvar.
-        """
         # do som basic sanity check
         if type(timeseries_reactive) == pd.Series:
             # check if the values in time series makes sense

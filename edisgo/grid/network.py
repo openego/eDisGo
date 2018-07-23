@@ -121,15 +121,21 @@ class EDisGo:
         Use 'other' if you don't want to explicitly provide every possible
         type.
     timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
-        DataFrame with time series of normalized reactive power (normalized by the rated
-        nominal acitve power) per technology and weather cell. Index needs to be a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-        Columns represent generator type and can be a MultiIndex column containing the
-        weather cell ID in the second level. If the technology doesn't contain weather
-        cell information i.e. if it is other than solar and wind generation,
-        this second level can be left as a numpy Nan or a None.
-
+        DataFrame with time series of normalized reactive power (normalized by
+        the rated nominal active power) per technology and weather cell. Index
+        needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent generator type and can be a MultiIndex column
+        containing the weather cell ID in the second level. If the technology
+        doesn't contain weather cell information i.e. if it is other than solar
+        and wind generation, this second level can be left as a numpy Nan or a
+        None.
         Default: None.
+        If no time series for the technology or technology and weather cell ID
+        is given, reactive power will be calculated from power factor and
+        power factor mode in the config sections `reactive_power_factor` and
+        `reactive_power_mode` and a warning will be raised. See
+        :class:`~.grid.components.Generator` and
+        :class:`~.grid.components.GeneratorFluctuating` for more information.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
         Parameter used to obtain time series of active power of (cumulative)
         loads.
@@ -863,9 +869,14 @@ class TimeSeriesControl:
         Use 'other' if you don't want to explicitly provide every possible
         type. Default: None.
     timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
-        DataFrame with time series of total reactive power in kvar to be distributed
-        among all available generating assets.
-
+        DataFrame with time series of normalized reactive power (normalized by
+        the rated nominal active power) per technology and weather cell. Index
+        needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent generator type and can be a MultiIndex column
+        containing the weather cell ID in the second level. If the technology
+        doesn't contain weather cell information i.e. if it is other than solar
+        and wind generation, this second level can be left as a numpy Nan or a
+        None.
         Default: None.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Parameter used to obtain time series of active power of (cumulative)
@@ -884,6 +895,7 @@ class TimeSeriesControl:
           * 'industrial'
           * 'agricultural'
 
+        Default: None.
     timeseries_load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
         DataFrame with time series of normalized reactive power (normalized by
         annual energy demand) per load sector. Index needs to be a
