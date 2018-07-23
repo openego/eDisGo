@@ -261,8 +261,7 @@ class Load(Component):
 
     @timeseries_reactive.setter
     def timeseries_reactive(self, timeseries_reactive):
-        # do som basic sanity check
-        if type(timeseries_reactive) == pd.Series:
+        if isinstance(timeseries_reactive, pd.Series):
             self._timeseries_reactive = timeseries_reactive
             self._power_factor = 'not_applicable'
             self._reactive_power_mode = 'not_applicable'
@@ -555,8 +554,7 @@ class Generator(Component):
 
     @timeseries_reactive.setter
     def timeseries_reactive(self, timeseries_reactive):
-        # do som basic sanity check
-        if type(timeseries_reactive) == pd.Series:
+        if isinstance(timeseries_reactive, pd.Series):
             # check if the values in time series makes sense
             if timeseries_reactive.max() <= self._nominal_capacity:
                 self._timeseries_reactive = timeseries_reactive
@@ -880,9 +878,7 @@ class GeneratorFluctuating(Generator):
 
     @timeseries_reactive.setter
     def timeseries_reactive(self, timeseries_reactive):
-        # do som basic sanity check
-        if type(timeseries_reactive) == pd.Series:
-            # check if the values in time series makes sense
+        if isinstance(timeseries_reactive, pd.Series):
             if timeseries_reactive.max() <= self._nominal_capacity:
                 self._timeseries_reactive = timeseries_reactive
                 self._power_factor = 'not_applicable'
