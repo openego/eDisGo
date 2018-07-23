@@ -1619,7 +1619,10 @@ class TimeSeries:
         -------
         :pandas: `pandas.DataFrame<dataframe>`
         """
-        return self._generation_reactive_power.loc[self.timeindex, :]
+        if self._load_reactive_power is not None:
+            return self._load_reactive_power.loc[self.timeindex, :]
+        else:
+            return None
 
     @load_reactive_power.setter
     def load_reactive_power(self, load_reactive_power_timeseries):
