@@ -805,44 +805,53 @@ class GeneratorFluctuating(Generator):
         """
 
         if self._timeseries_reactive is None:
-            # get time series for active power depending on if they are
-            # differentiated by weather cell ID or not
-            try:
-                if isinstance(self.grid.network.timeseries.generation_reactive_power.
-                                      columns, pd.MultiIndex):
+            # try to get time series for reactive power depending on if they
+            # are differentiated by weather cell ID or not
+            # raise warning if no time series for generator type (and weather
+            # cell ID) can be retrieved
+            if self.grid.network.timeseries.generation_reactive_power \
+                    is not None:
+                if isinstance(
+                        self.grid.network.timeseries.generation_reactive_power.
+                                columns, pd.MultiIndex):
                     if self.weather_cell_id:
                         try:
                             timeseries = self.grid.network.timeseries. \
-                                generation_reactive_power[self.type,
-                                                          self.weather_cell_id].to_frame('q')
-                            return timeseries * self._nominal_capacity
+                                generation_reactive_power[
+                                self.type, self.weather_cell_id].to_frame('q')
+                            return timeseries * self.nominal_capacity
                         except (KeyError, TypeError):
                             logger.warning("No time series for type {} and "
                                            "weather cell ID {} given. "
-                                           "Reactive power time series will"
-                                           " be calculated from assumptions"
-                                           " in config files and active power"
-                                           " timeseries.".format(self.type,
-                                                                 self.weather_cell_id))
+                                           "Reactive power time series will "
+                                           "be calculated from assumptions "
+                                           "in config files and active power "
+                                           "timeseries.".format(
+                                self.type, self.weather_cell_id))
+                            return None
                     else:
-                        logger.warning("No weather cell ID provided for "
-                                         "fluctuating generator {}.".format(repr(self)))
+                        raise ValueError(
+                            "No weather cell ID provided for fluctuating "
+                            "generator {}, but reactive power is given as a "
+                            "MultiIndex suggesting that it is differentiated "
+                            "by weather cell ID.".format(repr(self)))
                 else:
                     try:
                         timeseries = self.grid.network.timeseries. \
                             generation_reactive_power[self.type].to_frame('q')
-                        return timeseries * self._nominal_capacity
+                        return timeseries * self.nominal_capacity
                     except (KeyError, TypeError):
-                        logger.exception("No time series for type {} "
-                                         "given. "
-                                         "Reactive power time series will"
-                                         " be calculated from assumptions"
-                                         " in config files and active power"
-                                         " timeseries.".format(self.type))
+                        logger.warning("No reactive power time series for "
+                                       "type {} given. Reactive power time "
+                                       "series will be calculated from "
+                                       "assumptions in config files and "
+                                       "active power timeseries.".format(
+                            self.type))
                         return None
-            except AttributeError:
-                # when there is a NoneType somewhere
+            else:
                 return None
+        else:
+            return None
 
     @timeseries_reactive.setter
     def timeseries_reactive(self, timeseries_reactive):
