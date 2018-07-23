@@ -959,6 +959,8 @@ class TimeSeriesControl:
             self.timeseries.generation_fluctuating
             self.timeseries.generation_dispatchable
             self.timeseries.load
+            self.timeseries.generation_reactive_power
+            self.timeseries.load_reactive_power
         except:
             message = 'Time index of feed-in and load time series does ' \
                       'not match.'
