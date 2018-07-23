@@ -519,25 +519,21 @@ class Generator(Component):
                 timeseries = \
                     self.grid.network.timeseries.generation_reactive_power[
                         self.type].to_frame('q')
-                self.power_factor = 'not_applicable'
-                self.reactive_power_mode = 'not_applicable'
-                return timeseries * self.nominal_capacity
-
             except (KeyError, TypeError):
                 try:
                     timeseries = \
                         self.grid.network.timeseries.generation_reactive_power[
                             'other'].to_frame('q')
-                    self.power_factor = 'not_applicable'
-                    self.reactive_power_mode = 'not_applicable'
-                    return timeseries * self.nominal_capacity
-                except (KeyError, TypeError):
-                    # logger.warning("No time series for type {} ".format(self.type) +
-                    #                "given. Calculating a reactive power" +
-                    #                " time series based on the assumed power factor" +
-                    #                ",reactive power mode and the acitve power time" +
-                    #                " series.")
+                except:
+                    logger.warning(
+                        "No reactive power time series for type {} given. "
+                        "Reactive power time series will be calculated from "
+                        "assumptions in config files and active power "
+                        "timeseries.".format(self.type))
                     return None
+            self.power_factor = 'not_applicable'
+            self.reactive_power_mode = 'not_applicable'
+            return timeseries * self.nominal_capacity
         else:
             return self._timeseries_reactive
 
