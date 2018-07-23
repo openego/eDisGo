@@ -1612,7 +1612,8 @@ class TimeSeries:
     @property
     def load_reactive_power(self):
         """
-        Get reactive power time series for load normalized by active power.
+        Get reactive power time series for load normalized by annual
+        consumption.
 
         Returns
         -------
