@@ -228,13 +228,28 @@ class Load(Component):
             series containing reactive power in kvar.
         """
         if self._timeseries_reactive is None:
-            pass
-            # logger.debug("No time series " +
-            #                "given. Calculating a reactive power" +
-            #                " time series based on the assumed power factor" +
-            #                ",reactive power mode and the acitve power time" +
-            #                " series.")
-        return self._timeseries_reactive
+            
+            # work around until retail and industrial are separate sectors
+            # ToDo: remove once Ding0 data changed to single sector consumption
+            sector = list(self.consumption.keys())[0]
+            if len(list(self.consumption.keys())) > 1:
+                consumption = sum([v for k, v in self.consumption.items()])
+            else:
+                consumption = self.consumption[sector]
+
+            try:
+                timeseries = \
+                    self.grid.network.timeseries.load_reactive_power[
+                        sector].to_frame('q')
+            except (KeyError, TypeError):
+                return None
+
+            self.power_factor = 'not_applicable'
+            self.reactive_power_mode = 'not_applicable'
+
+            return timeseries * consumption
+        else:
+            return self._timeseries_reactive
 
     @timeseries_reactive.setter
     def timeseries_reactive(self, timeseries_reactive):
