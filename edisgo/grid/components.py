@@ -1,7 +1,7 @@
 import os
 import logging
 import pandas as pd
-from math import acos, tan, sqrt
+from math import acos, tan
 
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString
@@ -145,12 +145,23 @@ class Transformer(Component):
 
 
 class Load(Component):
-    """Load object
+    """
+    Load object
 
     Attributes
     ----------
-    _timeseries : :pandas:`pandas.Series<series>`
-        Contains time series for load
+    _timeseries : :pandas:`pandas.Series<series>`, optional
+        See `timeseries` getter for more information.
+    _consumption : :obj:`dict`, optional
+        See `consumption` getter for more information.
+    _timeseries_reactive : :pandas:`pandas.Series<series>`, optional
+        See `timeseries_reactive` getter for more information.
+    _power_factor : :obj:`float`, optional
+        See `power_factor` getter for more information.
+    _reactive_power_mode : :obj:`str`, optional
+        See `reactive_power_mode` getter for more information.
+    _q_sign : :obj:`int`, optional
+        See `q_sign` getter for more information.
 
     """
 
@@ -408,8 +419,9 @@ class Load(Component):
         elif self.reactive_power_mode.lower() == 'not_applicable':
             return None
         else:
-            raise ValueError("Unknown value {} in reactive_power_mode".format(
-                self.reactive_power_mode))
+            raise ValueError("Unknown value {} in reactive_power_mode for "
+                             "Load {}.".format(self.reactive_power_mode,
+                                                    repr(self)))
 
     def __repr__(self):
         return '_'.join(['Load',
@@ -423,15 +435,24 @@ class Generator(Component):
 
     Attributes
     ----------
-    _timeseries : :pandas:`pandas.Series<series>`
-        Contains time series for generator
-    _timeseries_reactive : :pandas:`pandas.Series<series>`
-        Contains time series for reactive power of the generator
-    _power_factor: :obj: `str`
-        Contains the power factor of the generator
-    _reactive_power_mode: :obj: `str`
-        Contains the reactive power behaviour of the generator,
-        either 'inductive' or 'capacitive'
+    _timeseries : :pandas:`pandas.Series<series>`, optional
+        See `timeseries` getter for more information.
+    _nominal_capacity : :obj:`dict`, optional
+        See `nominal_capacity` getter for more information.
+    _type : :pandas:`pandas.Series<series>`, optional
+        See `type` getter for more information.
+    _subtype : :obj:`str`, optional
+        See `subtype` getter for more information.
+    _v_level : :obj:`str`, optional
+        See `v_level` getter for more information.
+    _q_sign : :obj:`int`, optional
+        See `q_sign` getter for more information.
+    _power_factor : :obj:`float`, optional
+        See `power_factor` getter for more information.
+    _reactive_power_mode : :obj:`str`, optional
+        See `reactive_power_mode` getter for more information.
+    _q_sign : :obj:`int`, optional
+        See `q_sign` getter for more information.
 
     Notes
     -----
@@ -483,9 +504,10 @@ class Generator(Component):
         :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power in kW in column 'p' and
             reactive power in kvar in column 'q'.
+
         """
         if self._timeseries is None:
-            # set time series for active and reactive power
+            # calculate time series for active and reactive power
             try:
                 timeseries = \
                     self.grid.network.timeseries.generation_dispatchable[
@@ -561,8 +583,8 @@ class Generator(Component):
             if timeseries_reactive.max() <= self._nominal_capacity:
                 self._timeseries_reactive = timeseries_reactive
             else:
-                message = "Maximum reactive power in timeseries at" + \
-                          "index {} ".format(timeseries_reactive.idxmax()) + \
+                message = "Maximum reactive power in timeseries at index " \
+                          "{} ".format(timeseries_reactive.idxmax()) + \
                           "is higher than nominal capacity."
                 logger.error(message)
                 raise ValueError(message)
@@ -572,7 +594,8 @@ class Generator(Component):
                 "pandas Series.".format(repr(self)))
 
     def pypsa_timeseries(self, attr):
-        """Return time series in PyPSA format
+        """
+        Return time series in PyPSA format
 
         Convert from kW, kVA to MW, MVA
 
@@ -623,6 +646,7 @@ class Generator(Component):
             Ratio of real power to apparent power. If power factor is not set
             it is retrieved from the network config object depending on the
             grid level the generator is in.
+
         """
         if self._power_factor is None:
             if isinstance(self.grid, MVGrid):
@@ -701,8 +725,9 @@ class Generator(Component):
         elif self.reactive_power_mode.lower() == 'capacitive':
             return 1
         else:
-            raise ValueError("Unknown value {} in reactive_power_mode".format(
-                self.reactive_power_mode))
+            raise ValueError("Unknown value {} in reactive_power_mode for "
+                             "Generator {}.".format(self.reactive_power_mode,
+                                                    repr(self)))
 
 
 class GeneratorFluctuating(Generator):
@@ -712,20 +737,9 @@ class GeneratorFluctuating(Generator):
     Attributes
     ----------
     _curtailment : :pandas:`pandas.Series<series>`
-        Contains time series for curtailment in kW
+        See `curtailment` getter for more information.
     _weather_cell_id : :obj:`int`
-        ID of the weather cell used to generate feed-in time series
-
-    Notes
-    -----
-    The attributes :attr:`_type` and :attr:`_subtype` have to match the
-    corresponding types in :class:`~.grid.network.Timeseries` to
-    allow allocation of time series to generators.
-
-    See also
-    --------
-    edisgo.network.TimeSeries : Details of global
-        :class:`~.grid.network.TimeSeries`
+        See `weather_cell_id` getter for more information.
 
     """
 

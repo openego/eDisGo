@@ -1512,8 +1512,8 @@ class TimeSeries:
         Use 'other' if you don't want to explicitly provide every possible
         type. Default: None.
     generation_reactive_power : :pandas: `pandasDataFrame<dataframe>`, optional
-        DataFrame with reactive power normalized with the nominal active power
-        rating or capacity per technology and weather cell ID.
+        DataFrame with reactive power per technology and weather cell ID,
+        normalized with the nominal active power.
         Time series can either be aggregated by technology type or by type
         and weather cell ID. In the first case columns of the DataFrame are
         'solar' and 'wind'; in the second case columns need to be a
@@ -1563,8 +1563,9 @@ class TimeSeries:
 
     See also
     --------
-    edisgo.grid.components.Generator : Usage details of :meth:`_generation`
-    edisgo.grid.components.Load : Usage details of :meth:`_load`
+    `timeseries` getter in :class:`~.grid.components.Generator`,
+    :class:`~.grid.components.GeneratorFluctuating` and
+    :class:`~.grid.components.Load`.
 
     """
 
@@ -1592,6 +1593,7 @@ class TimeSeries:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
+
         """
         try:
             return self._generation_dispatchable.loc[[self.timeindex], :]
@@ -1626,12 +1628,14 @@ class TimeSeries:
     @property
     def generation_reactive_power(self):
         """
-        Get reactive power feedin time series normalized by active power
-        capacity.
+        Get reactive power time series for generators normalized by nominal
+        active power.
 
         Returns
         -------
         :pandas: `pandas.DataFrame<dataframe>`
+            See class definition for details.
+
         """
         if self._generation_reactive_power is not None:
             return self._generation_reactive_power.loc[self.timeindex, :]
@@ -1671,6 +1675,8 @@ class TimeSeries:
         Returns
         -------
         :pandas: `pandas.DataFrame<dataframe>`
+            See class definition for details.
+
         """
         if self._load_reactive_power is not None:
             return self._load_reactive_power.loc[self.timeindex, :]
