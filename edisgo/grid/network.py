@@ -213,7 +213,7 @@ class EDisGo:
                 timeseries_generation_dispatchable=kwargs.get(
                     'timeseries_generation_dispatchable', None),
                 timeseries_generation_reactive_power=kwargs.get(
-                    'timesereis_generation_reactive_power', None),
+                    'timeseries_generation_reactive_power', None),
                 timeseries_load=kwargs.get(
                     'timeseries_load', None),
                 timeseries_load_reactive_power = kwargs.get(
