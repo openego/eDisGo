@@ -405,6 +405,8 @@ class Load(Component):
             return 1
         elif self.reactive_power_mode.lower() == 'capacitive':
             return -1
+        elif self.reactive_power_mode.lower() == 'not_applicable':
+            return None
         else:
             raise ValueError("Unknown value {} in reactive_power_mode".format(
                 self.reactive_power_mode))
