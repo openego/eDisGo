@@ -677,13 +677,6 @@ class Generator(Component):
 
         return self._reactive_power_mode
 
-    @power_factor.setter
-    def power_factor(self, power_factor):
-        """
-        Set the power factor of the generator.
-        """
-        self._power_factor = power_factor
-
     @reactive_power_mode.setter
     def reactive_power_mode(self, reactive_power_mode):
         self._reactive_power_mode = reactive_power_mode
