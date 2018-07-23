@@ -207,7 +207,7 @@ class Load(Component):
                         "No timeseries for load of type {} "
                         "given.".format(sector))
                     raise
-            ts * consumption
+            ts = ts * consumption
             if self.timeseries_reactive is not None:
                 ts['q'] = self.timeseries_reactive
             else:
