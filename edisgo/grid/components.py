@@ -266,6 +266,10 @@ class Load(Component):
             self._timeseries_reactive = timeseries_reactive
             self._power_factor = 'not_applicable'
             self._reactive_power_mode = 'not_applicable'
+        else:
+            raise ValueError(
+                "Reactive power time series of load {} needs to be a pandas "
+                "Series.".format(repr(self)))
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
