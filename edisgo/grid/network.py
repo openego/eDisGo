@@ -148,6 +148,23 @@ class EDisGo:
           * 'industrial'
           * 'agricultural'
 
+    timeseries_load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of normalized reactive power (normalized by
+        annual energy demand) per load sector. Index needs to be a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent load type:
+
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
+
+        Default: None.
+        If no time series for the load sector is given, reactive power will be
+        calculated from power factor and power factor mode in the config
+        sections `reactive_power_factor` and `reactive_power_mode` and a
+        warning will be raised. See :class:`~.grid.components.Load` for
+        more information.
     generator_scenario : None or :obj:`str`
         If provided defines which scenario of future generator park to use
         and invokes import of these generators. Possible options are 'nep2035'
@@ -867,6 +884,17 @@ class TimeSeriesControl:
           * 'industrial'
           * 'agricultural'
 
+    timeseries_load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of normalized reactive power (normalized by
+        annual energy demand) per load sector. Index needs to be a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent load type:
+
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
+
         Default: None.
     timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
         Can be used to define a time range for which to obtain load time series
@@ -1494,6 +1522,18 @@ class TimeSeries:
         * 'agricultural'
 
          Default: None.
+    load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of normalized reactive power (normalized by
+        annual energy demand) per load sector. Index needs to be a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent load type:
+
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
+
+        Default: None.
     curtailment : :pandas:`pandas.DataFrame<dataframe>` or List, optional
         In the case curtailment is applied to all fluctuating renewables
         this needs to be a DataFrame with active power curtailment time series.
