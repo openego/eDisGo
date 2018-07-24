@@ -1199,16 +1199,17 @@ def process_pfa_results(network, pypsa):
 
     """
     # get the absolute losses in the system
-    # method 1 - subtracting total generation(including slack) from total load
+    # subtracting total generation(including slack) from total load
     grid_losses = {'p': 1e3 * (pypsa.generators_t['p'].sum(axis=1) - pypsa.loads_t['p'].sum(axis=1)),
                    'q': 1e3 * (pypsa.generators_t['q'].sum(axis=1) - pypsa.loads_t['q'].sum(axis=1))}
-    # method 2 - summing all power flow differences in all the lines and transformerss
-    # grid_losses = {'p': 1e3 * ((np.abs(pypsa.lines_t['p0'] + pypsa.lines_t['p1']).sum(axis=1) +
-    #                            np.abs(pypsa.transformers_t['p0'] + pypsa.transformers_t['p1']).sum(axis=1))),
-    #                'q': 1e3 * ((np.abs(pypsa.lines_t['q0'] + pypsa.lines_t['q1']).sum(axis=1) +
-    #                            np.abs(pypsa.transformers_t['q0'] + pypsa.transformers_t['q1']).sum(axis=1)))}
 
     network.results.grid_losses = pd.DataFrame(grid_losses)
+
+    # get the grid exchange through slack
+    grid_exchanges = {'p': 1e3 * (pypsa.generators_t['p']['Generator_slack']) - grid_losses['p'],
+                      'q': 1e3 * (pypsa.generators_t['q']['Generator_slack']) - grid_losses['q']}
+
+    network.results.grid_exchanges = pd.DataFrame(grid_exchanges)
 
     # get p and q of lines, LV transformers and MV Station (slack generator)
     # in absolute values

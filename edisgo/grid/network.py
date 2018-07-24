@@ -1208,6 +1208,12 @@ class CurtailmentControl:
         # check if curtailment exceeds feed-in
         self._check_curtailment(edisgo_object.network)
 
+        # write curtailment to results to be able to put it out as files for
+        # result checking
+        # make sure you don't overwrite existing curtailment data
+        edisgo_object.network.results.assigned_curtailment =\
+            edisgo_object.network.timeseries.curtailment.copy()
+
     def _check_timeindex(self, network):
         """
         Raises an error if time index of curtailment time series does not
@@ -1684,6 +1690,8 @@ class Results:
         self._equipment_changes = pd.DataFrame()
         self._grid_expansion_costs = None
         self._grid_losses = None
+        self._grid_exchanges = None
+        self._assigned_curtailment = None
         self._unresolved_issues = {}
 
     @property
@@ -1940,6 +1948,42 @@ class Results:
         self._grid_losses = pypsa_grid_losses
 
     @property
+    def grid_exchanges(self):
+        """
+        Holds the grid powers (active and reactive) transfered to the higher voltage
+        level through the slack
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>
+            Total power exchanged to the higher voltage network through slack not
+            including the grid losses
+        """
+
+        return self._grid_exchanges
+
+    @grid_exchanges.setter
+    def grid_exchanges(self, grid_exchanges):
+        self._grid_exchanges = grid_exchanges
+
+    @property
+    def assigned_curtailment(self):
+        """
+        Holds the curtailment assigned to each generator.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>
+            curtailment per generator (in columns) in timesteps(rows).
+        """
+
+        return self._assigned_curtailment
+
+    @assigned_curtailment.setter
+    def assigned_curtailment(self, assigned_curtailment):
+        self._assigned_curtailment = assigned_curtailment
+
+    @property
     def unresolved_issues(self):
         """
         Holds lines and nodes where over-loading or over-voltage issues
@@ -2090,34 +2134,6 @@ class Results:
         ----------
         directory: :obj:`str
             path to save the plots
-        create_plots: :obj:`boolean`
-            Whether to create plots or not. Either True or false
-        color: :obj:`str`
-            color of plot in matplotlib standard color
-        transparency: :obj:`float`
-            transparency of the plot, a number from 0 to 1,
-            where 0 is see through and 1 is opaque.
-        xlabel: :obj:`str`
-            label for x axis. Both by default and in failing cases this
-            would be set to 'Normalized Frequency [per unit]'.
-        ylabel: :obj:`str`
-            label for y axis. Both by default and in failing cases this
-            would be set to 'Voltage [per unit]'.
-        xlim: :obj:`tuple`
-            tuple of limits of x axis (left_limit,right_limit)
-        ylim: :obj:`tuple`
-            tuple of limits of y axis (left_limit,right_limit)
-        figsize: :obj:`str` or :obj:`tuple`
-            size of the figure in inches or a string with the following options:
-             - 'a4portrait'
-             - 'a4landscape'
-             - 'a5portrait'
-             - 'a5landscape'
-
-             By default and in failing cases this would be set to 'a5landscape'.
-        binwidth: :obj:`float`
-            width of bins in per unit voltage,
-            By default and in failing cases this would be set to 0.01.
         """
         powerflow_results_dir = os.path.join(directory, 'powerflow_results')
         calculated_results_dir = os.path.join(directory, 'calculated_results')
@@ -2153,6 +2169,15 @@ class Results:
         grid_losses_file = os.path.join(calculated_results_dir, 'grid_losses.csv')
         self.grid_losses.to_csv(grid_losses_file)
 
+        # grid exchanges
+        grid_exchanges_file = os.path.join(calculated_results_dir, 'grid_exchanges.csv')
+        self.grid_exchanges.to_csv(grid_exchanges_file)
+
+        # assigned curtailment
+        if self.assigned_curtailment is not None:
+            assigned_curtailment_file = os.path.join(calculated_results_dir, 'assigned_curtailment.csv')
+            self.assigned_curtailment.to_csv(assigned_curtailment_file)
+
         # equipment_changes
         equipment_changes_file = os.path.join(calculated_results_dir, 'equipment_changes.csv')
         self.equipment_changes.to_csv(equipment_changes_file)
@@ -2165,95 +2190,3 @@ class Results:
         # unresolved_issues
         unresolved_issues_file = os.path.join(calculated_results_dir, 'unresolved_issues.csv')
         pd.DataFrame(self.unresolved_issues).to_csv(unresolved_issues_file)
-
-        # create standard plots
-        if create_plots:
-            voltage_plots_dir = os.path.join(directory, 'voltage_plots')
-            os.makedirs(voltage_plots_dir, exist_ok=True)
-            self.create_voltage_plots(voltage_plots_dir, **kwargs)
-
-    def create_voltage_plots(self, directory, **kwargs):
-        """
-        Function to create some standard plots
-
-        Parameters
-        ----------
-        directory: :obj:`str`
-            path to save the plots
-        color: :obj:`str`
-            color of plot in matplotlib standard color
-        transparency: :obj:`float`
-            transparency of the plot, a number from 0 to 1,
-            where 0 is see through and 1 is opaque.
-        xlabel: :obj:`str`
-            label for x axis. Both by default and in failing cases this
-            would be set to 'Normalized Frequency [per unit]'.
-        ylabel: :obj:`str`
-            label for y axis. Both by default and in failing cases this
-            would be set to 'Voltage [per unit]'.
-        xlim: :obj:`tuple`
-            tuple of limits of x axis (left_limit,right_limit)
-        ylim: :obj:`tuple`
-            tuple of limits of y axis (left_limit,right_limit)
-        figsize: :obj:`str` or :obj:`tuple`
-            size of the figure in inches or a string with the following options:
-             - 'a4portrait'
-             - 'a4landscape'
-             - 'a5portrait'
-             - 'a5landscape'
-
-             By default and in failing cases this would be set to 'a5landscape'.
-        binwidth: :obj:`float`
-            width of bins in per unit voltage,
-            By default and in failing cases this would be set to 0.01.
-        """
-        voltage = self.pfa_v_mag_pu.copy()
-        x_label = kwargs.get('xlabel', "Voltage [per unit]")
-        y_label = kwargs.get('ylabel', "Normalized Frequency [per unit]")
-        x_limits = kwargs.get('xlim', (0.9, 1.1))
-        y_limits = kwargs.get('ylim', (0, 60))
-        color = kwargs.get('color', None)
-        transparency = kwargs.get('transparency', 0)
-        binwidth = kwargs.get('binwidth', 0.01)
-        lowerlimit = x_limits[0] - binwidth / 2
-        upperlimit = x_limits[1] + binwidth / 2
-        fig_size = kwargs.get('figsize', 'a5landscape')
-        standard_sizes = {'a4portrait': (8.27, 11.69),
-                          'a4landscape': (11.69, 8.27),
-                          'a5portrait': (5.8, 8.3),
-                          'a5landscape': (8.3, 5.8)}
-        try:
-            fig_size = standard_sizes[fig_size]
-        except:
-            message = "Unknown size {}. using default a5landscape".format(fig_size)
-            logging.warning(message)
-            fig_size = standard_sizes['a5landscape']
-
-        alpha = 1 - transparency
-        if alpha > 1:
-            alpha = 1
-        elif alpha < 0:
-            alpha = 0
-
-        for timestamp in voltage.index:
-            plot_title = "Voltage Histogram at {}".format(str(timestamp))
-
-            bins = np.arange(lowerlimit, upperlimit, binwidth)
-            plt.figure(figsize=fig_size)
-            voltage.loc[str(timestamp), :].plot(kind='hist', normed=True,
-                                                color=color,
-                                                alpha=alpha,
-                                                bins=bins,
-                                                xlim=x_limits,
-                                                ylim=y_limits,
-                                                grid=True)
-            plt.minorticks_on()
-            plt.axvline(1.0, color='black', linestyle='--')
-            plt.axvline(voltage.loc[str(timestamp), :].mean(),
-                        color='green', linestyle='--')
-            plt.title(plot_title)
-            plt.xlabel(x_label)
-            plt.ylabel(y_label)
-            plt.savefig(os.path.join(directory,
-                                     'voltage_histogram_{}.svgz'.format(
-                                         timestamp.strftime('%Y%m%d%H%M'))))
