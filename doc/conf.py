@@ -50,7 +50,7 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
     'sphinx.ext.coverage',
-    'sphinx.ext.pngmath',
+    'sphinx.ext.imgmath',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',  # enable Napoleon Sphinx v>1.3
     'sphinx.ext.extlinks'  # enables external links with a key
@@ -107,7 +107,7 @@ author = u'open_eGo-Team'
 # built documents.
 #
 # The short X.Y version.
-version = '0.0.3'
+version = '0.0.5'
 # The full version, including alpha/beta/rc tags.
 release = version
 
