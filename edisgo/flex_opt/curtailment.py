@@ -2,6 +2,9 @@ import pandas as pd
 import numpy as np
 import logging
 
+from pyomo.environ import ConcreteModel, Set, Param, Objective, Constraint, minimize, Var
+from pyomo.opt import SolverFactory
+
 from edisgo.grid.tools import get_gen_info, \
     get_capacities_by_type, \
     get_capacities_by_type_and_weather_cell
@@ -75,49 +78,182 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     """
     voltage_threshold = kwargs.get('voltage_threshold', 1.0)
 
-    # get the results of a load flow
-    # get the voltages at the nodes
-    feedin_gen_reprs = feedin.columns.levels[1].values.copy()
+    # ToDo: change input
+    feedin = pd.DataFrame(feedin.values, index=feedin.index,
+                          columns=feedin.columns.levels[0].values)
+    # # get the results of a load flow
+    # # get the voltages at the nodes
+    # feedin_gen_reprs = feedin.columns.levels[1].values.copy()
+    # feedin_gens = feedin.columns.levels[0].values
 
-    try:
-        v_pu = edisgo_object.network.results.v_res()
+    voltage_pu = edisgo_object.network.results.v_res(nodes=feedin.columns)
+    optimized_values = _optimize_curtail_voltage(
+        feedin, voltage_pu, total_curtailment_ts, voltage_threshold)
 
-    except AttributeError:
-        # if the load flow hasn't been done,
-        # do it!
-        edisgo_object.analyze()
-        v_pu = edisgo_object.network.results.v_res()
+    cf_max = optimized_values['cf_max']
+    offset = optimized_values['cf_max']
+    # try:
+    #     v_pu = edisgo_object.network.results.v_res()
+    #
+    # except AttributeError:
+    #     # if the load flow hasn't been done,
+    #     # do it!
+    #     edisgo_object.analyze()
+    #     v_pu = edisgo_object.network.results.v_res()
+    #
+    # if not(v_pu.empty):
+    #     # get only the specific feedin objects
+    #     v_pu = v_pu.loc[:, (slice(None), feedin_gen_reprs)]
+    #
+    #     # curtailment calculation by inducing a reduced or increased feedin
+    #     # find out the difference from lower threshold
+    #     feedin_factor = v_pu - voltage_threshold
+    #     # make sure the difference is positive
+    #     # zero the curtailment of those generators below the voltage_threshold
+    #     feedin_factor = feedin_factor[feedin_factor >= 0].fillna(0)
+    #     # after being normalized to maximum difference being 1 and minimum being 0
+    #     feedin_factor = feedin_factor.divide(feedin_factor.max(axis=1), axis=0)
+    #     # the curtailment here would be directly multplied the difference
+    #
+    #
+    #     feedin_factor.columns = feedin_factor.columns.droplevel(0)  # drop the 'mv' 'lv' labels
+    #
+    #     # multiply feedin_factor to feedin to modify the amount of curtailment
+    #     modified_feedin = feedin_factor.multiply(feedin, level=1)
+    #
+    #     # total_curtailment
+    #     curtailment = modified_feedin.divide(modified_feedin.sum(axis=1), axis=0). \
+    #         multiply(total_curtailment_ts, axis=0)
+    #
+    #     # assign curtailment to individual generators
+    #     assign_curtailment(curtailment, edisgo_object)
+    # else:
+    #     message = "There is no resulting node voltages after the PFA calculation" +\
+    #         " which correspond to the generators in the columns of the given feedin data"
+    #     logging.warning(message)
 
-    if not(v_pu.empty):
-        # get only the specific feedin objects
-        v_pu = v_pu.loc[:, (slice(None), feedin_gen_reprs)]
 
-        # curtailment calculation by inducing a reduced or increased feedin
-        # find out the difference from lower threshold
-        feedin_factor = v_pu - voltage_threshold
-        # make sure the difference is positive
-        # zero the curtailment of those generators below the voltage_threshold
-        feedin_factor = feedin_factor[feedin_factor >= 0].fillna(0)
-        # after being normalized to maximum difference being 1 and minimum being 0
-        feedin_factor = feedin_factor.divide(feedin_factor.max(axis=1), axis=0)
-        # the curtailment here would be directly multplied the difference
+def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_threshold):
+    """
+    Parameters
+    ------------
+    feedin : index is time index, columns are generators, feed-in in kW
+    voltage_pu : index is time index, columns are generators, voltage from power flow in p.u.
+    total_curtailment : index is time index, total curtailment in time step in kW
+    voltage_threshold : index is time index, voltage threshold in time step in p.u.
 
+    """
+    ### input variables
+    # # feed-in and voltage at node
+    # timeindex = pd.date_range('1/1/1971', periods=2, freq='H')
+    # feedin = pd.DataFrame(
+    #     data={1: [30.0, 30.0], 2: [10.0, 10.0], 3: [25.0, 25.0]},
+    #     index=timeindex)
+    #
+    # voltage_pu = pd.DataFrame(
+    #     data={1: [0.9, 0.9], 2: [1.04, 1.04], 3: [1.1, 1.1]},
+    #     index=timeindex)
+    #
+    # total_curtailment = pd.Series([50, 5], index=timeindex)
+    # v_min = pd.Series([0.9, 0.9], index=timeindex)
+    v_max = voltage_pu.max(axis=1)
+    timeindex = feedin.index
+    generators = feedin.columns
 
-        feedin_factor.columns = feedin_factor.columns.droplevel(0)  # drop the 'mv' 'lv' labels
+    # additional curtailment factors
+    cf_add = pd.DataFrame(index=timeindex)
+    for gen in feedin.columns:
+        cf_add[gen] = abs((voltage_pu.loc[:, gen] - v_max) / (voltage_threshold - v_max))
 
-        # multiply feedin_factor to feedin to modify the amount of curtailment
-        modified_feedin = feedin_factor.multiply(feedin, level=1)
+    # curtailment factors
+    cf = pd.DataFrame(index=timeindex)
+    for gen in feedin.columns:
+        cf[gen] = abs((voltage_pu.loc[:, gen] - voltage_threshold) / (v_max - voltage_threshold))
 
-        # total_curtailment
-        curtailment = modified_feedin.divide(modified_feedin.sum(axis=1), axis=0). \
-            multiply(total_curtailment_ts, axis=0)
+    ### initialize model
+    model = ConcreteModel()
 
-        # assign curtailment to individual generators
-        assign_curtailment(curtailment, edisgo_object)
-    else:
-        message = "There is no resulting node voltages after the PFA calculation" +\
-            " which correspond to the generators in the columns of the given feedin data"
-        logging.warning(message)
+    ### add sets
+    model.T = Set(initialize=timeindex)
+    model.G = Set(initialize=generators)
+
+    ### add parameters
+    def feedin_init(model, t, g):
+        return feedin.loc[t, g]
+
+    model.feedin = Param(model.T, model.G, initialize=feedin_init)
+
+    def voltage_pu_init(model, t, g):
+        return feedin.loc[t, g]
+
+    model.voltage_pu = Param(model.T, model.G, initialize=voltage_pu_init)
+
+    def cf_add_init(model, t, g):
+        return cf_add.loc[t, g]
+
+    model.cf_add = Param(model.T, model.G, initialize=cf_add_init)
+
+    def cf_init(model, t, g):
+        return cf.loc[t, g]
+
+    model.cf = Param(model.T, model.G, initialize=cf_init)
+
+    def total_curtailment_init(model, t):
+        return total_curtailment.loc[t]
+
+    model.total_curtailment = Param(model.T, initialize=total_curtailment_init)
+
+    ### add variables
+    model.offset = Var(model.T, bounds=(0, 1))
+    model.cf_max = Var(model.T, bounds=(0, 1))
+
+    def curtailment_init(model, t, g):
+        return (0, feedin.loc[t, g])
+
+    model.c = Var(model.T, model.G, bounds=curtailment_init)
+
+    ### add objective
+    def obj_rule(model):
+        expr = (sum(model.offset[t] * 100
+                    for t in model.T))
+        return expr
+
+    model.obj = Objective(rule=obj_rule, sense=minimize)
+
+    ### add constraints
+    # curtailment per generator constraints
+    def curtail(model, t, g):
+        return (
+        model.cf[t, g] * model.cf_max[t] * model.feedin[t, g] + model.cf_add[
+            t, g] * model.offset[t] * model.feedin[t, g] == model.c[t, g])
+
+    model.curtailment = Constraint(model.T, model.G, rule=curtail)
+
+    # total curtailment constraint
+    def total_curtailment(model, t, g):
+        return (
+        sum(model.c[t, g] for g in model.G) == model.total_curtailment[t])
+
+    model.sum_curtailment = Constraint(model.T, model.G,
+                                       rule=total_curtailment)
+
+    # solve
+    # ToDo: does solver come with pyomo?
+    solver = SolverFactory('cbc')
+    results = solver.solve(model, tee=True)
+
+    # Load results back into model
+    model.solutions.load_from(results)
+
+    # Print results
+    data = {'cf_max': [model.cf_max[t].value for t in model.T],
+            'offset': [model.offset[t].value for t in model.T]}
+    df = pd.DataFrame.from_dict(data)
+
+    # calculate curtailment
+    # ToDo: can model.curtailment be extracted from model?
+
+    return df
 
 
 def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):

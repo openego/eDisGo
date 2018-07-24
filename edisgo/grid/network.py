@@ -1079,6 +1079,7 @@ class CurtailmentControl:
         self.mode = kwargs.get('curtailment_methodology', None)
         self.curtailment_ts = kwargs.get('timeseries_curtailment', None)
 
+        logging.info("Start curtailment methodology {}.".format(self.mode))
         if self.curtailment_ts is not None:
             self._check_timeindex(edisgo_object.network)
 
@@ -1129,6 +1130,11 @@ class CurtailmentControl:
                 logging.warning(message)
                 #raise Warning(message)
                 pass
+
+        #ToDo: move analyze
+        # analyze
+        print('analyze')
+        edisgo_object.analyze()
 
         # get mode of curtailment and the arguments necessary
         if self.mode == 'curtail_all':
