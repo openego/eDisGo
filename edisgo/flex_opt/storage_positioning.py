@@ -220,13 +220,13 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
     # conduct grid reinforcement on copied edisgo object on worst-case time
     # steps
-    # grid_expansion_results_init = edisgo.reinforce(
-    #     copy_graph=True, timesteps_pfa='snapshot_analysis')
+    grid_expansion_results_init = edisgo.reinforce(
+        copy_graph=True, timesteps_pfa='snapshot_analysis')
 
-    # ToDo: delete once implementation is finished
-    import pickle
-    edisgo_reinforce = pickle.load(open('edisgo_reinforce_239.pkl', 'rb'))
-    grid_expansion_results_init = edisgo_reinforce.network.results
+    # # ToDo: delete once implementation is finished
+    # import pickle
+    # edisgo_reinforce = pickle.load(open('edisgo_reinforce_239.pkl', 'rb'))
+    # grid_expansion_results_init = edisgo_reinforce.network.results
 
     equipment_changes_reinforcement_init = \
         grid_expansion_results_init.equipment_changes.loc[
