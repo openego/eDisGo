@@ -10,7 +10,8 @@ from edisgo.tools import config, pypsa_io, tools
 from edisgo.data.import_data import import_from_ding0, import_generators, \
     import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
-from edisgo.flex_opt import storage_integration, storage_operation, curtailment
+from edisgo.flex_opt import storage_integration, storage_operation, \
+    curtailment, storage_positioning
 from edisgo.grid.components import Station, BranchTee, Generator, Load
 from edisgo.grid.tools import get_gen_info
 
@@ -354,7 +355,7 @@ class EDisGo:
         See :class:`~.grid.network.StorageControl` for more information.
 
         """
-        StorageControl(network=self.network, timeseries=timeseries,
+        StorageControl(edisgo=self, timeseries=timeseries,
                        position=position, **kwargs)
 
 
@@ -1256,7 +1257,7 @@ class StorageControl:
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    edisgo : :class:`~.grid.network.EDisGo`
     timeseries : :obj:`str` or :pandas:`pandas.Series<series>` or :obj:`dict`
         Parameter used to obtain time series of active power the
         storage(s) is/are charged (negative) or discharged (positive) with. Can
@@ -1285,7 +1286,7 @@ class StorageControl:
           the storage. See `parameters` for more information.
 
         Default: None.
-    position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :obj:`dict`
+    position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`  or :class:`~.grid.components.Generator` or :class:`~.grid.components.Load` or :obj:`dict`
         To position the storage a positioning strategy can be used or a
         node in the grid can be directly specified. Possible options are:
 
@@ -1296,6 +1297,10 @@ class StorageControl:
           this parameter is of type :class:`~.grid.components.LVStation` an
           additional parameter, `voltage_level`, has to be provided to define
           which side of the LV station the storage is connected to.
+        * 'distribute_storages_mv'
+          Places one storage in each MV feeder if it reduces grid expansion
+          costs. This method needs a given time series of active power.
+          ToDo: Elaborate
 
         In case of more than one storage provide a :obj:`dict` where each
         entry represents a storage. Keys of the dictionary have to match
@@ -1347,9 +1352,9 @@ class StorageControl:
 
     """
 
-    def __init__(self, network, timeseries, position, **kwargs):
+    def __init__(self, edisgo, timeseries, position, **kwargs):
 
-        self.network = network
+        self.edisgo = edisgo
         voltage_level = kwargs.get('voltage_level', None)
         parameters = kwargs.get('parameters', {})
         timeseries_reactive_power = kwargs.get(
@@ -1389,7 +1394,7 @@ class StorageControl:
             storage is charged (negative) or discharged (positive) with. Can
             either be a given time series or an operation strategy. See class
             definition for more information
-        position : :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
+        position : :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :class:`~.grid.components.Generator` or :class:`~.grid.components.Load`
             Parameter used to place the storage. See class definition for more
             information.
         params : :obj:`dict`
@@ -1407,17 +1412,41 @@ class StorageControl:
 
         """
         # place storage
-        if position == 'hvmv_substation_busbar':
-            params = self._check_nominal_power(params, timeseries)
-            storage, line = storage_integration.storage_at_hvmv_substation(
-                self.network.mv_grid, params)
-        elif isinstance(position, Station) or isinstance(position, BranchTee) \
+        params = self._check_nominal_power(params, timeseries)
+        if isinstance(position, Station) or isinstance(position, BranchTee) \
                 or isinstance(position, Generator) \
                 or isinstance(position, Load):
-            params = self._check_nominal_power(params, timeseries)
             storage = storage_integration.set_up_storage(
                 node=position, parameters=params, voltage_level=voltage_level)
             line = storage_integration.connect_storage(storage, position)
+        elif isinstance(position, str) \
+                and position == 'hvmv_substation_busbar':
+            storage, line = storage_integration.storage_at_hvmv_substation(
+                self.edisgo.network.mv_grid, params)
+        elif isinstance(position, str) \
+                and position == 'distribute_storages_mv':
+            # check active power time series
+            if not isinstance(timeseries, pd.Series):
+                raise ValueError(
+                    "Storage time series needs to be a pandas Series if "
+                    "`position` is 'distribute_storages_mv'.")
+            else:
+                timeseries = pd.DataFrame(data={'p': timeseries},
+                                          index=timeseries.index)
+                self._check_timeindex(timeseries)
+            # check reactive power time series
+            if reactive_power_timeseries is not None:
+                self._check_timeindex(reactive_power_timeseries)
+                timeseries['q'] = reactive_power_timeseries.loc[
+                    timeseries.index]
+            else:
+                timeseries['q'] = 0
+            # start storage positioning method
+            storage_positioning.one_storage_per_feeder(
+                edisgo=self.edisgo, storage_timeseries=timeseries,
+                storage_nominal_power=params['nominal_power'],
+                storage_parameters=params)
+            return
         else:
             message = 'Provided storage position option {} is not ' \
                       'valid.'.format(timeseries)
@@ -1431,7 +1460,7 @@ class StorageControl:
             self._check_timeindex(timeseries)
             storage.timeseries = timeseries
         elif isinstance(timeseries, str) and timeseries == 'fifty-fifty':
-            storage_operation.fifty_fifty(self.network, storage)
+            storage_operation.fifty_fifty(self.edisgo.network, storage)
         else:
             message = 'Provided storage timeseries option {} is not ' \
                       'valid.'.format(timeseries)
@@ -1447,9 +1476,10 @@ class StorageControl:
                 index=storage.timeseries.index)
 
         # update pypsa representation
-        if self.network.pypsa is not None:
+        if self.edisgo.network.pypsa is not None:
             pypsa_io.update_pypsa_storage(
-                self.network.pypsa, storages=[storage], storages_lines=[line])
+                self.edisgo.network.pypsa,
+                storages=[storage], storages_lines=[line])
 
     def _check_nominal_power(self, storage_parameters, timeseries):
         """
@@ -1498,7 +1528,7 @@ class StorageControl:
 
         """
         try:
-            timeseries.loc[self.network.timeseries.timeindex]
+            timeseries.loc[self.edisgo.network.timeseries.timeindex]
         except:
             message = 'Time index of storage time series does not match ' \
                       'with load and feed-in time series.'
