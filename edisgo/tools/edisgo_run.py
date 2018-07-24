@@ -154,12 +154,12 @@ def run_edisgo_basic(ding0_filepath,
         grid_issues['grid'] = edisgo_grid.network.id
         grid_issues['msg'] = str(edisgo_grid.network.results.unresolved_issues)
         costs = pd.DataFrame()
-        logging.info('Unresolved issues left after grid expansion.')
+        logging.warning('Unresolved issues left after grid expansion.')
     except Exception as e:
         grid_issues['grid'] = edisgo_grid.network.id
         grid_issues['msg'] = repr(e)
         costs = pd.DataFrame()
-        logging.info('Inexplicable Error, Please Check error messages and logs.')
+        logging.exception()
 
     return edisgo_grid, costs, grid_issues
 
