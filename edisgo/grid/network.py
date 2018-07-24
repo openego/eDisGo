@@ -313,8 +313,12 @@ class EDisGo:
 
         if self.network.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
+            logging.info('Translate eDisGo grid topology representation to '
+                         'PyPSA format.')
             self.network.pypsa = pypsa_io.to_pypsa(
                 self.network, mode, timesteps)
+            logging.info('Translating eDisGo grid topology representation to '
+                         'PyPSA format finished.')
         else:
             if self.network.pypsa.edisgo_mode is not mode:
                 # Translate eDisGo grid topology representation to PyPSA format
