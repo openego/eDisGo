@@ -11,7 +11,7 @@ logger = logging.getLogger('edisgo')
 
 
 def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
-                   max_while_iterations=10, combined_analysis=True):
+                   max_while_iterations=10, combined_analysis=False):
     """
     Evaluates grid reinforcement needs and performs measures.
 
@@ -53,7 +53,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         If True allowed voltage deviations for combined analysis of MV and LV
         grid are used. If False different allowed voltage deviations for MV
         and LV are used. See also config section
-        `grid_expansion_allowed_voltage_deviations`. Default: True.
+        `grid_expansion_allowed_voltage_deviations`. Default: False.
 
     Returns
     -------
