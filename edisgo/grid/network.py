@@ -381,7 +381,8 @@ class EDisGo:
             self, max_while_iterations=kwargs.get(
                 'max_while_iterations', 10),
             copy_graph=kwargs.get('copy_graph', False),
-            timesteps_pfa=kwargs.get('timesteps_pfa', None))
+            timesteps_pfa=kwargs.get('timesteps_pfa', None),
+            combined_analysis=kwargs.get('combined_analysis', True))
 
     def integrate_storage(self, **kwargs):
         """
@@ -496,6 +497,10 @@ class Network:
 
         """
         return self._config
+
+    @config.setter
+    def config(self, config_path):
+        self._config = Config(config_path=config_path)
 
     @property
     def metadata(self):
@@ -2200,4 +2205,4 @@ class Results:
             if not_included:
                 logging.info("Voltage levels for {nodes} are not returned from PFA".format(
                 nodes=not_included))
-            return self.pfa_v_mag_pu[level][ labels_included]
+            return self.pfa_v_mag_pu[level][labels_included]
