@@ -356,20 +356,21 @@ def mv_voltage_deviation(network, voltage_levels='mv_lv'):
     v_dev_allowed_per_case = {}
     v_dev_allowed_per_case['feedin_case_lower'] = 0.9
     v_dev_allowed_per_case['load_case_upper'] = 1.1
+    offset = network.config[
+        'grid_expansion_allowed_voltage_deviations']['hv_mv_trafo_offset']
+    control_deviation = network.config[
+        'grid_expansion_allowed_voltage_deviations'][
+        'hv_mv_trafo_control_deviation']
     if voltage_levels == 'mv_lv':
-        v_dev_allowed_per_case['feedin_case_upper'] = 1 + network.config[
-            'grid_expansion_allowed_voltage_deviations'][
-            'mv_lv_max_v_deviation']
-        v_dev_allowed_per_case['load_case_lower'] = 1 - network.config[
-            'grid_expansion_allowed_voltage_deviations'][
-            'mv_lv_max_v_deviation']
+        v_dev_allowed_per_case['feedin_case_upper'] = \
+            1 + offset + control_deviation + network.config[
+                'grid_expansion_allowed_voltage_deviations'][
+                'mv_lv_feedin_case_max_v_deviation']
+        v_dev_allowed_per_case['load_case_lower'] = \
+            1 + offset - control_deviation - network.config[
+                'grid_expansion_allowed_voltage_deviations'][
+                'mv_lv_load_case_max_v_deviation']
     elif voltage_levels == 'mv':
-        offset = network.config[
-            'grid_expansion_allowed_voltage_deviations']['hv_mv_trafo_offset']
-        control_deviation = network.config[
-            'grid_expansion_allowed_voltage_deviations'][
-            'hv_mv_trafo_control_deviation']
-
         v_dev_allowed_per_case['feedin_case_upper'] = \
             1 + offset + control_deviation + network.config[
                 'grid_expansion_allowed_voltage_deviations'][
@@ -454,12 +455,20 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
 
     v_dev_allowed_per_case = {}
     if voltage_levels == 'mv_lv':
-        v_dev_allowed_per_case['feedin_case_upper'] = 1 + network.config[
+        offset = network.config[
+            'grid_expansion_allowed_voltage_deviations']['hv_mv_trafo_offset']
+        control_deviation = network.config[
             'grid_expansion_allowed_voltage_deviations'][
-            'mv_lv_max_v_deviation']
-        v_dev_allowed_per_case['load_case_lower'] = 1 - network.config[
-            'grid_expansion_allowed_voltage_deviations'][
-            'mv_lv_max_v_deviation']
+            'hv_mv_trafo_control_deviation']
+        v_dev_allowed_per_case['feedin_case_upper'] = \
+            1 + offset + control_deviation + network.config[
+                'grid_expansion_allowed_voltage_deviations'][
+                'mv_lv_feedin_case_max_v_deviation']
+        v_dev_allowed_per_case['load_case_lower'] = \
+            1 + offset - control_deviation - network.config[
+                'grid_expansion_allowed_voltage_deviations'][
+                'mv_lv_load_case_max_v_deviation']
+
         v_dev_allowed_per_case['feedin_case_lower'] = 0.8  # random
         v_dev_allowed_per_case['load_case_upper'] = 1.2  # random
 
