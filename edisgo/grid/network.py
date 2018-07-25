@@ -897,6 +897,7 @@ class TimeSeriesControl:
 
         Default: None.
     timeseries_load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        Parameter to get the time series of the reactive power of loads. It should be a
         DataFrame with time series of normalized reactive power (normalized by
         annual energy demand) per load sector. Index needs to be a
         :pandas:`pandas.DatetimeIndex<datetimeindex>`.
