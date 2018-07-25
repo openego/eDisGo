@@ -875,8 +875,8 @@ class TimeSeriesControl:
         Columns represent generator type and can be a MultiIndex column
         containing the weather cell ID in the second level. If the technology
         doesn't contain weather cell information i.e. if it is other than solar
-        and wind generation, this second level can be left as a numpy Nan or a
-        None.
+        and wind generation, this second level can be left as an empty string ''.
+
         Default: None.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Parameter used to obtain time series of active power of (cumulative)
