@@ -461,6 +461,10 @@ class Network:
         """
         return self._config
 
+    @config.setter
+    def config(self, config_path):
+        self._config = Config(config_path=config_path)
+
     @property
     def metadata(self):
         """
