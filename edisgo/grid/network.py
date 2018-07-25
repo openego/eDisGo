@@ -344,7 +344,8 @@ class EDisGo:
             self, max_while_iterations=kwargs.get(
                 'max_while_iterations', 10),
             copy_graph=kwargs.get('copy_graph', False),
-            timesteps_pfa=kwargs.get('timesteps_pfa', None))
+            timesteps_pfa=kwargs.get('timesteps_pfa', None),
+            combined_analysis=kwargs.get('combined_analysis', True))
 
     def integrate_storage(self, **kwargs):
         """
