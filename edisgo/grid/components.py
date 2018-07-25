@@ -554,27 +554,33 @@ class Generator(Component):
 
         """
         if self._timeseries_reactive is None:
-            try:
-                timeseries = \
-                    self.grid.network.timeseries.generation_reactive_power[
-                        self.type].to_frame('q')
-            except (KeyError, TypeError):
+            if self.grid.network.timeseries.generation_reactive_power \
+                    is not None:
                 try:
                     timeseries = \
                         self.grid.network.timeseries.generation_reactive_power[
-                            'other'].to_frame('q')
-                except:
-                    logger.warning(
-                        "No reactive power time series for type {} given. "
-                        "Reactive power time series will be calculated from "
-                        "assumptions in config files and active power "
-                        "timeseries.".format(self.type))
-                    return None
-            self.power_factor = 'not_applicable'
-            self.reactive_power_mode = 'not_applicable'
-            return timeseries * self.nominal_capacity
+                            self.type].to_frame('q')
+                except (KeyError, TypeError):
+                    try:
+                        timeseries = \
+                            self.grid.network.timeseries.generation_reactive_power[
+                                'other'].to_frame('q')
+                    except:
+                        logger.warning(
+                            "No reactive power time series for type {} given. "
+                            "Reactive power time series will be calculated from "
+                            "assumptions in config files and active power "
+                            "timeseries.".format(self.type))
+                        return None
+                self.power_factor = 'not_applicable'
+                self.reactive_power_mode = 'not_applicable'
+                return timeseries * self.nominal_capacity
+            else:
+                return None
         else:
-            return self._timeseries_reactive
+            return self._timeseries_reactive.loc[
+                   self.grid.network.timeseries.timeindex, :]
+
 
     @timeseries_reactive.setter
     def timeseries_reactive(self, timeseries_reactive):
@@ -883,7 +889,8 @@ class GeneratorFluctuating(Generator):
             else:
                 return None
         else:
-            return None
+            return self._timeseries_reactive.loc[
+                   self.grid.network.timeseries.timeindex, :]
 
     @timeseries_reactive.setter
     def timeseries_reactive(self, timeseries_reactive):
