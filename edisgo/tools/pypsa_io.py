@@ -886,13 +886,19 @@ def _pypsa_bus_timeseries(network, buses, timesteps):
 
     # Set slack bus to operational voltage (includes offset and control
     # deviation
-    slack_voltage_pu = 1 + \
+    control_deviation = network.config[
+        'grid_expansion_allowed_voltage_deviations'][
+        'hv_mv_trafo_control_deviation']
+    control_deviation_ts = \
+        network.timeseries.timesteps_load_feedin_case.case.apply(
+            lambda _: control_deviation if _ == 'feedin_case'
+                                        else -control_deviation)
+
+    slack_voltage_pu = control_deviation_ts + 1 + \
                        network.config[
                            'grid_expansion_allowed_voltage_deviations'][
-                           'hv_mv_trafo_offset'] + \
-                       network.config[
-                           'grid_expansion_allowed_voltage_deviations'][
-                           'hv_mv_trafo_control_deviation']
+                           'hv_mv_trafo_offset']
+
     v_set_dict.update({slack_bus: slack_voltage_pu})
 
     # Convert to PyPSA compatible dataframe
