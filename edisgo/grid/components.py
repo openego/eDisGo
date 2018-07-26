@@ -192,38 +192,43 @@ class Load(Component):
 
         """
         if self._timeseries is None:
-            # work around until retail and industrial are separate sectors
-            # ToDo: remove once Ding0 data changed to single sector consumption
-            sector = list(self.consumption.keys())[0]
-            if len(list(self.consumption.keys())) > 1:
-                consumption = sum([v for k, v in self.consumption.items()])
-            else:
-                consumption = self.consumption[sector]
 
             if isinstance(self.grid, MVGrid):
                 voltage_level = 'mv'
             elif isinstance(self.grid, LVGrid):
                 voltage_level = 'lv'
 
-            # check if load time series for MV and LV are differentiated
-            try:
-                ts = self.grid.network.timeseries.load[
-                    sector, voltage_level].to_frame('p')
-            except KeyError:
+            ts_total = None
+            for sector in self.consumption.keys():
+                consumption = self.consumption[sector]
+
+                # check if load time series for MV and LV are differentiated
                 try:
                     ts = self.grid.network.timeseries.load[
-                        sector].to_frame('p')
+                        sector, voltage_level].to_frame('p')
                 except KeyError:
-                    logger.exception(
-                        "No timeseries for load of type {} "
-                        "given.".format(sector))
-                    raise
-            ts = ts * consumption
-            if self.timeseries_reactive is not None:
-                ts['q'] = self.timeseries_reactive
-            else:
-                ts['q'] = ts['p'] * self.q_sign * tan(acos(self.power_factor))
-            return ts
+                    try:
+                        ts = self.grid.network.timeseries.load[
+                            sector].to_frame('p')
+                    except KeyError:
+                        logger.exception(
+                            "No timeseries for load of type {} "
+                            "given.".format(sector))
+                        raise
+                ts = ts * consumption
+                if self.timeseries_reactive is not None:
+                    ts['q'] = self.timeseries_reactive
+                else:
+                    ts['q'] = ts['p'] * self.q_sign * tan(
+                        acos(self.power_factor))
+
+                if not ts_total:
+                    ts_total = ts
+                else:
+                    ts_total.p += ts.p
+                    ts_total.q += ts.q
+
+                return ts_total
         else:
             return self._timeseries
 
