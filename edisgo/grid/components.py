@@ -506,7 +506,7 @@ class GeneratorFluctuating(Generator):
         """
         if self._curtailment is not None:
             return self._curtailment
-        elif isinstance(self.grid.network.timeseries.curtailment,
+        elif isinstance(self.grid.network.timeseries._curtailment,
                         pd.DataFrame):
             if isinstance(self.grid.network.timeseries.curtailment.
                           columns, pd.MultiIndex):
