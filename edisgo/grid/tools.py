@@ -349,7 +349,8 @@ def select_cable(network, level, apparent_power):
 
     return cable_type, cable_count
 
-def get_gen_info(network, level='mvlv'):
+
+def get_gen_info(network, level='mvlv', fluctuating=False):
     """
     Gets all the installed generators under both mv and the lv grids.
 
@@ -361,24 +362,25 @@ def get_gen_info(network, level='mvlv'):
         'mv' for generators in mv level
         'lv' for generators in lv level
         'mvlv' for generators in both mv and lv levels
+    fluctuating : Boolean
+        If True only returns fluctuating generators. Default: False.
 
     Returns
     --------
     :pandas:`pandas.DataFrame<dataframe>`
         Generators and Generator information
+
     """
     # get all generators
     gens = []
     gens_w_id = []
     gens_voltage_level = []
-    gens_node = []
     gens_type = []
     gens_rating = []
 
     if 'mv' in level:
         gens = network.mv_grid.generators
         gens_voltage_level = ['mv']*len(gens)
-        gens_node = [gen.grid.station for gen in gens]
         gens_type = [gen.type for gen in gens]
         gens_rating = [gen.nominal_capacity for gen in gens]
         for gen in gens:
@@ -387,15 +389,11 @@ def get_gen_info(network, level='mvlv'):
             except AttributeError:
                 gens_w_id.append(np.nan)
 
-    else:
-        pass
-
     if 'lv' in level:
         for lv_grid in network.mv_grid.lv_grids:
             gens_lv = lv_grid.generators
             gens.extend(gens_lv)
             gens_voltage_level.extend(['lv']*len(gens_lv))
-            gens_node.extend([gen.grid.station for gen in gens_lv])
             gens_type.extend([gen.type for gen in gens_lv])
             gens_rating.extend([gen.nominal_capacity for gen in gens_lv])
             for gen in gens_lv:
@@ -404,24 +402,18 @@ def get_gen_info(network, level='mvlv'):
                 except AttributeError:
                     gens_w_id.append(np.nan)
 
-    else:
-        pass
-
     gen_df = pd.DataFrame({'gen_repr': list(map(lambda x: repr(x), gens)),
-                           'generator_uncat': gens,
+                           'generator': gens,
                            'type': gens_type,
                            'voltage_level': gens_voltage_level,
-                           'connected_node': gens_node,
                            'nominal_capacity': gens_rating,
                            'weather_cell_id': gens_w_id})
 
-    gen_df.sort_values('nominal_capacity', ascending=False, inplace=True)
+    gen_df.set_index('generator', inplace=True, drop=True)
 
-    gen_df['generator'] = pd.Categorical(gen_df.loc[:, 'generator_uncat'],
-                                         gen_df.loc[:, 'generator_uncat'])
-
-    gen_df.set_index('generator', inplace=True)
-    gen_df.drop('generator_uncat', axis=1, inplace=True)
+    # filter fluctuating generators
+    if fluctuating:
+        gen_df = gen_df.loc[(gen_df.type == 'solar') | (gen_df.type == 'wind')]
 
     return gen_df
 
