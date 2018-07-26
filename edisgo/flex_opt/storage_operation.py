@@ -22,10 +22,10 @@ def fifty_fifty(storage, feedin_threshold=0.5):
 
     """
     # determine generators cumulative apparent power output
-    generators = storage.grid.graph.nodes_by_attribute('generator') + \
+    generators = storage.grid.generators + \
                  [generators for lv_grid in
                   storage.grid.lv_grids for generators in
-                  lv_grid.graph.nodes_by_attribute('generator')]
+                  lv_grid.generators]
     generators_p = pd.concat([_.timeseries['p'] for _ in generators],
                              axis=1).sum(axis=1).rename('p')
     generators_q = pd.concat([_.timeseries['q'] for _ in generators],

@@ -842,8 +842,7 @@ def _validate_ding0_lv_grid_import(grids, ding0_grid, lv_grid_mapping):
 
         # Check number of generators
         data_integrity[grid]['generator']['edisgo'] = len(
-            grid.graph.nodes_by_attribute('generator') +
-            grid.graph.nodes_by_attribute('generator_aggr'))
+            grid.generators)
         data_integrity[grid]['generator']['ding0'] = len(
             list(lv_grid_mapping[grid].generators()))
 
@@ -1784,13 +1783,12 @@ def _import_genos_from_oedb(network):
 
         capacity_grid = 0
         # MV genos
-        for geno in network.mv_grid.graph.nodes_by_attribute('generator') +\
-            network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
+        for geno in network.mv_grid.generators:
             capacity_grid += geno.nominal_capacity
 
         # LV genos
         for lv_grid in network.mv_grid.lv_grids:
-            for geno in lv_grid.graph.nodes_by_attribute('generator'):
+            for geno in lv_grid.generators:
                 capacity_grid += geno.nominal_capacity
 
         logger.debug('Cumulative generator capacity (updated): {} kW'
@@ -1964,7 +1962,7 @@ def _build_generator_list(network):
 
     # LV genos
     for lv_grid in network.mv_grid.lv_grids:
-        for geno in lv_grid.graph.nodes_by_attribute('generator'):
+        for geno in lv_grid.generators:
             genos_lv.loc[len(genos_lv)] = [int(geno.id), geno]
 
     return genos_mv, genos_lv, genos_lv_agg

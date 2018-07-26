@@ -236,8 +236,7 @@ def mv_to_pypsa(network):
         `#54 <https://github.com/openego/eDisGo/issues/54>`_ for discussion.
     """
 
-    generators = network.mv_grid.graph.nodes_by_attribute('generator') + \
-                 network.mv_grid.graph.nodes_by_attribute('generator_aggr')
+    generators = network.mv_grid.generators
     loads = network.mv_grid.graph.nodes_by_attribute('load')
     branch_tees = network.mv_grid.graph.nodes_by_attribute('branch_tee')
     lines = network.mv_grid.graph.lines()
@@ -452,7 +451,7 @@ def lv_to_pypsa(network):
     storages = []
 
     for lv_grid in network.mv_grid.lv_grids:
-        generators.extend(lv_grid.graph.nodes_by_attribute('generator'))
+        generators.extend(lv_grid.generators)
         loads.extend(lv_grid.graph.nodes_by_attribute('load'))
         branch_tees.extend(lv_grid.graph.nodes_by_attribute('branch_tee'))
         lines.extend(lv_grid.graph.lines())
@@ -605,7 +604,7 @@ def add_aggregated_lv_components(network, components):
     # collect aggregated load grouped by sector
     for lv_grid in network.mv_grid.lv_grids:
         generators.setdefault(lv_grid, {})
-        for gen in lv_grid.graph.nodes_by_attribute('generator'):
+        for gen in lv_grid.generators:
             generators[lv_grid].setdefault(gen.type, {})
             generators[lv_grid][gen.type].setdefault(gen.subtype, {})
             generators[lv_grid][gen.type][gen.subtype].setdefault(
@@ -756,8 +755,7 @@ def _pypsa_generator_timeseries(network, timesteps, mode=None):
 
     # MV generator timeseries
     if mode is 'mv' or mode is None:
-        for gen in network.mv_grid.graph.nodes_by_attribute('generator') + \
-                network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
+        for gen in network.mv_grid.generators:
             mv_gen_timeseries_q.append(gen.pypsa_timeseries('q').rename(
                 repr(gen)).to_frame().loc[timesteps])
             mv_gen_timeseries_p.append(gen.pypsa_timeseries('p').rename(
@@ -770,7 +768,7 @@ def _pypsa_generator_timeseries(network, timesteps, mode=None):
     # LV generator timeseries
     if mode is 'lv' or mode is None:
         for lv_grid in network.mv_grid.lv_grids:
-            for gen in lv_grid.graph.nodes_by_attribute('generator'):
+            for gen in lv_grid.generators:
                 lv_gen_timeseries_q.append(gen.pypsa_timeseries('q').rename(
                     repr(gen)).to_frame().loc[timesteps])
                 lv_gen_timeseries_p.append(gen.pypsa_timeseries('p').rename(
@@ -930,7 +928,7 @@ def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
     for lv_grid in network.mv_grid.lv_grids:
         # Determine aggregated generation at LV stations
         generation = {}
-        for gen in lv_grid.graph.nodes_by_attribute('generator'):
+        for gen in lv_grid.generators:
             # for type in gen.type:
             #     for subtype in gen.subtype:
             gen_name = '_'.join([gen.type,
@@ -1244,9 +1242,7 @@ def process_pfa_results(network, pypsa):
     network.results._i_res = s0[pypsa.lines_t['q0'].columns].truediv(
         pypsa.lines['v_nom'] * line_voltage_avg.T, axis='columns') * 1e3
     # process results at nodes
-    generators_names = [repr(g) for g in
-                        network.mv_grid.graph.nodes_by_attribute('generator') +
-                        network.mv_grid.graph.nodes_by_attribute('generator_aggr')]
+    generators_names = [repr(g) for g in network.mv_grid.generators]
     generators_mapping = {v: k for k, v in
                           pypsa.generators.loc[generators_names][
                               'bus'].to_dict().items()}
