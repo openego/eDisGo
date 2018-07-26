@@ -12,8 +12,9 @@ from edisgo.tools import config, pypsa_io, tools
 from edisgo.data.import_data import import_from_ding0, import_generators, \
     import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
-from edisgo.flex_opt import storage_integration, storage_operation, curtailment
-from edisgo.grid.components import Station, BranchTee
+from edisgo.flex_opt import storage_integration, storage_operation, \
+    curtailment, storage_positioning
+from edisgo.grid.components import Station, BranchTee, Generator, Load
 from edisgo.grid.tools import get_gen_info
 
 logger = logging.getLogger('edisgo')
@@ -314,8 +315,12 @@ class EDisGo:
 
         if self.network.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
+            logging.info('Translate eDisGo grid topology representation to '
+                         'PyPSA format.')
             self.network.pypsa = pypsa_io.to_pypsa(
                 self.network, mode, timesteps)
+            logging.info('Translating eDisGo grid topology representation to '
+                         'PyPSA format finished.')
         else:
             if self.network.pypsa.edisgo_mode is not mode:
                 # Translate eDisGo grid topology representation to PyPSA format
@@ -331,7 +336,8 @@ class EDisGo:
         pf_results = self.network.pypsa.pf(timesteps)
 
         if all(pf_results['converged']['0'].tolist()):
-            pypsa_io.process_pfa_results(self.network, self.network.pypsa)
+            pypsa_io.process_pfa_results(
+                self.network, self.network.pypsa, timesteps)
         else:
             raise ValueError("Power flow analysis did not converge.")
 
@@ -348,20 +354,15 @@ class EDisGo:
             copy_graph=kwargs.get('copy_graph', False),
             timesteps_pfa=kwargs.get('timesteps_pfa', None))
 
-    def integrate_storage(self, **kwargs):
+    def integrate_storage(self, timeseries, position, **kwargs):
         """
         Integrates storage into grid.
 
         See :class:`~.grid.network.StorageControl` for more information.
 
         """
-        StorageControl(network=self.network,
-                       timeseries_battery=kwargs.get('timeseries_battery',
-                                                     None),
-                       battery_parameters=kwargs.get('battery_parameters',
-                                                     None),
-                       battery_position=kwargs.get('battery_position',
-                                                   None))
+        StorageControl(edisgo=self, timeseries=timeseries,
+                       position=position, **kwargs)
 
 
 class Network:
@@ -1113,23 +1114,23 @@ class CurtailmentControl:
                 # when either weather_cell_id or type attribute is missing
                 # meaning this could be a Generator Object instead of a Generator Fluctuating
                 if type(x) == edisgo.grid.components.GeneratorFluctuating:
-                    message = "One or both of the attributes, \'type\' or \'weather_cell_id\'" + \
-                              "of the {} object is missing even though ".format(x) + \
+                    message = "One or both of the attributes, \'type\' or \'weather_cell_id\'" +\
+                              "of the {} object is missing even though ".format(x) +\
                               "its a GeneratorFluctuating Object."
                     logging.warning(message)
-                    # raise Warning(message)
+                    #raise Warning(message)
                 else:
-                    message = "Generator Object found instead of GeneratorFluctuating Object " + \
+                    message = "Generator Object found instead of GeneratorFluctuating Object " +\
                               "in {}".format(x)
                     logging.warning(message)
-                    # raise Warning(message)
+                    #raise Warning(message)
                 pass
             except KeyError:
                 # when one of the keys are missing in either the feedin or the capacities
-                message = "One of the keys of {} are absent in either the feedin or the".format(x) + \
+                message = "One of the keys of {} are absent in either the feedin or the".format(x) +\
                           " generator fluctuating timeseries  object is missing"
                 logging.warning(message)
-                # raise Warning(message)
+                #raise Warning(message)
                 pass
 
         # get mode of curtailment and the arguments necessary
@@ -1162,8 +1163,8 @@ class CurtailmentControl:
                                          edisgo_object,
                                          **kwargs)
                     else:
-                        message = "In this grid there seems to be no feedin time series" + \
-                                  " or generators corresponding to the combination of {}".format(col_slice)
+                        message = "In this grid there seems to be no feedin time series" +\
+                            " or generators corresponding to the combination of {}".format(col_slice)
                         logging.warning(message)
             else:
                 # when there is no multi-index then we assume that this is only
@@ -1250,13 +1251,13 @@ class CurtailmentControl:
         """
 
         feedin_ts_compare = self.feedin.copy()
-        for r in range(len(feedin_ts_compare.columns.levels) - 1):
+        for r in range(len(feedin_ts_compare.columns.levels)-1):
             feedin_ts_compare.columns = feedin_ts_compare.columns.droplevel(1)
         # need an if condition to remove the weather_cell_id level too
 
         if not ((feedin_ts_compare.loc[
                  :, network.timeseries.curtailment.columns] -
-                 network.timeseries.curtailment) > -1e-3).all().all():
+                     network.timeseries.curtailment) > -1e-3).all().all():
             message = 'Curtailment exceeds feed-in.'
             logging.error(message)
             raise TypeError(message)
@@ -1268,9 +1269,9 @@ class StorageControl:
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
-    timeseries_battery : :obj:`str` or :pandas:`pandas.Series<series>` or :obj:`dict`
-        Parameter used to obtain time series of active power the battery
+    edisgo : :class:`~.grid.network.EDisGo`
+    timeseries : :obj:`str` or :pandas:`pandas.Series<series>` or :obj:`dict`
+        Parameter used to obtain time series of active power the
         storage(s) is/are charged (negative) or discharged (positive) with. Can
         either be a given time series or an operation strategy.
         Possible options are:
@@ -1279,126 +1280,255 @@ class StorageControl:
           Time series the storage will be charged and discharged with can be
           set directly by providing a :pandas:`pandas.Series<series>` with
           time series of active charge (negative) and discharge (positive)
-          power, normalized with corresponding storage capacity. Index needs
-          to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+          power in kW. Index needs to be a
+          :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+          If no nominal power for the storage is provided in
+          `parameters` parameter, the maximum of the time series is
+          used as nominal power.
           In case of more than one storage provide a :obj:`dict` where each
           entry represents a storage. Keys of the dictionary have to match
-          the keys of the `battery_parameters dictionary`, values must
+          the keys of the `parameters dictionary`, values must
           contain the corresponding time series as
           :pandas:`pandas.Series<series>`.
         * 'fifty-fifty'
           Storage operation depends on actual power of generators. If
           cumulative generation exceeds 50% of the nominal power, the storage
           will charge. Otherwise, the storage will discharge.
+          If you choose this option you have to provide a nominal power for
+          the storage. See `parameters` for more information.
 
         Default: None.
-    battery_parameters : :obj:`dict`
-        Dictionary with storage parameters. Format must be as follows:
+    position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`  or :class:`~.grid.components.Generator` or :class:`~.grid.components.Load` or :obj:`dict`
+        To position the storage a positioning strategy can be used or a
+        node in the grid can be directly specified. Possible options are:
+
+        * 'hvmv_substation_busbar'
+          Places a storage unit directly at the HV/MV station's bus bar.
+        * :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :class:`~.grid.components.Generator` or :class:`~.grid.components.Load`
+          Specifies a node the storage should be connected to. In the case
+          this parameter is of type :class:`~.grid.components.LVStation` an
+          additional parameter, `voltage_level`, has to be provided to define
+          which side of the LV station the storage is connected to.
+        * 'distribute_storages_mv'
+          Places one storage in each MV feeder if it reduces grid expansion
+          costs. This method needs a given time series of active power.
+          ToDo: Elaborate
+
+        In case of more than one storage provide a :obj:`dict` where each
+        entry represents a storage. Keys of the dictionary have to match
+        the keys of the `timeseries` and `parameters`
+        dictionaries, values must contain the corresponding positioning
+        strategy or node to connect the storage to.
+    parameters : :obj:`dict`, optional
+        Dictionary with the following optional storage parameters:
 
         .. code-block:: python
 
             {
-                'nominal_capacity': <float>, # in kWh
+                'nominal_power': <float>, # in kW
+                'max_hours': <float>, # in h
                 'soc_initial': <float>, # in kWh
                 'efficiency_in': <float>, # in per unit 0..1
                 'efficiency_out': <float>, # in per unit 0..1
                 'standing_loss': <float> # in per unit 0..1
             }
 
+        See :class:`~.grid.components.Storage` for more information on storage
+        parameters.
         In case of more than one storage provide a :obj:`dict` where each
         entry represents a storage. Keys of the dictionary have to match
-        the keys of the `timeseries_battery` dictionary, values must
+        the keys of the `timeseries` dictionary, values must
         contain the corresponding parameters dictionary specified above.
-    battery_position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :obj:`dict`
-        To position the storage a positioning strategy can be used or a
-        node in the grid can be directly specified. Possible options are:
-
-        * 'hvmv_substation_busbar'
-          Places a storage unit directly at the HV/MV station's bus bar.
-        * :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
-          Specifies a node the storage should be connected to.
-
+        Note: As edisgo currently only provides a power flow analysis storage
+        parameters don't have any effect on the calculations.
+        Default: {}.
+    voltage_level : :obj:`str`, optional
+        This parameter only needs to be provided if `position` is of
+        type :class:`~.grid.components.LVStation`. In that case `voltage_level`
+        defines which side of the LV station the storage is connected to. Valid
+        options are 'lv' and 'mv'. Default: None.
+    timeseries_reactive_power : :pandas:`pandas.Series<series>` or :obj:`dict`
+        By default reactive power is set through the config file
+        `config_timeseries` in sections `reactive_power_factor` specifying
+        the power factor and `reactive_power_mode` specifying if inductive
+        or capacitive reactive power is provided.
+        If you want to over-write this behavior you can provide a reactive
+        power time series in kvar here. Be aware that eDisGo uses the generator
+        sign convention for storages (see `Definitions and units` section of
+        the documentation for more information). Index of the series needs to
+        be a  :pandas:`pandas.DatetimeIndex<datetimeindex>`.
         In case of more than one storage provide a :obj:`dict` where each
         entry represents a storage. Keys of the dictionary have to match
-        the keys of the `timeseries_battery` and `battery_parameters`
-        dictionaries, values must contain the corresponding positioning
-        strategy or node to connect the storage to.
+        the keys of the `timeseries` dictionary, values must contain the
+        corresponding time series as :pandas:`pandas.Series<series>`.
 
     """
 
-    def __init__(self, network, timeseries_battery, battery_parameters,
-                 battery_position):
+    def __init__(self, edisgo, timeseries, position, **kwargs):
 
-        self.network = network
-
-        if isinstance(timeseries_battery, dict):
-            for storage, ts in timeseries_battery.items():
+        self.edisgo = edisgo
+        voltage_level = kwargs.get('voltage_level', None)
+        parameters = kwargs.get('parameters', {})
+        timeseries_reactive_power = kwargs.get(
+            'timeseries_reactive_power', None)
+        if isinstance(timeseries, dict):
+            for storage, ts in timeseries.items():
                 try:
-                    params = battery_parameters[storage]
-                    position = battery_position[storage]
+                    position = position[storage]
                 except KeyError:
                     message = 'Please provide storage parameters or ' \
                               'position for storage {}.'.format(storage)
                     logging.error(message)
                     raise KeyError(message)
-                self._integrate_storage(ts, params, position)
+                try:
+                    params = parameters[storage]
+                except:
+                    params = {}
+                try:
+                    reactive_power = timeseries_reactive_power[storage]
+                except:
+                    reactive_power = None
+                self._integrate_storage(ts, position, params,
+                                        voltage_level, reactive_power)
         else:
-            self._integrate_storage(timeseries_battery, battery_parameters,
-                                    battery_position)
+            self._integrate_storage(timeseries, position, parameters,
+                                    voltage_level, timeseries_reactive_power)
 
-    def _integrate_storage(self, timeseries, params, position):
+    def _integrate_storage(self, timeseries, position, params, voltage_level,
+                           reactive_power_timeseries):
         """
-        Integrate storage units in the grid and specify its operational mode.
+        Integrate storage units in the grid.
 
         Parameters
         ----------
         timeseries : :obj:`str` or :pandas:`pandas.Series<series>`
-            Parameter used to obtain time series of active power the battery
+            Parameter used to obtain time series of active power the storage
             storage is charged (negative) or discharged (positive) with. Can
             either be a given time series or an operation strategy. See class
             definition for more information
+        position : :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :class:`~.grid.components.Generator` or :class:`~.grid.components.Load`
+            Parameter used to place the storage. See class definition for more
+            information.
         params : :obj:`dict`
             Dictionary with storage parameters for one storage. See class
             definition for more information on what parameters must be
             provided.
-        position : :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
-            Parameter used to place the storage. See class definition for more
-            information.
+        voltage_level : :obj:`str` or None
+            `voltage_level` defines which side of the LV station the storage is
+            connected to. Valid options are 'lv' and 'mv'. Default: None. See
+            class definition for more information.
+        reactive_power_timeseries : :pandas:`pandas.Series<series>` or None
+            Reactive power time series in kvar (generator sign convention).
+            Index of the series needs to be a
+            :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         """
         # place storage
-        if position == 'hvmv_substation_busbar':
-            storage = storage_integration.storage_at_hvmv_substation(
-                self.network.mv_grid, params)
-        elif isinstance(position, Station) or isinstance(position, BranchTee):
+        params = self._check_nominal_power(params, timeseries)
+        if isinstance(position, Station) or isinstance(position, BranchTee) \
+                or isinstance(position, Generator) \
+                or isinstance(position, Load):
             storage = storage_integration.set_up_storage(
-                params, position)
-            storage_integration.connect_storage(storage, position)
+                node=position, parameters=params, voltage_level=voltage_level)
+            line = storage_integration.connect_storage(storage, position)
+        elif isinstance(position, str) \
+                and position == 'hvmv_substation_busbar':
+            storage, line = storage_integration.storage_at_hvmv_substation(
+                self.edisgo.network.mv_grid, params)
+        elif isinstance(position, str) \
+                and position == 'distribute_storages_mv':
+            # check active power time series
+            if not isinstance(timeseries, pd.Series):
+                raise ValueError(
+                    "Storage time series needs to be a pandas Series if "
+                    "`position` is 'distribute_storages_mv'.")
+            else:
+                timeseries = pd.DataFrame(data={'p': timeseries},
+                                          index=timeseries.index)
+                self._check_timeindex(timeseries)
+            # check reactive power time series
+            if reactive_power_timeseries is not None:
+                self._check_timeindex(reactive_power_timeseries)
+                timeseries['q'] = reactive_power_timeseries.loc[
+                    timeseries.index]
+            else:
+                timeseries['q'] = 0
+            # start storage positioning method
+            storage_positioning.one_storage_per_feeder(
+                edisgo=self.edisgo, storage_timeseries=timeseries,
+                storage_nominal_power=params['nominal_power'],
+                storage_parameters=params)
+            return
         else:
-            message = 'Provided battery position option {} is not ' \
+            message = 'Provided storage position option {} is not ' \
                       'valid.'.format(timeseries)
             logging.error(message)
             raise KeyError(message)
 
-        # implement operation strategy
+        # implement operation strategy (active power)
         if isinstance(timeseries, pd.Series):
-            # ToDo: Eingabe von Blindleistung auch ermöglichen?
-            timeseries = pd.DataFrame(data={'p': timeseries,
-                                            'q': [0] * len(timeseries)},
+            timeseries = pd.DataFrame(data={'p': timeseries},
                                       index=timeseries.index)
             self._check_timeindex(timeseries)
             storage.timeseries = timeseries
-        elif timeseries == 'fifty-fifty':
-            storage_operation.fifty_fifty(storage)
+        elif isinstance(timeseries, str) and timeseries == 'fifty-fifty':
+            storage_operation.fifty_fifty(self.edisgo.network, storage)
         else:
-            message = 'Provided battery timeseries option {} is not ' \
+            message = 'Provided storage timeseries option {} is not ' \
                       'valid.'.format(timeseries)
             logging.error(message)
             raise KeyError(message)
 
+        # reactive power
+        if reactive_power_timeseries is not None:
+            self._check_timeindex(reactive_power_timeseries)
+            storage.timeseries = pd.DataFrame(
+                {'p': storage.timeseries.p,
+                 'q': reactive_power_timeseries.loc[storage.timeseries.index]},
+                index=storage.timeseries.index)
+
+        # update pypsa representation
+        if self.edisgo.network.pypsa is not None:
+            pypsa_io.update_pypsa_storage(
+                self.edisgo.network.pypsa,
+                storages=[storage], storages_lines=[line])
+
+    def _check_nominal_power(self, storage_parameters, timeseries):
+        """
+        Tries to assign a nominal power to the storage.
+
+        Checks if nominal power is provided through `storage_parameters`,
+        otherwise tries to return the absolute maximum of `timeseries`. Raises
+        an error if it cannot assign a nominal power.
+
+        Parameters
+        ----------
+        timeseries : :obj:`str` or :pandas:`pandas.Series<series>`
+            See parameter `timeseries` in class definition for more
+            information.
+        storage_parameters : :obj:`dict`
+            See parameter `parameters` in class definition for more
+            information.
+
+        Returns
+        --------
+        :obj:`dict`
+            The given `storage_parameters` is returned extended by an entry for
+            'nominal_power', if it didn't already have that key.
+
+        """
+        if storage_parameters.get('nominal_power', None) is None:
+            try:
+                storage_parameters['nominal_power'] = max(abs(timeseries))
+            except:
+                raise ValueError("Could not assign a nominal power to the "
+                                 "storage. Please provide either a nominal "
+                                 "power or an active power time series.")
+        return storage_parameters
+
     def _check_timeindex(self, timeseries):
         """
-        Raises an error if time index of battery time series does not
+        Raises an error if time index of storage time series does not
         comply with the time index of load and feed-in time series.
 
         Parameters
@@ -1410,9 +1540,9 @@ class StorageControl:
 
         """
         try:
-            timeseries.loc[self.network.timeseries.timeindex]
+            timeseries.loc[self.edisgo.network.timeseries.timeindex]
         except:
-            message = 'Time index of battery time series does not match ' \
+            message = 'Time index of storage time series does not match ' \
                       'with load and feed-in time series.'
             logging.error(message)
             raise KeyError(message)
@@ -1831,10 +1961,10 @@ class Results:
         :class:`~.grid.components.Line`, :class:`~.grid.components.Station`,
         etc.) and has the following columns:
 
-        equipment : detailing what was changed (line, station, battery,
+        equipment : detailing what was changed (line, station, storage,
         curtailment). For ease of referencing we take the component itself.
         For lines we take the line-dict, for stations the transformers, for
-        batteries the battery-object itself and for curtailment
+        storages the storage-object itself and for curtailment
         either a dict providing the details of curtailment or a curtailment
         object if this makes more sense (has to be defined).
 
@@ -2037,13 +2167,11 @@ class Results:
 
         Parameters
         ----------
-        components : :class:`~.grid.components.Line` or
-            :class:`~.grid.components.Transformer`
-            Could be a list of instances of these classes
-
-            Line or Transformers objects of grid topology. If not provided
-            (respectively None) defaults to return `s_res` of all lines and
-            transformers in the grid.
+        components : :obj:`list`
+            List with all components (of type :class:`~.grid.components.Line`
+            or :class:`~.grid.components.Transformer`) to get apparent power
+            for. If not provided defaults to return apparent power of all lines
+            and transformers in the grid.
 
         Returns
         -------
@@ -2073,7 +2201,7 @@ class Results:
 
         return s_res
 
-    def v_res(self, nodes=None, generators=None, level=None):
+    def v_res(self, nodes=None, level=None):
         """
         Get resulting voltage level at node
 
@@ -2107,7 +2235,8 @@ class Results:
             # unless index is lexsorted, it cannot be sliced
             self.pfa_v_mag_pu.sort_index(axis=1, inplace=True)
         else:
-            message = "No Power Flow Calculation has be done yet, so there are no results yet."
+            message = "No Power Flow Calculation has be done yet, so there " \
+                      "are no results yet."
             raise AttributeError
 
         if level is None:

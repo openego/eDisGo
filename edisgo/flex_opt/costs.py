@@ -5,12 +5,12 @@ import os
 if not 'READTHEDOCS' in os.environ:
     from shapely.ops import transform
 
-from edisgo.grid.components import Transformer, Line
+from edisgo.grid.components import Transformer, Line, LVStation
 from edisgo.grid.grids import LVGrid, MVGrid
-from edisgo.grid.tools import get_mv_feeder_from_node, get_mv_feeder_from_line
+from edisgo.grid.tools import get_mv_feeder_from_line
 
 
-def grid_expansion_costs(network):
+def grid_expansion_costs(network, without_generator_import=False):
     """
     Calculates grid expansion costs for each reinforced transformer and line
     in kEUR.
@@ -18,6 +18,10 @@ def grid_expansion_costs(network):
     Attributes
     ----------
     network : :class:`~.grid.network.Network`
+    without_generator_import : Boolean
+        If True excludes lines that were added in the generator import to
+        connect new generators to the grid from calculation of grid expansion
+        costs. Default: False.
 
     Returns
     -------
@@ -97,11 +101,16 @@ def grid_expansion_costs(network):
 
     costs = pd.DataFrame()
 
+    if without_generator_import:
+        equipment_changes = network.results.equipment_changes.loc[
+            network.results.equipment_changes.iteration_step > 0]
+    else:
+        equipment_changes = network.results.equipment_changes
+
     # costs for transformers
-    if not network.results.equipment_changes.empty:
-        transformers = network.results.equipment_changes[
-            network.results.equipment_changes['equipment'].apply(
-                isinstance, args=(Transformer,))]
+    if not equipment_changes.empty:
+        transformers = equipment_changes[equipment_changes['equipment'].apply(
+            isinstance, args=(Transformer,))]
         added_transformers = transformers[transformers['change'] == 'added']
         removed_transformers = transformers[
             transformers['change'] == 'removed']
@@ -119,15 +128,15 @@ def grid_expansion_costs(network):
                  'total_costs': _get_transformer_costs(t),
                  'quantity': 1,
                  'voltage_level': 'mv/lv',
-                 'mv_feeder': get_mv_feeder_from_node(t.grid.station)},
+                 'mv_feeder': t.grid.station.mv_feeder if isinstance(
+                     t.grid, LVGrid) else None},
                 index=[t]))
 
         # costs for lines
         # get changed lines
-        lines = network.results.equipment_changes.loc[
-            network.results.equipment_changes.index[
-                network.results.equipment_changes.reset_index()['index'].apply(
-                    isinstance, args=(Line,))]]
+        lines = equipment_changes.loc[equipment_changes.index[
+            equipment_changes.reset_index()['index'].apply(
+                isinstance, args=(Line,))]]
         # calculate costs for each reinforced line
         for l in list(lines.index.unique()):
             # check if line connects aggregated units
@@ -136,9 +145,9 @@ def grid_expansion_costs(network):
             for aggr_line in aggr_lines_generator:
                 aggr_lines.append(repr(aggr_line['line']))
             if not repr(l) in aggr_lines:
-                number_lines_added = network.results.equipment_changes[
-                    (network.results.equipment_changes.index == l) &
-                    (network.results.equipment_changes.equipment ==
+                number_lines_added = equipment_changes[
+                    (equipment_changes.index == l) &
+                    (equipment_changes.equipment ==
                      l.type.name)]['quantity'].sum()
                 costs = costs.append(pd.DataFrame(
                     {'type': l.type.name,
@@ -147,7 +156,7 @@ def grid_expansion_costs(network):
                      'quantity': number_lines_added,
                      'voltage_level': ('lv' if isinstance(l.grid, LVGrid)
                                        else 'mv'),
-                     'mv_feeder': None}, #get_mv_feeder_from_line(l)},
+                     'mv_feeder': get_mv_feeder_from_line(l, network.mv_grid)},
                     index=[l]))
 
     # if no costs incurred write zero costs to DataFrame

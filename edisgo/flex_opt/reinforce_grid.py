@@ -5,6 +5,7 @@ from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import reinforce_measures, exceptions
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.tools import tools, pypsa_io
+from edisgo.grid.tools import assign_mv_feeder_to_nodes
 import logging
 
 logger = logging.getLogger('edisgo')
@@ -124,6 +125,10 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                     'Input {} for timesteps_pfa is not valid.'.format(
                         timesteps_pfa))
 
+    # assign MV feeder to every generator, LV station, load, and branch tee
+    # to assign grid expansion costs to an MV feeder
+    assign_mv_feeder_to_nodes(edisgo_reinforce.network.mv_grid)
+
     iteration_step = 1
     edisgo_reinforce.analyze(timesteps=timesteps_pfa)
     # edisgo_reinforce.network.pypsa.export_to_csv_folder(
@@ -206,7 +211,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
             "Overloading issues for the following lines could not be solved:"
             "{}".format(crit_lines))
     else:
-        logger.info('==> Load issues in MV grid were solved in {} iteration '
+        logger.info('==> Load issues were solved in {} iteration '
                     'step(s).'.format(while_counter))
 
     # REINFORCE BRANCHES DUE TO VOLTAGE ISSUES
@@ -429,6 +434,6 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # ToDo: delete at some point
     # import pickle
     # edisgo_reinforce.network.pypsa = None
-    # pickle.dump(edisgo_reinforce, open('edisgo.pkl', 'wb'))
+    # pickle.dump(edisgo_reinforce, open('edisgo_reinforce_274.pkl', 'wb'))
 
     return edisgo_reinforce.network.results

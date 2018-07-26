@@ -7,6 +7,7 @@ if not 'READTHEDOCS' in os.environ:
 from edisgo.grid.components import LVStation, BranchTee, Generator, Load, \
     MVDisconnectingPoint, Line, MVStation
 from edisgo.grid.grids import LVGrid
+from edisgo.flex_opt import exceptions
 
 import logging
 logger = logging.getLogger('edisgo')
@@ -319,12 +320,16 @@ def select_cable(network, level, apparent_power):
             network.mv_grid.voltage_nom > apparent_power]
 
         # increase cable count until appropriate cable type is found
-        while suitable_cables.empty:
+        while suitable_cables.empty and cable_count < 20:
             cable_count += 1
             suitable_cables = available_cables[
                 available_cables['I_max_th'] *
                 network.mv_grid.voltage_nom *
                 cable_count > apparent_power]
+        if suitable_cables.empty and cable_count == 20:
+            raise exceptions.MaximumIterationError(
+                "Could not find a suitable cable for apparent power of "
+                "{} kVA.".format(apparent_power))
 
         cable_type = suitable_cables.ix[suitable_cables['I_max_th'].idxmin()]
 
@@ -335,12 +340,16 @@ def select_cable(network, level, apparent_power):
             network.equipment_data['lv_cables']['U_n'] > apparent_power]
 
         # increase cable count until appropriate cable type is found
-        while suitable_cables.empty:
+        while suitable_cables.empty and cable_count < 20:
             cable_count += 1
             suitable_cables = network.equipment_data['lv_cables'][
                 network.equipment_data['lv_cables']['I_max_th'] *
                 network.equipment_data['lv_cables']['U_n'] *
                 cable_count > apparent_power]
+        if suitable_cables.empty and cable_count == 20:
+            raise exceptions.MaximumIterationError(
+                "Could not find a suitable cable for apparent power of "
+                "{} kVA.".format(apparent_power))
 
         cable_type = suitable_cables.ix[suitable_cables['I_max_th'].idxmin()]
 
@@ -348,6 +357,7 @@ def select_cable(network, level, apparent_power):
         raise ValueError('Please supply a level (either \'mv\' or \'lv\').')
 
     return cable_type, cable_count
+
 
 def get_gen_info(network, level='mvlv'):
     """
@@ -387,9 +397,6 @@ def get_gen_info(network, level='mvlv'):
             except AttributeError:
                 gens_w_id.append(np.nan)
 
-    else:
-        pass
-
     if 'lv' in level:
         for lv_grid in network.mv_grid.lv_grids:
             gens_lv = lv_grid.generators
@@ -403,9 +410,6 @@ def get_gen_info(network, level='mvlv'):
                     gens_w_id.append(gen.weather_cell_id)
                 except AttributeError:
                     gens_w_id.append(np.nan)
-
-    else:
-        pass
 
     gen_df = pd.DataFrame({'gen_repr': list(map(lambda x: repr(x), gens)),
                            'generator_uncat': gens,
@@ -499,50 +503,6 @@ def get_load_info(network, level='mvlv'):
     return load_df
 
 
-def get_capacities_by_type_and_weather_cell(network):
-    """
-    Gets installed capacities of wind and solar generators by weather
-    cell ID.
-
-    Parameters
-    ----------
-    network : :class:`~.grid.network.Network`
-
-    Returns
-    --------
-    dict
-        Dictionary with keys being a tuple of technology and weather
-        cell ID (e.g. ('solar', '1')) and the values containing the
-        corresponding installed capacity.
-
-    """
-
-    # mv_peak_generation = \
-    #  network.mv_grid.peak_generation_peak_generation_per_technology_and_weather_cell.loc[['solar', 'wind']]
-    # lv_accumulated_peak_generation = pd.Series({})
-    dict_capacities = {}
-    for gen in gens:
-        if gen.type in ['solar', 'wind']:
-            if gen.weather_cell_id:
-                if (gen.type, gen.weather_cell_id) in \
-                        dict_capacities.keys():
-                    dict_capacities[
-                        (gen.type, gen.weather_cell_id)] = \
-                        dict_capacities[
-                            (gen.type, gen.weather_cell_id)] + \
-                        gen.nominal_capacity
-                else:
-                    dict_capacities[
-                        (gen.type, gen.weather_cell_id)] = \
-                        gen.nominal_capacity
-            else:
-                message = 'Please provide a weather cell ID for ' \
-                          'generator {}.'.format(repr(gen))
-                logging.error(message)
-                raise KeyError(message)
-    return pd.Series(dict_capacities)
-
-
 def get_capacities_by_type(network):
     """
     Gets installed capacities of wind and solar generators.
@@ -575,48 +535,38 @@ def get_capacities_by_type(network):
     return mv_peak_generation + lv_accumulated_peak_generation
 
 
-def get_mv_feeder_from_node(node):
+def assign_mv_feeder_to_nodes(mv_grid):
     """
-    Determines MV feeder the given node is in.
-
-    MV feeders are identified by the first line segment of the half-ring.
+    Assigns an MV feeder to every generator, LV station, load, and branch tee
 
     Parameters
-    ----------
-    node : :class:`~.grid.components.Component`
-        Node to find the MV feeder for. Can be any kind of
-        :class:`~.grid.components.Component` except
-        :class:`~.grid.components.Line`.
-
-    Returns
-    -------
-    :class:`~.grid.components.Line`
-        MV feeder identifier (representative of the first line segment
-        of the half-ring)
+    -----------
+    mv_grid : :class:`~.grid.grids.MVGrid`
 
     """
-    # if node is MV station no MV feeder can be attributed and None is returned
-    if isinstance(node, MVStation):
-        return None
+    mv_station_neighbors = mv_grid.graph.neighbors(mv_grid.station)
+    # get all nodes in MV grid and remove MV station to get separate subgraphs
+    mv_graph_nodes = mv_grid.graph.nodes()
+    mv_graph_nodes.remove(mv_grid.station)
+    subgraph = mv_grid.graph.subgraph(mv_graph_nodes)
 
-    # if node is in LV grid, get LV station of that grid
-    if isinstance(node.grid, LVGrid):
-        node = node.grid.station
+    for neighbor in mv_station_neighbors:
+        # determine feeder
+        mv_feeder = mv_grid.graph.line_from_nodes(mv_grid.station, neighbor)
+        # get all nodes in that feeder by doing a DFS in the disconnected
+        # subgraph starting from the node adjacent to the MVStation `neighbor`
+        subgraph_neighbor = nx.dfs_tree(subgraph, source=neighbor)
+        for node in subgraph_neighbor.nodes():
+            # in case of an LV station assign feeder to all nodes in that LV
+            # grid
+            if isinstance(node, LVStation):
+                for lv_node in node.grid.graph.nodes():
+                    lv_node.mv_feeder = mv_feeder
+            else:
+                node.mv_feeder = mv_feeder
 
-    # find path from MV station to node in MV grid to assign MV feeder
-    if isinstance(node, LVStation):
-        path = nx.shortest_path(node.mv_grid.graph, node.mv_grid.station, node)
-    else:
-        path = nx.shortest_path(node.grid.graph, node.grid.station, node)
 
-    # MV feeder identifier is the representative of the first line segment
-    # of the half-ring
-    mv_feeder = path[0].grid.graph.line_from_nodes(path[0], path[1])
-
-    return mv_feeder
-
-
-def get_mv_feeder_from_line(line):
+def get_mv_feeder_from_line(line, mv_grid):
     """
     Determines MV feeder the given line is in.
 
@@ -635,9 +585,46 @@ def get_mv_feeder_from_line(line):
 
     """
     # get nodes of line
-    nodes = line.grid.graph.nodes_from_line(line)
+    # ToDo: Remove when #135 is solved
+    try:
+        nodes = line.grid.graph.nodes_from_line(line)
+    except:
+        return None
+
     # if one of the nodes is an MV station the line is an MV feeder itself
-    if isinstance(nodes[0], MVStation) or isinstance(nodes[1], MVStation):
-        return line
+    feeders = {}
+    for node in nodes:
+        if isinstance(node, MVStation):
+            feeders[repr(node)] = None
+        else:
+            try:
+                feeders[repr(node)] = node.mv_feeder
+            except AttributeError:
+                # in case of an AttributeError grid reinforcement was conducted
+                # on a copied graph and the line reference is a reference to
+                # the original graph
+
+                # first find grid the node is in in copied graph, then find
+                # node in copied graph
+                grid_original_graph = node.grid
+                if isinstance(grid_original_graph, LVGrid):
+                    grid_copied_graph = [
+                        _ for _ in mv_grid.lv_grids
+                        if repr(_)==repr(grid_original_graph)][0]
+                else:
+                    grid_copied_graph = mv_grid
+                node_copied_graph = [_ for _ in grid_copied_graph.graph.nodes()
+                                     if repr(_)==repr(node)][0]
+                feeders[repr(node)] = node_copied_graph.mv_feeder
+            except:
+                raise
+
+    feeder_1 = feeders[repr(nodes[0])]
+    feeder_2 = feeders[repr(nodes[1])]
+    if not feeder_1 is None and not feeder_2 is None:
+        if feeder_1 == feeder_2:
+            return feeder_1
+        else:
+            logging.warning('Different feeders for line {}'.format(line))
     else:
-        return get_mv_feeder_from_node(nodes[0])
+        return feeder_1 if feeder_1 is not None else feeder_2

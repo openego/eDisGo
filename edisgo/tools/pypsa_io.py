@@ -4,8 +4,6 @@ topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA grid
 container.
 """
 
-from edisgo.grid.components import Transformer, Line, LVStation
-
 import numpy as np
 import pandas as pd
 import itertools
@@ -14,6 +12,9 @@ from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
 from networkx import connected_component_subgraphs
 import collections
+
+from edisgo.grid.components import Transformer, Line, LVStation, MVStation
+from edisgo.grid.grids import LVGrid
 
 
 def to_pypsa(network, mode, timesteps):
@@ -393,7 +394,7 @@ def mv_to_pypsa(network):
 
         storage['name'].append(repr(sto))
         storage['bus'].append(bus_name)
-        storage['p_nom'].append(sto.nominal_capacity / 1e3)
+        storage['p_nom'].append(sto.nominal_power / 1e3)
         storage['state_of_charge_initial'].append(sto.soc_initial)
         storage['efficiency_store'].append(sto.efficiency_in)
         storage['efficiency_dispatch'].append(sto.efficiency_out)
@@ -545,8 +546,8 @@ def lv_to_pypsa(network):
 
         storage['name'].append(repr(sto))
         storage['bus'].append(bus_name)
-        storage['p_nom'].append(sto.nominal_capacity)
-        storage['state_of_charge_initial'].append(sto.soc_inital)
+        storage['p_nom'].append(sto.nominal_power)
+        storage['state_of_charge_initial'].append(sto.soc_initial)
         storage['efficiency_store'].append(sto.efficiency_in)
         storage['efficiency_dispatch'].append(sto.efficiency_out)
         storage['standing_loss'].append(sto.standing_loss)
@@ -1169,7 +1170,7 @@ def _check_integrity_of_pypsa(pypsa_network):
             labels=duplicate_v_mag_set))
 
 
-def process_pfa_results(network, pypsa):
+def process_pfa_results(network, pypsa, timesteps):
     """
     Assing values from PyPSA to
     :meth:`results <edisgo.grid.network.Network.results>`
@@ -1178,9 +1179,12 @@ def process_pfa_results(network, pypsa):
     ----------
     network : Network
         The eDisGo grid topology model overall container
-    pypsa :
-        `Network container <https://www.pypsa.org/doc/components.html#network>`_
-        of PyPSA
+    pypsa : :pypsa:`pypsa.Network<network>`
+        The PyPSA `Network container
+        <https://www.pypsa.org/doc/components.html#network>`_
+    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+        Time steps for which latest power flow analysis was conducted for and
+        for which to retrieve pypsa results.
 
     Notes
     -----
@@ -1217,22 +1221,22 @@ def process_pfa_results(network, pypsa):
         [np.abs(pypsa.lines_t['q0']),
          np.abs(pypsa.transformers_t['q0']),
          np.abs(pypsa.generators_t['q']['Generator_slack'].rename(
-             repr(network.mv_grid.station)))], axis=1)
+             repr(network.mv_grid.station)))], axis=1).loc[timesteps, :]
     q1 = pd.concat(
         [np.abs(pypsa.lines_t['q1']),
          np.abs(pypsa.transformers_t['q1']),
          np.abs(pypsa.generators_t['q']['Generator_slack'].rename(
-             repr(network.mv_grid.station)))], axis=1)
+             repr(network.mv_grid.station)))], axis=1).loc[timesteps, :]
     p0 = pd.concat(
         [np.abs(pypsa.lines_t['p0']),
          np.abs(pypsa.transformers_t['p0']),
          np.abs(pypsa.generators_t['p']['Generator_slack'].rename(
-            repr(network.mv_grid.station)))], axis=1)
+            repr(network.mv_grid.station)))], axis=1).loc[timesteps, :]
     p1 = pd.concat(
         [np.abs(pypsa.lines_t['p1']),
          np.abs(pypsa.transformers_t['p1']),
          np.abs(pypsa.generators_t['p']['Generator_slack'].rename(
-             repr(network.mv_grid.station)))], axis=1)
+             repr(network.mv_grid.station)))], axis=1).loc[timesteps, :]
 
     line_losses = {}
     line_losses['p'] = 1e3
@@ -1246,14 +1250,17 @@ def process_pfa_results(network, pypsa):
     network.results.pfa_q = q0.where(s0 > s1, q1) * 1e3
 
     lines_bus0 = pypsa.lines['bus0'].to_dict()
-    bus0_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[list(lines_bus0.values()), :].copy()
+    bus0_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[
+                    list(lines_bus0.values()), :].copy()
     bus0_v_mag_pu.index = list(lines_bus0.keys())
 
     lines_bus1 = pypsa.lines['bus1'].to_dict()
-    bus1_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[list(lines_bus1.values()), :].copy()
+    bus1_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[
+                    list(lines_bus1.values()), :].copy()
     bus1_v_mag_pu.index = list(lines_bus1.keys())
 
-    line_voltage_avg = 0.5 * (bus0_v_mag_pu + bus1_v_mag_pu)
+    line_voltage_avg = 0.5 * (bus0_v_mag_pu.loc[:, timesteps] +
+                              bus1_v_mag_pu.loc[:, timesteps])
 
     # Get voltage levels at line (avg. of buses at both sides)
     network.results._i_res = s0[pypsa.lines_t['q0'].columns].truediv(
@@ -1261,10 +1268,16 @@ def process_pfa_results(network, pypsa):
     # process results at nodes
     generators_names = [repr(g) for g in
                         network.mv_grid.graph.nodes_by_attribute('generator') +
-                        network.mv_grid.graph.nodes_by_attribute('generator_aggr')]
+                        network.mv_grid.graph.nodes_by_attribute(
+                            'generator_aggr')]
     generators_mapping = {v: k for k, v in
                           pypsa.generators.loc[generators_names][
                               'bus'].to_dict().items()}
+    storages_names = [repr(g) for g in
+                      network.mv_grid.graph.nodes_by_attribute('storage')]
+    storages_mapping = {v: k for k, v in
+                        pypsa.storage_units.loc[storages_names][
+                            'bus'].to_dict().items()}
     branch_t_names = [repr(bt) for bt in
                       network.mv_grid.graph.nodes_by_attribute('branch_tee')]
     branch_t_mapping = {'_'.join(['Bus', v]): v for v in branch_t_names}
@@ -1276,8 +1289,7 @@ def process_pfa_results(network, pypsa):
                                         'mv_disconnecting_point')]
     mv_switch_disconnector_mapping = {'_'.join(['Bus', v]): v for v in
                                       mv_switch_disconnector_names}
-    lv_station_names = [repr(l) for l in
-                        network.mv_grid.graph.nodes_by_attribute('lv_station')]
+
     lv_station_mapping_pri = {
         '_'.join(['Bus', l.__repr__('mv')]): repr(l)
         for l in network.mv_grid.graph.nodes_by_attribute('lv_station')}
@@ -1291,12 +1303,16 @@ def process_pfa_results(network, pypsa):
                          'bus'].to_dict().items()}
 
     lv_generators_names = []
+    lv_storages_names = []
     lv_branch_t_names = []
     lv_loads_names = []
     for lv_grid in network.mv_grid.lv_grids:
         lv_generators_names.extend([repr(g) for g in
                                     lv_grid.graph.nodes_by_attribute(
                                         'generator')])
+        lv_storages_names.extend([repr(g) for g in
+                                  lv_grid.graph.nodes_by_attribute(
+                                      'storage')])
         lv_branch_t_names.extend([repr(bt) for bt in
                              lv_grid.graph.nodes_by_attribute('branch_tee')])
         lv_loads_names.extend([repr(lo) for lo in
@@ -1305,12 +1321,16 @@ def process_pfa_results(network, pypsa):
     lv_generators_mapping = {v: k for k, v in
                              pypsa.generators.loc[lv_generators_names][
                                  'bus'].to_dict().items()}
+    lv_storages_mapping = {v: k for k, v in
+                           pypsa.storage_units.loc[lv_storages_names][
+                               'bus'].to_dict().items()}
     lv_branch_t_mapping = {'_'.join(['Bus', v]): v for v in lv_branch_t_names}
     lv_loads_mapping = {v: k for k, v in pypsa.loads.loc[lv_loads_names][
         'bus'].to_dict().items()}
 
     names_mapping = {
         **generators_mapping,
+        **storages_mapping,
         **branch_t_mapping,
         **mv_station_mapping_sec,
         **lv_station_mapping_pri,
@@ -1318,6 +1338,7 @@ def process_pfa_results(network, pypsa):
         **mv_switch_disconnector_mapping,
         **loads_mapping,
         **lv_generators_mapping,
+        **lv_storages_mapping,
         **lv_loads_mapping,
         **lv_branch_t_mapping
     }
@@ -1325,6 +1346,7 @@ def process_pfa_results(network, pypsa):
     # write voltage levels obtained from power flow to results object
     pfa_v_mag_pu_mv = (pypsa.buses_t['v_mag_pu'][
         list(generators_mapping) +
+        list(storages_mapping) +
         list(branch_t_mapping) +
         list(mv_station_mapping_sec) +
         list(mv_switch_disconnector_mapping) +
@@ -1333,10 +1355,12 @@ def process_pfa_results(network, pypsa):
     pfa_v_mag_pu_lv = (pypsa.buses_t['v_mag_pu'][
         list(lv_station_mapping_sec) +
         list(lv_generators_mapping) +
+        list(lv_storages_mapping) +
         list(lv_branch_t_mapping) +
         list(lv_loads_mapping)]).rename(columns=names_mapping)
     network.results.pfa_v_mag_pu = pd.concat(
-        {'mv': pfa_v_mag_pu_mv, 'lv': pfa_v_mag_pu_lv}, axis=1)
+        {'mv': pfa_v_mag_pu_mv.loc[timesteps, :],
+         'lv': pfa_v_mag_pu_lv.loc[timesteps, :]}, axis=1)
 
 
 
@@ -1450,6 +1474,125 @@ def update_pypsa_grid_reinforcement(network, equipment_changes):
 
         network.pypsa.lines.loc[repr(idx), 'bus0'] = bus0
         network.pypsa.lines.loc[repr(idx), 'bus1'] = bus1
+
+
+def update_pypsa_storage(pypsa, storages, storages_lines):
+    """
+    Adds storages and their lines to pypsa representation of the edisgo graph.
+
+    This function effects the following attributes of the pypsa network:
+    components ('StorageUnit'), storage_units, storage_units_t (p_set, q_set),
+    buses, lines
+
+    Parameters
+    -----------
+    pypsa : :pypsa:`pypsa.Network<network>`
+    storages : :obj:`list`
+        List with storages of type :class:`~.grid.components.Storage` to add
+        to pypsa network.
+    storages_lines : :obj:`list`
+        List with lines of type :class:`~.grid.components.Line` that connect
+        storages to the grid.
+
+    """
+    bus = {'name': [], 'v_nom': []}
+
+    line = {'name': [],
+            'bus0': [],
+            'bus1': [],
+            'type': [],
+            'x': [],
+            'r': [],
+            's_nom': [],
+            'length': []}
+
+    storage = {
+        'name': [],
+        'bus': [],
+        'p_nom': [],
+        'state_of_charge_initial': [],
+        'efficiency_store': [],
+        'efficiency_dispatch': [],
+        'standing_loss': []}
+
+    for s in storages:
+        bus_name = '_'.join(['Bus', repr(s)])
+
+        storage['name'].append(repr(s))
+        storage['bus'].append(bus_name)
+        storage['p_nom'].append(s.nominal_power / 1e3)
+        storage['state_of_charge_initial'].append(s.soc_initial)
+        storage['efficiency_store'].append(s.efficiency_in)
+        storage['efficiency_dispatch'].append(s.efficiency_out)
+        storage['standing_loss'].append(s.standing_loss)
+
+        bus['name'].append(bus_name)
+        bus['v_nom'].append(s.grid.voltage_nom)
+
+    omega = 2 * pi * 50
+    for l in storages_lines:
+        line['name'].append(repr(l))
+
+        adj_nodes = l.grid.graph.nodes_from_line(l)
+        if isinstance(l.grid, LVGrid):
+            if isinstance(adj_nodes[0], LVStation):
+                line['bus0'].append(
+                    '_'.join(['Bus', adj_nodes[0].__repr__(side='lv')]))
+            else:
+                line['bus0'].append('_'.join(['Bus', repr(adj_nodes[0])]))
+
+            if isinstance(adj_nodes[1], LVStation):
+                line['bus1'].append(
+                    '_'.join(['Bus', adj_nodes[1].__repr__(side='lv')]))
+            else:
+                line['bus1'].append('_'.join(['Bus', repr(adj_nodes[1])]))
+        else:
+            if isinstance(adj_nodes[0], LVStation):
+                line['bus0'].append(
+                    '_'.join(['Bus', adj_nodes[0].__repr__(side='mv')]))
+            elif isinstance(adj_nodes[0], MVStation):
+                line['bus0'].append(
+                    '_'.join(['Bus', adj_nodes[0].__repr__(side='lv')]))
+            else:
+                line['bus0'].append('_'.join(['Bus', repr(adj_nodes[0])]))
+
+            if isinstance(adj_nodes[1], LVStation):
+                line['bus1'].append(
+                    '_'.join(['Bus', adj_nodes[1].__repr__(side='mv')]))
+            elif isinstance(adj_nodes[1], MVStation):
+                line['bus1'].append(
+                    '_'.join(['Bus', adj_nodes[1].__repr__(side='lv')]))
+            else:
+                line['bus1'].append('_'.join(['Bus', repr(adj_nodes[1])]))
+
+        line['type'].append("")
+        line['x'].append(l.type['L'] * omega / 1e3 * l.length)
+        line['r'].append(l.type['R'] * l.length)
+        line['s_nom'].append(
+            sqrt(3) * l.type['I_max_th'] * l.type['U_n'] / 1e3)
+        line['length'].append(l.length)
+
+    # import new components to pypsa
+    pypsa.import_components_from_dataframe(
+        pd.DataFrame(bus).set_index('name'), 'Bus')
+    pypsa.import_components_from_dataframe(
+        pd.DataFrame(storage).set_index('name'), 'StorageUnit')
+    pypsa.import_components_from_dataframe(
+        pd.DataFrame(line).set_index('name'), 'Line')
+
+    # import time series of storages and buses to pypsa
+    timeseries_storage_p = pd.DataFrame()
+    timeseries_storage_q = pd.DataFrame()
+    for s in storages:
+        timeseries_storage_p[repr(s)] = s.pypsa_timeseries('p').loc[
+            pypsa.storage_units_t.p_set.index]
+        timeseries_storage_q[repr(s)] = s.pypsa_timeseries('q').loc[
+            pypsa.storage_units_t.q_set.index]
+
+    import_series_from_dataframe(pypsa, timeseries_storage_p,
+                                 'StorageUnit', 'p_set')
+    import_series_from_dataframe(pypsa, timeseries_storage_q,
+                                 'StorageUnit', 'q_set')
 
 
 def update_pypsa_timeseries(network, loads_to_update=None,

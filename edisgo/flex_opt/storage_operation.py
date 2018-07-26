@@ -2,16 +2,16 @@ import pandas as pd
 from math import sqrt
 
 
-def fifty_fifty(storage, feedin_threshold=0.5):
+def fifty_fifty(network, storage, feedin_threshold=0.5):
     """
     Operational mode where the storage operation depends on actual power by
     generators. If cumulative generation exceeds 50% of nominal power, the
     storage is charged. Otherwise, the storage is discharged.
-    The time series for active and reactive power are written into the
-    storage.
+    The time series for active power is written into the storage.
 
     Parameters
     -----------
+    network : :class:`~.grid.network.Network`
     storage : :class:`~.grid.components.Storage`
         Storage instance for which to generate time series.
     feedin_threshold : :obj:`float`
@@ -22,9 +22,9 @@ def fifty_fifty(storage, feedin_threshold=0.5):
 
     """
     # determine generators cumulative apparent power output
-    generators = storage.grid.graph.nodes_by_attribute('generator') + \
+    generators = network.mv_grid.graph.nodes_by_attribute('generator') + \
                  [generators for lv_grid in
-                  storage.grid.lv_grids for generators in
+                  network.mv_grid.lv_grids for generators in
                   lv_grid.graph.nodes_by_attribute('generator')]
     generators_p = pd.concat([_.timeseries['p'] for _ in generators],
                              axis=1).sum(axis=1).rename('p')
@@ -39,7 +39,6 @@ def fifty_fifty(storage, feedin_threshold=0.5):
     feedin_bool = generation['s'] > (feedin_threshold *
                                      generators_nom_capacity)
     feedin = feedin_bool.apply(
-        lambda x: storage.nominal_capacity if x
-        else -storage.nominal_capacity).rename('p').to_frame()
-    feedin['q'] = 0
-    storage.timeseries = feedin * storage.nominal_capacity
+        lambda x: storage.nominal_power if x
+        else -storage.nominal_power).rename('p').to_frame()
+    storage.timeseries = feedin

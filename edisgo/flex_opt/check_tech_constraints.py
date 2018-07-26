@@ -131,7 +131,7 @@ def _line_load(network, grid, crit_lines):
             line['line'].type['I_max_th'] * line['line'].quantity * \
             network.config['grid_expansion_load_factors'][
                 '{}_load_case_line'.format(grid_level)]
-        # maximum allowed apparent power of station in each time step
+        # maximum allowed line load in each time step
         i_line_allowed = \
             network.timeseries.timesteps_load_feedin_case.case.apply(
                 lambda _: i_line_allowed_per_case[_])
@@ -361,6 +361,10 @@ def mv_voltage_deviation(network, voltage_levels='mv_lv'):
         v_dev_allowed_per_case['load_case'] = v_dev_allowed_per_case[
             'feedin_case']
     elif voltage_levels == 'mv':
+        # network.config['grid_expansion_allowed_voltage_deviations'][
+        #     'hv_mv_trafo_offset']
+        # network.config['grid_expansion_allowed_voltage_deviations'][
+        #     'hv_mv_trafo_control_deviation']
         v_dev_allowed_per_case['feedin_case'] = network.config[
             'grid_expansion_allowed_voltage_deviations'][
             '{}_feedin_case_max_v_deviation'.format(voltage_levels)]
@@ -446,6 +450,9 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
             'feedin_case']
     elif voltage_levels == 'lv':
         # ToDo: allowed voltage deviation lv + mv?
+
+        # + voltage at lv station
+
         v_dev_allowed_per_case['feedin_case'] = network.config[
             'grid_expansion_allowed_voltage_deviations'][
             '{}_feedin_case_max_v_deviation'.format(voltage_levels)]
@@ -500,7 +507,7 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
 
 def _voltage_deviation(network, nodes, v_dev_allowed, voltage_level):
     """
-    Checks for voltage stability issues in LV grids.
+    Checks for voltage stability issues at given nodes.
 
     Parameters
     ----------
