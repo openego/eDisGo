@@ -1211,7 +1211,6 @@ class CurtailmentControl:
 
         # write curtailment to results to be able to put it out as files for
         # result checking
-        # make sure you don't overwrite existing curtailment data
         edisgo_object.network.results.assigned_curtailment =\
             edisgo_object.network.timeseries.curtailment.copy()
 
@@ -1493,6 +1492,9 @@ class StorageControl:
                 self.edisgo.network.pypsa,
                 storages=[storage], storages_lines=[line])
 
+        # write results to Result Object
+        self._write_to_results()
+
     def _check_nominal_power(self, storage_parameters, timeseries):
         """
         Tries to assign a nominal power to the storage.
@@ -1547,6 +1549,35 @@ class StorageControl:
             logging.error(message)
             raise KeyError(message)
 
+    def _write_to_results(self):
+        """
+        Groups all the storages assigned and their nominal powers and
+        writes them into the Results object to either just present the
+        results. Currently only the results from the mv grid are
+        presented
+
+        Results
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            The columns would be `nominal_power` and the indexes
+            would be the storage unit id
+        """
+        storage_integration_results = {}
+        storage_integration_results['storage_id'] = []
+        storage_integration_results['nominal_power'] = []
+        storage_integration_results['voltage_level'] = []
+        for storage_unit in self.edisgo.network.mv_grid.graph.nodes_by_attribute('storage'):
+            storage_integration_results['storage_id'].append(repr(storage_unit))
+            storage_integration_results['nominal_power'].append(storage_unit.nominal_power)
+            storage_integration_results['voltage_level'].append('mv')
+
+        # for lvgrid in self.edisgo.network.mv_grid.lv_grids:
+        #     for storage_unit in lvgrid.graph.nodes_by_attribute('storage'):
+        #         storage_integration_results['storage_id'].append(repr(storage_unit))
+        #         storage_integration_results['nominal_power'].append(storage_unit.nominal_power)
+        #         storage_integration_results['voltage_level'].append('lv')
+
+        self.edisgo.network.results.storage_integration = pd.DataFrame(storage_integration_results)
 
 class TimeSeries:
     """
@@ -1822,6 +1853,7 @@ class Results:
         self._grid_losses = None
         self._grid_exchanges = None
         self._assigned_curtailment = None
+        self._storage_integration = None
         self._unresolved_issues = {}
 
     @property
@@ -2114,6 +2146,29 @@ class Results:
         self._assigned_curtailment = assigned_curtailment
 
     @property
+    def storage_integration(self):
+        """
+        Presents the planned storage units that would support the network
+        and avoid network reinforcements. This function provides a
+        :pandas:`panadas.DataFrame<dataframe>` with the storage ids
+        and installed powers.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            curtailment per generator (in columns) in timesteps(rows).
+        """
+
+        return self._storage_integration
+
+    @storage_integration.setter
+    def storage_integration(self, storage_integration_results):
+        """
+        Setter for Storage integration results
+        """
+        self._storage_integration = storage_integration_results
+
+    @property
     def unresolved_issues(self):
         """
         Holds lines and nodes where over-loading or over-voltage issues
@@ -2306,6 +2361,11 @@ class Results:
         if self.assigned_curtailment is not None:
             assigned_curtailment_file = os.path.join(calculated_results_dir, 'assigned_curtailment.csv')
             self.assigned_curtailment.to_csv(assigned_curtailment_file)
+
+        # assigned storages
+        if self.storage_integration is not None:
+            storage_integration_file = os.path.join(calculated_results_dir, 'storage_integration.csv')
+            self.storage_integration.to_csv(storage_integration_file)
 
         # equipment_changes
         equipment_changes_file = os.path.join(calculated_results_dir, 'equipment_changes.csv')
