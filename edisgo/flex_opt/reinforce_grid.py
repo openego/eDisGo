@@ -11,7 +11,7 @@ logger = logging.getLogger('edisgo')
 
 
 def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
-                   max_while_iterations=10):
+                   max_while_iterations=10, combined_analysis=False):
     """
     Evaluates grid reinforcement needs and performs measures.
 
@@ -45,9 +45,15 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
           Use this option to explicitly choose which time steps to consider.
 
     copy_graph : :obj:`Boolean`
-        If True reinforcement is conducted on a copied graph and discarded
+        If True reinforcement is conducted on a copied graph and discarded.
+        Default: False.
     max_while_iterations : int
         Maximum number of times each while loop is conducted.
+    combined_analysis : :obj:`Boolean`
+        If True allowed voltage deviations for combined analysis of MV and LV
+        grid are used. If False different allowed voltage deviations for MV
+        and LV are used. See also config section
+        `grid_expansion_allowed_voltage_deviations`. Default: False.
 
     Returns
     -------
@@ -214,7 +220,12 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
 
     # solve voltage problems in MV grid
     logger.debug('==> Check voltage in MV grid.')
-    crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce.network)
+    if combined_analysis:
+        voltage_levels = 'mv_lv'
+    else:
+        voltage_levels = 'mv'
+    crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce.network,
+                                             voltage_levels=voltage_levels)
 
     while_counter = 0
     while crit_nodes and while_counter < max_while_iterations:
@@ -236,7 +247,8 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                     iteration_step == iteration_step])
         edisgo_reinforce.analyze(timesteps=timesteps_pfa)
         logger.debug('==> Recheck voltage in MV grid.')
-        crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce.network)
+        crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce.network,
+                                                 voltage_levels=voltage_levels)
 
         iteration_step += 1
         while_counter += 1
@@ -257,8 +269,13 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
 
     # solve voltage problems at secondary side of LV stations
     logger.debug('==> Check voltage at secondary side of LV stations.')
+    if combined_analysis:
+        voltage_levels = 'mv_lv'
+    else:
+        voltage_levels = 'lv'
     crit_stations = checks.lv_voltage_deviation(edisgo_reinforce.network,
-                                                mode='stations')
+                                                mode='stations',
+                                                voltage_levels=voltage_levels)
 
     while_counter = 0
     while crit_stations and while_counter < max_while_iterations:
@@ -279,8 +296,9 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                     iteration_step == iteration_step])
         edisgo_reinforce.analyze(timesteps=timesteps_pfa)
         logger.debug('==> Recheck voltage at secondary side of LV stations.')
-        crit_stations = checks.lv_voltage_deviation(edisgo_reinforce.network,
-                                                    mode='stations')
+        crit_stations = checks.lv_voltage_deviation(
+            edisgo_reinforce.network, mode='stations',
+            voltage_levels=voltage_levels)
 
         iteration_step += 1
         while_counter += 1
@@ -301,7 +319,8 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
 
     # solve voltage problems in LV grids
     logger.debug('==> Check voltage in LV grids.')
-    crit_nodes = checks.lv_voltage_deviation(edisgo_reinforce.network)
+    crit_nodes = checks.lv_voltage_deviation(edisgo_reinforce.network,
+                                             voltage_levels=voltage_levels)
 
     while_counter = 0
     while crit_nodes and while_counter < max_while_iterations:
@@ -323,7 +342,8 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                     iteration_step == iteration_step])
         edisgo_reinforce.analyze(timesteps=timesteps_pfa)
         logger.debug('==> Recheck voltage in LV grids.')
-        crit_nodes = checks.lv_voltage_deviation(edisgo_reinforce.network)
+        crit_nodes = checks.lv_voltage_deviation(edisgo_reinforce.network,
+                                                 voltage_levels=voltage_levels)
 
         iteration_step += 1
         while_counter += 1

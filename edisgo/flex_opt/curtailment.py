@@ -1,13 +1,12 @@
 import pandas as pd
-import numpy as np
 import logging
 
-from edisgo.grid.tools import get_gen_info, \
-    get_capacities_by_type, \
-    get_capacities_by_type_and_weather_cell
+from pyomo.environ import ConcreteModel, Set, Param, Objective, Constraint, minimize, Var
+from pyomo.opt import SolverFactory
 
 
-def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
+def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
+                    **kwargs):
     """
     Implements curtailment methodology 'curtail_voltage'.
 
@@ -73,51 +72,150 @@ def curtail_voltage(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         The node voltage below which no curtailment would be assigned to the
         respective generator. Default: 1.0.
     """
-    voltage_threshold = kwargs.get('voltage_threshold', 1.0)
+    voltage_threshold = pd.Series(kwargs.get('voltage_threshold', 1.0),
+                                  index=total_curtailment_ts.index)
 
-    # get the results of a load flow
     # get the voltages at the nodes
-    feedin_gen_reprs = feedin.columns.levels[1].values.copy()
+    voltage_pu_lv = edisgo.network.results.v_res(
+        nodes=generators.loc[(generators.voltage_level == 'lv')].index,
+        level='lv')
+    voltage_pu_mv = edisgo.network.results.v_res(
+        nodes=generators.loc[(generators.voltage_level == 'mv')].index,
+        level='mv')
+    voltage_pu = voltage_pu_lv.join(voltage_pu_mv)
 
-    try:
-        v_pu = edisgo_object.network.results.v_res()
+    # for every time step check if curtailment can be fulfilled, otherwise
+    # reduce voltage threshold; set feed-in of generators below voltage
+    # threshold to zero, so that they cannot be curtailed
+    for ts in total_curtailment_ts.index:
+        # get generators with voltage higher than threshold
+        gen_pool = voltage_pu.loc[
+            ts, voltage_pu.loc[ts, :] > voltage_threshold.loc[ts]].index
+        # if curtailment cannot be fulfilled lower voltage threshold
+        while sum(feedin.loc[ts, gen_pool]) < total_curtailment_ts.loc[ts]:
+            voltage_threshold.loc[ts] = voltage_threshold.loc[ts] - 0.01
+            gen_pool = voltage_pu.loc[
+                ts, voltage_pu.loc[ts, :] > voltage_threshold.loc[ts]].index
+        # set feed-in of generators below voltage threshold to zero, so that
+        # they cannot be curtailed
+        gen_pool_out = voltage_pu.loc[
+            ts, voltage_pu.loc[ts, :] <= voltage_threshold.loc[ts]].index
+        feedin.loc[ts, gen_pool_out] = 0
 
-    except AttributeError:
-        # if the load flow hasn't been done,
-        # do it!
-        edisgo_object.analyze()
-        v_pu = edisgo_object.network.results.v_res()
+    #GeneratorFluctuating_979130
+    curtailment = _optimize_curtail_voltage(
+        feedin, voltage_pu, total_curtailment_ts, voltage_threshold)
 
-    if not(v_pu.empty):
-        # get only the specific feedin objects
-        v_pu = v_pu.loc[:, (slice(None), feedin_gen_reprs)]
-
-        # curtailment calculation by inducing a reduced or increased feedin
-        # find out the difference from lower threshold
-        feedin_factor = v_pu - voltage_threshold
-        # make sure the difference is positive
-        # zero the curtailment of those generators below the voltage_threshold
-        feedin_factor = feedin_factor[feedin_factor >= 0].fillna(0)
-        # after being normalized to maximum difference being 1 and minimum being 0
-        feedin_factor = feedin_factor.divide(feedin_factor.max(axis=1), axis=0)
-        # the curtailment here would be directly multplied the difference
+    # assign curtailment to individual generators
+    assign_curtailment(curtailment, edisgo, generators)
 
 
-        feedin_factor.columns = feedin_factor.columns.droplevel(0)  # drop the 'mv' 'lv' labels
+def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_threshold):
+    """
+    Parameters
+    ------------
+    feedin : index is time index, columns are generators that will be curtailed, feed-in in kW
+    voltage_pu : index is time index, columns are generators, voltage from power flow in p.u.
+    total_curtailment : index is time index, total curtailment in time step in kW
+    voltage_threshold : index is time index, voltage threshold in time step in p.u.
 
-        # multiply feedin_factor to feedin to modify the amount of curtailment
-        modified_feedin = feedin_factor.multiply(feedin, level=1)
+    """
 
-        # total_curtailment
-        curtailment = modified_feedin.divide(modified_feedin.sum(axis=1), axis=0). \
-            multiply(total_curtailment_ts, axis=0)
+    logging.info("Start curtailment optimization.")
 
-        # assign curtailment to individual generators
-        assign_curtailment(curtailment, edisgo_object)
-    else:
-        message = "There is no resulting node voltages after the PFA calculation" +\
-            " which correspond to the generators in the columns of the given feedin data"
-        logging.warning(message)
+    v_max = voltage_pu.max(axis=1)
+    timeindex = feedin.index
+    generators = feedin.columns
+
+    # additional curtailment factors
+    cf_add = pd.DataFrame(index=timeindex)
+    for gen in generators:
+        cf_add[gen] = abs((voltage_pu.loc[:, gen] - v_max) / (
+            voltage_threshold - v_max))
+
+    # curtailment factors
+    cf = pd.DataFrame(index=timeindex)
+    for gen in generators:
+        cf[gen] = abs((voltage_pu.loc[:, gen] - voltage_threshold) / (
+            v_max - voltage_threshold))
+
+    ### initialize model
+    model = ConcreteModel()
+
+    ### add sets
+    model.T = Set(initialize=timeindex)
+    model.G = Set(initialize=generators)
+
+    ### add parameters
+    def feedin_init(model, t, g):
+        return feedin.loc[t, g]
+
+    model.feedin = Param(model.T, model.G, initialize=feedin_init)
+
+    def voltage_pu_init(model, t, g):
+        return voltage_pu.loc[t, g]
+
+    model.voltage_pu = Param(model.T, model.G, initialize=voltage_pu_init)
+
+    def cf_add_init(model, t, g):
+        return cf_add.loc[t, g]
+
+    model.cf_add = Param(model.T, model.G, initialize=cf_add_init)
+
+    def cf_init(model, t, g):
+        return cf.loc[t, g]
+
+    model.cf = Param(model.T, model.G, initialize=cf_init)
+
+    def total_curtailment_init(model, t):
+        return total_curtailment.loc[t]
+
+    model.total_curtailment = Param(model.T, initialize=total_curtailment_init)
+
+    ### add variables
+    model.offset = Var(model.T, bounds=(0, 1))
+    model.cf_max = Var(model.T, bounds=(0, 1))
+
+    def curtailment_init(model, t, g):
+        return (0, feedin.loc[t, g])
+
+    model.c = Var(model.T, model.G, bounds=curtailment_init)
+
+    ### add objective
+    def obj_rule(model):
+        expr = (sum(model.offset[t] * 100
+                    for t in model.T))
+        return expr
+
+    model.obj = Objective(rule=obj_rule, sense=minimize)
+
+    ### add constraints
+    # curtailment per generator constraints
+    def curtail(model, t, g):
+        return (
+        model.cf[t, g] * model.cf_max[t] * model.feedin[t, g] + model.cf_add[
+            t, g] * model.offset[t] * model.feedin[t, g] == model.c[t, g])
+
+    model.curtailment = Constraint(model.T, model.G, rule=curtail)
+
+    # total curtailment constraint
+    def total_curtailment(model, t):
+        return (
+        sum(model.c[t, g] for g in model.G) == model.total_curtailment[t])
+
+    model.sum_curtailment = Constraint(model.T, rule=total_curtailment)
+
+    # solve
+    solver = SolverFactory('cbc')
+    results = solver.solve(model, tee=True)
+
+    # load results back into model
+    model.solutions.load_from(results)
+
+    c = pd.DataFrame({g: [model.c[t, g].value for t in model.T]
+                      for g in model.G},
+                     index=model.T.value)
+    return c
 
 
 def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
@@ -183,7 +281,7 @@ def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
     assign_curtailment(curtailment, edisgo_object)
 
 
-def assign_curtailment(curtailment, edisgo_object):
+def assign_curtailment(curtailment, edisgo, generators):
     """
     Implements curtailment helper function to assign the curtailment time series
     to each and every individual generator and ensure that they get processed
@@ -198,18 +296,16 @@ def assign_curtailment(curtailment, edisgo_object):
         The edisgo object in which this function was called through the
         respective :class:`edisgo.grid.network.CurtailmentControl` instance.
     """
-    # pre-process curtailment before assigning it to generators
-    curtailment.fillna(0, inplace=True)
-
-    # drop extra column levels that were present in feedin
-    for r in range(len(curtailment.columns.levels) - 1):
-        curtailment.columns = curtailment.columns.droplevel(1)
 
     # assign curtailment to individual generators
+    gen_object_list = []
     for gen in curtailment.columns:
-        gen.curtailment = curtailment.loc[:, gen]
+        # get object from representative
+        gen_object = generators.loc[generators.gen_repr == gen].index[0]
+        gen_object.curtailment = curtailment.loc[:, gen]
+        gen_object_list.append(gen_object)
 
-    if not edisgo_object.network.timeseries._curtailment:
-        edisgo_object.network.timeseries._curtailment = list(curtailment.columns)
+    if edisgo.network.timeseries._curtailment:
+        edisgo.network.timeseries._curtailment.extend(gen_object_list)
     else:
-        edisgo_object.network.timeseries._curtailment.extend(list(curtailment.columns))
+        edisgo.network.timeseries._curtailment = gen_object_list

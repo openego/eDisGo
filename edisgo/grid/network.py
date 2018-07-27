@@ -5,8 +5,6 @@ from math import sqrt
 import logging
 import datetime
 
-from matplotlib import pyplot as plt
-
 import edisgo
 from edisgo.tools import config, pypsa_io, tools
 from edisgo.data.import_data import import_from_ding0, import_generators, \
@@ -122,6 +120,22 @@ class EDisGo:
 
         Use 'other' if you don't want to explicitly provide every possible
         type.
+    timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of normalized reactive power (normalized by
+        the rated nominal active power) per technology and weather cell. Index
+        needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent generator type and can be a MultiIndex column
+        containing the weather cell ID in the second level. If the technology
+        doesn't contain weather cell information i.e. if it is other than solar
+        and wind generation, this second level can be left as a numpy Nan or a
+        None.
+        Default: None.
+        If no time series for the technology or technology and weather cell ID
+        is given, reactive power will be calculated from power factor and
+        power factor mode in the config sections `reactive_power_factor` and
+        `reactive_power_mode` and a warning will be raised. See
+        :class:`~.grid.components.Generator` and
+        :class:`~.grid.components.GeneratorFluctuating` for more information.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
         Parameter used to obtain time series of active power of (cumulative)
         loads.
@@ -140,6 +154,23 @@ class EDisGo:
           * 'industrial'
           * 'agricultural'
 
+    timeseries_load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of normalized reactive power (normalized by
+        annual energy demand) per load sector. Index needs to be a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent load type:
+
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
+
+        Default: None.
+        If no time series for the load sector is given, reactive power will be
+        calculated from power factor and power factor mode in the config
+        sections `reactive_power_factor` and `reactive_power_mode` and a
+        warning will be raised. See :class:`~.grid.components.Load` for
+        more information.
     generator_scenario : None or :obj:`str`
         If provided defines which scenario of future generator park to use
         and invokes import of these generators. Possible options are 'nep2035'
@@ -204,8 +235,12 @@ class EDisGo:
                     'timeseries_generation_fluctuating', None),
                 timeseries_generation_dispatchable=kwargs.get(
                     'timeseries_generation_dispatchable', None),
+                timeseries_generation_reactive_power=kwargs.get(
+                    'timeseries_generation_reactive_power', None),
                 timeseries_load=kwargs.get(
                     'timeseries_load', None),
+                timeseries_load_reactive_power = kwargs.get(
+                    'timeseries_load_reactive_power', None),
                 timeindex=kwargs.get('timeindex', None)).timeseries
 
         # import new generators
@@ -222,7 +257,7 @@ class EDisGo:
         parameters and methodologies.
 
         """
-        CurtailmentControl(edisgo_object=self, **kwargs)
+        CurtailmentControl(edisgo=self, **kwargs)
 
     def import_from_ding0(self, file, **kwargs):
         """Import grid data from DINGO file
@@ -346,7 +381,8 @@ class EDisGo:
             self, max_while_iterations=kwargs.get(
                 'max_while_iterations', 10),
             copy_graph=kwargs.get('copy_graph', False),
-            timesteps_pfa=kwargs.get('timesteps_pfa', None))
+            timesteps_pfa=kwargs.get('timesteps_pfa', None),
+            combined_analysis=kwargs.get('combined_analysis', False))
 
     def integrate_storage(self, **kwargs):
         """
@@ -461,6 +497,10 @@ class Network:
 
         """
         return self._config
+
+    @config.setter
+    def config(self, config_path):
+        self._config = Config(config_path=config_path)
 
     @property
     def metadata(self):
@@ -833,6 +873,16 @@ class TimeSeriesControl:
 
         Use 'other' if you don't want to explicitly provide every possible
         type. Default: None.
+    timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of normalized reactive power (normalized by
+        the rated nominal active power) per technology and weather cell. Index
+        needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent generator type and can be a MultiIndex column
+        containing the weather cell ID in the second level. If the technology
+        doesn't contain weather cell information i.e. if it is other than solar
+        and wind generation, this second level can be left as an empty string ''.
+
+        Default: None.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Parameter used to obtain time series of active power of (cumulative)
         loads.
@@ -844,6 +894,19 @@ class TimeSeriesControl:
           DataFrame with load time series of each (cumulative) type of load
           normalized with corresponding annual energy demand.
           Columns represent load type:
+
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
+
+        Default: None.
+    timeseries_load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        Parameter to get the time series of the reactive power of loads. It should be a
+        DataFrame with time series of normalized reactive power (normalized by
+        annual energy demand) per load sector. Index needs to be a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent load type:
 
           * 'residential'
           * 'retail'
@@ -903,12 +966,17 @@ class TimeSeriesControl:
                 raise ValueError('Your input for '
                                  '"timeseries_generation_dispatchable" is not '
                                  'valid.'.format(mode))
+            # reactive power time series for all generators
+            ts = kwargs.get('timeseries_generation_reactive_power', None)
+            if isinstance(ts, pd.DataFrame):
+                self.timeseries.generation_reactive_power = ts
             # set time index
             if kwargs.get('timeindex', None) is not None:
                 self.timeseries._timeindex = kwargs.get('timeindex')
             else:
                 self.timeseries._timeindex = \
                     self.timeseries._generation_fluctuating.index
+
             # load time series
             ts = kwargs.get('timeseries_load', None)
             if isinstance(ts, pd.DataFrame):
@@ -919,6 +987,10 @@ class TimeSeriesControl:
             else:
                 raise ValueError('Your input for "timeseries_load" is not '
                                  'valid.'.format(mode))
+            # reactive power timeseries for loads
+            ts = kwargs.get('timeseries_load_reactive_power', None)
+            if isinstance(ts, pd.DataFrame):
+                self.timeseries.load_reactive_power = ts
 
             # check if time series for the set time index can be obtained
             self._check_timeindex()
@@ -933,6 +1005,8 @@ class TimeSeriesControl:
             self.timeseries.generation_fluctuating
             self.timeseries.generation_dispatchable
             self.timeseries.load
+            self.timeseries.generation_reactive_power
+            self.timeseries.load_reactive_power
         except:
             message = 'Time index of feed-in and load time series does ' \
                       'not match.'
@@ -1076,137 +1150,73 @@ class CurtailmentControl:
         is further passed on to the curtailment methodology functions.
     """
 
-    def __init__(self, edisgo_object, **kwargs):
+    def __init__(self, edisgo, **kwargs):
 
-        self.mode = kwargs.get('curtailment_methodology', None)
-        self.curtailment_ts = kwargs.get('timeseries_curtailment', None)
+        mode = kwargs.get('curtailment_methodology', None)
+        curtailment_ts = kwargs.get('timeseries_curtailment', None)
 
-        if self.curtailment_ts is not None:
-            self._check_timeindex(edisgo_object.network)
+        logging.info("Start curtailment methodology {}.".format(mode))
+        if curtailment_ts is not None:
+            self._check_timeindex(curtailment_ts, edisgo.network)
 
-        # get generation fluctuating time series
-        gen_fluct_ts = edisgo_object.network.timeseries.generation_fluctuating.copy()
-
-        # get aggregated capacities by technology and weather cell id
-        self.capacities = get_gen_info(edisgo_object.network, 'mvlv')
-        self.capacities = self.capacities.loc[(self.capacities.type == 'solar') | (self.capacities.type == 'wind')]
-        self.capacities = self.capacities.reset_index()
-        self.capacities.set_index(['generator', 'gen_repr', 'type', 'weather_cell_id'], inplace=True)
-        self.capacities = self.capacities.loc[:, 'nominal_capacity']
-
-        # calculate absolute feed-in timeseries including technology and weather cell id
-        self.feedin = pd.DataFrame(self.capacities).T
-        self.feedin = self.feedin.append([self.feedin] * (gen_fluct_ts.index.size - 1),
-                                         ignore_index=True)
-        self.feedin.index = gen_fluct_ts.index.copy()
-        self.feedin.columns = self.feedin.columns.remove_unused_levels()
-
-        # multiply feedin per type/weather cell id or both to capacities
-        # this is a workaround for pandas currently not allowing multiindex dataframes
-        # to be multiplied  and broadcast on two levels (type and weather_cell_id)
-        for x in self.feedin.columns.levels[0]:
-            try:
-                self.feedin.loc[:, (x, str(x), x.type, x.weather_cell_id)] = \
-                    self.feedin.loc[:, (x, str(x), x.type, x.weather_cell_id)] * \
-                    gen_fluct_ts.loc[:, (x.type, x.weather_cell_id)]
-            except AttributeError:
-                # when either weather_cell_id or type attribute is missing
-                # meaning this could be a Generator Object instead of a Generator Fluctuating
-                if type(x) == edisgo.grid.components.GeneratorFluctuating:
-                    message = "One or both of the attributes, \'type\' or \'weather_cell_id\'" + \
-                              "of the {} object is missing even though ".format(x) + \
-                              "its a GeneratorFluctuating Object."
-                    logging.warning(message)
-                    # raise Warning(message)
-                else:
-                    message = "Generator Object found instead of GeneratorFluctuating Object " + \
-                              "in {}".format(x)
-                    logging.warning(message)
-                    # raise Warning(message)
-                pass
-            except KeyError:
-                # when one of the keys are missing in either the feedin or the capacities
-                message = "One of the keys of {} are absent in either the feedin or the".format(x) + \
-                          " generator fluctuating timeseries  object is missing"
-                logging.warning(message)
-                # raise Warning(message)
-                pass
-
-        # get mode of curtailment and the arguments necessary
-        if self.mode == 'curtail_all':
-            curtail_function = curtailment.curtail_all
-        elif self.mode == 'curtail_voltage':
-            curtail_function = curtailment.curtail_voltage
+        if mode == 'curtail_all':
+            raise NotImplementedError
+            # self.curtail_all_init()
+        elif mode == 'curtail_voltage':
+            self.curtail_voltage_init(edisgo, curtailment_ts, **kwargs)
         else:
-            raise ValueError('{} is not a valid mode.'.format(self.mode))
+            raise ValueError(
+                '{} is not a valid curtailment methodology.'.format(self.mode))
+
+        # update generator time series in pypsa network
+        if edisgo.network.pypsa is not None:
+            pypsa_io.update_pypsa_generator_timeseries(edisgo.network)
+
+    def curtail_voltage_init(self, edisgo, curtailment_ts, **kwargs):
+        # get all fluctuating generators and their attributes (weather ID,
+        # type, etc.)
+        generators = get_gen_info(edisgo.network, 'mvlv', fluctuating=True)
+
+        # do analyze to get all voltages at generators and feed-in dataframe
+        edisgo.analyze()
+
+        # get feed-in time series of all generators
+        feedin = edisgo.network.pypsa.generators_t.p * 1000
+        # drop dispatchable generators and slack generator
+        drop_labels = [_ for _ in feedin.columns
+                       if 'GeneratorFluctuating' not in _] \
+                      + ['Generator_slack']
+        feedin.drop(labels=drop_labels, axis=1, inplace=True)
 
         # perform the mode of curtailment with some relevant checks
         # as to what the inputs are
-        if isinstance(self.curtailment_ts, pd.Series):
-            curtail_function(self.feedin,
-                             self.curtailment_ts,
-                             edisgo_object,
-                             **kwargs)
-        elif isinstance(self.curtailment_ts, pd.DataFrame):
-            if isinstance(self.curtailment_ts.columns, pd.MultiIndex):
-                col_tuple_list = self.curtailment_ts.columns.tolist()
-                for col_slice in col_tuple_list:
-                    feedin_slice = self.feedin.loc[:, (slice(None),
-                                                       slice(None),
-                                                       col_slice[0],
-                                                       col_slice[1])]
-                    feedin_slice.columns = feedin_slice.columns.remove_unused_levels()
-                    if feedin_slice.size > 0:
-                        curtail_function(feedin_slice,
-                                         self.curtailment_ts[col_slice],
-                                         edisgo_object,
-                                         **kwargs)
-                    else:
-                        message = "In this grid there seems to be no feedin time series" + \
-                                  " or generators corresponding to the combination of {}".format(col_slice)
-                        logging.warning(message)
+        if isinstance(curtailment_ts, pd.Series):
+            # check if curtailment exceeds feed-in
+            self._check_curtailment_total_energy(curtailment_ts, feedin)
+            curtailment.curtail_voltage(
+                feedin, generators, curtailment_ts, edisgo, **kwargs)
+        elif isinstance(curtailment_ts, pd.DataFrame):
+            if isinstance(curtailment_ts.columns, pd.MultiIndex):
+                for col in curtailment_ts.columns:
+                    # filter generators
+                    selected_generators = generators.loc[
+                        (generators.type == col[0]) &
+                        (generators.weather_cell_id == col[1])]
+                    selected_generators_repr = \
+                        selected_generators.gen_repr.values
+                    # check feed-in energy
+                    feedin_selected_generators = feedin.loc[
+                                                 :, selected_generators_repr]
+                    self._check_curtailment_total_energy(
+                        curtailment_ts.loc[:, col], feedin_selected_generators)
+                    curtailment.curtail_voltage(
+                        feedin_selected_generators, selected_generators,
+                        curtailment_ts.loc[:, col], edisgo, **kwargs)
             else:
-                # when there is no multi-index then we assume that this is only
-                # curtailed through technology or with weather cell id only
-                if self.curtailment_ts.columns.dtype == object:
-                    # this is when technology is given as strings
-                    for tech in self.curtailment_ts.columns:
-                        curtail_function(self.feedin.loc[:, (slice(None),
-                                                             slice(None),
-                                                             tech,
-                                                             slice(None))],
-                                         self.curtailment_ts[tech],
-                                         edisgo_object,
-                                         **kwargs)
-                elif self.curtailment_ts.columns.dtype == int:
-                    # this is when weather_cell_id is given as strings
-                    for w_id in self.curtailment_ts.columns:
-                        curtail_function(self.feedin.loc[:, (slice(None),
-                                                             slice(None),
-                                                             slice(None),
-                                                             w_id)],
-                                         self.curtailment_ts[w_id],
-                                         edisgo_object,
-                                         **kwargs)
-                else:
-                    message = 'Unallowed type {} of provided curtailment time ' \
-                              'series labels. Must either be string (like \'solar\') or ' \
-                              'integer (like w_id 933).'.format(type(self.curtailment_ts))
-                    logging.error(message)
-                    raise TypeError(message)
-        else:
-            message = 'Unallowed type {} of provided curtailment time ' \
-                      'series. Must either be pandas.Series or ' \
-                      'pandas.DataFrame.'.format(type(self.curtailment_ts))
-            logging.error(message)
-            raise TypeError(message)
-
-        # update generator time series in pypsa network
-        if edisgo_object.network.pypsa is not None:
-            pypsa_io.update_pypsa_generator_timeseries(edisgo_object.network)
+                raise NotImplementedError
 
         # check if curtailment exceeds feed-in
-        self._check_curtailment(edisgo_object.network)
+        self._check_curtailment(edisgo.network, feedin)
 
         # write curtailment to results to be able to put it out as files for
         # result checking
@@ -1228,14 +1238,33 @@ class CurtailmentControl:
         """
 
         try:
-            self.curtailment_ts.loc[network.timeseries.timeindex]
+            curtailment_ts.loc[network.timeseries.timeindex]
         except:
             message = 'Time index of curtailment time series does not match ' \
                       'with load and feed-in time series.'
             logging.error(message)
             raise KeyError(message)
 
-    def _check_curtailment(self, network):
+    def _check_curtailment_total_energy(self, curtailment_ts, feedin_selected):
+        """
+        Raises an error if the curtailment at any time step exceeds the
+        feed-in at that time.
+
+        Parameters
+        -----------
+
+        """
+        feedin_selected_sum = feedin_selected.sum(axis=1)
+        bad_time_steps = [_ for _ in curtailment_ts.index
+                          if curtailment_ts[_] > feedin_selected_sum[_]]
+
+        if bad_time_steps:
+            message = 'Curtailment demand exceeds total feed-in in time ' \
+                      'steps {}.'.format(bad_time_steps)
+            logging.error(message)
+            raise ValueError(message)
+
+    def _check_curtailment(self, network, feedin):
         """
         Raises an error if the curtailment at any time step exceeds the
         feed-in at that time.
@@ -1243,20 +1272,17 @@ class CurtailmentControl:
         Parameters
         -----------
         feedin : :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame with feed-in time series in kW. The DataFrame needs to have
-            the same columns as the curtailment DataFrame.
+            DataFrame with feed-in time series in kW. The DataFrame needs to
+            have the same columns as the curtailment DataFrame.
         network : :class:`~.grid.network.Network`
 
         """
-
-        feedin_ts_compare = self.feedin.copy()
-        for r in range(len(feedin_ts_compare.columns.levels) - 1):
-            feedin_ts_compare.columns = feedin_ts_compare.columns.droplevel(1)
-        # need an if condition to remove the weather_cell_id level too
-
-        if not ((feedin_ts_compare.loc[
-                 :, network.timeseries.curtailment.columns] -
-                 network.timeseries.curtailment) > -1e-3).all().all():
+        curtailment = network.timeseries.curtailment
+        gen_repr = [repr(_) for _ in curtailment.columns]
+        feedin_repr = feedin.loc[:, gen_repr]
+        curtailment_repr = curtailment
+        curtailment_repr.columns = gen_repr
+        if not ((feedin_repr - curtailment_repr) > -1e-3).all().all():
             message = 'Curtailment exceeds feed-in.'
             logging.error(message)
             raise TypeError(message)
@@ -1449,6 +1475,18 @@ class TimeSeries:
 
         Use 'other' if you don't want to explicitly provide every possible
         type. Default: None.
+    generation_reactive_power : :pandas: `pandasDataFrame<dataframe>`, optional
+        DataFrame with reactive power per technology and weather cell ID,
+        normalized with the nominal active power.
+        Time series can either be aggregated by technology type or by type
+        and weather cell ID. In the first case columns of the DataFrame are
+        'solar' and 'wind'; in the second case columns need to be a
+        :pandas:`pandas.MultiIndex<multiindex>` with the first level
+        containing the type and the second level the weather cell ID.
+        If the technology doesn't contain weather cell information, i.e.
+        if it is other than solar or wind generation,
+        this second level can be left as a numpy Nan or a None.
+        Default: None.
     load : :pandas:`pandas.DataFrame<dataframe>`, optional
         DataFrame with active power of load time series of each (cumulative)
         type of load, normalized with corresponding annual energy demand.
@@ -1460,6 +1498,18 @@ class TimeSeries:
         * 'agricultural'
 
          Default: None.
+    load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of normalized reactive power (normalized by
+        annual energy demand) per load sector. Index needs to be a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent load type:
+
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
+
+        Default: None.
     curtailment : :pandas:`pandas.DataFrame<dataframe>` or List, optional
         In the case curtailment is applied to all fluctuating renewables
         this needs to be a DataFrame with active power curtailment time series.
@@ -1477,8 +1527,9 @@ class TimeSeries:
 
     See also
     --------
-    edisgo.grid.components.Generator : Usage details of :meth:`_generation`
-    edisgo.grid.components.Load : Usage details of :meth:`_load`
+    `timeseries` getter in :class:`~.grid.components.Generator`,
+    :class:`~.grid.components.GeneratorFluctuating` and
+    :class:`~.grid.components.Load`.
 
     """
 
@@ -1488,7 +1539,10 @@ class TimeSeries:
                                                    None)
         self._generation_fluctuating = kwargs.get('generation_fluctuating',
                                                   None)
+        self._generation_reactive_power = kwargs.get(
+            'generation_reactive_power', None)
         self._load = kwargs.get('load', None)
+        self._load_reactive_power = kwargs.get('load_reacitve_power', None)
         self._curtailment = kwargs.get('curtailment', None)
         self._timeindex = kwargs.get('timeindex', None)
         self._timesteps_load_feedin_case = None
@@ -1503,6 +1557,7 @@ class TimeSeries:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
+
         """
         try:
             return self._generation_dispatchable.loc[[self.timeindex], :]
@@ -1535,9 +1590,30 @@ class TimeSeries:
         self._generation_fluctuating = generation_fluc_timeseries
 
     @property
+    def generation_reactive_power(self):
+        """
+        Get reactive power time series for generators normalized by nominal
+        active power.
+
+        Returns
+        -------
+        :pandas: `pandas.DataFrame<dataframe>`
+            See class definition for details.
+
+        """
+        if self._generation_reactive_power is not None:
+            return self._generation_reactive_power.loc[self.timeindex, :]
+        else:
+            return None
+
+    @generation_reactive_power.setter
+    def generation_reactive_power(self, generation_reactive_power_timeseries):
+        self._generation_reactive_power = generation_reactive_power_timeseries
+
+    @property
     def load(self):
         """
-        Get load timeseries (only active power)
+        Get load time series (only active power)
 
         Returns
         -------
@@ -1553,6 +1629,27 @@ class TimeSeries:
     @load.setter
     def load(self, load_timeseries):
         self._load = load_timeseries
+
+    @property
+    def load_reactive_power(self):
+        """
+        Get reactive power time series for load normalized by annual
+        consumption.
+
+        Returns
+        -------
+        :pandas: `pandas.DataFrame<dataframe>`
+            See class definition for details.
+
+        """
+        if self._load_reactive_power is not None:
+            return self._load_reactive_power.loc[self.timeindex, :]
+        else:
+            return None
+
+    @load_reactive_power.setter
+    def load_reactive_power(self, load_reactive_power_timeseries):
+        self._load_reactive_power = load_reactive_power_timeseries
 
     @property
     def timeindex(self):
