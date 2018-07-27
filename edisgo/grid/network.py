@@ -121,6 +121,22 @@ class EDisGo:
 
         Use 'other' if you don't want to explicitly provide every possible
         type.
+    timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of normalized reactive power (normalized by
+        the rated nominal active power) per technology and weather cell. Index
+        needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent generator type and can be a MultiIndex column
+        containing the weather cell ID in the second level. If the technology
+        doesn't contain weather cell information i.e. if it is other than solar
+        and wind generation, this second level can be left as a numpy Nan or a
+        None.
+        Default: None.
+        If no time series for the technology or technology and weather cell ID
+        is given, reactive power will be calculated from power factor and
+        power factor mode in the config sections `reactive_power_factor` and
+        `reactive_power_mode` and a warning will be raised. See
+        :class:`~.grid.components.Generator` and
+        :class:`~.grid.components.GeneratorFluctuating` for more information.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
         Parameter used to obtain time series of active power of (cumulative)
         loads.
@@ -139,6 +155,23 @@ class EDisGo:
           * 'industrial'
           * 'agricultural'
 
+    timeseries_load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of normalized reactive power (normalized by
+        annual energy demand) per load sector. Index needs to be a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent load type:
+
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
+
+        Default: None.
+        If no time series for the load sector is given, reactive power will be
+        calculated from power factor and power factor mode in the config
+        sections `reactive_power_factor` and `reactive_power_mode` and a
+        warning will be raised. See :class:`~.grid.components.Load` for
+        more information.
     generator_scenario : None or :obj:`str`
         If provided defines which scenario of future generator park to use
         and invokes import of these generators. Possible options are 'nep2035'
@@ -203,8 +236,12 @@ class EDisGo:
                     'timeseries_generation_fluctuating', None),
                 timeseries_generation_dispatchable=kwargs.get(
                     'timeseries_generation_dispatchable', None),
+                timeseries_generation_reactive_power=kwargs.get(
+                    'timeseries_generation_reactive_power', None),
                 timeseries_load=kwargs.get(
                     'timeseries_load', None),
+                timeseries_load_reactive_power = kwargs.get(
+                    'timeseries_load_reactive_power', None),
                 timeindex=kwargs.get('timeindex', None)).timeseries
 
         # import new generators
@@ -350,7 +387,8 @@ class EDisGo:
             self, max_while_iterations=kwargs.get(
                 'max_while_iterations', 10),
             copy_graph=kwargs.get('copy_graph', False),
-            timesteps_pfa=kwargs.get('timesteps_pfa', None))
+            timesteps_pfa=kwargs.get('timesteps_pfa', None),
+            combined_analysis=kwargs.get('combined_analysis', False))
 
     def integrate_storage(self, timeseries, position, **kwargs):
         """
@@ -460,6 +498,10 @@ class Network:
 
         """
         return self._config
+
+    @config.setter
+    def config(self, config_path):
+        self._config = Config(config_path=config_path)
 
     @property
     def metadata(self):
@@ -850,6 +892,19 @@ class TimeSeriesControl:
           * 'agricultural'
 
         Default: None.
+    timeseries_load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        Parameter to get the time series of the reactive power of loads. It should be a
+        DataFrame with time series of normalized reactive power (normalized by
+        annual energy demand) per load sector. Index needs to be a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent load type:
+
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
+
+        Default: None.
     timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
         Can be used to define a time range for which to obtain load time series
         and feed-in time series of fluctuating renewables or to define time
@@ -902,12 +957,17 @@ class TimeSeriesControl:
                 raise ValueError('Your input for '
                                  '"timeseries_generation_dispatchable" is not '
                                  'valid.'.format(mode))
+            # reactive power time series for all generators
+            ts = kwargs.get('timeseries_generation_reactive_power', None)
+            if isinstance(ts, pd.DataFrame):
+                self.timeseries.generation_reactive_power = ts
             # set time index
             if kwargs.get('timeindex', None) is not None:
                 self.timeseries._timeindex = kwargs.get('timeindex')
             else:
                 self.timeseries._timeindex = \
                     self.timeseries._generation_fluctuating.index
+
             # load time series
             ts = kwargs.get('timeseries_load', None)
             if isinstance(ts, pd.DataFrame):
@@ -918,6 +978,10 @@ class TimeSeriesControl:
             else:
                 raise ValueError('Your input for "timeseries_load" is not '
                                  'valid.'.format(mode))
+            # reactive power timeseries for loads
+            ts = kwargs.get('timeseries_load_reactive_power', None)
+            if isinstance(ts, pd.DataFrame):
+                self.timeseries.load_reactive_power = ts
 
             # check if time series for the set time index can be obtained
             self._check_timeindex()
@@ -932,6 +996,8 @@ class TimeSeriesControl:
             self.timeseries.generation_fluctuating
             self.timeseries.generation_dispatchable
             self.timeseries.load
+            self.timeseries.generation_reactive_power
+            self.timeseries.load_reactive_power
         except:
             message = 'Time index of feed-in and load time series does ' \
                       'not match.'
@@ -1366,7 +1432,7 @@ class StorageControl:
         if isinstance(timeseries, dict):
             for storage, ts in timeseries.items():
                 try:
-                    position = position[storage]
+                    position = battery_position[storage]
                 except KeyError:
                     message = 'Please provide storage parameters or ' \
                               'position for storage {}.'.format(storage)
@@ -1571,6 +1637,18 @@ class TimeSeries:
 
         Use 'other' if you don't want to explicitly provide every possible
         type. Default: None.
+    generation_reactive_power : :pandas: `pandasDataFrame<dataframe>`, optional
+        DataFrame with reactive power per technology and weather cell ID,
+        normalized with the nominal active power.
+        Time series can either be aggregated by technology type or by type
+        and weather cell ID. In the first case columns of the DataFrame are
+        'solar' and 'wind'; in the second case columns need to be a
+        :pandas:`pandas.MultiIndex<multiindex>` with the first level
+        containing the type and the second level the weather cell ID.
+        If the technology doesn't contain weather cell information, i.e.
+        if it is other than solar or wind generation,
+        this second level can be left as a numpy Nan or a None.
+        Default: None.
     load : :pandas:`pandas.DataFrame<dataframe>`, optional
         DataFrame with active power of load time series of each (cumulative)
         type of load, normalized with corresponding annual energy demand.
@@ -1582,6 +1660,18 @@ class TimeSeries:
         * 'agricultural'
 
          Default: None.
+    load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of normalized reactive power (normalized by
+        annual energy demand) per load sector. Index needs to be a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent load type:
+
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
+
+        Default: None.
     curtailment : :pandas:`pandas.DataFrame<dataframe>` or List, optional
         In the case curtailment is applied to all fluctuating renewables
         this needs to be a DataFrame with active power curtailment time series.
@@ -1599,8 +1689,9 @@ class TimeSeries:
 
     See also
     --------
-    edisgo.grid.components.Generator : Usage details of :meth:`_generation`
-    edisgo.grid.components.Load : Usage details of :meth:`_load`
+    `timeseries` getter in :class:`~.grid.components.Generator`,
+    :class:`~.grid.components.GeneratorFluctuating` and
+    :class:`~.grid.components.Load`.
 
     """
 
@@ -1610,7 +1701,10 @@ class TimeSeries:
                                                    None)
         self._generation_fluctuating = kwargs.get('generation_fluctuating',
                                                   None)
+        self._generation_reactive_power = kwargs.get(
+            'generation_reactive_power', None)
         self._load = kwargs.get('load', None)
+        self._load_reactive_power = kwargs.get('load_reacitve_power', None)
         self._curtailment = kwargs.get('curtailment', None)
         self._timeindex = kwargs.get('timeindex', None)
         self._timesteps_load_feedin_case = None
@@ -1625,6 +1719,7 @@ class TimeSeries:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
+
         """
         try:
             return self._generation_dispatchable.loc[[self.timeindex], :]
@@ -1657,9 +1752,30 @@ class TimeSeries:
         self._generation_fluctuating = generation_fluc_timeseries
 
     @property
+    def generation_reactive_power(self):
+        """
+        Get reactive power time series for generators normalized by nominal
+        active power.
+
+        Returns
+        -------
+        :pandas: `pandas.DataFrame<dataframe>`
+            See class definition for details.
+
+        """
+        if self._generation_reactive_power is not None:
+            return self._generation_reactive_power.loc[self.timeindex, :]
+        else:
+            return None
+
+    @generation_reactive_power.setter
+    def generation_reactive_power(self, generation_reactive_power_timeseries):
+        self._generation_reactive_power = generation_reactive_power_timeseries
+
+    @property
     def load(self):
         """
-        Get load timeseries (only active power)
+        Get load time series (only active power)
 
         Returns
         -------
@@ -1675,6 +1791,27 @@ class TimeSeries:
     @load.setter
     def load(self, load_timeseries):
         self._load = load_timeseries
+
+    @property
+    def load_reactive_power(self):
+        """
+        Get reactive power time series for load normalized by annual
+        consumption.
+
+        Returns
+        -------
+        :pandas: `pandas.DataFrame<dataframe>`
+            See class definition for details.
+
+        """
+        if self._load_reactive_power is not None:
+            return self._load_reactive_power.loc[self.timeindex, :]
+        else:
+            return None
+
+    @load_reactive_power.setter
+    def load_reactive_power(self, load_reactive_power_timeseries):
+        self._load_reactive_power = load_reactive_power_timeseries
 
     @property
     def timeindex(self):
