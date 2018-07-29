@@ -47,7 +47,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     copy_graph : :obj:`Boolean`
         If True reinforcement is conducted on a copied graph and discarded.
         Default: False.
-    max_while_iterations : int
+    max_while_iterations : :obj:`int`
         Maximum number of times each while loop is conducted.
     combined_analysis : :obj:`Boolean`
         If True allowed voltage deviations for combined analysis of MV and LV

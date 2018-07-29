@@ -257,7 +257,7 @@ def mv_to_pypsa(network):
                  'p_nom': [],
                  'type': []}
 
-    bus = {'name': [], 'v_nom': []}
+    bus = {'name': [], 'v_nom': [], 'x': [], 'y': []}
 
     load = {'name': [], 'bus': []}
 
@@ -300,11 +300,15 @@ def mv_to_pypsa(network):
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(gen.grid.voltage_nom)
+        bus['x'].append(gen.geom.x)
+        bus['y'].append(gen.geom.y)
 
     # create dataframe representing branch tees
     for bt in branch_tees:
         bus['name'].append('_'.join(['Bus', repr(bt)]))
         bus['v_nom'].append(bt.grid.voltage_nom)
+        bus['x'].append(bt.geom.x)
+        bus['y'].append(bt.geom.y)
 
     # create dataframes representing loads and associated buses
     for lo in loads:
@@ -314,6 +318,8 @@ def mv_to_pypsa(network):
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(lo.grid.voltage_nom)
+        bus['x'].append(lo.geom.x)
+        bus['y'].append(lo.geom.y)
 
     # create dataframe for lines
     for l in lines:
@@ -352,13 +358,18 @@ def mv_to_pypsa(network):
         bus0_name = '_'.join(['Bus', lv_st.__repr__(side='mv')])
         bus['name'].append(bus0_name)
         bus['v_nom'].append(lv_st.mv_grid.voltage_nom)
+        bus['x'].append(lv_st.geom.x)
+        bus['y'].append(lv_st.geom.y)
 
         # add secondary side bus (bus1)
         bus1_name = '_'.join(['Bus', lv_st.__repr__(side='lv')])
         bus['name'].append(bus1_name)
         bus['v_nom'].append(lv_st.transformers[0].voltage_op)
+        bus['x'].append(None)
+        bus['y'].append(None)
 
-        v_base = lv_st.mv_grid.voltage_nom # we choose voltage of transformers' primary side
+        # we choose voltage of transformers' primary side
+        v_base = lv_st.mv_grid.voltage_nom
 
         for tr in lv_st.transformers:
             z_base = v_base ** 2 / tr.type.S_nom
@@ -381,11 +392,15 @@ def mv_to_pypsa(network):
         bus1_name = '_'.join(['Bus', mv_st.__repr__(side='mv')])
         bus['name'].append(bus1_name)
         bus['v_nom'].append(mv_st.transformers[0].voltage_op)
+        bus['x'].append(mv_st.geom.x)
+        bus['y'].append(mv_st.geom.y)
 
     # create dataframe representing disconnecting points
     for dp in disconnecting_points:
         bus['name'].append('_'.join(['Bus', repr(dp)]))
         bus['v_nom'].append(dp.grid.voltage_nom)
+        bus['x'].append(dp.geom.x)
+        bus['y'].append(dp.geom.y)
 
     # create dataframe representing storages
     for sto in storages:
@@ -401,6 +416,8 @@ def mv_to_pypsa(network):
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(sto.grid.voltage_nom)
+        bus['x'].append(sto.geom.x)
+        bus['y'].append(sto.geom.y)
 
     # Add separate slack generator at MV station secondary side bus bar
     generator['name'].append("Generator_slack")
@@ -467,7 +484,7 @@ def lv_to_pypsa(network):
                  'p_nom': [],
                  'type': []}
 
-    bus = {'name': [], 'v_nom': []}
+    bus = {'name': [], 'v_nom': [], 'x': [], 'y': []}
 
     load = {'name': [], 'bus': []}
 
@@ -500,11 +517,15 @@ def lv_to_pypsa(network):
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(gen.grid.voltage_nom)
+        bus['x'].append(None)
+        bus['y'].append(None)
 
     # create dictionary representing branch tees
     for bt in branch_tees:
         bus['name'].append('_'.join(['Bus', repr(bt)]))
         bus['v_nom'].append(bt.grid.voltage_nom)
+        bus['x'].append(None)
+        bus['y'].append(None)
 
     # create dataframes representing loads and associated buses
     for lo in loads:
@@ -514,6 +535,8 @@ def lv_to_pypsa(network):
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(lo.grid.voltage_nom)
+        bus['x'].append(None)
+        bus['y'].append(None)
 
     # create dataframe for lines
     for l in lines:
@@ -553,6 +576,8 @@ def lv_to_pypsa(network):
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(sto.grid.voltage_nom)
+        bus['x'].append(None)
+        bus['y'].append(None)
 
     lv_components = {
         'Generator': pd.DataFrame(generator).set_index('name'),
