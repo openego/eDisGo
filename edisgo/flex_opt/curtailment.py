@@ -123,6 +123,14 @@ def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_thr
 
     logging.info("Start curtailment optimization.")
 
+    # hack until we know why error "TypeError: Cannot convert object of type
+    # 'ndarray' (value = 0.0) to a numeric value." is thrown whenn all feed-in
+    # values for one time step are zero
+    zero_feedin_timestep = feedin.sum(axis=1).loc[
+        feedin.sum(axis=1) == 0].index
+    if not zero_feedin_timestep.empty:
+        feedin.loc[zero_feedin_timestep, feedin.columns[0]] = 0.1
+        
     v_max = voltage_pu.max(axis=1)
     timeindex = feedin.index
     generators = feedin.columns
