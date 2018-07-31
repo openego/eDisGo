@@ -429,6 +429,70 @@ def get_gen_info(network, level='mvlv'):
 
     return gen_df
 
+def generator_feedins(edisgo_grid):
+    """
+    Get the individual feedin of each generators in kW
+    in a large pandas Dataframe
+
+    Parameters
+    ----------
+    edisgo_grid: :py:mod:`~/edisgo/netork.EDisGo`
+        The generatred eDisGo object
+
+    Return
+    ------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe with each column being a generator and the index
+        being a pandas DateTimeIndex of the timesteps. The values
+        being the active power feed in to the grid at the timestep
+        by each generator
+    """
+    generator_feedins = {}
+    for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator'):
+        generator_feedins[repr(i)] = i.timeseries['p']
+    for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
+        generator_feedins[repr(i)] = i.timeseries['p']
+
+    for lvgd in edisgo_grid.network.mv_grid.lv_grids:
+        for i in lvgd.graph.nodes_by_attribute('generator'):
+            generator_feedins[repr(i)] = i.timeseries['p']
+        for i in lvgd.graph.nodes_by_attribute('generator_aggr'):
+            generator_feedins[repr(i)] = i.timeseries['p']
+
+    return pd.DataFrame(generator_feedins)
+
+
+def generator_reactive_powers(edisgo_grid):
+    """
+        Get the individual reactive poowers of each generator in kvar
+        in a large pandas Dataframe
+
+        Parameters
+        ----------
+        edisgo_grid: :py:mod:`~/edisgo/netork.EDisGo`
+            The generatred eDisGo object
+
+        Return
+        ------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with each column being a generator and the index
+            being a pandas DateTimeIndex of the timesteps.  The values
+            being the reactive power feed in to the grid at the timestep
+            by each generator
+        """
+    generator_reactive_power = {}
+    for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator'):
+        generator_reactive_power[repr(i)] = i.timeseries['q']
+    for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
+        generator_reactive_power[repr(i)] = i.timeseries['q']
+
+    for lvgd in edisgo_grid.network.mv_grid.lv_grids:
+        for i in lvgd.graph.nodes_by_attribute('generator'):
+            generator_reactive_power[repr(i)] = i.timeseries['q']
+        for i in lvgd.graph.nodes_by_attribute('generator_aggr'):
+            generator_reactive_power[repr(i)] = i.timeseries['q']
+
+    return pd.DataFrame(generator_reactive_power)
 
 def get_load_info(network, level='mvlv'):
     """
