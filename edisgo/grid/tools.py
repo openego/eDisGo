@@ -446,13 +446,13 @@ def generator_feedins(edisgo_grid):
     generator_feedins = {}
     for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator'):
         generator_feedins[repr(i)] = i.timeseries['p']
-    for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator_agg'):
+    for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
         generator_feedins[repr(i)] = i.timeseries['p']
 
     for lvgd in edisgo_grid.network.mv_grid.lv_grids:
         for i in lvgd.graph.nodes_by_attribute('generator'):
             generator_feedins[repr(i)] = i.timeseries['p']
-        for i in lvgd.graph.nodes_by_attribute('generator_agg'):
+        for i in lvgd.graph.nodes_by_attribute('generator_aggr'):
             generator_feedins[repr(i)] = i.timeseries['p']
 
     return pd.DataFrame(generator_feedins)
@@ -479,13 +479,13 @@ def generator_reactive_powers(edisgo_grid):
     generator_reactive_power = {}
     for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator'):
         generator_reactive_power[repr(i)] = i.timeseries['q']
-    for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator_agg'):
+    for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
         generator_reactive_power[repr(i)] = i.timeseries['q']
 
     for lvgd in edisgo_grid.network.mv_grid.lv_grids:
         for i in lvgd.graph.nodes_by_attribute('generator'):
             generator_reactive_power[repr(i)] = i.timeseries['q']
-        for i in lvgd.graph.nodes_by_attribute('generator_agg'):
+        for i in lvgd.graph.nodes_by_attribute('generator_aggr'):
             generator_reactive_power[repr(i)] = i.timeseries['q']
 
     return pd.DataFrame(generator_reactive_power)
