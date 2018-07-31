@@ -13,7 +13,7 @@ def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
     The curtailment that has to be met in each step is allocated
     depending on the voltage at the nodes of the generators. The voltage
     at the node is used as an input to calculate a feedin_factor that changes
-    the curtailment by modifying the feed-in at the points where
+    the curtailment by curtailing the feed-in at the points where
     there are very high voltages. This is only used to manipulate the resulting
     curtailment and does not change the feed-in timeseries itself.
 
@@ -23,15 +23,19 @@ def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
     argument 'voltage_threshold'. By default, this voltage
     is set to 1.0 per unit.
 
-    Above the lower voltage threshold, the curtailment is proportional
-    to the difference between the node voltage and the lower
+    Above the voltage threshold, the curtailment is proportional
+    to the difference between the node voltage and the
     voltage threshold. Thus the higher the voltage, the greater the
-    difference from the lower voltage threshold and thereby the higher the
+    difference from the voltage threshold and thereby the higher the
     curtailment.
 
     Lowering this voltage will increase the amount of curtailment to
     generators with higher node voltages as well as possibly increase the
     number of generators the curtailment is spread over.
+
+    The method builds the curtailment distribution to the generators as
+    and optimization problem and passes through an available solver, like
+    'glpk' or 'cbc', etc.
 
     This method runs an edisgo_object.analyze internally to find out
     the voltage at the nodes if an :meth:`edisgo.grid.network.EDisGo.analyze`
@@ -71,11 +75,22 @@ def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
     voltage_threshold: :obj:`float`
         The node voltage below which no curtailment would be assigned to the
         respective generator. Default: 1.0.
+    solver: :obj:`str`
+        The solver used to optimize the curtailment assigned to the generator.
+        The string depends upon the installed or available solver.
+
+        * 'cbc' - coin-or branch and cut solver
+        * 'glpk' - gnu linear programming kit solver
+        * any other available compatible with 'pyomo' like 'gurobi'
+          or 'cplex'
+        Default: 'cbc'
     """
     voltage_threshold = pd.Series(kwargs.get('voltage_threshold', 1.0),
                                   index=total_curtailment_ts.index)
 
     # get the voltages at the nodes
+    # need to get generators separately due to non-lex-sorted column
+    # levels/labels
     voltage_pu_lv = edisgo.network.results.v_res(
         nodes=generators.loc[(generators.voltage_level == 'lv')].index,
         level='lv')
@@ -102,15 +117,19 @@ def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
             ts, voltage_pu.loc[ts, :] <= voltage_threshold.loc[ts]].index
         feedin.loc[ts, gen_pool_out] = 0
 
-    #GeneratorFluctuating_979130
+
+    # get the appropriate solver available
+    solver = kwargs.get('solver', 'cbc')
+
+    # do the curtailment optimization
     curtailment = _optimize_curtail_voltage(
-        feedin, voltage_pu, total_curtailment_ts, voltage_threshold)
+        feedin, voltage_pu, total_curtailment_ts, voltage_threshold, solver)
 
     # assign curtailment to individual generators
     assign_curtailment(curtailment, edisgo, generators)
 
 
-def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_threshold):
+def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_threshold, solver='cbc'):
     """
     Parameters
     ------------
@@ -118,7 +137,15 @@ def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_thr
     voltage_pu : index is time index, columns are generators, voltage from power flow in p.u.
     total_curtailment : index is time index, total curtailment in time step in kW
     voltage_threshold : index is time index, voltage threshold in time step in p.u.
+    solver: :obj:`str`
+        The solver used to optimize the curtailment assigned to the generator.
+        The string depends upon the installed or available solver.
 
+        * 'cbc' - coin-or branch and cut solver
+        * 'glpk' - gnu linear programming kit solver
+        * any other available compatible with 'pyomo' like 'gurobi'
+          or 'cplex'
+        Default: 'cbc'
     """
 
     logging.info("Start curtailment optimization.")
@@ -214,7 +241,7 @@ def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_thr
     model.sum_curtailment = Constraint(model.T, rule=total_curtailment)
 
     # solve
-    solver = SolverFactory('cbc')
+    solver = SolverFactory(solver)
     results = solver.solve(model, tee=True)
 
     # load results back into model
@@ -226,7 +253,8 @@ def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_thr
     return c
 
 
-def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
+def curtail_all(feedin, generators, total_curtailment_ts, edisgo,
+                    **kwargs):
     """
     Implements curtailment methodology 'curtail_all'.
 
@@ -260,33 +288,38 @@ def curtail_all(feedin, total_curtailment_ts, edisgo_object, **kwargs):
         through the :attr:`edisgo.grid.network.CurtailmentControl.feedin`
         attribute. See :class:`edisgo.grid.network.CurtailmentControl` for more
         details.
+    generators: :pandas:`pandas.DataFrame<dataframe>`
+        This contains a dataframe of all the generators selected for the assignment
+        of the curtailment. The typical structure of this dataframe can be obtained
+        from :py:mod:`edigo.grid.tools.get_gen_info`. The stucture essentially
+        contains 5 columns namely:
+
+        * 'gen_repr': The repr string of the generator with the asset name and the asset id
+        * 'type': the generator type, e. g. 'solar' or 'wind' typically
+        * 'voltage_level': the voltage level, either 'mv' or 'lv'
+        * 'nominal_capacity': the nominal capacity of the generator
+        * 'weather_cell_id': the id of the weather cell the generator is located in.
+
     total_curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
         The curtailment to be distributed amongst the generators in the
         edisgo_objects' network. This is input through the edisgo_object.
         See class definition for further information.
-    edisgo_object : :class:`edisgo.grid.network.EDisGo`
+    edisgo : :class:`edisgo.grid.network.EDisGo`
         The edisgo object in which this function was called through the
         respective :class:`edisgo.grid.network.CurtailmentControl` instance.
     """
-    # create a feedin factor of 1
-    # make sure the nans are filled in
-    # this is a work around to ensure the
-    # type of total_curtailment_ts (either series or dataframe)
-    # doesn't affect the calculation depending on the input
-    # and the timestamps are maintained
-
-    feedin_factor = total_curtailment_ts.copy()
-    feedin_factor = feedin_factor / feedin_factor
-    feedin_factor.fillna(1.0, inplace=True)
-
-    feedin.mul(feedin_factor, axis=0, level=1)
-
     # total_curtailment
     curtailment = feedin.divide(feedin.sum(axis=1), axis=0). \
         multiply(total_curtailment_ts, axis=0)
 
+    # make sure that the feedin isn't zero, as if it is
+    # dividing by zero makes a lot of Nans which makes it harder
+    # to check the curtailment correctly
+    # just fillna with 0s
+    curtailment.fillna(0, inplace=True)
+
     # assign curtailment to individual generators
-    assign_curtailment(curtailment, edisgo_object)
+    assign_curtailment(curtailment, edisgo, generators)
 
 
 def assign_curtailment(curtailment, edisgo, generators):
