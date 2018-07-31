@@ -1982,6 +1982,7 @@ class Results:
     @assigned_curtailment.setter
     def assigned_curtailment(self, assigned_curtailment):
         self._assigned_curtailment = assigned_curtailment
+        self.assigned_curtailment.sort_index(inplace=True)
 
     @property
     def unresolved_issues(self):
