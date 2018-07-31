@@ -133,9 +133,6 @@ def run_edisgo_basic(ding0_filepath,
         logging.info('Grid expansion with no generator imports based on scenario')
 
     try:
-        # Do non-linear power flow analysis with PyPSA
-        edisgo_grid.analyze()
-
         # Do grid reinforcement
         edisgo_grid.reinforce()
 

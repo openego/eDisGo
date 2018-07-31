@@ -5,7 +5,7 @@ import os
 if not 'READTHEDOCS' in os.environ:
     from shapely.ops import transform
 
-from edisgo.grid.components import Transformer, Line
+from edisgo.grid.components import Transformer, Line, LVStation
 from edisgo.grid.grids import LVGrid, MVGrid
 from edisgo.grid.tools import get_mv_feeder_from_node, get_mv_feeder_from_line
 
@@ -118,7 +118,8 @@ def grid_expansion_costs(network):
                 {'type': t.type.name,
                  'total_costs': _get_transformer_costs(t),
                  'quantity': 1,
-                 'voltage_level': 'mv/lv',
+                 'voltage_level': 'mv/lv' if isinstance(
+                     t.grid.station, LVStation) else 'hv/mv',
                  'mv_feeder': get_mv_feeder_from_node(t.grid.station)},
                 index=[t]))
 
