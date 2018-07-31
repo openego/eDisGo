@@ -368,7 +368,16 @@ def get_gen_info(network, level='mvlv', fluctuating=False):
     Returns
     --------
     :pandas:`pandas.DataFrame<dataframe>`
-        Generators and Generator information
+        This contains a dataframe of all the generators selected for the assignment
+        of the curtailment. The typical structure of this dataframe can be obtained
+        from :py:mod:`edigo.grid.tools.get_gen_info`. The stucture essentially
+        contains 5 columns namely:
+
+        * 'gen_repr': The repr string of the generator with the asset name and the asset id
+        * 'type': the generator type, e. g. 'solar' or 'wind' typically
+        * 'voltage_level': the voltage level, either 'mv' or 'lv'
+        * 'nominal_capacity': the nominal capacity of the generator
+        * 'weather_cell_id': the id of the weather cell the generator is located in
 
     """
     # get all generators
@@ -438,13 +447,13 @@ def generator_feedins(edisgo_grid):
     generator_feedins = {}
     for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator'):
         generator_feedins[repr(i)] = i.timeseries['p']
-    for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator_agg'):
+    for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
         generator_feedins[repr(i)] = i.timeseries['p']
 
     for lvgd in edisgo_grid.network.mv_grid.lv_grids:
         for i in lvgd.graph.nodes_by_attribute('generator'):
             generator_feedins[repr(i)] = i.timeseries['p']
-        for i in lvgd.graph.nodes_by_attribute('generator_agg'):
+        for i in lvgd.graph.nodes_by_attribute('generator_aggr'):
             generator_feedins[repr(i)] = i.timeseries['p']
 
     return pd.DataFrame(generator_feedins)
@@ -471,13 +480,13 @@ def generator_reactive_powers(edisgo_grid):
     generator_reactive_power = {}
     for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator'):
         generator_reactive_power[repr(i)] = i.timeseries['q']
-    for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator_agg'):
+    for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
         generator_reactive_power[repr(i)] = i.timeseries['q']
 
     for lvgd in edisgo_grid.network.mv_grid.lv_grids:
         for i in lvgd.graph.nodes_by_attribute('generator'):
             generator_reactive_power[repr(i)] = i.timeseries['q']
-        for i in lvgd.graph.nodes_by_attribute('generator_agg'):
+        for i in lvgd.graph.nodes_by_attribute('generator_aggr'):
             generator_reactive_power[repr(i)] = i.timeseries['q']
 
     return pd.DataFrame(generator_reactive_power)
