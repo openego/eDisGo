@@ -6,7 +6,8 @@ import logging
 import datetime
 
 import edisgo
-from edisgo.tools import config, pypsa_io, tools
+from edisgo.tools import config, tools
+from edisgo.tools import pypsa_io_lopf as pypsa_io
 from edisgo.data.import_data import import_from_ding0, import_generators, \
     import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
@@ -363,7 +364,8 @@ class EDisGo:
                      for _ in timesteps]:
             pypsa_io.update_pypsa_timeseries(self.network, timesteps=timesteps)
         # run power flow analysis
-        pf_results = self.network.pypsa.pf(timesteps)
+        pf_results = self.network.pypsa.lopf(
+            snapshots=timesteps, solver_name='cbc', keep_files=True)
 
         if all(pf_results['converged']['0'].tolist()):
             pypsa_io.process_pfa_results(self.network, self.network.pypsa)

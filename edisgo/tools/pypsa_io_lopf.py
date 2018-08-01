@@ -96,11 +96,11 @@ def to_pypsa(network, mode, timesteps):
         components = combine_mv_and_lv(mv_components, lv_components)
 
         if list(components['Load'].index.values):
-            timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
+            timeseries_load_p_set = _pypsa_load_timeseries(
                 network, mode=mode, timesteps=timesteps)
 
         if len(list(components['Generator'].index.values)) > 1:
-            timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
+            timeseries_gen_p_min, timeseries_gen_p_max = _pypsa_generator_timeseries(
                 network, mode=mode, timesteps=timesteps)
 
         if list(components['Bus'].index.values):
@@ -108,7 +108,7 @@ def to_pypsa(network, mode, timesteps):
                 network, components['Bus'].index.tolist(), timesteps=timesteps)
 
         if len(list(components['StorageUnit'].index.values)) > 0:
-            timeseries_storage_p, timeseries_storage_q = \
+            timeseries_storage_p_min, timeseries_storage_p_max = \
                 _pypsa_storage_timeseries(
                     network, mode=mode, timesteps=timesteps)
 
@@ -162,26 +162,26 @@ def to_pypsa(network, mode, timesteps):
 
     # import time series to PyPSA network
     if len(list(components['Generator'].index.values)) > 1:
-        import_series_from_dataframe(pypsa_network, timeseries_gen_p,
-                                     'Generator', 'p_set')
-        import_series_from_dataframe(pypsa_network, timeseries_gen_q,
-                                     'Generator', 'q_set')
+        import_series_from_dataframe(pypsa_network, timeseries_gen_p_min,
+                                     'Generator', 'p_min_pu')
+        import_series_from_dataframe(pypsa_network, timeseries_gen_p_max,
+                                     'Generator', 'p_max_pu')
 
     if list(components['Load'].index.values):
-        import_series_from_dataframe(pypsa_network, timeseries_load_p,
+        import_series_from_dataframe(pypsa_network, timeseries_load_p_set,
                                      'Load', 'p_set')
-        import_series_from_dataframe(pypsa_network, timeseries_load_q,
-                                     'Load', 'q_set')
+        # import_series_from_dataframe(pypsa_network, timeseries_load_q,
+        #                              'Load', 'q_set')
 
     if list(components['Bus'].index.values):
         import_series_from_dataframe(pypsa_network, timeseries_bus_v_set,
                                      'Bus', 'v_mag_pu_set')
 
     if len(list(components['StorageUnit'].index.values)) > 0:
-        import_series_from_dataframe(pypsa_network, timeseries_storage_p,
-                                     'StorageUnit', 'p_set')
-        import_series_from_dataframe(pypsa_network, timeseries_storage_q,
-                                     'StorageUnit', 'q_set')
+        import_series_from_dataframe(pypsa_network, timeseries_storage_p_min,
+                                     'StorageUnit', 'p_min_pu')
+        import_series_from_dataframe(pypsa_network, timeseries_storage_p_max,
+                                     'StorageUnit', 'p_max_pu')
 
     _check_integrity_of_pypsa(pypsa_network)
 
@@ -268,6 +268,8 @@ def mv_to_pypsa(network):
             'x': [],
             'r': [],
             's_nom': [],
+            's_nom_extendable': [],
+            'capital_cost': [],
             'length': []}
 
     transformer = {'name': [],
@@ -283,11 +285,14 @@ def mv_to_pypsa(network):
     storage = {
         'name': [],
         'bus': [],
-        'p_nom': [],
-        'state_of_charge_initial': [],
-        'efficiency_store': [],
-        'efficiency_dispatch': [],
-        'standing_loss': []}
+        #'p_nom': [],
+        'p_nom_extendable': [],
+        'p_nom_min': [],
+        'p_nom_max': []}
+        # 'state_of_charge_initial': [],
+        # 'efficiency_store': [],
+        # 'efficiency_dispatch': [],
+        # 'standing_loss': []}
 
     # create dataframe representing generators and associated buses
     for gen in generators:
@@ -349,6 +354,8 @@ def mv_to_pypsa(network):
         line['r'].append(l['line'].type['R'] * l['line'].length)
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
+        line['s_nom_extendable'].append(True)
+        line['capital_cost'].append(100)
         line['length'].append(l['line'].length)
 
     # create dataframe for LV stations incl. primary/secondary side bus
@@ -409,10 +416,13 @@ def mv_to_pypsa(network):
         storage['name'].append(repr(sto))
         storage['bus'].append(bus_name)
         storage['p_nom'].append(sto.nominal_capacity / 1e3)
-        storage['state_of_charge_initial'].append(sto.soc_initial)
-        storage['efficiency_store'].append(sto.efficiency_in)
-        storage['efficiency_dispatch'].append(sto.efficiency_out)
-        storage['standing_loss'].append(sto.standing_loss)
+        storage['p_nom_extendable'].append(True)
+        storage['p_nom_min'].append(0.3)
+        storage['p_nom_min'].append(4.5)
+        # storage['state_of_charge_initial'].append(sto.soc_initial)
+        # storage['efficiency_store'].append(sto.efficiency_in)
+        # storage['efficiency_dispatch'].append(sto.efficiency_out)
+        # storage['standing_loss'].append(sto.standing_loss)
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(sto.grid.voltage_nom)
@@ -495,6 +505,8 @@ def lv_to_pypsa(network):
             'x': [],
             'r': [],
             's_nom': [],
+            's_nom_extendable': [],
+            'capital_cost': [],
             'length': []}
 
     storage = {
@@ -560,6 +572,8 @@ def lv_to_pypsa(network):
         line['r'].append(l['line'].type['R'] * l['line'].length)
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
+        line['s_nom_extendable'].append(True)
+        line['capital_cost'].append(100)
         line['length'].append(l['line'].length)
 
     # create dataframe representing storages
@@ -709,15 +723,15 @@ def _pypsa_load_timeseries(network, timesteps, mode=None):
         Time series table in PyPSA format
     """
     mv_load_timeseries_p = []
-    mv_load_timeseries_q = []
+    # mv_load_timeseries_q = []
     lv_load_timeseries_p = []
-    lv_load_timeseries_q = []
+    # lv_load_timeseries_q = []
 
     # add MV grid loads
     if mode is 'mv' or mode is None:
         for load in network.mv_grid.graph.nodes_by_attribute('load'):
-            mv_load_timeseries_q.append(load.pypsa_timeseries('q').rename(
-                repr(load)).to_frame().loc[timesteps])
+            # mv_load_timeseries_q.append(load.pypsa_timeseries('q').rename(
+            #     repr(load)).to_frame().loc[timesteps])
             mv_load_timeseries_p.append(load.pypsa_timeseries('p').rename(
                 repr(load)).to_frame().loc[timesteps])
         if mode is 'mv':
@@ -738,17 +752,17 @@ def _pypsa_load_timeseries(network, timesteps, mode=None):
                     # exported to pypsa.
                     # ToDo: resolve this in the importer
                     if sector != 'retail':
-                        lv_load_timeseries_q.append(
-                            load.pypsa_timeseries('q').rename(
-                                repr(load)).to_frame().loc[timesteps])
+                        # lv_load_timeseries_q.append(
+                        #     load.pypsa_timeseries('q').rename(
+                        #         repr(load)).to_frame().loc[timesteps])
                         lv_load_timeseries_p.append(
                             load.pypsa_timeseries('p').rename(
                                 repr(load)).to_frame().loc[timesteps])
 
     load_df_p = pd.concat(mv_load_timeseries_p + lv_load_timeseries_p, axis=1)
-    load_df_q = pd.concat(mv_load_timeseries_q + lv_load_timeseries_q, axis=1)
+    # load_df_q = pd.concat(mv_load_timeseries_q + lv_load_timeseries_q, axis=1)
 
-    return load_df_p, load_df_q
+    return load_df_p #, load_df_q
 
 
 def _pypsa_generator_timeseries(network, timesteps, mode=None):
@@ -774,19 +788,19 @@ def _pypsa_generator_timeseries(network, timesteps, mode=None):
         Time series table in PyPSA format
     """
 
-    mv_gen_timeseries_q = []
-    mv_gen_timeseries_p = []
-    lv_gen_timeseries_q = []
-    lv_gen_timeseries_p = []
+    mv_gen_timeseries_p_min = []
+    mv_gen_timeseries_p_max = []
+    lv_gen_timeseries_p_min = []
+    lv_gen_timeseries_p_max = []
 
     # MV generator timeseries
     if mode is 'mv' or mode is None:
         for gen in network.mv_grid.graph.nodes_by_attribute('generator') + \
                 network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
-            mv_gen_timeseries_q.append(gen.pypsa_timeseries('q').rename(
-                repr(gen)).to_frame().loc[timesteps])
-            mv_gen_timeseries_p.append(gen.pypsa_timeseries('p').rename(
-                repr(gen)).to_frame().loc[timesteps])
+            mv_gen_timeseries_p_min.append(gen.pypsa_timeseries('p').rename(
+                repr(gen)).to_frame().loc[timesteps] / gen.nominal_capacity)
+            mv_gen_timeseries_p_max.append(gen.pypsa_timeseries('p').rename(
+                repr(gen)).to_frame().loc[timesteps] / gen.nominal_capacity)
         if mode is 'mv':
             lv_gen_timeseries_p, lv_gen_timeseries_q = \
                 _pypsa_generator_timeseries_aggregated_at_lv_station(
@@ -796,15 +810,15 @@ def _pypsa_generator_timeseries(network, timesteps, mode=None):
     if mode is 'lv' or mode is None:
         for lv_grid in network.mv_grid.lv_grids:
             for gen in lv_grid.graph.nodes_by_attribute('generator'):
-                lv_gen_timeseries_q.append(gen.pypsa_timeseries('q').rename(
-                    repr(gen)).to_frame().loc[timesteps])
-                lv_gen_timeseries_p.append(gen.pypsa_timeseries('p').rename(
-                    repr(gen)).to_frame().loc[timesteps])
+                lv_gen_timeseries_p_min.append(gen.pypsa_timeseries('p').rename(
+                    repr(gen)).to_frame().loc[timesteps] / gen.nominal_capacity)
+                lv_gen_timeseries_p_max.append(gen.pypsa_timeseries('p').rename(
+                    repr(gen)).to_frame().loc[timesteps] / gen.nominal_capacity)
 
-    gen_df_p = pd.concat(mv_gen_timeseries_p + lv_gen_timeseries_p, axis=1)
-    gen_df_q = pd.concat(mv_gen_timeseries_q + lv_gen_timeseries_q, axis=1)
+    gen_df_p_max = pd.concat(mv_gen_timeseries_p_max + lv_gen_timeseries_p_max, axis=1)
+    gen_df_p_min = pd.concat(mv_gen_timeseries_p_min + lv_gen_timeseries_p_max, axis=1)
 
-    return gen_df_p, gen_df_q
+    return gen_df_p_min, gen_df_p_max
 
 
 def _pypsa_storage_timeseries(network, timesteps, mode=None):
@@ -831,38 +845,38 @@ def _pypsa_storage_timeseries(network, timesteps, mode=None):
         Time series table in PyPSA format
     """
 
-    mv_storage_timeseries_q = []
-    mv_storage_timeseries_p = []
-    lv_storage_timeseries_q = []
-    lv_storage_timeseries_p = []
+    mv_storage_timeseries_p_min = []
+    mv_storage_timeseries_p_max = []
+    lv_storage_timeseries_p_min = []
+    lv_storage_timeseries_p_max = []
 
     # MV storage time series
     if mode is 'mv' or mode is None:
         for storage in network.mv_grid.graph.nodes_by_attribute('storage'):
-            mv_storage_timeseries_q.append(
-                storage.pypsa_timeseries('q').rename(
-                    repr(storage)).to_frame().loc[timesteps])
-            mv_storage_timeseries_p.append(
+            mv_storage_timeseries_p_min.append(
                 storage.pypsa_timeseries('p').rename(
-                    repr(storage)).to_frame().loc[timesteps])
+                    repr(storage)).to_frame().loc[timesteps] / storage.nominal_power)
+            mv_storage_timeseries_p_max.append(
+                storage.pypsa_timeseries('p').rename(
+                    repr(storage)).to_frame().loc[timesteps] / storage.nominal_power)
 
     # LV storage time series
     if mode is 'lv' or mode is None:
         for lv_grid in network.mv_grid.lv_grids:
             for storage in lv_grid.graph.nodes_by_attribute('storage'):
-                lv_storage_timeseries_q.append(
+                lv_storage_timeseries_p_min.append(
                     storage.pypsa_timeseries('q').rename(
-                        repr(storage)).to_frame().loc[timesteps])
-                lv_storage_timeseries_p.append(
+                        repr(storage)).to_frame().loc[timesteps] / storage.nominal_power)
+                lv_storage_timeseries_p_max.append(
                     storage.pypsa_timeseries('p').rename(
-                        repr(storage)).to_frame().loc[timesteps])
+                        repr(storage)).to_frame().loc[timesteps] / storage.nominal_power)
 
-    storage_df_p = pd.concat(
-        mv_storage_timeseries_p + lv_storage_timeseries_p, axis=1)
-    storage_df_q = pd.concat(
-        mv_storage_timeseries_q + lv_storage_timeseries_q, axis=1)
+    storage_df_p_min = pd.concat(
+        mv_storage_timeseries_p_min + lv_storage_timeseries_p_min, axis=1)
+    storage_df_p_max = pd.concat(
+        mv_storage_timeseries_p_max + lv_storage_timeseries_p_max, axis=1)
 
-    return storage_df_p, storage_df_q
+    return storage_df_p_min, storage_df_p_max
 
 
 def _pypsa_bus_timeseries(network, buses, timesteps):
@@ -1092,16 +1106,16 @@ def _check_integrity_of_pypsa(pypsa_network):
     # check consistency of topology and time series data
     generators_ts_p_missing = pypsa_network.generators.loc[
         ~pypsa_network.generators.index.isin(
-            pypsa_network.generators_t['p_set'].columns.tolist())]
+            pypsa_network.generators_t['p_min_pu'].columns.tolist())]
     generators_ts_q_missing = pypsa_network.generators.loc[
         ~pypsa_network.generators.index.isin(
-            pypsa_network.generators_t['q_set'].columns.tolist())]
+            pypsa_network.generators_t['p_max_pu'].columns.tolist())]
     loads_ts_p_missing = pypsa_network.loads.loc[
         ~pypsa_network.loads.index.isin(
             pypsa_network.loads_t['p_set'].columns.tolist())]
-    loads_ts_q_missing = pypsa_network.loads.loc[
-        ~pypsa_network.loads.index.isin(
-            pypsa_network.loads_t['q_set'].columns.tolist())]
+    # loads_ts_q_missing = pypsa_network.loads.loc[
+    #     ~pypsa_network.loads.index.isin(
+    #         pypsa_network.loads_t['q_set'].columns.tolist())]
     bus_v_set_missing = pypsa_network.buses.loc[
         ~pypsa_network.buses.index.isin(
             pypsa_network.buses_t['v_mag_pu_set'].columns.tolist())]
@@ -1124,10 +1138,10 @@ def _check_integrity_of_pypsa(pypsa_network):
                          "{loads}".format(
             loads=loads_ts_p_missing))
 
-    if not loads_ts_q_missing.empty:
-        raise ValueError("Following loads have no `q_set` time series "
-                         "{loads}".format(
-            loads=loads_ts_q_missing))
+    # if not loads_ts_q_missing.empty:
+    #     raise ValueError("Following loads have no `q_set` time series "
+    #                      "{loads}".format(
+    #         loads=loads_ts_q_missing))
 
     if not bus_v_set_missing.empty:
         raise ValueError("Following loads have no `v_mag_pu_set` time series "
