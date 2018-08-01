@@ -117,19 +117,29 @@ def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
             ts, voltage_pu.loc[ts, :] <= voltage_threshold.loc[ts]].index
         feedin.loc[ts, gen_pool_out] = 0
 
-
     # get the appropriate solver available
     solver = kwargs.get('solver', 'cbc')
 
-    # do the curtailment optimization
-    curtailment = _optimize_curtail_voltage(
-        feedin, voltage_pu, total_curtailment_ts, voltage_threshold, solver)
+    # only optimize for time steps where curtailment is greater than zero
+    timeindex = total_curtailment_ts[total_curtailment_ts > 0].index
+    if not timeindex.empty:
+        curtailment = _optimize_curtail_voltage(
+            feedin, voltage_pu, total_curtailment_ts, voltage_threshold,
+            timeindex)
+    else:
+        curtailment = pd.DataFrame()
+
+    # set curtailment for other time steps to zero
+    curtailment = curtailment.append(pd.DataFrame(
+        0, columns=feedin.columns, index=total_curtailment_ts[
+            total_curtailment_ts <= 0].index))
 
     # assign curtailment to individual generators
     assign_curtailment(curtailment, edisgo, generators)
 
 
-def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_threshold, solver='cbc'):
+def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment,
+                              voltage_threshold, timeindex, solver='cbc'):
     """
     Parameters
     ------------
@@ -149,30 +159,23 @@ def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_thr
     """
 
     logging.info("Start curtailment optimization.")
-
-    # hack until we know why error "TypeError: Cannot convert object of type
-    # 'ndarray' (value = 0.0) to a numeric value." is thrown whenn all feed-in
-    # values for one time step are zero
-    zero_feedin_timestep = feedin.sum(axis=1).loc[
-        feedin.sum(axis=1) == 0].index
-    if not zero_feedin_timestep.empty:
-        feedin.loc[zero_feedin_timestep, feedin.columns[0]] = 0.1
-        
+  
     v_max = voltage_pu.max(axis=1)
-    timeindex = feedin.index
     generators = feedin.columns
 
     # additional curtailment factors
     cf_add = pd.DataFrame(index=timeindex)
     for gen in generators:
-        cf_add[gen] = abs((voltage_pu.loc[:, gen] - v_max) / (
-            voltage_threshold - v_max))
+        cf_add[gen] = abs(
+            (voltage_pu.loc[timeindex, gen] - v_max[timeindex]) / (
+                    voltage_threshold[timeindex] - v_max[timeindex]))
 
     # curtailment factors
     cf = pd.DataFrame(index=timeindex)
     for gen in generators:
-        cf[gen] = abs((voltage_pu.loc[:, gen] - voltage_threshold) / (
-            v_max - voltage_threshold))
+        cf[gen] = abs(
+            (voltage_pu.loc[timeindex, gen] - voltage_threshold[timeindex]) / (
+                    v_max[timeindex] - voltage_threshold[timeindex]))
 
     ### initialize model
     model = ConcreteModel()

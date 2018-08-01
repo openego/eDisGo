@@ -2358,7 +2358,7 @@ class Results:
 
             if not_included:
                 logging.info("Voltage levels for {nodes} are not returned from PFA".format(
-                    nodes=not_included))
+                nodes=not_included))
             return self.pfa_v_mag_pu[level][labels_included]
 
     def save(self, directory, create_plots=False, **kwargs):
