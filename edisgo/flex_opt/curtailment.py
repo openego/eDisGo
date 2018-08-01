@@ -138,13 +138,14 @@ def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
         if not timeindex.empty:
             curtailment = _optimize_curtail_voltage(
                 feedin, voltage_pu, total_curtailment_ts, voltage_threshold,
-                timeindex, solver)
+                timeindex)
         else:
             curtailment = pd.DataFrame()
-            # set curtailment for other time steps to zero
-            curtailment = curtailment.append(pd.DataFrame(
-                0, columns=feedin.columns, index=total_curtailment_ts[
-                    total_curtailment_ts <= 0].index))
+
+        # set curtailment for other time steps to zero
+        curtailment = curtailment.append(pd.DataFrame(
+            0, columns=feedin.columns, index=total_curtailment_ts[
+                total_curtailment_ts <= 0].index))
     elif optimization_method == 'weighted':
         # do weighted curtailment with no solver
         curtailment = _weighted_curtail_voltage(
