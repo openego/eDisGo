@@ -1226,6 +1226,7 @@ class CurtailmentControl:
         elif isinstance(curtailment_ts, pd.DataFrame):
             if isinstance(curtailment_ts.columns, pd.MultiIndex):
                 for col in curtailment_ts.columns:
+                    logging.debug('Calculating curtailment for {}'.format(col))
                     # filter generators
                     selected_generators = generators.loc[
                         (generators.type == col[0]) &
@@ -1256,23 +1257,24 @@ class CurtailmentControl:
                             curtailment_ts.loc[:, col], edisgo, **kwargs)
             else:
                 for col in curtailment_ts.columns:
+                    logging.debug('Calculating curtailment for {}'.format(col))
                     # filter generators
                     selected_generators = generators.loc[
-                        (generators.type == col[0])]
+                        (generators.type == col)]
 
                     if selected_generators.empty:
-                        message = "No generators selected for type {}".format(col[0])
+                        message = "No generators selected for type {}".format(col)
                         logging.warning(message)
                     selected_generators_repr = selected_generators.gen_repr.values
                     # check feed-in energy
                     feedin_selected_generators = feedin.loc[
                                                  :, selected_generators_repr]
                     if feedin_selected_generators.empty:
-                        message = "Feedin for type {} is empty".format(col[0])
+                        message = "Feedin for type {} is empty".format(col)
                         logging.warning(message)
 
                     if feedin_selected_generators.empty or selected_generators.empty:
-                        message = "No curtailment for type {}".format(col[0])
+                        message = "No curtailment for type {}".format(col)
                         logging.warning(message)
                     else:
                         self._check_curtailment_total_energy(
@@ -1295,15 +1297,16 @@ class CurtailmentControl:
         # perform the mode of curtailment with some relevant checks
         # as to what the inputs are
         if isinstance(curtailment_ts, pd.Series):
-            logging.info("Curtailment is a series")
+            logging.debug("Curtailment is a series")
             # check if curtailment exceeds feed-in
             self._check_curtailment_total_energy(curtailment_ts, feedin)
             curtailment.curtail_all(
                 feedin, generators, curtailment_ts, edisgo, **kwargs)
         elif isinstance(curtailment_ts, pd.DataFrame):
             if isinstance(curtailment_ts.columns, pd.MultiIndex):
-                logging.info("Curtailment is a MultiColumn Dataframe")
+                logging.debug("Curtailment is a MultiColumn Dataframe")
                 for col in curtailment_ts.columns:
+                    logging.debug('Calculating curtailment for {}'.format(col))
                     # filter generators
                     selected_generators = generators.loc[
                         (generators.type == col[0]) &
@@ -1332,8 +1335,9 @@ class CurtailmentControl:
                             feedin_selected_generators, selected_generators,
                             curtailment_ts.loc[:, col], edisgo, **kwargs)
             else:
-                logging.info("Curtailment supplied with non-MultiColumn DataFrame")
+                logging.debug("Curtailment supplied with non-MultiColumn DataFrame")
                 for col in curtailment_ts.columns:
+                    logging.debug('Calculating curtailment for {}'.format(col))
                     # filter generators
                     selected_generators = generators.loc[
                         (generators.type == col)]

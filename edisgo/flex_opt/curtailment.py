@@ -85,6 +85,9 @@ def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
           or 'cplex'
         Default: 'cbc'
     """
+    # get the optimization_method
+    optimization_method = kwargs.get('optimization_method', 'lp')
+
     voltage_threshold = pd.Series(kwargs.get('voltage_threshold', 1.0),
                                   index=total_curtailment_ts.index)
 
@@ -99,6 +102,10 @@ def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
         level='mv')
     voltage_pu = voltage_pu_lv.join(voltage_pu_mv)
 
+    if optimization_method == 'weighted':
+        # save feedin in case curtail all needs to be done as a last resort
+        feedin_orig = feedin.copy()
+
     # for every time step check if curtailment can be fulfilled, otherwise
     # reduce voltage threshold; set feed-in of generators below voltage
     # threshold to zero, so that they cannot be curtailed
@@ -111,28 +118,40 @@ def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
             voltage_threshold.loc[ts] = voltage_threshold.loc[ts] - 0.01
             gen_pool = voltage_pu.loc[
                 ts, voltage_pu.loc[ts, :] > voltage_threshold.loc[ts]].index
+            logging.debug("The 'voltage_threshold' chosen is too high, "
+                         "the feedin from the generators with such high "
+                         "voltages is insufficient for the required "
+                         "curtailment. Voltage reduced to {}".format(
+                voltage_threshold.loc[ts]))
         # set feed-in of generators below voltage threshold to zero, so that
         # they cannot be curtailed
         gen_pool_out = voltage_pu.loc[
             ts, voltage_pu.loc[ts, :] <= voltage_threshold.loc[ts]].index
         feedin.loc[ts, gen_pool_out] = 0
 
-    # get the appropriate solver available
-    solver = kwargs.get('solver', 'cbc')
+    if optimization_method == 'lp':
+        # get the appropriate solver available
+        solver = kwargs.get('solver', 'cbc')
 
-    # only optimize for time steps where curtailment is greater than zero
-    timeindex = total_curtailment_ts[total_curtailment_ts > 0].index
-    if not timeindex.empty:
-        curtailment = _optimize_curtail_voltage(
-            feedin, voltage_pu, total_curtailment_ts, voltage_threshold,
-            timeindex)
+        # only optimize for time steps where curtailment is greater than zero
+        timeindex = total_curtailment_ts[total_curtailment_ts > 0].index
+        if not timeindex.empty:
+            curtailment = _optimize_curtail_voltage(
+                feedin, voltage_pu, total_curtailment_ts, voltage_threshold,
+                timeindex, solver)
+        else:
+            curtailment = pd.DataFrame()
+            # set curtailment for other time steps to zero
+            curtailment = curtailment.append(pd.DataFrame(
+                0, columns=feedin.columns, index=total_curtailment_ts[
+                    total_curtailment_ts <= 0].index))
+    elif optimization_method == 'weighted':
+        # do weighted curtailment with no solver
+        curtailment = _weighted_curtail_voltage(
+            feedin, voltage_pu, total_curtailment_ts, voltage_threshold, feedin_orig)
     else:
-        curtailment = pd.DataFrame()
-
-    # set curtailment for other time steps to zero
-    curtailment = curtailment.append(pd.DataFrame(
-        0, columns=feedin.columns, index=total_curtailment_ts[
-            total_curtailment_ts <= 0].index))
+        message = 'Unknown Optimization method {}'.format(optimization_method)
+        raise RuntimeError(message)
 
     # assign curtailment to individual generators
     assign_curtailment(curtailment, edisgo, generators)
@@ -256,7 +275,87 @@ def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment,
     return c
 
 
-def curtail_all(feedin, generators, total_curtailment_ts, edisgo,
+def _weighted_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_threshold, feedin_original):
+    """
+    Implements curtailment method 'curtail_voltage' using weighting factors to influence the
+    amount of curtailment assigned to the generators.
+
+    feedin : index is time index, columns are generators that will be curtailed, feed-in in kW
+    voltage_pu : index is time index, columns are generators, voltage from power flow in p.u.
+    total_curtailment : index is time index, total curtailment in time step in kW
+    voltage_threshold : index is time index, voltage threshold in time step in p.u.
+
+    Return
+    ------
+    """
+
+    # curtailment calculation by inducing a reduced or increased feedin
+    # find out the difference from lower threshold
+    # add a tilt factor of zero initially
+    tilt_factor = pd.Series(0, index=voltage_threshold.index.copy())
+    curtailment = _calculate_weighted_curtailment(feedin, voltage_pu, total_curtailment,
+                                                  voltage_threshold, tilt_factor)
+
+    # make sure the no single generator overshoots its feed-in,
+    # if it does, introduce a small tilt in the voltage characteristic iteratively
+    # to allow higher curtailment at nodes with lower voltages to ensure that
+    # lower curtailment is assigned to nodes at higher voltages
+
+    while not ((feedin - curtailment) > -1e-3).all().all():
+        # The actual algorithm is below this break
+        # if the tilt factor is greater than 1.0 then curtailment voltage through
+        # this algorithm has failed due to low feed-in and high curtailment requirement
+        # in this case curtail_all algorithm will be used
+        if tilt_factor.any() >= 1.0:
+            logging.warning("Maximum tilt reached, doing curtail_all")
+            # NOTE: this curtail all uses the zeroed out feedin at the voltages below
+            # voltage threshold
+            curtailment = feedin.divide(feedin.sum(axis=1), axis=0). \
+                multiply(total_curtailment, axis=0)
+            curtailment.fillna(0, inplace=True)
+
+            # need to check again inside the if, if the curtailment overshoots feedin
+            # if it does then use the non-zeroed out feedin below voltage_threshold
+            if not ((feedin - curtailment) > -1e-3).all().all():
+                curtailment = feedin_original.divide(feedin_original.sum(axis=1), axis=0). \
+                    multiply(total_curtailment, axis=0)
+                curtailment.fillna(0, inplace=True)
+            break
+        # increase the tilt factor in small amounts at the indices where there is an
+        # over shoot of feedin
+        for ts in curtailment[(feedin - curtailment) <= -1e-3].dropna(axis=1).index:
+            tilt_factor.loc[ts] += 0.01
+        curtailment = _calculate_weighted_curtailment(feedin, voltage_pu, total_curtailment,
+                                                      voltage_threshold, tilt_factor)
+
+    # check if curtailment exceeds feedin
+    # check if overall curtailment
+    if ((abs(curtailment.sum(axis=1) - total_curtailment)) >= 1e-3).any():
+        raise ValueError("Total_curtailment sum does not match the assigned curtailment")
+
+    return curtailment
+
+
+def _calculate_weighted_curtailment(feedin, voltage_pu, total_curtailment, voltage_threshold, tilt_factor):
+    feedin_factor = voltage_pu.subtract(voltage_threshold, axis='rows').add(tilt_factor, axis='rows')
+    # make sure the difference is positive
+    # after being normalized to maximum difference being 1 and minimum being 0
+    feedin_factor = feedin_factor.divide(feedin_factor.max(axis=1), axis=0)
+    # the curtailment here would be directly multplied the difference
+
+    # multiply feedin_factor to feedin to modify the amount of curtailment
+    modified_feedin = feedin_factor.multiply(feedin)
+
+    # normalize the feedin
+    normalized_feedin = modified_feedin.divide(modified_feedin.sum(axis=1), axis=0)
+    # fill the nans with zeros typically filling in the x/0 cases with 0
+    normalized_feedin.fillna(0, inplace=True)
+    # total_curtailment
+    curtailment = normalized_feedin.multiply(total_curtailment, axis=0)
+    return curtailment
+
+
+def curtail_all(feedin, generators, total_curtailment, edisgo,
                     **kwargs):
     """
     Implements curtailment methodology 'curtail_all'.
@@ -313,7 +412,7 @@ def curtail_all(feedin, generators, total_curtailment_ts, edisgo,
     """
     # total_curtailment
     curtailment = feedin.divide(feedin.sum(axis=1), axis=0). \
-        multiply(total_curtailment_ts, axis=0)
+        multiply(total_curtailment, axis=0)
 
     # make sure that the feedin isn't zero, as if it is
     # dividing by zero makes a lot of Nans which makes it harder
