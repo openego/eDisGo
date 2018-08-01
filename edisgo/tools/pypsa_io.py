@@ -1204,6 +1204,18 @@ def process_pfa_results(network, pypsa):
         Understand how results of power flow analysis are structured in eDisGo.
 
     """
+    # get the absolute losses in the system
+    # subtracting total generation(including slack) from total load
+    grid_losses = {'p': 1e3 * (pypsa.generators_t['p'].sum(axis=1) - pypsa.loads_t['p'].sum(axis=1)),
+                   'q': 1e3 * (pypsa.generators_t['q'].sum(axis=1) - pypsa.loads_t['q'].sum(axis=1))}
+
+    network.results.grid_losses = pd.DataFrame(grid_losses)
+
+    # get the grid exchange through slack
+    grid_exchanges = {'p': 1e3 * (pypsa.generators_t['p']['Generator_slack']) - grid_losses['p'],
+                      'q': 1e3 * (pypsa.generators_t['q']['Generator_slack']) - grid_losses['q']}
+
+    network.results.grid_exchanges = pd.DataFrame(grid_exchanges)
 
     # get p and q of lines, LV transformers and MV Station (slack generator)
     # in absolute values
@@ -1227,6 +1239,9 @@ def process_pfa_results(network, pypsa):
          np.abs(pypsa.transformers_t['p1']),
          np.abs(pypsa.generators_t['p']['Generator_slack'].rename(
              repr(network.mv_grid.station)))], axis=1)
+
+    line_losses = {}
+    line_losses['p'] = 1e3
 
     # determine apparent power and line endings/transformers' side
     s0 = np.hypot(p0, q0)
@@ -1328,6 +1343,8 @@ def process_pfa_results(network, pypsa):
         list(lv_loads_mapping)]).rename(columns=names_mapping)
     network.results.pfa_v_mag_pu = pd.concat(
         {'mv': pfa_v_mag_pu_mv, 'lv': pfa_v_mag_pu_lv}, axis=1)
+
+
 
 
 def update_pypsa_grid_reinforcement(network, equipment_changes):

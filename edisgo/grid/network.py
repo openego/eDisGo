@@ -1,9 +1,11 @@
-from os import path
+import os
 import pandas as pd
 import numpy as np
 from math import sqrt
 import logging
 import datetime
+
+from matplotlib import pyplot as plt
 
 import edisgo
 from edisgo.tools import config, pypsa_io, tools
@@ -465,8 +467,8 @@ class Network:
                 equipment_parameters = self.config['equipment'][
                     'equipment_{}_parameters_{}'.format(voltage_level, i)]
                 data['{}_{}'.format(voltage_level, i)] = pd.read_csv(
-                    path.join(package_path, equipment_dir,
-                              equipment_parameters),
+                    os.path.join(package_path, equipment_dir,
+                                 equipment_parameters),
                     comment='#', index_col='name',
                     delimiter=',', decimal='.')
 
@@ -1196,14 +1198,14 @@ class CurtailmentControl:
                     message = "Generator Object found instead of GeneratorFluctuating Object " +\
                               "in {}".format(x)
                     logging.warning(message)
-                    #raise Warning(message)
+                    # raise Warning(message)
                 pass
             except KeyError:
                 # when one of the keys are missing in either the feedin or the capacities
                 message = "One of the keys of {} are absent in either the feedin or the".format(x) +\
                           " generator fluctuating timeseries  object is missing"
                 logging.warning(message)
-                #raise Warning(message)
+                # raise Warning(message)
                 pass
 
         # get mode of curtailment and the arguments necessary
@@ -1282,6 +1284,12 @@ class CurtailmentControl:
         # check if curtailment exceeds feed-in
         self._check_curtailment(edisgo_object.network)
 
+        # write curtailment to results to be able to put it out as files for
+        # result checking
+        # make sure you don't overwrite existing curtailment data
+        edisgo_object.network.results.assigned_curtailment =\
+            edisgo_object.network.timeseries.curtailment.copy()
+
     def _check_timeindex(self, network):
         """
         Raises an error if time index of curtailment time series does not
@@ -1318,13 +1326,13 @@ class CurtailmentControl:
         """
 
         feedin_ts_compare = self.feedin.copy()
-        for r in range(len(feedin_ts_compare.columns.levels)-1):
+        for r in range(len(feedin_ts_compare.columns.levels) - 1):
             feedin_ts_compare.columns = feedin_ts_compare.columns.droplevel(1)
         # need an if condition to remove the weather_cell_id level too
 
         if not ((feedin_ts_compare.loc[
                  :, network.timeseries.curtailment.columns] -
-                     network.timeseries.curtailment) > -1e-3).all().all():
+                 network.timeseries.curtailment) > -1e-3).all().all():
             message = 'Curtailment exceeds feed-in.'
             logging.error(message)
             raise TypeError(message)
@@ -1828,6 +1836,9 @@ class Results:
         self._i_res = None
         self._equipment_changes = pd.DataFrame()
         self._grid_expansion_costs = None
+        self._grid_losses = None
+        self._grid_exchanges = None
+        self._assigned_curtailment = None
         self._unresolved_issues = {}
 
     @property
@@ -2065,6 +2076,62 @@ class Results:
         self._grid_expansion_costs = total_costs
 
     @property
+    def grid_losses(self):
+        """
+        Holds the losses in the grid obtained from the slack bus in
+        kW and kvar.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Total Losses, both active and reactive power losses
+            per timestep
+        """
+
+        return self._grid_losses
+
+    @grid_losses.setter
+    def grid_losses(self, pypsa_grid_losses):
+        self._grid_losses = pypsa_grid_losses
+
+    @property
+    def grid_exchanges(self):
+        """
+        Holds the grid powers (active and reactive) transfered to the higher voltage
+        level through the slack
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>
+            Total power exchanged to the higher voltage network through slack not
+            including the grid losses
+        """
+
+        return self._grid_exchanges
+
+    @grid_exchanges.setter
+    def grid_exchanges(self, grid_exchanges):
+        self._grid_exchanges = grid_exchanges
+
+    @property
+    def assigned_curtailment(self):
+        """
+        Holds the curtailment assigned to each generator.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>
+            curtailment per generator (in columns) in timesteps(rows).
+        """
+
+        return self._assigned_curtailment
+
+    @assigned_curtailment.setter
+    def assigned_curtailment(self, assigned_curtailment):
+        self._assigned_curtailment = assigned_curtailment
+        self.assigned_curtailment.sort_index(inplace=True)
+
+    @property
     def unresolved_issues(self):
         """
         Holds lines and nodes where over-loading or over-voltage issues
@@ -2206,3 +2273,68 @@ class Results:
                 logging.info("Voltage levels for {nodes} are not returned from PFA".format(
                 nodes=not_included))
             return self.pfa_v_mag_pu[level][labels_included]
+
+    def save(self, directory, create_plots=False, **kwargs):
+        """
+        Save all results to disk in a folder.
+
+        Parameters
+        ----------
+        directory: :obj:`str
+            path to save the plots
+        """
+        powerflow_results_dir = os.path.join(directory, 'powerflow_results')
+        calculated_results_dir = os.path.join(directory, 'calculated_results')
+
+        os.makedirs(powerflow_results_dir, exist_ok=True)
+        os.makedirs(calculated_results_dir, exist_ok=True)
+
+        # put out important information at the top level
+
+        # put out all relevant power_flow results
+        # voltage
+        voltage_pu_file = os.path.join(powerflow_results_dir, 'voltages_pu.csv')
+        self.pfa_v_mag_pu.to_csv(voltage_pu_file)
+
+        # current
+        current_file = os.path.join(powerflow_results_dir, 'currents.csv')
+        self.i_res.to_csv(current_file)
+
+        # active power
+        acitve_power_file = os.path.join(powerflow_results_dir, 'active_powers.csv')
+        self.pfa_p.to_csv(acitve_power_file)
+
+        # reactive power
+        reacitve_power_file = os.path.join(powerflow_results_dir, 'reactive_powers.csv')
+        self.pfa_q.to_csv(reacitve_power_file)
+
+        # apparent power
+        apparent_power_file = os.path.join(powerflow_results_dir, 'apparent_powers.csv')
+        self.s_res().to_csv(apparent_power_file)
+
+        # put out all relevant calculated results
+        # grid losses
+        grid_losses_file = os.path.join(calculated_results_dir, 'grid_losses.csv')
+        self.grid_losses.to_csv(grid_losses_file)
+
+        # grid exchanges
+        grid_exchanges_file = os.path.join(calculated_results_dir, 'grid_exchanges.csv')
+        self.grid_exchanges.to_csv(grid_exchanges_file)
+
+        # assigned curtailment
+        if self.assigned_curtailment is not None:
+            assigned_curtailment_file = os.path.join(calculated_results_dir, 'assigned_curtailment.csv')
+            self.assigned_curtailment.to_csv(assigned_curtailment_file)
+
+        # equipment_changes
+        equipment_changes_file = os.path.join(calculated_results_dir, 'equipment_changes.csv')
+        self.equipment_changes.to_csv(equipment_changes_file)
+
+        # grid_expansion_costs
+        if self.grid_expansion_costs is not None:
+            grid_expansion_costs_file = os.path.join(calculated_results_dir, 'grid_expansion_costs.csv')
+            self.grid_expansion_costs.to_csv(grid_expansion_costs_file)
+
+        # unresolved_issues
+        unresolved_issues_file = os.path.join(calculated_results_dir, 'unresolved_issues.csv')
+        pd.DataFrame(self.unresolved_issues).to_csv(unresolved_issues_file)
