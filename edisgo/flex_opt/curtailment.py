@@ -252,7 +252,7 @@ def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment,
     def curtail(model, t, g):
         return (
         model.cf[t, g] * model.cf_max[t] * model.feedin[t, g] + model.cf_add[
-            t, g] * model.offset[t] * model.feedin[t, g] == model.c[t, g])
+            t, g] * model.offset[t] * model.feedin[t, g] - model.c[t, g] == 0)
 
     model.curtailment = Constraint(model.T, model.G, rule=curtail)
 
