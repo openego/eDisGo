@@ -138,7 +138,7 @@ def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
         if not timeindex.empty:
             curtailment = _optimize_curtail_voltage(
                 feedin, voltage_pu, total_curtailment_ts, voltage_threshold,
-                timeindex)
+                timeindex, solver)
         else:
             curtailment = pd.DataFrame()
 
