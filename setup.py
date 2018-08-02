@@ -38,6 +38,7 @@ setup(
         'pypsa >=0.11.0, <=0.11.0',
         'pyproj >= 1.9.5.1, <= 1.9.5.1',
         'geopy >= 1.11.0, <= 1.11.0',
+        'pyomo >= 5.5.0',
         'workalendar',
         'demandlib',
         'oedialect'

@@ -1101,8 +1101,17 @@ class CurtailmentControl:
           based on the voltages at the generator connection points and a
           defined voltage threshold. Generators at higher voltages
           are curtailed more. The default voltage threshold is 1.0 but
-          can be changed by providing the argument 'voltage_threshold'. For
-          more information see
+          can be changed by providing the argument 'voltage_threshold'. This
+          method formulates this as a linear optimization problem using
+          :py:mod:`pyomo` and requires that a linear programming solver
+          like coin-or cbc (cbc) or gnu linear programming kit (glpk).
+          The sovler that needs to be used can be provided as a string
+          to the function using the keyword 'solver'. An alternative
+          to using the solver is to be using a method of weighting the
+          feedins between the available generators, this method does
+          not run by default, it can be forced by setting the keyword
+          'optimization_method' to 'weighted'.
+          For more information see
           :meth:`edisgo.flex_opt.curtailment.curtail_voltage()`.
 
     timeseries_curtailment : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional

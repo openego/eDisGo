@@ -161,12 +161,48 @@ def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
 def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment,
                               voltage_threshold, timeindex, solver='cbc'):
     """
+    Implements the curtailment method based on voltage by formulating the
+    strategy as a liner optimization problem. This method uses a linear
+    programming solver to find the most optimal distribution of curtailment
+    among the generators.
+
     Parameters
     ------------
-    feedin : index is time index, columns are generators that will be curtailed, feed-in in kW
-    voltage_pu : index is time index, columns are generators, voltage from power flow in p.u.
-    total_curtailment : index is time index, total curtailment in time step in kW
-    voltage_threshold : index is time index, voltage threshold in time step in p.u.
+    feedin : :pandas:`pandas.DataFrame<dataframe>`
+        This contains the feedin of the specific set of generators that either:
+
+        * of no specific grouping if curtailment is provided
+          as a :pandas:`pandas.Series<series>`
+        * of a given type if curtailment is provided
+          as a :pandas:`pandas.DataFrame<dataframe`
+        * of a give type and in a given weather cell if
+          curtailment is provided as a :pandas:`pandas.DataFrame<dataframe>`
+          with a :pandas.`pandas.MultiIndex` column with two levels, type
+          and weather cell ID.
+
+        The feedin that is expected as an input here already has the
+        columns corresponding to the 'not-to-be-curtailed' generators
+        set to zero so that no curtailment is assigned to them.
+        The index is a time index and the columns are generators that will be curtailed,
+        The feed-in is in kW.
+    voltage_pu : :pandas:`pandas.DataFrame<dataframe>
+        The dataframe that contains the voltages at the
+        various generator nodes after doing a power flow calculation.
+        This stucture's index is a :pandas:`pandas.DateTimeIndex`
+        and the columns are generators.
+        The voltage from power flow in p.u.
+    total_curtailment : :pandas:`pandas.Series<series>`
+        The series containing the specific curtailment for the type of
+        generators to be curtailed and the weather cells they belong to.
+        This is the specific column of the input curtailment.
+        The index is a :pandas:`pandas.DateTimeIndex` and the
+        total curtailment in time step in kW
+    voltage_threshold : :pandas:`pandas.Series<series>`
+        A series containing the voltage thresholds below which no
+        generator curtailment will occur.The series contains the
+        threshold calculated for each and every timestep that is
+        being calculated. The index is a :pandas:`pandas.DateTimeIndex`,
+        and the voltage threshold in time step in p.u.
     solver: :obj:`str`
         The solver used to optimize the curtailment assigned to the generator.
         The string depends upon the installed or available solver.
@@ -176,6 +212,15 @@ def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment,
         * any other available compatible with 'pyomo' like 'gurobi'
           or 'cplex'
         Default: 'cbc'
+
+    Returns
+    -------
+    :pandas:`pandas:DataFrame<dataframe>`
+        A dataframe containing the curtailment in kW per generator
+        of the provided 'feedin' dataframe per timestep.
+        The index is a :pandas:`pandas.DateTimeIndex` and the
+        columns are :py:mod:`edisgo.network.GeneratorFluctuating`
+        objects.
     """
 
     logging.info("Start curtailment optimization.")
@@ -276,18 +321,89 @@ def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment,
     return c
 
 
-def _weighted_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_threshold, feedin_original):
+def _weighted_curtail_voltage(feedin,
+                              voltage_pu,
+                              total_curtailment,
+                              voltage_threshold,
+                              feedin_original):
     """
-    Implements curtailment method 'curtail_voltage' using weighting factors to influence the
+    Implements curtailment method 'curtail_voltage'
+    using weighting factors to influence the
     amount of curtailment assigned to the generators.
+    This strategy assigns weights and checks if the
+    assigned curtailment is still above the limits
+    of the individual generator feedins. If the
+    curtailment exceeds the feedins then a small
+    kink is introduced in the curtailment vs
+    voltage characteristic to increase the curtailment
+    of the generators with voltages close to the
+    voltage_threshold. The kink is increases till
+    the point where the individual generator
+    curtailments do not exceed their feedins.
+    If during the calculation the kink becomes too much,
+    the curtailment_voltage strategy is replaced with
+    the curtail_all strategy, this case should not be met
+    in any typical case with curtailment < 100% of feed-in.
+    This is a last resort measure if the strategy fails.
+    The method also checks to ensure that the total curtailment
+    assigned remains the same as the curtailment
+    provided in the input.
 
-    feedin : index is time index, columns are generators that will be curtailed, feed-in in kW
-    voltage_pu : index is time index, columns are generators, voltage from power flow in p.u.
-    total_curtailment : index is time index, total curtailment in time step in kW
-    voltage_threshold : index is time index, voltage threshold in time step in p.u.
+    Parameters
+    ----------
+    feedin : :pandas:`pandas.DataFrame<dataframe>`
+        This contains the feedin of the specific set
+        of generators that either:
+
+        * of no specific grouping if curtailment is provided
+          as a :pandas:`pandas.Series<series>`
+        * of a given type if curtailment is provided
+          as a :pandas:`pandas.DataFrame<dataframe`
+        * of a give type and in a given weather cell if
+          curtailment is provided as a :pandas:`pandas.DataFrame<dataframe>`
+          with a :pandas.`pandas.MultiIndex` column with two levels, type
+          and weather cell ID.
+
+        The feedin that is expected as an input here already has the
+        columns corresponding to the 'not-to-be-curtailed' generators
+        set to zero so that no curtailment is assigned to them.
+        The index is a time index and thecolumns are generators
+        that will be curtailed.
+        The feed-in is in kW.
+    voltage_pu : :pandas:`pandas.DataFrame<dataframe>
+        The dataframe that contains the voltages at the
+        various generator nodes after doing a power flow calculation.
+        This stucture's index is a :pandas:`pandas.DateTimeIndex`
+        and the columns are generators.
+        The voltage from power flow in p.u.
+    total_curtailment : :pandas:`pandas.Series<series>`
+        The series containing the specific curtailment for the type of
+        generators to be curtailed and the weather cells they belong to.
+        This is the specific column of the input curtailment.
+        The index is a :pandas:`pandas.DateTimeIndex` and the
+        total curtailment in time step in kW
+    voltage_threshold : :pandas:`pandas.Series<series>`
+        A series containing the voltage thresholds below which no
+        generator curtailment will occur.The series contains the
+        threshold calculated for each and every timestep that is
+        being calculated. The index is a :pandas:`pandas.DateTimeIndex`,
+        and the voltage threshold in time step in p.u.
+    feedin_original: :pandas:`pandas.DataFrame<dataframe>`
+        The same as 'feedin' with the only difference being that this
+        dataframe would not have the 'not-to-be-curtailed' generators'
+        feedin zeroed out. The dataframe would be used as a last resort
+        only when the curtailment based on voltage fails. This dataframe
+        would be used to calculate using a curtail_all algorithm
+        if voltage weighted curtailment fails.
 
     Return
     ------
+    :pandas:`pandas:DataFrame<dataframe>`
+        A dataframe containing the curtailment in kW per generator
+        of the provided 'feedin' dataframe per timestep.
+        The index is a :pandas:`pandas.DateTimeIndex` and the
+        columns are :py:mod:`edisgo.network.GeneratorFluctuating`
+        objects.
     """
 
     # curtailment calculation by inducing a reduced or increased feedin
@@ -325,7 +441,7 @@ def _weighted_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_thr
         # increase the tilt factor in small amounts at the indices where there is an
         # over shoot of feedin
         for ts in curtailment[(feedin - curtailment) <= -1e-3].dropna(axis=1).index:
-            tilt_factor.loc[ts] += 0.01
+            tilt_factor.loc[ts] += 1e-4
         curtailment = _calculate_weighted_curtailment(feedin, voltage_pu, total_curtailment,
                                                       voltage_threshold, tilt_factor)
 
@@ -337,7 +453,75 @@ def _weighted_curtail_voltage(feedin, voltage_pu, total_curtailment, voltage_thr
     return curtailment
 
 
-def _calculate_weighted_curtailment(feedin, voltage_pu, total_curtailment, voltage_threshold, tilt_factor):
+def _calculate_weighted_curtailment(feedin, voltage_pu,
+                                    total_curtailment,
+                                    voltage_threshold,
+                                    tilt_factor):
+    """
+    The raw calculation method to obtain the weighted curtailment
+    without checking if the individual generator feedins are
+    overshot. This check happens in the function calling this
+    method in :py:mod:`edisgo.flex_opt.curtailment._weighted_curtail_voltage`.
+    Parameters
+    ----------
+    feedin : :pandas:`pandas.DataFrame<dataframe>`
+        This contains the feedin of the specific set
+        of generators that either:
+
+        * of no specific grouping if curtailment is provided
+          as a :pandas:`pandas.Series<series>`
+        * of a given type if curtailment is provided
+          as a :pandas:`pandas.DataFrame<dataframe`
+        * of a give type and in a given weather cell if
+          curtailment is provided as a :pandas:`pandas.DataFrame<dataframe>`
+          with a :pandas.`pandas.MultiIndex` column with two levels, type
+          and weather cell ID.
+
+        The feedin that is expected as an input here already has the
+        columns corresponding to the 'not-to-be-curtailed' generators
+        set to zero so that no curtailment is assigned to them.
+        The index is a time index and thecolumns are generators
+        that will be curtailed.
+        The feed-in is in kW.
+    voltage_pu : :pandas:`pandas.DataFrame<dataframe>
+        The dataframe that contains the voltages at the
+        various generator nodes after doing a power flow calculation.
+        This stucture's index is a :pandas:`pandas.DateTimeIndex`
+        and the columns are generators.
+        The voltage from power flow in p.u.
+    total_curtailment : :pandas:`pandas.Series<series>`
+        The series containing the specific curtailment for the type of
+        generators to be curtailed and the weather cells they belong to.
+        This is the specific column of the input curtailment.
+        The index is a :pandas:`pandas.DateTimeIndex` and the
+        total curtailment in time step in kW
+    voltage_threshold : :pandas:`pandas.Series<series>`
+        A series containing the voltage thresholds below which no
+        generator curtailment will occur.The series contains the
+        threshold calculated for each and every timestep that is
+        being calculated. The index is a :pandas:`pandas.DateTimeIndex`,
+        and the voltage threshold in time step in p.u.
+    tilt_factor: :pandas:`pandas.Series<series>`
+        The tilt factor per time step controls the size of the kink
+        introduced between the 'not-to-be-curtailed' generators and
+        the generators lying just above the voltage_threshold. This
+        effectively increases the curtailment assigned to these
+        generators. The slope of the voltage characterisitic is hence
+        changed. The factor is bounded to a value between 0 and 1.
+        In the calculation routines, if this value becomes greater
+        than 1, the curtail_all strategy is used.
+        The index is a :pandas:`pandas.DateTimeIndex`,
+        and the tilt factor is a value between 0 and 1.
+
+    Return
+    ------
+    :pandas:`pandas:DataFrame<dataframe>`
+        A dataframe containing the curtailment in kW per generator
+        of the provided 'feedin' dataframe per timestep.
+        The index is a :pandas:`pandas.DateTimeIndex` and the
+        columns are :py:mod:`edisgo.network.GeneratorFluctuating`
+        objects.
+    """
     feedin_factor = voltage_pu.subtract(voltage_threshold, axis='rows').add(tilt_factor, axis='rows')
     # make sure the difference is positive
     # after being normalized to maximum difference being 1 and minimum being 0
