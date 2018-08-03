@@ -1213,7 +1213,7 @@ def process_pfa_results(network, pypsa):
     grid_exchanges = {'p': 1e3 * (pypsa.generators_t['p']['Generator_slack']) - grid_losses['p'],
                       'q': 1e3 * (pypsa.generators_t['q']['Generator_slack']) - grid_losses['q']}
 
-    network.results.grid_exchanges = pd.DataFrame(grid_exchanges)
+    network.results.hv_mv_exchanges = pd.DataFrame(grid_exchanges)
 
     # get p and q of lines, LV transformers and MV Station (slack generator)
     # in absolute values
