@@ -426,6 +426,7 @@ def get_gen_info(network, level='mvlv', fluctuating=False):
 
     return gen_df
 
+
 def generator_feedins(edisgo_grid):
     """
     Get the individual feedin of each generators in kW
@@ -444,19 +445,19 @@ def generator_feedins(edisgo_grid):
         being the active power feed in to the grid at the timestep
         by each generator
     """
-    generator_feedins = {}
+    feedins = {}
     for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator'):
-        generator_feedins[repr(i)] = i.timeseries['p']
+        feedins[repr(i)] = i.timeseries['p']
     for i in edisgo_grid.network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
-        generator_feedins[repr(i)] = i.timeseries['p']
+        feedins[repr(i)] = i.timeseries['p']
 
     for lvgd in edisgo_grid.network.mv_grid.lv_grids:
         for i in lvgd.graph.nodes_by_attribute('generator'):
-            generator_feedins[repr(i)] = i.timeseries['p']
+            feedins[repr(i)] = i.timeseries['p']
         for i in lvgd.graph.nodes_by_attribute('generator_aggr'):
-            generator_feedins[repr(i)] = i.timeseries['p']
+            feedins[repr(i)] = i.timeseries['p']
 
-    return pd.DataFrame(generator_feedins)
+    return pd.DataFrame(feedins)
 
 
 def generator_reactive_powers(edisgo_grid):
@@ -490,6 +491,7 @@ def generator_reactive_powers(edisgo_grid):
             generator_reactive_power[repr(i)] = i.timeseries['q']
 
     return pd.DataFrame(generator_reactive_power)
+
 
 def get_load_info(network, level='mvlv'):
     """
