@@ -86,7 +86,7 @@ def create_curtailment_characteristic(edisgo_object, directory, **kwargs):
     assigned_curtailment = edisgo_object.network.results.assigned_curtailment
 
     # get the feedin
-    feedin = edisgo_object.network.pypsa.generators_t.p * 1000
+    feedin = generator_feedins(edisgo_object)
     # drop dispatchable generators and slack generator
     drop_labels = [_ for _ in feedin.columns
                    if 'GeneratorFluctuating' not in _] \
