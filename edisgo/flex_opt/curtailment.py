@@ -6,6 +6,7 @@ from pyomo.opt import SolverFactory
 
 
 def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
+                    assigned_curtailment_key,
                     **kwargs):
     """
     Implements curtailment methodology 'curtail_voltage'.
@@ -72,6 +73,13 @@ def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
     edisgo_object : :class:`edisgo.grid.network.EDisGo`
         The edisgo object in which this function was called through the
         respective :class:`edisgo.grid.network.CurtailmentControl` instance.
+    assigned_curtailment_key: :obj:`tuple` or :obj:`str`
+        The type and weather cell ID if :obj:`tuple` or only
+        the type if :obj:`str` in which the generators are
+        being curtailed. This is used to separate the
+        resulting assigned curtailment dataframes in the
+        :class:`edisgo.grid.network.Results` objects
+        accordingly.
     voltage_threshold: :obj:`float`
         The node voltage below which no curtailment would be assigned to the
         respective generator. Default: 1.0.
@@ -155,7 +163,7 @@ def curtail_voltage(feedin, generators, total_curtailment_ts, edisgo,
         raise RuntimeError(message)
 
     # assign curtailment to individual generators
-    assign_curtailment(curtailment, edisgo, generators)
+    assign_curtailment(curtailment, edisgo, generators, assigned_curtailment_key)
 
 
 def _optimize_curtail_voltage(feedin, voltage_pu, total_curtailment,
@@ -541,6 +549,7 @@ def _calculate_weighted_curtailment(feedin, voltage_pu,
 
 
 def curtail_all(feedin, generators, total_curtailment, edisgo,
+                assigned_curtailment_key,
                     **kwargs):
     """
     Implements curtailment methodology 'curtail_all'.
@@ -594,6 +603,13 @@ def curtail_all(feedin, generators, total_curtailment, edisgo,
     edisgo : :class:`edisgo.grid.network.EDisGo`
         The edisgo object in which this function was called through the
         respective :class:`edisgo.grid.network.CurtailmentControl` instance.
+    assigned_curtailment_key: :obj:`tuple` or :obj:`str`
+        The type and weather cell ID if :obj:`tuple` or only
+        the type if :obj:`str` in which the generators are
+        being curtailed. This is used to separate the
+        resulting assigned curtailment dataframes in the
+        :class:`edisgo.grid.network.Results` objects
+        accordingly.
     """
     # total_curtailment
     curtailment = feedin.divide(feedin.sum(axis=1), axis=0). \
@@ -606,10 +622,10 @@ def curtail_all(feedin, generators, total_curtailment, edisgo,
     curtailment.fillna(0, inplace=True)
 
     # assign curtailment to individual generators
-    assign_curtailment(curtailment, edisgo, generators)
+    assign_curtailment(curtailment, edisgo, generators, assigned_curtailment_key)
 
 
-def assign_curtailment(curtailment, edisgo, generators):
+def assign_curtailment(curtailment, edisgo, generators, assigned_curtailment_key):
     """
     Implements curtailment helper function to assign the curtailment time series
     to each and every individual generator and ensure that they get processed
@@ -623,6 +639,13 @@ def assign_curtailment(curtailment, edisgo, generators):
     edisgo_object : :class:`edisgo.grid.network.EDisGo`
         The edisgo object in which this function was called through the
         respective :class:`edisgo.grid.network.CurtailmentControl` instance.
+    assigned_curtailment_key: :obj:`tuple` or :obj:`str`
+        The type and weather cell ID if :obj:`tuple` or only
+        the type if :obj:`str` in which the generators are
+        being curtailed. This is used to separate the
+        resulting assigned curtailment dataframes in the
+        :class:`edisgo.grid.network.Results` objects
+        accordingly.
     """
 
     # assign curtailment to individual generators
@@ -635,5 +658,10 @@ def assign_curtailment(curtailment, edisgo, generators):
 
     if edisgo.network.timeseries._curtailment:
         edisgo.network.timeseries._curtailment.extend(gen_object_list)
+        edisgo.network.results._assigned_curtailment[assigned_curtailment_key] = \
+            gen_object_list
     else:
         edisgo.network.timeseries._curtailment = gen_object_list
+        edisgo.network.results._assigned_curtailment = \
+            {assigned_curtailment_key: gen_object_list}
+
