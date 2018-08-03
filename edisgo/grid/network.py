@@ -1961,7 +1961,7 @@ class Results:
         self._equipment_changes = pd.DataFrame()
         self._grid_expansion_costs = None
         self._grid_losses = None
-        self._grid_exchanges = None
+        self._hv_mv_exchanges = None
         self._assigned_curtailment = None
         self._unresolved_issues = {}
 
@@ -2203,7 +2203,8 @@ class Results:
     def grid_losses(self):
         """
         Holds the losses in the grid obtained from the slack bus in
-        kW and kvar.
+        kW and kvar. The slack is currently placed at
+        the secondary side of the transfomer at the medium voltage bus bar.
 
         Returns
         -------
@@ -2223,7 +2224,8 @@ class Results:
     def hv_mv_exchanges(self):
         """
         Holds the grid powers (active and reactive) transferred to the higher voltage
-        level through the slack without the losses.
+        level through the slack without the losses. The slack is currently placed at
+        the secondary side of the transfomer at the medium voltage bus bar.
 
         Returns
         -------
@@ -2233,11 +2235,11 @@ class Results:
             the index is a :pandas:`pandas.DateTimeIndex`
         """
 
-        return self._grid_exchanges
+        return self._hv_mv_exchanges
 
     @hv_mv_exchanges.setter
-    def hv_mv_exchanges(self, grid_exchanges):
-        self._grid_exchanges = grid_exchanges
+    def hv_mv_exchanges(self, hv_mv_exchanges):
+        self._hv_mv_exchanges = hv_mv_exchanges
 
     @property
     def assigned_curtailment(self):
@@ -2498,8 +2500,8 @@ class Results:
             self.grid_losses.to_csv(grid_losses_file)
 
             # grid exchanges
-            grid_exchanges_file = os.path.join(calculated_results_dir, 'hv_mv_exchanges.csv')
-            self.hv_mv_exchanges.to_csv(grid_exchanges_file)
+            hv_mv_exchanges_file = os.path.join(calculated_results_dir, 'hv_mv_exchanges.csv')
+            self.hv_mv_exchanges.to_csv(hv_mv_exchanges_file)
 
             # equipment_changes
             equipment_changes_file = os.path.join(calculated_results_dir, 'equipment_changes.csv')
