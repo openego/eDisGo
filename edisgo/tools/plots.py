@@ -82,19 +82,19 @@ def create_curtailment_characteristic(edisgo_object, directory, **kwargs):
     else:
         raise ValueError('Invalid input to normalization method')
 
+    # ToDo: Change the input parameter from edisgo_object to the following input dataframes
+    # ---------------------------------------------------------------------------
+
     # get the assigned curtailment
     assigned_curtailment = edisgo_object.network.results.assigned_curtailment
 
     # get the feedin
     feedin = generator_feedins(edisgo_object)
-    # drop dispatchable generators and slack generator
-    drop_labels = [_ for _ in feedin.columns
-                   if 'GeneratorFluctuating' not in _] \
-                  + ['Generator_slack']
-    feedin.drop(labels=drop_labels, axis=1, inplace=True)
 
     # this needs to be a separate dataframe with voltages
     generator_voltages_before_curtailment = edisgo_object.network.pypsa.buses_t['v_mag_pu']
+
+    # -----------------------------------------------------------------------------
     gens_fluct = get_gen_info(edisgo_object.network, fluctuating=True)
     gens_fluct = gens_fluct.reset_index().set_index('gen_repr')
     fluct_buses = list('Bus_' + gens_fluct.index)
