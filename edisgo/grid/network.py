@@ -1103,7 +1103,7 @@ class CurtailmentControl:
           are curtailed more. The default voltage threshold is 1.0 but
           can be changed by providing the argument 'voltage_threshold'. This
           method formulates this as a linear optimization problem using
-          :py:mod:`pyomo` and requires that a linear programming solver
+          :py:mod:`Pyomo` and requires that a linear programming solver
           like coin-or cbc (cbc) or gnu linear programming kit (glpk).
           The sovler that needs to be used can be provided as a string
           to the function using the keyword 'solver'. An alternative
@@ -1190,19 +1190,13 @@ class CurtailmentControl:
         if edisgo.network.pypsa is not None:
             pypsa_io.update_pypsa_generator_timeseries(edisgo.network)
 
-        # write curtailment to results to be able to put it out as files for
-        # result checking
-        # make sure you don't overwrite existing curtailment data
-        edisgo.network.results.assigned_curtailment = \
-            edisgo.network.timeseries.curtailment.copy()
-
     def curtail_voltage_init(self, edisgo, curtailment_ts, **kwargs):
         """
         Setup the curtail voltage function
 
         Parameters
         ----------
-        edisgo: :py:mod:`~/edisgo.network.EDisGo` object
+        edisgo: :class:`edisgo.grid.network.EDisGo` object
             The instantiated edisgo object
         curtailment_ts: :pandas:`pandas.
 
@@ -1230,8 +1224,13 @@ class CurtailmentControl:
         if isinstance(curtailment_ts, pd.Series):
             # check if curtailment exceeds feed-in
             self._check_curtailment_total_energy(curtailment_ts, feedin)
+            # give in the keys to create
+            # assigned_curtailment generator dictionary
+            assigned_curtailment_key = 'all_fluctuating_generators'
+            # do curtailment
             curtailment.curtail_voltage(
-                feedin, generators, curtailment_ts, edisgo, **kwargs)
+                feedin, generators, curtailment_ts, edisgo,
+                assigned_curtailment_key, **kwargs)
         elif isinstance(curtailment_ts, pd.DataFrame):
             if isinstance(curtailment_ts.columns, pd.MultiIndex):
                 for col in curtailment_ts.columns:
@@ -1261,9 +1260,14 @@ class CurtailmentControl:
                     else:
                         self._check_curtailment_total_energy(
                             curtailment_ts.loc[:, col], feedin_selected_generators)
+                        # give in the keys to create
+                        # assigned_curtailment generator dictionary
+                        assigned_curtailment_key = col
+                        # do curtailment
                         curtailment.curtail_voltage(
                             feedin_selected_generators, selected_generators,
-                            curtailment_ts.loc[:, col], edisgo, **kwargs)
+                            curtailment_ts.loc[:, col], edisgo,
+                            assigned_curtailment_key, **kwargs)
             else:
                 for col in curtailment_ts.columns:
                     logging.debug('Calculating curtailment for {}'.format(col))
@@ -1288,9 +1292,14 @@ class CurtailmentControl:
                     else:
                         self._check_curtailment_total_energy(
                             curtailment_ts.loc[:, col], feedin_selected_generators)
+                        # give in the keys to create
+                        # assigned_curtailment generator dictionary
+                        assigned_curtailment_key = col
+                        # do curtailment
                         curtailment.curtail_voltage(
                             feedin_selected_generators, selected_generators,
-                            curtailment_ts.loc[:, col], edisgo, **kwargs)
+                            curtailment_ts.loc[:, col], edisgo,
+                            assigned_curtailment_key, **kwargs)
 
         # check if curtailment exceeds feed-in
         self._check_curtailment(edisgo.network, feedin)
@@ -1309,8 +1318,13 @@ class CurtailmentControl:
             logging.debug("Curtailment is a series")
             # check if curtailment exceeds feed-in
             self._check_curtailment_total_energy(curtailment_ts, feedin)
+            # give in the keys to create
+            # assigned_curtailment generator dictionary
+            assigned_curtailment_key = 'all_fluctuating_generators'
+            # do curtailment
             curtailment.curtail_all(
-                feedin, generators, curtailment_ts, edisgo, **kwargs)
+                feedin, generators, curtailment_ts, edisgo,
+                assigned_curtailment_key, **kwargs)
         elif isinstance(curtailment_ts, pd.DataFrame):
             if isinstance(curtailment_ts.columns, pd.MultiIndex):
                 logging.debug("Curtailment is a MultiColumn Dataframe")
@@ -1340,9 +1354,14 @@ class CurtailmentControl:
                     else:
                         self._check_curtailment_total_energy(
                             curtailment_ts.loc[:, col], feedin_selected_generators)
+                        # give in the keys to create
+                        # assigned_curtailment generator dictionary
+                        assigned_curtailment_key = col
+                        # do curtailment
                         curtailment.curtail_all(
                             feedin_selected_generators, selected_generators,
-                            curtailment_ts.loc[:, col], edisgo, **kwargs)
+                            curtailment_ts.loc[:, col], edisgo,
+                            assigned_curtailment_key, **kwargs)
             else:
                 logging.debug("Curtailment supplied with non-MultiColumn DataFrame")
                 for col in curtailment_ts.columns:
@@ -1367,9 +1386,14 @@ class CurtailmentControl:
                     else:
                         self._check_curtailment_total_energy(
                             curtailment_ts.loc[:, col], feedin_selected_generators)
+                        # give in the keys to create
+                        # assigned_curtailment generator dictionary
+                        assigned_curtailment_key = col
+                        # do curtailment
                         curtailment.curtail_all(
                             feedin_selected_generators, selected_generators,
-                            curtailment_ts.loc[:, col], edisgo, **kwargs)
+                            curtailment_ts.loc[:, col], edisgo,
+                            assigned_curtailment_key, **kwargs)
 
         # check if curtailment exceeds feed-in
         self._check_curtailment(edisgo.network, feedin)
@@ -2185,7 +2209,8 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Total Losses, both active and reactive power losses
-            per timestep
+            per timestep.  The columns are simply 'p' and 'q' and
+            the index is a :pandas:`pandas.DateTimeIndex`
         """
 
         return self._grid_losses
@@ -2195,41 +2220,82 @@ class Results:
         self._grid_losses = pypsa_grid_losses
 
     @property
-    def grid_exchanges(self):
+    def hv_mv_exchanges(self):
         """
-        Holds the grid powers (active and reactive) transfered to the higher voltage
-        level through the slack
+        Holds the grid powers (active and reactive) transferred to the higher voltage
+        level through the slack without the losses.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>
             Total power exchanged to the higher voltage network through slack not
-            including the grid losses
+            including the grid losses. The columns are simply 'p' and 'q' and
+            the index is a :pandas:`pandas.DateTimeIndex`
         """
 
         return self._grid_exchanges
 
-    @grid_exchanges.setter
-    def grid_exchanges(self, grid_exchanges):
+    @hv_mv_exchanges.setter
+    def hv_mv_exchanges(self, grid_exchanges):
         self._grid_exchanges = grid_exchanges
 
     @property
     def assigned_curtailment(self):
         """
-        Holds the curtailment assigned to each generator.
+        Holds the curtailment assigned to each generator. The
+        output is a dictionary with dataframes of generator (columns)
+        curtailments in time (index) and the keys as the grouping
+        provided in the curtailment input:
+
+        * if curtailment is provided as a :pandas:`pandas.Series<series>`
+          the dataframe of curtailment in each generator
+          would be directly available and not a dictionary.
+        * if curtailment is provided as a :pandas:`pandas.DataFrame<dataframe`
+          with generators of a given type, the keys would be the types
+          with dataframes for each type.
+        * if curtailment is provided as a :pandas:`pandas.DataFrame<dataframe>`
+          with a :pandas.`pandas.MultiIndex` column with two levels, 'type'
+          and 'weather cell ID' the dictionary key would be a tuple of
+          ('type','weather_cell_id'), with dataframes for each
+          combination of type and weather cell.
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>
+        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>` or :pandas:`pandas.DataFrame<dataframe>`
             curtailment per generator (in columns) in timesteps(rows).
+            dictionary keys depending upon the input curtailment.
+
+            * if curtailment is provided as a :pandas:`pandas.Series<series>`
+              the dataframe of curtailment in each generator
+              would be directly available and not a dictionary.
+            * if curtailment is provided as a :pandas:`pandas.DataFrame<dataframe`
+              with generators of a given type, the keys would be the types
+              with dataframes for each type.
+            * if curtailment is provided as a :pandas:`pandas.DataFrame<dataframe>`
+              with a :pandas.`pandas.MultiIndex` column with two levels, 'type'
+              and 'weather cell ID' the dictionary key would be a tuple of
+              ('type','weather_cell_id'), with dataframes for each
+              combination of type and weather cell.
+
         """
+        if self._assigned_curtailment is not None:
+            result_dict = {}
+            for key, gen_list in self._assigned_curtailment.items():
+                ts_dict = {}
+                for gen in gen_list:
+                    if gen.curtailment is not None:
+                        ts_dict[gen] = gen.curtailment
+                    else:
+                        message = "The component {} has no curtailment assigned".format(repr(gen))
+                        logging.info(message)
 
-        return self._assigned_curtailment
-
-    @assigned_curtailment.setter
-    def assigned_curtailment(self, assigned_curtailment):
-        self._assigned_curtailment = assigned_curtailment
-        self.assigned_curtailment.sort_index(inplace=True)
+                if key == 'all_fluctuating_generators':
+                    result_dict = pd.DataFrame(ts_dict)
+                else:
+                    result_dict[key] = pd.DataFrame(ts_dict)
+            return result_dict
+        else:
+            return None
 
     @property
     def unresolved_issues(self):
@@ -2321,7 +2387,7 @@ class Results:
 
         return s_res
 
-    def v_res(self, nodes=None, generators=None, level=None):
+    def v_res(self, nodes=None, level=None):
         """
         Get resulting voltage level at node
 
@@ -2374,7 +2440,7 @@ class Results:
                 nodes=not_included))
             return self.pfa_v_mag_pu[level][labels_included]
 
-    def save(self, directory, create_plots=False, **kwargs):
+    def save(self, directory):
         """
         Save all results to disk in a folder.
 
@@ -2385,56 +2451,72 @@ class Results:
         """
         powerflow_results_dir = os.path.join(directory, 'powerflow_results')
         calculated_results_dir = os.path.join(directory, 'calculated_results')
-
-        os.makedirs(powerflow_results_dir, exist_ok=True)
-        os.makedirs(calculated_results_dir, exist_ok=True)
-
+        flex_opt_results_dir = os.path.join(directory, 'flexibility_options_results')
+        flex_opt_curtailment_results_dir = os.path.join(flex_opt_results_dir,
+                                                        'curtailment_results')
         # put out important information at the top level
+        # check to see if power flow results are available
+        if self.pfa_v_mag_pu is not None:
+            # create the folder
+            os.makedirs(powerflow_results_dir, exist_ok=True)
 
-        # put out all relevant power_flow results
-        # voltage
-        voltage_pu_file = os.path.join(powerflow_results_dir, 'voltages_pu.csv')
-        self.pfa_v_mag_pu.to_csv(voltage_pu_file)
+            # voltage
+            voltage_pu_file = os.path.join(powerflow_results_dir, 'voltages_pu.csv')
+            self.pfa_v_mag_pu.to_csv(voltage_pu_file)
 
-        # current
-        current_file = os.path.join(powerflow_results_dir, 'currents.csv')
-        self.i_res.to_csv(current_file)
+            # current
+            current_file = os.path.join(powerflow_results_dir, 'currents.csv')
+            self.i_res.to_csv(current_file)
 
-        # active power
-        acitve_power_file = os.path.join(powerflow_results_dir, 'active_powers.csv')
-        self.pfa_p.to_csv(acitve_power_file)
+            # active power
+            acitve_power_file = os.path.join(powerflow_results_dir, 'active_powers.csv')
+            self.pfa_p.to_csv(acitve_power_file)
 
-        # reactive power
-        reacitve_power_file = os.path.join(powerflow_results_dir, 'reactive_powers.csv')
-        self.pfa_q.to_csv(reacitve_power_file)
+            # reactive power
+            reacitve_power_file = os.path.join(powerflow_results_dir, 'reactive_powers.csv')
+            self.pfa_q.to_csv(reacitve_power_file)
 
-        # apparent power
-        apparent_power_file = os.path.join(powerflow_results_dir, 'apparent_powers.csv')
-        self.s_res().to_csv(apparent_power_file)
+            # apparent power
+            apparent_power_file = os.path.join(powerflow_results_dir, 'apparent_powers.csv')
+            self.s_res().to_csv(apparent_power_file)
 
-        # put out all relevant calculated results
-        # grid losses
-        grid_losses_file = os.path.join(calculated_results_dir, 'grid_losses.csv')
-        self.grid_losses.to_csv(grid_losses_file)
-
-        # grid exchanges
-        grid_exchanges_file = os.path.join(calculated_results_dir, 'grid_exchanges.csv')
-        self.grid_exchanges.to_csv(grid_exchanges_file)
-
-        # assigned curtailment
-        if self.assigned_curtailment is not None:
-            assigned_curtailment_file = os.path.join(calculated_results_dir, 'assigned_curtailment.csv')
-            self.assigned_curtailment.to_csv(assigned_curtailment_file)
-
-        # equipment_changes
-        equipment_changes_file = os.path.join(calculated_results_dir, 'equipment_changes.csv')
-        self.equipment_changes.to_csv(equipment_changes_file)
-
-        # grid_expansion_costs
+        # check to see if there are any calcuated results
+        # before creating any folder structure
         if self.grid_expansion_costs is not None:
+            os.makedirs(calculated_results_dir, exist_ok=True)
+            # grid_expansion_costs
             grid_expansion_costs_file = os.path.join(calculated_results_dir, 'grid_expansion_costs.csv')
             self.grid_expansion_costs.to_csv(grid_expansion_costs_file)
 
-        # unresolved_issues
-        unresolved_issues_file = os.path.join(calculated_results_dir, 'unresolved_issues.csv')
-        pd.DataFrame(self.unresolved_issues).to_csv(unresolved_issues_file)
+            # unresolved_issues
+            unresolved_issues_file = os.path.join(calculated_results_dir, 'unresolved_issues.csv')
+            pd.DataFrame(self.unresolved_issues).to_csv(unresolved_issues_file)
+
+            # put out all relevant calculated results
+            # grid losses
+            grid_losses_file = os.path.join(calculated_results_dir, 'grid_losses.csv')
+            self.grid_losses.to_csv(grid_losses_file)
+
+            # grid exchanges
+            grid_exchanges_file = os.path.join(calculated_results_dir, 'hv_mv_exchanges.csv')
+            self.hv_mv_exchanges.to_csv(grid_exchanges_file)
+
+            # equipment_changes
+            equipment_changes_file = os.path.join(calculated_results_dir, 'equipment_changes.csv')
+            self.equipment_changes.to_csv(equipment_changes_file)
+
+        # assigned curtailment
+        if self.assigned_curtailment is not None:
+            os.makedirs(flex_opt_curtailment_results_dir, exist_ok=True)
+            for key, curtailment_df in self.assigned_curtailment.items():
+                if type(key) == tuple:
+                    type_prefix = '-'.join([key[0], str(key[1])])
+                elif type(key) == str:
+                    type_prefix = key
+                else:
+                    raise KeyError("Unknown key type {} for key {}".format(type(key), key))
+
+                assigned_curtailment_file = os.path.join(flex_opt_curtailment_results_dir,
+                                                         '{}_assigned_curtailment.csv'.format(type_prefix))
+
+                curtailment_df.to_csv(assigned_curtailment_file, index_label=type_prefix)
