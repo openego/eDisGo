@@ -7,18 +7,56 @@ import logging
 
 from matplotlib import pyplot as plt
 from edisgo.grid.network import Results
-from edisgo.grid.tools import get_gen_info, generator_feedins, generator_reactive_powers
 
 
-def create_curtailment_characteristic(edisgo_object, directory, **kwargs):
+def create_curtailment_characteristic(assigned_curtailment,
+                                      generator_feedins,
+                                      bus_voltages_before_curtailment,
+                                      gens_fluct_info,
+                                      directory, **kwargs):
     """
     Function to create some voltage histograms.
     Parameters
     ----------
-    edisgo_object: :py:mod:`~/edisgo/grid/network.EDisGo` Object
-        The eDisGo object which should be plotted
+    assigned_curtailment: :pandas:`pandas.DataFrame<dataframe>`
+        The assigned curtailment in kW of the generators typically
+        obtained from :py:mod:`edisgo.network.Results` object
+        in the attribute
+        :attr:`edisgo.network.Results.assigned_curtailment`.
+        The columns names are the individual generators as
+        `edisgo.grid.components.GeneratorFluctuating` objects
+        and the index is a :pandas:`pandas.DateTimeIndex`.
+    generator_feedins: :pandas:`pandas.DataFrame<dataframe>`
+        The feedins in kW of every single generator typically
+        obtained from :py:mod:`edisgo.grid.tools.generator_feedins`
+        The columns names are the individual generators as
+        `edisgo.grid.components.GeneratorFluctuating` and
+        `edisgo.grid.components.Generator` objects
+        and the index is a :pandas:`pandas.DateTimeIndex`.
+    bus_voltages_before_curtailment: :pandas:`pandas.DataFrame<dataframe>`
+        The voltages in per unit at the buses before curtailment
+        as in the :py:mod:`edisgo.network.pypsa` object
+        from the attribute 'buses_t['v_mag_pu'].
+        The columns names are the individual buses as
+        :obj:`str` objects containing the bus IDs
+        (including Generators as 'Bus_Generator...')
+        and the index is a :pandas:`pandas.DateTimeIndex`.
+    gens_fluct_info: :pandas:`pandas.DataFrame<dataframe>`
+        The information about all the fluctuating generators
+        i.e. gen_repr, type, voltage_level, weather_cell_id and nominal_capacity
+        as can be obtained from :py:mod:`edisgo.grid.tools.get_gen_info`
+        with the 'fluctuating' switch set to 'True'.
+        The columns names are information categories
+        namely 'gen_repr', 'type', 'voltage_level',
+        'nominal_capacity', 'weather_cell_id' and
+        the index contains the
+        `edisgo.grid.components.GeneratorFluctuating` objects.
     directory: :obj:`str`
         path to save the plots
+    filetype: :obj:`str`
+        filetype to save the file with, the allowed types
+        are the same as those allowed from matplotlib
+        Default: png
     timeindex: :pandas:`pandas.DateTimeIndex`
         Datetime index which the histogram should be constructed from.
         Default: all indexes in the results
@@ -52,6 +90,7 @@ def create_curtailment_characteristic(edisgo_object, directory, **kwargs):
     y_limits = kwargs.get('ylim', None)
     color = kwargs.get('color', 'blue')
     transparency = kwargs.get('transparency', 0)
+    filetype = kwargs.get('filetype', 'png')
     fig_size = kwargs.get('figsize', 'a5landscape')
     standard_sizes = {'a4portrait': (8.27, 11.69),
                       'a4landscape': (11.69, 8.27),
@@ -74,7 +113,7 @@ def create_curtailment_characteristic(edisgo_object, directory, **kwargs):
 
     normalization = kwargs.get('normalization_method', 'by_feedin')
     if normalization == 'by_feedin':
-        by_feedin=True
+        by_feedin = True
         by_nominal_cap = False
     elif normalization == 'by_nominal_cap':
         by_feedin = False
@@ -82,37 +121,30 @@ def create_curtailment_characteristic(edisgo_object, directory, **kwargs):
     else:
         raise ValueError('Invalid input to normalization method')
 
-    # ToDo: Change the input parameter from edisgo_object to the following input dataframes
-    # ---------------------------------------------------------------------------
+    # process the gen info to get the bus names
+    gens_fluct_info = gens_fluct_info.reset_index().set_index('gen_repr')
+    # get only those generator that are present in assigned curtailment
+    gens_in_assinged_curtail = list(assigned_curtailment.columns)
+    if type(gens_in_assinged_curtail[0]) != str:
+        gens_in_assinged_curtail = list(map(repr, gens_in_assinged_curtail))
+    gens_fluct_info = gens_fluct_info.loc[gens_in_assinged_curtail, :]
+    # get the buses from the repr
+    fluct_buses = list('Bus_' + gens_fluct_info.index)
 
-    # get the assigned curtailment
-    assigned_curtailment = edisgo_object.network.results.assigned_curtailment
-
-    # get the feedin
-    feedin = generator_feedins(edisgo_object)
-
-    # this needs to be a separate dataframe with voltages
-    generator_voltages_before_curtailment = edisgo_object.network.pypsa.buses_t['v_mag_pu']
-
-    # -----------------------------------------------------------------------------
-    gens_fluct = get_gen_info(edisgo_object.network, fluctuating=True)
-    gens_fluct = gens_fluct.reset_index().set_index('gen_repr')
-    fluct_buses = list('Bus_' + gens_fluct.index)
-
-    timeindex = kwargs.get('timeindex',generator_voltages_before_curtailment.index)
+    timeindex = kwargs.get('timeindex', bus_voltages_before_curtailment.index)
 
     v = {}
-    for n, i in enumerate(generator_voltages_before_curtailment.loc[timeindex, :].index):
-        v[n] = generator_voltages_before_curtailment.loc[str(i), fluct_buses]
+    for n, i in enumerate(bus_voltages_before_curtailment.loc[timeindex, :].index):
+        v[n] = bus_voltages_before_curtailment.loc[str(i), fluct_buses]
 
     c = {}
     for n, i in enumerate(assigned_curtailment.loc[timeindex, :].index):
-        c[n] = assigned_curtailment.loc[str(i), gens_fluct.generator]
+        c[n] = assigned_curtailment.loc[str(i), gens_fluct_info.generator]
         c[n].index = list(map(str, c[n].index.values))
         if by_feedin:
-            c[n] /= feedin.iloc[n]
+            c[n] /= generator_feedins.iloc[n]
         elif by_nominal_cap:
-            c[n] /= gens_fluct.nominal_capacity
+            c[n] /= gens_fluct_info.nominal_capacity
         else:
             raise RuntimeError("incorrect normalization method provided")
         c[n].index = list(map(lambda x: 'Bus_' + str(x), c[n].index.values))
@@ -124,8 +156,9 @@ def create_curtailment_characteristic(edisgo_object, directory, **kwargs):
         x_label = kwargs.get('xlabel', "Voltage [per unit]")
         y_label = kwargs.get('ylabel', "Curtailment [per unit] normalized by installed capacity")
 
-    plt.figure(figsize=fig_size)
     for n, i in enumerate([(c[x], v[x]) for x in range(len(timeindex))]):
+        plt.figure(figsize=fig_size)
+        plot_title = "Curtailment Characteristic at {}".format(timeindex[n])
         pd.DataFrame({'voltage_pu': i[1],
                       'curtailment_pu': i[0]}).plot(kind='scatter',
                                                     x='voltage_pu',
@@ -138,12 +171,14 @@ def create_curtailment_characteristic(edisgo_object, directory, **kwargs):
                                                     grid=True)
         plt.minorticks_on()
         plt.axvline(1.0, color='black', linestyle='--')
+        plt.title(plot_title)
         plt.xlabel(x_label)
         plt.ylabel(y_label)
         plt.savefig(os.path.join(directory,
-                                 'curtailment_voltage_characterisitc_{}.svgz'.format(
-                                     timeindex[n].strftime('%Y%m%d%H%M'))))
-        plt.close()
+                                 'curtailment_voltage_characterisitc_{}.{}'.format(
+                                     timeindex[n].strftime('%Y%m%d%H%M'),
+                                     filetype)))
+        plt.close('all')
 
 
 def create_voltage_plots(voltage_data, directory, **kwargs):
@@ -159,6 +194,10 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
         get the dataframe in pfa_v_mag_pu.
     directory: :obj:`str`
         path to save the plots
+    filetype: :obj:`str`
+        filetype to save the file with, the allowed types
+        are the same as those allowed from matplotlib
+        Default: png
     timeindex: :pandas:`pandas.DateTimeIndex`
         Datetime index which the histogram should be constructed from.
         Default: all indexes in the results
@@ -204,6 +243,7 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
     binwidth = kwargs.get('binwidth', 0.01)
     lowerlimit = x_limits[0] - binwidth / 2
     upperlimit = x_limits[1] + binwidth / 2
+    filetype = kwargs.get('filetype', 'png')
     fig_size = kwargs.get('figsize', 'a5landscape')
     standard_sizes = {'a4portrait': (8.27, 11.69),
                       'a4landscape': (11.69, 8.27),
@@ -249,9 +289,10 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
             plt.xlabel(x_label)
             plt.ylabel(y_label)
             plt.savefig(os.path.join(directory,
-                                     'voltage_histogram_{}.svgz'.format(
-                                         timestamp.strftime('%Y%m%d%H%M'))))
-            plt.close()
+                                     'voltage_histogram_{}.{}'.format(
+                                         timestamp.strftime('%Y%m%d%H%M'),
+                                         filetype)))
+            plt.close('all')
     else:
         plot_title = "Voltage Histogram \nfrom {} to {}".format(str(timeindex[0]), str(timeindex[-1]))
 
@@ -274,5 +315,5 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
         plt.xlabel(x_label)
         plt.ylabel(y_label)
         plt.savefig(os.path.join(directory,
-                                 'voltage_histogram_all.svgz'))
-        plt.close()
+                                 'voltage_histogram_all.{}'.format(filetype)))
+        plt.close('all')
