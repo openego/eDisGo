@@ -661,7 +661,13 @@ def assign_curtailment(curtailment, edisgo, generators, assigned_curtailment_key
         edisgo.network.results._assigned_curtailment[assigned_curtailment_key] = \
             gen_object_list
     else:
+        # if gen_object_list isn't copied here, then
+        # the object is saved in _curtailment
+        # and in edisgo.network.results._assigned_curtailment[1st_key]
+        # and after every _curtailment.extend,
+        # the object simply get added to the ._assigned_curtailment[1st_key]
+        # which is bad
         edisgo.network.timeseries._curtailment = gen_object_list
         edisgo.network.results._assigned_curtailment = \
-            {assigned_curtailment_key: gen_object_list}
+            {assigned_curtailment_key: gen_object_list.copy()}
 
