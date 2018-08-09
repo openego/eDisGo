@@ -257,7 +257,9 @@ class EDisGo:
         parameters and methodologies.
 
         """
-        CurtailmentControl(edisgo=self, **kwargs)
+        CurtailmentControl(edisgo=self, methodology=methodology,
+                           curtailment_timeseries=curtailment_timeseries,
+                           **kwargs)
 
     def import_from_ding0(self, file, **kwargs):
         """Import grid data from DINGO file
@@ -1088,8 +1090,8 @@ class CurtailmentControl:
     ----------
     edisgo_object : :class:`edisgo.EDisGo`
         The parent EDisGo object that this instance is a part of.
-    curtailment_methodology : :obj:`str`
         Mode defines the curtailment strategy. Possible options are:
+    methodology : :obj:`str`
 
         * 'curtail_all'
           The curtailment that has to be met in each time step is allocated
@@ -1114,7 +1116,7 @@ class CurtailmentControl:
           For more information see
           :meth:`edisgo.flex_opt.curtailment.curtail_voltage()`.
 
-    timeseries_curtailment : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
+    curtailment_timeseries : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Series or DataFrame containing the curtailment time series in kW. Index
         needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
         Provide a Series if the curtailment time series applies to wind and
@@ -1168,10 +1170,8 @@ class CurtailmentControl:
         Default: 'cbc'
     """
 
-    def __init__(self, edisgo, **kwargs):
+    def __init__(self, edisgo, methodology, curtailment_timeseries, **kwargs):
 
-        mode = kwargs.get('curtailment_methodology', None)
-        curtailment_ts = kwargs.get('timeseries_curtailment', None)
 
         logging.info("Start curtailment methodology {}.".format(mode))
         if curtailment_ts is not None:
