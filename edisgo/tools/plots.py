@@ -139,7 +139,7 @@ def create_curtailment_characteristic(assigned_curtailment,
 
     c = {}
     for n, i in enumerate(assigned_curtailment.loc[timeindex, :].index):
-        c[n] = assigned_curtailment.loc[str(i), gens_fluct_info.generator]
+        c[n] = assigned_curtailment.loc[i, gens_fluct_info.generator]
         c[n].index = list(map(str, c[n].index.values))
         if by_feedin:
             c[n] /= generator_feedins.iloc[n]
