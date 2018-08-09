@@ -352,32 +352,45 @@ def select_cable(network, level, apparent_power):
 
 def get_gen_info(network, level='mvlv', fluctuating=False):
     """
-    Gets all the installed generators under both mv and the lv grids.
+    Gets all the installed generators with some additional information.
 
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-        the network data
-    level : :string
-        'mv' for generators in mv level
-        'lv' for generators in lv level
-        'mvlv' for generators in both mv and lv levels
-    fluctuating : Boolean
+        Network object holding the grid data.
+    level : :obj:`str`
+        Defines which generators are returned. Possible options are:
+
+        * 'mv'
+          Only generators connected to the MV grid are returned.
+        * 'lv'
+          Only generators connected to the LV grids are returned.
+        * 'mvlv'
+          All generators connected to the MV grid and LV grids are returned.
+
+        Default: 'mvlv'.
+    fluctuating : :obj:`bool`
         If True only returns fluctuating generators. Default: False.
 
     Returns
     --------
     :pandas:`pandas.DataFrame<dataframe>`
-        This contains a dataframe of all the generators selected for the assignment
-        of the curtailment. The typical structure of this dataframe can be obtained
-        from :py:mod:`edigo.grid.tools.get_gen_info`. The stucture essentially
-        contains 5 columns namely:
+        Dataframe with all generators connected to the specified voltage
+        level. Index of the dataframe are the generator objects of type
+        :class:`~.grid.components.Generator`. Columns of the dataframe are:
 
-        * 'gen_repr': The repr string of the generator with the asset name and the asset id
-        * 'type': the generator type, e. g. 'solar' or 'wind' typically
-        * 'voltage_level': the voltage level, either 'mv' or 'lv'
-        * 'nominal_capacity': the nominal capacity of the generator
-        * 'weather_cell_id': the id of the weather cell the generator is located in
+        * 'gen_repr'
+          The representative of the generator as :obj:`str`.
+        * 'type'
+          The generator type, e.g. 'solar' or 'wind' as :obj:`str`.
+        * 'voltage_level'
+          The voltage level the generator is connected to as :obj:`str`. Can
+          either be 'mv' or 'lv'.
+        * 'nominal_capacity'
+          The nominal capacity of the generator as as :obj:`float`.
+        * 'weather_cell_id'
+          The id of the weather cell the generator is located in as :obj:`int`
+          (only applies to fluctuating generators).
 
     """
     # get all generators
