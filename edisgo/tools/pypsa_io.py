@@ -1203,15 +1203,19 @@ def process_pfa_results(network, pypsa):
 
     """
     # get the absolute losses in the system
-    # subtracting total generation(including slack) from total load
-    grid_losses = {'p': 1e3 * (pypsa.generators_t['p'].sum(axis=1) - pypsa.loads_t['p'].sum(axis=1)),
-                   'q': 1e3 * (pypsa.generators_t['q'].sum(axis=1) - pypsa.loads_t['q'].sum(axis=1))}
+    # subtracting total generation (including slack) from total load
+    grid_losses = {'p': 1e3 * (pypsa.generators_t['p'].sum(axis=1) -
+                               pypsa.loads_t['p'].sum(axis=1)),
+                   'q': 1e3 * (pypsa.generators_t['q'].sum(axis=1) -
+                               pypsa.loads_t['q'].sum(axis=1))}
 
     network.results.grid_losses = pd.DataFrame(grid_losses)
 
     # get the grid exchange through slack
-    grid_exchanges = {'p': 1e3 * (pypsa.generators_t['p']['Generator_slack']) - grid_losses['p'],
-                      'q': 1e3 * (pypsa.generators_t['q']['Generator_slack']) - grid_losses['q']}
+    grid_exchanges = {'p': 1e3 * (pypsa.generators_t['p']['Generator_slack']) -
+                           grid_losses['p'],
+                      'q': 1e3 * (pypsa.generators_t['q']['Generator_slack']) -
+                           grid_losses['q']}
 
     network.results.hv_mv_exchanges = pd.DataFrame(grid_exchanges)
 
@@ -1238,9 +1242,6 @@ def process_pfa_results(network, pypsa):
          np.abs(pypsa.generators_t['p']['Generator_slack'].rename(
              repr(network.mv_grid.station)))], axis=1)
 
-    line_losses = {}
-    line_losses['p'] = 1e3
-
     # determine apparent power and line endings/transformers' side
     s0 = np.hypot(p0, q0)
     s1 = np.hypot(p1, q1)
@@ -1250,11 +1251,13 @@ def process_pfa_results(network, pypsa):
     network.results.pfa_q = q0.where(s0 > s1, q1) * 1e3
 
     lines_bus0 = pypsa.lines['bus0'].to_dict()
-    bus0_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[list(lines_bus0.values()), :].copy()
+    bus0_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[
+                    list(lines_bus0.values()), :].copy()
     bus0_v_mag_pu.index = list(lines_bus0.keys())
 
     lines_bus1 = pypsa.lines['bus1'].to_dict()
-    bus1_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[list(lines_bus1.values()), :].copy()
+    bus1_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[
+                    list(lines_bus1.values()), :].copy()
     bus1_v_mag_pu.index = list(lines_bus1.keys())
 
     line_voltage_avg = 0.5 * (bus0_v_mag_pu + bus1_v_mag_pu)
@@ -1272,7 +1275,8 @@ def process_pfa_results(network, pypsa):
     branch_t_mapping = {'_'.join(['Bus', v]): v for v in branch_t_names}
     mv_station_names = [repr(m) for m in
                         network.mv_grid.graph.nodes_by_attribute('mv_station')]
-    mv_station_mapping_sec = {'_'.join(['Bus', v]): v for v in mv_station_names}
+    mv_station_mapping_sec = {'_'.join(['Bus', v]): v for v in
+                              mv_station_names}
     mv_switch_disconnector_names = [repr(sd) for sd in
                                     network.mv_grid.graph.nodes_by_attribute(
                                         'mv_disconnecting_point')]
@@ -1339,8 +1343,6 @@ def process_pfa_results(network, pypsa):
         list(lv_loads_mapping)]).rename(columns=names_mapping)
     network.results.pfa_v_mag_pu = pd.concat(
         {'mv': pfa_v_mag_pu_mv, 'lv': pfa_v_mag_pu_lv}, axis=1)
-
-
 
 
 def update_pypsa_grid_reinforcement(network, equipment_changes):
