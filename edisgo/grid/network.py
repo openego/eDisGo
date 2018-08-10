@@ -1799,7 +1799,7 @@ class Results:
         self._grid_expansion_costs = None
         self._grid_losses = None
         self._hv_mv_exchanges = None
-        self._assigned_curtailment = None
+        self._curtailment = None
         self._unresolved_issues = {}
 
     @property
@@ -2039,16 +2039,30 @@ class Results:
     @property
     def grid_losses(self):
         """
-        Holds the losses in the grid obtained from the slack bus in
-        kW and kvar. The slack is currently placed at
-        the secondary side of the transfomer at the medium voltage bus bar.
+        Holds active and reactive grid losses in kW and kvar, respectively.
 
+        Parameters
+        ----------
+        pypsa_grid_losses : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe holding active and reactive grid losses in
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Total Losses, both active and reactive power losses
+            Active and reactive power losses
             per timestep.  The columns are simply 'p' and 'q' and
             the index is a :pandas:`pandas.DateTimeIndex`
+
+        Notes
+        ------
+        Grid losses are calculated as follows:
+
+        .. math::
+            P_{loss} = \sum{feed-in} - \sum{load} + P_{slack}
+            Q_{loss} = \sum{feed-in} - \sum{load} + Q_{slack}
+
+        As the slack is placed at the secondary side of the HV/MV station
+        losses do not include losses of the HV/MV transformers.
+
         """
 
         return self._grid_losses
@@ -2079,7 +2093,7 @@ class Results:
         self._hv_mv_exchanges = hv_mv_exchanges
 
     @property
-    def assigned_curtailment(self):
+    def curtailment(self):
         """
         Holds the curtailment assigned to each generator. The
         output is a dictionary with dataframes of generator (columns)
@@ -2117,21 +2131,17 @@ class Results:
               combination of type and weather cell.
 
         """
-        if self._assigned_curtailment is not None:
+        if self._curtailment is not None:
             result_dict = {}
-            for key, gen_list in self._assigned_curtailment.items():
-                ts_dict = {}
+            for key, gen_list in self._curtailment.items():
+                curtailment_df = pd.DataFrame()
                 for gen in gen_list:
-                    if gen.curtailment is not None:
-                        ts_dict[gen] = gen.curtailment
-                    else:
-                        message = "The component {} has no curtailment assigned".format(repr(gen))
-                        logging.info(message)
+                    curtailment_df[gen] = gen.curtailment
 
                 if key == 'all_fluctuating_generators':
-                    result_dict = pd.DataFrame(ts_dict)
+                    result_dict = curtailment_df
                 else:
-                    result_dict[key] = pd.DataFrame(ts_dict)
+                    result_dict[key] = curtailment_df
             return result_dict
         else:
             return None
