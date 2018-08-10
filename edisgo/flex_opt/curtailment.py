@@ -113,7 +113,7 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
             curtailment_timeseries <= 0].index))
 
     # assign curtailment to individual generators
-    assign_curtailment(curtailment, edisgo, generators, curtailment_key)
+    _assign_curtailment(curtailment, edisgo, generators, curtailment_key)
 
 
 def _optimize_voltage_based_curtailment(feedin, voltage_pu, total_curtailment,
@@ -286,32 +286,34 @@ def feedin_proportional(feedin, generators, curtailment_timeseries, edisgo,
     curtailment.fillna(0, inplace=True)
 
     # assign curtailment to individual generators
-    assign_curtailment(curtailment, edisgo, generators, curtailment_key)
+    _assign_curtailment(curtailment, edisgo, generators, curtailment_key)
 
 
-def assign_curtailment(curtailment, edisgo, generators, curtailment_key):
+def _assign_curtailment(curtailment, edisgo, generators, curtailment_key):
     """
-    Implements curtailment helper function to assign the curtailment time series
-    to each and every individual generator and ensure that they get processed
-    and included in the :meth:`edisgo.grid.network.TimeSeries.curtailment` correctly
+    Helper function to write curtailment time series to generator objects.
+
+    This function also writes a list of the curtailed generators to curtailment
+    in :class:`edisgo.grid.network.TimeSeries` and
+    :class:`edisgo.grid.network.Results`.
 
     Parameters
     ----------
     curtailment : :pandas:`pandas.DataFrame<dataframe>`
-        final curtailment dataframe with generator objects as column
-        labels and a DatetimeIndex as the index
+        Dataframe containing the curtailment in kW per generator and time step
+        for all generators of the type (and in weather cell) specified in
+        `curtailment_key` parameter. Index is a :pandas:`pandas.DateTimeIndex`,
+        columns are the generator representatives.
     edisgo : :class:`edisgo.grid.network.EDisGo`
-        The edisgo object in which this function was called through the
-        respective :class:`edisgo.grid.network.CurtailmentControl` instance.
-    curtailment_key: :obj:`tuple` or :obj:`str`
-        The type and weather cell ID if :obj:`tuple` or only
-        the type if :obj:`str` in which the generators are
-        being curtailed. This is used to separate the
-        resulting assigned curtailment dataframes in the
-        :class:`edisgo.grid.network.Results` objects
-        accordingly.
-    """
+    generators : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe with all generators of the type (and in weather cell)
+        specified in `curtailment_key` parameter. See return value of
+        :func:`edisgo.grid.tools.get_gen_info` for more information.
+    curtailment_key : :obj:`str` or :obj:`tuple` with :obj:`str`
+        The technology and weather cell ID if :obj:`tuple` or only
+        the technology if :obj:`str` the curtailment is specified for.
 
+    """
 
     gen_object_list = []
     for gen in curtailment.columns:
@@ -324,16 +326,11 @@ def assign_curtailment(curtailment, edisgo, generators, curtailment_key):
     # set timeseries.curtailment
     if edisgo.network.timeseries._curtailment:
         edisgo.network.timeseries._curtailment.extend(gen_object_list)
-        edisgo.network.results._assigned_curtailment[curtailment_key] = \
+        edisgo.network.results._curtailment[curtailment_key] = \
             gen_object_list
     else:
-        # if gen_object_list isn't copied here, then
-        # the object is saved in _curtailment
-        # and in edisgo.network.results._assigned_curtailment[1st_key]
-        # and after every _curtailment.extend,
-        # the object simply get added to the ._assigned_curtailment[1st_key]
-        # which is bad
         edisgo.network.timeseries._curtailment = gen_object_list
-        edisgo.network.results._assigned_curtailment = \
+        # list needs to be copied, otherwise it will be extended every time
+        # a new key is added to results._curtailment
+        edisgo.network.results._curtailment = \
             {curtailment_key: gen_object_list.copy()}
-
