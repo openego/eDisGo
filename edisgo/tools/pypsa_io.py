@@ -1236,11 +1236,9 @@ def process_pfa_results(network, pypsa):
 
     network.results.grid_losses = pd.DataFrame(grid_losses)
 
-    # get the grid exchange through slack
-    grid_exchanges = {'p': 1e3 * (pypsa.generators_t['p']['Generator_slack']) -
-                           grid_losses['p'],
-                      'q': 1e3 * (pypsa.generators_t['q']['Generator_slack']) -
-                           grid_losses['q']}
+    # get slack results
+    grid_exchanges = {'p': 1e3 * (pypsa.generators_t['p']['Generator_slack']),
+                      'q': 1e3 * (pypsa.generators_t['q']['Generator_slack'])}
 
     network.results.hv_mv_exchanges = pd.DataFrame(grid_exchanges)
 
