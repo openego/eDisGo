@@ -1848,7 +1848,7 @@ class Results:
 
         Parameters
         ----------
-        pypsa: `pandas.DataFrame<dataframe>`
+        pypsa : `pandas.DataFrame<dataframe>`
             Results time series of active power P in kW from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
@@ -1880,7 +1880,7 @@ class Results:
 
         Parameters
         ----------
-        pypsa: `pandas.DataFrame<dataframe>`
+        pypsa : `pandas.DataFrame<dataframe>`
             Results time series of reactive power Q in kvar from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
