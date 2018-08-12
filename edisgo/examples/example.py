@@ -77,7 +77,7 @@ if __name__ == '__main__':
                                     costs_grouped.index]))
 
             # Clear results
-            edisgo.network.results = Results()
+            edisgo.network.results = Results(edisgo.network)
             edisgo.network.pypsa = None
 
             # Calculate grid expansion costs after generator import
