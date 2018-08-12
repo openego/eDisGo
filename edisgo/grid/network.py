@@ -1779,17 +1779,10 @@ class Results:
 
     Attributes
     ----------
-    measures: list
-        A stack that details the history of measures to increase grid's hosting
-        capacity. The last item refers to the latest measure. The key
-        `original` refers to the state of the grid topology as it was initially
-        imported.
     network : :class:`~.grid.network.Network`
         The network is a container object holding all data.
 
     """
-
-    # ToDo: maybe add setter to alter list of measures
 
     def __init__(self, network):
         self.network = network
@@ -1804,6 +1797,32 @@ class Results:
         self._hv_mv_exchanges = None
         self._curtailment = None
         self._unresolved_issues = {}
+
+    @property
+    def measures(self):
+        """
+        List with the history of measures to increase grid's hosting capacity.
+
+        Parameters
+        ----------
+        measure : :obj:`str`
+            Measure to increase grid's hosting capacity. Possible options are
+            'grid_expansion', 'storage_integration', 'curtailment'.
+
+        Returns
+        -------
+        measures : :obj:`list`
+            A stack that details the history of measures to increase grid's
+            hosting capacity. The last item refers to the latest measure. The
+            key `original` refers to the state of the grid topology as it was
+            initially imported.
+
+        """
+        return self._measures
+
+    @measures.setter
+    def measures(self, measure):
+        self._measures.append(measure)
 
     @property
     def pfa_p(self):
