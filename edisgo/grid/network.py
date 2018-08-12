@@ -379,12 +379,17 @@ class EDisGo:
         See :meth:`~.flex_opt.reinforce_grid` for more information.
 
         """
-        return reinforce_grid(
+        results = reinforce_grid(
             self, max_while_iterations=kwargs.get(
                 'max_while_iterations', 10),
             copy_graph=kwargs.get('copy_graph', False),
             timesteps_pfa=kwargs.get('timesteps_pfa', None),
             combined_analysis=kwargs.get('combined_analysis', False))
+
+        # add measure to Results object
+        self.network.results.measures = 'grid_expansion'
+
+        return results
 
     def integrate_storage(self, **kwargs):
         """
@@ -1212,6 +1217,9 @@ class CurtailmentControl:
         if edisgo.network.pypsa is not None:
             pypsa_io.update_pypsa_generator_timeseries(edisgo.network)
 
+        # add measure to Results object
+        edisgo.network.results.measures = 'curtailment'
+
     def _check_timeindex(self, curtailment_timeseries, network):
         """
         Raises an error if time index of curtailment time series does not
@@ -1382,6 +1390,9 @@ class StorageControl:
         else:
             self._integrate_storage(timeseries_battery, battery_parameters,
                                     battery_position)
+
+        # add measure to Results object
+        self.network.results.measures = 'storage_integration'
 
     def _integrate_storage(self, timeseries, params, position):
         """
