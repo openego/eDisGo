@@ -2044,13 +2044,16 @@ class Results:
         Parameters
         ----------
         pypsa_grid_losses : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe holding active and reactive grid losses in
+            Dataframe holding active and reactive grid losses in columns 'p'
+            and 'q' and in kW and kvar, respectively. Index is a
+            :pandas:`pandas.DateTimeIndex`.
+
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Active and reactive power losses
-            per timestep.  The columns are simply 'p' and 'q' and
-            the index is a :pandas:`pandas.DateTimeIndex`
+            Dataframe holding active and reactive grid losses in columns 'p'
+            and 'q' and in kW and kvar, respectively. Index is a
+            :pandas:`pandas.DateTimeIndex`.
 
         Notes
         ------
@@ -2074,16 +2077,27 @@ class Results:
     @property
     def hv_mv_exchanges(self):
         """
-        Holds the grid powers (active and reactive) transferred to the higher voltage
-        level through the slack without the losses. The slack is currently placed at
-        the secondary side of the transfomer at the medium voltage bus bar.
+        Holds active and reactive power exchanged with the HV grid.
+
+        The exchanges are essentially the slack results. As the slack is placed
+        at the secondary side of the HV/MV station, this gives the energy
+        transferred to and taken from the HV grid at the secondary side of the
+        HV/MV station.
+
+        Parameters
+        ----------
+        hv_mv_exchanges : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe holding active and reactive power exchanged with the HV
+            grid in columns 'p' and 'q' and in kW and kvar, respectively. Index
+            is a :pandas:`pandas.DateTimeIndex`.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>
-            Total power exchanged to the higher voltage network through slack not
-            including the grid losses. The columns are simply 'p' and 'q' and
-            the index is a :pandas:`pandas.DateTimeIndex`
+            Dataframe holding active and reactive power exchanged with the HV
+            grid in columns 'p' and 'q' and in kW and kvar, respectively. Index
+            is a :pandas:`pandas.DateTimeIndex`.
+
         """
 
         return self._hv_mv_exchanges
@@ -2095,40 +2109,22 @@ class Results:
     @property
     def curtailment(self):
         """
-        Holds the curtailment assigned to each generator. The
-        output is a dictionary with dataframes of generator (columns)
-        curtailments in time (index) and the keys as the grouping
-        provided in the curtailment input:
-
-        * if curtailment is provided as a :pandas:`pandas.Series<series>`
-          the dataframe of curtailment in each generator
-          would be directly available and not a dictionary.
-        * if curtailment is provided as a :pandas:`pandas.DataFrame<dataframe`
-          with generators of a given type, the keys would be the types
-          with dataframes for each type.
-        * if curtailment is provided as a :pandas:`pandas.DataFrame<dataframe>`
-          with a :pandas.`pandas.MultiIndex` column with two levels, 'type'
-          and 'weather cell ID' the dictionary key would be a tuple of
-          ('type','weather_cell_id'), with dataframes for each
-          combination of type and weather cell.
+        Holds curtailment assigned to each generator per curtailment target.
 
         Returns
         -------
-        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>` or :pandas:`pandas.DataFrame<dataframe>`
-            curtailment per generator (in columns) in timesteps(rows).
-            dictionary keys depending upon the input curtailment.
-
-            * if curtailment is provided as a :pandas:`pandas.Series<series>`
-              the dataframe of curtailment in each generator
-              would be directly available and not a dictionary.
-            * if curtailment is provided as a :pandas:`pandas.DataFrame<dataframe`
-              with generators of a given type, the keys would be the types
-              with dataframes for each type.
-            * if curtailment is provided as a :pandas:`pandas.DataFrame<dataframe>`
-              with a :pandas.`pandas.MultiIndex` column with two levels, 'type'
-              and 'weather cell ID' the dictionary key would be a tuple of
-              ('type','weather_cell_id'), with dataframes for each
-              combination of type and weather cell.
+        :obj:`dict` with :pandas:`pandas.DataFrame<dataframe>`
+            Keys of the dictionary are generator types (and weather cell ID)
+            curtailment targets were given for. E.g. if curtailment is provided
+            as a :pandas:`pandas.DataFrame<dataframe>` with
+            :pandas.`pandas.MultiIndex` columns with levels 'type' and
+            'weather cell ID' the dictionary key is a tuple of
+            ('type','weather_cell_id').
+            Values of the dictionary are dataframes with the curtailed power in
+            kW per generator and time step. Index of the dataframe is a
+            :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
+            generators of type
+            :class:`edisgo.grid.components.GeneratorFluctuating`.
 
         """
         if self._curtailment is not None:
