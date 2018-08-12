@@ -1848,7 +1848,7 @@ class Results:
 
         Parameters
         ----------
-        pypsa : `pandas.DataFrame<dataframe>`
+        pypsa : :pandas:`pandas.DataFrame<dataframe>`
             Results time series of active power P in kW from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
@@ -1880,7 +1880,7 @@ class Results:
 
         Parameters
         ----------
-        pypsa : `pandas.DataFrame<dataframe>`
+        pypsa : :pandas:`pandas.DataFrame<dataframe>`
             Results time series of reactive power Q in kvar from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
@@ -1912,7 +1912,7 @@ class Results:
 
         Parameters
         ----------
-        pypsa: `pandas.DataFrame<dataframe>`
+        pypsa : :pandas:`pandas.DataFrame<dataframe>`
             Results time series of voltage deviation in p.u. from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
@@ -1944,7 +1944,7 @@ class Results:
 
         Parameters
         ----------
-        pypsa: `pandas.DataFrame<dataframe>`
+        pypsa : :pandas:`pandas.DataFrame<dataframe>`
             Results time series of current in A from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
@@ -1979,21 +1979,21 @@ class Results:
         either a dict providing the details of curtailment or a curtailment
         object if this makes more sense (has to be defined).
 
-        change : :obj:`str` {'added' | 'removed'}
-            says if something was added or removed
+        change : :obj:`str`
+            Specifies if something was added or removed.
 
-        iteration_step : int
+        iteration_step : :obj:`int`
             Used for the update of the pypsa network to only consider changes
             since the last power flow analysis.
 
-        quantity : int
+        quantity : :obj:`int`
             Number of components added or removed. Only relevant for
             calculation of grid expansion costs to keep track of how many
             new standard lines were added.
 
         Parameters
         ----------
-        changes: `pandas.DataFrame<dataframe>`
+        changes : :pandas:`pandas.DataFrame<dataframe>`
             Provide this if you want to set values. For retrieval of data do
             not pass an argument.
 
@@ -2030,23 +2030,24 @@ class Results:
             that can either be a :class:`~.grid.components.Line` or a
             :class:`~.grid.components.Transformer`. Columns are the following:
 
-            type: String
+            type : :obj:`str`
                 Transformer size or cable name
 
-            total_costs: float
+            total_costs : :obj:`float`
                 Costs of equipment in kEUR. For lines the line length and
                 number of parallel lines is already included in the total
                 costs.
 
-            quantity: int
+            quantity : :obj:`int`
                 For transformers quantity is always one, for lines it specifies
                 the number of parallel lines.
 
-            line_length: float
+            line_length : :obj:`float`
                 Length of line or in case of parallel lines all lines in km.
 
             voltage_level : :obj:`str` {'lv' | 'mv' | 'mv/lv'}
-                Specifies voltage level the equipment is in.
+                Specifies voltage level the equipment is in ('lv', 'mv' or
+                'mv/lv').
 
             mv_feeder : :class:`~.grid.components.Line`
                 First line segment of half-ring used to identify in which
@@ -2079,14 +2080,14 @@ class Results:
         pypsa_grid_losses : :pandas:`pandas.DataFrame<dataframe>`
             Dataframe holding active and reactive grid losses in columns 'p'
             and 'q' and in kW and kvar, respectively. Index is a
-            :pandas:`pandas.DateTimeIndex`.
+            :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Dataframe holding active and reactive grid losses in columns 'p'
             and 'q' and in kW and kvar, respectively. Index is a
-            :pandas:`pandas.DateTimeIndex`.
+            :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         Notes
         ------
@@ -2122,14 +2123,14 @@ class Results:
         hv_mv_exchanges : :pandas:`pandas.DataFrame<dataframe>`
             Dataframe holding active and reactive power exchanged with the HV
             grid in columns 'p' and 'q' and in kW and kvar, respectively. Index
-            is a :pandas:`pandas.DateTimeIndex`.
+            is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>
             Dataframe holding active and reactive power exchanged with the HV
             grid in columns 'p' and 'q' and in kW and kvar, respectively. Index
-            is a :pandas:`pandas.DateTimeIndex`.
+            is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         """
 
@@ -2221,22 +2222,21 @@ class Results:
 
         .. math::
 
-            S = max(\sqrt{p0^2 + q0^2}, \sqrt{p1^2 + q1^2})
+            S = max(\sqrt{p_0^2 + q_0^2}, \sqrt{p_1^2 + q_1^2})
 
         Parameters
         ----------
-        components : :class:`~.grid.components.Line` or
+        components : list with :class:`~.grid.components.Line` or \
             :class:`~.grid.components.Transformer`
-            Could be a list of instances of these classes
 
-            Line or Transformers objects of grid topology. If not provided
-            (respectively None) defaults to return `s_res` of all lines and
-            transformers in the grid.
+            List of Line and/or Transformers objects of grid topology. If not
+            provided (respectively None) defaults to return apparent power
+            of all lines and transformers in the grid.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Apparent power for `lines` and/or `transformers`
+            Apparent power in kVA for lines and/or transformers.
 
         """
 
@@ -2263,14 +2263,14 @@ class Results:
 
     def v_res(self, nodes=None, level=None):
         """
-        Get resulting voltage level at node
+        Get resulting voltage level at node.
 
         Parameters
         ----------
         nodes :  {:class:`~.grid.components.Load`, :class:`~.grid.components.Generator`, ...} or :obj:`list` of
-            grid topology component or `list` grid topology components
+            Grid topology component or list of grid topology components.
             If not provided defaults to column names available in grid level
-            `level`
+            `level`.
         level : str
             Either 'mv' or 'lv' or None (default). Depending which grid level results you are
             interested in. It is required to provide this argument in order
@@ -2351,7 +2351,7 @@ class Results:
 
           See :py:func:`pypsa.Network.export_to_csv_folder`
 
-        * `grid_expansion_results`
+        * `grid_expansion_results` directory
 
           * `grid_expansion_costs.csv`
 
@@ -2363,7 +2363,7 @@ class Results:
 
             See :py:attr:`~unresolved_issues` for more information.
 
-        * `curtailment_results`
+        * `curtailment_results` directory
 
           Files depend on curtailment specifications. There will be one file
           for each curtailment specification, that is for every key in
@@ -2384,58 +2384,64 @@ class Results:
             * 'curtailment_results'
 
         """
-        def _save_power_flow_results(dir):
+        def _save_power_flow_results(target_dir):
             if self.pfa_v_mag_pu is not None:
                 # create directory
-                os.makedirs(dir, exist_ok=True)
+                os.makedirs(target_dir, exist_ok=True)
 
                 # voltage
-                self.pfa_v_mag_pu.to_csv(os.path.join(dir, 'voltages_pu.csv'))
+                self.pfa_v_mag_pu.to_csv(
+                    os.path.join(target_dir, 'voltages_pu.csv'))
 
                 # current
-                self.i_res.to_csv(os.path.join(dir, 'currents.csv'))
+                self.i_res.to_csv(
+                    os.path.join(target_dir, 'currents.csv'))
 
                 # active power
-                self.pfa_p.to_csv(os.path.join(dir, 'active_powers.csv'))
+                self.pfa_p.to_csv(
+                    os.path.join(target_dir, 'active_powers.csv'))
 
                 # reactive power
-                self.pfa_q.to_csv(os.path.join(dir, 'reactive_powers.csv'))
+                self.pfa_q.to_csv(
+                    os.path.join(target_dir, 'reactive_powers.csv'))
 
                 # apparent power
-                self.s_res().to_csv(os.path.join(dir, 'apparent_powers.csv'))
+                self.s_res().to_csv(
+                    os.path.join(target_dir, 'apparent_powers.csv'))
 
                 # grid losses
-                self.grid_losses.to_csv(os.path.join(dir, 'grid_losses.csv'))
+                self.grid_losses.to_csv(
+                    os.path.join(target_dir, 'grid_losses.csv'))
 
                 # grid exchanges
                 self.hv_mv_exchanges.to_csv(os.path.join(
-                    dir, 'hv_mv_exchanges.csv'))
+                    target_dir, 'hv_mv_exchanges.csv'))
 
-        def _save_pypsa_network(dir):
+        def _save_pypsa_network(target_dir):
             if self.network.pypsa:
-                self.network.pypsa.export_to_csv_folder(dir)
+                self.network.pypsa.export_to_csv_folder(target_dir)
 
-        def _save_grid_expansion_results(dir):
+        def _save_grid_expansion_results(target_dir):
             if self.grid_expansion_costs is not None:
                 # create directory
-                os.makedirs(dir, exist_ok=True)
+                os.makedirs(target_dir, exist_ok=True)
 
                 # grid expansion costs
                 self.grid_expansion_costs.to_csv(os.path.join(
-                    dir, 'grid_expansion_costs.csv'))
+                    target_dir, 'grid_expansion_costs.csv'))
 
                 # unresolved issues
                 pd.DataFrame(self.unresolved_issues).to_csv(os.path.join(
-                    dir, 'unresolved_issues.csv'))
+                    target_dir, 'unresolved_issues.csv'))
 
                 # equipment changes
                 self.equipment_changes.to_csv(os.path.join(
-                    dir, 'equipment_changes.csv'))
+                    target_dir, 'equipment_changes.csv'))
 
-        def _save_curtailment_results(dir):
+        def _save_curtailment_results(target_dir):
             if self.curtailment is not None:
                 # create directory
-                os.makedirs(dir, exist_ok=True)
+                os.makedirs(target_dir, exist_ok=True)
 
                 for key, curtailment_df in self.curtailment.items():
                     if type(key) == tuple:
@@ -2447,7 +2453,7 @@ class Results:
                             type(key), key))
 
                     filename = os.path.join(
-                        dir, '{}_curtailment.csv'.format(type_prefix))
+                        target_dir, '{}_curtailment.csv'.format(type_prefix))
 
                     curtailment_df.to_csv(filename, index_label=type_prefix)
 

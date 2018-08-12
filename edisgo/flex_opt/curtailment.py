@@ -129,15 +129,16 @@ def _optimize_voltage_based_curtailment(feedin, voltage_pu, total_curtailment,
         :func:`edisgo.flex_opt.curtailment.voltage_based` for more information.
     voltage_pu : :pandas:`pandas.DataFrame<dataframe>
         Dataframe containing voltages in p.u. at the generator nodes. Index
-        of the dataframe is a :pandas:`pandas.DateTimeIndex`, columns are
-        the generator representatives.
+        of the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        columns are the generator representatives.
     total_curtailment : :pandas:`pandas.Series<series>`
         Series containing the specific curtailment in kW to be allocated to the
-        generators. The index is a :pandas:`pandas.DateTimeIndex`.
+        generators. The index is a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
     voltage_threshold : :pandas:`pandas.Series<series>`
         Series containing the voltage thresholds in p.u. below which no
         generator curtailment will occur. The index is a
-        :pandas:`pandas.DateTimeIndex`.
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
     solver : :obj:`str`
         The solver used to optimize the linear problem. Default: 'cbc'.
 
@@ -146,8 +147,8 @@ def _optimize_voltage_based_curtailment(feedin, voltage_pu, total_curtailment,
     :pandas:`pandas:DataFrame<dataframe>`
         Dataframe containing the curtailment in kW per generator and time step
         feed-in was provided for in `feedin` parameter. Index is a
-        :pandas:`pandas.DateTimeIndex`, columns are the generator
-        representatives.
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`, columns are the
+        generator representatives.
 
     """
 
@@ -302,8 +303,9 @@ def _assign_curtailment(curtailment, edisgo, generators, curtailment_key):
     curtailment : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing the curtailment in kW per generator and time step
         for all generators of the type (and in weather cell) specified in
-        `curtailment_key` parameter. Index is a :pandas:`pandas.DateTimeIndex`,
-        columns are the generator representatives.
+        `curtailment_key` parameter. Index is a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`, columns are the
+        generator representatives.
     edisgo : :class:`edisgo.grid.network.EDisGo`
     generators : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with all generators of the type (and in weather cell)
