@@ -2316,83 +2316,170 @@ class Results:
                 nodes=not_included))
             return self.pfa_v_mag_pu[level][labels_included]
 
-    def save(self, directory):
+    def save(self, directory, parameters='all'):
         """
-        Save all results to disk in a folder.
+        Saves results to disk.
+
+        Depending on which results are selected and if they exist, the
+        following directories and files are created:
+
+        * `powerflow_results` directory
+
+          * `voltages_pu.csv`
+
+            See :py:attr:`~pfa_v_mag_pu` for more information.
+          * `currents.csv`
+
+            See :func:`~i_res` for more information.
+          * `active_powers.csv`
+
+            See :py:attr:`~pfa_p` for more information.
+          * `reactive_powers.csv`
+
+            See :py:attr:`~pfa_q` for more information.
+          * `apparent_powers.csv`
+
+            See :func:`~s_res` for more information.
+          * `grid_losses.csv`
+
+            See :py:attr:`~grid_losses` for more information.
+          * `hv_mv_exchanges.csv`
+
+            See :py:attr:`~hv_mv_exchanges` for more information.
+
+        * `pypsa_network` directory
+
+          See :py:func:`pypsa.Network.export_to_csv_folder`
+
+        * `grid_expansion_results`
+
+          * `grid_expansion_costs.csv`
+
+            See :py:attr:`~grid_expansion_costs` for more information.
+          * `equipment_changes.csv`
+
+            See :py:attr:`~equipment_changes` for more information.
+          * `unresolved_issues.csv`
+
+            See :py:attr:`~unresolved_issues` for more information.
+
+        * `curtailment_results`
+
+          Files depend on curtailment specifications. There will be one file
+          for each curtailment specification, that is for every key in
+          :py:attr:`~curtailment` dictionary.
 
         Parameters
         ----------
-        directory: :obj:`str
-            path to save the plots
+        directory : :obj:`str`
+            Directory to save the results in.
+        parameters : :obj:`str` or :obj:`list` of :obj:`str`
+            Specifies which results will be saved. By default all results are
+            saved. To only save certain results set `parameters` to one of the
+            following options or choose several options by providing a list:
+
+            * 'pypsa_network'
+            * 'powerflow_results'
+            * 'grid_expansion_results'
+            * 'curtailment_results'
+
         """
-        powerflow_results_dir = os.path.join(directory, 'powerflow_results')
-        calculated_results_dir = os.path.join(directory, 'calculated_results')
-        flex_opt_results_dir = os.path.join(directory, 'flexibility_options_results')
-        flex_opt_curtailment_results_dir = os.path.join(flex_opt_results_dir,
-                                                        'curtailment_results')
-        # put out important information at the top level
-        # check to see if power flow results are available
-        if self.pfa_v_mag_pu is not None:
-            # create the folder
-            os.makedirs(powerflow_results_dir, exist_ok=True)
+        def _save_power_flow_results(dir):
+            if self.pfa_v_mag_pu is not None:
+                # create directory
+                os.makedirs(dir, exist_ok=True)
 
-            # voltage
-            voltage_pu_file = os.path.join(powerflow_results_dir, 'voltages_pu.csv')
-            self.pfa_v_mag_pu.to_csv(voltage_pu_file)
+                # voltage
+                self.pfa_v_mag_pu.to_csv(os.path.join(dir, 'voltages_pu.csv'))
 
-            # current
-            current_file = os.path.join(powerflow_results_dir, 'currents.csv')
-            self.i_res.to_csv(current_file)
+                # current
+                self.i_res.to_csv(os.path.join(dir, 'currents.csv'))
 
-            # active power
-            acitve_power_file = os.path.join(powerflow_results_dir, 'active_powers.csv')
-            self.pfa_p.to_csv(acitve_power_file)
+                # active power
+                self.pfa_p.to_csv(os.path.join(dir, 'active_powers.csv'))
 
-            # reactive power
-            reacitve_power_file = os.path.join(powerflow_results_dir, 'reactive_powers.csv')
-            self.pfa_q.to_csv(reacitve_power_file)
+                # reactive power
+                self.pfa_q.to_csv(os.path.join(dir, 'reactive_powers.csv'))
 
-            # apparent power
-            apparent_power_file = os.path.join(powerflow_results_dir, 'apparent_powers.csv')
-            self.s_res().to_csv(apparent_power_file)
+                # apparent power
+                self.s_res().to_csv(os.path.join(dir, 'apparent_powers.csv'))
 
-        # check to see if there are any calcuated results
-        # before creating any folder structure
-        if self.grid_expansion_costs is not None:
-            os.makedirs(calculated_results_dir, exist_ok=True)
-            # grid_expansion_costs
-            grid_expansion_costs_file = os.path.join(calculated_results_dir, 'grid_expansion_costs.csv')
-            self.grid_expansion_costs.to_csv(grid_expansion_costs_file)
+                # grid losses
+                self.grid_losses.to_csv(os.path.join(dir, 'grid_losses.csv'))
 
-            # unresolved_issues
-            unresolved_issues_file = os.path.join(calculated_results_dir, 'unresolved_issues.csv')
-            pd.DataFrame(self.unresolved_issues).to_csv(unresolved_issues_file)
+                # grid exchanges
+                self.hv_mv_exchanges.to_csv(os.path.join(
+                    dir, 'hv_mv_exchanges.csv'))
 
-            # put out all relevant calculated results
-            # grid losses
-            grid_losses_file = os.path.join(calculated_results_dir, 'grid_losses.csv')
-            self.grid_losses.to_csv(grid_losses_file)
+        def _save_pypsa_network(dir):
+            if self.network.pypsa:
+                self.network.pypsa.export_to_csv_folder(dir)
 
-            # grid exchanges
-            hv_mv_exchanges_file = os.path.join(calculated_results_dir, 'hv_mv_exchanges.csv')
-            self.hv_mv_exchanges.to_csv(hv_mv_exchanges_file)
+        def _save_grid_expansion_results(dir):
+            if self.grid_expansion_costs is not None:
+                # create directory
+                os.makedirs(dir, exist_ok=True)
 
-            # equipment_changes
-            equipment_changes_file = os.path.join(calculated_results_dir, 'equipment_changes.csv')
-            self.equipment_changes.to_csv(equipment_changes_file)
+                # grid expansion costs
+                self.grid_expansion_costs.to_csv(os.path.join(
+                    dir, 'grid_expansion_costs.csv'))
 
-        # assigned curtailment
-        if self.assigned_curtailment is not None:
-            os.makedirs(flex_opt_curtailment_results_dir, exist_ok=True)
-            for key, curtailment_df in self.assigned_curtailment.items():
-                if type(key) == tuple:
-                    type_prefix = '-'.join([key[0], str(key[1])])
-                elif type(key) == str:
-                    type_prefix = key
-                else:
-                    raise KeyError("Unknown key type {} for key {}".format(type(key), key))
+                # unresolved issues
+                pd.DataFrame(self.unresolved_issues).to_csv(os.path.join(
+                    dir, 'unresolved_issues.csv'))
 
-                assigned_curtailment_file = os.path.join(flex_opt_curtailment_results_dir,
-                                                         '{}_assigned_curtailment.csv'.format(type_prefix))
+                # equipment changes
+                self.equipment_changes.to_csv(os.path.join(
+                    dir, 'equipment_changes.csv'))
 
-                curtailment_df.to_csv(assigned_curtailment_file, index_label=type_prefix)
+        def _save_curtailment_results(dir):
+            if self.curtailment is not None:
+                # create directory
+                os.makedirs(dir, exist_ok=True)
+
+                for key, curtailment_df in self.curtailment.items():
+                    if type(key) == tuple:
+                        type_prefix = '-'.join([key[0], str(key[1])])
+                    elif type(key) == str:
+                        type_prefix = key
+                    else:
+                        raise KeyError("Unknown key type {} for key {}".format(
+                            type(key), key))
+
+                    filename = os.path.join(
+                        dir, '{}_curtailment.csv'.format(type_prefix))
+
+                    curtailment_df.to_csv(filename, index_label=type_prefix)
+
+        # dictionary with function to call to save each parameter
+        func_dict = {
+            'powerflow_results': _save_power_flow_results,
+            'pypsa_network': _save_pypsa_network,
+            'grid_expansion_results': _save_grid_expansion_results,
+            'curtailment_results': _save_curtailment_results
+        }
+
+        # if string is given convert to list
+        if isinstance(parameters, str):
+            if parameters == 'all':
+                parameters = ['powerflow_results', 'pypsa_network',
+                              'grid_expansion_results', 'curtailment_results']
+            else:
+                parameters = [parameters]
+
+        # save each parameter
+        for parameter in parameters:
+            try:
+                func_dict[parameter](os.path.join(directory, parameter))
+            except KeyError:
+                message = "Invalid input {} for `parameters` when saving " \
+                          "results. Must be any or a list of the following: " \
+                          "'pypsa_network', 'powerflow_results', " \
+                          "'grid_expansion_results', 'curtailment_results'."
+                logger.error(message)
+                raise KeyError(message)
+            except:
+                raise
+        # save measures
+        pd.DataFrame(data={'measure': self.measures}).to_csv(
+            os.path.join(directory, 'measures.csv'))
