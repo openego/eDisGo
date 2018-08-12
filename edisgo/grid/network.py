@@ -2262,8 +2262,9 @@ class Results:
             # unless index is lexsorted, it cannot be sliced
             self.pfa_v_mag_pu.sort_index(axis=1, inplace=True)
         else:
-            message = "No Power Flow Calculation has be done yet, so there are no results yet."
-            raise AttributeError
+            message = "No Power Flow Calculation has be done yet, " \
+                      "so there are no results yet."
+            raise AttributeError(message)
 
         if level is None:
             level = ['mv', 'lv']
@@ -2277,7 +2278,8 @@ class Results:
             labels_included = [_ for _ in labels if _ not in not_included]
 
             if not_included:
-                logging.info("Voltage levels for {nodes} are not returned from PFA".format(
+                logging.info("Voltage levels for {nodes} are not returned "
+                             "from PFA".format(
                 nodes=not_included))
             return self.pfa_v_mag_pu[level][labels_included]
 
