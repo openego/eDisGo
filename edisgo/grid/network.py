@@ -442,7 +442,7 @@ class Network:
 
         self._mv_grid = kwargs.get('mv_grid', None)
         self._pypsa = None
-        self.results = Results()
+        self.results = Results(self)
 
         self._dingo_import_data = []
 
@@ -1784,12 +1784,15 @@ class Results:
         capacity. The last item refers to the latest measure. The key
         `original` refers to the state of the grid topology as it was initially
         imported.
+    network : :class:`~.grid.network.Network`
+        The network is a container object holding all data.
 
     """
 
     # ToDo: maybe add setter to alter list of measures
 
-    def __init__(self):
+    def __init__(self, network):
+        self.network = network
         self._measures = ['original']
         self._pfa_p = None
         self._pfa_q = None

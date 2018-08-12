@@ -196,7 +196,7 @@ def run_edisgo_twice(run_args):
 
     if edisgo_grid:
         # clear the pypsa object and results from edisgo_grid
-        edisgo_grid.network.results = Results()
+        edisgo_grid.network.results = Results(edisgo_grid.network)
         edisgo_grid.network.pypsa = None
 
         # case after generator import
