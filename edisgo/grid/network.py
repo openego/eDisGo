@@ -2133,11 +2133,7 @@ class Results:
                 curtailment_df = pd.DataFrame()
                 for gen in gen_list:
                     curtailment_df[gen] = gen.curtailment
-
-                if key == 'all_fluctuating_generators':
-                    result_dict = curtailment_df
-                else:
-                    result_dict[key] = curtailment_df
+                result_dict[key] = curtailment_df
             return result_dict
         else:
             return None
