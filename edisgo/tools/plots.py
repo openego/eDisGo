@@ -24,14 +24,14 @@ def create_curtailment_characteristic(assigned_curtailment,
         :attr:`edisgo.network.Results.assigned_curtailment`.
         The columns names are the individual generators as
         `edisgo.grid.components.GeneratorFluctuating` objects
-        and the index is a :pandas:`pandas.DateTimeIndex`.
+        and the index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
     generator_feedins: :pandas:`pandas.DataFrame<dataframe>`
         The feedins in kW of every single generator typically
         obtained from :py:mod:`edisgo.grid.tools.generator_feedins`
         The columns names are the individual generators as
         `edisgo.grid.components.GeneratorFluctuating` and
         `edisgo.grid.components.Generator` objects
-        and the index is a :pandas:`pandas.DateTimeIndex`.
+        and the index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
     bus_voltages_before_curtailment: :pandas:`pandas.DataFrame<dataframe>`
         The voltages in per unit at the buses before curtailment
         as in the :py:mod:`edisgo.network.pypsa` object
@@ -39,7 +39,7 @@ def create_curtailment_characteristic(assigned_curtailment,
         The columns names are the individual buses as
         :obj:`str` objects containing the bus IDs
         (including Generators as 'Bus_Generator...')
-        and the index is a :pandas:`pandas.DateTimeIndex`.
+        and the index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
     gens_fluct_info: :pandas:`pandas.DataFrame<dataframe>`
         The information about all the fluctuating generators
         i.e. gen_repr, type, voltage_level, weather_cell_id and nominal_capacity
@@ -56,7 +56,7 @@ def create_curtailment_characteristic(assigned_curtailment,
         filetype to save the file with, the allowed types
         are the same as those allowed from matplotlib
         Default: png
-    timeindex: :pandas:`pandas.DateTimeIndex`
+    timeindex: :pandas:`pandas.DatetimeIndex<datetimeindex>`
         Datetime index which the histogram should be constructed from.
         Default: all indexes in the results
     color: :obj:`str`
@@ -98,7 +98,7 @@ def create_curtailment_characteristic(assigned_curtailment,
     try:
         fig_size = standard_sizes[fig_size]
     except:
-        message = "Unknown size {}. using default a5landscape".format(fig_size)
+        message = "Unknown size {}. Using default a5landscape".format(fig_size)
         logging.warning(message)
         fig_size = standard_sizes['a5landscape']
 
@@ -197,7 +197,7 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
         filetype to save the file with, the allowed types
         are the same as those allowed from matplotlib
         Default: png
-    timeindex: :pandas:`pandas.DateTimeIndex`
+    timeindex: :pandas:`pandas.DatetimeIndex<datetimeindex>`
         Datetime index which the histogram should be constructed from.
         Default: all indexes in the results
     plot_separate_timesteps: :obj:`boolean`
