@@ -503,6 +503,8 @@ def get_mv_feeder_from_line(line, mv_grid):
     try:
         nodes = line.grid.graph.nodes_from_line(line)
     except:
+        logging.warning('nodes_from_line for line {} does not '
+                        'work.'.format(line))
         return None
 
     # if one of the nodes is an MV station the line is an MV feeder itself
@@ -513,23 +515,6 @@ def get_mv_feeder_from_line(line, mv_grid):
         else:
             try:
                 feeders[repr(node)] = node.mv_feeder
-            except AttributeError:
-                # in case of an AttributeError grid reinforcement was conducted
-                # on a copied graph and the line reference is a reference to
-                # the original graph
-
-                # first find grid the node is in in copied graph, then find
-                # node in copied graph
-                grid_original_graph = node.grid
-                if isinstance(grid_original_graph, LVGrid):
-                    grid_copied_graph = [
-                        _ for _ in mv_grid.lv_grids
-                        if repr(_)==repr(grid_original_graph)][0]
-                else:
-                    grid_copied_graph = mv_grid
-                node_copied_graph = [_ for _ in grid_copied_graph.graph.nodes()
-                                     if repr(_)==repr(node)][0]
-                feeders[repr(node)] = node_copied_graph.mv_feeder
             except:
                 raise
 
@@ -539,6 +524,7 @@ def get_mv_feeder_from_line(line, mv_grid):
         if feeder_1 == feeder_2:
             return feeder_1
         else:
-            logging.warning('Different feeders for line {}'.format(line))
+            logging.warning('Different feeders for line {}.'.format(line))
+            return None
     else:
         return feeder_1 if feeder_1 is not None else feeder_2

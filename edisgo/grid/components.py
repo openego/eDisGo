@@ -786,7 +786,7 @@ class GeneratorFluctuating(Generator):
                                   columns, pd.MultiIndex):
                 if self.weather_cell_id:
                     try:
-                        timeseries = self.grid.network.timeseries. \
+                        timeseries = self.grid.network.timeseries.\
                             generation_fluctuating[
                             self.type, self.weather_cell_id].to_frame('p')
                     except KeyError:
@@ -801,7 +801,7 @@ class GeneratorFluctuating(Generator):
                     raise KeyError
             else:
                 try:
-                    timeseries = self.grid.network.timeseries. \
+                    timeseries = self.grid.network.timeseries.\
                         generation_fluctuating[self.type].to_frame('p')
                 except KeyError:
                     logger.exception("No time series for type {} "
