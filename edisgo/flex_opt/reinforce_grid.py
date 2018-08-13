@@ -101,6 +101,10 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                          'quantity': [1] * len(transformer_list)},
                         index=[station] * len(transformer_list)))
 
+    # assign MV feeder to every generator, LV station, load, and branch tee
+    # to assign grid expansion costs to an MV feeder
+    assign_mv_feeder_to_nodes(edisgo.network.mv_grid)
+
     # in case reinforcement needs to be conducted on a copied graph the
     # edisgo object is deep copied
     if copy_graph is True:
@@ -130,10 +134,6 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                 raise ValueError(
                     'Input {} for timesteps_pfa is not valid.'.format(
                         timesteps_pfa))
-
-    # assign MV feeder to every generator, LV station, load, and branch tee
-    # to assign grid expansion costs to an MV feeder
-    assign_mv_feeder_to_nodes(edisgo_reinforce.network.mv_grid)
 
     iteration_step = 1
     edisgo_reinforce.analyze(timesteps=timesteps_pfa)
