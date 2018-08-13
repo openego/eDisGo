@@ -729,21 +729,10 @@ def _pypsa_load_timeseries(network, timesteps, mode=None):
     if mode is 'lv' or mode is None:
         for lv_grid in network.mv_grid.lv_grids:
             for load in lv_grid.graph.nodes_by_attribute('load'):
-                for sector in list(load.consumption.keys()):
-                # for sector in list(list(load.consumption.keys())[0]):
-                    # ToDo: remove consideration of only industrial sector
-                    # now, if a load object has consumption in multiple sectors
-                    # (like currently only industrial/retail) the consumption is
-                    # implicitly assigned to the industrial sector when being
-                    # exported to pypsa.
-                    # ToDo: resolve this in the importer
-                    if sector != 'retail':
-                        lv_load_timeseries_q.append(
-                            load.pypsa_timeseries('q').rename(
-                                repr(load)).to_frame().loc[timesteps])
-                        lv_load_timeseries_p.append(
-                            load.pypsa_timeseries('p').rename(
-                                repr(load)).to_frame().loc[timesteps])
+                lv_load_timeseries_q.append(load.pypsa_timeseries('q').rename(
+                    repr(load)).to_frame().loc[timesteps])
+                lv_load_timeseries_p.append(load.pypsa_timeseries('p').rename(
+                    repr(load)).to_frame().loc[timesteps])
 
     load_df_p = pd.concat(mv_load_timeseries_p + lv_load_timeseries_p, axis=1)
     load_df_q = pd.concat(mv_load_timeseries_q + lv_load_timeseries_q, axis=1)
