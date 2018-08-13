@@ -359,7 +359,7 @@ def select_cable(network, level, apparent_power):
     return cable_type, cable_count
 
 
-def get_gen_info(network, level='mvlv'):
+def get_gen_info(network, level='mvlv', fluctuating=False):
     """
     Gets all the installed generators with some additional information.
 
@@ -452,7 +452,7 @@ def get_gen_info(network, level='mvlv'):
 def assign_mv_feeder_to_nodes(mv_grid):
     """
     Assigns an MV feeder to every generator, LV station, load, and branch tee
-    
+
     Parameters
     -----------
     mv_grid : :class:`~.grid.grids.MVGrid`
@@ -480,7 +480,7 @@ def assign_mv_feeder_to_nodes(mv_grid):
                 node.mv_feeder = mv_feeder
 
 
-def get_mv_feeder_from_line(line):
+def get_mv_feeder_from_line(line, mv_grid):
     """
     Determines MV feeder the given line is in.
 

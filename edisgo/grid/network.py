@@ -1542,6 +1542,9 @@ class StorageControl:
                 self.edisgo.network.pypsa,
                 storages=[storage], storages_lines=[line])
 
+        # write results to Result Object
+        self._write_to_results()
+
     def _check_nominal_power(self, storage_parameters, timeseries):
         """
         Tries to assign a nominal power to the storage.
@@ -1596,6 +1599,35 @@ class StorageControl:
             logging.error(message)
             raise KeyError(message)
 
+    def _write_to_results(self):
+        """
+        Groups all the storages assigned and their nominal powers and
+        writes them into the Results object to either just present the
+        results. Currently only the results from the mv grid are
+        presented
+
+        Results
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            The columns would be `nominal_power` and the indexes
+            would be the storage unit id
+        """
+        storage_integration_results = {}
+        storage_integration_results['storage_id'] = []
+        storage_integration_results['nominal_power'] = []
+        storage_integration_results['voltage_level'] = []
+        for storage_unit in self.edisgo.network.mv_grid.graph.nodes_by_attribute('storage'):
+            storage_integration_results['storage_id'].append(repr(storage_unit))
+            storage_integration_results['nominal_power'].append(storage_unit.nominal_power)
+            storage_integration_results['voltage_level'].append('mv')
+
+        # for lvgrid in self.edisgo.network.mv_grid.lv_grids:
+        #     for storage_unit in lvgrid.graph.nodes_by_attribute('storage'):
+        #         storage_integration_results['storage_id'].append(repr(storage_unit))
+        #         storage_integration_results['nominal_power'].append(storage_unit.nominal_power)
+        #         storage_integration_results['voltage_level'].append('lv')
+
+        self.edisgo.network.results.storage_integration = pd.DataFrame(storage_integration_results)
 
 class TimeSeries:
     """
@@ -1938,6 +1970,7 @@ class Results:
         self._grid_losses = None
         self._hv_mv_exchanges = None
         self._curtailment = None
+        self._storage_integration = None
         self._unresolved_issues = {}
 
     @property
@@ -2302,6 +2335,26 @@ class Results:
             return result_dict
         else:
             return None
+
+    @property
+    def storage_integration(self):
+        """
+        Presents the planned storage units that would support the network
+        and avoid network reinforcements. This function provides a
+        :pandas:`panadas.DataFrame<dataframe>` with the storage ids
+        and installed powers.
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            curtailment per generator (in columns) in timesteps(rows).
+        """
+        return self._storage_integration
+    @storage_integration.setter
+    def storage_integration(self, storage_integration_results):
+        """
+        Setter for Storage integration results
+        """
+        self._storage_integration = storage_integration_results
 
     @property
     def unresolved_issues(self):
