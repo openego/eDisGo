@@ -931,7 +931,7 @@ class GeneratorFluctuating(Generator):
         """
         if self._curtailment is not None:
             return self._curtailment
-        elif isinstance(self.grid.network.timeseries.curtailment,
+        elif isinstance(self.grid.network.timeseries._curtailment,
                         pd.DataFrame):
             if isinstance(self.grid.network.timeseries.curtailment.
                                   columns, pd.MultiIndex):
@@ -990,23 +990,6 @@ class Storage(Component):
     :attr:`Storage.standing_loss` as well as its time series of operation
     :meth:`Storage.timeseries`.
 
-    Examples
-    --------
-    In order to define a storage that operates in mode "fifty-fifty"
-    (see :class:`~.grid.network.StorageControl` `timeseries_battery` parameter
-    for details about modes) provide the following when instantiating a
-    storage:
-
-    >>> from edisgo.grid.components import Storage
-    >>> from edisgo.flex_opt import storage_operation
-    >>> storage_parameters = {'nominal_capacity': 100,
-    >>>                       'soc_initial': 0,
-    >>>                       'efficiency_in': .9,
-    >>>                       'efficiency_out': .9,
-    >>>                       'standing_loss': 0}
-    >>> storage = Storage(storage_parameters)
-    >>> storage_operation.fifty_fifty(storage)
-
     """
 
     def __init__(self, **kwargs):
@@ -1022,6 +1005,7 @@ class Storage(Component):
         self._efficiency_out = kwargs.get('efficiency_out', None)
         self._standing_loss = kwargs.get('standing_loss', None)
         self._operation = kwargs.get('operation', None)
+        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
         self._q_sign = None
 
     @property
@@ -1031,7 +1015,7 @@ class Storage(Component):
 
         Parameters
         ----------
-        timeseries : :pandas:`pandas.DataFrame<dataframe>`
+        ts : :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power the storage is charged (negative)
             and discharged (positive) with (on the grid side) in kW in column 
             'p' and reactive power in kvar in column 'q'. When 'q' is positive,

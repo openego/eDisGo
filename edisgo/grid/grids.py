@@ -103,7 +103,7 @@ class Grid:
 
             # get all the weather cell ids
             self._weather_cells = []
-            for gen in self.graph.nodes_by_attribute('generator'):
+            for gen in self.generators:
                 if hasattr(gen, 'weather_cell_id'):
                     self._weather_cells.append(gen.weather_cell_id)
 
@@ -218,13 +218,15 @@ class Grid:
         -------
         list
             List of Generator Objects
+
         """
         if not self._generators:
             generators = list(self.graph.nodes_by_attribute('generator'))
-            generators.extend(list(self.graph.nodes_by_attribute('generator_aggr')))
+            generators.extend(list(self.graph.nodes_by_attribute(
+                'generator_aggr')))
             return generators
         else:
-            pass
+            return self._generators
 
     @property
     def loads(self):

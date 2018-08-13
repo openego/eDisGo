@@ -1,4 +1,4 @@
-from os import path
+import os
 import pandas as pd
 import numpy as np
 from math import sqrt
@@ -248,7 +248,7 @@ class EDisGo:
         if self.network.generator_scenario is not None:
             self.import_generators()
 
-    def curtail(self, **kwargs):
+    def curtail(self, methodology, curtailment_timeseries, **kwargs):
         """
         Sets up curtailment time series.
 
@@ -258,7 +258,9 @@ class EDisGo:
         parameters and methodologies.
 
         """
-        CurtailmentControl(edisgo_object=self, **kwargs)
+        CurtailmentControl(edisgo=self, methodology=methodology,
+                           curtailment_timeseries=curtailment_timeseries,
+                           **kwargs)
 
     def import_from_ding0(self, file, **kwargs):
         """Import grid data from DINGO file
@@ -350,11 +352,11 @@ class EDisGo:
 
         if self.network.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
-            logging.info('Translate eDisGo grid topology representation to '
+            logging.debug('Translate eDisGo grid topology representation to '
                          'PyPSA format.')
             self.network.pypsa = pypsa_io.to_pypsa(
                 self.network, mode, timesteps)
-            logging.info('Translating eDisGo grid topology representation to '
+            logging.debug('Translating eDisGo grid topology representation to '
                          'PyPSA format finished.')
         else:
             if self.network.pypsa.edisgo_mode is not mode:
@@ -383,14 +385,19 @@ class EDisGo:
         See :meth:`~.flex_opt.reinforce_grid` for more information.
 
         """
-        return reinforce_grid(
+        results = reinforce_grid(
             self, max_while_iterations=kwargs.get(
                 'max_while_iterations', 10),
             copy_graph=kwargs.get('copy_graph', False),
             timesteps_pfa=kwargs.get('timesteps_pfa', None),
             combined_analysis=kwargs.get('combined_analysis', False))
 
-    def integrate_storage(self, timeseries, position, **kwargs):
+        # add measure to Results object
+        self.network.results.measures = 'grid_expansion'
+
+        return results
+
+    def integrate_storage(self, **kwargs):
         """
         Integrates storage into grid.
 
@@ -441,7 +448,7 @@ class Network:
 
         self._mv_grid = kwargs.get('mv_grid', None)
         self._pypsa = None
-        self.results = Results()
+        self.results = Results(self)
 
         self._dingo_import_data = []
 
@@ -466,8 +473,8 @@ class Network:
                 equipment_parameters = self.config['equipment'][
                     'equipment_{}_parameters_{}'.format(voltage_level, i)]
                 data['{}_{}'.format(voltage_level, i)] = pd.read_csv(
-                    path.join(package_path, equipment_dir,
-                              equipment_parameters),
+                    os.path.join(package_path, equipment_dir,
+                                 equipment_parameters),
                     comment='#', index_col='name',
                     delimiter=',', decimal='.')
 
@@ -874,6 +881,16 @@ class TimeSeriesControl:
 
         Use 'other' if you don't want to explicitly provide every possible
         type. Default: None.
+    timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of normalized reactive power (normalized by
+        the rated nominal active power) per technology and weather cell. Index
+        needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent generator type and can be a MultiIndex column
+        containing the weather cell ID in the second level. If the technology
+        doesn't contain weather cell information i.e. if it is other than solar
+        and wind generation, this second level can be left as an empty string ''.
+
+        Default: None.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Parameter used to obtain time series of active power of (cumulative)
         loads.
@@ -1073,249 +1090,220 @@ class TimeSeriesControl:
 
 class CurtailmentControl:
     """
-    Sets up curtailment time series for solar and wind generators.
+    Allocates given curtailment targets to solar and wind generators.
 
     Parameters
     ----------
-    edisgo_object : :class:`edisgo.EDisGo`
+    edisgo: :class:`edisgo.EDisGo`
         The parent EDisGo object that this instance is a part of.
-    curtailment_methodology : :obj:`str`
-        Mode defines the curtailment strategy. Possible options are:
+    methodology : :obj:`str`
+        Defines the curtailment strategy. Possible options are:
 
-        * 'curtail_all'
+        * 'feedin-proportional'
           The curtailment that has to be met in each time step is allocated
           equally to all generators depending on their share of total
           feed-in in that time step. For more information see
-          :meth:`edisgo.flex_opt.curtailment.curtail_all()`.
-        * 'curtail_voltage'
+          :func:`edisgo.flex_opt.curtailment.feedin_proportional`.
+        * 'voltage-based'
           The curtailment that has to be met in each time step is allocated
           based on the voltages at the generator connection points and a
           defined voltage threshold. Generators at higher voltages
           are curtailed more. The default voltage threshold is 1.0 but
-          can be changed by providing the argument 'voltage_threshold'. For
-          more information see
-          :meth:`edisgo.flex_opt.curtailment.curtail_voltage()`.
+          can be changed by providing the argument 'voltage_threshold'. This
+          method formulates the allocation of curtailment as a linear
+          optimization problem using :py:mod:`Pyomo` and requires a linear
+          programming solver like coin-or cbc (cbc) or gnu linear programming
+          kit (glpk). The solver can be specified through the parameter
+          'solver'. For more information see
+          :func:`edisgo.flex_opt.curtailment.voltage_based`.
 
-    timeseries_curtailment : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
+    curtailment_timeseries : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Series or DataFrame containing the curtailment time series in kW. Index
         needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
         Provide a Series if the curtailment time series applies to wind and
         solar generators. Provide a DataFrame if the curtailment time series
-        applies to a specific technology and/or weather cell. In the first case
-        columns of the DataFrame are e.g. 'solar' and 'wind'; in the second
-        case columns need to be a :pandas:`pandas.MultiIndex<multiindex>` with
-        the first level containing the type and the second level the weather
-        cell ID.
-        Curtailment time series cannot be more specific than the feed-in time
-        series (e.g. if feed-in is given by technology curtailment cannot be
-        given by technology and weather cell).
-        Default: None.
+        applies to a specific technology and optionally weather cell. In the
+        first case columns of the DataFrame are e.g. 'solar' and 'wind'; in the
+        second case columns need to be a
+        :pandas:`pandas.MultiIndex<multiindex>` with the first level containing
+        the type and the second level the weather cell ID. Default: None.
+    solver: :obj:`str`
+        The solver used to optimize the curtailment assigned to the generators
+        when 'voltage-based' curtailment methodology is chosen.
+        Possible options are:
 
-    Attributes
-    ----------
+        * 'cbc'
+        * 'glpk'
+        * any other available solver compatible with 'pyomo' such as 'gurobi'
+          or 'cplex'
 
-    mode : :obj:`str`
-        Contains the string given by the `curtailment_methodology`
-        keyword argument.
-    curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`,
-        Contains the *total_curtailment_ts* input object
-    capacities : :pandas:`pandas.Series<series>`
-        This is a series containing the nominal capacities of every single
-        generator in the MV grid and the underlying LV grids. The series has a
-        MultiIndex index with the following levels:
+        Default: 'cbc'.
+    voltage_threshold : :obj:`float`
+        Voltage below which no curtailment is assigned to the respective
+        generator if not necessary when 'voltage-based' curtailment methodology
+        is chosen. See :func:`edisgo.flex_opt.curtailment.voltage_based` for
+        more information. Default: 1.0.
 
-        * generator : :class:`edisgo.grid.components.GeneratorFluctuating`,
-          essentially all the generator objects in the MV grid and the LV grid
-        * gen_repr : :obj:`str`
-          the repr strings of the generator objects from above
-        * type : :obj:`str`
-          the type of the generator object e.g. 'solar' or 'wind'
-        * weather_cell_id : :obj:`int`
-          the weather_cell_id that the generator object belongs to.
-    feedin : :pandas:`pandas.DataFrame<dataframe>`
-        This is a dataframe that is essentially a multiplication of the feedin timeseries
-        obtained from the parameter `timeseries_generation_fluctuating` in :class:`edisgo.grid.network.EDisGo`
-        and the *capacities* attribute above. Upon multiplication, this dataframe's
-        columns come from the indexes of *capacities* and the dataframe's index comes
-        from the `timeseries_generation_fluctuating`'s Datetimeindex. This dataframe
-        is further passed on to the curtailment methodology functions.
     """
 
-    def __init__(self, edisgo_object, **kwargs):
+    def __init__(self, edisgo, methodology, curtailment_timeseries, **kwargs):
 
-        self.mode = kwargs.get('curtailment_methodology', None)
-        self.curtailment_ts = kwargs.get('timeseries_curtailment', None)
+        logging.info("Start curtailment methodology {}.".format(methodology))
 
-        if self.curtailment_ts is not None:
-            self._check_timeindex(edisgo_object.network)
+        self._check_timeindex(curtailment_timeseries, edisgo.network)
 
-        # get generation fluctuating time series
-        gen_fluct_ts = edisgo_object.network.timeseries.generation_fluctuating.copy()
-
-        # get aggregated capacities by technology and weather cell id
-        self.capacities = get_gen_info(edisgo_object.network, 'mvlv')
-        self.capacities = self.capacities.loc[(self.capacities.type == 'solar') | (self.capacities.type == 'wind')]
-        self.capacities = self.capacities.reset_index()
-        self.capacities.set_index(['generator', 'gen_repr', 'type', 'weather_cell_id'], inplace=True)
-        self.capacities = self.capacities.loc[:, 'nominal_capacity']
-
-        # calculate absolute feed-in timeseries including technology and weather cell id
-        self.feedin = pd.DataFrame(self.capacities).T
-        self.feedin = self.feedin.append([self.feedin] * (gen_fluct_ts.index.size - 1),
-                                         ignore_index=True)
-        self.feedin.index = gen_fluct_ts.index.copy()
-        self.feedin.columns = self.feedin.columns.remove_unused_levels()
-
-        # multiply feedin per type/weather cell id or both to capacities
-        # this is a workaround for pandas currently not allowing multiindex dataframes
-        # to be multiplied  and broadcast on two levels (type and weather_cell_id)
-        for x in self.feedin.columns.levels[0]:
-            try:
-                self.feedin.loc[:, (x, str(x), x.type, x.weather_cell_id)] = \
-                    self.feedin.loc[:, (x, str(x), x.type, x.weather_cell_id)] * \
-                    gen_fluct_ts.loc[:, (x.type, x.weather_cell_id)]
-            except AttributeError:
-                # when either weather_cell_id or type attribute is missing
-                # meaning this could be a Generator Object instead of a Generator Fluctuating
-                if type(x) == edisgo.grid.components.GeneratorFluctuating:
-                    message = "One or both of the attributes, \'type\' or \'weather_cell_id\'" +\
-                              "of the {} object is missing even though ".format(x) +\
-                              "its a GeneratorFluctuating Object."
-                    logging.warning(message)
-                    #raise Warning(message)
-                else:
-                    message = "Generator Object found instead of GeneratorFluctuating Object " +\
-                              "in {}".format(x)
-                    logging.warning(message)
-                    #raise Warning(message)
-                pass
-            except KeyError:
-                # when one of the keys are missing in either the feedin or the capacities
-                message = "One of the keys of {} are absent in either the feedin or the".format(x) +\
-                          " generator fluctuating timeseries  object is missing"
-                logging.warning(message)
-                #raise Warning(message)
-                pass
-
-        # get mode of curtailment and the arguments necessary
-        if self.mode == 'curtail_all':
-            curtail_function = curtailment.curtail_all
-        elif self.mode == 'curtail_voltage':
-            curtail_function = curtailment.curtail_voltage
+        if methodology == 'feedin-proportional':
+            curtailment_method = curtailment.feedin_proportional
+        elif methodology == 'voltage-based':
+            curtailment_method = curtailment.voltage_based
         else:
-            raise ValueError('{} is not a valid mode.'.format(self.mode))
+            raise ValueError(
+                '{} is not a valid curtailment methodology.'.format(
+                    methodology))
 
-        # perform the mode of curtailment with some relevant checks
-        # as to what the inputs are
-        if isinstance(self.curtailment_ts, pd.Series):
-            curtail_function(self.feedin,
-                             self.curtailment_ts,
-                             edisgo_object,
-                             **kwargs)
-        elif isinstance(self.curtailment_ts, pd.DataFrame):
-            if isinstance(self.curtailment_ts.columns, pd.MultiIndex):
-                col_tuple_list = self.curtailment_ts.columns.tolist()
-                for col_slice in col_tuple_list:
-                    feedin_slice = self.feedin.loc[:, (slice(None),
-                                                       slice(None),
-                                                       col_slice[0],
-                                                       col_slice[1])]
-                    feedin_slice.columns = feedin_slice.columns.remove_unused_levels()
-                    if feedin_slice.size > 0:
-                        curtail_function(feedin_slice,
-                                         self.curtailment_ts[col_slice],
-                                         edisgo_object,
-                                         **kwargs)
-                    else:
-                        message = "In this grid there seems to be no feedin time series" +\
-                            " or generators corresponding to the combination of {}".format(col_slice)
-                        logging.warning(message)
-            else:
-                # when there is no multi-index then we assume that this is only
-                # curtailed through technology or with weather cell id only
-                if self.curtailment_ts.columns.dtype == object:
-                    # this is when technology is given as strings
-                    for tech in self.curtailment_ts.columns:
-                        curtail_function(self.feedin.loc[:, (slice(None),
-                                                             slice(None),
-                                                             tech,
-                                                             slice(None))],
-                                         self.curtailment_ts[tech],
-                                         edisgo_object,
-                                         **kwargs)
-                elif self.curtailment_ts.columns.dtype == int:
-                    # this is when weather_cell_id is given as strings
-                    for w_id in self.curtailment_ts.columns:
-                        curtail_function(self.feedin.loc[:, (slice(None),
-                                                             slice(None),
-                                                             slice(None),
-                                                             w_id)],
-                                         self.curtailment_ts[w_id],
-                                         edisgo_object,
-                                         **kwargs)
+        # get all fluctuating generators and their attributes (weather ID,
+        # type, etc.)
+        generators = get_gen_info(edisgo.network, 'mvlv', fluctuating=True)
+
+        # do analyze to get all voltages at generators and feed-in dataframe
+        edisgo.analyze()
+
+        # get feed-in time series of all generators
+        feedin = edisgo.network.pypsa.generators_t.p * 1000
+        # drop dispatchable generators and slack generator
+        drop_labels = [_ for _ in feedin.columns
+                       if 'GeneratorFluctuating' not in _] \
+                      + ['Generator_slack']
+        feedin.drop(labels=drop_labels, axis=1, inplace=True)
+
+        if isinstance(curtailment_timeseries, pd.Series):
+            # check if curtailment exceeds feed-in
+            self._precheck(curtailment_timeseries, feedin,
+                           'all_fluctuating_generators')
+
+            # do curtailment
+            curtailment_method(
+                feedin, generators, curtailment_timeseries, edisgo,
+                'all_fluctuating_generators', **kwargs)
+
+        elif isinstance(curtailment_timeseries, pd.DataFrame):
+            for col in curtailment_timeseries.columns:
+                logging.debug('Calculating curtailment for {}'.format(col))
+
+                # filter generators
+                if isinstance(curtailment_timeseries.columns, pd.MultiIndex):
+                    selected_generators = generators.loc[
+                        (generators.type == col[0]) &
+                        (generators.weather_cell_id == col[1])]
                 else:
-                    message = 'Unallowed type {} of provided curtailment time ' \
-                              'series labels. Must either be string (like \'solar\') or ' \
-                              'integer (like w_id 933).'.format(type(self.curtailment_ts))
-                    logging.error(message)
-                    raise TypeError(message)
-        else:
-            message = 'Unallowed type {} of provided curtailment time ' \
-                      'series. Must either be pandas.Series or ' \
-                      'pandas.DataFrame.'.format(type(self.curtailment_ts))
-            logging.error(message)
-            raise TypeError(message)
+                    selected_generators = generators.loc[
+                        (generators.type == col)]
 
-        # update generator time series in pypsa network
-        if edisgo_object.network.pypsa is not None:
-            pypsa_io.update_pypsa_generator_timeseries(edisgo_object.network)
+                # check if curtailment exceeds feed-in
+                feedin_selected_generators = \
+                    feedin.loc[:, selected_generators.gen_repr.values]
+                self._precheck(curtailment_timeseries.loc[:, col],
+                               feedin_selected_generators, col)
+
+                # do curtailment
+                curtailment_method(
+                    feedin_selected_generators, selected_generators,
+                    curtailment_timeseries.loc[:, col], edisgo,
+                    col, **kwargs)
 
         # check if curtailment exceeds feed-in
-        self._check_curtailment(edisgo_object.network)
+        self._postcheck(edisgo.network, feedin)
 
-    def _check_timeindex(self, network):
+        # update generator time series in pypsa network
+        if edisgo.network.pypsa is not None:
+            pypsa_io.update_pypsa_generator_timeseries(edisgo.network)
+
+        # add measure to Results object
+        edisgo.network.results.measures = 'curtailment'
+
+    def _check_timeindex(self, curtailment_timeseries, network):
         """
         Raises an error if time index of curtailment time series does not
         comply with the time index of load and feed-in time series.
 
         Parameters
         -----------
-        curtailment_ts : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
-            See parameter `total_curtailment_ts` in class definition for more
+        curtailment_timeseries : :pandas:`pandas.Series<series>` or \
+            :pandas:`pandas.DataFrame<dataframe>`
+            See parameter `curtailment_timeseries` in class definition for more
             information.
 
         """
-
+        if curtailment_timeseries is None:
+            message = 'No curtailment given.'
+            logging.error(message)
+            raise KeyError(message)
         try:
-            self.curtailment_ts.loc[network.timeseries.timeindex]
+            curtailment_timeseries.loc[network.timeseries.timeindex]
         except:
             message = 'Time index of curtailment time series does not match ' \
                       'with load and feed-in time series.'
             logging.error(message)
             raise KeyError(message)
 
-    def _check_curtailment(self, network):
+    def _precheck(self, curtailment_timeseries, feedin_df, curtailment_key):
         """
         Raises an error if the curtailment at any time step exceeds the
-        feed-in at that time.
+        total feed-in of all generators curtailment can be distributed among
+        at that time.
 
         Parameters
         -----------
-        feedin : :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame with feed-in time series in kW. The DataFrame needs to have
-            the same columns as the curtailment DataFrame.
-        network : :class:`~.grid.network.Network`
+        curtailment_timeseries : :pandas:`pandas.Series<series>`
+            Curtailment time series in kW for the technology (and weather
+            cell) specified in `curtailment_key`.
+        feedin_df : :pandas:`pandas.Series<series>`
+            Feed-in time series in kW for all generators of type (and in
+            weather cell) specified in `curtailment_key`.
+        curtailment_key : :obj:`str` or :obj:`tuple` with :obj:`str`
+            Technology (and weather cell) curtailment is given for.
 
         """
+        if not feedin_df.empty:
+            feedin_selected_sum = feedin_df.sum(axis=1)
+            bad_time_steps = [_ for _ in curtailment_timeseries.index
+                              if curtailment_timeseries[_] >
+                              feedin_selected_sum[_]]
+            if bad_time_steps:
+                message = 'Curtailment demand exceeds total feed-in in time ' \
+                          'steps {}.'.format(bad_time_steps)
+                logging.error(message)
+                raise ValueError(message)
+        else:
+            bad_time_steps = [_ for _ in curtailment_timeseries.index
+                              if curtailment_timeseries[_] > 0]
+            if bad_time_steps:
+                message = 'Curtailment given for time steps {} but there ' \
+                          'are no generators to meet the curtailment target ' \
+                          'for {}.'.format(bad_time_steps, curtailment_key)
+                logging.error(message)
+                raise ValueError(message)
 
-        feedin_ts_compare = self.feedin.copy()
-        for r in range(len(feedin_ts_compare.columns.levels)-1):
-            feedin_ts_compare.columns = feedin_ts_compare.columns.droplevel(1)
-        # need an if condition to remove the weather_cell_id level too
+    def _postcheck(self, network, feedin):
+        """
+        Raises an error if the curtailment of a generator exceeds the
+        feed-in of that generator at any time step.
 
-        if not ((feedin_ts_compare.loc[
-                 :, network.timeseries.curtailment.columns] -
-                     network.timeseries.curtailment) > -1e-3).all().all():
+        Parameters
+        -----------
+        network : :class:`~.grid.network.Network`
+        feedin : :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with feed-in time series in kW. Columns of the dataframe
+            are :class:`~.grid.components.GeneratorFluctuating`, index is
+            time index.
+
+        """
+        curtailment = network.timeseries.curtailment
+        gen_repr = [repr(_) for _ in curtailment.columns]
+        feedin_repr = feedin.loc[:, gen_repr]
+        curtailment_repr = curtailment
+        curtailment_repr.columns = gen_repr
+        if not ((feedin_repr - curtailment_repr) > -1e-3).all().all():
             message = 'Curtailment exceeds feed-in.'
             logging.error(message)
             raise TypeError(message)
@@ -1432,7 +1420,7 @@ class StorageControl:
         if isinstance(timeseries, dict):
             for storage, ts in timeseries.items():
                 try:
-                    position = battery_position[storage]
+                    position = position[storage]
                 except KeyError:
                     message = 'Please provide storage parameters or ' \
                               'position for storage {}.'.format(storage)
@@ -1451,6 +1439,9 @@ class StorageControl:
         else:
             self._integrate_storage(timeseries, position, parameters,
                                     voltage_level, timeseries_reactive_power)
+
+        # add measure to Results object
+        self.network.results.measures = 'storage_integration'
 
     def _integrate_storage(self, timeseries, position, params, voltage_level,
                            reactive_power_timeseries):
@@ -1930,17 +1921,13 @@ class Results:
 
     Attributes
     ----------
-    measures: list
-        A stack that details the history of measures to increase grid's hosting
-        capacity. The last item refers to the latest measure. The key
-        `original` refers to the state of the grid topology as it was initially
-        imported.
+    network : :class:`~.grid.network.Network`
+        The network is a container object holding all data.
 
     """
 
-    # ToDo: maybe add setter to alter list of measures
-
-    def __init__(self):
+    def __init__(self, network):
+        self.network = network
         self._measures = ['original']
         self._pfa_p = None
         self._pfa_q = None
@@ -1948,7 +1935,36 @@ class Results:
         self._i_res = None
         self._equipment_changes = pd.DataFrame()
         self._grid_expansion_costs = None
+        self._grid_losses = None
+        self._hv_mv_exchanges = None
+        self._curtailment = None
         self._unresolved_issues = {}
+
+    @property
+    def measures(self):
+        """
+        List with the history of measures to increase grid's hosting capacity.
+
+        Parameters
+        ----------
+        measure : :obj:`str`
+            Measure to increase grid's hosting capacity. Possible options are
+            'grid_expansion', 'storage_integration', 'curtailment'.
+
+        Returns
+        -------
+        measures : :obj:`list`
+            A stack that details the history of measures to increase grid's
+            hosting capacity. The last item refers to the latest measure. The
+            key `original` refers to the state of the grid topology as it was
+            initially imported.
+
+        """
+        return self._measures
+
+    @measures.setter
+    def measures(self, measure):
+        self._measures.append(measure)
 
     @property
     def pfa_p(self):
@@ -1963,7 +1979,7 @@ class Results:
 
         Parameters
         ----------
-        pypsa: `pandas.DataFrame<dataframe>`
+        pypsa : :pandas:`pandas.DataFrame<dataframe>`
             Results time series of active power P in kW from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
@@ -1995,7 +2011,7 @@ class Results:
 
         Parameters
         ----------
-        pypsa: `pandas.DataFrame<dataframe>`
+        pypsa : :pandas:`pandas.DataFrame<dataframe>`
             Results time series of reactive power Q in kvar from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
@@ -2027,7 +2043,7 @@ class Results:
 
         Parameters
         ----------
-        pypsa: `pandas.DataFrame<dataframe>`
+        pypsa : :pandas:`pandas.DataFrame<dataframe>`
             Results time series of voltage deviation in p.u. from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
@@ -2059,7 +2075,7 @@ class Results:
 
         Parameters
         ----------
-        pypsa: `pandas.DataFrame<dataframe>`
+        pypsa : :pandas:`pandas.DataFrame<dataframe>`
             Results time series of current in A from the
             `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
 
@@ -2094,21 +2110,21 @@ class Results:
         either a dict providing the details of curtailment or a curtailment
         object if this makes more sense (has to be defined).
 
-        change : :obj:`str` {'added' | 'removed'}
-            says if something was added or removed
+        change : :obj:`str`
+            Specifies if something was added or removed.
 
-        iteration_step : int
+        iteration_step : :obj:`int`
             Used for the update of the pypsa network to only consider changes
             since the last power flow analysis.
 
-        quantity : int
+        quantity : :obj:`int`
             Number of components added or removed. Only relevant for
             calculation of grid expansion costs to keep track of how many
             new standard lines were added.
 
         Parameters
         ----------
-        changes: `pandas.DataFrame<dataframe>`
+        changes : :pandas:`pandas.DataFrame<dataframe>`
             Provide this if you want to set values. For retrieval of data do
             not pass an argument.
 
@@ -2145,23 +2161,24 @@ class Results:
             that can either be a :class:`~.grid.components.Line` or a
             :class:`~.grid.components.Transformer`. Columns are the following:
 
-            type: String
+            type : :obj:`str`
                 Transformer size or cable name
 
-            total_costs: float
+            total_costs : :obj:`float`
                 Costs of equipment in kEUR. For lines the line length and
                 number of parallel lines is already included in the total
                 costs.
 
-            quantity: int
+            quantity : :obj:`int`
                 For transformers quantity is always one, for lines it specifies
                 the number of parallel lines.
 
-            line_length: float
+            line_length : :obj:`float`
                 Length of line or in case of parallel lines all lines in km.
 
-            voltage_level : :obj:`str` {'lv' | 'mv' | 'mv/lv'}
-                Specifies voltage level the equipment is in.
+            voltage_level : :obj:`str`
+                Specifies voltage level the equipment is in ('lv', 'mv' or
+                'mv/lv').
 
             mv_feeder : :class:`~.grid.components.Line`
                 First line segment of half-ring used to identify in which
@@ -2183,6 +2200,108 @@ class Results:
     @grid_expansion_costs.setter
     def grid_expansion_costs(self, total_costs):
         self._grid_expansion_costs = total_costs
+
+    @property
+    def grid_losses(self):
+        """
+        Holds active and reactive grid losses in kW and kvar, respectively.
+
+        Parameters
+        ----------
+        pypsa_grid_losses : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe holding active and reactive grid losses in columns 'p'
+            and 'q' and in kW and kvar, respectively. Index is a
+            :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe holding active and reactive grid losses in columns 'p'
+            and 'q' and in kW and kvar, respectively. Index is a
+            :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+
+        Notes
+        ------
+        Grid losses are calculated as follows:
+
+        .. math::
+            P_{loss} = \sum{feed-in} - \sum{load} + P_{slack}
+            Q_{loss} = \sum{feed-in} - \sum{load} + Q_{slack}
+
+        As the slack is placed at the secondary side of the HV/MV station
+        losses do not include losses of the HV/MV transformers.
+
+        """
+
+        return self._grid_losses
+
+    @grid_losses.setter
+    def grid_losses(self, pypsa_grid_losses):
+        self._grid_losses = pypsa_grid_losses
+
+    @property
+    def hv_mv_exchanges(self):
+        """
+        Holds active and reactive power exchanged with the HV grid.
+
+        The exchanges are essentially the slack results. As the slack is placed
+        at the secondary side of the HV/MV station, this gives the energy
+        transferred to and taken from the HV grid at the secondary side of the
+        HV/MV station.
+
+        Parameters
+        ----------
+        hv_mv_exchanges : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe holding active and reactive power exchanged with the HV
+            grid in columns 'p' and 'q' and in kW and kvar, respectively. Index
+            is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>
+            Dataframe holding active and reactive power exchanged with the HV
+            grid in columns 'p' and 'q' and in kW and kvar, respectively. Index
+            is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+
+        """
+
+        return self._hv_mv_exchanges
+
+    @hv_mv_exchanges.setter
+    def hv_mv_exchanges(self, hv_mv_exchanges):
+        self._hv_mv_exchanges = hv_mv_exchanges
+
+    @property
+    def curtailment(self):
+        """
+        Holds curtailment assigned to each generator per curtailment target.
+
+        Returns
+        -------
+        :obj:`dict` with :pandas:`pandas.DataFrame<dataframe>`
+            Keys of the dictionary are generator types (and weather cell ID)
+            curtailment targets were given for. E.g. if curtailment is provided
+            as a :pandas:`pandas.DataFrame<dataframe>` with
+            :pandas.`pandas.MultiIndex` columns with levels 'type' and
+            'weather cell ID' the dictionary key is a tuple of
+            ('type','weather_cell_id').
+            Values of the dictionary are dataframes with the curtailed power in
+            kW per generator and time step. Index of the dataframe is a
+            :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
+            generators of type
+            :class:`edisgo.grid.components.GeneratorFluctuating`.
+
+        """
+        if self._curtailment is not None:
+            result_dict = {}
+            for key, gen_list in self._curtailment.items():
+                curtailment_df = pd.DataFrame()
+                for gen in gen_list:
+                    curtailment_df[gen] = gen.curtailment
+                result_dict[key] = curtailment_df
+            return result_dict
+        else:
+            return None
 
     @property
     def unresolved_issues(self):
@@ -2234,7 +2353,7 @@ class Results:
 
         .. math::
 
-            S = max(\sqrt{p0^2 + q0^2}, \sqrt{p1^2 + q1^2})
+            S = max(\sqrt{p_0^2 + q_0^2}, \sqrt{p_1^2 + q_1^2})
 
         Parameters
         ----------
@@ -2247,7 +2366,7 @@ class Results:
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Apparent power for `lines` and/or `transformers`
+            Apparent power in kVA for lines and/or transformers.
 
         """
 
@@ -2274,19 +2393,20 @@ class Results:
 
     def v_res(self, nodes=None, level=None):
         """
-        Get resulting voltage level at node
+        Get resulting voltage level at node.
 
         Parameters
         ----------
-        nodes :  {:class:`~.grid.components.Load`, :class:`~.grid.components.Generator`, ...} or :obj:`list` of
-            grid topology component or `list` grid topology components
+        nodes : :class:`~.grid.components.Load`, \
+            :class:`~.grid.components.Generator`, etc. or :obj:`list`
+            Grid topology component or list of grid topology components.
             If not provided defaults to column names available in grid level
-            `level`
+            `level`.
         level : str
-            Either 'mv' or 'lv' or None (default). Depending which grid level results you are
-            interested in. It is required to provide this argument in order
-            to distinguish voltage levels at primary and secondary side of the
-            transformer/LV station.
+            Either 'mv' or 'lv' or None (default). Depending on which grid
+            level results you are interested in. It is required to provide this
+            argument in order to distinguish voltage levels at primary and
+            secondary side of the transformer/LV station.
             If not provided (respectively None) defaults to ['mv', 'lv'].
 
         Returns
@@ -2306,9 +2426,9 @@ class Results:
             # unless index is lexsorted, it cannot be sliced
             self.pfa_v_mag_pu.sort_index(axis=1, inplace=True)
         else:
-            message = "No Power Flow Calculation has be done yet, so there " \
-                      "are no results yet."
-            raise AttributeError
+            message = "No Power Flow Calculation has be done yet, " \
+                      "so there are no results yet."
+            raise AttributeError(message)
 
         if level is None:
             level = ['mv', 'lv']
@@ -2323,5 +2443,180 @@ class Results:
 
             if not_included:
                 logging.info("Voltage levels for {nodes} are not returned "
-                             "from PFA".format(nodes=not_included))
-            return self.pfa_v_mag_pu[level][ labels_included]
+                             "from PFA".format(
+                nodes=not_included))
+            return self.pfa_v_mag_pu[level][labels_included]
+
+    def save(self, directory, parameters='all'):
+        """
+        Saves results to disk.
+
+        Depending on which results are selected and if they exist, the
+        following directories and files are created:
+
+        * `powerflow_results` directory
+
+          * `voltages_pu.csv`
+
+            See :py:attr:`~pfa_v_mag_pu` for more information.
+          * `currents.csv`
+
+            See :func:`~i_res` for more information.
+          * `active_powers.csv`
+
+            See :py:attr:`~pfa_p` for more information.
+          * `reactive_powers.csv`
+
+            See :py:attr:`~pfa_q` for more information.
+          * `apparent_powers.csv`
+
+            See :func:`~s_res` for more information.
+          * `grid_losses.csv`
+
+            See :py:attr:`~grid_losses` for more information.
+          * `hv_mv_exchanges.csv`
+
+            See :py:attr:`~hv_mv_exchanges` for more information.
+
+        * `pypsa_network` directory
+
+          See :py:func:`pypsa.Network.export_to_csv_folder`
+
+        * `grid_expansion_results` directory
+
+          * `grid_expansion_costs.csv`
+
+            See :py:attr:`~grid_expansion_costs` for more information.
+          * `equipment_changes.csv`
+
+            See :py:attr:`~equipment_changes` for more information.
+          * `unresolved_issues.csv`
+
+            See :py:attr:`~unresolved_issues` for more information.
+
+        * `curtailment_results` directory
+
+          Files depend on curtailment specifications. There will be one file
+          for each curtailment specification, that is for every key in
+          :py:attr:`~curtailment` dictionary.
+
+        Parameters
+        ----------
+        directory : :obj:`str`
+            Directory to save the results in.
+        parameters : :obj:`str` or :obj:`list` of :obj:`str`
+            Specifies which results will be saved. By default all results are
+            saved. To only save certain results set `parameters` to one of the
+            following options or choose several options by providing a list:
+
+            * 'pypsa_network'
+            * 'powerflow_results'
+            * 'grid_expansion_results'
+            * 'curtailment_results'
+
+        """
+        def _save_power_flow_results(target_dir):
+            if self.pfa_v_mag_pu is not None:
+                # create directory
+                os.makedirs(target_dir, exist_ok=True)
+
+                # voltage
+                self.pfa_v_mag_pu.to_csv(
+                    os.path.join(target_dir, 'voltages_pu.csv'))
+
+                # current
+                self.i_res.to_csv(
+                    os.path.join(target_dir, 'currents.csv'))
+
+                # active power
+                self.pfa_p.to_csv(
+                    os.path.join(target_dir, 'active_powers.csv'))
+
+                # reactive power
+                self.pfa_q.to_csv(
+                    os.path.join(target_dir, 'reactive_powers.csv'))
+
+                # apparent power
+                self.s_res().to_csv(
+                    os.path.join(target_dir, 'apparent_powers.csv'))
+
+                # grid losses
+                self.grid_losses.to_csv(
+                    os.path.join(target_dir, 'grid_losses.csv'))
+
+                # grid exchanges
+                self.hv_mv_exchanges.to_csv(os.path.join(
+                    target_dir, 'hv_mv_exchanges.csv'))
+
+        def _save_pypsa_network(target_dir):
+            if self.network.pypsa:
+                self.network.pypsa.export_to_csv_folder(target_dir)
+
+        def _save_grid_expansion_results(target_dir):
+            if self.grid_expansion_costs is not None:
+                # create directory
+                os.makedirs(target_dir, exist_ok=True)
+
+                # grid expansion costs
+                self.grid_expansion_costs.to_csv(os.path.join(
+                    target_dir, 'grid_expansion_costs.csv'))
+
+                # unresolved issues
+                pd.DataFrame(self.unresolved_issues).to_csv(os.path.join(
+                    target_dir, 'unresolved_issues.csv'))
+
+                # equipment changes
+                self.equipment_changes.to_csv(os.path.join(
+                    target_dir, 'equipment_changes.csv'))
+
+        def _save_curtailment_results(target_dir):
+            if self.curtailment is not None:
+                # create directory
+                os.makedirs(target_dir, exist_ok=True)
+
+                for key, curtailment_df in self.curtailment.items():
+                    if type(key) == tuple:
+                        type_prefix = '-'.join([key[0], str(key[1])])
+                    elif type(key) == str:
+                        type_prefix = key
+                    else:
+                        raise KeyError("Unknown key type {} for key {}".format(
+                            type(key), key))
+
+                    filename = os.path.join(
+                        target_dir, '{}_curtailment.csv'.format(type_prefix))
+
+                    curtailment_df.to_csv(filename, index_label=type_prefix)
+
+        # dictionary with function to call to save each parameter
+        func_dict = {
+            'powerflow_results': _save_power_flow_results,
+            'pypsa_network': _save_pypsa_network,
+            'grid_expansion_results': _save_grid_expansion_results,
+            'curtailment_results': _save_curtailment_results
+        }
+
+        # if string is given convert to list
+        if isinstance(parameters, str):
+            if parameters == 'all':
+                parameters = ['powerflow_results', 'pypsa_network',
+                              'grid_expansion_results', 'curtailment_results']
+            else:
+                parameters = [parameters]
+
+        # save each parameter
+        for parameter in parameters:
+            try:
+                func_dict[parameter](os.path.join(directory, parameter))
+            except KeyError:
+                message = "Invalid input {} for `parameters` when saving " \
+                          "results. Must be any or a list of the following: " \
+                          "'pypsa_network', 'powerflow_results', " \
+                          "'grid_expansion_results', 'curtailment_results'."
+                logger.error(message)
+                raise KeyError(message)
+            except:
+                raise
+        # save measures
+        pd.DataFrame(data={'measure': self.measures}).to_csv(
+            os.path.join(directory, 'measures.csv'))
