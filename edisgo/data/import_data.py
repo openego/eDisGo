@@ -2067,20 +2067,17 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
 
         timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
 
-        recasted_feedin_lists = []
-        for ty in feedin.index.levels[0]:
-            for w_id in feedin.index.levels[1]:
-                recasted_feedin_lists.append(feedin.loc[(ty, w_id), :].values[0])
+        recasted_feedin_dict = {}
+        for type_w_id in feedin.index:
+            recasted_feedin_dict[type_w_id] = feedin.loc[
+                                              type_w_id, :].values[0]
 
-        feedin = pd.DataFrame(np.array(recasted_feedin_lists).transpose(),
-                              index=timeindex,
-                              columns=feedin.index.copy())
+        feedin = pd.DataFrame(recasted_feedin_dict, index=timeindex)
 
-        # rename 'windonshore' to 'wind'
-        feedin.columns.set_levels(list(map(lambda x: x.replace('wind_onshore', 'wind') if x == 'wind_onshore' else x,
-                                           feedin.columns.levels[0].values)),
-                                  level=0,
-                                  inplace=True)
+        # rename 'wind_onshore' and 'wind_offshore' to 'wind'
+        new_level = [_ if _ not in ['wind_onshore', 'wind_offshore']
+                     else 'wind' for _ in feedin.columns.levels[0]]
+        feedin.columns.set_levels(new_level, level=0, inplace=True)
 
         feedin.columns.rename('type', level=0, inplace=True)
         feedin.columns.rename('weather_cell_id', level=1, inplace=True)
