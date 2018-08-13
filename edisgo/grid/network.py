@@ -397,7 +397,7 @@ class EDisGo:
 
         return results
 
-    def integrate_storage(self, **kwargs):
+    def integrate_storage(self, timeseries, position, **kwargs):
         """
         Integrates storage into grid.
 
@@ -1441,7 +1441,7 @@ class StorageControl:
                                     voltage_level, timeseries_reactive_power)
 
         # add measure to Results object
-        self.network.results.measures = 'storage_integration'
+        self.edisgo.network.results.measures = 'storage_integration'
 
     def _integrate_storage(self, timeseries, position, params, voltage_level,
                            reactive_power_timeseries):
