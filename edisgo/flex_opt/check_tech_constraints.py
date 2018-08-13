@@ -569,20 +569,24 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
     return crit_nodes
 
 
-def _voltage_deviation(network, nodes, v_dev_allowed, voltage_level):
+def _voltage_deviation(network, nodes, v_dev_allowed_upper,
+                       v_dev_allowed_lower, voltage_level):
     """
     Checks for voltage stability issues in LV grids.
-
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
     nodes : :obj:`list`
         List of nodes (of type :class:`~.grid.components.Generator`,
         :class:`~.grid.components.Load`, etc.) to check voltage deviation for.
-    v_dev_allowed : :pandas:`pandas.Series<series>`
+    v_dev_allowed_upper : :pandas:`pandas.Series<series>`
         Series with time steps (of type :pandas:`pandas.Timestamp<timestamp>`)
-        power flow analysis was conducted for and the allowed voltage
-        deviation for each time step as float.
+        power flow analysis was conducted for and the allowed upper limit of
+        voltage deviation for each time step as float.
+    v_dev_allowed_lower : :pandas:`pandas.Series<series>`
+        Series with time steps (of type :pandas:`pandas.Timestamp<timestamp>`)
+        power flow analysis was conducted for and the allowed lower limit of
+        voltage deviation for each time step as float.
     voltage_levels : :obj:`str`
         Specifies which voltage level to retrieve power flow analysis results
         for. Possible options are 'mv' and 'lv'.
@@ -612,26 +616,32 @@ def _voltage_deviation(network, nodes, v_dev_allowed, voltage_level):
     for node in nodes:
         # check for over- and under-voltage
         overvoltage = v_mag_pu_pfa[repr(node)][
-            (v_mag_pu_pfa[repr(node)] > (1 + v_dev_allowed.loc[
-                v_mag_pu_pfa.index]))] - 1
-        undervoltage = 1 - v_mag_pu_pfa[repr(node)][
-            (v_mag_pu_pfa[repr(node)] < (1 - v_dev_allowed.loc[
+            (v_mag_pu_pfa[repr(node)] > (v_dev_allowed_upper.loc[
+                v_mag_pu_pfa.index]))]
+        undervoltage = v_mag_pu_pfa[repr(node)][
+            (v_mag_pu_pfa[repr(node)] < (v_dev_allowed_lower.loc[
                 v_mag_pu_pfa.index]))]
 
         # write greatest voltage deviation to dataframe
         if not overvoltage.empty:
+            overvoltage_diff = overvoltage - v_dev_allowed_upper.loc[
+                overvoltage.index]
             if not undervoltage.empty:
-                if overvoltage.max() > undervoltage.max():
+                undervoltage_diff = v_dev_allowed_lower.loc[
+                    undervoltage.index] - undervoltage
+                if overvoltage_diff.max() > undervoltage_diff.max():
                     crit_nodes_grid = crit_nodes_grid.append(
-                        _append_crit_node(overvoltage))
+                        _append_crit_node(overvoltage_diff))
                 else:
                     crit_nodes_grid = crit_nodes_grid.append(
-                        _append_crit_node(undervoltage))
+                        _append_crit_node(undervoltage_diff))
             else:
                 crit_nodes_grid = crit_nodes_grid.append(
-                    _append_crit_node(overvoltage))
+                    _append_crit_node(overvoltage_diff))
         elif not undervoltage.empty:
+            undervoltage_diff = v_dev_allowed_lower.loc[
+                                    undervoltage.index] - undervoltage
             crit_nodes_grid = crit_nodes_grid.append(
-                _append_crit_node(undervoltage))
+                _append_crit_node(undervoltage_diff))
 
     return crit_nodes_grid
