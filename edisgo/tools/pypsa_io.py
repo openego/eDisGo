@@ -26,10 +26,10 @@ def to_pypsa(network, mode, timesteps):
     :class:`~.grid.network.EDisGo`.
 
     Translating eDisGo's grid topology to PyPSA representation is structured
-    into tranlating the topology and adding time series for components of the
+    into translating the topology and adding time series for components of the
     grid. In both cases translation of MV grid only (`mode='mv'`), LV grid only
     (`mode='lv'`), MV and LV (`mode=None`) share some code. The
-    code is organized as follows
+    code is organized as follows:
 
     * Medium-voltage only (`mode='mv'`): All medium-voltage grid components are
       exported by :func:`mv_to_pypsa` including the LV station. LV grid load
