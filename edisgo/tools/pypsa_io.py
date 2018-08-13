@@ -1004,7 +1004,10 @@ def _pypsa_load_timeseries_aggregated_at_lv_station(network, timesteps):
             2. 'q_set' of aggregated Load per sector at each LV station
 
     """
-
+    # ToDo: Load.pypsa_timeseries is not differentiated by sector so this
+    # function will not work (either change here and in
+    # add_aggregated_lv_components or in Load class)
+    
     load_p = []
     load_q = []
 
