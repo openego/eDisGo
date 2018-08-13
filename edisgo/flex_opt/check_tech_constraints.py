@@ -354,35 +354,47 @@ def mv_voltage_deviation(network, voltage_levels='mv_lv'):
     crit_nodes = {}
 
     v_dev_allowed_per_case = {}
+    v_dev_allowed_per_case['feedin_case_lower'] = 0.9
+    v_dev_allowed_per_case['load_case_upper'] = 1.1
+    offset = network.config[
+        'grid_expansion_allowed_voltage_deviations']['hv_mv_trafo_offset']
+    control_deviation = network.config[
+        'grid_expansion_allowed_voltage_deviations'][
+        'hv_mv_trafo_control_deviation']
     if voltage_levels == 'mv_lv':
-        v_dev_allowed_per_case['feedin_case'] = network.config[
-            'grid_expansion_allowed_voltage_deviations'][
-            'mv_lv_max_v_deviation']
-        v_dev_allowed_per_case['load_case'] = v_dev_allowed_per_case[
-            'feedin_case']
+        v_dev_allowed_per_case['feedin_case_upper'] = \
+            1 + offset + control_deviation + network.config[
+                'grid_expansion_allowed_voltage_deviations'][
+                'mv_lv_feedin_case_max_v_deviation']
+        v_dev_allowed_per_case['load_case_lower'] = \
+            1 + offset - control_deviation - network.config[
+                'grid_expansion_allowed_voltage_deviations'][
+                'mv_lv_load_case_max_v_deviation']
     elif voltage_levels == 'mv':
-        # network.config['grid_expansion_allowed_voltage_deviations'][
-        #     'hv_mv_trafo_offset']
-        # network.config['grid_expansion_allowed_voltage_deviations'][
-        #     'hv_mv_trafo_control_deviation']
-        v_dev_allowed_per_case['feedin_case'] = network.config[
-            'grid_expansion_allowed_voltage_deviations'][
-            '{}_feedin_case_max_v_deviation'.format(voltage_levels)]
-        v_dev_allowed_per_case['load_case'] = network.config[
-            'grid_expansion_allowed_voltage_deviations'][
-            '{}_load_case_max_v_deviation'.format(voltage_levels)]
+        v_dev_allowed_per_case['feedin_case_upper'] = \
+            1 + offset + control_deviation + network.config[
+                'grid_expansion_allowed_voltage_deviations'][
+                'mv_feedin_case_max_v_deviation']
+        v_dev_allowed_per_case['load_case_lower'] = \
+            1 + offset - control_deviation - network.config[
+                'grid_expansion_allowed_voltage_deviations'][
+                'mv_load_case_max_v_deviation']
     else:
         raise ValueError(
             'Specified mode {} is not a valid option.'.format(voltage_levels))
     # maximum allowed apparent power of station in each time step
-    v_dev_allowed = \
+    v_dev_allowed_upper = \
         network.timeseries.timesteps_load_feedin_case.case.apply(
-            lambda _: v_dev_allowed_per_case[_])
+            lambda _: v_dev_allowed_per_case['{}_upper'.format(_)])
+    v_dev_allowed_lower = \
+        network.timeseries.timesteps_load_feedin_case.case.apply(
+            lambda _: v_dev_allowed_per_case['{}_lower'.format(_)])
 
     nodes = network.mv_grid.graph.nodes()
 
     crit_nodes_grid = _voltage_deviation(
-        network, nodes, v_dev_allowed, voltage_level='mv')
+        network, nodes, v_dev_allowed_upper, v_dev_allowed_lower,
+        voltage_level='mv')
 
     if not crit_nodes_grid.empty:
         crit_nodes[network.mv_grid] = crit_nodes_grid.sort_values(
@@ -443,29 +455,34 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
 
     v_dev_allowed_per_case = {}
     if voltage_levels == 'mv_lv':
-        v_dev_allowed_per_case['feedin_case'] = network.config[
+        offset = network.config[
+            'grid_expansion_allowed_voltage_deviations']['hv_mv_trafo_offset']
+        control_deviation = network.config[
             'grid_expansion_allowed_voltage_deviations'][
-            'mv_lv_max_v_deviation']
-        v_dev_allowed_per_case['load_case'] = v_dev_allowed_per_case[
-            'feedin_case']
+            'hv_mv_trafo_control_deviation']
+        v_dev_allowed_per_case['feedin_case_upper'] = \
+            1 + offset + control_deviation + network.config[
+                'grid_expansion_allowed_voltage_deviations'][
+                'mv_lv_feedin_case_max_v_deviation']
+        v_dev_allowed_per_case['load_case_lower'] = \
+            1 + offset - control_deviation - network.config[
+                'grid_expansion_allowed_voltage_deviations'][
+                'mv_lv_load_case_max_v_deviation']
+
+        v_dev_allowed_per_case['feedin_case_lower'] = 0.8  # random
+        v_dev_allowed_per_case['load_case_upper'] = 1.2  # random
+
+        v_dev_allowed_upper = \
+                network.timeseries.timesteps_load_feedin_case.case.apply(
+                lambda _: v_dev_allowed_per_case['{}_upper'.format(_)])
+        v_dev_allowed_lower = \
+            network.timeseries.timesteps_load_feedin_case.case.apply(
+                lambda _: v_dev_allowed_per_case['{}_lower'.format(_)])
     elif voltage_levels == 'lv':
-        # ToDo: allowed voltage deviation lv + mv?
-
-        # + voltage at lv station
-
-        v_dev_allowed_per_case['feedin_case'] = network.config[
-            'grid_expansion_allowed_voltage_deviations'][
-            '{}_feedin_case_max_v_deviation'.format(voltage_levels)]
-        v_dev_allowed_per_case['load_case'] = network.config[
-            'grid_expansion_allowed_voltage_deviations'][
-            '{}_load_case_max_v_deviation'.format(voltage_levels)]
+        pass
     else:
         raise ValueError(
             'Specified mode {} is not a valid option.'.format(voltage_levels))
-    # maximum allowed apparent power of station in each time step
-    v_dev_allowed = \
-        network.timeseries.timesteps_load_feedin_case.case.apply(
-            lambda _: v_dev_allowed_per_case[_])
 
     for lv_grid in network.mv_grid.lv_grids:
 
@@ -480,8 +497,55 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
         else:
             nodes = lv_grid.graph.nodes()
 
+        if voltage_levels == 'lv':
+            # get voltage at primary side to calculate upper bound for
+            # feed-in case and lower bound for load case
+            v_lv_station_primary = network.results.v_res(
+                nodes=[lv_grid.station], level='mv').loc[:, repr(nodes[0])]
+            timeindex = v_lv_station_primary.index
+            if mode == 'station':
+                v_dev_allowed_per_case['feedin_case_upper'] = \
+                    v_lv_station_primary + network.config[
+                        'grid_expansion_allowed_voltage_deviations'][
+                        'mv_lv_station_feedin_case_max_v_deviation']
+                v_dev_allowed_per_case['load_case_lower'] = \
+                    v_lv_station_primary - network.config[
+                        'grid_expansion_allowed_voltage_deviations'][
+                        'mv_lv_station_load_case_max_v_deviation']
+            else:
+                v_dev_allowed_per_case['feedin_case_upper'] = \
+                    v_lv_station_primary + network.config[
+                        'grid_expansion_allowed_voltage_deviations'][
+                        'lv_feedin_case_max_v_deviation']
+                v_dev_allowed_per_case['load_case_lower'] = \
+                    v_lv_station_primary - network.config[
+                        'grid_expansion_allowed_voltage_deviations'][
+                        'lv_load_case_max_v_deviation']
+            v_dev_allowed_per_case['feedin_case_lower'] = pd.Series(
+                0.8, index=timeindex)  # random
+            v_dev_allowed_per_case['load_case_upper'] = pd.Series(
+                1.2, index=timeindex)  # random
+            # maximum allowed voltage deviation in each time step
+            v_dev_allowed_upper = []
+            v_dev_allowed_lower = []
+            for t in timeindex:
+                case = \
+                    network.timeseries.timesteps_load_feedin_case.loc[
+                        t, 'case']
+                v_dev_allowed_upper.append(
+                    v_dev_allowed_per_case[
+                        '{}_upper'.format(case)].loc[t])
+                v_dev_allowed_lower.append(
+                    v_dev_allowed_per_case[
+                        '{}_lower'.format(case)].loc[t])
+            v_dev_allowed_upper = pd.Series(v_dev_allowed_upper,
+                                            index=timeindex)
+            v_dev_allowed_lower = pd.Series(v_dev_allowed_lower,
+                                            index=timeindex)
+
         crit_nodes_grid = _voltage_deviation(
-            network, nodes, v_dev_allowed, voltage_level='lv')
+            network, nodes, v_dev_allowed_upper, v_dev_allowed_lower,
+            voltage_level='lv')
 
         if not crit_nodes_grid.empty:
             crit_nodes[lv_grid] = crit_nodes_grid.sort_values(
@@ -507,7 +571,7 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
 
 def _voltage_deviation(network, nodes, v_dev_allowed, voltage_level):
     """
-    Checks for voltage stability issues at given nodes.
+    Checks for voltage stability issues in LV grids.
 
     Parameters
     ----------

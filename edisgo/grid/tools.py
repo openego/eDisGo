@@ -361,34 +361,57 @@ def select_cable(network, level, apparent_power):
 
 def get_gen_info(network, level='mvlv'):
     """
-    Gets all the installed generators under both mv and the lv grids.
+    Gets all the installed generators with some additional information.
 
     Parameters
     ----------
     network : :class:`~.grid.network.Network`
-        the network data
-    level : :string
-        'mv' for generators in mv level
-        'lv' for generators in lv level
-        'mvlv' for generators in both mv and lv levels
+        Network object holding the grid data.
+    level : :obj:`str`
+        Defines which generators are returned. Possible options are:
+
+        * 'mv'
+          Only generators connected to the MV grid are returned.
+        * 'lv'
+          Only generators connected to the LV grids are returned.
+        * 'mvlv'
+          All generators connected to the MV grid and LV grids are returned.
+
+        Default: 'mvlv'.
+    fluctuating : :obj:`bool`
+        If True only returns fluctuating generators. Default: False.
 
     Returns
     --------
     :pandas:`pandas.DataFrame<dataframe>`
-        Generators and Generator information
+        Dataframe with all generators connected to the specified voltage
+        level. Index of the dataframe are the generator objects of type
+        :class:`~.grid.components.Generator`. Columns of the dataframe are:
+
+        * 'gen_repr'
+          The representative of the generator as :obj:`str`.
+        * 'type'
+          The generator type, e.g. 'solar' or 'wind' as :obj:`str`.
+        * 'voltage_level'
+          The voltage level the generator is connected to as :obj:`str`. Can
+          either be 'mv' or 'lv'.
+        * 'nominal_capacity'
+          The nominal capacity of the generator as as :obj:`float`.
+        * 'weather_cell_id'
+          The id of the weather cell the generator is located in as :obj:`int`
+          (only applies to fluctuating generators).
+
     """
     # get all generators
     gens = []
     gens_w_id = []
     gens_voltage_level = []
-    gens_node = []
     gens_type = []
     gens_rating = []
 
     if 'mv' in level:
         gens = network.mv_grid.generators
         gens_voltage_level = ['mv']*len(gens)
-        gens_node = [gen.grid.station for gen in gens]
         gens_type = [gen.type for gen in gens]
         gens_rating = [gen.nominal_capacity for gen in gens]
         for gen in gens:
@@ -402,7 +425,6 @@ def get_gen_info(network, level='mvlv'):
             gens_lv = lv_grid.generators
             gens.extend(gens_lv)
             gens_voltage_level.extend(['lv']*len(gens_lv))
-            gens_node.extend([gen.grid.station for gen in gens_lv])
             gens_type.extend([gen.type for gen in gens_lv])
             gens_rating.extend([gen.nominal_capacity for gen in gens_lv])
             for gen in gens_lv:
@@ -412,133 +434,25 @@ def get_gen_info(network, level='mvlv'):
                     gens_w_id.append(np.nan)
 
     gen_df = pd.DataFrame({'gen_repr': list(map(lambda x: repr(x), gens)),
-                           'generator_uncat': gens,
+                           'generator': gens,
                            'type': gens_type,
                            'voltage_level': gens_voltage_level,
-                           'connected_node': gens_node,
                            'nominal_capacity': gens_rating,
                            'weather_cell_id': gens_w_id})
 
-    gen_df.sort_values('nominal_capacity', ascending=False, inplace=True)
+    gen_df.set_index('generator', inplace=True, drop=True)
 
-    gen_df['generator'] = pd.Categorical(gen_df.loc[:, 'generator_uncat'],
-                                         gen_df.loc[:, 'generator_uncat'])
-
-    gen_df.set_index('generator', inplace=True)
-    gen_df.drop('generator_uncat', axis=1, inplace=True)
+    # filter fluctuating generators
+    if fluctuating:
+        gen_df = gen_df.loc[(gen_df.type == 'solar') | (gen_df.type == 'wind')]
 
     return gen_df
-
-
-def get_load_info(network, level='mvlv'):
-    """
-    Gets all the installed generators under both mv and the lv grids.
-
-    Parameters
-    ----------
-    network : :class:`~.grid.network.Network`
-        the network data
-    level : :string
-        'mv' for generators in mv level
-        'lv' for generators in lv level
-        'mvlv' for generators in both mv and lv levels
-
-    Returns
-    --------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Generators and Generator information
-    """
-    # get all generators
-    load = []
-    load_voltage_level = []
-    load_node = []
-    load_peak_agr = []
-    load_peak_ind = []
-    load_peak_res = []
-    load_peak_com = []
-
-    if 'mv' in level:
-        load = network.mv_grid.loads
-        load_voltage_level = ['mv']*len(load)
-        load_node = [ld.grid.station for ld in load]
-        load_peak_agr = [ld.peak_load.loc['agricultural'] for ld in load]
-        load_peak_ind = [ld.peak_load.loc['industrial'] for ld in load]
-        load_peak_res = [ld.peak_load.loc['residential'] for ld in load]
-        load_peak_com = [ld.peak_load.loc['retail'] for ld in load]
-
-    else:
-        pass
-
-    if 'lv' in level:
-        for lv_grid in network.mv_grid.lv_grids:
-            loads_lv = lv_grid.loads
-            load.extend(loads_lv)
-            load_voltage_level.extend(['lv']*len(loads_lv))
-            load_node.extend([ld.grid.station for ld in loads_lv])
-            load_peak_agr.extend([ld.peak_load.loc['agricultural'] for ld in loads_lv])
-            load_peak_ind.extend([ld.peak_load.loc['industrial'] for ld in loads_lv])
-            load_peak_res.extend([ld.peak_load.loc['residential'] for ld in loads_lv])
-            load_peak_com.extend([ld.peak_load.loc['retail'] for ld in loads_lv])
-
-    else:
-        pass
-
-    load_df = pd.DataFrame({'load_repr': list(map(lambda x: repr(x), load)),
-                            'load_uncat': load,
-                            'voltage_level': load_voltage_level,
-                            'connected_node': load_node,
-                            'agricultural': load_peak_agr,
-                            'industrial': load_peak_ind,
-                            'residential': load_peak_res,
-                            'retail': load_peak_com})
-
-    load_df.sort_values('residential', ascending=False, inplace=True)
-
-    load_df['load'] = pd.Categorical(load_df.loc[:, 'load_uncat'],
-                                     load_df.loc[:, 'load_uncat'])
-
-    load_df.set_index('load', inplace=True)
-    load_df.drop('load_uncat', axis=1, inplace=True)
-
-    return load_df
-
-
-def get_capacities_by_type(network):
-    """
-    Gets installed capacities of wind and solar generators.
-
-    Parameters
-    ----------
-    network : :class:`~.grid.network.Network`
-
-    Returns
-    --------
-    dict
-        Dictionary with keys 'solar' and 'wind' and the values
-        containing the corresponding installed capacity.
-
-    """
-    mv_peak_generation = network.mv_grid.peak_generation_per_technology.loc[['solar', 'wind']]
-    lv_accumulated_peak_generation = pd.Series({'solar': 0,
-                                                'wind': 0})
-    for lv_grid in network.mv_grid.lv_grids:
-        try:
-            lv_accumulated_peak_generation.loc['solar'] += \
-                lv_grid.peak_generation_per_technology.loc['solar']
-        except KeyError:
-            pass
-        try:
-            lv_accumulated_peak_generation.loc['wind'] += \
-                lv_grid.peak_generation_per_technology.loc['wind']
-        except KeyError:
-            pass
-    return mv_peak_generation + lv_accumulated_peak_generation
 
 
 def assign_mv_feeder_to_nodes(mv_grid):
     """
     Assigns an MV feeder to every generator, LV station, load, and branch tee
-
+    
     Parameters
     -----------
     mv_grid : :class:`~.grid.grids.MVGrid`
@@ -566,7 +480,7 @@ def assign_mv_feeder_to_nodes(mv_grid):
                 node.mv_feeder = mv_feeder
 
 
-def get_mv_feeder_from_line(line, mv_grid):
+def get_mv_feeder_from_line(line):
     """
     Determines MV feeder the given line is in.
 

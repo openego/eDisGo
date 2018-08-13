@@ -77,7 +77,7 @@ def assign_load_feedin_case(network):
     gens = []
     loads = []
     for grid in grids:
-        gens.extend(list(grid.graph.nodes_by_attribute('generator')))
+        gens.extend(grid.generators)
         gens.extend(list(grid.graph.nodes_by_attribute('storage')))
         loads.extend(list(grid.graph.nodes_by_attribute('load')))
 

@@ -237,8 +237,7 @@ def mv_to_pypsa(network):
         `#54 <https://github.com/openego/eDisGo/issues/54>`_ for discussion.
     """
 
-    generators = network.mv_grid.graph.nodes_by_attribute('generator') + \
-                 network.mv_grid.graph.nodes_by_attribute('generator_aggr')
+    generators = network.mv_grid.generators
     loads = network.mv_grid.graph.nodes_by_attribute('load')
     branch_tees = network.mv_grid.graph.nodes_by_attribute('branch_tee')
     lines = network.mv_grid.graph.lines()
@@ -258,7 +257,7 @@ def mv_to_pypsa(network):
                  'p_nom': [],
                  'type': []}
 
-    bus = {'name': [], 'v_nom': []}
+    bus = {'name': [], 'v_nom': [], 'x': [], 'y': []}
 
     load = {'name': [], 'bus': []}
 
@@ -301,11 +300,15 @@ def mv_to_pypsa(network):
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(gen.grid.voltage_nom)
+        bus['x'].append(gen.geom.x)
+        bus['y'].append(gen.geom.y)
 
     # create dataframe representing branch tees
     for bt in branch_tees:
         bus['name'].append('_'.join(['Bus', repr(bt)]))
         bus['v_nom'].append(bt.grid.voltage_nom)
+        bus['x'].append(bt.geom.x)
+        bus['y'].append(bt.geom.y)
 
     # create dataframes representing loads and associated buses
     for lo in loads:
@@ -315,6 +318,8 @@ def mv_to_pypsa(network):
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(lo.grid.voltage_nom)
+        bus['x'].append(lo.geom.x)
+        bus['y'].append(lo.geom.y)
 
     # create dataframe for lines
     for l in lines:
@@ -353,13 +358,18 @@ def mv_to_pypsa(network):
         bus0_name = '_'.join(['Bus', lv_st.__repr__(side='mv')])
         bus['name'].append(bus0_name)
         bus['v_nom'].append(lv_st.mv_grid.voltage_nom)
+        bus['x'].append(lv_st.geom.x)
+        bus['y'].append(lv_st.geom.y)
 
         # add secondary side bus (bus1)
         bus1_name = '_'.join(['Bus', lv_st.__repr__(side='lv')])
         bus['name'].append(bus1_name)
         bus['v_nom'].append(lv_st.transformers[0].voltage_op)
+        bus['x'].append(None)
+        bus['y'].append(None)
 
-        v_base = lv_st.mv_grid.voltage_nom # we choose voltage of transformers' primary side
+        # we choose voltage of transformers' primary side
+        v_base = lv_st.mv_grid.voltage_nom
 
         for tr in lv_st.transformers:
             z_base = v_base ** 2 / tr.type.S_nom
@@ -382,11 +392,15 @@ def mv_to_pypsa(network):
         bus1_name = '_'.join(['Bus', mv_st.__repr__(side='mv')])
         bus['name'].append(bus1_name)
         bus['v_nom'].append(mv_st.transformers[0].voltage_op)
+        bus['x'].append(mv_st.geom.x)
+        bus['y'].append(mv_st.geom.y)
 
     # create dataframe representing disconnecting points
     for dp in disconnecting_points:
         bus['name'].append('_'.join(['Bus', repr(dp)]))
         bus['v_nom'].append(dp.grid.voltage_nom)
+        bus['x'].append(dp.geom.x)
+        bus['y'].append(dp.geom.y)
 
     # create dataframe representing storages
     for sto in storages:
@@ -402,6 +416,8 @@ def mv_to_pypsa(network):
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(sto.grid.voltage_nom)
+        bus['x'].append(sto.geom.x)
+        bus['y'].append(sto.geom.y)
 
     # Add separate slack generator at MV station secondary side bus bar
     generator['name'].append("Generator_slack")
@@ -453,7 +469,7 @@ def lv_to_pypsa(network):
     storages = []
 
     for lv_grid in network.mv_grid.lv_grids:
-        generators.extend(lv_grid.graph.nodes_by_attribute('generator'))
+        generators.extend(lv_grid.generators)
         loads.extend(lv_grid.graph.nodes_by_attribute('load'))
         branch_tees.extend(lv_grid.graph.nodes_by_attribute('branch_tee'))
         lines.extend(lv_grid.graph.lines())
@@ -468,7 +484,7 @@ def lv_to_pypsa(network):
                  'p_nom': [],
                  'type': []}
 
-    bus = {'name': [], 'v_nom': []}
+    bus = {'name': [], 'v_nom': [], 'x': [], 'y': []}
 
     load = {'name': [], 'bus': []}
 
@@ -501,11 +517,15 @@ def lv_to_pypsa(network):
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(gen.grid.voltage_nom)
+        bus['x'].append(None)
+        bus['y'].append(None)
 
     # create dictionary representing branch tees
     for bt in branch_tees:
         bus['name'].append('_'.join(['Bus', repr(bt)]))
         bus['v_nom'].append(bt.grid.voltage_nom)
+        bus['x'].append(None)
+        bus['y'].append(None)
 
     # create dataframes representing loads and associated buses
     for lo in loads:
@@ -515,6 +535,8 @@ def lv_to_pypsa(network):
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(lo.grid.voltage_nom)
+        bus['x'].append(None)
+        bus['y'].append(None)
 
     # create dataframe for lines
     for l in lines:
@@ -554,6 +576,8 @@ def lv_to_pypsa(network):
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(sto.grid.voltage_nom)
+        bus['x'].append(None)
+        bus['y'].append(None)
 
     lv_components = {
         'Generator': pd.DataFrame(generator).set_index('name'),
@@ -606,7 +630,7 @@ def add_aggregated_lv_components(network, components):
     # collect aggregated load grouped by sector
     for lv_grid in network.mv_grid.lv_grids:
         generators.setdefault(lv_grid, {})
-        for gen in lv_grid.graph.nodes_by_attribute('generator'):
+        for gen in lv_grid.generators:
             generators[lv_grid].setdefault(gen.type, {})
             generators[lv_grid][gen.type].setdefault(gen.subtype, {})
             generators[lv_grid][gen.type][gen.subtype].setdefault(
@@ -757,8 +781,7 @@ def _pypsa_generator_timeseries(network, timesteps, mode=None):
 
     # MV generator timeseries
     if mode is 'mv' or mode is None:
-        for gen in network.mv_grid.graph.nodes_by_attribute('generator') + \
-                network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
+        for gen in network.mv_grid.generators:
             mv_gen_timeseries_q.append(gen.pypsa_timeseries('q').rename(
                 repr(gen)).to_frame().loc[timesteps])
             mv_gen_timeseries_p.append(gen.pypsa_timeseries('p').rename(
@@ -771,7 +794,7 @@ def _pypsa_generator_timeseries(network, timesteps, mode=None):
     # LV generator timeseries
     if mode is 'lv' or mode is None:
         for lv_grid in network.mv_grid.lv_grids:
-            for gen in lv_grid.graph.nodes_by_attribute('generator'):
+            for gen in lv_grid.generators:
                 lv_gen_timeseries_q.append(gen.pypsa_timeseries('q').rename(
                     repr(gen)).to_frame().loc[timesteps])
                 lv_gen_timeseries_p.append(gen.pypsa_timeseries('p').rename(
@@ -887,13 +910,19 @@ def _pypsa_bus_timeseries(network, buses, timesteps):
 
     # Set slack bus to operational voltage (includes offset and control
     # deviation
-    slack_voltage_pu = 1 + \
+    control_deviation = network.config[
+        'grid_expansion_allowed_voltage_deviations'][
+        'hv_mv_trafo_control_deviation']
+    control_deviation_ts = \
+        network.timeseries.timesteps_load_feedin_case.case.apply(
+            lambda _: control_deviation if _ == 'feedin_case'
+                                        else -control_deviation)
+
+    slack_voltage_pu = control_deviation_ts + 1 + \
                        network.config[
                            'grid_expansion_allowed_voltage_deviations'][
-                           'hv_mv_trafo_offset'] + \
-                       network.config[
-                           'grid_expansion_allowed_voltage_deviations'][
-                           'hv_mv_trafo_control_deviation']
+                           'hv_mv_trafo_offset']
+
     v_set_dict.update({slack_bus: slack_voltage_pu})
 
     # Convert to PyPSA compatible dataframe
@@ -931,7 +960,7 @@ def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
     for lv_grid in network.mv_grid.lv_grids:
         # Determine aggregated generation at LV stations
         generation = {}
-        for gen in lv_grid.graph.nodes_by_attribute('generator'):
+        for gen in lv_grid.generators:
             # for type in gen.type:
             #     for subtype in gen.subtype:
             gen_name = '_'.join([gen.type,
@@ -1202,6 +1231,20 @@ def process_pfa_results(network, pypsa, timesteps):
         Understand how results of power flow analysis are structured in eDisGo.
 
     """
+    # get the absolute losses in the system
+    # subtracting total generation (including slack) from total load
+    grid_losses = {'p': 1e3 * (pypsa.generators_t['p'].sum(axis=1) -
+                               pypsa.loads_t['p'].sum(axis=1)),
+                   'q': 1e3 * (pypsa.generators_t['q'].sum(axis=1) -
+                               pypsa.loads_t['q'].sum(axis=1))}
+
+    network.results.grid_losses = pd.DataFrame(grid_losses)
+
+    # get slack results
+    grid_exchanges = {'p': 1e3 * (pypsa.generators_t['p']['Generator_slack']),
+                      'q': 1e3 * (pypsa.generators_t['q']['Generator_slack'])}
+
+    network.results.hv_mv_exchanges = pd.DataFrame(grid_exchanges)
 
     # get p and q of lines, LV transformers and MV Station (slack generator)
     # in absolute values
@@ -1251,10 +1294,7 @@ def process_pfa_results(network, pypsa, timesteps):
     network.results._i_res = s0[pypsa.lines_t['q0'].columns].truediv(
         pypsa.lines['v_nom'] * line_voltage_avg.T, axis='columns') * 1e3
     # process results at nodes
-    generators_names = [repr(g) for g in
-                        network.mv_grid.graph.nodes_by_attribute('generator') +
-                        network.mv_grid.graph.nodes_by_attribute(
-                            'generator_aggr')]
+    generators_names = [repr(g) for g in network.mv_grid.generators]
     generators_mapping = {v: k for k, v in
                           pypsa.generators.loc[generators_names][
                               'bus'].to_dict().items()}
@@ -1268,7 +1308,8 @@ def process_pfa_results(network, pypsa, timesteps):
     branch_t_mapping = {'_'.join(['Bus', v]): v for v in branch_t_names}
     mv_station_names = [repr(m) for m in
                         network.mv_grid.graph.nodes_by_attribute('mv_station')]
-    mv_station_mapping_sec = {'_'.join(['Bus', v]): v for v in mv_station_names}
+    mv_station_mapping_sec = {'_'.join(['Bus', v]): v for v in
+                              mv_station_names}
     mv_switch_disconnector_names = [repr(sd) for sd in
                                     network.mv_grid.graph.nodes_by_attribute(
                                         'mv_disconnecting_point')]
