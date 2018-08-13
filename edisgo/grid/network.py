@@ -1227,7 +1227,8 @@ class CurtailmentControl:
 
         Parameters
         -----------
-        curtailment_timeseries : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`
+        curtailment_timeseries : :pandas:`pandas.Series<series>` or \
+            :pandas:`pandas.DataFrame<dataframe>`
             See parameter `curtailment_timeseries` in class definition for more
             information.
 
@@ -2045,7 +2046,7 @@ class Results:
             line_length : :obj:`float`
                 Length of line or in case of parallel lines all lines in km.
 
-            voltage_level : :obj:`str` {'lv' | 'mv' | 'mv/lv'}
+            voltage_level : :obj:`str`
                 Specifies voltage level the equipment is in ('lv', 'mv' or
                 'mv/lv').
 
@@ -2267,15 +2268,16 @@ class Results:
 
         Parameters
         ----------
-        nodes :  {:class:`~.grid.components.Load`, :class:`~.grid.components.Generator`, ...} or :obj:`list` of
+        nodes : :class:`~.grid.components.Load`, \
+            :class:`~.grid.components.Generator`, etc. or :obj:`list`
             Grid topology component or list of grid topology components.
             If not provided defaults to column names available in grid level
             `level`.
         level : str
-            Either 'mv' or 'lv' or None (default). Depending which grid level results you are
-            interested in. It is required to provide this argument in order
-            to distinguish voltage levels at primary and secondary side of the
-            transformer/LV station.
+            Either 'mv' or 'lv' or None (default). Depending on which grid
+            level results you are interested in. It is required to provide this
+            argument in order to distinguish voltage levels at primary and
+            secondary side of the transformer/LV station.
             If not provided (respectively None) defaults to ['mv', 'lv'].
 
         Returns
