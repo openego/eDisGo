@@ -14,6 +14,7 @@ from edisgo.flex_opt import storage_integration, storage_operation, \
     curtailment, storage_positioning
 from edisgo.grid.components import Station, BranchTee, Generator, Load
 from edisgo.grid.tools import get_gen_info
+from edisgo.grid.grids import MVGrid
 
 logger = logging.getLogger('edisgo')
 
@@ -1542,9 +1543,6 @@ class StorageControl:
                 self.edisgo.network.pypsa,
                 storages=[storage], storages_lines=[line])
 
-        # write results to Result Object
-        self._write_to_results()
-
     def _check_nominal_power(self, storage_parameters, timeseries):
         """
         Tries to assign a nominal power to the storage.
@@ -1599,35 +1597,6 @@ class StorageControl:
             logging.error(message)
             raise KeyError(message)
 
-    def _write_to_results(self):
-        """
-        Groups all the storages assigned and their nominal powers and
-        writes them into the Results object to either just present the
-        results. Currently only the results from the mv grid are
-        presented
-
-        Results
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            The columns would be `nominal_power` and the indexes
-            would be the storage unit id
-        """
-        storage_integration_results = {}
-        storage_integration_results['storage_id'] = []
-        storage_integration_results['nominal_power'] = []
-        storage_integration_results['voltage_level'] = []
-        for storage_unit in self.edisgo.network.mv_grid.graph.nodes_by_attribute('storage'):
-            storage_integration_results['storage_id'].append(repr(storage_unit))
-            storage_integration_results['nominal_power'].append(storage_unit.nominal_power)
-            storage_integration_results['voltage_level'].append('mv')
-
-        # for lvgrid in self.edisgo.network.mv_grid.lv_grids:
-        #     for storage_unit in lvgrid.graph.nodes_by_attribute('storage'):
-        #         storage_integration_results['storage_id'].append(repr(storage_unit))
-        #         storage_integration_results['nominal_power'].append(storage_unit.nominal_power)
-        #         storage_integration_results['voltage_level'].append('lv')
-
-        self.edisgo.network.results.storage_integration = pd.DataFrame(storage_integration_results)
 
 class TimeSeries:
     """
@@ -2336,25 +2305,39 @@ class Results:
         else:
             return None
 
-    @property
-    def storage_integration(self):
+    def storages(self):
         """
-        Presents the planned storage units that would support the network
-        and avoid network reinforcements. This function provides a
-        :pandas:`panadas.DataFrame<dataframe>` with the storage ids
-        and installed powers.
+        Gathers relevant storage results.
+
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            curtailment per generator (in columns) in timesteps(rows).
+
+            Dataframe containing all storages installed in the MV grid and
+            LV grids. Index of the dataframe are the storage representatives,
+            columns are the following:
+
+            nominal_power : :obj:`float`
+                Nominal power of the storage in kW.
+
+            voltage_level : :obj:`str`
+                Voltage level the storage is connected to. Can either be 'mv'
+                or 'lv'.
+
         """
-        return self._storage_integration
-    @storage_integration.setter
-    def storage_integration(self, storage_integration_results):
-        """
-        Setter for Storage integration results
-        """
-        self._storage_integration = storage_integration_results
+        grids = [self.network.mv_grid] + list(self.network.mv_grid.lv_grids)
+        storage_results = {}
+        storage_results['storage_id'] = []
+        storage_results['nominal_power'] = []
+        storage_results['voltage_level'] = []
+        for grid in grids:
+            for storage in grid.graph.nodes_by_attribute('storage'):
+                storage_results['storage_id'].append(repr(storage))
+                storage_results['nominal_power'].append(storage.nominal_power)
+                storage_results['voltage_level'].append(
+                    'mv' if isinstance(grid, MVGrid) else 'lv')
+
+        return pd.DataFrame(storage_results).set_index('storage_id')
 
     @property
     def unresolved_issues(self):
@@ -2553,6 +2536,12 @@ class Results:
           for each curtailment specification, that is for every key in
           :py:attr:`~curtailment` dictionary.
 
+        * `storage_integration_results` directory
+
+          * `storages.csv`
+
+            See :func:`~storages` for more information.
+
         Parameters
         ----------
         directory : :obj:`str`
@@ -2566,6 +2555,7 @@ class Results:
             * 'powerflow_results'
             * 'grid_expansion_results'
             * 'curtailment_results'
+            * 'storage_integration_results'
 
         """
         def _save_power_flow_results(target_dir):
@@ -2641,19 +2631,30 @@ class Results:
 
                     curtailment_df.to_csv(filename, index_label=type_prefix)
 
+        def _save_storage_integration_results(target_dir):
+            storages = self.storages()
+            if not storages.empty:
+                # create directory
+                os.makedirs(target_dir, exist_ok=True)
+
+                # grid expansion costs
+                storages.to_csv(os.path.join(target_dir, 'storages.csv'))
+
         # dictionary with function to call to save each parameter
         func_dict = {
             'powerflow_results': _save_power_flow_results,
             'pypsa_network': _save_pypsa_network,
             'grid_expansion_results': _save_grid_expansion_results,
-            'curtailment_results': _save_curtailment_results
+            'curtailment_results': _save_curtailment_results,
+            'storage_integration_results': _save_storage_integration_results
         }
 
         # if string is given convert to list
         if isinstance(parameters, str):
             if parameters == 'all':
                 parameters = ['powerflow_results', 'pypsa_network',
-                              'grid_expansion_results', 'curtailment_results']
+                              'grid_expansion_results', 'curtailment_results',
+                              'storage_integration_results']
             else:
                 parameters = [parameters]
 
@@ -2665,7 +2666,8 @@ class Results:
                 message = "Invalid input {} for `parameters` when saving " \
                           "results. Must be any or a list of the following: " \
                           "'pypsa_network', 'powerflow_results', " \
-                          "'grid_expansion_results', 'curtailment_results'."
+                          "'grid_expansion_results', 'curtailment_results', " \
+                          "'storage_integration_results'."
                 logger.error(message)
                 raise KeyError(message)
             except:
