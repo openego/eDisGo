@@ -7,7 +7,6 @@ from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
 from edisgo.grid.components import Transformer, BranchTee, Generator, Load, \
     LVStation
 from edisgo.grid.grids import LVGrid
-from edisgo.flex_opt import exceptions
 
 import logging
 logger = logging.getLogger('edisgo')
