@@ -280,6 +280,8 @@ def mv_to_pypsa(network):
                    'x': [],
                    'r': [],
                    's_nom': [],
+                   's_nom_extendable': [],
+                   'capital_cost': [],
                    'tap_ratio': []}
 
     storage = {
@@ -389,6 +391,8 @@ def mv_to_pypsa(network):
             transformer['r'].append(tr.type.R / z_base)
             transformer['x'].append(tr.type.X / z_base)
             transformer['s_nom'].append(tr.type.S_nom / 1e3)
+            transformer['s_nom_extendable'].append(True)
+            transformer['capital_cost'].append(100)
             transformer['tap_ratio'].append(1)
 
             transformer_count += 1
@@ -430,10 +434,11 @@ def mv_to_pypsa(network):
         bus['y'].append(sto.geom.y)
 
     # Add separate slack generator at MV station secondary side bus bar
+    s_station = sum([_.type.S_nom for _ in mv_stations[0].transformers])
     generator['name'].append("Generator_slack")
     generator['bus'].append(bus1_name)
-    generator['control'].append('Slack')
-    generator['p_nom'].append(0)
+    generator['control'].append('PQ')
+    generator['p_nom'].append(2*s_station)
     generator['type'].append('Slack generator')
 
     components = {
@@ -815,8 +820,16 @@ def _pypsa_generator_timeseries(network, timesteps, mode=None):
                 lv_gen_timeseries_p_max.append(gen.pypsa_timeseries('p').rename(
                     repr(gen)).to_frame().loc[timesteps] / gen.nominal_capacity)
 
+    # Slack time series
+    lv_gen_timeseries_p_min.append(
+        pd.Series([-1] * len(timesteps), index=timesteps).rename(
+            "Generator_slack").to_frame())
+    lv_gen_timeseries_p_max.append(
+        pd.Series([1] * len(timesteps), index=timesteps).rename(
+            "Generator_slack").to_frame())
+
     gen_df_p_max = pd.concat(mv_gen_timeseries_p_max + lv_gen_timeseries_p_max, axis=1)
-    gen_df_p_min = pd.concat(mv_gen_timeseries_p_min + lv_gen_timeseries_p_max, axis=1)
+    gen_df_p_min = pd.concat(mv_gen_timeseries_p_min + lv_gen_timeseries_p_min, axis=1)
 
     return gen_df_p_min, gen_df_p_max
 
