@@ -380,6 +380,25 @@ def _add_cable_to_equipment_changes(network, line):
         )
 
 
+def _del_cable_from_equipment_changes(network, line):
+    """Delete cable from the equipment changes if existing
+
+    This is needed if a cable was already added to network.results.equipment_changes
+    but another node is connected later to this cable. Therefore, the cable needs to
+    be split which changes the id (one cable id -> 2 new cable ids).
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+        The eDisGo container object
+    line : class:`~.grid.components.Line`
+        Line instance which is to be deleted
+    """
+    if line in network.results.equipment_changes.index:
+        network.results.equipment_changes = \
+            network.results.equipment_changes.drop(line)
+
+
 def _find_nearest_conn_objects(network, node, branches):
     """Searches all branches for the nearest possible connection object per branch
 
@@ -531,7 +550,12 @@ def _connect_mv_node(network, node, target_obj):
             line_kind = line['line'].kind
             line_type = line['line'].type
 
+            # remove line from graph
             network.mv_grid.graph.remove_edge(adj_node1, adj_node2)
+
+            # delete line from equipment changes if existing
+            _del_cable_from_equipment_changes(network=network,
+                                              line=line['line'])
 
             line_length = calc_geo_dist_vincenty(network=network,
                                                  node_source=adj_node1,
@@ -542,10 +566,15 @@ def _connect_mv_node(network, node, target_obj):
                         kind=line_kind,
                         type=line_type,
                         grid=network.mv_grid)
+
             network.mv_grid.graph.add_edge(adj_node1,
                                            branch_tee,
                                            line=line,
                                            type='line')
+
+            # add line to equipment changes to track costs
+            _add_cable_to_equipment_changes(network=network,
+                                            line=line)
 
             line_length = calc_geo_dist_vincenty(network=network,
                                                  node_source=adj_node2,
@@ -556,10 +585,15 @@ def _connect_mv_node(network, node, target_obj):
                         kind=line_kind,
                         type=line_type,
                         grid=network.mv_grid)
+
             network.mv_grid.graph.add_edge(adj_node2,
                                            branch_tee,
                                            line=line,
                                            type='line')
+
+            # add line to equipment changes to track costs
+            _add_cable_to_equipment_changes(network=network,
+                                            line=line)
 
             # add new branch for new node (node to branch tee)
             # ================================================
@@ -572,6 +606,7 @@ def _connect_mv_node(network, node, target_obj):
                         kind=std_line_kind,
                         type=std_line_type,
                         grid=network.mv_grid)
+
             network.mv_grid.graph.add_edge(node,
                                            branch_tee,
                                            line=line,
