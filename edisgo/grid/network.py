@@ -363,9 +363,13 @@ class EDisGo:
         if False in [True if _ in self.network.pypsa.snapshots else False
                      for _ in timesteps]:
             pypsa_io.update_pypsa_timeseries(self.network, timesteps=timesteps)
+
         # run power flow analysis
         pf_results = self.network.pypsa.lopf(
             snapshots=timesteps, solver_name='cbc', keep_files=True)
+
+        self.network.pypsa.model.write(
+            io_options={'symbolic_solver_labels': True})
 
         if all(pf_results['converged']['0'].tolist()):
             pypsa_io.process_pfa_results(self.network, self.network.pypsa)
