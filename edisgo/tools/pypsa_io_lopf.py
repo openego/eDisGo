@@ -287,14 +287,12 @@ def mv_to_pypsa(network):
     storage = {
         'name': [],
         'bus': [],
-        #'p_nom': [],
+        'p_nom': [],
         'p_nom_extendable': [],
         'p_nom_min': [],
-        'p_nom_max': []}
-        # 'state_of_charge_initial': [],
-        # 'efficiency_store': [],
-        # 'efficiency_dispatch': [],
-        # 'standing_loss': []}
+        'p_nom_max': [],
+        'capital_cost': [],
+        'max_hours': []}
 
     # create dataframe representing generators and associated buses
     for gen in generators:
@@ -419,14 +417,12 @@ def mv_to_pypsa(network):
 
         storage['name'].append(repr(sto))
         storage['bus'].append(bus_name)
-        storage['p_nom'].append(sto.nominal_capacity / 1e3)
+        storage['p_nom'].append(sto.nominal_power / 1e3)
         storage['p_nom_extendable'].append(True)
         storage['p_nom_min'].append(0.3)
-        storage['p_nom_min'].append(4.5)
-        # storage['state_of_charge_initial'].append(sto.soc_initial)
-        # storage['efficiency_store'].append(sto.efficiency_in)
-        # storage['efficiency_dispatch'].append(sto.efficiency_out)
-        # storage['standing_loss'].append(sto.standing_loss)
+        storage['p_nom_max'].append(4.5)
+        storage['capital_cost'].append(0)
+        storage['max_hours'].append(6)
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(sto.grid.voltage_nom)
@@ -518,10 +514,11 @@ def lv_to_pypsa(network):
         'name': [],
         'bus': [],
         'p_nom': [],
-        'state_of_charge_initial': [],
-        'efficiency_store': [],
-        'efficiency_dispatch': [],
-        'standing_loss': []}
+        'p_nom_extendable': [],
+        'p_nom_min': [],
+        'p_nom_max': [],
+        'capital_cost': [],
+        'max_hours': []}
 
     # create dictionary representing generators and associated buses
     for gen in generators:
@@ -587,11 +584,12 @@ def lv_to_pypsa(network):
 
         storage['name'].append(repr(sto))
         storage['bus'].append(bus_name)
-        storage['p_nom'].append(sto.nominal_capacity)
-        storage['state_of_charge_initial'].append(sto.soc_inital)
-        storage['efficiency_store'].append(sto.efficiency_in)
-        storage['efficiency_dispatch'].append(sto.efficiency_out)
-        storage['standing_loss'].append(sto.standing_loss)
+        storage['p_nom'].append(sto.nominal_power / 1e3)
+        storage['p_nom_extendable'].append(True)
+        storage['p_nom_min'].append(0.3)
+        storage['p_nom_max'].append(4.5)
+        storage['capital_cost'].append(0)
+        storage['max_hours'].append(6)
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(sto.grid.voltage_nom)
@@ -867,22 +865,22 @@ def _pypsa_storage_timeseries(network, timesteps, mode=None):
     if mode is 'mv' or mode is None:
         for storage in network.mv_grid.graph.nodes_by_attribute('storage'):
             mv_storage_timeseries_p_min.append(
-                storage.pypsa_timeseries('p').rename(
-                    repr(storage)).to_frame().loc[timesteps] / storage.nominal_power)
+                pd.Series([-1] * len(timesteps), index=timesteps).rename(
+                    repr(storage)).to_frame())
             mv_storage_timeseries_p_max.append(
-                storage.pypsa_timeseries('p').rename(
-                    repr(storage)).to_frame().loc[timesteps] / storage.nominal_power)
+                pd.Series([1] * len(timesteps), index=timesteps).rename(
+                    repr(storage)).to_frame())
 
     # LV storage time series
     if mode is 'lv' or mode is None:
         for lv_grid in network.mv_grid.lv_grids:
             for storage in lv_grid.graph.nodes_by_attribute('storage'):
                 lv_storage_timeseries_p_min.append(
-                    storage.pypsa_timeseries('q').rename(
-                        repr(storage)).to_frame().loc[timesteps] / storage.nominal_power)
+                    pd.Series([-1] * len(timesteps), index=timesteps).rename(
+                        repr(storage)).to_frame())
                 lv_storage_timeseries_p_max.append(
-                    storage.pypsa_timeseries('p').rename(
-                        repr(storage)).to_frame().loc[timesteps] / storage.nominal_power)
+                    pd.Series([1] * len(timesteps), index=timesteps).rename(
+                        repr(storage)).to_frame())
 
     storage_df_p_min = pd.concat(
         mv_storage_timeseries_p_min + lv_storage_timeseries_p_min, axis=1)
