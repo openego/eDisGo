@@ -498,33 +498,31 @@ def get_mv_feeder_from_line(line, mv_grid):
         of the half-ring)
 
     """
-    # get nodes of line
-    # ToDo: Remove when #135 is solved
     try:
+        # get nodes of line
         nodes = line.grid.graph.nodes_from_line(line)
-    except:
-        logging.warning('nodes_from_line for line {} does not '
-                        'work.'.format(line))
-        return None
 
-    # if one of the nodes is an MV station the line is an MV feeder itself
-    feeders = {}
-    for node in nodes:
-        if isinstance(node, MVStation):
-            feeders[repr(node)] = None
-        else:
-            try:
+        # get feeders
+        feeders = {}
+        for node in nodes:
+            # if one of the nodes is an MV station the line is an MV feeder
+            # itself
+            if isinstance(node, MVStation):
+                feeders[repr(node)] = None
+            else:
                 feeders[repr(node)] = node.mv_feeder
-            except:
-                raise
 
-    feeder_1 = feeders[repr(nodes[0])]
-    feeder_2 = feeders[repr(nodes[1])]
-    if not feeder_1 is None and not feeder_2 is None:
-        if feeder_1 == feeder_2:
-            return feeder_1
+        # return feeder that is not None
+        feeder_1 = feeders[repr(nodes[0])]
+        feeder_2 = feeders[repr(nodes[1])]
+        if not feeder_1 is None and not feeder_2 is None:
+            if feeder_1 == feeder_2:
+                return feeder_1
+            else:
+                logging.warning('Different feeders for line {}.'.format(line))
+                return None
         else:
-            logging.warning('Different feeders for line {}.'.format(line))
-            return None
-    else:
-        return feeder_1 if feeder_1 is not None else feeder_2
+            return feeder_1 if feeder_1 is not None else feeder_2
+    except Exception as e:
+        logging.warning('Failed to get MV feeder: {}.'.format(e))
+        return None
