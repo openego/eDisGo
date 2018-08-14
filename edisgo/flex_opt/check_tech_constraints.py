@@ -131,7 +131,7 @@ def _line_load(network, grid, crit_lines):
             line['line'].type['I_max_th'] * line['line'].quantity * \
             network.config['grid_expansion_load_factors'][
                 '{}_load_case_line'.format(grid_level)]
-        # maximum allowed apparent power of station in each time step
+        # maximum allowed line load in each time step
         i_line_allowed = \
             network.timeseries.timesteps_load_feedin_case.case.apply(
                 lambda _: i_line_allowed_per_case[_])
@@ -469,8 +469,8 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
                 'grid_expansion_allowed_voltage_deviations'][
                 'mv_lv_load_case_max_v_deviation']
 
-        v_dev_allowed_per_case['feedin_case_lower'] = 0.8  # random
-        v_dev_allowed_per_case['load_case_upper'] = 1.2  # random
+        v_dev_allowed_per_case['feedin_case_lower'] = 0.9
+        v_dev_allowed_per_case['load_case_upper'] = 1.1
 
         v_dev_allowed_upper = \
                 network.timeseries.timesteps_load_feedin_case.case.apply(
@@ -522,9 +522,9 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
                         'grid_expansion_allowed_voltage_deviations'][
                         'lv_load_case_max_v_deviation']
             v_dev_allowed_per_case['feedin_case_lower'] = pd.Series(
-                0.8, index=timeindex)  # random
+                0.9, index=timeindex)
             v_dev_allowed_per_case['load_case_upper'] = pd.Series(
-                1.2, index=timeindex)  # random
+                1.1, index=timeindex)
             # maximum allowed voltage deviation in each time step
             v_dev_allowed_upper = []
             v_dev_allowed_lower = []
@@ -573,7 +573,6 @@ def _voltage_deviation(network, nodes, v_dev_allowed_upper,
                        v_dev_allowed_lower, voltage_level):
     """
     Checks for voltage stability issues in LV grids.
-
     Parameters
     ----------
     network : :class:`~.grid.network.Network`

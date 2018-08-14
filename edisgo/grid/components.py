@@ -490,8 +490,8 @@ class Generator(Component):
         """
         Feed-in time series of generator
 
-        It returns the actual time series used in power flow analysis. If
-        :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
+        It returns the actual dispatch time series used in power flow analysis.
+        If :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
         :meth:`timeseries` looks for time series of the according type of
         technology in :class:`~.grid.network.TimeSeries`. If the reactive
         power time series is provided through :attr:`_timeseries_reactive`,
@@ -629,7 +629,7 @@ class Generator(Component):
 
     @property
     def nominal_capacity(self):
-        """:obj:`float` : Nominal generation capacity"""
+        """:obj:`float` : Nominal generation capacity in kW"""
         return self._nominal_capacity
 
     @nominal_capacity.setter
@@ -786,7 +786,7 @@ class GeneratorFluctuating(Generator):
                                   columns, pd.MultiIndex):
                 if self.weather_cell_id:
                     try:
-                        timeseries = self.grid.network.timeseries. \
+                        timeseries = self.grid.network.timeseries.\
                             generation_fluctuating[
                             self.type, self.weather_cell_id].to_frame('p')
                     except KeyError:
@@ -801,7 +801,7 @@ class GeneratorFluctuating(Generator):
                     raise KeyError
             else:
                 try:
-                    timeseries = self.grid.network.timeseries. \
+                    timeseries = self.grid.network.timeseries.\
                         generation_fluctuating[self.type].to_frame('p')
                 except KeyError:
                     logger.exception("No time series for type {} "
@@ -824,6 +824,7 @@ class GeneratorFluctuating(Generator):
 
             return timeseries
         else:
+            #ToDo: should curtailment be subtracted from timeseries?
             return self._timeseries.loc[
                    self.grid.network.timeseries.timeindex, :]
 
@@ -930,7 +931,7 @@ class GeneratorFluctuating(Generator):
         """
         if self._curtailment is not None:
             return self._curtailment
-        elif isinstance(self.grid.network.timeseries.curtailment,
+        elif isinstance(self.grid.network.timeseries._curtailment,
                         pd.DataFrame):
             if isinstance(self.grid.network.timeseries.curtailment.
                                   columns, pd.MultiIndex):
@@ -989,29 +990,16 @@ class Storage(Component):
     :attr:`Storage.standing_loss` as well as its time series of operation
     :meth:`Storage.timeseries`.
 
-    Examples
-    --------
-    In order to define a storage that operates in mode "fifty-fifty"
-    (see :class:`~.grid.network.StorageControl` `timeseries_battery` parameter
-    for details about modes) provide the following when instantiating a
-    storage:
-
-    >>> from edisgo.grid.components import Storage
-    >>> from edisgo.flex_opt import storage_operation
-    >>> storage_parameters = {'nominal_capacity': 100,
-    >>>                       'soc_initial': 0,
-    >>>                       'efficiency_in': .9,
-    >>>                       'efficiency_out': .9,
-    >>>                       'standing_loss': 0}
-    >>> storage = Storage(storage_parameters)
-    >>> storage_operation.fifty_fifty(storage)
-
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._timeseries = kwargs.get('timeseries', None)
-        self._nominal_capacity = kwargs.get('nominal_capacity', None)
+        self._nominal_power = kwargs.get('nominal_power', None)
+        self._power_factor = kwargs.get('power_factor', None)
+        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
+
+        self._max_hours = kwargs.get('max_hours', None)
         self._soc_initial = kwargs.get('soc_initial', None)
         self._efficiency_in = kwargs.get('efficiency_in', None)
         self._efficiency_out = kwargs.get('efficiency_out', None)
@@ -1027,12 +1015,12 @@ class Storage(Component):
 
         Parameters
         ----------
-        timeseries : :pandas:`pandas.DataFrame<dataframe>`
+        ts : :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power the storage is charged (negative)
-            and discharged (positive) with in kW in column 'p' and
-            reactive power in kvar in column 'q'. When 'q' is positive,
-            reactive power is supplied (behaving as a capacitor) and when
-            'q' is negative reactive power is consumed (behaving as a inductor).
+            and discharged (positive) with (on the grid side) in kW in column 
+            'p' and reactive power in kvar in column 'q'. When 'q' is positive,
+            reactive power is supplied (behaving as a capacitor) and when 'q'
+            is negative reactive power is consumed (behaving as an inductor).
 
         Returns
         -------
@@ -1040,24 +1028,19 @@ class Storage(Component):
             See parameter `timeseries`.
 
         """
-        # ToDo: Consider efficiencies
-        return self._timeseries.loc[self.grid.network.timeseries.timeindex, :]
+        # check if time series for reactive power is given, otherwise
+        # calculate it
+        if 'q' in self._timeseries.columns:
+            return self._timeseries
+        else:
+            self._timeseries['q'] = abs(self._timeseries.p) * self.q_sign * \
+                                    tan(acos(self.power_factor))
+            return self._timeseries.loc[
+                   self.grid.network.timeseries.timeindex, :]
 
     @timeseries.setter
-    def timeseries(self, timeseries):
-        if 'q' in timeseries.columns:
-            self._timeseries = timeseries
-        else:
-            message = "There seems to be no \'q\' defined, it will be generated with the assumed" + \
-                      " power_factor for generators"
-            logger.warning(message)
-            try:
-                self._timeseries = timeseries
-                self._timeseries['q'] = self.q_sign * self._timeseries['p']
-            except KeyError:
-                message = "There seems to be no column \'p\' in the timeseries dataframe"
-                logger.error(message)
-                raise KeyError(message)
+    def timeseries(self, ts):
+        self._timeseries = ts
 
     def pypsa_timeseries(self, attr):
         """Return time series in PyPSA format
@@ -1073,9 +1056,36 @@ class Storage(Component):
         return self.timeseries[attr] / 1e3
 
     @property
+    def nominal_power(self):
+        """
+        Nominal charging and discharging power of storage instance in kW.
+
+        Returns
+        -------
+        float
+            Storage nominal power
+
+        """
+        return self._nominal_power
+
+    @property
+    def max_hours(self):
+        """
+        Maximum state of charge capacity in terms of hours at full discharging
+        power `nominal_power`.
+
+        Returns
+        -------
+        float
+            Hours storage can be discharged for at nominal power
+
+        """
+        return self._max_hours
+
+    @property
     def nominal_capacity(self):
         """
-        Nominal capacity of storage instance in kW.
+        Nominal storage capacity in kWh.
 
         Returns
         -------
@@ -1083,7 +1093,7 @@ class Storage(Component):
             Storage nominal capacity
 
         """
-        return self._nominal_capacity
+        return self._max_hours * self._nominal_power
 
     @property
     def soc_initial(self):
@@ -1149,35 +1159,63 @@ class Storage(Component):
         self._operation
 
     @property
+    def power_factor(self):
+        """
+        Power factor of storage
+
+        If power factor is not set it is retrieved from the network config
+        object depending on the grid level the storage is in.
+
+        Returns
+        --------
+        :obj:`float` : Power factor
+            Ratio of real power to apparent power.
+
+        """
+        if self._power_factor is None:
+            if isinstance(self.grid, MVGrid):
+                self._power_factor = self.grid.network.config[
+                    'reactive_power_factor']['mv_storage']
+            elif isinstance(self.grid, LVGrid):
+                self._power_factor = self.grid.network.config[
+                    'reactive_power_factor']['lv_storage']
+        return self._power_factor
+
+    @power_factor.setter
+    def power_factor(self, power_factor):
+        self._power_factor = power_factor
+
+    @property
     def reactive_power_mode(self):
         """
-        Power factor mode of generator.
+        Power factor mode of storage.
 
-        If the power factor is set, then it is necessary to know whether the
+        If the power factor is set, then it is necessary to know whether
         it is leading or lagging. In other words this information is necessary
-        to make the generator behave in an inductive or capacitive manner.
+        to make the storage behave in an inductive or capacitive manner.
         Essentially this changes the sign of the reactive power Q.
 
-        The convention used here in a generator is that:
+        The convention used here in a storage is that:
         - when `reactive_power_mode` is 'capacitive' then Q is positive
         - when `reactive_power_mode` is 'inductive' then Q is negative
 
         In the case that this attribute is not set, it is retrieved from the
-        network config object depending on the voltage level the generator
+        network config object depending on the voltage level the storage
         is in.
 
         Returns
         -------
         :obj: `str` : Power factor mode
             Either 'inductive' or 'capacitive'
+
         """
         if self._reactive_power_mode is None:
             if isinstance(self.grid, MVGrid):
                 self._reactive_power_mode = self.grid.network.config[
-                    'reactive_power_mode']['mv_gen']
+                    'reactive_power_mode']['mv_storage']
             elif isinstance(self.grid, LVGrid):
                 self._reactive_power_mode = self.grid.network.config[
-                    'reactive_power_mode']['lv_gen']
+                    'reactive_power_mode']['lv_storage']
 
         return self._reactive_power_mode
 
@@ -1206,6 +1244,9 @@ class Storage(Component):
         else:
             raise ValueError("Unknown value {} in reactive_power_mode".format(
                 self.reactive_power_mode))
+
+    def __repr__(self):
+        return str(self._id)
 
 
 class MVDisconnectingPoint(Component):
@@ -1433,3 +1474,4 @@ class Line(Component):
     @kind.setter
     def kind(self, new_kind):
         self._kind = new_kind
+
