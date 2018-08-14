@@ -646,3 +646,19 @@ def _voltage_deviation(network, nodes, v_dev_allowed_upper,
                 _append_crit_node(undervoltage_diff))
 
     return crit_nodes_grid
+
+
+def check_ten_percent_voltage_deviation(network):
+    """
+    Checks if 10% criteria is exceeded.
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+
+    """
+
+    v_mag_pu_pfa = network.results.v_res()
+    if (v_mag_pu_pfa > 1.1).any().any() or (v_mag_pu_pfa < 0.9).any().any():
+        message = "Maximum allowed voltage deviation of 10% exceeded."
+        raise ValueError(message)
