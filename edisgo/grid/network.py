@@ -1387,13 +1387,20 @@ class StorageControl:
         the keys of the `timeseries` dictionary, values must
         contain the corresponding parameters dictionary specified above.
         Note: As edisgo currently only provides a power flow analysis storage
-        parameters don't have any effect on the calculations.
+        parameters don't have any effect on the calculations, except of the
+        nominal power of the storage.
         Default: {}.
-    voltage_level : :obj:`str`, optional
-        This parameter only needs to be provided if `position` is of
-        type :class:`~.grid.components.LVStation`. In that case `voltage_level`
-        defines which side of the LV station the storage is connected to. Valid
-        options are 'lv' and 'mv'. Default: None.
+    voltage_level : :obj:`str` or :obj:`dict`, optional
+        This parameter only needs to be provided if any entry in `position` is
+        of type :class:`~.grid.components.LVStation`. In that case
+        `voltage_level` defines which side of the LV station the storage is
+        connected to. Valid options are 'lv' and 'mv'.
+        In case of more than one storage provide a :obj:`dict` specifying the
+        voltage level for each storage that is to be connected to an LV
+        station. Keys of the dictionary have to match the keys of the
+        `timeseries` dictionary, values must contain the corresponding
+        voltage level.
+        Default: None.
     timeseries_reactive_power : :pandas:`pandas.Series<series>` or :obj:`dict`
         By default reactive power is set through the config file
         `config_timeseries` in sections `reactive_power_factor` specifying
@@ -1419,14 +1426,41 @@ class StorageControl:
         timeseries_reactive_power = kwargs.get(
             'timeseries_reactive_power', None)
         if isinstance(timeseries, dict):
-            for storage, ts in timeseries.items():
-                try:
-                    position = position[storage]
-                except KeyError:
-                    message = 'Please provide storage parameters or ' \
-                              'position for storage {}.'.format(storage)
+            # check if other parameters are dicts as well if provided
+            if voltage_level is not None:
+                if not isinstance(voltage_level, dict):
+                    message = 'Since storage `timeseries` is a dictionary, ' \
+                              '`voltage_level` has to be provided as a ' \
+                              'dictionary as well.'
                     logging.error(message)
                     raise KeyError(message)
+            if parameters is not None:
+                if not all(isinstance(value, dict) == True
+                           for value in parameters.values()):
+                    message = 'Since storage `timeseries` is a dictionary, ' \
+                              'storage parameters of each storage have to ' \
+                              'be provided as a dictionary as well.'
+                    logging.error(message)
+                    raise KeyError(message)
+            if timeseries_reactive_power is not None:
+                if not isinstance(timeseries_reactive_power, dict):
+                    message = 'Since storage `timeseries` is a dictionary, ' \
+                              '`timeseries_reactive_power` has to be ' \
+                              'provided as a dictionary as well.'
+                    logging.error(message)
+                    raise KeyError(message)
+            for storage, ts in timeseries.items():
+                try:
+                    pos = position[storage]
+                except KeyError:
+                    message = 'Please provide position for storage {}.'.format(
+                        storage)
+                    logging.error(message)
+                    raise KeyError(message)
+                try:
+                    voltage_lev = voltage_level[storage]
+                except:
+                    voltage_lev = None
                 try:
                     params = parameters[storage]
                 except:
@@ -1435,8 +1469,8 @@ class StorageControl:
                     reactive_power = timeseries_reactive_power[storage]
                 except:
                     reactive_power = None
-                self._integrate_storage(ts, position, params,
-                                        voltage_level, reactive_power)
+                self._integrate_storage(ts, pos, params,
+                                        voltage_lev, reactive_power)
         else:
             self._integrate_storage(timeseries, position, parameters,
                                     voltage_level, timeseries_reactive_power)
