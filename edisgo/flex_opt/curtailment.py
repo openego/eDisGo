@@ -112,6 +112,10 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
         0, columns=feedin.columns, index=curtailment_timeseries[
             curtailment_timeseries <= 0].index))
 
+    # check if curtailment target was met
+    _check_curtailment_target(curtailment, curtailment_timeseries,
+                              curtailment_key)
+
     # assign curtailment to individual generators
     _assign_curtailment(curtailment, edisgo, generators, curtailment_key)
 
@@ -286,8 +290,38 @@ def feedin_proportional(feedin, generators, curtailment_timeseries, edisgo,
     # substitute NaNs from division with 0 by 0
     curtailment.fillna(0, inplace=True)
 
+    # check if curtailment target was met
+    _check_curtailment_target(curtailment, curtailment_timeseries,
+                              curtailment_key)
+
     # assign curtailment to individual generators
     _assign_curtailment(curtailment, edisgo, generators, curtailment_key)
+
+
+def _check_curtailment_target(curtailment, curtailment_target,
+                              curtailment_key):
+    """
+    Raises an error if curtailment target was not met in any time step.
+
+    Parameters
+    -----------
+    curtailment : :pandas:`pandas:DataFrame<dataframe>`
+        Dataframe containing the curtailment in kW per generator and time step.
+        Index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`, columns are
+        the generator representatives.
+    curtailment_target : :pandas:`pandas.Series<series>`
+        The curtailment in kW that was to be distributed amongst the
+        generators. Index of the series is a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+    curtailment_key : :obj:`str` or :obj:`tuple` with :obj:`str`
+        The technology and weather cell ID if :obj:`tuple` or only
+        the technology if :obj:`str` the curtailment was specified for.
+
+    """
+    if not (abs(curtailment.sum(axis=1) - curtailment_target) < 1e-3).all():
+        message = 'Curtailment target not met for {}.'.format(curtailment_key)
+        logging.error(message)
+        raise TypeError(message)
 
 
 def _assign_curtailment(curtailment, edisgo, generators, curtailment_key):
