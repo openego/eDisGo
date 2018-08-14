@@ -239,7 +239,7 @@ def _optimize_voltage_based_curtailment(feedin, voltage_pu, total_curtailment,
 
     # solve
     solver = SolverFactory(solver)
-    results = solver.solve(model, tee=True)
+    results = solver.solve(model, tee=False)
 
     # load results back into model
     model.solutions.load_from(results)
