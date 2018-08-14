@@ -2075,7 +2075,7 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
         feedin = pd.DataFrame(recasted_feedin_dict, index=timeindex)
 
         # rename 'wind_onshore' and 'wind_offshore' to 'wind'
-        new_level = [_ if _ not in ['wind_onshore', 'wind_offshore']
+        new_level = [_ if _ not in ['wind_onshore']
                      else 'wind' for _ in feedin.columns.levels[0]]
         feedin.columns.set_levels(new_level, level=0, inplace=True)
 
