@@ -864,12 +864,18 @@ def _pypsa_storage_timeseries(network, timesteps, mode=None):
     # MV storage time series
     if mode is 'mv' or mode is None:
         for storage in network.mv_grid.graph.nodes_by_attribute('storage'):
+            # mv_storage_timeseries_p_min.append(
+            #     pd.Series([-1] * len(timesteps), index=timesteps).rename(
+            #         repr(storage)).to_frame())
+            # mv_storage_timeseries_p_max.append(
+            #     pd.Series([1] * len(timesteps), index=timesteps).rename(
+            #         repr(storage)).to_frame())
             mv_storage_timeseries_p_min.append(
-                pd.Series([-1] * len(timesteps), index=timesteps).rename(
-                    repr(storage)).to_frame())
+                storage.timeseries.p.rename(repr(
+                    storage)).to_frame().loc[timesteps])
             mv_storage_timeseries_p_max.append(
-                pd.Series([1] * len(timesteps), index=timesteps).rename(
-                    repr(storage)).to_frame())
+                storage.timeseries.p.rename(repr(
+                    storage)).to_frame().loc[timesteps])
 
     # LV storage time series
     if mode is 'lv' or mode is None:

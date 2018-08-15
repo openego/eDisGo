@@ -4,6 +4,7 @@ import numpy as np
 from math import sqrt
 import logging
 import datetime
+from pyomo.environ import Constraint, Param
 
 import edisgo
 from edisgo.tools import config, tools
@@ -285,7 +286,7 @@ class EDisGo:
         data_source = 'oedb'
         import_generators(network=self.network, data_source=data_source)
 
-    def analyze(self, mode=None, timesteps=None):
+    def analyze(self, mode=None, timesteps=None, etrago_max_storage_size=None):
         """Analyzes the grid by power flow analysis
 
         Analyze the grid for violations of hosting capacity. Means, perform a
@@ -372,18 +373,45 @@ class EDisGo:
                      for _ in timesteps]:
             pypsa_io.update_pypsa_timeseries(self.network, timesteps=timesteps)
 
+        # add storage constraints
+        def extra_functionality(network, snapshots):
+            model = network.model
+            # total installed capacity
+            model.storages_p_nom = Constraint(
+                rule=lambda model: sum(
+                    model.storage_p_nom[s]
+                    for s in self.network.pypsa.storage_units.index) <=
+                                   etrago_max_storage_size)
+            # # storage feed-in at each time step
+            # def storages_p_sum_target_init(model, t):
+            #     return total_storage_timeseries.loc[t]
+            # model.storages_p_sum_target = Param(
+            #     snapshots, initialize=storages_p_sum_target_init)
+            # def storage_p_sum_rule(model, s, t):
+            #     return sum(model.storage_p_dispatch[s, t]
+            #         for s in
+            #         self.network.pypsa.storage_units.index) ==
+            #     model.storages_p_sum_target[t]
+            # model.storages_p_sum = Constraint(
+            #     rule=lambda model: sum(model.storage_p_dispatch[s, snapshot]
+            #                            for s in
+            #                            self.network.pypsa.storage_units.index) <=
+            #                        model.storages_p_sum_target[snapshot])
+
         # run power flow analysis
-        pf_results = self.network.pypsa.lopf(
-            snapshots=timesteps, solver_name='cbc', keep_files=True)
+        self.network.pypsa.lopf(
+            snapshots=timesteps, solver_name='cbc', keep_files=True,
+            extra_functionality=extra_functionality,
+            solver_options={'tee': True})
 
         self.network.pypsa.model.write(
             io_options={'symbolic_solver_labels': True})
 
-        if all(pf_results['converged']['0'].tolist()):
-            pypsa_io.process_pfa_results(
-                self.network, self.network.pypsa, timesteps)
-        else:
-            raise ValueError("Power flow analysis did not converge.")
+        print('objective: {}'.format(self.network.pypsa.objective))
+
+        print('installed storage capacity: {}'.format(
+            self.network.pypsa.storage_units.p_nom_opt.sum()))
+
 
     def reinforce(self, **kwargs):
         """
