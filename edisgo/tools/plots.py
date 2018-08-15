@@ -5,8 +5,6 @@ import logging
 from matplotlib import pyplot as plt
 from pypsa import Network as PyPSANetwork
 
-from edisgo.grid.network import Results
-
 
 def create_curtailment_characteristic(assigned_curtailment,
                                       generator_feedins,
@@ -229,10 +227,7 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
         width of bins in per unit voltage,
         By default and in failing cases this would be set to 0.01.
     """
-    if type(voltage_data) == Results:
-        voltage = voltage_data.pfa_v_mag_pu.copy()
-    elif type(voltage_data) == pd.DataFrame:
-        voltage = voltage_data.copy()
+    voltage = voltage_data.copy()
     x_label = kwargs.get('xlabel', "Voltage [per unit]")
     y_label = kwargs.get('ylabel', "Normalized Frequency [per unit]")
     x_limits = kwargs.get('xlim', (0.9, 1.1))
@@ -437,4 +432,89 @@ def line_loading(network, timestep, filename=None, arrows=True):
         plt.show()
     else:
         plt.savefig(filename)
+        plt.close()
+
+
+def storage_size(mv_grid, pypsa_network, filename=None):
+    """
+    Plot line loading as color on lines
+
+    Displays line loading relative to nominal capacity
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+    timestep : :pandas:`pandas.Timestamp<timestamp>`
+        Time step to plot analysis results for.
+    filename : :obj:`str`
+        Filename to save plot under. If not provided, figure is shown directly.
+        Default: None.
+    arrows: :obj:`Boolean`
+        If True draws arrows on lines in the direction of the power flow.
+        Default: True.
+
+    """
+
+    # create pypsa network only containing MV buses and lines
+    lines = [_['line'] for _ in mv_grid.graph.lines()]
+    pypsa_plot = PyPSANetwork()
+    pypsa_plot.buses = pypsa_network.buses.loc[
+        (pypsa_network.buses.v_nom >= 10)]
+    pypsa_plot.lines = pypsa_network.lines.loc[[repr(_) for _ in lines]]
+
+    # bus colors and sizes
+    bus_sizes = {}
+    bus_colors = {}
+    colors_dict = {'BranchTee': 'b',
+                   'GeneratorFluctuating': 'g',
+                   'Generator': 'k',
+                   'LVStation': 'c',
+                   'MVStation': 'orange',
+                   'Storage': 'r',
+                   'DisconnectingPoint': '0.75',
+                   'else': 'y'}
+    sizes_dict = {'BranchTee': 10,
+                  'GeneratorFluctuating': 10,
+                  'Generator': 10,
+                  'LVStation': 50,
+                  'MVStation': 120,
+                  'Storage': 1000,
+                  'DisconnectingPoint': 50,
+                  'else': 10}
+
+    def get_color_and_size(name):
+        if 'BranchTee' in name:
+            return colors_dict['BranchTee'], sizes_dict['BranchTee']
+        elif 'LVStation' in name:
+            return colors_dict['LVStation'], sizes_dict['LVStation']
+        elif 'GeneratorFluctuating' in name:
+            return (colors_dict['GeneratorFluctuating'],
+                    sizes_dict['GeneratorFluctuating'])
+        elif 'Generator' in name:
+            return colors_dict['Generator'], sizes_dict['Generator']
+        elif 'DisconnectingPoint' in name:
+            return (colors_dict['DisconnectingPoint'],
+                    sizes_dict['DisconnectingPoint'])
+        elif 'MVStation' in name:
+            return colors_dict['MVStation'], sizes_dict['MVStation']
+        elif 'storage' in name:
+            tmp = name.split('_')
+            storage_repr = '_'.join(tmp[1:])
+            size = pypsa_network.generators.loc[
+                       storage_repr, 'p_nom_opt'] * sizes_dict['Storage']
+            return colors_dict['Storage'], size
+        else:
+            return colors_dict['else'], sizes_dict['else']
+
+    for bus in pypsa_plot.buses.index:
+        bus_colors[bus], bus_sizes[bus] = get_color_and_size(bus)
+
+    # plot
+    ll = pypsa_plot.plot(title="Line loading", line_widths=0.55,
+                         branch_components=['Line'], basemap=True,
+                         bus_sizes=bus_sizes, bus_colors=bus_colors)
+
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename, papertype='a4')
         plt.close()

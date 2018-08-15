@@ -5,10 +5,11 @@ from math import sqrt
 import logging
 import datetime
 from pyomo.environ import Constraint, Param
+import networkx as nx
 
 import edisgo
 from edisgo.tools import config, tools
-from edisgo.tools import pypsa_io_lopf as pypsa_io
+from edisgo.tools import pypsa_io_lopf, pypsa_io
 from edisgo.data.import_data import import_from_ding0, import_generators, \
     import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
@@ -17,6 +18,7 @@ from edisgo.flex_opt import storage_integration, storage_operation, \
 from edisgo.grid.components import Station, BranchTee, Generator, Load
 from edisgo.grid.tools import get_gen_info
 from edisgo.grid.grids import MVGrid
+from edisgo.tools import plots
 
 logger = logging.getLogger('edisgo')
 
@@ -286,7 +288,7 @@ class EDisGo:
         data_source = 'oedb'
         import_generators(network=self.network, data_source=data_source)
 
-    def analyze(self, mode=None, timesteps=None, etrago_max_storage_size=None):
+    def analyze(self, mode=None, timesteps=None):
         """Analyzes the grid by power flow analysis
 
         Analyze the grid for violations of hosting capacity. Means, perform a
@@ -355,12 +357,8 @@ class EDisGo:
 
         if self.network.pypsa is None:
             # Translate eDisGo grid topology representation to PyPSA format
-            logging.debug('Translate eDisGo grid topology representation to '
-                         'PyPSA format.')
             self.network.pypsa = pypsa_io.to_pypsa(
                 self.network, mode, timesteps)
-            logging.debug('Translating eDisGo grid topology representation to '
-                         'PyPSA format finished.')
         else:
             if self.network.pypsa.edisgo_mode is not mode:
                 # Translate eDisGo grid topology representation to PyPSA format
@@ -372,46 +370,138 @@ class EDisGo:
         if False in [True if _ in self.network.pypsa.snapshots else False
                      for _ in timesteps]:
             pypsa_io.update_pypsa_timeseries(self.network, timesteps=timesteps)
+        # run power flow analysis
+        pf_results = self.network.pypsa.pf(timesteps)
 
-        # add storage constraints
+        if all(pf_results['converged']['0'].tolist()):
+            pypsa_io.process_pfa_results(self.network, self.network.pypsa)
+        else:
+            raise ValueError("Power flow analysis did not converge.")
+
+    def analyze_lopf(self, mode=None, timesteps=None,
+                     etrago_max_storage_size=None):
+        """Analyzes the grid by power flow analysis
+
+        Analyze the grid for violations of hosting capacity. Means, perform a
+        power flow analysis and obtain voltages at nodes (load, generator,
+        stations/transformers and branch tees) and active/reactive power at
+        lines.
+
+        The power flow analysis can currently only be performed for both grid
+        levels MV and LV. See ToDos section for more information.
+
+        A static `non-linear power flow analysis is performed using PyPSA
+        <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
+        The high-voltage to medium-voltage transformer are not included in the
+        analysis. The slack bus is defined at secondary side of these
+        transformers assuming an ideal tap changer. Hence, potential
+        overloading of the transformers is not studied here.
+
+        Parameters
+        ----------
+        mode : str
+            Allows to toggle between power flow analysis (PFA) on the whole
+            grid topology (MV + LV), only MV or only LV. Defaults to None which
+            equals power flow analysis for MV + LV which is the only
+            implemented option at the moment. See ToDos section for
+            more information.
+        timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+            Timesteps specifies for which time steps to conduct the power flow
+            analysis. It defaults to None in which case the time steps in
+            timeseries.timeindex (see :class:`~.grid.network.TimeSeries`) are
+            used.
+
+        Notes
+        -----
+        The current implementation always translates the grid topology
+        representation to the PyPSA format and stores it to
+        :attr:`self.network.pypsa`.
+
+        ToDos
+        ------
+        The option to export only the edisgo MV grid (mode = 'mv') to conduct
+        a power flow analysis is implemented in
+        :func:`~.tools.pypsa_io.to_pypsa` but NotImplementedError is raised
+        since the rest of edisgo does not handle this option yet. The analyze
+        function will throw an error since
+        :func:`~.tools.pypsa_io.process_pfa_results`
+        does not handle aggregated loads and generators in the LV grids. Also,
+        grid reinforcement, pypsa update of time series, and probably other
+        functionalities do not work when only the MV grid is analysed.
+
+        Further ToDos are:
+        * explain how power plants are modeled, if possible use a link
+        * explain where to find and adjust power flow analysis defining
+        parameters
+
+        See Also
+        --------
+        :func:`~.tools.pypsa_io.to_pypsa`
+            Translator to PyPSA data format
+
+        """
+        if timesteps is None:
+            timesteps = self.network.timeseries.timeindex
+        # check if timesteps is array-like, otherwise convert to list
+        if not hasattr(timesteps, "__len__"):
+            timesteps = [timesteps]
+
+        # Translate eDisGo grid topology representation to PyPSA format
+        logging.debug('Translate eDisGo grid topology representation to '
+                      'PyPSA format.')
+        self.network.pypsa_lopf = pypsa_io_lopf.to_pypsa(
+            self.network, mode, timesteps)
+        logging.debug('Translating eDisGo grid topology representation to '
+                      'PyPSA format finished.')
+
+        # add total storage capacity constraint
         def extra_functionality(network, snapshots):
             model = network.model
             # total installed capacity
             model.storages_p_nom = Constraint(
                 rule=lambda model: sum(
-                    model.storage_p_nom[s]
-                    for s in self.network.pypsa.storage_units.index) <=
-                                   etrago_max_storage_size)
-            # # storage feed-in at each time step
-            # def storages_p_sum_target_init(model, t):
-            #     return total_storage_timeseries.loc[t]
-            # model.storages_p_sum_target = Param(
-            #     snapshots, initialize=storages_p_sum_target_init)
-            # def storage_p_sum_rule(model, s, t):
-            #     return sum(model.storage_p_dispatch[s, t]
-            #         for s in
-            #         self.network.pypsa.storage_units.index) ==
-            #     model.storages_p_sum_target[t]
-            # model.storages_p_sum = Constraint(
-            #     rule=lambda model: sum(model.storage_p_dispatch[s, snapshot]
-            #                            for s in
-            #                            self.network.pypsa.storage_units.index) <=
-            #                        model.storages_p_sum_target[snapshot])
+                    model.generator_p_nom[s]
+                    for s in self.network.pypsa_lopf.generators[
+                        self.network.pypsa_lopf.generators.type ==
+                        'Storage'].index) <= etrago_max_storage_size)
 
         # run power flow analysis
-        self.network.pypsa.lopf(
-            snapshots=timesteps, solver_name='cbc', keep_files=True,
+        self.network.pypsa_lopf.lopf(
+            snapshots=timesteps, solver_name='cbc', keep_files=False,
             extra_functionality=extra_functionality,
             solver_options={'tee': True})
 
-        self.network.pypsa.model.write(
-            io_options={'symbolic_solver_labels': True})
+        # self.network.pypsa.model.write(
+        #     io_options={'symbolic_solver_labels': True})
 
-        print('objective: {}'.format(self.network.pypsa.objective))
+        print('objective: {}'.format(self.network.pypsa_lopf.objective))
 
-        print('installed storage capacity: {}'.format(
-            self.network.pypsa.storage_units.p_nom_opt.sum()))
+        # relevant outputs
+        plots.storage_size(self.network.mv_grid, self.network.pypsa_lopf,
+                           filename='storage_results_{}.pdf'.format(
+                               self.network.id))
 
+        storages = self.network.mv_grid.graph.nodes_by_attribute('storage')
+        storages_repr = [repr(_) for _ in storages]
+        print('Installed storage capacity: {} MW'.format(
+            self.network.pypsa_lopf.generators.loc[
+                storages_repr, 'p_nom_opt'].sum()))
+
+        # export storage results
+        pypsa_storages_df = self.network.pypsa_lopf.generators.loc[
+            storages_repr, :]
+
+        # find nodes storages are connected to
+        storage_repr = []
+        storage_path = []
+        for s in storages:
+            storage_repr.append(repr(s))
+            storage_path.append(nx.shortest_path(self.network.mv_grid.graph,
+                                    self.network.mv_grid.station, s))
+        graph_storages_df = pd.DataFrame({'path': storage_path},
+                                         index=storage_repr)
+        pypsa_storages_df.join(graph_storages_df).to_csv(
+            'storage_results_{}.csv'.format(self.network.id))
 
     def reinforce(self, **kwargs):
         """
