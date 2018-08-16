@@ -137,8 +137,6 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
 
     iteration_step = 1
     edisgo_reinforce.analyze(timesteps=timesteps_pfa)
-    # edisgo_reinforce.network.pypsa.export_to_csv_folder(
-    #     'pypsa_network_feedin_case_generator_import')
 
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
 
@@ -450,10 +448,5 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # calculate grid expansion costs
     edisgo_reinforce.network.results.grid_expansion_costs = \
         grid_expansion_costs(edisgo_reinforce.network)
-
-    # ToDo: delete at some point
-    # import pickle
-    # edisgo_reinforce.network.pypsa = None
-    # pickle.dump(edisgo_reinforce, open('edisgo_reinforce_274.pkl', 'wb'))
 
     return edisgo_reinforce.network.results
