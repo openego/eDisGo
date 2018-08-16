@@ -117,6 +117,40 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
         return battery_node
 
+    def calc_storage_size(edisgo, feeder):
+        sizes = [0] + np.arange(300, 4500, 200)
+        p_feeder = edisgo.network.results.pfa_p.loc[:, repr(feeder)]
+        q_feeder = edisgo.network.results.pfa_q.loc[:, repr(feeder)]
+        # get sign of p and q
+        l = edisgo.network.pypsa.lines.loc[repr(feeder), :]
+        mv_station_bus = 'bus0' if l.loc['bus0'] == 'Bus_'.format(
+            repr(edisgo.network.mv_grid.station)) else 'bus1'
+        if mv_station_bus == 'bus0':
+            diff = edisgo.network.pypsa.lines_t.p1.loc[:, repr(feeder)] - \
+                   edisgo.network.pypsa.lines_t.p0.loc[:, repr(feeder)]
+            diff_q = edisgo.network.pypsa.lines_t.p1.loc[:, repr(feeder)] - \
+                     edisgo.network.pypsa.lines_t.p0.loc[:, repr(feeder)]
+        else:
+            diff = edisgo.network.pypsa.lines_t.p0.loc[:, repr(feeder)] - \
+                   edisgo.network.pypsa.lines_t.p1.loc[:, repr(feeder)]
+            diff_q = edisgo.network.pypsa.lines_t.q0.loc[:, repr(feeder)] - \
+                     edisgo.network.pypsa.lines_t.q1.loc[:, repr(feeder)]
+        p_sign = pd.Series([-1 if _ < 0 else 1 for _ in diff],
+                           index=p_feeder.index)
+        q_sign = pd.Series([-1 if _ < 0 else 1 for _ in diff_q],
+                           index=p_feeder.index)
+        p_feeder = p_feeder.multiply(p_sign)
+        q_feeder = q_feeder.multiply(q_sign)
+        s_max = []
+        for size in sizes:
+            share = size / storage_nominal_power
+            p_storage = storage_timeseries.p * share
+            q_storage = storage_timeseries.q * share
+            p_total = p_feeder + p_storage
+            q_total = q_feeder + q_storage
+            s_max.append(max((p_total ** 2 + q_total ** 2).apply(sqrt)))
+        return sizes[pd.Series(s_max).idxmin()]
+
     def calculate_storage_nominal_power(battery_line, p_storage_remaining):
         """
         Parameters
@@ -157,58 +191,6 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                 print(p_storage, s_line_max)
         return p_storage
 
-    def calculate_storage_nominal_power_2(battery_line):
-        """
-        Methodology to calculate storage nominal power
-
-        Returns
-        --------
-
-        """
-        # find critical time steps (critical time steps are time steps where
-        # storage discharges in feed-in case and charges in load case)
-        timesteps_load_feedin_case = \
-            edisgo.network.timeseries.timesteps_load_feedin_case
-        critical_timesteps = [
-            _ for _ in storage_timeseries.index
-            if (timesteps_load_feedin_case.loc[_, 'case'] == 'feedin_case' and
-                storage_timeseries.loc[_, 'p'] > 0) or
-               (timesteps_load_feedin_case.loc[_, 'case'] == 'load_case' and
-                storage_timeseries.loc[_, 'p'] < 0)]
-
-        # allowed apparent power
-        i_line_allowed_per_case = {}
-        i_line_allowed_per_case['feedin_case'] = \
-            battery_line.type['I_max_th'] * battery_line.quantity * \
-            edisgo.network.config['grid_expansion_load_factors'][
-                'mv_feedin_case_line']
-        i_line_allowed_per_case['load_case'] = \
-            battery_line.type['I_max_th'] * battery_line.quantity * \
-            edisgo.network.config['grid_expansion_load_factors'][
-                'mv_load_case_line']
-        # maximum allowed line load in each time step
-        i_allowed = edisgo.network.timeseries. \
-            timesteps_load_feedin_case.case.apply(
-            lambda _: i_line_allowed_per_case[_])
-        u_allowed = battery_line.type['U_n']
-        # ToDo: correct?
-        s_allowed = sqrt(3) / 1000 * i_allowed * u_allowed
-
-        if critical_timesteps:
-            # actual apparent power
-            pfa_p = edisgo.network.results.pfa_p[repr(battery_line)]
-            pfa_q = edisgo.network.results.pfa_q[repr(battery_line)]
-            pfa_s = (pfa_p ** 2 + pfa_q ** 2).apply(sqrt)
-
-            # ToDo: p muss noch aus s und q berechnet werden, wenn q != 0
-            p = min((s_allowed - pfa_s).loc[critical_timesteps])
-            if p > p_storage_min:
-                p_storage = p
-                if p_storage > p_storage_max:
-                    p_storage = p_storage_max
-        else:
-            # allow maximal allowed line load
-            p_storage = max(s_allowed)
         return p_storage
 
     # global variables
