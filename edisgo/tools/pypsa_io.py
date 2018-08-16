@@ -1511,7 +1511,7 @@ def update_pypsa_storage(pypsa, storages, storages_lines):
         storages to the grid.
 
     """
-    bus = {'name': [], 'v_nom': []}
+    bus = {'name': [], 'v_nom': [], 'x': [], 'y': []}
 
     line = {'name': [],
             'bus0': [],
@@ -1544,6 +1544,8 @@ def update_pypsa_storage(pypsa, storages, storages_lines):
 
         bus['name'].append(bus_name)
         bus['v_nom'].append(s.grid.voltage_nom)
+        bus['x'].append(s.geom.x)
+        bus['y'].append(s.geom.y)
 
     omega = 2 * pi * 50
     for l in storages_lines:
