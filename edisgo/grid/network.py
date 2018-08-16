@@ -16,7 +16,7 @@ from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, \
     curtailment, storage_positioning
 from edisgo.grid.components import Station, BranchTee, Generator, Load
-from edisgo.grid.tools import get_gen_info
+from edisgo.grid.tools import get_gen_info, disconnect_storage
 from edisgo.grid.grids import MVGrid
 from edisgo.tools import plots
 
@@ -374,7 +374,8 @@ class EDisGo:
         pf_results = self.network.pypsa.pf(timesteps)
 
         if all(pf_results['converged']['0'].tolist()):
-            pypsa_io.process_pfa_results(self.network, self.network.pypsa)
+            pypsa_io.process_pfa_results(
+                self.network, self.network.pypsa, timesteps)
         else:
             raise ValueError("Power flow analysis did not converge.")
 
@@ -477,6 +478,7 @@ class EDisGo:
         print('objective: {}'.format(self.network.pypsa_lopf.objective))
 
         # relevant outputs
+        # plot MV grid
         plots.storage_size(self.network.mv_grid, self.network.pypsa_lopf,
                            filename='storage_results_{}.pdf'.format(
                                self.network.id))
@@ -487,11 +489,10 @@ class EDisGo:
             self.network.pypsa_lopf.generators.loc[
                 storages_repr, 'p_nom_opt'].sum()))
 
-        # export storage results
+        # export storage results (pypsa and path to storage)
         pypsa_storages_df = self.network.pypsa_lopf.generators.loc[
-            storages_repr, :]
+            storages_repr, :].sort_values(by=['p_nom_opt'], ascending=False)
 
-        # find nodes storages are connected to
         storage_repr = []
         storage_path = []
         for s in storages:
@@ -502,6 +503,21 @@ class EDisGo:
                                          index=storage_repr)
         pypsa_storages_df.join(graph_storages_df).to_csv(
             'storage_results_{}.csv'.format(self.network.id))
+
+        # take largest 8 storages and remove the rest
+        keep_storages = pypsa_storages_df.iloc[:8, :].index
+        remove_storages = pypsa_storages_df.iloc[8:, :].index
+        # write time series to kept storages
+        for s in keep_storages:
+            keep_storage_obj = [_ for _ in storages if repr(_)==s][0]
+            ts = self.network.pypsa_lopf.generators_t.p.loc[:, s]
+            keep_storage_obj.timeseries = pd.DataFrame({'p': ts * 1000,
+                                                        'q': [0] * len(ts)},
+                                                        index=ts.index)
+        # delete small storages
+        for s in remove_storages:
+            disconnect_storage(self.network,
+                               [_ for _ in storages if repr(_)==s][0])
 
     def reinforce(self, **kwargs):
         """
