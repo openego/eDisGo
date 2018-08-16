@@ -156,7 +156,7 @@ def grid_expansion_costs(network, without_generator_import=False):
                      'quantity': number_lines_added,
                      'voltage_level': ('lv' if isinstance(l.grid, LVGrid)
                                        else 'mv'),
-                     'mv_feeder': get_mv_feeder_from_line(l, network.mv_grid)},
+                     'mv_feeder': get_mv_feeder_from_line(l)},
                     index=[l]))
 
     # if no costs incurred write zero costs to DataFrame
