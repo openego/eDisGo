@@ -480,7 +480,7 @@ def assign_mv_feeder_to_nodes(mv_grid):
                 node.mv_feeder = mv_feeder
 
 
-def get_mv_feeder_from_line(line, mv_grid):
+def get_mv_feeder_from_line(line):
     """
     Determines MV feeder the given line is in.
 
@@ -526,3 +526,39 @@ def get_mv_feeder_from_line(line, mv_grid):
     except Exception as e:
         logging.warning('Failed to get MV feeder: {}.'.format(e))
         return None
+
+
+def disconnect_storage(network, storage):
+    """
+    Removes storage from network graph and pypsa representation.
+
+    Parameters
+    -----------
+    network : :class:`~.grid.network.Network`
+    storage : :class:`~.grid.components.Storage`
+        Storage instance to be removed.
+
+    """
+    # does only remove from network.pypsa, not from network.pypsa_lopf
+    # remove from pypsa (buses, storage_units, storage_units_t, lines)
+    neighbor = storage.grid.graph.neighbors(storage)[0]
+    if network.pypsa is not None:
+        line = storage.grid.graph.line_from_nodes(storage, neighbor)
+        network.pypsa.storage_units = network.pypsa.storage_units.loc[
+                                      network.pypsa.storage_units.index.drop(
+                                          repr(storage)), :]
+        network.pypsa.storage_units_t.p_set.drop([repr(storage)], axis=1,
+                                                 inplace=True)
+        network.pypsa.storage_units_t.q_set.drop([repr(storage)], axis=1,
+                                                 inplace=True)
+        network.pypsa.buses = network.pypsa.buses.loc[
+                              network.pypsa.buses.index.drop(
+                                  '_'.join(['Bus', repr(storage)])), :]
+        network.pypsa.lines = network.pypsa.lines.loc[
+                              network.pypsa.lines.index.drop(
+                                  repr(line)), :]
+    # delete line
+    neighbor = storage.grid.graph.neighbors(storage)[0]
+    storage.grid.graph.remove_edge(storage, neighbor)
+    # delete storage
+    storage.grid.graph.remove_node(storage)
