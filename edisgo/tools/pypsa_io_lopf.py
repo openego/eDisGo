@@ -239,6 +239,8 @@ def mv_to_pypsa(network):
             'x': [],
             'r': [],
             's_nom': [],
+            's_nom_min': [],
+            's_max_pu': [],
             's_nom_extendable': [],
             'capital_cost': [],
             'length': []}
@@ -327,8 +329,11 @@ def mv_to_pypsa(network):
         line['x'].append(
             l['line'].type['L'] * omega / 1e3 * l['line'].length)
         line['r'].append(l['line'].type['R'] * l['line'].length)
-        line['s_nom'].append(
-            sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e6)
+        s_nom = sqrt(3) * l['line'].type['I_max_th'] * \
+                l['line'].type['U_n'] / 1e3
+        line['s_nom'].append(s_nom)
+        line['s_nom_min'].append(s_nom)
+        line['s_max_pu'].append(0.6)
         line['s_nom_extendable'].append(True)
         line['capital_cost'].append(100)
         line['length'].append(l['line'].length)
@@ -491,6 +496,8 @@ def lv_to_pypsa(network):
             'x': [],
             'r': [],
             's_nom': [],
+            's_nom_min': [],
+            's_max_pu': [],
             's_nom_extendable': [],
             'capital_cost': [],
             'length': []}
@@ -561,8 +568,11 @@ def lv_to_pypsa(network):
         line['x'].append(
             l['line'].type['L'] * omega / 1e3 * l['line'].length)
         line['r'].append(l['line'].type['R'] * l['line'].length)
-        line['s_nom'].append(
-            sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e6)
+        s_nom = sqrt(3) * l['line'].type['I_max_th'] * \
+                l['line'].type['U_n'] / 1e3
+        line['s_nom'].append(s_nom)
+        line['s_nom_min'].append(s_nom)
+        line['s_max_pu'].append(0.6)
         line['s_nom_extendable'].append(True)
         line['capital_cost'].append(100)
         line['length'].append(l['line'].length)
