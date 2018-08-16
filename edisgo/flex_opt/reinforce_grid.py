@@ -445,6 +445,9 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
             '==> Load issues were rechecked and solved '
             'in {} iteration step(s).'.format(while_counter))
 
+    # final check 10% criteria
+    checks.check_ten_percent_voltage_deviation(edisgo_reinforce.network)
+
     # calculate grid expansion costs
     edisgo_reinforce.network.results.grid_expansion_costs = \
         grid_expansion_costs(edisgo_reinforce.network)
