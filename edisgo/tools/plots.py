@@ -435,7 +435,7 @@ def line_loading(network, timestep, filename=None, arrows=True):
         plt.close()
 
 
-def storage_size(mv_grid, pypsa_network, filename=None):
+def storage_size(mv_grid, pypsa_network, filename=None, lopf=True):
     """
     Plot line loading as color on lines
 
@@ -499,9 +499,14 @@ def storage_size(mv_grid, pypsa_network, filename=None):
         elif 'storage' in name:
             tmp = name.split('_')
             storage_repr = '_'.join(tmp[1:])
-            size = pypsa_network.generators.loc[
-                       storage_repr, 'p_nom_opt'] * sizes_dict['Storage']
-            return colors_dict['Storage'], size
+            if lopf:
+                size = pypsa_network.generators.loc[
+                           storage_repr, 'p_nom_opt'] * sizes_dict['Storage']
+                return colors_dict['Storage'], size
+            else:
+                size = pypsa_network.storage_units.loc[
+                           storage_repr, 'p_nom'] * sizes_dict['Storage'] + 200
+                return colors_dict['Storage'], size
         else:
             return colors_dict['else'], sizes_dict['else']
 
