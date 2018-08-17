@@ -1680,8 +1680,7 @@ class StorageControl:
             # start storage positioning method
             storage_positioning.one_storage_per_feeder(
                 edisgo=self.edisgo, storage_timeseries=timeseries,
-                storage_nominal_power=params['nominal_power'],
-                storage_parameters=params)
+                storage_nominal_power=params['nominal_power'])
             return
         else:
             message = 'Provided storage position option {} is not ' \
