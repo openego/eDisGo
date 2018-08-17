@@ -156,47 +156,6 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             s_max.append(max((p_total ** 2 + q_total ** 2).apply(sqrt)))
         return sizes[pd.Series(s_max).idxmin()]
 
-    def calculate_storage_nominal_power(battery_line, p_storage_remaining):
-        """
-        Parameters
-        -----------
-        battery_line : line object
-        p_storage_remaining : float
-
-        """
-        # actual apparent power
-        pfa_p = edisgo.network.results.pfa_p[repr(battery_line)]
-        pfa_q = edisgo.network.results.pfa_q[repr(battery_line)]
-
-        s_line_max = max((pfa_p ** 2 + pfa_q ** 2).apply(sqrt))
-        # start iteration at minimum needed power to be connected to the MV
-        # grid
-        p_storage = p_storage_min
-        # set very high value to go into while loop
-        s_line_max_previous_iteration = 10 ** 4
-
-        while s_line_max < s_line_max_previous_iteration and \
-                p_storage < p_storage_remaining and \
-                p_storage < p_storage_max:
-            # calculate share of storage of whole storage
-            share = p_storage / storage_nominal_power
-            # calculate storage p and q
-            p = storage_timeseries.p * share
-            q = storage_timeseries.q * share
-            # calculate new line p and q
-            line_p = pfa_p + p
-            line_q = pfa_q + q
-            s_line_max_previous_iteration = s_line_max
-            s_line_max = max((line_p ** 2 + line_q ** 2).apply(sqrt))
-            # if apparent power of line decreased
-            if s_line_max < s_line_max_previous_iteration:
-                # continue iteration process
-                # increase storage capacity
-                p_storage += 100
-                logger.debug('P_storage: {}, S_line_max: {}'.format(
-                    p_storage, s_line_max))
-        return p_storage
-
     # global variables
     # minimum and maximum storage power to be connected to the MV grid
     p_storage_min = 300
@@ -253,19 +212,13 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         logger.debug("Critical MV lines in feeder: {}".format(
             critical_mv_lines))
 
-        # second step: estimate residual line load to calculate size of battery
-
-        # get line (in original graph) from node the storage will be connected
-        # to to next node towards the MV station
-        path_to_battery_node = nx.shortest_path(
-            edisgo.network.mv_grid.graph, edisgo.network.mv_grid.station,
-            battery_node)
-        battery_line = edisgo.network.mv_grid.graph.line_from_nodes(
-            path_to_battery_node[-1], path_to_battery_node[-2])
+        # second step: calculate storage size
 
         # add to output lists
         feeder_repr.append(repr(feeder))
-        storage_path.append(path_to_battery_node)
+        storage_path.append(nx.shortest_path(
+            edisgo.network.mv_grid.graph, edisgo.network.mv_grid.station,
+            battery_node))
 
         # analyze for all time steps
         edisgo.analyze()
@@ -287,8 +240,6 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                                    index=critical_mv_lines)
         logger.debug('Overload: {}'.format(overload_df))
 
-        # p_storage = calculate_storage_nominal_power(battery_line,
-        #                                             p_storage_remaining)
         p_storage = calc_storage_size(edisgo, feeder)
 
         # third step: integrate storage
