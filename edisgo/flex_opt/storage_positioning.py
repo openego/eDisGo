@@ -57,7 +57,15 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             ['mv_feeder'], sort=False).sum().reset_index().sort_values(
             by=['total_costs'], ascending=False)['mv_feeder']
 
-    def find_battery_node(components, edisgo_original):
+    def _shortest_path(node):
+        if isinstance(node, LVStation):
+            return len(nx.shortest_path(
+                node.mv_grid.graph, node.mv_grid.station, node))
+        else:
+            return len(nx.shortest_path(
+                node.grid.graph, node.grid.station, node))
+
+    def find_battery_node(edisgo_original, feeder):
         """
         Evaluates where to install the storage
 
@@ -66,61 +74,38 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         Node where storage is installed.
 
         """
-        # nodes_mv will contain all nodes of MV lines with over-loading or
-        # over-voltage issues; lv_stations will contain all stations of LV
-        # grids with over-loading or over-voltage issues
-        nodes_mv = []
-        lv_stations = []
-        for comp in components:
-            if isinstance(comp, Transformer) or isinstance(comp.grid, LVGrid):
-                lv_stations.append(comp.grid.station)
-            else:
-                nodes_mv.extend(list(comp.grid.graph.nodes_from_line(comp)))
 
-        # if there are nodes with issues in the MV grid the battery storage
+        # get overloaded MV lines in feeder
+        critical_lines = check_tech_constraints.mv_line_load(
+            edisgo_original.network)
+
+        critical_lines_feeder = []
+        for l in critical_lines.index:
+            if repr(tools.get_mv_feeder_from_line(l)) == repr(feeder):
+                critical_lines_feeder.append(l)
+
+        # if there are overloaded lines in the MV feeder the battery storage
         # will be installed at the node farthest away from the MV station
-        if nodes_mv:
+        if critical_lines_feeder:
             # dictionary with nodes and their corresponding path length to
             # MV station
             path_length_dict = {}
-            for node in nodes_mv:
-                if isinstance(node, LVStation):
-                    path_length_dict[node] = len(
-                        nx.shortest_path(node.mv_grid.graph,
-                                         node.mv_grid.station, node))
-                else:
-                    path_length_dict[node] = len(
-                        nx.shortest_path(node.grid.graph, node.grid.station,
-                                         node))
-            # find node farthest away
-            battery_node = [_ for _ in path_length_dict.keys()
-                            if path_length_dict[_] ==
-                            max(path_length_dict.values())][0]
-        # if there are only issues in the LV grids find LV station with issues
-        # closest to MV station
+            for l in critical_lines_feeder:
+                nodes = l.grid.graph.nodes_from_line(l)
+                for node in nodes:
+                    path_length_dict[node] = _shortest_path(node)
+            # get node farthest away
+            logger.debug("Storage positioning due to overload.")
+            return [_ for _ in path_length_dict.keys()
+                    if path_length_dict[_] == max(
+                    path_length_dict.values())][0]
+
+        # get nodes with voltage issues in MV grid
+        critical_nodes = check_tech_constraints.mv_voltage_deviation(
+            edisgo_original.network, voltage_levels='mv')
+        if critical_nodes:
+            critical_nodes = critical_nodes[edisgo_original.network.mv_grid]
         else:
-            # calculate path lengths
-            path_length_dict = {}
-            for node in lv_stations:
-                path_length_dict[node] = len(nx.shortest_path(
-                    node.mv_grid.graph, node.mv_grid.station, node))
-            # find closest node
-            battery_node = [_ for _ in path_length_dict.keys()
-                            if path_length_dict[_] ==
-                            min(path_length_dict.values())][0]
-
-        # assign battery_node node the corresponding node in the original graph
-        nodes = edisgo_original.network.mv_grid.graph.nodes()
-        for node in nodes:
-            if repr(node) == repr(battery_node):
-                battery_node = node
-        # if no node from original graph could be assigned raise error
-        if battery_node not in nodes:
-            raise ValueError("Could not assign battery node {} from the "
-                             "copied graph to a node in the original "
-                             "graph.".format(battery_node))
-
-        return battery_node
 
     def calc_storage_size(edisgo, feeder):
         sizes = [0] + np.arange(300, 4500, 200)
@@ -239,6 +224,8 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         overload_df = pd.DataFrame({'max_rel_overload': overload},
                                    index=critical_mv_lines)
         logger.debug('Overload: {}'.format(overload_df))
+        # get node the storage will be connected to (in original graph)
+        battery_node = find_battery_node(edisgo, feeder)
 
         p_storage = calc_storage_size(edisgo, feeder)
 
