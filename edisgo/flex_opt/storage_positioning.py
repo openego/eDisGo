@@ -304,6 +304,17 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                                    'storage') if _ in
                                edisgo.network.mv_grid.graph.neighbors(
                                    battery_node)][0]
+                # assign MV feeder
+                if not check_costs_reduction:
+                    mv_station_neighbors = \
+                        edisgo.network.mv_grid.graph.neighbors(
+                            edisgo.network.mv_grid.station)
+                    for neighbor in mv_station_neighbors:
+                        mv_feeder = \
+                            edisgo.network.mv_grid.graph.line_from_nodes(
+                                edisgo.network.mv_grid.station, neighbor)
+                        if repr(mv_feeder) == repr(feeder):
+                            storage_obj.mv_feeder = mv_feeder
 
                 logger.debug(
                     'Storage with nominal power of {} kW connected to '
