@@ -190,6 +190,15 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         q_sign = pd.Series([-1 if _ < 0 else 1 for _ in diff_q],
                            index=p_feeder.index)
 
+        # get allowed load factors
+        lf = {'feedin_case': edisgo.network.config[
+            'grid_expansion_load_factors']['mv_feedin_case_line'],
+              'load_case': network.config[
+            'grid_expansion_load_factors']['mv_load_case_line']}
+        lf_ts = \
+            edisgo.network.timeseries.timesteps_load_feedin_case.case.apply(
+                lambda _: lf[_])
+
         p_feeder = p_feeder.multiply(p_sign)
         q_feeder = q_feeder.multiply(q_sign)
         s_max = []
@@ -199,7 +208,8 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             q_storage = storage_timeseries.q * share
             p_total = p_feeder + p_storage
             q_total = q_feeder + q_storage
-            s_max.append(max((p_total ** 2 + q_total ** 2).apply(sqrt)))
+            s_max.append(max((p_total ** 2 + q_total ** 2).apply(
+                sqrt).divide(lf_ts)))
         return sizes[pd.Series(s_max).idxmin()]
 
     # global variables
@@ -285,6 +295,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                     position=battery_node,
                     voltage_level='mv',
                     timeseries_reactive_power=storage_timeseries.q * share)
+                edisgo.analyze()
 
                 # get new storage object
                 storage_obj = [_
@@ -293,6 +304,17 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                                    'storage') if _ in
                                edisgo.network.mv_grid.graph.neighbors(
                                    battery_node)][0]
+                # assign MV feeder
+                if not check_costs_reduction:
+                    mv_station_neighbors = \
+                        edisgo.network.mv_grid.graph.neighbors(
+                            edisgo.network.mv_grid.station)
+                    for neighbor in mv_station_neighbors:
+                        mv_feeder = \
+                            edisgo.network.mv_grid.graph.line_from_nodes(
+                                edisgo.network.mv_grid.station, neighbor)
+                        if repr(mv_feeder) == repr(feeder):
+                            storage_obj.mv_feeder = mv_feeder
 
                 logger.debug(
                     'Storage with nominal power of {} kW connected to '
@@ -349,9 +371,6 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                                 voltage_level='mv',
                                 timeseries_reactive_power=
                                 storage_timeseries.q * 0)
-
-                else:
-                    edisgo.analyze()
 
                 # fifth step: if there is storage capacity left, rerun
                 # the past steps for the next feeder in the ranking
