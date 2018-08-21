@@ -190,6 +190,15 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         q_sign = pd.Series([-1 if _ < 0 else 1 for _ in diff_q],
                            index=p_feeder.index)
 
+        # get allowed load factors
+        lf = {'feedin_case': edisgo.network.config[
+            'grid_expansion_load_factors']['mv_feedin_case_line'],
+              'load_case': network.config[
+            'grid_expansion_load_factors']['mv_load_case_line']}
+        lf_ts = \
+            edisgo.network.timeseries.timesteps_load_feedin_case.case.apply(
+                lambda _: lf[_])
+
         p_feeder = p_feeder.multiply(p_sign)
         q_feeder = q_feeder.multiply(q_sign)
         s_max = []
@@ -199,7 +208,8 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             q_storage = storage_timeseries.q * share
             p_total = p_feeder + p_storage
             q_total = q_feeder + q_storage
-            s_max.append(max((p_total ** 2 + q_total ** 2).apply(sqrt)))
+            s_max.append(max((p_total ** 2 + q_total ** 2).apply(
+                sqrt).divide(lf_ts)))
         return sizes[pd.Series(s_max).idxmin()]
 
     # global variables
