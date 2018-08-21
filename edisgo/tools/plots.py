@@ -350,7 +350,7 @@ def line_loading(network, timestep, filename=None, arrows=True):
 
     # create pypsa network only containing MV buses and lines
     pypsa_plot = PyPSANetwork()
-    pypsa_plot.buses = network.pypsa.buses.loc[network.pypsa.buses.v_nom == 20]
+    pypsa_plot.buses = network.pypsa.buses.loc[network.pypsa.buses.v_nom >= 10]
     pypsa_plot.lines = network.pypsa.lines.loc[[repr(_) for _ in lines]]
 
     # bus colors and sizes
