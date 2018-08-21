@@ -17,7 +17,7 @@ logger = logging.getLogger('edisgo')
 
 def one_storage_per_feeder(edisgo, storage_timeseries,
                            storage_nominal_power=None,
-                           debug=True, check_costs_reduction=True):
+                           debug=False, check_costs_reduction=True):
     """
     Parameters
     -----------
