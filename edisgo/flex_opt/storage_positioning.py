@@ -295,6 +295,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                     position=battery_node,
                     voltage_level='mv',
                     timeseries_reactive_power=storage_timeseries.q * share)
+                edisgo.analyze()
 
                 # get new storage object
                 storage_obj = [_
@@ -359,9 +360,6 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                                 voltage_level='mv',
                                 timeseries_reactive_power=
                                 storage_timeseries.q * 0)
-
-                else:
-                    edisgo.analyze()
 
                 # fifth step: if there is storage capacity left, rerun
                 # the past steps for the next feeder in the ranking
