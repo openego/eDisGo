@@ -501,7 +501,7 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
             # get voltage at primary side to calculate upper bound for
             # feed-in case and lower bound for load case
             v_lv_station_primary = network.results.v_res(
-                nodes=[lv_grid.station], level='mv').loc[:, repr(nodes[0])]
+                nodes=[lv_grid.station], level='mv').iloc[:, 0]
             timeindex = v_lv_station_primary.index
             if mode == 'station':
                 v_dev_allowed_per_case['feedin_case_upper'] = \
