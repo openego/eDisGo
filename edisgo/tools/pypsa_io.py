@@ -61,7 +61,7 @@ def to_pypsa(network, mode, timesteps):
 
     Parameters
     ----------
-    network : Network
+    network : :class:`~.grid.network.Network`
         eDisGo grid container
     mode : str
         Determines grid levels that are translated to
@@ -75,13 +75,16 @@ def to_pypsa(network, mode, timesteps):
           not handle it yet.)
         * ('lv' to export LV grid level only. This option is not yet
            implemented)
-    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
+        :pandas:`pandas.Timestamp<timestamp>`
         Timesteps specifies which time steps to export to pypsa representation
         and use in power flow analysis.
 
     Returns
     -------
-        PyPSA Network
+        :pypsa:`pypsa.Network<network>`
+            The `PyPSA network
+            <https://www.pypsa.org/doc/components.html#network>`_ container.
 
     """
 
@@ -902,10 +905,13 @@ def _pypsa_bus_timeseries(network, buses, timesteps):
     control_deviation = network.config[
         'grid_expansion_allowed_voltage_deviations'][
         'hv_mv_trafo_control_deviation']
-    control_deviation_ts = \
-        network.timeseries.timesteps_load_feedin_case.case.apply(
-            lambda _: control_deviation if _ == 'feedin_case'
-                                        else -control_deviation)
+    if control_deviation != 0:
+        control_deviation_ts = \
+            network.timeseries.timesteps_load_feedin_case.case.apply(
+                lambda _: control_deviation if _ == 'feedin_case'
+                                            else -control_deviation)
+    else:
+        control_deviation_ts = 0
 
     slack_voltage_pu = control_deviation_ts + 1 + \
                        network.config[
