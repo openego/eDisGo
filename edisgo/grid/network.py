@@ -2077,13 +2077,7 @@ class TimeSeries:
             load and 'feedin_case' for negative residual load.
 
         """
-        if self._timesteps_load_feedin_case is None:
-            tools.assign_load_feedin_case(self.network)
-        return self._timesteps_load_feedin_case
-
-    @timesteps_load_feedin_case.setter
-    def timesteps_load_feedin_case(self, timeseries_load_feedin_case):
-        self._timesteps_load_feedin_case = timeseries_load_feedin_case
+        return tools.assign_load_feedin_case(self.network)
 
 
 class Results:
