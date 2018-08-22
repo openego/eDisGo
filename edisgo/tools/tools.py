@@ -101,7 +101,9 @@ def assign_load_feedin_case(network):
     """
 
     if network.pypsa is not None:
-        residual_load = get_residual_load_from_pypsa_network(network.pypsa)
+        residual_load = get_residual_load_from_pypsa_network(network.pypsa) * \
+                        1e3
+
     else:
         grids = [network.mv_grid] + list(network.mv_grid.lv_grids)
 
