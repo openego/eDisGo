@@ -5,6 +5,8 @@ import logging
 from matplotlib import pyplot as plt
 from pypsa import Network as PyPSANetwork
 
+from edisgo.tools import tools
+
 
 def create_curtailment_characteristic(assigned_curtailment,
                                       generator_feedins,
@@ -335,7 +337,10 @@ def line_loading(network, timestep, filename=None, arrows=True):
     cmap = plt.cm.jet
 
     # calculate relative line loading
-    case = network.timeseries.timesteps_load_feedin_case.loc[timestep, 'case']
+    residual_load = tools.get_residual_load_from_pypsa_network(network.pypsa)
+    case = residual_load.apply(
+            lambda _: 'feedin_case' if _ < 0 else 'load_case').loc[timestep]
+
     load_factor = network.config['grid_expansion_load_factors'][
         'mv_{}_line'.format(case)]
 
@@ -350,7 +355,7 @@ def line_loading(network, timestep, filename=None, arrows=True):
 
     # create pypsa network only containing MV buses and lines
     pypsa_plot = PyPSANetwork()
-    pypsa_plot.buses = network.pypsa.buses.loc[network.pypsa.buses.v_nom == 20]
+    pypsa_plot.buses = network.pypsa.buses.loc[network.pypsa.buses.v_nom >= 10]
     pypsa_plot.lines = network.pypsa.lines.loc[[repr(_) for _ in lines]]
 
     # bus colors and sizes

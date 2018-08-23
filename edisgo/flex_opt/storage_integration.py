@@ -112,8 +112,12 @@ def connect_storage(storage, node):
         voltage_level = 'lv'
 
     # necessary apparent power the line must be able to carry is set to be
-    # the storages nominal power and equal amount of reactive power
-    apparent_power_line = sqrt(2) * storage.nominal_power
+    # the storages nominal power and equal amount of reactive power devided by
+    # the minimum load factor
+    lf_dict = storage.grid.network.config['grid_expansion_load_factors']
+    lf = min(lf_dict['{}_feedin_case_line'.format(voltage_level)],
+             lf_dict['{}_load_case_line'.format(voltage_level)])
+    apparent_power_line = sqrt(2) * storage.nominal_power / lf
     line_type, line_count = select_cable(storage.grid.network, voltage_level,
                                          apparent_power_line)
     line = Line(

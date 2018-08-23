@@ -40,6 +40,34 @@ def select_worstcase_snapshots(network):
     return timestamp
 
 
+def get_residual_load_from_pypsa_network(pypsa_network):
+    """
+    Calculates residual load in MW in MV grid and underlying LV grids.
+
+    Parameters
+    ----------
+    pypsa_network : :pypsa:`pypsa.Network<network>`
+        The `PyPSA network
+        <https://www.pypsa.org/doc/components.html#network>`_ container,
+        containing load flow results.
+
+    Returns
+    -------
+    :pandas:`pandas.Series<series>`
+        Series with residual load in MW for each time step. Positiv values
+        indicate a higher demand than generation and vice versa. Index of the
+        series is a :pandas:`pandas.DatetimeIndex<datetimeindex>`
+
+    """
+    residual_load = \
+        pypsa_network.loads_t.p.sum(axis=1) - (
+                pypsa_network.generators_t.p.loc[
+                :, pypsa_network.generators_t.p.columns !=
+                   'Generator_slack'].sum(axis=1) +
+                pypsa_network.storage_units_t.p.sum(axis=1))
+    return residual_load
+
+
 def assign_load_feedin_case(network):
     """
     For each time step evaluate whether it is a feed-in or a load case.
@@ -72,31 +100,36 @@ def assign_load_feedin_case(network):
 
     """
 
-    grids = [network.mv_grid] + list(network.mv_grid.lv_grids)
+    if network.pypsa is not None:
+        residual_load = get_residual_load_from_pypsa_network(network.pypsa) * \
+                        1e3
 
-    gens = []
-    loads = []
-    for grid in grids:
-        gens.extend(grid.generators)
-        gens.extend(list(grid.graph.nodes_by_attribute('storage')))
-        loads.extend(list(grid.graph.nodes_by_attribute('load')))
+    else:
+        grids = [network.mv_grid] + list(network.mv_grid.lv_grids)
 
-    generation_timeseries = pd.Series(0, index=network.timeseries.timeindex)
-    for gen in gens:
-        generation_timeseries += gen.timeseries.p
+        gens = []
+        loads = []
+        for grid in grids:
+            gens.extend(grid.generators)
+            gens.extend(list(grid.graph.nodes_by_attribute('storage')))
+            loads.extend(list(grid.graph.nodes_by_attribute('load')))
 
-    load_timeseries = pd.Series(0, index=network.timeseries.timeindex)
-    for load in loads:
-        load_timeseries += load.timeseries.p
+        generation_timeseries = pd.Series(
+            0, index=network.timeseries.timeindex)
+        for gen in gens:
+            generation_timeseries += gen.timeseries.p
 
-    timeseries_load_feedin_case = (
-        load_timeseries - generation_timeseries).rename(
+        load_timeseries = pd.Series(0, index=network.timeseries.timeindex)
+        for load in loads:
+            load_timeseries += load.timeseries.p
+
+        residual_load = load_timeseries - generation_timeseries
+
+    timeseries_load_feedin_case = residual_load.rename(
         'residual_load').to_frame()
 
     timeseries_load_feedin_case['case'] = \
         timeseries_load_feedin_case.residual_load.apply(
             lambda _: 'feedin_case' if _ < 0 else 'load_case')
-
-    network.timeseries.timesteps_load_feedin_case = timeseries_load_feedin_case
 
     return timeseries_load_feedin_case
