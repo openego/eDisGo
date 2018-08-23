@@ -102,21 +102,16 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         """
 
         # get overloaded MV lines in feeder
-        critical_lines = check_tech_constraints.mv_line_load(edisgo.network)
-
-        critical_lines_feeder = []
-        for l in critical_lines.index:
-            if repr(tools.get_mv_feeder_from_line(l)) == repr(feeder):
-                critical_lines_feeder.append(l)
+        critical_lines_feeder = _critical_lines_feeder(edisgo, feeder)
 
         # if there are overloaded lines in the MV feeder the battery storage
         # will be installed at the node farthest away from the MV station
-        if critical_lines_feeder:
+        if not critical_lines_feeder.empty:
             logger.debug("Storage positioning due to overload.")
             # dictionary with nodes and their corresponding path length to
             # MV station
             path_length_dict = {}
-            for l in critical_lines_feeder:
+            for l in critical_lines_feeder.index:
                 nodes = l.grid.graph.nodes_from_line(l)
                 for node in nodes:
                     path_length_dict[node] = _shortest_path(node)
@@ -125,18 +120,8 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                     if path_length_dict[_] == max(
                     path_length_dict.values())][0]
 
-        # get nodes with voltage issues in MV grid
-        critical_nodes = check_tech_constraints.mv_voltage_deviation(
-            edisgo.network, voltage_levels='mv')
-        if critical_nodes:
-            critical_nodes = critical_nodes[edisgo.network.mv_grid]
-        else:
-            return None
-
-        critical_nodes_feeder = []
-        for n in critical_nodes.index:
-            if repr(n.mv_feeder) == repr(feeder):
-                critical_nodes_feeder.append(n)
+        # get nodes with voltage issues in MV feeder
+        critical_nodes_feeder = _critical_nodes_feeder(edisgo, feeder)
 
         # if there are voltage issues in the MV grid the battery storage will
         # be installed at the first node in path that exceeds 2/3 of the line
@@ -232,6 +217,49 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             s_max.append(max(s_max_ts))
 
         return sizes[pd.Series(s_max).idxmin()]
+
+    def _critical_nodes_feeder(edisgo, feeder):
+        """
+        Returns all nodes in MV feeder with voltage issues.
+
+        """
+        # get all nodes with voltage issues in MV grid
+        critical_nodes = check_tech_constraints.mv_voltage_deviation(
+            edisgo.network, voltage_levels='mv')
+        if critical_nodes:
+            critical_nodes = critical_nodes[edisgo.network.mv_grid]
+        else:
+            return []
+        # filter nodes with voltage issues in feeder
+        critical_nodes_feeder = []
+        for n in critical_nodes.index:
+            if repr(n.mv_feeder) == repr(feeder):
+                critical_nodes_feeder.append(n)
+        return critical_nodes_feeder
+
+    def _critical_lines_feeder(edisgo, feeder):
+        """
+        Returns all lines in MV feeder with overload issues.
+
+        """
+        # get all overloaded MV lines
+        critical_lines = check_tech_constraints.mv_line_load(edisgo.network)
+        # filter overloaded lines in feeder
+        critical_lines_feeder = []
+        for l in critical_lines.index:
+            if repr(tools.get_mv_feeder_from_line(l)) == repr(feeder):
+                critical_lines_feeder.append(l)
+        return critical_lines.loc[critical_lines_feeder, :]
+
+    def _estimate_new_number_of_lines(edisgo, feeder):
+
+        critical_lines_feeder = _critical_lines_feeder(edisgo, feeder)
+        number_parallel_lines = 0
+        for crit_line in critical_lines_feeder.index:
+            number_parallel_lines += ceil(critical_lines_feeder.loc[
+                crit_line, 'max_rel_overload'] * crit_line.quantity) - \
+                                     crit_line.quantity
+        return number_parallel_lines
 
     # global variables
     # minimum and maximum storage power to be connected to the MV grid
