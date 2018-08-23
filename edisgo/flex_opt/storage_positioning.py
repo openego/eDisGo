@@ -435,8 +435,13 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             for storage in storage_obj_list:
                 tools.disconnect_storage(edisgo.network, storage)
     else:
-        costs_diff = grid_expansion_results_init.grid_expansion_costs.\
-                         total_costs.sum() - total_grid_expansion_costs_new
+        if total_grid_expansion_costs_new is None:
+            costs_diff = 0
+        else:
+            total_grid_expansion_costs = grid_expansion_results_init.\
+                grid_expansion_costs.total_costs.sum()
+            costs_diff = total_grid_expansion_costs - \
+                         total_grid_expansion_costs_new
         logger.info(
             'Storage integration in grid {} reduced grid '
             'expansion costs by {} kEuro.'.format(
