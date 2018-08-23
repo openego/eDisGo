@@ -19,16 +19,31 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                            storage_nominal_power=None,
                            debug=True, check_costs_reduction=False):
     """
+    Allocates the given storage capacity to multiple smaller storages.
+
+    For each feeder with load or voltage issues it is checked if integrating a
+    storage will reduce grid expansion costs, starting with the feeder with
+    the highest theoretical grid expansion costs. A heuristic approach is used
+    to estimate storage sizing and siting while storage operation is carried
+    over from the given storage operation.
+
+    The approach assumes that grid expansion costs are reduced if peaks in the
+    feeder can be reduced.
+
     Parameters
     -----------
     edisgo : :class:`~.grid.network.EDisGo`
-    storage_parameters : :obj:`dict`
-        Dictionary with storage parameters. See
-        :class:`~.grid.network.StorageControl` class definition for more
-        information.
     storage_timeseries : :pandas:`pandas.DataFrame<dataframe>`
-        p and q in kW and kvar of total storage
-    storage_power : in kW of total storage
+        Active and reactive power time series of the large storage that will
+        be allocated to the smaller storages in feeders with load or voltage
+        issues. Columns of the dataframe are 'p' containing active power time
+        series in kW and 'q' containing the reactive power time series in kvar.
+        Index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+    storage_nominal_power : :obj:`float` or None
+        Nominal power in kW that will be allocated to the smaller storages in
+        feeders with load or voltage issues. If no nominal power is provided
+        the maximum active power given in `storage_timeseries` is used.
+        Default: None.
 
     """
 
