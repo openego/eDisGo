@@ -82,7 +82,8 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             return len(nx.shortest_path(
                 node.grid.graph, node.grid.station, node))
 
-    def _find_battery_node(edisgo, feeder):
+    def _find_battery_node(edisgo, critical_lines_feeder,
+                           critical_nodes_feeder):
         """
         Evaluates where to install the storage.
 
@@ -90,9 +91,13 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         -----------
         edisgo : :class:`~.grid.network.EDisGo`
             The original edisgo object.
-        feeder : :class:`~.grid.components.Line`
-            MV feeder the storage will be connected to. The line object is an
-            object from the copied graph.
+        critical_lines_feeder : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe containing over-loaded lines in MV feeder, their maximum
+            relative over-loading and the corresponding time step. See
+            :func:`edisgo.flex_opt.check_tech_constraints.mv_line_load` for
+            more information.
+        critical_nodes_feeder : :obj:`list`
+            List with all nodes in MV feeder with voltage issues.
 
         Returns
         -------
@@ -100,9 +105,6 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             Node where storage is installed.
 
         """
-
-        # get overloaded MV lines in feeder
-        critical_lines_feeder = _critical_lines_feeder(edisgo, feeder)
 
         # if there are overloaded lines in the MV feeder the battery storage
         # will be installed at the node farthest away from the MV station
@@ -119,9 +121,6 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             return [_ for _ in path_length_dict.keys()
                     if path_length_dict[_] == max(
                     path_length_dict.values())][0]
-
-        # get nodes with voltage issues in MV feeder
-        critical_nodes_feeder = _critical_nodes_feeder(edisgo, feeder)
 
         # if there are voltage issues in the MV grid the battery storage will
         # be installed at the first node in path that exceeds 2/3 of the line
@@ -222,6 +221,19 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         """
         Returns all nodes in MV feeder with voltage issues.
 
+        Parameters
+        -----------
+        edisgo : :class:`~.grid.network.EDisGo`
+            The original edisgo object.
+        feeder : :class:`~.grid.components.Line`
+            MV feeder the storage will be connected to. The line object is an
+            object from the copied graph.
+
+        Returns
+        -------
+        :obj:`list`
+            List with all nodes in MV feeder with voltage issues.
+
         """
         # get all nodes with voltage issues in MV grid
         critical_nodes = check_tech_constraints.mv_voltage_deviation(
@@ -240,6 +252,22 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
     def _critical_lines_feeder(edisgo, feeder):
         """
         Returns all lines in MV feeder with overload issues.
+
+        Parameters
+        -----------
+        edisgo : :class:`~.grid.network.EDisGo`
+            The original edisgo object.
+        feeder : :class:`~.grid.components.Line`
+            MV feeder the storage will be connected to. The line object is an
+            object from the copied graph.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe containing over-loaded lines in MV feeder, their maximum
+            relative over-loading and the corresponding time step. See
+            :func:`edisgo.flex_opt.check_tech_constraints.mv_line_load` for
+            more information.
 
         """
         # get all overloaded MV lines
@@ -314,10 +342,14 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         logger.debug('Feeder: {}'.format(count))
         count += 1
 
+        critical_nodes_feeder = _critical_nodes_feeder(edisgo, feeder)
+        critical_lines_feeder = _critical_lines_feeder(edisgo, feeder)
+
         # first step: find node where storage will be installed
 
         # get node the storage will be connected to (in original graph)
-        battery_node = _find_battery_node(edisgo, feeder)
+        battery_node = _find_battery_node(edisgo, critical_lines_feeder,
+                                          critical_nodes_feeder)
 
         if battery_node:
 
