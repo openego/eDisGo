@@ -534,7 +534,8 @@ class EDisGo:
             combined_analysis=kwargs.get('combined_analysis', False))
 
         # add measure to Results object
-        self.network.results.measures = 'grid_expansion'
+        if not kwargs.get('copy_graph', False):
+            self.network.results.measures = 'grid_expansion'
 
         return results
 
@@ -1463,7 +1464,7 @@ class StorageControl:
         either be a given time series or an operation strategy.
         Possible options are:
 
-        * Time series
+        * :pandas:`pandas.Series<series>`
           Time series the storage will be charged and discharged with can be
           set directly by providing a :pandas:`pandas.Series<series>` with
           time series of active charge (negative) and discharge (positive)
@@ -2108,6 +2109,7 @@ class Results:
         self._curtailment = None
         self._storage_integration = None
         self._unresolved_issues = {}
+        self._storages_costs_reduction = None
 
     @property
     def measures(self):
@@ -2507,6 +2509,35 @@ class Results:
         return pd.DataFrame(storage_results).set_index('storage_id')
 
     @property
+    def storages_costs_reduction(self):
+        """
+        Contains costs reduction due to storage integration.
+
+        Parameters
+        ----------
+        costs_df : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe containing grid expansion costs in kEUR before and after
+            storage integration in columns 'grid_expansion_costs_initial' and
+            'grid_expansion_costs_with_storages', respectively. Index of the
+            dataframe is the MV grid id.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+
+            Dataframe containing grid expansion costs in kEUR before and after
+            storage integration in columns 'grid_expansion_costs_initial' and
+            'grid_expansion_costs_with_storages', respectively. Index of the
+            dataframe is the MV grid id.
+
+        """
+        return self._storages_costs_reduction
+
+    @storages_costs_reduction.setter
+    def storages_costs_reduction(self, costs_df):
+        self._storages_costs_reduction = costs_df
+
+    @property
     def unresolved_issues(self):
         """
         Holds lines and nodes where over-loading or over-voltage issues
@@ -2806,6 +2837,11 @@ class Results:
 
                 # grid expansion costs
                 storages.to_csv(os.path.join(target_dir, 'storages.csv'))
+
+                if not self.storages_costs_reduction is None:
+                    self.storages_costs_reduction.to_csv(
+                        os.path.join(target_dir,
+                                     'storages_costs_reduction.csv'))
 
         # dictionary with function to call to save each parameter
         func_dict = {
