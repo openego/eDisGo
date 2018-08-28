@@ -2791,6 +2791,8 @@ class Results:
 
         def _save_pypsa_network(target_dir):
             if self.network.pypsa:
+                # create directory
+                os.makedirs(target_dir, exist_ok=True)
                 self.network.pypsa.export_to_csv_folder(target_dir)
 
         def _save_grid_expansion_results(target_dir):
