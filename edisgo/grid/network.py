@@ -2825,7 +2825,7 @@ class Results:
                             type(key), key))
 
                     filename = os.path.join(
-                        target_dir, '{}_curtailment.csv'.format(type_prefix))
+                        target_dir, '{}.csv'.format(type_prefix))
 
                     curtailment_df.to_csv(filename, index_label=type_prefix)
 
