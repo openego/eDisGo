@@ -562,9 +562,12 @@ def _determine_aggregated_nodes(la_centers):
             if not(list(lvgd.lv_grid.generators())):
                 weather_cell_id = None
             else:
-                weather_cell_id = list(weather_cell_ids.keys())[
-                    list(weather_cell_ids.values()).index(max(weather_cell_ids.values()))]
-
+                if weather_cell_ids:
+                    weather_cell_id = list(weather_cell_ids.keys())[
+                        list(weather_cell_ids.values()).index(
+                            max(weather_cell_ids.values()))]
+                else:
+                    weather_cell_id = None
 
             for v_level in aggr['generation']:
                 for type in aggr['generation'][v_level]:
@@ -594,7 +597,6 @@ def _determine_aggregated_nodes(la_centers):
 
         # add elements to lists
         aggregated.update({la_center.id_db: aggr})
-
 
     return aggregated, aggr_stations, dingo_import_data
 
