@@ -4,8 +4,9 @@ import numpy as np
 from math import sqrt
 import logging
 import datetime
-from pyomo.environ import Constraint, Param
+from pyomo.environ import Constraint
 import networkx as nx
+import csv
 
 import edisgo
 from edisgo.tools import config, tools
@@ -2880,3 +2881,11 @@ class Results:
         # save measures
         pd.DataFrame(data={'measure': self.measures}).to_csv(
             os.path.join(directory, 'measures.csv'))
+        # save configs
+        with open(os.path.join(directory, 'configs.csv'), 'w') as f:
+            writer = csv.writer(f)
+            rows = [
+                ['{}'.format(key)] + [value for item in values.items()
+                                      for value in item]
+                for key, values in self.network.config._data.items()]
+            writer.writerows(rows)
