@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import logging
+from math import sqrt
 from matplotlib import pyplot as plt
 from pypsa import Network as PyPSANetwork
 
@@ -286,7 +287,8 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
         plt.close('all')
 
 
-def line_loading(network, timestep, filename=None, arrows=True):
+def line_loading(pypsa_network, configs, line_load, timestep,
+                 filename=None, arrows=True):
     """
     Plot line loading as color on lines
 
@@ -304,30 +306,25 @@ def line_loading(network, timestep, filename=None, arrows=True):
         Default: True.
 
     """
-    # define color map
-    cmap = plt.cm.jet
-
-    # calculate relative line loading
-    residual_load = tools.get_residual_load_from_pypsa_network(network.pypsa)
-    case = residual_load.apply(
-            lambda _: 'feedin_case' if _ < 0 else 'load_case').loc[timestep]
-
-    load_factor = network.config['grid_expansion_load_factors'][
-        'mv_{}_line'.format(case)]
-
-    lines = [_['line'] for _ in network.mv_grid.graph.lines()]
-    i_line_allowed = pd.DataFrame(
-        {repr(l): [l.type['I_max_th'] * l.quantity * load_factor]
-         for l in lines},
-        index=[timestep])
-    i_line_pfa = network.results.i_res.loc[[timestep],
-                                           [repr(l) for l in lines]]
-    loading = (i_line_pfa / i_line_allowed).iloc[0]
-
     # create pypsa network only containing MV buses and lines
     pypsa_plot = PyPSANetwork()
-    pypsa_plot.buses = network.pypsa.buses.loc[network.pypsa.buses.v_nom >= 10]
-    pypsa_plot.lines = network.pypsa.lines.loc[[repr(_) for _ in lines]]
+    pypsa_plot.buses = pypsa_network.buses.loc[pypsa_network.buses.v_nom >= 10]
+    pypsa_plot.lines = pypsa_network.lines.loc[pypsa_network.lines.v_nom >= 10]
+
+    # calculate relative line loading
+    # get load factor
+    residual_load = tools.get_residual_load_from_pypsa_network(pypsa_network)
+    case = residual_load.apply(
+            lambda _: 'feedin_case' if _ < 0 else 'load_case').loc[timestep]
+    load_factor = float(configs['grid_expansion_load_factors'][
+        'mv_{}_line'.format(case)])
+    # get allowed line load
+    i_line_allowed = pypsa_plot.lines.s_nom.divide(
+        pypsa_plot.lines.v_nom) / sqrt(3) * 1e3 * load_factor
+    # get line load from pf
+    i_line_pfa = line_load.loc[timestep,
+                               pypsa_plot.lines.index]
+    loading = i_line_pfa.divide(i_line_allowed)
 
     # bus colors and sizes
     bus_sizes = {}
@@ -373,6 +370,7 @@ def line_loading(network, timestep, filename=None, arrows=True):
         bus_colors[bus], bus_sizes[bus] = get_color_and_size(bus)
 
     # plot
+    cmap = plt.cm.jet
     ll = pypsa_plot.plot(line_colors=loading, line_cmap=cmap,
                          title="Line loading", line_widths=0.55,
                          branch_components=['Line'], basemap=True,
@@ -391,7 +389,8 @@ def line_loading(network, timestep, filename=None, arrows=True):
         path = ll[1].get_segments()
         colors = cmap(ll[1].get_array() / 100)
         for i in range(len(path)):
-            if network.pypsa.lines_t.p0.loc[timestep, repr(lines[i])] > 0:
+            if pypsa_network.lines_t.p0.loc[timestep,
+                                            loading.index[i]] > 0:
                 arrowprops = dict(arrowstyle="->", color=colors[i])
             else:
                 arrowprops = dict(arrowstyle="<-", color=colors[i])
