@@ -8,23 +8,23 @@ from pypsa import Network as PyPSANetwork
 from edisgo.tools import tools
 
 
-def create_curtailment_characteristic(assigned_curtailment,
-                                      generator_feedins,
-                                      bus_voltages_before_curtailment,
-                                      gens_fluct_info,
+def create_curtailment_characteristic(curtailment, pypsa_network, timestep,
                                       directory, **kwargs):
     """
     Function to create some voltage histograms.
     Parameters
     ----------
-    assigned_curtailment: :pandas:`pandas.DataFrame<dataframe>`
-        The assigned curtailment in kW of the generators typically
+    curtailment : :pandas:`pandas.DataFrame<dataframe>`
+        Assigned curtailment in kW of all generators to be included in the
+        plot. The column names are the generators representatives, index is a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Curtailment can be obtained from to each generator per curtailment target.
+        The assigned curtailment in kW from of the generators typically
         obtained from :py:mod:`edisgo.network.Results` object
         in the attribute
         :attr:`edisgo.network.Results.assigned_curtailment`.
-        The columns names are the individual generators as
-        `edisgo.grid.components.GeneratorFluctuating` objects
-        and the index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+
+    pypsa_network :
     generator_feedins: :pandas:`pandas.DataFrame<dataframe>`
         The feedins in kW of every single generator typically
         obtained from :py:mod:`edisgo.grid.tools.generator_feedins`
@@ -85,6 +85,23 @@ def create_curtailment_characteristic(assigned_curtailment,
         width of bins in per unit voltage,
         By default and in failing cases this would be set to 0.01.
     """
+
+    # get voltages
+    gens_buses = list(map(lambda _: 'Bus_{}'.format(_), curtailment.columns))
+    voltages = pypsa_network.buses_t.v_mag_pu.loc[timestep, gens_buses]
+    voltages = pd.Series(voltages.values, index=curtailment.columns)
+
+    # get feed-ins
+    feedins = pypsa_network.generators_t.p.loc[
+                  timestep, curtailment.columns] * 1e3
+
+    # relative curtailment
+    rel_curtailment = curtailment.loc[timestep, :] / feedins
+
+    plot_df = pd.DataFrame({'voltage_pu': voltages,
+                            'curtailment_pu': rel_curtailment})
+
+    # configure plot
     x_limits = kwargs.get('xlim', None)
     y_limits = kwargs.get('ylim', None)
     color = kwargs.get('color', 'blue')
@@ -102,82 +119,36 @@ def create_curtailment_characteristic(assigned_curtailment,
         logging.warning(message)
         fig_size = standard_sizes['a5landscape']
 
-    os.makedirs(directory, exist_ok=True)
-
     alpha = 1 - transparency
     if alpha > 1:
         alpha = 1
     elif alpha < 0:
         alpha = 0
 
-    normalization = kwargs.get('normalization_method', 'by_feedin')
-    if normalization == 'by_feedin':
-        by_feedin = True
-        by_nominal_cap = False
-    elif normalization == 'by_nominal_cap':
-        by_feedin = False
-        by_nominal_cap = True
-    else:
-        raise ValueError('Invalid input to normalization method')
+    x_label = kwargs.get('xlabel', "Voltage in p.u.")
+    y_label = kwargs.get('ylabel', "Curtailment normalized by feedin in kW/kW")
 
-    # process the gen info to get the bus names
-    gens_fluct_info = gens_fluct_info.reset_index().set_index('gen_repr')
-    # get only those generator that are present in assigned curtailment
-    gens_in_assinged_curtail = list(assigned_curtailment.columns)
-    if type(gens_in_assinged_curtail[0]) != str:
-        gens_in_assinged_curtail = list(map(repr, gens_in_assinged_curtail))
-    gens_fluct_info = gens_fluct_info.loc[gens_in_assinged_curtail, :]
-    # get the buses from the repr
-    fluct_buses = list('Bus_' + gens_fluct_info.index)
+    # plot
+    plt.figure(figsize=fig_size)
+    plot_title = "Curtailment Characteristic at {}".format(timestep)
+    plot_df.plot(kind='scatter', x='voltage_pu', y='curtailment_pu',
+                 xlim=x_limits, ylim=y_limits,
+                 color=color, alpha=alpha, edgecolor=None, grid=True)
+    plt.minorticks_on()
+    plt.title(plot_title)
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
 
-    timeindex = kwargs.get('timeindex', bus_voltages_before_curtailment.index)
-
-    v = {}
-    for n, i in enumerate(bus_voltages_before_curtailment.loc[timeindex, :].index):
-        v[n] = bus_voltages_before_curtailment.loc[str(i), fluct_buses]
-
-    c = {}
-    for n, i in enumerate(assigned_curtailment.loc[timeindex, :].index):
-        c[n] = assigned_curtailment.loc[i, gens_fluct_info.generator]
-        c[n].index = list(map(str, c[n].index.values))
-        if by_feedin:
-            c[n] /= generator_feedins.iloc[n]
-        elif by_nominal_cap:
-            c[n] /= gens_fluct_info.nominal_capacity
-        else:
-            raise RuntimeError("incorrect normalization method provided")
-        c[n].index = list(map(lambda x: 'Bus_' + str(x), c[n].index.values))
-
-    if by_feedin:
-        x_label = kwargs.get('xlabel', "Voltage [per unit]")
-        y_label = kwargs.get('ylabel', "Curtailment [per unit] normalized by feedin")
-    elif by_nominal_cap:
-        x_label = kwargs.get('xlabel', "Voltage [per unit]")
-        y_label = kwargs.get('ylabel', "Curtailment [per unit] normalized by installed capacity")
-
-    for n, i in enumerate([(c[x], v[x]) for x in range(len(timeindex))]):
-        plt.figure(figsize=fig_size)
-        plot_title = "Curtailment Characteristic at {}".format(timeindex[n])
-        pd.DataFrame({'voltage_pu': i[1],
-                      'curtailment_pu': i[0]}).plot(kind='scatter',
-                                                    x='voltage_pu',
-                                                    y='curtailment_pu',
-                                                    xlim=x_limits,
-                                                    ylim=y_limits,
-                                                    color=color,
-                                                    alpha=alpha,
-                                                    edgecolor=None,
-                                                    grid=True)
-        plt.minorticks_on()
+    if kwargs.get('voltage_threshold', None):
         plt.axvline(1.0, color='black', linestyle='--')
-        plt.title(plot_title)
-        plt.xlabel(x_label)
-        plt.ylabel(y_label)
-        plt.savefig(os.path.join(directory,
-                                 'curtailment_voltage_characterisitc_{}.{}'.format(
-                                     timeindex[n].strftime('%Y%m%d%H%M'),
-                                     filetype)))
-        plt.close('all')
+
+    # save
+    os.makedirs(directory, exist_ok=True)
+    plt.savefig(os.path.join(directory,
+                             'curtailment_characteristic_{}.{}'.format(
+                                 timestep.strftime('%Y%m%d%H%M'),
+                                 filetype)))
+    plt.close('all')
 
 
 def create_voltage_plots(voltage_data, directory, **kwargs):
