@@ -2475,6 +2475,7 @@ class Results:
         else:
             return None
 
+    @property
     def storages(self):
         """
         Gathers relevant storage results.
@@ -2833,7 +2834,7 @@ class Results:
                     curtailment_df.to_csv(filename, index_label=type_prefix)
 
         def _save_storage_integration_results(target_dir):
-            storages = self.storages()
+            storages = self.storages
             if not storages.empty:
                 # create directory
                 os.makedirs(target_dir, exist_ok=True)
