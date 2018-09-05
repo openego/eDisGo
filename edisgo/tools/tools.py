@@ -60,11 +60,11 @@ def get_residual_load_from_pypsa_network(pypsa_network):
 
     """
     residual_load = \
-        pypsa_network.loads_t.p.sum(axis=1) - (
-                pypsa_network.generators_t.p.loc[
-                :, pypsa_network.generators_t.p.columns !=
+        pypsa_network.loads_t.p_set.sum(axis=1) - (
+                pypsa_network.generators_t.p_set.loc[
+                :, pypsa_network.generators_t.p_set.columns !=
                    'Generator_slack'].sum(axis=1) +
-                pypsa_network.storage_units_t.p.sum(axis=1))
+                pypsa_network.storage_units_t.p_set.sum(axis=1))
     return residual_load
 
 
