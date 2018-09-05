@@ -20,7 +20,6 @@ import networkx as nx
 from math import isnan
 import random
 import os
-import oedialect
 
 from ding0.core import GeneratorFluctuatingDing0
 
@@ -715,7 +714,6 @@ def _validate_ding0_grid_import(mv_grid, ding0_mv_grid, lv_grid_mapping):
 
     # Check cumulative load and generation in MV grid district
     _validate_load_generation(mv_grid, ding0_mv_grid)
-
 
 
 def _validate_ding0_mv_grid_import(grid, ding0_grid):

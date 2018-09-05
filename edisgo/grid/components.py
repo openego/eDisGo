@@ -586,7 +586,6 @@ class Generator(Component):
             return self._timeseries_reactive.loc[
                    self.grid.network.timeseries.timeindex, :]
 
-
     @timeseries_reactive.setter
     def timeseries_reactive(self, timeseries_reactive):
         if isinstance(timeseries_reactive, pd.Series):

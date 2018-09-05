@@ -402,13 +402,7 @@ def get_gen_info(network, level='mvlv', fluctuating=False):
           (only applies to fluctuating generators).
 
     """
-    # get all generators
-    gens = []
     gens_w_id = []
-    gens_voltage_level = []
-    gens_type = []
-    gens_rating = []
-
     if 'mv' in level:
         gens = network.mv_grid.generators
         gens_voltage_level = ['mv']*len(gens)
