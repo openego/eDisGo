@@ -1387,6 +1387,127 @@ def process_pfa_results(network, pypsa, timesteps):
          'lv': pfa_v_mag_pu_lv.loc[timesteps, :]}, axis=1)
 
 
+def update_pypsa_generator_import(network):
+    """
+    Translate graph based grid representation to PyPSA Network
+
+    For details from a user perspective see API documentation of
+    :meth:`~.grid.network.EDisGo.analyze` of the API class
+    :class:`~.grid.network.EDisGo`.
+
+    Translating eDisGo's grid topology to PyPSA representation is structured
+    into translating the topology and adding time series for components of the
+    grid. In both cases translation of MV grid only (`mode='mv'`), LV grid only
+    (`mode='lv'`), MV and LV (`mode=None`) share some code. The
+    code is organized as follows:
+
+    * Medium-voltage only (`mode='mv'`): All medium-voltage grid components are
+      exported by :func:`mv_to_pypsa` including the LV station. LV grid load
+      and generation is considered using :func:`add_aggregated_lv_components`.
+      Time series are collected by `_pypsa_load_timeseries` (as example
+      for loads, generators and buses) specifying `mode='mv'`). Timeseries
+      for aggregated load/generation at substations are determined individually.
+    * Low-voltage only (`mode='lv'`): LV grid topology including the MV-LV
+      transformer is exported. The slack is defind at primary side of the MV-LV
+      transformer.
+    * Both level MV+LV (`mode=None`): The entire grid topology is translated to
+      PyPSA in order to perform a complete power flow analysis in both levels
+      together. First, both grid levels are translated seperately using
+      :func:`mv_to_pypsa` and :func:`lv_to_pypsa`. Those are merge by
+      :func:`combine_mv_and_lv`. Time series are obtained at once for both grid
+      levels.
+
+    This PyPSA interface is aware of translation errors and performs so checks
+    on integrity of data converted to PyPSA grid representation
+
+    * Sub-graphs/ Sub-networks: It is ensured the grid has no islanded parts
+    * Completeness of time series: It is ensured each component has a time
+      series
+    * Buses available: Each component (load, generator, line, transformer) is
+      connected to a bus. The PyPSA representation is check for completeness of
+      buses.
+    * Duplicate labels in components DataFrames and components' time series
+      DataFrames
+
+    Parameters
+    ----------
+    network : :class:`~.grid.network.Network`
+        eDisGo grid container
+    mode : str
+        Determines grid levels that are translated to
+        `PyPSA grid representation
+        <https://www.pypsa.org/doc/components.html#network>`_. Specify
+
+        * None to export MV and LV grid levels. None is the default.
+        * ('mv' to export MV grid level only. This includes cumulative load and
+          generation from underlying LV grid aggregated at respective LV
+          station. This option is implemented, though the rest of edisgo does
+          not handle it yet.)
+        * ('lv' to export LV grid level only. This option is not yet
+           implemented)
+    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
+        :pandas:`pandas.Timestamp<timestamp>`
+        Timesteps specifies which time steps to export to pypsa representation
+        and use in power flow analysis.
+
+    Returns
+    -------
+        :pypsa:`pypsa.Network<network>`
+            The `PyPSA network
+            <https://www.pypsa.org/doc/components.html#network>`_ container.
+
+    """
+
+    # get topology and time series data
+    if network.pypsa.edisgo_mode is None:
+        mv_components = mv_to_pypsa(network)
+        lv_components = lv_to_pypsa(network)
+        components = combine_mv_and_lv(mv_components, lv_components)
+    elif network.pypsa.edisgo_mode is 'mv':
+        raise NotImplementedError
+    elif network.pypsa.edisgo_mode is 'lv':
+        raise NotImplementedError
+    else:
+        raise ValueError("Provide proper mode or leave it empty to export "
+                         "entire grid topology.")
+
+    # check topology
+    _check_topology(components)
+
+    # create power flow problem
+    pypsa_network = PyPSANetwork()
+    pypsa_network.edisgo_mode = network.pypsa.edisgo_mode
+    pypsa_network.set_snapshots(network.pypsa.snapshots)
+
+    # import grid topology to PyPSA network
+    # buses are created first to avoid warnings
+    pypsa_network.import_components_from_dataframe(components['Bus'], 'Bus')
+
+    for k, comps in components.items():
+        if k is not 'Bus' and not comps.empty:
+            pypsa_network.import_components_from_dataframe(comps, k)
+
+    # import time series to PyPSA network
+    pypsa_network.generators_t.p_set = network.pypsa.generators_t.p_set
+    pypsa_network.generators_t.q_set = network.pypsa.generators_t.q_set
+    pypsa_network.loads_t.p_set = network.pypsa.loads_t.p_set
+    pypsa_network.loads_t.q_set = network.pypsa.loads_t.q_set
+    pypsa_network.storage_units_t.p_set = network.pypsa.storage_units_t.p_set
+    pypsa_network.storage_units_t.q_set = network.pypsa.storage_units_t.q_set
+    pypsa_network.buses_t.v_mag_pu_set = network.pypsa.buses_t.v_mag_pu_set
+
+    network.pypsa = pypsa_network
+
+    if len(list(components['Generator'].index.values)) > 1:
+        update_pypsa_generator_timeseries(network)
+    if list(components['Bus'].index.values):
+        update_pypsa_bus_timeseries(network)
+    if len(list(components['StorageUnit'].index.values)) > 0:
+        update_pypsa_storage_timeseries(network)
+
+    _check_integrity_of_pypsa(pypsa_network)
+
+
 def update_pypsa_grid_reinforcement(network, equipment_changes):
     """
     Update equipment data of lines and transformers after grid reinforcement.
