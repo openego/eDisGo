@@ -31,6 +31,7 @@ setup(
     author_email='',
     description='A python package for distribution grid analysis and optimization',
     install_requires=[
+	'demandlib',
         'ding0 >=0.1.7',
         'networkx >=1.11, <2.0 ',
         'shapely >= 1.5.12, <= 1.6.3',
@@ -41,7 +42,6 @@ setup(
         'pyomo >= 5.5.0',
         'multiprocess',
         'workalendar',
-        'demandlib',
         'oedialect'
     ],
     package_data={
