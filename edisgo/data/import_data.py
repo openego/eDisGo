@@ -4,6 +4,7 @@ from ..grid.grids import MVGrid, LVGrid
 from ..grid.connect import connect_mv_generators, connect_lv_generators
 from ..grid.tools import select_cable, position_switch_disconnectors
 from ..tools.geo import proj2equidistant
+from edisgo.tools import pypsa_io
 
 from egoio.db_tables import model_draft, supply
 from egoio.tools.db import connection
@@ -1029,10 +1030,8 @@ def import_generators(network, data_source=None, file=None):
                         'imported from the oedb.')
         _import_genos_from_oedb(network=network)
         network.mv_grid._weather_cells = None
-        # ToDo: Implement update of pypsa network after generator import
-        # work-around for now: reset pypsa network to make sure it is
-        # generated again with new and decommissioned generators
-        network.pypsa = None
+        if network.pypsa is not None:
+            pypsa_io.update_pypsa_generator_import(network)
     elif data_source == 'pypsa':
         _import_genos_from_pypsa(network=network, file=file)
     else:
