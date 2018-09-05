@@ -1863,8 +1863,12 @@ def _update_pypsa_timeseries_by_type(network, type, components_to_update=None,
         # in whole grid
         if components_to_update is None:
             grids = [network.mv_grid] + list(network.mv_grid.lv_grids)
-            components_to_update = list(itertools.chain(
-                *[grid.graph.nodes_by_attribute(type) for grid in grids]))
+            if type == 'generator':
+                components_to_update = list(itertools.chain(
+                    *[grid.generators for grid in grids]))
+            else:
+                components_to_update = list(itertools.chain(
+                    *[grid.graph.nodes_by_attribute(type) for grid in grids]))
         # if no time steps are specified update all time steps currently
         # contained in pypsa representation
         if timesteps is None:
