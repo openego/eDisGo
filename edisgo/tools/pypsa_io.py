@@ -1850,10 +1850,13 @@ def _update_pypsa_timeseries_by_type(network, type, components_to_update=None,
     # pypsa dataframe to update
     if type == 'load':
         pypsa_ts = network.pypsa.loads_t
+        components_in_pypsa = network.pypsa.loads.index
     elif type == 'generator':
         pypsa_ts = network.pypsa.generators_t
+        components_in_pypsa = network.pypsa.generators.index
     elif type == 'storage':
         pypsa_ts = network.pypsa.storage_units_t
+        components_in_pypsa = network.pypsa.storage_units.index
     else:
         raise ValueError('{} is not a valid type.'.format(type))
 
@@ -1878,7 +1881,6 @@ def _update_pypsa_timeseries_by_type(network, type, components_to_update=None,
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
 
-        components_in_pypsa = pypsa_ts.p_set.columns
         p_set = pd.DataFrame()
         q_set = pd.DataFrame()
         for comp in components_to_update:
