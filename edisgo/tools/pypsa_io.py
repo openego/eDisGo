@@ -1805,7 +1805,7 @@ def update_pypsa_bus_timeseries(network, timesteps=None):
     # check if timesteps is array-like, otherwise convert to list
     if not hasattr(timesteps, "__len__"):
         timesteps = [timesteps]
-    buses = network.pypsa.buses_t.v_mag_pu_set.columns
+    buses = network.pypsa.buses.index
     v_mag_pu_set = _pypsa_bus_timeseries(network, buses, timesteps)
     network.pypsa.buses_t.v_mag_pu_set = v_mag_pu_set
 
