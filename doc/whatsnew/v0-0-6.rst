@@ -1,10 +1,32 @@
 Release v0.0.6
 ==============
 
-Release date: July <DAY>, 2018
+Release date: September 6, 2018
 
-<Summary>
+This release comes with a bunch of new features such as results output and visualization, speed-up options, a new storage 
+integration methodology and an option to provide separate allowed voltage deviations for calculation of grid expansion needs.
+See list of changes below for more details.
 
 Changes
 -------
 
+* A methodolgy to integrate storages in the MV grid to reduce grid expansion costs was added that takes a given storage capacity and operation and allocates it to multiple smaller storages.
+  This methodology is mainly to be used together with the `eTraGo tool <https://github.com/openego/eTraGo>`_ where an optimization of the HV and EHV levels is conducted to calculate
+  optiomal storage size and operation at each HV/MV substation.
+* The voltage-based curtailment methodolgy was adapted to take into account allowed voltage deviations and curtail generators with voltages that exceed the allowed voltage deviation
+  more than generators with voltages that do not exceed the allowed voltage deviation.
+* When conducting grid reinforcement it is now possible to apply separate allowed voltage deviations for different voltage levels (`#108 <https://github.com/openego/eDisGo/issues/108>`_). 
+  Furthermore, an additional check was added at the end of the grid expansion methodology if the 10%-criterion was observed.
+* To speed up calculations functions to update the pypsa representation of the edisgo graph after generator import, storage integration and time series update, e.g. after curtailment, were added.
+* Also as a means to speed up calculations an option to calculate grid expansion costs for the two worst time steps, characterized by highest and lowest residual load at the HV/MV substation,
+  was added.
+* For the newly added storage integration methodology it was necessary to calculate grid expansion costs without changing the topology of the graph in order to identify feeders with
+  high grid expansion needs. Therefore, the option to conduct grid reinforcement on a copy of the graph was added to the grid expansion function.
+* So far loads and generators always provided or consumed inductive reactive power with the specified power factor. It is now possible to specify whether loads and generators should 
+  behave as inductors or capacitors and to provide a concrete reactive power time series(`#131 <https://github.com/openego/eDisGo/issues/131>`_). 
+* The Results class was extended by outputs for storages, grid losses and active and reactive power at the HV/MV substation (`#138 <https://github.com/openego/eDisGo/issues/138>`_)
+  as well as by a function to save all results to csv files.
+* A plotting function to plot line loading in the MV grid was added. 
+* Update `ding0 version to v0.1.8 <https://github.com/openego/ding0/releases/tag/v0.1.8>`_ and include
+  `data processing v0.4.5 data <https://github.com/openego/data_processing/releases/tag/v0.4.5>`_
+* `Bug fix <https://github.com/openego/eDisGo/issues/135>`_
