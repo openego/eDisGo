@@ -67,43 +67,83 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
 
     """
 
-    voltage_threshold = pd.Series(kwargs.get('voltage_threshold', 1.0),
+    voltage_threshold = pd.Series(kwargs.get('voltage_threshold', 0.0),
                                   index=curtailment_timeseries.index)
     solver = kwargs.get('solver', 'cbc')
+    combined_analysis = kwargs.get('combined_analysis', False)
 
-    # get the voltages at the nodes
-    voltage_pu_lv = edisgo.network.results.v_res(
+    # get the voltages at the generators
+    voltages_lv_gens = edisgo.network.results.v_res(
         nodes=generators.loc[(generators.voltage_level == 'lv')].index,
         level='lv')
-    voltage_pu_mv = edisgo.network.results.v_res(
+    voltages_mv_gens = edisgo.network.results.v_res(
         nodes=generators.loc[(generators.voltage_level == 'mv')].index,
         level='mv')
-    voltage_pu = voltage_pu_lv.join(voltage_pu_mv)
+    voltages_gens = voltages_lv_gens.join(voltages_mv_gens)
+
+    # get voltages at stations
+    grids = list(set(generators.grid))
+    lv_stations = [_.station for _ in grids if 'LVStation' in repr(_.station)]
+    voltage_lv_stations = edisgo.network.results.v_res(
+        nodes=lv_stations, level='lv')
+    voltages_mv_station = edisgo.network.results.v_res(
+        nodes=[edisgo.network.mv_grid.station], level='mv')
+    voltages_stations = voltage_lv_stations.join(voltages_mv_station)
+
+    # get allowed voltage deviations
+    if not combined_analysis:
+        allowed_voltage_dev_mv = edisgo.network.config[
+            'grid_expansion_allowed_voltage_deviations'][
+            'mv_feedin_case_max_v_deviation']
+        allowed_voltage_diff_lv = edisgo.network.config[
+            'grid_expansion_allowed_voltage_deviations'][
+            'lv_feedin_case_max_v_deviation']
+    else:
+        allowed_voltage_dev_mv = edisgo.network.config[
+            'grid_expansion_allowed_voltage_deviations'][
+            'mv_lv_feedin_case_max_v_deviation']
+        allowed_voltage_diff_lv = edisgo.network.config[
+            'grid_expansion_allowed_voltage_deviations'][
+            'mv_lv_feedin_case_max_v_deviation']
+    generators['allowed_voltage_dev'] = generators.voltage_level.apply(
+        lambda _: allowed_voltage_diff_lv if _ == 'lv'
+        else allowed_voltage_dev_mv)
+
+    # calculate voltage difference from generator node to station
+    voltage_gens_diff = pd.DataFrame()
+    for gen in voltages_gens.columns:
+        station = generators[generators.gen_repr==gen].grid.values[0].station
+        voltage_gens_diff[gen] = voltages_gens.loc[:, gen] - \
+                                 voltages_stations.loc[:, repr(station)] - \
+                                 generators[generators.gen_repr ==
+                                            gen].allowed_voltage_dev.iloc[0]
 
     # for every time step check if curtailment can be fulfilled, otherwise
     # reduce voltage threshold; set feed-in of generators below voltage
     # threshold to zero, so that they cannot be curtailed
     for ts in curtailment_timeseries.index:
         # get generators with voltage higher than threshold
-        gen_pool = voltage_pu.loc[
-            ts, voltage_pu.loc[ts, :] > voltage_threshold.loc[ts]].index
+        gen_pool = voltage_gens_diff.loc[
+            ts, voltage_gens_diff.loc[ts, :] > voltage_threshold.loc[ts]].index
         # if curtailment cannot be fulfilled lower voltage threshold
         while sum(feedin.loc[ts, gen_pool]) < curtailment_timeseries.loc[ts]:
             voltage_threshold.loc[ts] = voltage_threshold.loc[ts] - 0.01
-            gen_pool = voltage_pu.loc[
-                ts, voltage_pu.loc[ts, :] > voltage_threshold.loc[ts]].index
+            gen_pool = voltage_gens_diff.loc[
+                ts, voltage_gens_diff.loc[ts, :] >
+                voltage_threshold.loc[ts]].index
         # set feed-in of generators below voltage threshold to zero, so that
         # they cannot be curtailed
-        gen_pool_out = voltage_pu.loc[
-            ts, voltage_pu.loc[ts, :] <= voltage_threshold.loc[ts]].index
+        gen_pool_out = voltage_gens_diff.loc[
+            ts, voltage_gens_diff.loc[ts, :] <=
+            voltage_threshold.loc[ts]].index
         feedin.loc[ts, gen_pool_out] = 0
 
     # only optimize for time steps where curtailment is greater than zero
     timeindex = curtailment_timeseries[curtailment_timeseries > 0].index
     if not timeindex.empty:
         curtailment = _optimize_voltage_based_curtailment(
-            feedin, voltage_pu, curtailment_timeseries, voltage_threshold,
-            timeindex, solver)
+            feedin, voltage_gens_diff, curtailment_timeseries,
+            voltage_threshold, timeindex, solver)
     else:
         curtailment = pd.DataFrame()
 
