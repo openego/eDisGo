@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
         # set up worst-case scenario
         edisgo = EDisGo(ding0_grid=os.path.join('data', dingo_grid),
-                        worst_case_analysis='worst-case-feedin')
+                        worst_case_analysis='worst-case')
 
         try:
             # Calculate grid expansion costs before generator import
@@ -78,7 +78,6 @@ if __name__ == '__main__':
 
             # Clear results
             edisgo.network.results = Results(edisgo.network)
-            edisgo.network.pypsa = None
 
             # Calculate grid expansion costs after generator import
             logging.info('Grid expansion after generator import.')

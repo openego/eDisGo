@@ -68,6 +68,13 @@ edisgo.flex\_opt.storage\_operation module
     :undoc-members:
     :show-inheritance:
 
+edisgo.flex\_opt.storage\_positioning module
+----------------------------------------------
+
+.. automodule:: edisgo.flex_opt.storage_positioning
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 Module contents
 ---------------

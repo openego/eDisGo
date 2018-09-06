@@ -28,6 +28,14 @@ edisgo.tools.geo module
     :undoc-members:
     :show-inheritance:
 
+edisgo.tools.plots module
+--------------------------
+
+.. automodule:: edisgo.tools.plots
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 edisgo.tools.pypsa\_io module
 -----------------------------
 
