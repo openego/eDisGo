@@ -391,9 +391,6 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             # power required, do storage integration
             if p_storage >= p_storage_min:
 
-                number_parallel_lines_before = _estimate_new_number_of_lines(
-                    critical_lines_feeder)
-
                 # third step: integrate storage
 
                 share = p_storage / storage_nominal_power
@@ -422,14 +419,6 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
                 # fourth step: check if storage integration reduced grid
                 # reinforcement costs
-
-                edisgo.analyze()
-                critical_lines_feeder_new = _critical_lines_feeder(
-                    edisgo, feeder)
-                critical_nodes_feeder_new = _critical_nodes_feeder(
-                    edisgo, feeder)
-                number_parallel_lines = _estimate_new_number_of_lines(
-                    critical_lines_feeder_new)
 
                 if check_costs_reduction:
 
@@ -480,6 +469,16 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                                 edisgo.network.mv_grid)
 
                 else:
+                    number_parallel_lines_before = \
+                        _estimate_new_number_of_lines(critical_lines_feeder)
+                    edisgo.analyze()
+                    critical_lines_feeder_new = _critical_lines_feeder(
+                        edisgo, feeder)
+                    critical_nodes_feeder_new = _critical_nodes_feeder(
+                        edisgo, feeder)
+                    number_parallel_lines = _estimate_new_number_of_lines(
+                        critical_lines_feeder_new)
+
                     # if there are critical lines check if number of parallel
                     # lines was reduced
                     if not critical_lines_feeder.empty:
