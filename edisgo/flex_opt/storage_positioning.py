@@ -356,9 +356,6 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
     ranked_feeders = _feeder_ranking(grid_expansion_costs_feeder_ranking)
 
-    # analyze for all time steps
-    edisgo.analyze()
-
     count = 1
     storage_obj_list = []
     total_grid_expansion_costs_new = None
