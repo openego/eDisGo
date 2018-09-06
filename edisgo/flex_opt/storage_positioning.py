@@ -454,6 +454,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                             'kEuro).'.format(feeder, -costs_diff))
 
                         tools.disconnect_storage(edisgo.network, storage_obj)
+                        p_storage = 0
 
                         if debug:
                             storage_repr.append(None)
@@ -498,6 +499,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
                                 tools.disconnect_storage(edisgo.network,
                                                          storage_obj)
+                                p_storage = 0
 
                                 if debug:
                                     storage_repr.append(None)
