@@ -330,17 +330,24 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         copy_graph=True, timesteps_pfa='snapshot_analysis')
 
     # only analyse storage integration if there were any grid expansion needs
-    equipment_changes_reinforcement_init = \
-        grid_expansion_results_init.equipment_changes.loc[
-            grid_expansion_results_init.equipment_changes.iteration_step > 0]
-    total_grid_expansion_costs = \
-        grid_expansion_results_init.grid_expansion_costs.total_costs.sum()
-    if equipment_changes_reinforcement_init.empty:
+    if grid_expansion_results_init.equipment_changes.empty:
         logger.debug('No storage integration necessary since there are no '
                      'grid expansion needs.')
         return
     else:
-        network = equipment_changes_reinforcement_init.index[0].grid.network
+        equipment_changes_reinforcement_init = \
+            grid_expansion_results_init.equipment_changes.loc[
+                grid_expansion_results_init.equipment_changes.iteration_step >
+                0]
+        total_grid_expansion_costs = \
+            grid_expansion_results_init.grid_expansion_costs.total_costs.sum()
+        if equipment_changes_reinforcement_init.empty:
+            logger.debug('No storage integration necessary since there are no '
+                         'grid expansion needs.')
+            return
+        else:
+            network = equipment_changes_reinforcement_init.index[
+                0].grid.network
 
     # calculate grid expansion costs without costs for new generators
     # to be used in feeder ranking
