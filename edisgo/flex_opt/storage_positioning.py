@@ -46,7 +46,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         and a plot with all storage positions is created and saved, both to the
         current working directory with filename `storage_results_{MVgrid_id}`.
         Default: False.
-    check_costs_reduction : :obj:`Boolean` or : :obj:`str`, optional
+    check_costs_reduction : :obj:`Boolean` or :obj:`str`, optional
         This parameter specifies when and whether it should be checked if a
         storage reduced grid expansion costs or not. It can be used as a safety
         check but can be quite time consuming. Possible options are:
