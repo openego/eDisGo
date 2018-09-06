@@ -418,7 +418,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                             battery_node)))
 
                 # fourth step: check if storage integration reduced grid
-                # reinforcement costs
+                # reinforcement costs or number of issues
 
                 if check_costs_reduction == 'each_feeder':
 
