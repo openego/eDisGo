@@ -515,7 +515,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                                         edisgo.network.mv_grid)
                             else:
                                 logger.debug(
-                                    'Number of critical nodes in feeder {} '
+                                    'Critical nodes in feeder {} '
                                     'before and after storage integration: '
                                     '{} vs. {}'.format(
                                         feeder, critical_nodes_feeder,
@@ -536,7 +536,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                     # if there are no critical lines
                     else:
                         logger.debug(
-                            'Number of critical nodes in feeder {} '
+                            'Critical nodes in feeder {} '
                             'before and after storage integration: '
                             '{} vs. {}'.format(
                                 feeder, critical_nodes_feeder,
