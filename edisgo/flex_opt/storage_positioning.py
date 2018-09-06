@@ -337,7 +337,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         grid_expansion_results_init.grid_expansion_costs.total_costs.sum()
     if equipment_changes_reinforcement_init.empty:
         logger.debug('No storage integration necessary since there are no '
-                     'grid expansion costs.')
+                     'grid expansion needs.')
         return
     else:
         network = equipment_changes_reinforcement_init.index[0].grid.network
@@ -359,10 +359,10 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         logger.debug('Feeder: {}'.format(count))
         count += 1
 
+        # first step: find node where storage will be installed
+
         critical_nodes_feeder = _critical_nodes_feeder(edisgo, feeder)
         critical_lines_feeder = _critical_lines_feeder(edisgo, feeder)
-
-        # first step: find node where storage will be installed
 
         # get node the storage will be connected to (in original graph)
         battery_node = _find_battery_node(edisgo, critical_lines_feeder,
