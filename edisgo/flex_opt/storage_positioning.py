@@ -420,7 +420,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                 # fourth step: check if storage integration reduced grid
                 # reinforcement costs
 
-                if check_costs_reduction:
+                if check_costs_reduction == 'each_feeder':
 
                     # calculate new grid expansion costs
 
@@ -573,9 +573,9 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                 feeder_repr.append(repr(feeder))
                 storage_path.append([])
 
-    # if cost reduction was not checked after each storage integration check it
-    # now
-    if not check_costs_reduction:
+    if check_costs_reduction == 'once':
+        # check costs reduction and discard all storages if costs were not
+        # reduced
         grid_expansion_results_new = edisgo.reinforce(
             copy_graph=True, timesteps_pfa='snapshot_analysis')
 
@@ -599,8 +599,10 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
             for storage in storage_obj_list:
                 tools.disconnect_storage(edisgo.network, storage)
-    else:
-        if total_grid_expansion_costs_new is None:
+    elif check_costs_reduction == 'each_feeder':
+        # if costs redcution was checked after each storage only give out
+        # total costs reduction
+        if total_grid_expansion_costs_new == 'not calculated':
             costs_diff = 0
         else:
             total_grid_expansion_costs = grid_expansion_results_init.\
