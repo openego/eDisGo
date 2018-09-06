@@ -21,28 +21,45 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
     Allocates the given storage capacity to multiple smaller storages.
 
     For each feeder with load or voltage issues it is checked if integrating a
-    storage will reduce grid expansion costs, starting with the feeder with
+    storage will reduce peaks in the feeder, starting with the feeder with
     the highest theoretical grid expansion costs. A heuristic approach is used
     to estimate storage sizing and siting while storage operation is carried
     over from the given storage operation.
-
-    The approach assumes that grid expansion costs are reduced if peaks in the
-    feeder can be reduced.
 
     Parameters
     -----------
     edisgo : :class:`~.grid.network.EDisGo`
     storage_timeseries : :pandas:`pandas.DataFrame<dataframe>`
-        Active and reactive power time series of the large storage that will
-        be allocated to the smaller storages in feeders with load or voltage
-        issues. Columns of the dataframe are 'p' containing active power time
-        series in kW and 'q' containing the reactive power time series in kvar.
-        Index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Total active and reactive power time series that will be allocated to
+        the smaller storages in feeders with load or voltage issues. Columns of
+        the dataframe are 'p' containing active power time series in kW and 'q'
+        containing the reactive power time series in kvar. Index is a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
     storage_nominal_power : :obj:`float` or None
         Nominal power in kW that will be allocated to the smaller storages in
         feeders with load or voltage issues. If no nominal power is provided
         the maximum active power given in `storage_timeseries` is used.
         Default: None.
+    debug : :obj:`Boolean`, optional
+        If dedug is True a dataframe with storage size and path to storage of
+        all installed and possibly discarded storages is saved to a csv file
+        and a plot with all storage positions is created and saved, both to the
+        current working directory with filename `storage_results_{MVgrid_id}`.
+        Default: False.
+    check_costs_reduction : :obj:`Boolean` or : :obj:`str`, optional
+        This parameter specifies when and whether it should be checked if a
+        storage reduced grid expansion costs or not. It can be used as a safety
+        check but can be quite time consuming. Possible options are:
+
+        * 'each_feeder'
+          Costs reduction is checked for each feeder. If the storage did not
+          reduce grid expansion costs it is discarded.
+        * 'once'
+          Costs reduction is checked after the total storage capacity is
+          allocated to the feeders. If the storages did not reduce grid
+          expansion costs they are all discarded.
+        * False
+          Costs reduction is never checked.
 
     """
 
