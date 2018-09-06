@@ -50,7 +50,7 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
     'sphinx.ext.coverage',
-    'sphinx.ext.imgmath',
+    'sphinx.ext.pngmath',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',  # enable Napoleon Sphinx v>1.3
     'sphinx.ext.extlinks'  # enables external links with a key
