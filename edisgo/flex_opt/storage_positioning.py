@@ -358,7 +358,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
     count = 1
     storage_obj_list = []
-    total_grid_expansion_costs_new = None
+    total_grid_expansion_costs_new = 'not calculated'
     for feeder in ranked_feeders.values:
         logger.debug('Feeder: {}'.format(count))
         count += 1
