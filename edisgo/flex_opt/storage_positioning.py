@@ -16,8 +16,7 @@ logger = logging.getLogger('edisgo')
 
 
 def one_storage_per_feeder(edisgo, storage_timeseries,
-                           storage_nominal_power=None,
-                           debug=False, check_costs_reduction=False):
+                           storage_nominal_power=None, **kwargs):
     """
     Allocates the given storage capacity to multiple smaller storages.
 
@@ -286,6 +285,9 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                 crit_line, 'max_rel_overload'] * crit_line.quantity) - \
                                      crit_line.quantity
         return number_parallel_lines
+
+    debug = kwargs.get('debug', False)
+    check_costs_reduction = kwargs.get('check_costs_reduction', False)
 
     # global variables
     # minimum and maximum storage power to be connected to the MV grid
