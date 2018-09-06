@@ -520,6 +520,10 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                                     '{} vs. {}'.format(
                                         feeder, critical_nodes_feeder,
                                         critical_nodes_feeder_new))
+                                if debug:
+                                    storage_repr.append(repr(storage_obj))
+                                    storage_size.append(
+                                        storage_obj.nominal_power)
                         else:
                             logger.debug(
                                 'Storage integration in feeder {} reduced '
