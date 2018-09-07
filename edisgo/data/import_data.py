@@ -22,13 +22,11 @@ from math import isnan
 import random
 import os
 
-from ding0.core import GeneratorFluctuatingDing0
-
-
 if not 'READTHEDOCS' in os.environ:
     from ding0.tools.results import load_nd_from_pickle
     from ding0.core.network.stations import LVStationDing0
     from ding0.core.structure.regions import LVLoadAreaCentreDing0
+    from ding0.core import GeneratorFluctuatingDing0
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
 
