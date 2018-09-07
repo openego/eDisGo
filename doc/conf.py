@@ -78,8 +78,8 @@ extlinks = {'pandas':('http://pandas.pydata.org/pandas-docs/stable/api.html#%s',
                       'SQLAlchemy session object'),
             'shapely':('http://toblerity.org/shapely/manual.html#%s',
                       'Shapely object'),
-            'dingo':('https://dingo.readthedocs.io/en/dev/api/dingo.html#%s',
-                     'Dingo'),
+            'ding0':('https://dingo.readthedocs.io/en/dev/api/ding0.flexopt.html#%s',
+                     'Ding0'),
             'pypsa': ('https://pypsa.org/doc/components.html#%s', 'pypsa')
             }
 
