@@ -12,7 +12,7 @@ import edisgo
 from edisgo.tools import config, tools
 from edisgo.tools import pypsa_io_lopf, pypsa_io
 from edisgo.data.import_data import import_from_ding0, import_generators, \
-    import_feedin_timeseries, import_load_timeseries, import_from_csv
+    import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, \
     curtailment, storage_positioning
@@ -268,34 +268,14 @@ class EDisGo:
                            curtailment_timeseries=curtailment_timeseries,
                            **kwargs)
 
-    def import_from_ding0(self, ding0_path, **kwargs):
-        """Import grid data from DINGO ding0_path
+    def import_from_ding0(self, file, **kwargs):
+        """Import grid data from DINGO file
 
         For details see
         :func:`edisgo.data.import_data.import_from_ding0`
 
         """
-        if isinstance(ding0_path, str):
-            if os.path.isfile(ding0_path):
-                try:
-                    import_from_ding0(file=ding0_path, network=self.network)
-                except:
-                    raise RuntimeError(
-                        "Couldn't import ding0 grid from pickle ding0_path.")
-            elif os.path.isdir(ding0_path):
-                try:
-                    sep = kwargs.get('sep', ',')
-                    index_col = kwargs.get('index_col', 0)
-                    import_from_csv(path=ding0_path, network=self.network, sep=sep, index_col=index_col)
-                except:
-                    raise RuntimeError(
-                        "Couldn't import ding0 grid from csv files.")
-        elif isinstance(ding0_path, GridDing0):
-            try:
-                import_from_ding0(file=ding0_path, network=self.network)
-            except:
-                raise RuntimeError(
-                    "Couldn't import ding0 grid from GridDing0.")
+        import_from_ding0(file=file, network=self.network)
 
     def import_generators(self, generator_scenario=None):
         """Import generators

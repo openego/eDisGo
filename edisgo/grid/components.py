@@ -429,10 +429,10 @@ class Load(Component):
                                                     repr(self)))
 
     def __repr__(self):
-       return '_'.join(['Load',
-                        sorted(list(self.consumption.keys()))[0],
-                        repr(self.grid),
-                        str(self.id)])
+        return '_'.join(['Load',
+                         sorted(list(self.consumption.keys()))[0],
+                         repr(self.grid),
+                         str(self.id)])
 
 
 class Generator(Component):

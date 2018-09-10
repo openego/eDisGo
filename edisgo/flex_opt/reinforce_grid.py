@@ -76,18 +76,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     def _add_lines_changes_to_equipment_changes():
         equipment, index, quantity = [], [], []
         for line, number_of_lines in lines_changes.items():
-            # this is a workaround for imports from csv vs pickle
-            # pickle usage = pickle doesn't have line.type.loc['name'] but has line.type.name
-            # csv usage = csv has line.type.loc['name'] but doesn't have line.type.name
-            if line.type.name:
-                equipment.append(line.type.name)
-            else:
-                equipment.append(line.type.loc['name'])
-                # this name needs to be set
-                # if it is absent
-                # proper calculation of costs at a later part of
-                # the code will not happen!
-                line.type.name = line.type.loc['name']
+            equipment.append(line.type.name)
             index.append(line)
             quantity.append(number_of_lines)
         edisgo_reinforce.network.results.equipment_changes = \
