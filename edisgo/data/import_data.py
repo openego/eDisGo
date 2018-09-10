@@ -4,6 +4,7 @@ from ..grid.grids import MVGrid, LVGrid, Grid
 from ..grid.connect import connect_mv_generators, connect_lv_generators
 from ..grid.tools import select_cable, position_switch_disconnectors
 from ..tools.geo import proj2equidistant
+from edisgo.tools import pypsa_io
 
 from egoio.db_tables import model_draft, supply
 from egoio.tools.db import connection
@@ -33,6 +34,7 @@ if not 'READTHEDOCS' in os.environ:
     from ding0.tools.results import load_nd_from_pickle
     from ding0.core.network.stations import LVStationDing0
     from ding0.core.structure.regions import LVLoadAreaCentreDing0
+    from ding0.core import GeneratorFluctuatingDing0
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
 
@@ -281,7 +283,7 @@ def _build_mv_grid(ding0_grid, network):
                                 for _ in
                                 ding0_grid.grid_district._lv_load_areas
                                 if not np.isnan(_.zensus_sum)])},
-        voltage_nom=ding0_grid.v_level) #ToDo: voltagenom vs. v_level?
+        voltage_nom=ding0_grid.v_level)
 
     # Special treatment of LVLoadAreaCenters see ...
     # ToDo: add a reference above for explanation of how these are treated
@@ -566,9 +568,12 @@ def _determine_aggregated_nodes(la_centers):
             if not(list(lvgd.lv_grid.generators())):
                 weather_cell_id = None
             else:
-                weather_cell_id = list(weather_cell_ids.keys())[
-                    list(weather_cell_ids.values()).index(max(weather_cell_ids.values()))]
-
+                if weather_cell_ids:
+                    weather_cell_id = list(weather_cell_ids.keys())[
+                        list(weather_cell_ids.values()).index(
+                            max(weather_cell_ids.values()))]
+                else:
+                    weather_cell_id = None
 
             for v_level in aggr['generation']:
                 for type in aggr['generation'][v_level]:
@@ -598,7 +603,6 @@ def _determine_aggregated_nodes(la_centers):
 
         # add elements to lists
         aggregated.update({la_center.id_db: aggr})
-
 
     return aggregated, aggr_stations, dingo_import_data
 
@@ -717,7 +721,6 @@ def _validate_ding0_grid_import(mv_grid, ding0_mv_grid, lv_grid_mapping):
 
     # Check cumulative load and generation in MV grid district
     _validate_load_generation(mv_grid, ding0_mv_grid)
-
 
 
 def _validate_ding0_mv_grid_import(grid, ding0_grid):
@@ -846,8 +849,7 @@ def _validate_ding0_lv_grid_import(grids, ding0_grid, lv_grid_mapping):
 
         # Check number of generators
         data_integrity[grid]['generator']['edisgo'] = len(
-            grid.graph.nodes_by_attribute('generator') +
-            grid.graph.nodes_by_attribute('generator_aggr'))
+            grid.generators)
         data_integrity[grid]['generator']['ding0'] = len(
             list(lv_grid_mapping[grid].generators()))
 
@@ -1034,10 +1036,8 @@ def import_generators(network, data_source=None, file=None):
                         'imported from the oedb.')
         _import_genos_from_oedb(network=network)
         network.mv_grid._weather_cells = None
-        # ToDo: Implement update of pypsa network after generator import
-        # work-around for now: reset pypsa network to make sure it is
-        # generated again with new and decommissioned generators
-        network.pypsa = None
+        if network.pypsa is not None:
+            pypsa_io.update_pypsa_generator_import(network)
     elif data_source == 'pypsa':
         _import_genos_from_pypsa(network=network, file=file)
     else:
@@ -1613,15 +1613,28 @@ def _import_genos_from_oedb(network):
                 for v_level, val2 in val.items():
                     for type, val3 in val2.items():
                         for subtype, val4 in val3.items():
-                            gen = Generator(
-                                id='agg-' + str(la_id) + '-' + '_'.join([
-                                    str(_) for _ in val4['ids']]),
-                                nominal_capacity=val4['capacity'],
-                                type=type,
-                                subtype=subtype,
-                                geom=network.mv_grid.station.geom,
-                                grid=network.mv_grid,
-                                v_level=4)
+                            if type in ['solar', 'wind']:
+                                gen = GeneratorFluctuating(
+                                    id='agg-' + str(la_id) + '-' + '_'.join([
+                                        str(_) for _ in val4['ids']]),
+                                    grid=network.mv_grid,
+                                    nominal_capacity=val4['capacity'],
+                                    type=type,
+                                    subtype=subtype,
+                                    v_level=4,
+                                    # ToDo: get correct w_id
+                                    weather_cell_id=row['w_id'],
+                                    geom=network.mv_grid.station.geom)
+                            else:
+                                gen = Generator(
+                                    id='agg-' + str(la_id) + '-' + '_'.join([
+                                        str(_) for _ in val4['ids']]),
+                                    nominal_capacity=val4['capacity'],
+                                    type=type,
+                                    subtype=subtype,
+                                    geom=network.mv_grid.station.geom,
+                                    grid=network.mv_grid,
+                                    v_level=4)
 
                             network.mv_grid.graph.add_node(
                                 gen, type='generator_aggr')
@@ -1788,13 +1801,12 @@ def _import_genos_from_oedb(network):
 
         capacity_grid = 0
         # MV genos
-        for geno in network.mv_grid.graph.nodes_by_attribute('generator') +\
-            network.mv_grid.graph.nodes_by_attribute('generator_aggr'):
+        for geno in network.mv_grid.generators:
             capacity_grid += geno.nominal_capacity
 
         # LV genos
         for lv_grid in network.mv_grid.lv_grids:
-            for geno in lv_grid.graph.nodes_by_attribute('generator'):
+            for geno in lv_grid.generators:
                 capacity_grid += geno.nominal_capacity
 
         logger.debug('Cumulative generator capacity (updated): {} kW'
@@ -1968,7 +1980,7 @@ def _build_generator_list(network):
 
     # LV genos
     for lv_grid in network.mv_grid.lv_grids:
-        for geno in lv_grid.graph.nodes_by_attribute('generator'):
+        for geno in lv_grid.generators:
             genos_lv.loc[len(genos_lv)] = [int(geno.id), geno]
 
     return genos_mv, genos_lv, genos_lv_agg
@@ -2060,22 +2072,17 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
 
         timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
 
-        recasted_feedin_lists = []
-        for ty in feedin.index.levels[0]:
-            for w_id in feedin.index.levels[1]:
-                recasted_feedin_lists.append(feedin.loc[(ty, w_id), :].values[0])
+        recasted_feedin_dict = {}
+        for type_w_id in feedin.index:
+            recasted_feedin_dict[type_w_id] = feedin.loc[
+                                              type_w_id, :].values[0]
 
-        feedin = pd.DataFrame(np.array(recasted_feedin_lists).transpose(),
-                              index=timeindex,
-                              columns=feedin.index.copy())
+        feedin = pd.DataFrame(recasted_feedin_dict, index=timeindex)
 
-
-
-        # rename 'windonshore' to 'wind'
-        feedin.columns.set_levels(list(map(lambda x: x.replace('wind_onshore', 'wind') if x == 'wind_onshore' else x,
-                                           feedin.columns.levels[0].values)),
-                                  level=0,
-                                  inplace=True)
+        # rename 'wind_onshore' and 'wind_offshore' to 'wind'
+        new_level = [_ if _ not in ['wind_onshore']
+                     else 'wind' for _ in feedin.columns.levels[0]]
+        feedin.columns.set_levels(new_level, level=0, inplace=True)
 
         feedin.columns.rename('type', level=0, inplace=True)
         feedin.columns.rename('weather_cell_id', level=1, inplace=True)

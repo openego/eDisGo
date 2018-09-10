@@ -1,13 +1,9 @@
 import os
 import sys
-import readline
 import glob
 import re
 
-import random
-import itertools
-import time
-import queue
+import multiprocess as mp2
 import multiprocessing as mp
 
 import argparse
@@ -138,9 +134,6 @@ def run_edisgo_basic(ding0_filepath,
         logging.info('Grid expansion with no generator imports based on scenario')
 
     try:
-        # Do non-linear power flow analysis with PyPSA
-        edisgo_grid.analyze()
-
         # Do grid reinforcement
         edisgo_grid.reinforce()
 
@@ -162,12 +155,12 @@ def run_edisgo_basic(ding0_filepath,
         grid_issues['grid'] = edisgo_grid.network.id
         grid_issues['msg'] = str(edisgo_grid.network.results.unresolved_issues)
         costs = pd.DataFrame()
-        logging.info('Unresolved issues left after grid expansion.')
+        logging.warning('Unresolved issues left after grid expansion.')
     except Exception as e:
         grid_issues['grid'] = edisgo_grid.network.id
         grid_issues['msg'] = repr(e)
         costs = pd.DataFrame()
-        logging.info('Inexplicable Error, Please Check error messages and logs.')
+        logging.exception()
 
     return edisgo_grid, costs, grid_issues
 
@@ -204,7 +197,7 @@ def run_edisgo_twice(run_args):
 
     if edisgo_grid:
         # clear the pypsa object and results from edisgo_grid
-        edisgo_grid.network.results = Results()
+        edisgo_grid.network.results = Results(edisgo_grid.network)
         edisgo_grid.network.pypsa = None
 
         # case after generator import
@@ -280,7 +273,7 @@ def run_edisgo_pool(ding0_file_list, run_args_opt,
 
 
 def run_edisgo_pool_flexible(ding0_id_list, func, func_arguments,
-                    workers=mp.cpu_count(), worker_lifetime=1):
+                    workers=mp2.cpu_count(), worker_lifetime=1):
     """
     Use python multiprocessing toolbox for parallelization
 
@@ -327,14 +320,18 @@ def run_edisgo_pool_flexible(ding0_id_list, func, func_arguments,
 
     results = {}
 
-    pool = mp.Pool(workers,
+    pool = mp2.Pool(workers,
                    maxtasksperchild=worker_lifetime)
 
-    for id in ding0_id_list:
-        edisgo_args = (id, *func_arguments)
+    def error_callback(key):
+        return lambda o: results.update({key: o})
+    
+    for ding0_id in ding0_id_list:
+        edisgo_args = (ding0_id, *func_arguments)
         pool.apply_async(func=func,
                          args=edisgo_args,
-                         callback=collect_pool_results)
+                         callback=collect_pool_results,
+                         error_callback=error_callback(ding0_id))
 
     pool.close()
     pool.join()

@@ -23,7 +23,7 @@ class InstallSetup(install):
 
 setup(
     name='eDisGo',
-    version='0.0.4dev',
+    version='0.0.7dev',
     packages=find_packages(),
     url='https://github.com/openego/eDisGo',
     license='GNU Affero General Public License v3.0',
@@ -31,15 +31,17 @@ setup(
     author_email='',
     description='A python package for distribution grid analysis and optimization',
     install_requires=[
-        'ding0 >=0.1.6',
+	'demandlib',
+        'ding0 >=0.1.8',
         'networkx >=1.11, <2.0 ',
         'shapely >= 1.5.12, <= 1.6.3',
         'pandas >=0.20.3, <=0.20.3',
         'pypsa >=0.11.0, <=0.11.0',
         'pyproj >= 1.9.5.1, <= 1.9.5.1',
         'geopy >= 1.11.0, <= 1.11.0',
+        'pyomo >= 5.5.0',
+        'multiprocess',
         'workalendar',
-        'demandlib',
         'oedialect'
     ],
     package_data={
