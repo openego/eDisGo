@@ -12,7 +12,7 @@ import edisgo
 from edisgo.tools import config, tools
 from edisgo.tools import pypsa_io_lopf, pypsa_io
 from edisgo.data.import_data import import_from_ding0, import_generators, \
-    import_feedin_timeseries, import_load_timeseries
+    import_feedin_timeseries, import_load_timeseries, import_from_csv
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, \
     curtailment, storage_positioning
@@ -276,6 +276,18 @@ class EDisGo:
 
         """
         import_from_ding0(file=file, network=self.network)
+
+    def import_from_csv(self, path, **kwargs):
+        """Import grid data from directory of csvs
+
+        For details see
+        :func:`edisgo.data.import_data.import_from_csv`
+
+        """
+        csv_sep = kwargs.get('csv_sep', ',')
+        csv_index_col = kwargs.get('csv_index_col', 0)
+        import_from_csv(path=path, network=self.network,
+                        sep=csv_sep, index_col=csv_index_col)
 
     def import_generators(self, generator_scenario=None):
         """Import generators
