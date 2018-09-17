@@ -165,8 +165,8 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
         """
         step_size = 200
-        sizes = [0] + np.arange(
-            p_storage_min, max_storage_size + 0.5 * step_size, step_size)
+        sizes = [0] + list(np.arange(
+            p_storage_min, max_storage_size + 0.5 * step_size, step_size))
         p_feeder = edisgo.network.results.pfa_p.loc[:, repr(feeder)]
         q_feeder = edisgo.network.results.pfa_q.loc[:, repr(feeder)]
         p_slack = edisgo.network.pypsa.generators_t.p.loc[
