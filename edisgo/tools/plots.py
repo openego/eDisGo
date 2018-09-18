@@ -13,6 +13,7 @@ def create_curtailment_characteristic(curtailment, pypsa_network, timestep,
                                       directory, **kwargs):
     """
     Function to create some voltage histograms.
+
     Parameters
     ----------
     curtailment : :pandas:`pandas.DataFrame<dataframe>`
@@ -24,8 +25,7 @@ def create_curtailment_characteristic(curtailment, pypsa_network, timestep,
         obtained from :py:mod:`edisgo.network.Results` object
         in the attribute
         :attr:`edisgo.network.Results.assigned_curtailment`.
-
-    pypsa_network :
+    pypsa_network : :pypsa:`pypsa.Network<network>`
     generator_feedins: :pandas:`pandas.DataFrame<dataframe>`
         The feedins in kW of every single generator typically
         obtained from :py:mod:`edisgo.grid.tools.generator_feedins`
@@ -77,14 +77,16 @@ def create_curtailment_characteristic(curtailment, pypsa_network, timestep,
         tuple of limits of y axis (left_limit,right_limit)
     figsize: :obj:`str` or :obj:`tuple`
         size of the figure in inches or a string with the following options:
-         - 'a4portrait'
-         - 'a4landscape'
-         - 'a5portrait'
-         - 'a5landscape'
+         * 'a4portrait'
+         * 'a4landscape'
+         * 'a5portrait'
+         * 'a5landscape'
+
          By default and in failing cases this would be set to 'a5landscape'.
     binwidth: :obj:`float`
         width of bins in per unit voltage,
         By default and in failing cases this would be set to 0.01.
+
     """
 
     # get voltages
@@ -155,6 +157,7 @@ def create_curtailment_characteristic(curtailment, pypsa_network, timestep,
 def create_voltage_plots(voltage_data, directory, **kwargs):
     """
     Function to create some voltage histograms.
+
     Parameters
     ----------
     voltage_data: either :pandas:`pandas.DataFrame<dataframe>` or :py:mod:`~/edisgo/grid/network.Results` Object
@@ -192,14 +195,16 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
         tuple of limits of y axis (left_limit,right_limit)
     figsize: :obj:`str` or :obj:`tuple`
         size of the figure in inches or a string with the following options:
-         - 'a4portrait'
-         - 'a4landscape'
-         - 'a5portrait'
-         - 'a5landscape'
+         * 'a4portrait'
+         * 'a4landscape'
+         * 'a5portrait'
+         * 'a5landscape'
+
          By default and in failing cases this would be set to 'a5landscape'.
     binwidth: :obj:`float`
         width of bins in per unit voltage,
         By default and in failing cases this would be set to 0.01.
+
     """
     voltage = voltage_data.copy()
     x_label = kwargs.get('xlabel', "Voltage [per unit]")
@@ -290,12 +295,13 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
 def line_loading(pypsa_network, configs, line_load, timestep,
                  filename=None, arrows=True):
     """
-    Plot line loading as color on lines
+    Plot line loading as color on lines.
 
-    Displays line loading relative to nominal capacity
+    Displays line loading relative to nominal capacity.
+
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    pypsa_network : :pypsa:`pypsa.Network<network>`
     timestep : :pandas:`pandas.Timestamp<timestamp>`
         Time step to plot analysis results for.
     filename : :obj:`str`
@@ -415,6 +421,7 @@ def storage_size(mv_grid, pypsa_network, filename=None, lopf=True):
     Plot line loading as color on lines
 
     Displays line loading relative to nominal capacity
+
     Parameters
     ----------
     network : :class:`~.grid.network.Network`

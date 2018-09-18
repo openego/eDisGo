@@ -402,13 +402,7 @@ def get_gen_info(network, level='mvlv', fluctuating=False):
           (only applies to fluctuating generators).
 
     """
-    # get all generators
-    gens = []
     gens_w_id = []
-    gens_voltage_level = []
-    gens_type = []
-    gens_rating = []
-
     if 'mv' in level:
         gens = network.mv_grid.generators
         gens_voltage_level = ['mv']*len(gens)
@@ -419,6 +413,7 @@ def get_gen_info(network, level='mvlv', fluctuating=False):
                 gens_w_id.append(gen.weather_cell_id)
             except AttributeError:
                 gens_w_id.append(np.nan)
+        gens_grid = [network.mv_grid]*len(gens)
 
     if 'lv' in level:
         for lv_grid in network.mv_grid.lv_grids:
@@ -432,13 +427,15 @@ def get_gen_info(network, level='mvlv', fluctuating=False):
                     gens_w_id.append(gen.weather_cell_id)
                 except AttributeError:
                     gens_w_id.append(np.nan)
+            gens_grid.extend([lv_grid] * len(gens_lv))
 
     gen_df = pd.DataFrame({'gen_repr': list(map(lambda x: repr(x), gens)),
                            'generator': gens,
                            'type': gens_type,
                            'voltage_level': gens_voltage_level,
                            'nominal_capacity': gens_rating,
-                           'weather_cell_id': gens_w_id})
+                           'weather_cell_id': gens_w_id,
+                           'grid': gens_grid})
 
     gen_df.set_index('generator', inplace=True, drop=True)
 

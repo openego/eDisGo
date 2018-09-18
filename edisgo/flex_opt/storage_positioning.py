@@ -16,34 +16,50 @@ logger = logging.getLogger('edisgo')
 
 
 def one_storage_per_feeder(edisgo, storage_timeseries,
-                           storage_nominal_power=None,
-                           debug=False, check_costs_reduction=False):
+                           storage_nominal_power=None, **kwargs):
     """
     Allocates the given storage capacity to multiple smaller storages.
 
     For each feeder with load or voltage issues it is checked if integrating a
-    storage will reduce grid expansion costs, starting with the feeder with
+    storage will reduce peaks in the feeder, starting with the feeder with
     the highest theoretical grid expansion costs. A heuristic approach is used
     to estimate storage sizing and siting while storage operation is carried
     over from the given storage operation.
-
-    The approach assumes that grid expansion costs are reduced if peaks in the
-    feeder can be reduced.
 
     Parameters
     -----------
     edisgo : :class:`~.grid.network.EDisGo`
     storage_timeseries : :pandas:`pandas.DataFrame<dataframe>`
-        Active and reactive power time series of the large storage that will
-        be allocated to the smaller storages in feeders with load or voltage
-        issues. Columns of the dataframe are 'p' containing active power time
-        series in kW and 'q' containing the reactive power time series in kvar.
-        Index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Total active and reactive power time series that will be allocated to
+        the smaller storages in feeders with load or voltage issues. Columns of
+        the dataframe are 'p' containing active power time series in kW and 'q'
+        containing the reactive power time series in kvar. Index is a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
     storage_nominal_power : :obj:`float` or None
         Nominal power in kW that will be allocated to the smaller storages in
         feeders with load or voltage issues. If no nominal power is provided
         the maximum active power given in `storage_timeseries` is used.
         Default: None.
+    debug : :obj:`Boolean`, optional
+        If dedug is True a dataframe with storage size and path to storage of
+        all installed and possibly discarded storages is saved to a csv file
+        and a plot with all storage positions is created and saved, both to the
+        current working directory with filename `storage_results_{MVgrid_id}`.
+        Default: False.
+    check_costs_reduction : :obj:`Boolean` or :obj:`str`, optional
+        This parameter specifies when and whether it should be checked if a
+        storage reduced grid expansion costs or not. It can be used as a safety
+        check but can be quite time consuming. Possible options are:
+
+        * 'each_feeder'
+          Costs reduction is checked for each feeder. If the storage did not
+          reduce grid expansion costs it is discarded.
+        * 'once'
+          Costs reduction is checked after the total storage capacity is
+          allocated to the feeders. If the storages did not reduce grid
+          expansion costs they are all discarded.
+        * False
+          Costs reduction is never checked.
 
     """
 
@@ -287,6 +303,9 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                                      crit_line.quantity
         return number_parallel_lines
 
+    debug = kwargs.get('debug', False)
+    check_costs_reduction = kwargs.get('check_costs_reduction', False)
+
     # global variables
     # minimum and maximum storage power to be connected to the MV grid
     p_storage_min = 300
@@ -311,17 +330,24 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         copy_graph=True, timesteps_pfa='snapshot_analysis')
 
     # only analyse storage integration if there were any grid expansion needs
-    equipment_changes_reinforcement_init = \
-        grid_expansion_results_init.equipment_changes.loc[
-            grid_expansion_results_init.equipment_changes.iteration_step > 0]
-    total_grid_expansion_costs = \
-        grid_expansion_results_init.grid_expansion_costs.total_costs.sum()
-    if equipment_changes_reinforcement_init.empty:
+    if grid_expansion_results_init.equipment_changes.empty:
         logger.debug('No storage integration necessary since there are no '
-                     'grid expansion costs.')
+                     'grid expansion needs.')
         return
     else:
-        network = equipment_changes_reinforcement_init.index[0].grid.network
+        equipment_changes_reinforcement_init = \
+            grid_expansion_results_init.equipment_changes.loc[
+                grid_expansion_results_init.equipment_changes.iteration_step >
+                0]
+        total_grid_expansion_costs = \
+            grid_expansion_results_init.grid_expansion_costs.total_costs.sum()
+        if equipment_changes_reinforcement_init.empty:
+            logger.debug('No storage integration necessary since there are no '
+                         'grid expansion needs.')
+            return
+        else:
+            network = equipment_changes_reinforcement_init.index[
+                0].grid.network
 
     # calculate grid expansion costs without costs for new generators
     # to be used in feeder ranking
@@ -330,20 +356,17 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
     ranked_feeders = _feeder_ranking(grid_expansion_costs_feeder_ranking)
 
-    # analyze for all time steps
-    edisgo.analyze()
-
     count = 1
     storage_obj_list = []
-    total_grid_expansion_costs_new = None
+    total_grid_expansion_costs_new = 'not calculated'
     for feeder in ranked_feeders.values:
         logger.debug('Feeder: {}'.format(count))
         count += 1
 
+        # first step: find node where storage will be installed
+
         critical_nodes_feeder = _critical_nodes_feeder(edisgo, feeder)
         critical_lines_feeder = _critical_lines_feeder(edisgo, feeder)
-
-        # first step: find node where storage will be installed
 
         # get node the storage will be connected to (in original graph)
         battery_node = _find_battery_node(edisgo, critical_lines_feeder,
@@ -367,9 +390,6 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             # if p_storage is greater than or equal to the minimum storage
             # power required, do storage integration
             if p_storage >= p_storage_min:
-
-                number_parallel_lines_before = _estimate_new_number_of_lines(
-                    critical_lines_feeder)
 
                 # third step: integrate storage
 
@@ -398,17 +418,9 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                             battery_node)))
 
                 # fourth step: check if storage integration reduced grid
-                # reinforcement costs
+                # reinforcement costs or number of issues
 
-                edisgo.analyze()
-                critical_lines_feeder_new = _critical_lines_feeder(
-                    edisgo, feeder)
-                critical_nodes_feeder_new = _critical_nodes_feeder(
-                    edisgo, feeder)
-                number_parallel_lines = _estimate_new_number_of_lines(
-                    critical_lines_feeder_new)
-
-                if check_costs_reduction:
+                if check_costs_reduction == 'each_feeder':
 
                     # calculate new grid expansion costs
 
@@ -442,6 +454,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                             'kEuro).'.format(feeder, -costs_diff))
 
                         tools.disconnect_storage(edisgo.network, storage_obj)
+                        p_storage = 0
 
                         if debug:
                             storage_repr.append(None)
@@ -457,6 +470,16 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                                 edisgo.network.mv_grid)
 
                 else:
+                    number_parallel_lines_before = \
+                        _estimate_new_number_of_lines(critical_lines_feeder)
+                    edisgo.analyze()
+                    critical_lines_feeder_new = _critical_lines_feeder(
+                        edisgo, feeder)
+                    critical_nodes_feeder_new = _critical_nodes_feeder(
+                        edisgo, feeder)
+                    number_parallel_lines = _estimate_new_number_of_lines(
+                        critical_lines_feeder_new)
+
                     # if there are critical lines check if number of parallel
                     # lines was reduced
                     if not critical_lines_feeder.empty:
@@ -476,6 +499,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
                                 tools.disconnect_storage(edisgo.network,
                                                          storage_obj)
+                                p_storage = 0
 
                                 if debug:
                                     storage_repr.append(None)
@@ -491,11 +515,15 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                                         edisgo.network.mv_grid)
                             else:
                                 logger.debug(
-                                    'Number of critical nodes in feeder {} '
+                                    'Critical nodes in feeder {} '
                                     'before and after storage integration: '
                                     '{} vs. {}'.format(
                                         feeder, critical_nodes_feeder,
                                         critical_nodes_feeder_new))
+                                if debug:
+                                    storage_repr.append(repr(storage_obj))
+                                    storage_size.append(
+                                        storage_obj.nominal_power)
                         else:
                             logger.debug(
                                 'Storage integration in feeder {} reduced '
@@ -508,7 +536,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                     # if there are no critical lines
                     else:
                         logger.debug(
-                            'Number of critical nodes in feeder {} '
+                            'Critical nodes in feeder {} '
                             'before and after storage integration: '
                             '{} vs. {}'.format(
                                 feeder, critical_nodes_feeder,
@@ -549,9 +577,9 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                 feeder_repr.append(repr(feeder))
                 storage_path.append([])
 
-    # if cost reduction was not checked after each storage integration check it
-    # now
-    if not check_costs_reduction:
+    if check_costs_reduction == 'once':
+        # check costs reduction and discard all storages if costs were not
+        # reduced
         grid_expansion_results_new = edisgo.reinforce(
             copy_graph=True, timesteps_pfa='snapshot_analysis')
 
@@ -575,8 +603,10 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
             for storage in storage_obj_list:
                 tools.disconnect_storage(edisgo.network, storage)
-    else:
-        if total_grid_expansion_costs_new is None:
+    elif check_costs_reduction == 'each_feeder':
+        # if costs redcution was checked after each storage only give out
+        # total costs reduction
+        if total_grid_expansion_costs_new == 'not calculated':
             costs_diff = 0
         else:
             total_grid_expansion_costs = grid_expansion_results_init.\

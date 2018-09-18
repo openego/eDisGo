@@ -5,7 +5,7 @@ pypsa >=0.11.0, <=0.11.0
 pyproj >=1.9.5.1, <=1.9.5.1
 matplotlib >=1.5.3, <=1.5.3
 geopy >=1.11.0, <=1.11.0
-egoio >=0.4.1
+egoio >=0.4.5
 workalendar
 demandlib
 oedialect

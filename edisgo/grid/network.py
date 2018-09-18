@@ -1563,9 +1563,9 @@ class StorageControl:
     def __init__(self, edisgo, timeseries, position, **kwargs):
 
         self.edisgo = edisgo
-        voltage_level = kwargs.get('voltage_level', None)
-        parameters = kwargs.get('parameters', {})
-        timeseries_reactive_power = kwargs.get(
+        voltage_level = kwargs.pop('voltage_level', None)
+        parameters = kwargs.pop('parameters', {})
+        timeseries_reactive_power = kwargs.pop(
             'timeseries_reactive_power', None)
         if isinstance(timeseries, dict):
             # check if other parameters are dicts as well if provided
@@ -1612,16 +1612,17 @@ class StorageControl:
                 except:
                     reactive_power = None
                 self._integrate_storage(ts, pos, params,
-                                        voltage_lev, reactive_power)
+                                        voltage_lev, reactive_power, **kwargs)
         else:
             self._integrate_storage(timeseries, position, parameters,
-                                    voltage_level, timeseries_reactive_power)
+                                    voltage_level, timeseries_reactive_power,
+                                    **kwargs)
 
         # add measure to Results object
         self.edisgo.network.results.measures = 'storage_integration'
 
     def _integrate_storage(self, timeseries, position, params, voltage_level,
-                           reactive_power_timeseries):
+                           reactive_power_timeseries, **kwargs):
         """
         Integrate storage units in the grid.
 
@@ -1682,7 +1683,7 @@ class StorageControl:
             # start storage positioning method
             storage_positioning.one_storage_per_feeder(
                 edisgo=self.edisgo, storage_timeseries=timeseries,
-                storage_nominal_power=params['nominal_power'])
+                storage_nominal_power=params['nominal_power'], **kwargs)
             return
         else:
             message = 'Provided storage position option {} is not ' \
@@ -2475,6 +2476,7 @@ class Results:
         else:
             return None
 
+    @property
     def storages(self):
         """
         Gathers relevant storage results.
@@ -2833,7 +2835,7 @@ class Results:
                     curtailment_df.to_csv(filename, index_label=type_prefix)
 
         def _save_storage_integration_results(target_dir):
-            storages = self.storages()
+            storages = self.storages
             if not storages.empty:
                 # create directory
                 os.makedirs(target_dir, exist_ok=True)
