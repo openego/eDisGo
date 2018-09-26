@@ -1183,8 +1183,7 @@ def _check_integrity_of_pypsa(pypsa_network):
                          "generators_t['q_set']"
                          " or loads_t['q_set']".format(
             labels=duplicate_q_sets))
-    
-        
+
     # find duplicate v_mag_set entries
     duplicate_v_mag_set = []
     if any(pypsa_network.buses_t['v_mag_pu_set'].columns.duplicated()):
@@ -1560,8 +1559,10 @@ def update_pypsa_grid_reinforcement(network, equipment_changes):
             v_base = idx.mv_grid.voltage_nom
             z_base = v_base ** 2 / row['equipment'].type.S_nom
 
-            transformer['bus0'].append('_'.join(['Bus', idx.__repr__(side='mv')]))
-            transformer['bus1'].append('_'.join(['Bus', idx.__repr__(side='lv')]))
+            transformer['bus0'].append('_'.join(['Bus', idx.__repr__(
+                side='mv')]))
+            transformer['bus1'].append('_'.join(['Bus', idx.__repr__(
+                side='lv')]))
             transformer['name'].append(repr(row['equipment']))
             transformer['type'].append("")
             transformer['model'].append('pi')
