@@ -1,5 +1,5 @@
 """
-This modules provides tools to convert graph based representation of the grid
+This module provides tools to convert graph based representation of the grid
 topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA grid
 container.
 """
