@@ -823,7 +823,6 @@ class GeneratorFluctuating(Generator):
 
             return timeseries
         else:
-            #ToDo: should curtailment be subtracted from timeseries?
             return self._timeseries.loc[
                    self.grid.network.timeseries.timeindex, :]
 
