@@ -1,5 +1,5 @@
 name,S_nom,R,X
-#-,kVA,Ohm,Ohm
+#,kVA,Ohm,Ohm
 20 MVA,20000,0,0
 32 MVA,32000,0,0
 40 MVA,40000,0,0
