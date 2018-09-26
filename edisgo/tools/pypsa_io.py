@@ -1596,7 +1596,6 @@ def update_pypsa_grid_reinforcement(network, equipment_changes):
             idx.type['R'] / idx.quantity * idx.length)
         network.pypsa.lines.loc[repr(idx), 'x'] = (
             idx.type['L'] / 1e3 * omega / idx.quantity * idx.length)
-        # ToDo remove s_nom?
         network.pypsa.lines.loc[repr(idx), 's_nom'] = (
             sqrt(3) * idx.type['I_max_th'] * idx.type[
                 'U_n'] * idx.quantity / 1e3)
