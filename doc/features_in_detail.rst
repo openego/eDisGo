@@ -6,8 +6,12 @@ Features in detail
 Data import
 -----------
 
+.. todo:: Documentation needed.
+
 Power flow analysis
 -------------------
+
+.. todo:: Documentation needed.
 
 
 .. _grid_expansion_methodology:
@@ -18,30 +22,43 @@ Automatic grid expansion
 General methodology
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The grid expansion methodology is conducted in :py:mod:`~edisgo.flex_opt.reinforce_grid`.
+The grid expansion methodology is conducted in :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid`.
 
-For now only a combined analysis of MV and LV grids is possible.
 The order grid expansion measures are conducted is as follows:
 
-* Reinforce transformers and lines due to over-loading issues
-* Reinforce lines in MV grid due to over-voltage issues
-* Reinforce lines in LV grid due to over-loading issues
-* Reinforce transformers and lines due to over-loading issues
+* Reinforce stations and lines due to overloading issues
+* Reinforce lines in MV grid due to voltage issues
+* Reinforce distribution substations due to voltage issues
+* Reinforce lines in LV grid due to voltage issues
+* Reinforce stations and lines due to overloading issues
 
-Reinforcement of transformers and lines due to over-loading issues is performed twice, once in the beginning and again after fixing over-voltage problems,
-because the changed power flows after reinforcing the grid may lead to new over-loading issues.
+Reinforcement of stations and lines due to overloading issues is performed twice, once in the beginning and again after fixing voltage issues,
+as the changed power flows after reinforcing the grid may lead to new overloading issues. How voltage and overloading issues are identified and
+solved is explained in the following sections.
+
+:py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid` offers a few additional options. It is e.g. possible to conduct grid 
+reinforcement measures on a copy
+of the graph so that the original grid topology is not changed. It is also possible to only identify necessary
+reinforcement measures for two worst-case snapshots in order to save computing time and to set combined or separate
+allowed voltage deviation limits for MV and LV.
+See documentation of :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid` for more information. 
 
 
-Identification of over-voltage and over-loading issues
+Identification of overloading and voltage issues
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Identification of over-voltage and over-loading issues is conducted in 
+Identification of overloading and voltage issues is conducted in 
 :py:mod:`~edisgo.flex_opt.check_tech_constraints`.
 
-Over-voltage is determined based on allowed voltage deviations set in the config file 
-:any:`config_grid_expansion.cfg` in section `grid_expansion_allowed_voltage_deviations`.
-Over-load is determined based on allowed load factors that are also defined in the config file
-:any:`config_grid_expansion.cfg` in section `grid_expansion_load_factors`.
+Voltage issues are determined based on allowed voltage deviations set in the config file 
+*config_grid_expansion.cfg* in section `grid_expansion_allowed_voltage_deviations`. It is possible
+to set one allowed voltage deviation that is used for MV and LV or define separate allowed voltage deviations.
+Which allowed voltage deviation is used is defined through the parameter *combined_analysis* of :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid`.
+By default *combined_analysis* is set to false, resulting in separate voltage limits for MV and LV, as a combined limit
+may currently lead to problems if voltage deviation in MV grid is already close to the allowed limit, in which case the remaining allowed voltage deviation in the LV grids is close to zero.
+
+Overloading is determined based on allowed load factors that are also defined in the config file
+*config_grid_expansion.cfg* in section `grid_expansion_load_factors`.
 
 Allowed voltage deviations as well as load factors are in most cases different for load and feed-in case. 
 Load and feed-in case are commonly used worst-cases for grid expansion analyses. 
@@ -49,7 +66,7 @@ Load case defines a situation where all loads in the grid have a high demand whi
 or zero. In this case power is flowing from the high-voltage grid to the distribution grid. 
 In the feed-in case there is a high generator feed-in and a small energy demand leading to a reversed power flow.
 Load and generation assumptions for the two worst-cases are definded in the config file
-:any:`config_timeseries.cfg` in section `worst_case_scale_factor` (scale factors describe actual power
+`config_timeseries.cfg` in section `worst_case_scale_factor` (scale factors describe actual power
 to nominal power ratio of generators and loads).
 
 When conducting grid reinforcement based on given time series instead of worst-case assumptions, load and feed-in
@@ -63,79 +80,88 @@ in the grid and defined as follows:
 Grid losses are not taken into account. See :func:`~edisgo.tools.tools.assign_load_feedin_case` for more
 details and implementation.
 
-Check LV and MV line load
-"""""""""""""""""""""""""""""""""""""
+Check line load
+""""""""""""""""""
 
-  Uses a given load factor and the maximum allowed current given by the manufacturer to calculate the allowed
-  line load of each LV and MV line. If the line load calculated in the power flow analysis exceeds the allowed line load the line is reinforced (see :ref:`grid-expansion-measure-line-load-label`).
+  Exceedance of allowed line load of MV and LV lines is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_line_load` and
+  :py:func:`~edisgo.flex_opt.check_tech_constraints.lv_line_load`, respectively.
+  The functions use the given load factor and the maximum allowed current given by the manufacturer (see *I_max_th* in tables :ref:`lv_cables_table`, 
+  :ref:`mv_cables_table` and :ref:`mv_lines_table`) to calculate the allowed
+  line load of each LV and MV line. If the line load calculated in the power flow analysis exceeds the allowed line 
+  load, the line is reinforced (see :ref:`grid-expansion-measure-line-load-label`).
+  
 
-Check HV/MV station load
-"""""""""""""""""""""""""""""""""""""
+Check station load
+""""""""""""""""""""
 
-  Uses a given load factor and the maximum allowed apparent power given by the manufacturer to calculate the allowed
-  apparent power of the HV/MV station. If the apparent power calculated in the power flow analysis exceeds the allowed apparent power the station is reinforced (see :ref:`grid-expansion-measure-mv-station-load-label`).
-
-Check MV/LV station load
-"""""""""""""""""""""""""""""""""""""
-
-  Uses a given load factor and the maximum allowed apparent power given by the manufacturer to calculate the allowed
-  apparent power of each MV/LV station. If the apparent power calculated in the power flow analysis exceeds the allowed apparent power the station is reinforced (see :ref:`grid-expansion-measure-lv-station-load-label`).
+  Exceedance of allowed station load of HV/MV and MV/LV stations is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.hv_mv_station_load` and
+  :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_lv_station_load`, respectively.
+  The functions use the given load factor and the maximum allowed apparent power given by the manufacturer (see *S_nom* in tables :ref:`lv_transformers_table`, 
+  and :ref:`mv_transformers_table`) to calculate the allowed
+  apparent power of the stations. If the apparent power calculated in the power flow analysis exceeds the allowed apparent power the station is reinforced 
+  (see :ref:`grid-expansion-measure-station-load-label`).
 
 Check line and station voltage deviation
 """"""""""""""""""""""""""""""""""""""""""
 
-  Uses a given allowed voltage deviation. If the voltage of an LV or MV line calculated in the power flow analysis exceeds the allowed voltage deviation the line is reinforced (see :ref:`grid-expansion-measure-lv-station-voltage-label` or
-  :ref:`grid-expansion-measure-line-voltage-label`)
+  Compliance with allowed voltage deviation limits in MV and LV grids is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_voltage_deviation` and
+  :py:func:`~edisgo.flex_opt.check_tech_constraints.lv_voltage_deviation`, respectively.
+  The functions check if the voltage deviation at a node calculated in the power flow analysis exceeds the allowed voltage deviation. If it does,
+  the line is reinforced (see :ref:`grid-expansion-measure-lv-station-voltage-label` or
+  :ref:`grid-expansion-measure-line-voltage-label`).
 
 
 Grid expansion measures
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Reinforcement measures are conducted in :py:mod:`~edisgo.flex_opt.reinforce_measures`.
+Reinforcement measures are conducted in :py:mod:`~edisgo.flex_opt.reinforce_measures`. Whereas overloading issues can usually be solved in one step, except for 
+some cases where the lowered grid impedance through reinforcement measures leads to new issues, voltage issues can only be solved iteratively. This means that after each reinforcement
+step a power flow analysis is conducted and the voltage rechecked. An upper limit for how many iteration steps should be performed is set in order to avoid endless iteration. By
+default it is set to 10 but can be changed using the parameter *max_while_iterations* of :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid`.
 
 .. _grid-expansion-measure-line-load-label:
 
-Reinforce lines due to over-loading
-"""""""""""""""""""""""""""""""""""""
+Reinforce lines due to overloading issues
+"""""""""""""""""""""""""""""""""""""""""""""
 
-  In a first step a parallel line of the same line type is installed. If this does not solve the over-loading issue as many parallel standard lines as needed are installed.
+  Line reinforcement due to overloading is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_branches_overloading`. 
+  In a first step a parallel line of the same line type is installed. If this does not solve the overloading issue as many parallel standard lines as needed are installed.
 
-.. _grid-expansion-measure-mv-station-load-label:
+.. _grid-expansion-measure-station-load-label:
 
-Reinforce HV/MV station due to over-loading issues
+Reinforce stations due to overloading issues
 """""""""""""""""""""""""""""""""""""""""""""""""""""
  
+  Reinforcement of HV/MV and MV/LV stations due to overloading is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.extend_substation_overloading` and
+  :py:func:`~edisgo.flex_opt.reinforce_measures.extend_distribution_substation_overloading`, respectively. 
   In a first step a parallel transformer of the same type as the existing transformer is installed. If there is more than one transformer in the station the smallest transformer
-  that will solve the over-loading issue is used. If this does not solve the over-loading issue as many parallel standard transformers as needed are installed.
-
-.. _grid-expansion-measure-lv-station-load-label:
-
-Reinforce MV/LV station due to over-loading issues
-"""""""""""""""""""""""""""""""""""""""""""""""""""""
-
-  In a first step a parallel transformer of the same type as the existing transformer is installed. If there is more than one transformer in the station the smallest transformer
-  that will solve the over-loading issue is used. If this does not solve the over-loading issue as many parallel standard transformers as needed are installed.
+  that will solve the overloading issue is used. If this does not solve the overloading issue as many parallel standard transformers as needed are installed.
 
 .. _grid-expansion-measure-lv-station-voltage-label:
 
-Reinforce MV/LV station due to over-voltage issues
+Reinforce MV/LV stations due to voltage issues
 """""""""""""""""""""""""""""""""""""""""""""""""""""
 
-  A parallel standard transformer is installed. Afterwards a power flow analysis is conducted and the voltage is rechecked. If there are still voltage issues the process of installing
-  a parallel standard transformer and conducting a power flow analysis is repeated until voltage issues are solved.
+  Reinforcement of MV/LV stations due to voltage issues is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.extend_distribution_substation_overvoltage`. 
+  To solve voltage issues, a parallel standard transformer is installed. 
+
+  After each station with voltage issues is reinforced, a power flow analysis is conducted and the voltage rechecked. If there are still voltage issues 
+  the process of installing
+  a parallel standard transformer and conducting a power flow analysis is repeated until voltage issues are solved or until the maximum number of allowed iterations is reached.
 
 .. _grid-expansion-measure-line-voltage-label:
 
-Reinforce lines due to over-voltage
+Reinforce lines due to voltage
 """""""""""""""""""""""""""""""""""""""""""""""""""""
 
-  In the case of several voltage problems the path to the node with the highest voltage deviation is reinforced first. Therefore, the line between the secondary side of the station and the 
+  Reinforcement of lines due to voltage issues is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_branches_overvoltage`. 
+  In the case of several voltage issues the path to the node with the highest voltage deviation is reinforced first. Therefore, the line between the secondary side of the station and the 
   node with the highest voltage deviation is disconnected at a distribution substation after 2/3 of the path length. If there is no distribution substation where the line can be
   disconnected, the node is directly connected to the busbar. If the node is already directly connected to the busbar a parallel standard line is installed.
  
-  Only one voltage problem for each main route is considered at a time since each measure effects the voltage of each node in that route.
+  Only one voltage problem for each feeder is considered at a time since each measure effects the voltage of each node in that feeder.
 
-  After each main route with voltage problems has been considered a power flow analysis is conducted and the voltage rechecked. The process of solving voltage issues is repeated until voltage issues are solved
+  After each feeder with voltage problems has been considered, a power flow analysis is conducted and the voltage rechecked. The process of solving voltage issues is repeated until voltage issues are solved
   or until the maximum number of allowed iterations is reached.
 
 
@@ -145,7 +171,7 @@ Grid expansion costs
 Total grid expansion costs are the sum of costs for each added transformer and line.
 Costs for lines and transformers are only distinguished by the voltage level they are installed in 
 and not by the different types. 
-In the case of lines it is further taken into account wether the line is installed in a rural or an urban area whereas rural areas
+In the case of lines it is further taken into account wether the line is installed in a rural or an urban area, whereas rural areas
 are areas with a population density smaller or equal to 500 people per km² and urban areas are defined as areas
 with a population density higher than 500 people per km² [DENA]_. 
 The population density is calculated by the population and area of the grid district the line is in (See :class:`~.grid.grids.Grid`).
