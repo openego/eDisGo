@@ -293,7 +293,9 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
 
 
 def line_loading(pypsa_network, configs, line_load, timestep,
-                 filename=None, arrows=True):
+                 filename=None, arrows=True, node_color='technology',
+                 voltage=None, limits_cb_load=None, limits_cb_voltage=None,
+                 xlim=None, ylim=None):
     """
     Plot line loading as color on lines.
 
@@ -302,16 +304,94 @@ def line_loading(pypsa_network, configs, line_load, timestep,
     Parameters
     ----------
     pypsa_network : :pypsa:`pypsa.Network<network>`
+    configs : :obj:`dict`
+        Dictionary with used configurations from config files. See
+        :class:`~.grid.network.Config` for more information.
+    line_load : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe with current results from power flow analysis in A. Index of
+        the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        columns are the line representatives.
     timestep : :pandas:`pandas.Timestamp<timestamp>`
         Time step to plot analysis results for.
     filename : :obj:`str`
         Filename to save plot under. If not provided, figure is shown directly.
         Default: None.
-    arrows: :obj:`Boolean`
+    arrows : :obj:`Boolean`
         If True draws arrows on lines in the direction of the power flow.
         Default: True.
+    node_color : :obj:`str`
+        Defines if colors of nodes are set by 'technology' or 'voltage'. If
+        'voltage' is chosen, voltages of nodes in MV grid must be provided by
+        parameter `voltage`. Default: 'technology'.
+    limits_cb_load : :obj:`tuple`
+        Tuple with limits for colorbar of line loading. First entry is the
+        minimum and second entry the maximum value. Default: None.
+    limits_cb_voltage : :obj:`tuple`
+        Tuple with limits for colorbar of node voltages. First entry is the
+        minimum and second entry the maximum value. Default: None.
+    xlim : :obj:`tuple`
+        Limits of x-axis. Default: None.
+    ylim : :obj:`tuple`
+        Limits of y-axis. Default: None.
 
     """
+
+    def get_color_and_size(name, colors_dict, sizes_dict):
+        if 'BranchTee' in name:
+            return colors_dict['BranchTee'], sizes_dict['BranchTee']
+        elif 'LVStation' in name:
+            return colors_dict['LVStation'], sizes_dict['LVStation']
+        elif 'GeneratorFluctuating' in name:
+            return (colors_dict['GeneratorFluctuating'],
+                    sizes_dict['GeneratorFluctuating'])
+        elif 'Generator' in name:
+            return colors_dict['Generator'], sizes_dict['Generator']
+        elif 'DisconnectingPoint' in name:
+            return (colors_dict['DisconnectingPoint'],
+                    sizes_dict['DisconnectingPoint'])
+        elif 'MVStation' in name:
+            return colors_dict['MVStation'], sizes_dict['MVStation']
+        elif 'Storage' in name:
+            return colors_dict['Storage'], sizes_dict['Storage']
+        else:
+            return colors_dict['else'], sizes_dict['else']
+
+    def nodes_by_technology(buses):
+        bus_sizes = {}
+        bus_colors = {}
+        colors_dict = {'BranchTee': 'b',
+                       'GeneratorFluctuating': 'g',
+                       'Generator': 'k',
+                       'LVStation': 'c',
+                       'MVStation': 'r',
+                       'Storage': 'y',
+                       'DisconnectingPoint': '0.75',
+                       'else': 'orange'}
+        sizes_dict = {'BranchTee': 10,
+                      'GeneratorFluctuating': 100,
+                      'Generator': 100,
+                      'LVStation': 50,
+                      'MVStation': 120,
+                      'Storage': 100,
+                      'DisconnectingPoint': 50,
+                      'else': 200}
+        for bus in buses:
+            bus_colors[bus], bus_sizes[bus] = get_color_and_size(
+                bus, colors_dict, sizes_dict)
+        return bus_sizes, bus_colors
+
+    def nodes_by_voltage(buses, voltage):
+        bus_colors = {}
+        bus_sizes = {}
+        for bus in buses:
+            if 'primary' in bus:
+                bus_tmp = bus[12:]
+            else:
+                bus_tmp = bus[4:]
+            bus_colors[bus] = voltage.loc[timestep, ('mv', bus_tmp)]
+            bus_sizes[bus] = 50
+        return bus_sizes, bus_colors
+
     # create pypsa network only containing MV buses and lines
     pypsa_plot = PyPSANetwork()
     pypsa_plot.buses = pypsa_network.buses.loc[pypsa_network.buses.v_nom >= 10]
@@ -333,73 +413,62 @@ def line_loading(pypsa_network, configs, line_load, timestep,
     loading = i_line_pfa.divide(i_line_allowed)
 
     # bus colors and sizes
-    bus_sizes = {}
-    bus_colors = {}
-    colors_dict = {'BranchTee': 'b',
-                   'GeneratorFluctuating': 'g',
-                   'Generator': 'k',
-                   'LVStation': 'c',
-                   'MVStation': 'r',
-                   'Storage': 'y',
-                   'DisconnectingPoint': '0.75',
-                   'else': 'orange'}
-    sizes_dict = {'BranchTee': 10,
-                  'GeneratorFluctuating': 100,
-                  'Generator': 100,
-                  'LVStation': 50,
-                  'MVStation': 120,
-                  'Storage': 100,
-                  'DisconnectingPoint': 50,
-                  'else': 200}
-
-    def get_color_and_size(name):
-        if 'BranchTee' in name:
-            return colors_dict['BranchTee'], sizes_dict['BranchTee']
-        elif 'LVStation' in name:
-            return colors_dict['LVStation'], sizes_dict['LVStation']
-        elif 'GeneratorFluctuating' in name:
-            return (colors_dict['GeneratorFluctuating'],
-                    sizes_dict['GeneratorFluctuating'])
-        elif 'Generator' in name:
-            return colors_dict['Generator'], sizes_dict['Generator']
-        elif 'DisconnectingPoint' in name:
-            return (colors_dict['DisconnectingPoint'],
-                    sizes_dict['DisconnectingPoint'])
-        elif 'MVStation' in name:
-            return colors_dict['MVStation'], sizes_dict['MVStation']
-        elif 'Storage' in name:
-            return colors_dict['Storage'], sizes_dict['Storage']
-        else:
-            return colors_dict['else'], sizes_dict['else']
-
-    for bus in pypsa_plot.buses.index:
-        bus_colors[bus], bus_sizes[bus] = get_color_and_size(bus)
+    if node_color == 'technology':
+        bus_sizes, bus_colors = nodes_by_technology(pypsa_plot.buses.index)
+        bus_cmap = None
+    elif node_color == 'voltage':
+        bus_sizes, bus_colors = nodes_by_voltage(
+            pypsa_plot.buses.index, voltage)
+        bus_cmap = plt.cm.Blues
 
     # plot
-    cmap = plt.cm.jet
-    ll = pypsa_plot.plot(line_colors=loading, line_cmap=cmap,
-                         title="Line loading", line_widths=0.55,
-                         branch_components=['Line'], basemap=True,
-                         bus_sizes=bus_sizes, bus_colors=bus_colors)
+    plt.figure(figsize=(12, 8))
+    ax = plt.gca()
 
-    # color bar
-    v = np.linspace(min(loading), max(loading), 101)
-    boundaries = [min(loading), max(loading)]
+    cmap = plt.cm.get_cmap('inferno_r')
+    ll = pypsa_plot.plot(line_colors=loading, line_cmap=cmap, ax=ax,
+                         title="Line loading", line_widths=2,
+                         branch_components=['Line'], basemap=True,
+                         bus_sizes=bus_sizes, bus_colors=bus_colors,
+                         bus_cmap=bus_cmap)
+
+    # color bar line loading
+    if limits_cb_load is None:
+        limits_cb_load = (min(loading), max(loading))
+    v = np.linspace(limits_cb_load[0], limits_cb_load[1], 101)
     cb = plt.colorbar(ll[1], boundaries=v, ticks=v[0:101:10])
-    cb.set_clim(vmin=boundaries[0], vmax=boundaries[1])
+    cb.set_clim(vmin=limits_cb_load[0], vmax=limits_cb_load[1])
     cb.set_label('Line loading in %')
+
+    # color bar voltage
+    if node_color == 'voltage':
+        if limits_cb_voltage is None:
+            limits_cb_voltage = (min(voltage.loc[timestep, 'mv']),
+                                 max(voltage.loc[timestep, 'mv']))
+        v_voltage = np.linspace(limits_cb_voltage[0], limits_cb_voltage[1],
+                                101)
+        cb_voltage = plt.colorbar(ll[0], boundaries=v_voltage,
+                                  ticks=v_voltage[0:101:10])
+        cb_voltage.set_clim(vmin=limits_cb_voltage[0],
+                            vmax=limits_cb_voltage[1])
+        cb_voltage.set_label('Voltage in p.u.')
+
+    # axes limits
+    if xlim is not None:
+        ax.set_xlim(xlim[0], xlim[1])
+    if ylim is not None:
+        ax.set_ylim(ylim[0], ylim[1])
 
     # draw arrows on lines
     if arrows:
-        ax = plt.axes()
         path = ll[1].get_segments()
         colors = cmap(ll[1].get_array() / 100)
         for i in range(len(path)):
             if pypsa_network.lines_t.p0.loc[timestep,
                                             loading.index[i]] > 0:
-                arrowprops = dict(arrowstyle="->", color=colors[i])
+                arrowprops = dict(arrowstyle="->", color='b')#colors[i])
             else:
-                arrowprops = dict(arrowstyle="<-", color=colors[i])
+                arrowprops = dict(arrowstyle="<-", color='b')#colors[i])
             ax.annotate(
                 "",
                 xy=abs(
