@@ -222,13 +222,13 @@ class Load(Component):
                     ts['q'] = ts['p'] * self.q_sign * tan(
                         acos(self.power_factor))
 
-                if not ts_total:
+                if ts_total is None:
                     ts_total = ts
                 else:
                     ts_total.p += ts.p
                     ts_total.q += ts.q
 
-                return ts_total
+            return ts_total
         else:
             return self._timeseries
 
