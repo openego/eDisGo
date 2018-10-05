@@ -643,8 +643,8 @@ class Network:
 
         Returns
         -------
-        :obj:`collections.OrderedDict`
-            Configuration data from config files.
+        :class:`~.grid.network.Config`
+            Config object with configuration data from config files.
 
         """
         return self._config
