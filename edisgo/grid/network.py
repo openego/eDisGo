@@ -1349,10 +1349,11 @@ class CurtailmentControl:
                                feedin_selected_generators, col)
 
                 # do curtailment
-                curtailment_method(
-                    feedin_selected_generators, selected_generators,
-                    curtailment_timeseries.loc[:, col], edisgo,
-                    col, **kwargs)
+                if not feedin_selected_generators.empty:
+                    curtailment_method(
+                        feedin_selected_generators, selected_generators,
+                        curtailment_timeseries.loc[:, col], edisgo,
+                        col, **kwargs)
 
         # check if curtailment exceeds feed-in
         self._postcheck(edisgo.network, feedin)
