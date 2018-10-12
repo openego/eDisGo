@@ -354,13 +354,15 @@ def line_loading(pypsa_network, configs, line_load, timestep,
         the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
         columns are the line representatives.
     timestep : :pandas:`pandas.Timestamp<timestamp>`
-        Time step to plot analysis results for.
+        Time step to plot analysis results for. If `timestep` is None maximum
+        line load and if given, maximum voltage deviation, is used. In that
+        case arrows cannot be drawn.
     filename : :obj:`str`
         Filename to save plot under. If not provided, figure is shown directly.
         Default: None.
     arrows : :obj:`Boolean`
         If True draws arrows on lines in the direction of the power flow.
-        Default: True.
+        Default: False.
     node_color : :obj:`str`
         Defines if colors of nodes are set by 'technology' or 'voltage'. If
         'voltage' is chosen, voltages of nodes in MV grid must be provided by
@@ -422,7 +424,12 @@ def line_loading(pypsa_network, configs, line_load, timestep,
                 bus, colors_dict, sizes_dict)
         return bus_sizes, bus_colors
 
-    def nodes_by_voltage(buses, voltage):
+    def nodes_by_voltage(buses, voltage, configs):
+        # get set voltage at station to calculate voltage deviation
+        # ToDo: Consider control deviation
+        voltage_station = 1.0 + float(
+            configs['grid_expansion_allowed_voltage_deviations'][
+                'hv_mv_trafo_offset'])
         bus_colors = {}
         bus_sizes = {}
         for bus in buses:
@@ -430,7 +437,12 @@ def line_loading(pypsa_network, configs, line_load, timestep,
                 bus_tmp = bus[12:]
             else:
                 bus_tmp = bus[4:]
-            bus_colors[bus] = voltage.loc[timestep, ('mv', bus_tmp)]
+            if timestep is not None:
+                bus_colors[bus] = abs(voltage_station -
+                                      voltage.loc[timestep, ('mv', bus_tmp)])
+            else:
+                bus_colors[bus] = abs(voltage_station -
+                                      max(voltage.loc[:, ('mv', bus_tmp)]))
             bus_sizes[bus] = 50
         return bus_sizes, bus_colors
 
@@ -443,16 +455,30 @@ def line_loading(pypsa_network, configs, line_load, timestep,
     # get load factor
     residual_load = tools.get_residual_load_from_pypsa_network(pypsa_network)
     case = residual_load.apply(
-            lambda _: 'feedin_case' if _ < 0 else 'load_case').loc[timestep]
-    load_factor = float(configs['grid_expansion_load_factors'][
-        'mv_{}_line'.format(case)])
-    # get allowed line load
-    i_line_allowed = pypsa_plot.lines.s_nom.divide(
-        pypsa_plot.lines.v_nom) / sqrt(3) * 1e3 * load_factor
-    # get line load from pf
-    i_line_pfa = line_load.loc[timestep,
-                               pypsa_plot.lines.index]
-    loading = i_line_pfa.divide(i_line_allowed)
+            lambda _: 'feedin_case' if _ < 0 else 'load_case')
+    if timestep is not None:
+        load_factor = float(configs['grid_expansion_load_factors'][
+            'mv_{}_line'.format(case.loc[timestep])])
+        # get allowed line load
+        i_line_allowed = pypsa_plot.lines.s_nom.divide(
+            pypsa_plot.lines.v_nom) / sqrt(3) * 1e3 * load_factor
+        # get line load from pf
+        i_line_pfa = line_load.loc[timestep,
+                                   pypsa_plot.lines.index]
+        loading = i_line_pfa.divide(i_line_allowed)
+    else:
+        load_factor = pd.Series(
+            data=[float(configs['grid_expansion_load_factors'][
+                                'mv_{}_line'.format(case.loc[_])])
+                  for _ in line_load.index],
+            index=line_load.index)
+        # get allowed line load
+        i_line_allowed = load_factor.to_frame().dot(
+            (pypsa_plot.lines.s_nom.divide(
+                pypsa_plot.lines.v_nom) / sqrt(3) * 1e3).to_frame().T)
+        # get line load from pf
+        i_line_pfa = line_load.loc[:, pypsa_plot.lines.index]
+        loading = (i_line_pfa.divide(i_line_allowed)).max()
 
     # bus colors and sizes
     if node_color == 'technology':
@@ -460,7 +486,7 @@ def line_loading(pypsa_network, configs, line_load, timestep,
         bus_cmap = None
     elif node_color == 'voltage':
         bus_sizes, bus_colors = nodes_by_voltage(
-            pypsa_plot.buses.index, voltage)
+            pypsa_plot.buses.index, voltage, configs)
         bus_cmap = plt.cm.Blues
 
     # plot
@@ -485,15 +511,15 @@ def line_loading(pypsa_network, configs, line_load, timestep,
     # color bar voltage
     if node_color == 'voltage':
         if limits_cb_voltage is None:
-            limits_cb_voltage = (min(voltage.loc[timestep, 'mv']),
-                                 max(voltage.loc[timestep, 'mv']))
+            limits_cb_voltage = (min(bus_colors.values()),
+                                 max(bus_colors.values()))
         v_voltage = np.linspace(limits_cb_voltage[0], limits_cb_voltage[1],
                                 101)
         cb_voltage = plt.colorbar(ll[0], boundaries=v_voltage,
                                   ticks=v_voltage[0:101:10])
         cb_voltage.set_clim(vmin=limits_cb_voltage[0],
                             vmax=limits_cb_voltage[1])
-        cb_voltage.set_label('Voltage in p.u.')
+        cb_voltage.set_label('Voltage deviation in p.u.')
 
     # axes limits
     if xlim is not None:
@@ -502,7 +528,7 @@ def line_loading(pypsa_network, configs, line_load, timestep,
         ax.set_ylim(ylim[0], ylim[1])
 
     # draw arrows on lines
-    if arrows:
+    if arrows and timestep:
         path = ll[1].get_segments()
         colors = cmap(ll[1].get_array() / 100)
         for i in range(len(path)):
