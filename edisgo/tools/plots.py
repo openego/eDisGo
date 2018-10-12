@@ -5,6 +5,12 @@ import logging
 from math import sqrt
 from matplotlib import pyplot as plt
 from pypsa import Network as PyPSANetwork
+from egoio.tools.db import connection
+from egoio.db_tables.grid import EgoDpMvGriddistrict
+from egoio.db_tables.model_draft import EgoGridMvGriddistrict
+from sqlalchemy.orm import sessionmaker
+import geopandas as gpd
+from geoalchemy2 import shape
 
 from edisgo.tools import tools
 
@@ -290,6 +296,42 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
         plt.savefig(os.path.join(directory,
                                  'voltage_histogram_all.{}'.format(filetype)))
         plt.close('all')
+
+
+def get_grid_district_polygon(config, subst_id=None):
+    """
+    Get MV grid district polygon from oedb for plotting.
+
+    """
+
+    # make DB session
+    conn = connection(section=config['db_connection']['section'])
+    Session = sessionmaker(bind=conn)
+    session = Session()
+
+    # get polygon from versioned schema
+    if config['data_source']['oedb_data_source'] == 'versioned':
+
+        version = config['versioned']['version']
+        query = session.query(EgoDpMvGriddistrict.subst_id,
+                              EgoDpMvGriddistrict.geom)
+        Regions = [(subst_id, shape.to_shape(geom)) for subst_id, geom in
+                   query.filter(EgoDpMvGriddistrict.version == version,
+                                EgoDpMvGriddistrict.subst_id == subst_id).all()]
+
+    # get polygon from model_draft
+    else:
+        query = session.query(EgoGridMvGriddistrict.subst_id,
+                              EgoGridMvGriddistrict.geom)
+        Regions = [(subst_id, shape.to_shape(geom)) for subst_id, geom in
+                   query.filter(EgoGridMvGriddistrict.subst_id.in_(
+                       subst_id)).all()]
+
+    crs = {'init': 'epsg:3035'}
+    region = gpd.GeoDataFrame(
+        Regions, columns=['subst_id', 'geometry'], crs=crs)
+    region = region.to_crs(epsg=4326) #({'init': 'epsg:4326'})
+    return region
 
 
 def line_loading(pypsa_network, configs, line_load, timestep,
