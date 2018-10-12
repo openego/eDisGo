@@ -335,7 +335,7 @@ def get_grid_district_polygon(config, subst_id=None):
 
 
 def line_loading(pypsa_network, configs, line_load, timestep,
-                 filename=None, arrows=True, node_color='technology',
+                 filename=None, arrows=False, node_color='technology',
                  voltage=None, limits_cb_load=None, limits_cb_voltage=None,
                  xlim=None, ylim=None):
     """
