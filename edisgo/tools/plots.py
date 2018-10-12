@@ -336,6 +336,7 @@ def get_grid_district_polygon(config, subst_id=None):
 
 def line_loading(pypsa_network, configs, line_load, timestep,
                  filename=None, arrows=False, node_color='technology',
+                 grid_district_geom=True,
                  voltage=None, limits_cb_load=None, limits_cb_voltage=None,
                  xlim=None, ylim=None):
     """
@@ -545,6 +546,15 @@ def line_loading(pypsa_network, configs, line_load, timestep,
                     (path[i][0] - path[i][1]) * 0.49 - path[i][0]),
                 arrowprops=arrowprops,
                 size=10)
+
+    # plot grid district
+    if grid_district_geom:
+        subst = pypsa_network.buses[
+            pypsa_network.buses.index.str.contains("MVStation")].index[0]
+        subst_id = subst.split('_')[-1]
+        region = get_grid_district_polygon(configs, subst_id=subst_id)
+        region.plot(ax=ax, color='white', alpha=0.2,
+                    edgecolor='black', linewidth=2)
 
     if filename is None:
         plt.show()
