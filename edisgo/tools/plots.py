@@ -298,7 +298,7 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
         plt.close('all')
 
 
-def get_grid_district_polygon(config, subst_id=None):
+def get_grid_district_polygon(config, subst_id=None, projection=4326):
     """
     Get MV grid district polygon from oedb for plotting.
 
@@ -331,7 +331,7 @@ def get_grid_district_polygon(config, subst_id=None):
     crs = {'init': 'epsg:3035'}
     region = gpd.GeoDataFrame(
         Regions, columns=['subst_id', 'geometry'], crs=crs)
-    region = region.to_crs(epsg=4326) #({'init': 'epsg:4326'})
+    region = region.to_crs(epsg=projection)
     return region
 
 
