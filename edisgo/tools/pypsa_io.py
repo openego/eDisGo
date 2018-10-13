@@ -1605,16 +1605,14 @@ def update_pypsa_grid_reinforcement(network, equipment_changes):
         adj_nodes = idx.grid.graph.nodes_from_line(idx)
 
         if adj_nodes[0] in lv_stations:
-            bus0 = '_'.join(['Bus', adj_nodes[0].__repr__(side='mv')])
-        elif adj_nodes[0] is network.mv_grid.station:
-            bus0 = '_'.join(['Bus', adj_nodes[0].__repr__(side='lv')])
+            side = 'lv' if isinstance(idx.grid, LVGrid) else 'mv'
+            bus0 = '_'.join(['Bus', adj_nodes[0].__repr__(side=side)])
         else:
             bus0 = '_'.join(['Bus', repr(adj_nodes[0])])
 
         if adj_nodes[1] in lv_stations:
-            bus1 = '_'.join(['Bus', adj_nodes[1].__repr__(side='mv')])
-        elif adj_nodes[1] is network.mv_grid.station:
-            bus1 = '_'.join(['Bus', adj_nodes[1].__repr__(side='lv')])
+            side = 'lv' if isinstance(idx.grid, LVGrid) else 'mv'
+            bus1 = '_'.join(['Bus', adj_nodes[1].__repr__(side=side)])
         else:
             bus1 = '_'.join(['Bus', repr(adj_nodes[1])])
 
