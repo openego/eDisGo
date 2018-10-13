@@ -358,7 +358,7 @@ def _check_curtailment_target(curtailment, curtailment_target,
         the technology if :obj:`str` the curtailment was specified for.
 
     """
-    if not (abs(curtailment.sum(axis=1) - curtailment_target) < 1e-3).all():
+    if not (abs(curtailment.sum(axis=1) - curtailment_target) < 1e-1).all():
         message = 'Curtailment target not met for {}.'.format(curtailment_key)
         logging.error(message)
         raise TypeError(message)

@@ -216,19 +216,20 @@ class Load(Component):
                             "given.".format(sector))
                         raise
                 ts = ts * consumption
-                if self.timeseries_reactive is not None:
-                    ts['q'] = self.timeseries_reactive
+                ts_q = self.timeseries_reactive
+                if ts_q is not None:
+                    ts['q'] = ts_q.q
                 else:
                     ts['q'] = ts['p'] * self.q_sign * tan(
                         acos(self.power_factor))
 
-                if not ts_total:
+                if ts_total is None:
                     ts_total = ts
                 else:
                     ts_total.p += ts.p
                     ts_total.q += ts.q
 
-                return ts_total
+            return ts_total
         else:
             return self._timeseries
 
@@ -252,26 +253,34 @@ class Load(Component):
 
         """
         if self._timeseries_reactive is None:
-            
-            # work around until retail and industrial are separate sectors
-            # ToDo: remove once Ding0 data changed to single sector consumption
-            sector = list(self.consumption.keys())[0]
-            if len(list(self.consumption.keys())) > 1:
-                consumption = sum([v for k, v in self.consumption.items()])
-            else:
-                consumption = self.consumption[sector]
+            # if normalized reactive power time series are given, they are
+            # scaled by the annual consumption; if none are given reactive
+            # power time series are calculated timeseries getter using a given
+            # power factor
+            if self.grid.network.timeseries.load_reactive_power is not None:
+                self.power_factor = 'not_applicable'
+                self.reactive_power_mode = 'not_applicable'
+                ts_total = None
+                for sector in self.consumption.keys():
+                    consumption = self.consumption[sector]
 
-            try:
-                timeseries = \
-                    self.grid.network.timeseries.load_reactive_power[
-                        sector].to_frame('q')
-            except (KeyError, TypeError):
+                    try:
+                        ts = self.grid.network.timeseries.load_reactive_power[
+                            sector].to_frame('q')
+                    except KeyError:
+                        logger.exception(
+                            "No timeseries for load of type {} "
+                            "given.".format(sector))
+                        raise
+                    ts = ts * consumption
+                    if ts_total is None:
+                        ts_total = ts
+                    else:
+                        ts_total.q += ts.q
+                return ts_total
+            else:
                 return None
 
-            self.power_factor = 'not_applicable'
-            self.reactive_power_mode = 'not_applicable'
-
-            return timeseries * consumption
         else:
             return self._timeseries_reactive
 
