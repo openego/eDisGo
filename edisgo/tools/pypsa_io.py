@@ -331,18 +331,12 @@ def mv_to_pypsa(network):
         if l['adj_nodes'][0] in lv_stations:
             line['bus0'].append(
                 '_'.join(['Bus', l['adj_nodes'][0].__repr__(side='mv')]))
-        elif l['adj_nodes'][0] is network.mv_grid.station:
-            line['bus0'].append(
-                '_'.join(['Bus', l['adj_nodes'][0].__repr__(side='lv')]))
         else:
             line['bus0'].append('_'.join(['Bus', repr(l['adj_nodes'][0])]))
 
         if l['adj_nodes'][1] in lv_stations:
             line['bus1'].append(
                 '_'.join(['Bus', l['adj_nodes'][1].__repr__(side='mv')]))
-        elif l['adj_nodes'][1] is network.mv_grid.station:
-            line['bus1'].append(
-                '_'.join(['Bus', l['adj_nodes'][1].__repr__(side='lv')]))
         else:
             line['bus1'].append('_'.join(['Bus', repr(l['adj_nodes'][1])]))
 
