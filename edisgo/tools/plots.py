@@ -568,6 +568,10 @@ def line_loading(pypsa_network, configs, line_load, timestep,
     if ylim is not None:
         ax.set_ylim(ylim[0], ylim[1])
 
+    # hide axes labels
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+
     # draw arrows on lines
     if arrows and timestep:
         path = ll[1].get_segments()
