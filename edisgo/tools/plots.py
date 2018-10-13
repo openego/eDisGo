@@ -12,6 +12,11 @@ from sqlalchemy.orm import sessionmaker
 import geopandas as gpd
 from geoalchemy2 import shape
 from pyproj import Proj, transform
+contextily = True
+try:
+    import contextily as ctx
+except:
+    contextily = False
 
 from edisgo.tools import tools
 
@@ -299,6 +304,19 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
         plt.close('all')
 
 
+def add_basemap(ax, zoom=12, url=ctx.sources.ST_TONER_LITE):
+    """
+    Adds map to a plot.
+
+    """
+    xmin, xmax, ymin, ymax = ax.axis()
+    basemap, extent = ctx.bounds2img(xmin, ymin, xmax, ymax,
+                                     zoom=zoom, url=url)
+    ax.imshow(basemap, extent=extent, interpolation='bilinear')
+    # restore original x/y limits
+    ax.axis((xmin, xmax, ymin, ymax))
+
+
 def get_grid_district_polygon(config, subst_id=None, projection=4326):
     """
     Get MV grid district polygon from oedb for plotting.
@@ -338,7 +356,7 @@ def get_grid_district_polygon(config, subst_id=None, projection=4326):
 
 def line_loading(pypsa_network, configs, line_load, timestep,
                  filename=None, arrows=False, node_color='technology',
-                 grid_district_geom=True,
+                 grid_district_geom=True, background_map=True,
                  voltage=None, limits_cb_load=None, limits_cb_voltage=None,
                  xlim=None, ylim=None):
     """
@@ -492,6 +510,16 @@ def line_loading(pypsa_network, configs, line_load, timestep,
             pypsa_plot.buses.index, voltage, configs)
         bus_cmap = plt.cm.Blues
 
+    # convert bus coordinates to Mercator
+    if contextily and background_map:
+        inProj = Proj(init='epsg:4326')
+        outProj = Proj(init='epsg:3857')
+        x2, y2 = transform(inProj, outProj,
+                           list(pypsa_plot.buses.loc[:, 'x']),
+                           list(pypsa_plot.buses.loc[:, 'y']))
+        pypsa_plot.buses.loc[:, 'x'] = x2
+        pypsa_plot.buses.loc[:, 'y'] = y2
+
     # plot
     plt.figure(figsize=(12, 8))
     ax = plt.gca()
@@ -559,6 +587,9 @@ def line_loading(pypsa_network, configs, line_load, timestep,
                 arrowprops=arrowprops,
                 size=10)
 
+    # plot map data in background
+    if contextily and background_map:
+        add_basemap(ax, zoom=12)
 
     if filename is None:
         plt.show()
