@@ -11,6 +11,7 @@ from egoio.db_tables.model_draft import EgoGridMvGriddistrict
 from sqlalchemy.orm import sessionmaker
 import geopandas as gpd
 from geoalchemy2 import shape
+from pyproj import Proj, transform
 
 from edisgo.tools import tools
 
@@ -495,6 +496,16 @@ def line_loading(pypsa_network, configs, line_load, timestep,
     plt.figure(figsize=(12, 8))
     ax = plt.gca()
 
+    # plot grid district
+    if grid_district_geom:
+        subst = pypsa_network.buses[
+            pypsa_network.buses.index.str.contains("MVStation")].index[0]
+        subst_id = subst.split('_')[-1]
+        projection = 3857 if contextily and background_map else 4326
+        region = get_grid_district_polygon(configs, subst_id=subst_id,
+                                           projection=projection)
+        region.plot(ax=ax, color='white', alpha=0.2,
+                    edgecolor='red', linewidth=2)
     cmap = plt.cm.get_cmap('inferno_r')
     ll = pypsa_plot.plot(line_colors=loading, line_cmap=cmap, ax=ax,
                          title="Line loading", line_widths=2,
@@ -548,14 +559,6 @@ def line_loading(pypsa_network, configs, line_load, timestep,
                 arrowprops=arrowprops,
                 size=10)
 
-    # plot grid district
-    if grid_district_geom:
-        subst = pypsa_network.buses[
-            pypsa_network.buses.index.str.contains("MVStation")].index[0]
-        subst_id = subst.split('_')[-1]
-        region = get_grid_district_polygon(configs, subst_id=subst_id)
-        region.plot(ax=ax, color='white', alpha=0.2,
-                    edgecolor='black', linewidth=2)
 
     if filename is None:
         plt.show()
