@@ -317,7 +317,8 @@ def get_grid_district_polygon(config, subst_id=None):
                               EgoDpMvGriddistrict.geom)
         Regions = [(subst_id, shape.to_shape(geom)) for subst_id, geom in
                    query.filter(EgoDpMvGriddistrict.version == version,
-                                EgoDpMvGriddistrict.subst_id == subst_id).all()]
+                                EgoDpMvGriddistrict.subst_id == subst_id).all()
+                   ]
 
     # get polygon from model_draft
     else:
