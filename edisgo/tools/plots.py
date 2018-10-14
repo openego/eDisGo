@@ -9,16 +9,18 @@ from egoio.tools.db import connection
 from egoio.db_tables.grid import EgoDpMvGriddistrict
 from egoio.db_tables.model_draft import EgoGridMvGriddistrict
 from sqlalchemy.orm import sessionmaker
-import geopandas as gpd
 from geoalchemy2 import shape
 from pyproj import Proj, transform
-contextily = True
-try:
-    import contextily as ctx
-except:
-    contextily = False
 
 from edisgo.tools import tools
+
+if not 'READTHEDOCS' in os.environ:
+    import geopandas as gpd
+    contextily = True
+    try:
+        import contextily as ctx
+    except:
+        contextily = False
 
 
 def create_curtailment_characteristic(curtailment, pypsa_network, timestep,
