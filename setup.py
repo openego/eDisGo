@@ -43,7 +43,8 @@ setup(
         'multiprocess',
         'workalendar',
         'oedialect',
-        'geopandas'
+        'geopandas',
+        'descartes'
     ],
     package_data={
         'edisgo': [
