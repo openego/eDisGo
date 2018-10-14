@@ -306,14 +306,15 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
         plt.close('all')
 
 
-def add_basemap(ax, zoom=12, url=ctx.sources.ST_TONER_LITE):
+def add_basemap(ax, zoom=12):
     """
     Adds map to a plot.
 
     """
+    url = ctx.sources.ST_TONER_LITE
     xmin, xmax, ymin, ymax = ax.axis()
     basemap, extent = ctx.bounds2img(xmin, ymin, xmax, ymax,
-                                     zoom=zoom, url=url)
+                                            zoom=zoom, url=url)
     ax.imshow(basemap, extent=extent, interpolation='bilinear')
     # restore original x/y limits
     ax.axis((xmin, xmax, ymin, ymax))
