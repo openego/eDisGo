@@ -9,3 +9,4 @@ egoio >=0.4.5
 workalendar
 demandlib
 oedialect
+geopandas
