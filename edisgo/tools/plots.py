@@ -6,8 +6,6 @@ from math import sqrt
 from matplotlib import pyplot as plt
 from pypsa import Network as PyPSANetwork
 from egoio.tools.db import connection
-from egoio.db_tables.grid import EgoDpMvGriddistrict
-from egoio.db_tables.model_draft import EgoGridMvGriddistrict
 from sqlalchemy.orm import sessionmaker
 from geoalchemy2 import shape
 from pyproj import Proj, transform
@@ -15,6 +13,8 @@ from pyproj import Proj, transform
 from edisgo.tools import tools
 
 if not 'READTHEDOCS' in os.environ:
+    from egoio.db_tables.grid import EgoDpMvGriddistrict
+    from egoio.db_tables.model_draft import EgoGridMvGriddistrict
     import geopandas as gpd
     contextily = True
     try:
