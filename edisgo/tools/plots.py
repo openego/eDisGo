@@ -659,7 +659,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
     #ToDo set plot title corresponding to what was plotted
     cmap = plt.cm.get_cmap('inferno_r')
     ll = pypsa_plot.plot(line_colors=line_colors, line_cmap=cmap, ax=ax,
-                         title=None,
+                         title="",
                          line_widths=2, #pypsa_plot.lines.s_nom,
                          branch_components=['Line'], basemap=True,
                          bus_sizes=bus_sizes, bus_colors=bus_colors,
