@@ -359,7 +359,7 @@ def line_loading(pypsa_network, configs, timestep=None,
                  line_load=None, grid_expansion_costs=None,
                  filename=None, arrows=False,
                  grid_district_geom=True, background_map=True,
-                 voltage=None, limits_cb_load=None, limits_cb_voltage=None,
+                 voltage=None, limits_cb_lines=None, limits_cb_nodes=None,
                  xlim=None, ylim=None):
     """
     Plot line loading as color on lines.
@@ -425,11 +425,11 @@ def line_loading(pypsa_network, configs, timestep=None,
         only work when `line_color` option 'loading' is used and a time step
         is given.
         Default: False.
-    limits_cb_load : :obj:`tuple`
-        Tuple with limits for colorbar of line loading. First entry is the
+    limits_cb_lines : :obj:`tuple`
+        Tuple with limits for colorbar of line color. First entry is the
         minimum and second entry the maximum value. Default: None.
-    limits_cb_voltage : :obj:`tuple`
-        Tuple with limits for colorbar of node voltages. First entry is the
+    limits_cb_nodes : :obj:`tuple`
+        Tuple with limits for colorbar of nodes. First entry is the
         minimum and second entry the maximum value. Default: None.
     xlim : :obj:`tuple`
         Limits of x-axis. Default: None.
@@ -667,32 +667,32 @@ def line_loading(pypsa_network, configs, timestep=None,
 
     # color bar line loading
     if line_color == 'loading':
-        if limits_cb_load is None:
-            limits_cb_load = (min(line_colors), max(line_colors))
-        v = np.linspace(limits_cb_load[0], limits_cb_load[1], 101)
+        if limits_cb_lines is None:
+            limits_cb_lines = (min(line_colors), max(line_colors))
+        v = np.linspace(limits_cb_lines[0], limits_cb_lines[1], 101)
         cb = plt.colorbar(ll[1], boundaries=v, ticks=v[0:101:10])
-        cb.set_clim(vmin=limits_cb_load[0], vmax=limits_cb_load[1])
+        cb.set_clim(vmin=limits_cb_lines[0], vmax=limits_cb_lines[1])
         cb.set_label('Line loading in p.u.')
+    # color bar grid expansion costs
     elif line_color == 'expansion_costs':
-        if limits_cb_load is None:
-            limits_cb_load = (min(min(line_colors), min(bus_colors.values())),
+        if limits_cb_lines is None:
+            limits_cb_lines = (min(min(line_colors), min(bus_colors.values())),
                               max(max(line_colors), max(bus_colors.values())))
-        v = np.linspace(limits_cb_load[0], limits_cb_load[1], 101)
+        v = np.linspace(limits_cb_lines[0], limits_cb_lines[1], 101)
         cb = plt.colorbar(ll[1], boundaries=v, ticks=v[0:101:10])
-        cb.set_clim(vmin=limits_cb_load[0], vmax=limits_cb_load[1])
+        cb.set_clim(vmin=limits_cb_lines[0], vmax=limits_cb_lines[1])
         cb.set_label('Grid expansion costs in kEUR')
 
     # color bar voltage
     if node_color == 'voltage':
-        if limits_cb_voltage is None:
-            limits_cb_voltage = (min(bus_colors.values()),
+        if limits_cb_nodes is None:
+            limits_cb_nodes = (min(bus_colors.values()),
                                  max(bus_colors.values()))
-        v_voltage = np.linspace(limits_cb_voltage[0], limits_cb_voltage[1],
-                                101)
+        v_voltage = np.linspace(limits_cb_nodes[0], limits_cb_nodes[1], 101)
         cb_voltage = plt.colorbar(ll[0], boundaries=v_voltage,
                                   ticks=v_voltage[0:101:10])
-        cb_voltage.set_clim(vmin=limits_cb_voltage[0],
-                            vmax=limits_cb_voltage[1])
+        cb_voltage.set_clim(vmin=limits_cb_nodes[0],
+                            vmax=limits_cb_nodes[1])
         cb_voltage.set_label('Voltage deviation in p.u.')
 
     # storages
