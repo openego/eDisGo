@@ -354,13 +354,13 @@ def get_grid_district_polygon(config, subst_id=None, projection=4326):
     return region
 
 
-def line_loading(pypsa_network, configs, timestep=None,
-                 line_color=None, node_color=None,
-                 line_load=None, grid_expansion_costs=None,
-                 filename=None, arrows=False,
-                 grid_district_geom=True, background_map=True,
-                 voltage=None, limits_cb_lines=None, limits_cb_nodes=None,
-                 xlim=None, ylim=None):
+def mv_grid_topology(pypsa_network, configs, timestep=None,
+                     line_color=None, node_color=None,
+                     line_load=None, grid_expansion_costs=None,
+                     filename=None, arrows=False,
+                     grid_district_geom=True, background_map=True,
+                     voltage=None, limits_cb_lines=None, limits_cb_nodes=None,
+                     xlim=None, ylim=None):
     """
     Plot line loading as color on lines.
 
