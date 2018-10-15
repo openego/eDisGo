@@ -643,14 +643,18 @@ def line_loading(pypsa_network, configs, timestep=None,
 
     # plot grid district
     if grid_district_geom:
-        subst = pypsa_network.buses[
-            pypsa_network.buses.index.str.contains("MVStation")].index[0]
-        subst_id = subst.split('_')[-1]
-        projection = 3857 if contextily and background_map else 4326
-        region = get_grid_district_polygon(configs, subst_id=subst_id,
-                                           projection=projection)
-        region.plot(ax=ax, color='white', alpha=0.2,
-                    edgecolor='red', linewidth=2)
+        try:
+            subst = pypsa_network.buses[
+                pypsa_network.buses.index.str.contains("MVStation")].index[0]
+            subst_id = subst.split('_')[-1]
+            projection = 3857 if contextily and background_map else 4326
+            region = get_grid_district_polygon(configs, subst_id=subst_id,
+                                               projection=projection)
+            region.plot(ax=ax, color='white', alpha=0.2,
+                        edgecolor='red', linewidth=2)
+        except Exception as e:
+            logging.warning("Grid district geometry could not be plotted due "
+                            "to the following error: {}".format(e))
 
     #ToDo set plot title corresponding to what was plotted
     cmap = plt.cm.get_cmap('inferno_r')
@@ -741,7 +745,11 @@ def line_loading(pypsa_network, configs, timestep=None,
 
     # plot map data in background
     if contextily and background_map:
-        add_basemap(ax, zoom=12)
+        try:
+            add_basemap(ax, zoom=12)
+        except Exception as e:
+            logging.warning("Background map could not be plotted due to the "
+                            "following error: {}".format(e))
 
     if filename is None:
         plt.show()
