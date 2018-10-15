@@ -42,7 +42,9 @@ setup(
         'pyomo >= 5.5.0',
         'multiprocess',
         'workalendar',
-        'oedialect'
+        'oedialect',
+        'geopandas',
+        'descartes'
     ],
     package_data={
         'edisgo': [

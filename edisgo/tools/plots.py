@@ -6,19 +6,21 @@ from math import sqrt
 from matplotlib import pyplot as plt
 from pypsa import Network as PyPSANetwork
 from egoio.tools.db import connection
-from egoio.db_tables.grid import EgoDpMvGriddistrict
-from egoio.db_tables.model_draft import EgoGridMvGriddistrict
 from sqlalchemy.orm import sessionmaker
-import geopandas as gpd
 from geoalchemy2 import shape
 from pyproj import Proj, transform
-contextily = True
-try:
-    import contextily as ctx
-except:
-    contextily = False
 
 from edisgo.tools import tools
+
+if not 'READTHEDOCS' in os.environ:
+    from egoio.db_tables.grid import EgoDpMvGriddistrict
+    from egoio.db_tables.model_draft import EgoGridMvGriddistrict
+    import geopandas as gpd
+    contextily = True
+    try:
+        import contextily as ctx
+    except:
+        contextily = False
 
 
 def create_curtailment_characteristic(curtailment, pypsa_network, timestep,
@@ -304,14 +306,15 @@ def create_voltage_plots(voltage_data, directory, **kwargs):
         plt.close('all')
 
 
-def add_basemap(ax, zoom=12, url=ctx.sources.ST_TONER_LITE):
+def add_basemap(ax, zoom=12):
     """
     Adds map to a plot.
 
     """
+    url = ctx.sources.ST_TONER_LITE
     xmin, xmax, ymin, ymax = ax.axis()
     basemap, extent = ctx.bounds2img(xmin, ymin, xmax, ymax,
-                                     zoom=zoom, url=url)
+                                            zoom=zoom, url=url)
     ax.imshow(basemap, extent=extent, interpolation='bilinear')
     # restore original x/y limits
     ax.axis((xmin, xmax, ymin, ymax))

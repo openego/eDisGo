@@ -163,7 +163,7 @@ if 'READTHEDOCS' in os.environ:
         def __getattr__(cls, name):
                 return MagicMock()
 
-    MOCK_MODULES = ['ding0', 'ding0.results', 'shapely']
+    MOCK_MODULES = ['ding0', 'ding0.results', 'shapely', 'shapely.wkt', 'shapely.wkb']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 
