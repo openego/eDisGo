@@ -17,7 +17,8 @@ from edisgo.data.import_data import import_from_ding0, import_generators, \
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, \
     curtailment, storage_positioning
-from edisgo.grid.components import Station, BranchTee, Generator, Load
+from edisgo.grid.components import Station, BranchTee, Generator, Load, \
+    GeneratorFluctuating
 from edisgo.grid.tools import get_gen_info, disconnect_storage
 from edisgo.grid.grids import MVGrid
 from edisgo.tools import plots
@@ -1319,9 +1320,16 @@ class TimeSeriesControl:
             if isinstance(ts, pd.DataFrame):
                 self.timeseries.generation_dispatchable = ts
             else:
-                raise ValueError('Your input for '
-                                 '"timeseries_generation_dispatchable" is not '
-                                 'valid.'.format(mode))
+                # check if there are any dispatchable generators, and
+                # throw error if there are
+                gens = network.mv_grid.generators + [
+                    gen for lv_grid in network.mv_grid.lv_grids
+                    for gen in lv_grid.generators]
+                if False in [True if isinstance(g, GeneratorFluctuating)
+                             else False for g in gens]:
+                    raise ValueError(
+                        'Your input for "timeseries_generation_dispatchable" '
+                        'is not valid.'.format(mode))
             # reactive power time series for all generators
             ts = kwargs.get('timeseries_generation_reactive_power', None)
             if isinstance(ts, pd.DataFrame):
