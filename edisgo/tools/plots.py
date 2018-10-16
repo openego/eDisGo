@@ -23,108 +23,72 @@ if not 'READTHEDOCS' in os.environ:
         contextily = False
 
 
-def create_curtailment_characteristic(curtailment, pypsa_network, timestep,
-                                      directory, **kwargs):
+def histogram(data, **kwargs):
     """
-    Function to create some voltage histograms.
+    Function to create histogram, e.g. for voltages or currents.
 
     Parameters
     ----------
-    curtailment : :pandas:`pandas.DataFrame<dataframe>`
-        Assigned curtailment in kW of all generators to be included in the
-        plot. The column names are the generators representatives, index is a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-        Curtailment can be obtained from to each generator per curtailment target.
-        The assigned curtailment in kW from of the generators typically
-        obtained from :py:mod:`edisgo.network.Results` object
-        in the attribute
-        :attr:`edisgo.network.Results.assigned_curtailment`.
-    pypsa_network : :pypsa:`pypsa.Network<network>`
-    generator_feedins: :pandas:`pandas.DataFrame<dataframe>`
-        The feedins in kW of every single generator typically
-        obtained from :py:mod:`edisgo.grid.tools.generator_feedins`
-        The columns names are the individual generators as
-        `edisgo.grid.components.GeneratorFluctuating` and
-        `edisgo.grid.components.Generator` objects
-        and the index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-    bus_voltages_before_curtailment: :pandas:`pandas.DataFrame<dataframe>`
-        The voltages in per unit at the buses before curtailment
-        as in the :py:mod:`edisgo.network.pypsa` object
-        from the attribute 'buses_t['v_mag_pu'].
-        The columns names are the individual buses as
-        :obj:`str` objects containing the bus IDs
-        (including Generators as 'Bus_Generator...')
-        and the index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-    gens_fluct_info: :pandas:`pandas.DataFrame<dataframe>`
-        The information about all the fluctuating generators
-        i.e. gen_repr, type, voltage_level, weather_cell_id and nominal_capacity
-        as can be obtained from :py:mod:`edisgo.grid.tools.get_gen_info`
-        with the 'fluctuating' switch set to 'True'.
-        The columns names are information categories
-        namely 'gen_repr', 'type', 'voltage_level',
-        'nominal_capacity', 'weather_cell_id' and
-        the index contains the
-        `edisgo.grid.components.GeneratorFluctuating` objects.
-    directory: :obj:`str`
-        path to save the plots
-    filetype: :obj:`str`
-        filetype to save the file with, the allowed types
-        are the same as those allowed from matplotlib
-        Default: png
-    timeindex: :pandas:`pandas.DatetimeIndex<datetimeindex>`
-        Datetime index which the histogram should be constructed from.
-        Default: all indexes in the results
-    color: :obj:`str`
-        color of plot in matplotlib standard color
-    transparency: :obj:`float`
-        transparency of the plot, a number from 0 to 1,
-        where 0 is see through and 1 is opaque.
-    xlabel: :obj:`str`
-        label for x axis. Both by default and in failing cases this
-        would be set to 'Normalized Frequency [per unit]'.
-    ylabel: :obj:`str`
-        label for y axis. Both by default and in failing cases this
-        would be set to 'Voltage [per unit]'.
-    xlim: :obj:`tuple`
-        tuple of limits of x axis (left_limit,right_limit)
-    ylim: :obj:`tuple`
-        tuple of limits of y axis (left_limit,right_limit)
-    figsize: :obj:`str` or :obj:`tuple`
-        size of the figure in inches or a string with the following options:
+    data : :pandas:`pandas.DataFrame<dataframe>`
+        Data to be plotted, e.g. voltage or current (`v_res` or `i_res` from
+        :class:`edisgo.grid.network.Results`). Index of the dataframe must be
+        a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+    timeindex : :pandas:`pandas.Timestamp<timestamp>` or None, optional
+        Specifies time step histogram is plotted for. If timeindex is None all
+        time steps provided in dataframe are used. Default: None.
+    directory : :obj:`str` or None, optional
+        Path to directory the plot is saved to. Is created if it does not
+        exist. Default: None.
+    filename : :obj:`str` or None, optional
+        Filename the plot is saved as. File format is specified by ending. If
+        filename is None, the plot is shown. Default: None.
+    color : :obj:`str` or None, optional
+        Color used in plot. If None it defaults to blue. Default: None.
+    alpha : :obj:`float`, optional
+        Transparency of the plot. Must be a number between 0 and 1,
+        where 0 is see through and 1 is opaque. Default: 1.
+    title : :obj:`str` or None, optional
+        Plot title. Default: None.
+    x_label : :obj:`str`, optional
+        Label for x-axis. Default: "".
+    y_label : :obj:`str`, optional
+        Label for y-axis. Default: "".
+    normed : :obj:`bool`, optional
+        Defines if histogram is normed. Default: False.
+    x_limits : :obj:`tuple` or None, optional
+        Tuple with x-axis limits. First entry is the minimum and second entry
+        the maximum value. Default: None.
+    y_limits : :obj:`tuple` or None, optional
+        Tuple with y-axis limits. First entry is the minimum and second entry
+        the maximum value. Default: None.
+    fig_size : :obj:`str` or :obj:`tuple`, optional
+        Size of the figure in inches or a string with the following options:
          * 'a4portrait'
          * 'a4landscape'
          * 'a5portrait'
          * 'a5landscape'
 
-         By default and in failing cases this would be set to 'a5landscape'.
-    binwidth: :obj:`float`
-        width of bins in per unit voltage,
-        By default and in failing cases this would be set to 0.01.
+         Default: 'a5landscape'.
+    binwidth : :obj:`float`
+        Width of bins. Default: None.
 
     """
+    timeindex = kwargs.get('timeindex', None)
+    directory = kwargs.get('directory', None)
+    filename = kwargs.get('filename', None)
+    title = kwargs.get('title', "")
+    x_label = kwargs.get('x_label', "")
+    y_label = kwargs.get('y_label', "")
 
-    # get voltages
-    gens_buses = list(map(lambda _: 'Bus_{}'.format(_), curtailment.columns))
-    voltages = pypsa_network.buses_t.v_mag_pu.loc[timestep, gens_buses]
-    voltages = pd.Series(voltages.values, index=curtailment.columns)
+    color = kwargs.get('color', None)
+    alpha = kwargs.get('alpha', 1)
+    normed = kwargs.get('normed', False)
 
-    # get feed-ins
-    feedins = pypsa_network.generators_t.p.loc[
-                  timestep, curtailment.columns] * 1e3
+    x_limits = kwargs.get('x_limits', None)
+    y_limits = kwargs.get('y_limits', None)
+    binwidth = kwargs.get('binwidth', None)
 
-    # relative curtailment
-    rel_curtailment = curtailment.loc[timestep, :] / feedins
-
-    plot_df = pd.DataFrame({'voltage_pu': voltages,
-                            'curtailment_pu': rel_curtailment})
-
-    # configure plot
-    x_limits = kwargs.get('xlim', None)
-    y_limits = kwargs.get('ylim', None)
-    color = kwargs.get('color', 'blue')
-    transparency = kwargs.get('transparency', 0)
-    filetype = kwargs.get('filetype', 'png')
-    fig_size = kwargs.get('figsize', 'a5landscape')
+    fig_size = kwargs.get('fig_size', 'a5landscape')
     standard_sizes = {'a4portrait': (8.27, 11.69),
                       'a4landscape': (11.69, 8.27),
                       'a5portrait': (5.8, 8.3),
@@ -132,178 +96,46 @@ def create_curtailment_characteristic(curtailment, pypsa_network, timestep,
     try:
         fig_size = standard_sizes[fig_size]
     except:
-        message = "Unknown size {}. Using default a5landscape".format(fig_size)
-        logging.warning(message)
         fig_size = standard_sizes['a5landscape']
 
-    alpha = 1 - transparency
-    if alpha > 1:
-        alpha = 1
-    elif alpha < 0:
-        alpha = 0
+    if timeindex is not None:
+        plot_data = data.loc[timeindex, :]
+    else:
+        plot_data = data.T.stack()
 
-    x_label = kwargs.get('xlabel', "Voltage in p.u.")
-    y_label = kwargs.get('ylabel', "Curtailment normalized by feedin in kW/kW")
+    if binwidth is not None:
+        if x_limits is not None:
+            lowerlimit = x_limits[0] - binwidth / 2
+            upperlimit = x_limits[1] + binwidth / 2
+        else:
+            lowerlimit = plot_data.min() - binwidth / 2
+            upperlimit = plot_data.max() + binwidth / 2
+        bins = np.arange(lowerlimit, upperlimit, binwidth)
+    else:
+        bins = 10
 
-    # plot
     plt.figure(figsize=fig_size)
-    plot_title = "Curtailment Characteristic at {}".format(timestep)
-    plot_df.plot(kind='scatter', x='voltage_pu', y='curtailment_pu',
-                 xlim=x_limits, ylim=y_limits,
-                 color=color, alpha=alpha, edgecolor=None, grid=True)
+    ax = plot_data.hist(
+        normed=normed, color=color, alpha=alpha, bins=bins, grid=True)
     plt.minorticks_on()
-    plt.title(plot_title)
+
+    if x_limits is not None:
+        ax.set_xlim(x_limits[0], x_limits[1])
+    if y_limits is not None:
+        ax.set_ylim(y_limits[0], y_limits[1])
+    if title is not None:
+        plt.title(title)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
 
-    if kwargs.get('voltage_threshold', None):
-        plt.axvline(1.0, color='black', linestyle='--')
-
-    # save
-    os.makedirs(directory, exist_ok=True)
-    plt.savefig(os.path.join(directory,
-                             'curtailment_characteristic_{}.{}'.format(
-                                 timestep.strftime('%Y%m%d%H%M'),
-                                 filetype)))
-    plt.close('all')
-
-
-def create_voltage_plots(voltage_data, directory, **kwargs):
-    """
-    Function to create some voltage histograms.
-
-    Parameters
-    ----------
-    voltage_data: either :pandas:`pandas.DataFrame<dataframe>` or :py:mod:`~/edisgo/grid/network.Results` Object
-        The voltage data to be plotted. If this is a
-        :pandas:`pandas.DataFrame<dataframe>`, the columns are to be
-        String labels of the node names with IDs, else if its an
-        :py:mod:`~/edisgo/grid/network.Results` the function will automatically
-        get the dataframe in pfa_v_mag_pu.
-    directory: :obj:`str`
-        path to save the plots
-    filetype: :obj:`str`
-        filetype to save the file with, the allowed types
-        are the same as those allowed from matplotlib
-        Default: png
-    timeindex: :pandas:`pandas.DatetimeIndex<datetimeindex>`
-        Datetime index which the histogram should be constructed from.
-        Default: all indexes in the results
-    plot_separate_timesteps: :obj:`boolean`
-        If true then a separate histogram is generated for each timestep
-        Default: False
-    color: :obj:`str`
-        color of plot in matplotlib standard color
-    transparency: :obj:`float`
-        transparency of the plot, a number from 0 to 1,
-        where 0 is see through and 1 is opaque.
-    xlabel: :obj:`str`
-        label for x axis. Both by default and in failing cases this
-        would be set to 'Normalized Frequency [per unit]'.
-    ylabel: :obj:`str`
-        label for y axis. Both by default and in failing cases this
-        would be set to 'Voltage [per unit]'.
-    xlim: :obj:`tuple`
-        tuple of limits of x axis (left_limit,right_limit)
-    ylim: :obj:`tuple`
-        tuple of limits of y axis (left_limit,right_limit)
-    figsize: :obj:`str` or :obj:`tuple`
-        size of the figure in inches or a string with the following options:
-         * 'a4portrait'
-         * 'a4landscape'
-         * 'a5portrait'
-         * 'a5landscape'
-
-         By default and in failing cases this would be set to 'a5landscape'.
-    binwidth: :obj:`float`
-        width of bins in per unit voltage,
-        By default and in failing cases this would be set to 0.01.
-
-    """
-    voltage = voltage_data.copy()
-    x_label = kwargs.get('xlabel', "Voltage [per unit]")
-    y_label = kwargs.get('ylabel', "Normalized Frequency [per unit]")
-    x_limits = kwargs.get('xlim', (0.9, 1.1))
-    y_limits = kwargs.get('ylim', (0, 60))
-    color = kwargs.get('color', None)
-    transparency = kwargs.get('transparency', 0)
-    binwidth = kwargs.get('binwidth', 0.01)
-    lowerlimit = x_limits[0] - binwidth / 2
-    upperlimit = x_limits[1] + binwidth / 2
-    filetype = kwargs.get('filetype', 'png')
-    fig_size = kwargs.get('figsize', 'a5landscape')
-    standard_sizes = {'a4portrait': (8.27, 11.69),
-                      'a4landscape': (11.69, 8.27),
-                      'a5portrait': (5.8, 8.3),
-                      'a5landscape': (8.3, 5.8)}
-    try:
-        fig_size = standard_sizes[fig_size]
-    except:
-        message = "Unknown size {}. using default a5landscape".format(fig_size)
-        logging.warning(message)
-        fig_size = standard_sizes['a5landscape']
-
-    alpha = 1 - transparency
-    if alpha > 1:
-        alpha = 1
-    elif alpha < 0:
-        alpha = 0
-
-    timeindex = kwargs.get('timeindex', voltage.index)
-
-    plot_separate_timesteps = kwargs.get('plot_separate_timesteps', False)
-
-    os.makedirs(directory, exist_ok=True)
-
-    if plot_separate_timesteps:
-        for timestamp in timeindex:
-            plot_title = "Voltage Histogram at {}".format(str(timestamp))
-
-            bins = np.arange(lowerlimit, upperlimit, binwidth)
-            plt.figure(figsize=fig_size)
-            voltage.loc[str(timestamp), :].plot(kind='hist', normed=True,
-                                                color=color,
-                                                alpha=alpha,
-                                                bins=bins,
-                                                xlim=x_limits,
-                                                ylim=y_limits,
-                                                grid=True)
-            plt.minorticks_on()
-            plt.axvline(1.0, color='black', linestyle='--')
-            plt.axvline(voltage.loc[str(timestamp), :].mean(),
-                        color='green', linestyle='--')
-            plt.title(plot_title)
-            plt.xlabel(x_label)
-            plt.ylabel(y_label)
-            plt.savefig(os.path.join(directory,
-                                     'voltage_histogram_{}.{}'.format(
-                                         timestamp.strftime('%Y%m%d%H%M'),
-                                         filetype)))
-            plt.close('all')
+    if filename is None:
+        plt.show()
     else:
-        plot_title = "Voltage Histogram \nfrom {} to {}".format(str(timeindex[0]), str(timeindex[-1]))
-
-        bins = np.arange(lowerlimit, upperlimit, binwidth)
-        plt.figure(figsize=fig_size)
-        voltage.plot(kind='hist', normed=True,
-                     color=color,
-                     alpha=alpha,
-                     bins=bins,
-                     xlim=x_limits,
-                     ylim=y_limits,
-                     grid=True,
-                     legend=False)
-        plt.minorticks_on()
-        plt.axvline(1.0, color='black', linestyle='--')
-        # plt.axvline(voltage.mean(),
-        #             color='green', linestyle='--')
-        plt.legend()
-        plt.title(plot_title)
-        plt.xlabel(x_label)
-        plt.ylabel(y_label)
-        plt.savefig(os.path.join(directory,
-                                 'voltage_histogram_all.{}'.format(filetype)))
-        plt.close('all')
+        if directory is not None:
+            os.makedirs(directory, exist_ok=True)
+            filename = os.path.join(directory, filename)
+        plt.savefig(filename)
+        plt.close()
 
 
 def add_basemap(ax, zoom=12):
