@@ -231,8 +231,10 @@ def _build_lv_grid(ding0_grid, network):
                          for _ in edges]
                 # convert voltage from V to kV
                 for line in lines:
-                    line[2]['line'].type['U_n'] = \
-                        line[2]['line'].type['U_n'] / 1e3
+                    # ToDo: remove work around once it's fixed in ding0
+                    if line[2]['line'].type['U_n'] >= 400:
+                        line[2]['line'].type['U_n'] = \
+                            line[2]['line'].type['U_n'] / 1e3
                 lv_grid.graph.add_edges_from(lines, type='line')
 
                 # Add LV station as association to LV grid
