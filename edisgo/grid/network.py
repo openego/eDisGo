@@ -25,7 +25,121 @@ from edisgo.tools import plots
 logger = logging.getLogger('edisgo')
 
 
-class EDisGo:
+class EDisGoReimport:
+    """
+    EDisGo class created from saved results.
+
+    """
+    def __init__(self, results_path, **kwargs):
+
+        # create network
+        self.network = NetworkReimport(results_path, **kwargs)
+
+    def plot_mv_grid_topology(self, **kwargs):
+        """
+        Plots plain MV grid topology.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        if self.network.pypsa is None:
+            try:
+                timesteps = self.network.timeseries.timeindex
+                self.network.pypsa = pypsa_io.to_pypsa(
+                    self.network, mode=None, timesteps=timesteps)
+            except:
+                logging.warning(
+                    "pypsa representation of MV grid needed to plot MV "
+                    "grid topology.")
+
+        if self.network.pypsa is not None:
+            plots.mv_grid_topology(
+                self.network.pypsa, self.network.config,
+                filename=kwargs.get('filename', None),
+                grid_district_geom=kwargs.get('grid_district_geom', True),
+                background_map=kwargs.get('background_map', True),
+                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None))
+
+    def plot_line_loading(self, **kwargs):
+        """
+        Plots relative line loading (current from power flow analysis to
+        allowed current) of MV lines.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        if self.network.pypsa is not None and \
+                self.network.results.i_res is not None:
+            plots.mv_grid_topology(
+                self.network.pypsa, self.network.config,
+                timestep=kwargs.get('timestep', None),
+                line_color='loading',
+                node_color=kwargs.get('node_color', None),
+                line_load=self.network.results.i_res,
+                filename=kwargs.get('filename', None),
+                arrows=kwargs.get('arrows', None),
+                grid_district_geom=kwargs.get('grid_district_geom', True),
+                background_map=kwargs.get('background_map', True),
+                voltage=self.network.results.v_res(),
+                limits_cb_lines=kwargs.get('limits_cb_lines', None),
+                limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
+                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None))
+        else:
+            if self.network.pypsa is None:
+                logging.warning("pypsa representation of MV grid needed to "
+                                "plot line loading.")
+            if self.network.results.i_res is None:
+                logging.warning("Currents `i_res` from power flow analysis "
+                                "must be available to plot line loading.")
+
+    def plot_grid_expansion_costs(self, **kwargs):
+        """
+        Plots costs per MV line.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        if self.network.pypsa is not None and \
+                self.network.results.grid_expansion_costs is not None:
+            plots.mv_grid_topology(
+                self.network.pypsa, self.network.config,
+                line_color='expansion_costs',
+                grid_expansion_costs=self.network.results.grid_expansion_costs,
+                filename=kwargs.get('filename', None),
+                grid_district_geom=kwargs.get('grid_district_geom', True),
+                background_map=kwargs.get('background_map', True),
+                limits_cb_lines=kwargs.get('limits_cb_lines', None),
+                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None))
+        else:
+            if self.network.pypsa is None:
+                logging.warning("pypsa representation of MV grid needed to "
+                                "plot grid expansion costs.")
+            if self.network.results.grid_expansion_costs is None:
+                logging.warning("Grid expansion cost results needed to plot "
+                                "them.")
+
+    def plot_storage_integration(self, **kwargs):
+        """
+        Plots storage position in MV grid of integrated storages.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        if self.network.pypsa is not None:
+            plots.mv_grid_topology(
+                self.network.pypsa, self.network.config,
+                node_color=kwargs.get('storage_integration', None),
+                filename=kwargs.get('filename', None),
+                grid_district_geom=kwargs.get('grid_district_geom', True),
+                background_map=kwargs.get('background_map', True),
+                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None))
+        else:
+            if self.network.pypsa is None:
+                logging.warning("pypsa representation of MV grid needed to "
+                                "plot storage integration in MV grid.")
+
+
+class EDisGo(EDisGoReimport):
     """
     Provides the top-level API for invocation of data import, analysis of
     hosting capacity, grid reinforcement and flexibility measures.
@@ -2893,114 +3007,6 @@ class Results:
                                       for value in item]
                 for key, values in self.network.config._data.items()]
             writer.writerows(rows)
-
-
-class EDisGoReimport:
-    """
-    EDisGo class created from saved results.
-
-    """
-    def __init__(self, results_path, **kwargs):
-
-        # create network
-        self.network = NetworkReimport(results_path, **kwargs)
-
-    def plot_mv_grid_topology(self, **kwargs):
-        """
-        Plots plain MV grid topology.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.network.pypsa is not None:
-            plots.mv_grid_topology(
-                self.network.pypsa, self.network.config,
-                filename=kwargs.get('filename', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None))
-        else:
-            if self.network.pypsa is None:
-                logging.warning("pypsa representation of MV grid needed to "
-                                "plot MV grid topology.")
-
-    def plot_line_loading(self, **kwargs):
-        """
-        Plots relative line loading (current from power flow analysis to
-        allowed current) of MV lines.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.network.pypsa is not None and \
-                self.network.results.i_res is not None:
-            plots.mv_grid_topology(
-                self.network.pypsa, self.network.config,
-                timestep=kwargs.get('timestep', None),
-                line_color='loading',
-                node_color=kwargs.get('node_color', None),
-                line_load=self.network.results.i_res,
-                filename=kwargs.get('filename', None),
-                arrows=kwargs.get('arrows', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                voltage=self.network.results.v_res(),
-                limits_cb_lines=kwargs.get('limits_cb_lines', None),
-                limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None))
-        else:
-            if self.network.pypsa is None:
-                logging.warning("pypsa representation of MV grid needed to "
-                                "plot line loading.")
-            if self.network.results.i_res is None:
-                logging.warning("Currents `i_res` from power flow analysis "
-                                "must be available to plot line loading.")
-
-    def plot_grid_expansion_costs(self, **kwargs):
-        """
-        Plots costs per MV line.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.network.pypsa is not None and \
-                self.network.results.grid_expansion_costs is not None:
-            plots.mv_grid_topology(
-                self.network.pypsa, self.network.config,
-                line_color='expansion_costs',
-                grid_expansion_costs=self.network.results.grid_expansion_costs,
-                filename=kwargs.get('filename', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                limits_cb_lines=kwargs.get('limits_cb_lines', None),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None))
-        else:
-            if self.network.pypsa is None:
-                logging.warning("pypsa representation of MV grid needed to "
-                                "plot grid expansion costs.")
-            if self.network.results.grid_expansion_costs is None:
-                logging.warning("Grid expansion cost results needed to plot "
-                                "them.")
-
-    def plot_storage_integration(self, **kwargs):
-        """
-        Plots storage position in MV grid of integrated storages.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.network.pypsa is not None:
-            plots.mv_grid_topology(
-                self.network.pypsa, self.network.config,
-                node_color=kwargs.get('storage_integration', None),
-                filename=kwargs.get('filename', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None))
-        else:
-            if self.network.pypsa is None:
-                logging.warning("pypsa representation of MV grid needed to "
-                                "plot storage integration in MV grid.")
 
 
 class NetworkReimport:
