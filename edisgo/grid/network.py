@@ -149,6 +149,85 @@ class EDisGoReimport:
                 logging.warning("pypsa representation of MV grid needed to "
                                 "plot storage integration in MV grid.")
 
+    def histogram_voltage(self, timestep=None, title=True, **kwargs):
+        """
+        Plots histogram of voltages.
+
+        For more information see :func:`edisgo.tools.plots.histogram`.
+
+        Parameters
+        ----------
+        timestep : :pandas:`pandas.Timestamp<timestamp>` or None, optional
+            Specifies time step histogram is plotted for. If timestep is None
+            all time steps voltages are calculated for are used. Default: None.
+        title : :obj:`str` or :obj:`bool`, optional
+            Title for plot. If True title is auto generated. If False plot has
+            no title. If :obj:`str`, the provided title is used. Default: True.
+
+        """
+        data = self.network.results.v_res()
+        if title is True:
+            if timestep is not None:
+                title = "Voltage histogram for time step {}".format(timestep)
+            else:
+                title = "Voltage histogram \nfor time steps {} to {}".format(
+                    data.index[0], data.index[-1])
+        elif title is False:
+            title = None
+        plots.histogram(data=data, title=title, **kwargs)
+
+    def histogram_relative_line_load(self, timestep=None, title=True,
+                                     **kwargs):
+        """
+        Plots histogram of relative line loads.
+
+        For more information see :func:`edisgo.tools.plots.histogram`.
+
+        Parameters
+        ----------
+        Parameters
+        ----------
+        timestep : :pandas:`pandas.Timestamp<timestamp>` or None, optional
+            Specifies time step histogram is plotted for. If timestep is None
+            all time steps voltages are calculated for are used. Default: None.
+        title : :obj:`str` or :obj:`bool`, optional
+            Title for plot. If True title is auto generated. If False plot has
+            no title. If :obj:`str`, the provided title is used. Default: True.
+
+        """
+        line_load = self.network.results.i_res
+        residual_load = tools.get_residual_load_from_pypsa_network(
+            self.network.pypsa)
+        case = residual_load.apply(
+            lambda _: 'feedin_case' if _ < 0 else 'load_case')
+        if timestep is not None:
+            timeindex = [timestep]
+        else:
+            timeindex = line_load.index
+        load_factor = pd.Series(
+            data=[float(self.network.config['grid_expansion_load_factors'][
+                            'mv_{}_line'.format(case.loc[_])])
+                  for _ in timeindex],
+            index=timeindex)
+        # get allowed line load
+        i_line_allowed = load_factor.to_frame().dot(
+            (self.network.pypsa.lines.s_nom.divide(
+                self.network.pypsa.lines.v_nom) / sqrt(3) * 1e3).to_frame().T)
+        # get line load from pf
+        i_line_pfa = line_load.loc[:, self.network.pypsa.lines.index]
+        data = (i_line_pfa.divide(i_line_allowed))
+
+        if title is True:
+            if timestep is not None:
+                title = "Relative line load histogram for time step {}".format(
+                    timestep)
+            else:
+                title = "Relative line load histogram \nfor time steps " \
+                        "{} to {}".format(data.index[0], data.index[-1])
+        elif title is False:
+            title = None
+        plots.histogram(data=data, title=title, **kwargs)
+
 
 class EDisGo(EDisGoReimport):
     """
