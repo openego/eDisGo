@@ -566,7 +566,9 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
     # create pypsa network only containing MV buses and lines
     pypsa_plot = PyPSANetwork()
     pypsa_plot.buses = pypsa_network.buses.loc[pypsa_network.buses.v_nom >= 10]
-    pypsa_plot.lines = pypsa_network.lines.loc[pypsa_network.lines.v_nom >= 10]
+    pypsa_plot.lines = pypsa_network.lines[
+        pypsa_network.lines.bus0.isin(pypsa_plot.buses.index)][
+        pypsa_network.lines.bus1.isin(pypsa_plot.buses.index)]
 
     # line colors
     if line_color == 'loading':
