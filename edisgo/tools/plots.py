@@ -623,6 +623,10 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
         bus_sizes, bus_colors = nodes_by_costs(pypsa_plot.buses.index,
                                                grid_expansion_costs)
         bus_cmap = None
+    elif node_color is None:
+        bus_sizes = 0
+        bus_colors = 'r'
+        bus_cmap = None
     else:
         logging.warning('Choice for `node_color` is not valid. Default is '
                         'used instead.')
