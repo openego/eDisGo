@@ -59,7 +59,8 @@ class EDisGoReimport:
                 filename=kwargs.get('filename', None),
                 grid_district_geom=kwargs.get('grid_district_geom', True),
                 background_map=kwargs.get('background_map', True),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None))
+                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+                title=kwargs.get('title', ''))
 
     def plot_line_loading(self, **kwargs):
         """
@@ -84,7 +85,9 @@ class EDisGoReimport:
                 voltage=self.network.results.v_res(),
                 limits_cb_lines=kwargs.get('limits_cb_lines', None),
                 limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None))
+                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+                lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
+                title=kwargs.get('title', ''))
         else:
             if self.network.pypsa is None:
                 logging.warning("pypsa representation of MV grid needed to "
@@ -121,7 +124,9 @@ class EDisGoReimport:
                 grid_district_geom=kwargs.get('grid_district_geom', True),
                 background_map=kwargs.get('background_map', True),
                 limits_cb_lines=kwargs.get('limits_cb_lines', None),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None))
+                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+                lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
+                title=kwargs.get('title', ''))
         else:
             if self.network.pypsa is None:
                 logging.warning("pypsa representation of MV grid needed to "
@@ -144,7 +149,8 @@ class EDisGoReimport:
                 filename=kwargs.get('filename', None),
                 grid_district_geom=kwargs.get('grid_district_geom', True),
                 background_map=kwargs.get('background_map', True),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None))
+                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+                title=kwargs.get('title', ''))
         else:
             if self.network.pypsa is None:
                 logging.warning("pypsa representation of MV grid needed to "

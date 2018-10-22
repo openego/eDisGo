@@ -195,7 +195,8 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
                      filename=None, arrows=False,
                      grid_district_geom=True, background_map=True,
                      voltage=None, limits_cb_lines=None, limits_cb_nodes=None,
-                     xlim=None, ylim=None):
+                     xlim=None, ylim=None, lines_cmap='inferno_r',
+                     title=''):
     """
     Plot line loading as color on lines.
 
@@ -270,6 +271,11 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
         Limits of x-axis. Default: None.
     ylim : :obj:`tuple`
         Limits of y-axis. Default: None.
+    lines_cmap : :obj:`str`
+        Colormap to use for lines in case `line_color` is 'loading' or
+        'expansion_costs'. Default: 'inferno_r'.
+    title : :obj:`str`
+        Title of the plot. Default: ''.
 
     """
 
@@ -500,10 +506,9 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
             logging.warning("Grid district geometry could not be plotted due "
                             "to the following error: {}".format(e))
 
-    #ToDo set plot title corresponding to what was plotted
-    cmap = plt.cm.get_cmap('inferno_r')
+    cmap = plt.cm.get_cmap(lines_cmap)
     ll = pypsa_plot.plot(line_colors=line_colors, line_cmap=cmap, ax=ax,
-                         title="",
+                         title=title,
                          line_widths=2, #pypsa_plot.lines.s_nom,
                          branch_components=['Line'], basemap=True,
                          bus_sizes=bus_sizes, bus_colors=bus_colors,
