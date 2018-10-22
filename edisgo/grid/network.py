@@ -3161,9 +3161,15 @@ class ResultsReimport:
                 os.path.join(
                     results_path, 'powerflow_results', 'voltages_pu.csv'),
                 index_col=0, parse_dates=True, header=[0, 1])
+            # apparent power
+            self.apparent_power = pd.read_csv(
+                os.path.join(
+                    results_path, 'powerflow_results', 'apparent_powers.csv'),
+                index_col=0, parse_dates=True)
         else:
             self.i_res = None
             self.v_pu = None
+            self.apparent_power = None
 
         # import grid expansion results
         if os.path.isdir(os.path.join(results_path, 'grid_expansion_results')):
@@ -3216,6 +3222,36 @@ class ResultsReimport:
             labels_included = [_ for _ in nodes if _ not in not_included]
 
             if not_included:
-                logging.info("Voltage levels for {nodes} are not returned "
-                             "from PFA".format(nodes=not_included))
+                logging.warning("Voltage levels for {nodes} are not returned "
+                                "from PFA".format(nodes=not_included))
             return self.v_pu[level][labels_included]
+
+    def s_res(self, components=None):
+        """
+        Get apparent power in kVA at line(s) and transformer(s).
+
+        Parameters
+        ----------
+        components : :obj:`list`
+            List of string representatives of :class:`~.grid.components.Line`
+            or :class:`~.grid.components.Transformer`. If not provided defaults
+            to return apparent power of all lines and transformers in the grid.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Apparent power in kVA for lines and/or transformers.
+
+        """
+        if components is None:
+            return self.apparent_power
+        else:
+            not_included = [_ for _ in components
+                            if _ not in self.apparent_power.index]
+            labels_included = [_ for _ in components if _ not in not_included]
+
+            if not_included:
+                logging.warning(
+                    "No apparent power results available for: {}".format(
+                        not_included))
+            return self.apparent_power.loc[:, labels_included]
