@@ -420,28 +420,21 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
         case = residual_load.apply(
                 lambda _: 'feedin_case' if _ < 0 else 'load_case')
         if timestep is not None:
-            load_factor = float(configs['grid_expansion_load_factors'][
-                'mv_{}_line'.format(case.loc[timestep])])
-            # get allowed line load
-            i_line_allowed = pypsa_plot.lines.s_nom.divide(
-                pypsa_plot.lines.v_nom) / sqrt(3) * 1e3 * load_factor
-            # get line load from pf
-            i_line_pfa = line_load.loc[timestep,
-                                       pypsa_plot.lines.index]
-            line_colors = i_line_pfa.divide(i_line_allowed)
+            timeindex = [timestep]
         else:
-            load_factor = pd.Series(
-                data=[float(configs['grid_expansion_load_factors'][
-                                    'mv_{}_line'.format(case.loc[_])])
-                      for _ in line_load.index],
-                index=line_load.index)
-            # get allowed line load
-            i_line_allowed = load_factor.to_frame().dot(
-                (pypsa_plot.lines.s_nom.divide(
-                    pypsa_plot.lines.v_nom) / sqrt(3) * 1e3).to_frame().T)
-            # get line load from pf
-            i_line_pfa = line_load.loc[:, pypsa_plot.lines.index]
-            line_colors = (i_line_pfa.divide(i_line_allowed)).max()
+            timeindex = line_load.index
+        load_factor = pd.DataFrame(
+            data={'s_nom': [float(configs[
+                                      'grid_expansion_load_factors'][
+                                      'mv_{}_line'.format(case.loc[_])])
+                            for _ in timeindex]},
+            index=timeindex)
+        # get allowed line load
+        s_allowed = load_factor.dot(
+            pypsa_plot.lines.s_nom.to_frame().T * 1e3)
+        # get line load from pf
+        line_colors = line_load.loc[:, pypsa_plot.lines.index].divide(
+            s_allowed).max()
     elif line_color == 'expansion_costs':
         node_color = 'expansion_costs'
         line_costs = pypsa_plot.lines.join(

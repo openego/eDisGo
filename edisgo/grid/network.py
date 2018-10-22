@@ -77,7 +77,7 @@ class EDisGoReimport:
                 timestep=kwargs.get('timestep', None),
                 line_color='loading',
                 node_color=kwargs.get('node_color', None),
-                line_load=self.network.results.i_res,
+                line_load=self.network.results.s_res(),
                 filename=kwargs.get('filename', None),
                 arrows=kwargs.get('arrows', None),
                 grid_district_geom=kwargs.get('grid_district_geom', True),
@@ -202,7 +202,6 @@ class EDisGoReimport:
             no title. If :obj:`str`, the provided title is used. Default: True.
 
         """
-        line_load = self.network.results.i_res
         residual_load = tools.get_residual_load_from_pypsa_network(
             self.network.pypsa)
         case = residual_load.apply(
@@ -210,19 +209,18 @@ class EDisGoReimport:
         if timestep is not None:
             timeindex = [timestep]
         else:
-            timeindex = line_load.index
-        load_factor = pd.Series(
-            data=[float(self.network.config['grid_expansion_load_factors'][
-                            'mv_{}_line'.format(case.loc[_])])
-                  for _ in timeindex],
+            timeindex = self.network.results.s_res().index
+        load_factor = pd.DataFrame(
+            data={'s_nom': [float(self.network.config[
+                                      'grid_expansion_load_factors'][
+                                      'mv_{}_line'.format(case.loc[_])])
+                            for _ in timeindex]},
             index=timeindex)
         # get allowed line load
-        i_line_allowed = load_factor.to_frame().dot(
-            (self.network.pypsa.lines.s_nom.divide(
-                self.network.pypsa.lines.v_nom) / sqrt(3) * 1e3).to_frame().T)
+        s_allowed = load_factor.dot(
+            self.network.pypsa.lines.s_nom.to_frame().T * 1e3)
         # get line load from pf
-        i_line_pfa = line_load.loc[:, self.network.pypsa.lines.index]
-        data = (i_line_pfa.divide(i_line_allowed))
+        data = self.network.results.s_res().divide(s_allowed)
 
         if title is True:
             if timestep is not None:
@@ -2838,8 +2836,9 @@ class Results:
                 else:
                     labels_not_included.append(label)
             if labels_not_included:
-                print("Apparent power for {lines} are not returned from "
-                      "PFA".format(lines=labels_not_included))
+                logging.warning(
+                    "Apparent power for {lines} are not returned from "
+                    "PFA".format(lines=labels_not_included))
         else:
             labels_included = self.pfa_p.columns
 
