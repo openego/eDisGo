@@ -33,8 +33,12 @@ class EDisGoReimport:
     """
     def __init__(self, results_path, **kwargs):
 
-        # create network
-        self.network = NetworkReimport(results_path, **kwargs)
+        if os.path.isdir(results_path):
+            # create network
+            self.network = NetworkReimport(results_path, **kwargs)
+        else:
+            logging.error('Results cannot be imported as the specified '
+                          'directory {} does not exist.'.format(results_path))
 
     def plot_mv_grid_topology(self, **kwargs):
         """
@@ -2720,14 +2724,42 @@ class Results:
         storage_results['storage_id'] = []
         storage_results['nominal_power'] = []
         storage_results['voltage_level'] = []
+        storage_results['grid_connection_point'] = []
         for grid in grids:
             for storage in grid.graph.nodes_by_attribute('storage'):
                 storage_results['storage_id'].append(repr(storage))
                 storage_results['nominal_power'].append(storage.nominal_power)
                 storage_results['voltage_level'].append(
                     'mv' if isinstance(grid, MVGrid) else 'lv')
+                storage_results['grid_connection_point'].append(
+                     grid.graph.neighbors(storage)[0])
 
         return pd.DataFrame(storage_results).set_index('storage_id')
+
+    def storages_timeseries(self):
+        """
+        Returns a dataframe with storage time series.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+
+            Dataframe containing time series of all storages installed in the
+            MV grid and LV grids. Index of the dataframe is a
+            :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
+            storage representatives.
+
+        """
+        storages_p = pd.DataFrame()
+        storages_q = pd.DataFrame()
+        grids = [self.network.mv_grid] + list(self.network.mv_grid.lv_grids)
+        for grid in grids:
+            for storage in grid.graph.nodes_by_attribute('storage'):
+                ts = storage.timeseries
+                storages_p[repr(storage)] = ts.p
+                storages_q[repr(storage)] = ts.q
+
+        return storages_p, storages_q
 
     @property
     def storages_costs_reduction(self):
@@ -3059,8 +3091,15 @@ class Results:
                 # create directory
                 os.makedirs(target_dir, exist_ok=True)
 
-                # grid expansion costs
+                # general storage information
                 storages.to_csv(os.path.join(target_dir, 'storages.csv'))
+
+                # storages time series
+                ts_p, ts_q = self.storages_timeseries()
+                ts_p.to_csv(os.path.join(
+                    target_dir, 'storages_active_power.csv'))
+                ts_q.to_csv(os.path.join(
+                    target_dir, 'storages_reactive_power.csv'))
 
                 if not self.storages_costs_reduction is None:
                     self.storages_costs_reduction.to_csv(
@@ -3094,7 +3133,7 @@ class Results:
                           "results. Must be any or a list of the following: " \
                           "'pypsa_network', 'powerflow_results', " \
                           "'grid_expansion_results', 'curtailment_results', " \
-                          "'storage_integration_results'."
+                          "'storage_integration_results'.".format(parameter)
                 logger.error(message)
                 raise KeyError(message)
             except:
@@ -3127,8 +3166,11 @@ class NetworkReimport:
                 a = iter(row[1:])
                 self.config[row[0]] = dict(zip(a, a))
 
+        parameters = kwargs.get('parameters', 'all')
+
         # import pypsa network
-        if os.path.isdir(os.path.join(results_path, 'pypsa_network')):
+        if ('pypsa_network' in parameters or parameters == 'all') and \
+                os.path.isdir(os.path.join(results_path, 'pypsa_network')):
             self.pypsa = PyPSANetwork()
             self.pypsa.import_from_csv_folder(
                 os.path.join(results_path, 'pypsa_network'))
@@ -3136,7 +3178,8 @@ class NetworkReimport:
             self.pypsa = None
 
         # create ResultsReimport class
-        self.results = ResultsReimport(results_path)
+        self.results = ResultsReimport(
+            results_path, parameters=parameters)
 
 
 class ResultsReimport:
@@ -3144,41 +3187,148 @@ class ResultsReimport:
     Results class created from saved results.
 
     """
-    def __init__(self, results_path, **kwargs):
+    def __init__(self, results_path, parameters='all'):
 
-        # ToDo: add more results
+        # measures
+        measures_df = pd.read_csv(os.path.join(results_path, 'measures.csv'),
+                                  index_col=0)
+        self.measures = list(measures_df.measure.values)
+
+        # if string is given convert to list
+        if isinstance(parameters, str):
+            if parameters == 'all':
+                parameters = ['powerflow_results', 'grid_expansion_results',
+                              'curtailment_results',
+                              'storage_integration_results']
+            else:
+                parameters = [parameters]
 
         # import power flow results
-        if os.path.isdir(os.path.join(results_path, 'powerflow_results')):
+        if 'powerflow_results' in parameters and os.path.isdir(os.path.join(
+                results_path, 'powerflow_results')):
             # line loading
             self.i_res = pd.read_csv(
                 os.path.join(
                     results_path, 'powerflow_results', 'currents.csv'),
                 index_col=0, parse_dates=True)
             # voltage
-            self.v_pu = pd.read_csv(
+            self.pfa_v_mag_pu = pd.read_csv(
                 os.path.join(
                     results_path, 'powerflow_results', 'voltages_pu.csv'),
                 index_col=0, parse_dates=True, header=[0, 1])
+            # active power
+            self.pfa_p = pd.read_csv(
+                os.path.join(
+                    results_path, 'powerflow_results', 'active_powers.csv'),
+                index_col=0, parse_dates=True)
+            # reactive power
+            self.pfa_q = pd.read_csv(
+                os.path.join(
+                    results_path, 'powerflow_results', 'reactive_powers.csv'),
+                index_col=0, parse_dates=True)
             # apparent power
             self.apparent_power = pd.read_csv(
                 os.path.join(
                     results_path, 'powerflow_results', 'apparent_powers.csv'),
                 index_col=0, parse_dates=True)
+            # grid losses
+            self.grid_losses = pd.read_csv(
+                os.path.join(
+                    results_path, 'powerflow_results', 'grid_losses.csv'),
+                index_col=0, parse_dates=True)
+            # grid exchanges
+            self.hv_mv_exchanges = pd.read_csv(
+                os.path.join(
+                    results_path, 'powerflow_results', 'hv_mv_exchanges.csv'),
+                index_col=0, parse_dates=True)
         else:
             self.i_res = None
-            self.v_pu = None
+            self.pfa_v_mag_pu = None
+            self.pfa_p = None
+            self.pfa_q = None
             self.apparent_power = None
+            self.grid_losses = None
+            self.hv_mv_exchanges = None
 
         # import grid expansion results
-        if os.path.isdir(os.path.join(results_path, 'grid_expansion_results')):
+        if 'grid_expansion_results' in parameters and os.path.isdir(
+                os.path.join(results_path, 'grid_expansion_results')):
+            # grid expansion costs
             self.grid_expansion_costs = pd.read_csv(
                 os.path.join(
                     results_path, 'grid_expansion_results',
                     'grid_expansion_costs.csv'),
                 index_col=0)
+            # equipment changes
+            self.equipment_changes = pd.read_csv(
+                os.path.join(
+                    results_path, 'grid_expansion_results',
+                    'equipment_changes.csv'),
+                index_col=0)
         else:
             self.grid_expansion_costs = None
+            self.equipment_changes = None
+
+        # import curtailment results
+        if 'curtailment_results' in parameters and os.path.isdir(
+                os.path.join(results_path, 'curtailment_results')):
+            self.curtailment = {}
+            for file in os.listdir(os.path.join(
+                    results_path, 'curtailment_results')):
+                if file.endswith(".csv"):
+                    try:
+                        key = file[0:-4]
+                        if '-' in key:
+                            # make tuple if curtailment was given for generator
+                            # type and weather cell id
+                            tmp = key.split('-')
+                            key = (tmp[0], float(tmp[1]))
+                        self.curtailment[key] = pd.read_csv(
+                            os.path.join(
+                                results_path, 'curtailment_results', file),
+                            index_col=0, parse_dates=True)
+                    except Exception as e:
+                        logging.warning(
+                            'The following error occured when trying to '
+                            'import curtailment results: {}'.format(e))
+        else:
+            self.curtailment = None
+
+        # import storage results
+        if 'storage_integration_results' in parameters and os.path.isdir(
+                os.path.join(results_path, 'storage_integration_results')):
+            # storages
+            self.storages = pd.read_csv(
+                os.path.join(results_path, 'storage_integration_results',
+                             'storages.csv'),
+                index_col=0)
+            # storages costs reduction
+            try:
+                self.storages_costs_reduction = pd.read_csv(
+                    os.path.join(
+                        results_path, 'storage_integration_results',
+                        'storages_costs_reduction.csv'),
+                    index_col=0)
+            except:
+                pass
+            # storages time series
+            self.storages_p = pd.read_csv(
+                os.path.join(
+                    results_path, 'storage_integration_results',
+                    'storages_active_power.csv'),
+                index_col=0, parse_dates=True)
+            # storages time series
+            self.storages_q = pd.read_csv(
+                os.path.join(
+                    results_path, 'storage_integration_results',
+                    'storages_reactive_power.csv'),
+                index_col=0, parse_dates=True)
+
+        else:
+            self.storages = None
+            self.storages_costs_reduction = None
+            self.storages_p = None
+            self.storages_q = None
 
     def v_res(self, nodes=None, level=None):
         """
@@ -3214,16 +3364,16 @@ class ResultsReimport:
             level = ['mv', 'lv']
 
         if nodes is None:
-            return self.v_pu.loc[:, (level, slice(None))]
+            return self.pfa_v_mag_pu.loc[:, (level, slice(None))]
         else:
             not_included = [_ for _ in nodes
-                            if _ not in list(self.v_pu[level].columns)]
+                            if _ not in list(self.pfa_v_mag_pu[level].columns)]
             labels_included = [_ for _ in nodes if _ not in not_included]
 
             if not_included:
                 logging.warning("Voltage levels for {nodes} are not returned "
                                 "from PFA".format(nodes=not_included))
-            return self.v_pu[level][labels_included]
+            return self.pfa_v_mag_pu[level][labels_included]
 
     def s_res(self, components=None):
         """
@@ -3254,3 +3404,19 @@ class ResultsReimport:
                     "No apparent power results available for: {}".format(
                         not_included))
             return self.apparent_power.loc[:, labels_included]
+
+    def storages_timeseries(self):
+        """
+        Returns a dataframe with storage time series.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+
+            Dataframe containing time series of all storages installed in the
+            MV grid and LV grids. Index of the dataframe is a
+            :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
+            storage representatives.
+
+        """
+        return self.storages_p, self.storages_q
