@@ -1,5 +1,5 @@
 name,U_n,I_max_th,R,L,C
-#-,kV,A,ohm/km,mH/km,uF/km,-
+#,kV,A,ohm/km,mH/km,uF/km
 48-AL1/8-ST1A,10,210,0.35,1.11,0.0104
 94-AL1/15-ST1A,10,350,0.33,1.05,0.0112
 122-AL1/20-ST1A,10,410,0.31,0.99,0.0115

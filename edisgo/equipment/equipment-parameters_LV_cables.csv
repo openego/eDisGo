@@ -1,5 +1,5 @@
 name,U_n,I_max_th,R,L,C,Source
-#-,kV,A,ohm/km,mH/km,uF/km,-
+#,kV,A,ohm/km,mH/km,uF/km,
 NAYY 4x1x300,0.4,419,0.1,0.279,,FaberKabel
 NAYY 4x1x240,0.4,364,0.125,0.254,,FaberKabel
 NAYY 4x1x185,0.4,313,0.164,0.256,,FaberKabel
