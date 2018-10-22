@@ -3,16 +3,12 @@
 Features in detail
 ==================
 
-Data import
------------
-
-.. todo:: Documentation needed.
-
 Power flow analysis
 -------------------
 
-.. todo:: Documentation needed.
-
+In order to analyse voltages and line loadings a non-linear power flow analysis (PF) is conducted. 
+All loads and generators are modelled as PQ nodes; the slack is modelled as a PV node with a set voltage of 1\,p.u.
+and positioned at the substation's secondary side.
 
 .. _grid_expansion_methodology:
 
