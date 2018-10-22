@@ -178,98 +178,70 @@ aggregated areas are not modeled but aggregated loads and generators are directl
 Curtailment
 -----------
 
-Implementation
-^^^^^^^^^^^^^^
-The Curtailment methodology is conducted in :py:mod:`~edisgo.flex_opt.curtailment`.
+eDisGo right now provides two curtailment methodologies called 'feedin-proportional' and 'voltage-based', that are implemented in 
+:py:mod:`~edisgo.flex_opt.curtailment`. 
+Both methods take a given curtailment target and allocate it to the generation units in the grids. Curtailment targets can be specified for all 
+wind and solar generators,
+by generator type (solar or wind) or by generator type in a given weather cell.
+It is also possible to curtail specific generators internally, though a user friendly implementation is still in the works.
 
-The curtailment function is essentially used to spatially distribute the power required to be curtailed (henceforth
-referred to as 'curtailed power') to the various generating units inside the grid. This provides a simple interface
-to curtailing the power of generators of either a certain type (eg. solar or wind) or generators in a give weather
-cell or both.
+'feedin-proportional'
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-The current implementations of this are:
-
-* `curtail_all`
-* `curtail_voltage`
-
-with other more complex and finer methodologies in development. The focus of these methods is to try and reduce the
-requirement for network reinforcement by alleviating either node over-voltage or line loading issues or both. While
-it is possible to curtail specific generators internally, a user friendly implementation is still in the works.
-
-Concept
-^^^^^^^
-
-.. _curtailment-basic-label:
-
-Basic curtailment
-"""""""""""""""""""""""
-In each of the curtailment methods, first the feedin of each of the individual fluctuating generators are
-calculated based on the normalized feedin time series per technology and weather cell id from the OpenEnergy
-database and the individual generators' nominal capacities.
+The 'feedin-proportional' curtailment is implemented in :py:func:`~edisgo.flex_opt.curtailment.feedin_proportional`. 
+The curtailment that has to be met in each time step is allocated equally to all generators depending on their share of total
+feed-in in that time step.
 
 .. math::
-    feedin = feedin_{\text{normalized per type or weather cell}} \times \\
-    nominal\_power_{\text{single generators}}
+    c_{g,t} = \frac{a_{g,t}}{\sum\limits_{g \in gens} a_{g,t}} \times  c_{target,t} ~ ~ \forall t\in timesteps
 
-Once the feedin is calculated, both the feedin per generator and curtailed power are normalized and multiplied to get
-the curtailed power per generator.
+where :math:`c_{g,t}` is the curtailed power of generator :math:`g` in timestep :math:`t`, :math:`a_{g,t}` is the weather-dependent availability
+of generator :math:`g` in timestep :math:`t` and :math:`c_{target,t}` is the given curtailment target (power) for timestep :math:`t` to be allocated
+to the generators.
 
-.. math::
-    curtailment =
-        \frac{feedin}{\sum feedin} \times  total\_curtailment_{\text{normalized per type or weather cell}}
+'voltage-based'
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-This curtailment is subtracted from the feedin of the generator to obtain the power output of the generator after
-curtailment.
-_{\text{single generators}}
+The 'voltage-based' curtailment is implemented in :py:func:`~edisgo.flex_opt.curtailment.voltage_based`. 
+The curtailment that has to be met in each time step is allocated to all generators depending on
+the exceedance of the allowed voltage deviation at the nodes of the generators. The higher the exceedance, the higher
+the curtailment.
 
-Feedin factor
-"""""""""""""
-The case discussed in :ref:`curtailment-basic-label` is for equally curtailing all generators
-of a given type or weather cell. To induce a bias in the curtailment of the generators based on a parameter
-of our choosing like voltage or line loading, we use a feedin factor, which is essentially a scalar value which
-is used to modify the feedin based on this parameter.
+The optional parameter *voltage_threshold* specifies the threshold for the exceedance of the allowed voltage deviation above
+which a generator is curtailed. By default it is set to zero, meaning that all generators at nodes with voltage deviations
+that exceed the allowed voltage deviation are curtailed. Generators at nodes where the allowed voltage deviation is not
+exceeded are not curtailed. In the case that the required
+curtailment exceeds the weather-dependent availability of all generators with voltage deviations above the specified threshold,
+the voltage threshold is lowered in steps of 0.01 p.u. until the curtailment target can be met.
 
-.. math::
-    modified\_feedin = feedin \times feedin\_factor
-
-and the resulting curtailment is:
+Above the threshold, the curtailment is proportional to the exceedance of the allowed voltage deviation. 
 
 .. math::
-    curtailment = \frac{modified\_feedin}{\sum modified\_feedin} \times
-            total\_curtailment_{\text{normalized per type or weather cell}}
+    \frac{c_{g,t}}{a_{g,t}} = n \cdot (V_{g,t} - V_{threshold, g, t}) + offset
 
-The way this influences the curtailment is that when the the feedin for a particular generator is increased by
-multiplication, it results in a higher curtailment of power in this specific generator. Similarly the converse,
-where when the feedin for a particular generator is reduced the curtailment for this specific generator is also
-reduced. The modified feedin also allows the total curtailed power to remain the same even with the inclusion of
-the biasing due to the feedin factor.
+where :math:`c_{g,t}` is the curtailed power of generator :math:`g` in timestep :math:`t`, :math:`a_{g,t}` is the weather-dependent availability
+of generator :math:`g` in timestep :math:`t`, :math:`V_{g,t}` is the voltage at generator :math:`g` in timestep :math:`t` and
+:math:`V_{threshold, g, t}` is the voltage threshold for generator :math:`g` in timestep :math:`t`. :math:`V_{threshold, g, t}` is calculated as follows:
 
-The feedin factor is only used as a weighing factor to increase or decrease the curtailment and this in no way
-affects the base feedin of the generator.
+.. math::
+    V_{threshold, g, t} = V_{g_{station}, t} + \Delta V_{g_{allowed}} + \Delta V_{offset, t}
 
-Spatially biased curtailment methods
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+where :math:`V_{g_{station}, t}` is the voltage at the station's secondary side, :math:`\Delta V_{g_{allowed}}` is the allowed voltage 
+deviation in the reverse power flow and :math:`\Delta V_{offset, t}` is the exceedance of the allowed voltage deviation above which generators are curtailed.
 
-Curtailment biased by node voltage
-""""""""""""""""""""""""""""""""""
+:math:`n` and :math:`offset` in the equation above are slope and y-intercept of a linear relation between
+the curtailment and the exceedance of the allowed voltage deviation. They are calculated by solving the following linear problem that penalizes the offset
+using the python package pyomo:
 
-This is implemented in the methodology using the keyword argument :py:mod:`edisgo.flex_opt.curtailment.curtail_voltage`.
-Here the feedin factor is used to bias the curtailment such that there more power is curtailed at nodes with higher
-voltages and lesser power is curtailed at nodes with lower voltages. This essentially is a linear characteristic
-between curtailed power and voltage, the higher the voltage, the higher the curtailed power. The characteristic is
-as shown in :numref:`curtailment_voltage_characteristic_label`
+.. math::
+    min \left(\sum\limits_{t} offset_t\right) 
 
-A lower voltage threshold is defined, where no curtailment is assigned if the voltage at the node is lower than this
-threshold voltage. The assigned curtailment to the other nodes is directly proportional to the difference of the
-voltage at the node to the lower voltage threshold.
+.. math::
+    s.t. \sum\limits_{g} c_{g,t} = c_{target,t} ~ \forall g \in (solar, wind) \\
+     c_{g,t} \leq a_{g,t}  \forall g \in (solar, wind),t 
 
-
-.. _curtailment_voltage_characteristic_label:
-.. figure:: images/curtailment_voltage_characteristic.png
-
-    Per unit curtailment versus per unit node voltage characteristic used under the method
-    :py:mod:`edisgo.flex_opt.curtailment.curtail_voltage`
-
+where :math:`c_{target,t}` is the given curtailment target (power) for timestep :math:`t` to be allocated
+to the generators.
 
 
 

@@ -11,20 +11,22 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
     """
     Implements curtailment methodology 'voltage-based'.
 
-    The curtailment that has to be met in each step is allocated depending on
-    the voltage at the nodes of the generators.
+    The curtailment that has to be met in each time step is allocated depending
+    on the exceedance of the allowed voltage deviation at the nodes of the
+    generators. The higher the exceedance, the higher the curtailment.
 
-    In a first step it is for each time step checked whether the required
-    curtailment can be met by all generators with node voltages above the
-    specified voltage threshold. If this is not the case the voltage threshold
-    is lowered in steps of 0.01 p.u. until curtailment demand can be met.
+    The optional parameter `voltage_threshold` specifies the threshold for the
+    exceedance of the allowed voltage deviation above which a generator is
+    curtailed. By default it is set to zero, meaning that all generators at
+    nodes with voltage deviations that exceed the allowed voltage deviation are
+    curtailed. Generators at nodes where the allowed voltage deviation is not
+    exceeded are not curtailed. In the case that the required curtailment
+    exceeds the weather-dependent availability of all generators with voltage
+    deviations above the specified threshold, the voltage threshold is lowered
+    in steps of 0.01 p.u. until the curtailment target can be met.
 
-    In a second step the curtailment demand is allocated to all generators with
-    node voltages above the defined voltage threshold. Generators with node
-    voltages below the threshold will not be curtailed. Above the voltage
-    threshold, the curtailment is proportional to the difference between the
-    node voltage and the voltage threshold. Thus the higher the voltage, the
-    higher the curtailment. In order to find the linear relation between
+    Above the threshold, the curtailment is proportional to the exceedance of
+    the allowed voltage deviation. In order to find the linear relation between
     the curtailment and the voltage difference a linear problem is formulated
     and solved using the python package pyomo. See documentation for further
     information.
@@ -51,7 +53,7 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
         the technology if :obj:`str` the curtailment is specified for.
     voltage_threshold: :obj:`float`
         The node voltage below which no curtailment is assigned to the
-        respective generator if not necessary. Default: 1.0.
+        respective generator if not necessary. Default: 0.0.
     solver: :obj:`str`
         The solver used to optimize the curtailment assigned to the generator.
         Possible options are:
