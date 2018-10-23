@@ -48,10 +48,6 @@ that when the reactive power (Q) is positive, the component shows inductive beha
 reactive power (Q) is negative, the component shows capacitive behaviour. This is the direct opposite of the
 generator sign convention.
 
-Glossary
---------
-
-
 
 Units
 -----

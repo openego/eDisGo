@@ -11,12 +11,6 @@ in developer mode::
 
     pip3 install -e <path-to-repo>
 
-The package `Dingo <https://github.com/openego/dingo>`_ is currently not
-available as up-to-date release. Thus, we install it via a commit reference.
-Therefore use the flag :code:`--process-dependency-links` ::
-
-    pip3 install -e <path-to-repo> --process-dependency-links
-
 
 Code style
 ~~~~~~~~~~
