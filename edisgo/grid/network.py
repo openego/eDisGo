@@ -3354,8 +3354,8 @@ class ResultsReimport:
 
         """
         # check if voltages are available:
-        if hasattr(self, 'v_pu'):
-            self.v_pu.sort_index(axis=1, inplace=True)
+        if hasattr(self, 'pfa_v_mag_pu'):
+            self.pfa_v_mag_pu.sort_index(axis=1, inplace=True)
         else:
             message = "No voltage results available."
             raise AttributeError(message)
