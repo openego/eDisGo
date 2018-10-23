@@ -244,6 +244,22 @@ where :math:`c_{target,t}` is the given curtailment target (power) for timestep 
 to the generators.
 
 
+Storage integration
+--------------------
+
+Besides the possibility to connect a storage with a given operation to any node in the grid, eDisGo provides a methodology that takes
+a given storage capacity and allocates it to multiple smaller storages such that it reduces line overloading and voltage deviations.
+The methodology is implemented in :py:func:`~edisgo.flex_opt.storage_positioning.one_storage_per_feeder`. As the above described
+curtailment allocation methodologies it is intended to be used in combination with `eTraGo <https://github.com/openego/eTraGo>`_ where
+storage capacity and operation is optimized. 
+
+For each feeder with load or voltage issues it is checked if integrating a
+storage will reduce peaks in the feeder, starting with the feeder with
+the highest theoretical grid expansion costs. A heuristic approach is used
+to estimate storage sizing and siting while storage operation is carried
+over from the given storage operation.
+
+A more thorough documentation will follow soon.
 
 References
 ----------
