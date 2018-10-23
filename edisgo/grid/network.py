@@ -738,7 +738,7 @@ class EDisGo(EDisGoReimport):
         """
         Reinforces the grid and calculates grid expansion costs.
 
-        See :meth:`~.flex_opt.reinforce_grid` for more information.
+        See :meth:`edisgo.flex_opt.reinforce_grid` for more information.
 
         """
         results = reinforce_grid(
