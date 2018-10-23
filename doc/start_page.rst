@@ -1,3 +1,7 @@
+.. figure:: images/edisgo_logo.png
+   :align: right
+   :scale: 70%
+
 eDisGo
 ======
 
