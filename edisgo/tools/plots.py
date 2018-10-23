@@ -336,10 +336,11 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
             else:
                 bus_tmp = bus[4:]
             if timestep is not None:
-                bus_colors[bus] = abs(1 - voltage.loc[timestep,
+                bus_colors[bus] = 100 * abs(1 - voltage.loc[timestep,
                                                       ('mv', bus_tmp)])
             else:
-                bus_colors[bus] = max(abs(1 - voltage.loc[:, ('mv', bus_tmp)]))
+                bus_colors[bus] = 100 * max(abs(1 - voltage.loc[
+                                                    :, ('mv', bus_tmp)]))
             bus_sizes[bus] = 50
         return bus_sizes, bus_colors
 
@@ -533,7 +534,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
                                   ticks=v_voltage[0:101:10])
         cb_voltage.set_clim(vmin=limits_cb_nodes[0],
                             vmax=limits_cb_nodes[1])
-        cb_voltage.set_label('Voltage deviation in p.u.')
+        cb_voltage.set_label('Voltage deviation in %')
 
     # storages
     if node_color == 'expansion_costs':
