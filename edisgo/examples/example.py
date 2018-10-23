@@ -59,7 +59,7 @@ if __name__ == '__main__':
         logging.info('Grid expansion for {}'.format(dingo_grid))
 
         # set up worst-case scenario
-        edisgo = EDisGo(ding0_grid=os.path.join('data', dingo_grid),
+        edisgo = EDisGo(ding0_grid=dingo_grid,
                         worst_case_analysis='worst-case')
 
         try:
