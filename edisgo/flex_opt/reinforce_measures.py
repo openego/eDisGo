@@ -323,12 +323,6 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     There is no need for a switch disconnector in that case because generators
     don't need to be n-1 safe.
 
-    References
-    ----------
-
-    The method of grid reinforcement as implemented here bases on
-    [VerteilnetzstudieBW]_ and [EAMS]_.
-
     """
 
     # load standard line data

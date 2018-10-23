@@ -67,10 +67,6 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     See :ref:`features-in-detail` for more information on how grid
     reinforcement is conducted.
 
-    References
-    ----------
-    The methodology and parameters found on [DenaVNS]_ and [VNSRP]_.
-
     """
 
     def _add_lines_changes_to_equipment_changes():

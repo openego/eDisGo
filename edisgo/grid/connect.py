@@ -120,7 +120,8 @@ def connect_mv_generators(network):
 def connect_lv_generators(network, allow_multiple_genos_per_load=True):
     """Connect LV generators to existing grids.
 
-    This function searches for unconnected generators in all LV grids and connects them.
+    This function searches for unconnected generators in all LV grids and
+    connects them.
 
     It connects
 
@@ -131,7 +132,8 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
             * with a nom. capacity of <=30 kW to LV loads of type residential
             * with a nom. capacity of >30 kW and <=100 kW to LV loads of type
                 retail, industrial or agricultural
-            * to the MV-LV station if no appropriate load is available (fallback)
+            * to the MV-LV station if no appropriate load is available
+              (fallback)
 
     Parameters
     ----------
@@ -142,12 +144,9 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
 
     Notes
     -----
-    For the allocation, loads are selected randomly (sector-wise) using a predefined seed
-    to ensure reproducibility.
+    For the allocation, loads are selected randomly (sector-wise) using a
+    predefined seed to ensure reproducibility.
 
-    Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
-        21a52048f84ec341fe54e0204ac62228a9e8a32a/\
-        ding0/grid/lv_grid/lv_connect.py#L27>`_.
     """
 
     # get predefined random seed and initialize random generator

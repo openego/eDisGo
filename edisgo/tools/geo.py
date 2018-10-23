@@ -119,11 +119,6 @@ def calc_geo_dist_vincenty(network, node_source, node_target):
     :obj:`float`
         Distance in m
 
-    Notes
-    -----
-    Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
-        21a52048f84ec341fe54e0204ac62228a9e8a32a/\
-        ding0/tools/geo.py#L84>`_.
     """
 
     branch_detour_factor = network.config['grid_connection'][

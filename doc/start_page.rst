@@ -5,8 +5,9 @@
 eDisGo
 ======
 
-The python package eDisGo provides a toolbox for analysis and optimization of
-distribution grids. This software lives in the context of the research project
+The python package eDisGo provides a toolbox to analyze distribution grids for grid issues 
+and to evaluate measures responding these.
+This software lives in the context of the research project
 `open_eGo <https://openegoproject.wordpress.com>`_. It is closely related to the
 python project `Ding0 <https://github.com/openego/ding0>`_ as this project
 is currently the single data source for eDisGo providing synthetic grid data
