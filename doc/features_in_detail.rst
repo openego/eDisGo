@@ -244,6 +244,7 @@ using the python package pyomo:
 where :math:`c_{target,t}` is the given curtailment target (power) for timestep :math:`t` to be allocated
 to the generators.
 
+.. _storage-integration-label:
 
 Storage integration
 --------------------
