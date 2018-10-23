@@ -237,8 +237,8 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
           Node color as well as size is set according to type of node
           (generator, MV station, etc.).
         * 'voltage'
-          Node color is set according to voltage deviation. Voltages of nodes
-          in MV grid must be provided by parameter `voltage`.
+          Node color is set according to voltage deviation from 1 p.u..
+          Voltages of nodes in MV grid must be provided by parameter `voltage`.
         * 'storage_integration'
           Only storages are plotted. Size of node corresponds to size of
           storage.
@@ -323,12 +323,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
                 bus, colors_dict, sizes_dict)
         return bus_sizes, bus_colors
 
-    def nodes_by_voltage(buses, voltage, configs):
-        # get set voltage at station to calculate voltage deviation
-        # ToDo: Consider control deviation
-        voltage_station = 1.0 + float(
-            configs['grid_expansion_allowed_voltage_deviations'][
-                'hv_mv_trafo_offset'])
+    def nodes_by_voltage(buses, voltage):
         bus_colors = {}
         bus_sizes = {}
         for bus in buses:
@@ -337,11 +332,10 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
             else:
                 bus_tmp = bus[4:]
             if timestep is not None:
-                bus_colors[bus] = abs(voltage_station -
-                                      voltage.loc[timestep, ('mv', bus_tmp)])
+                bus_colors[bus] = abs(1 - voltage.loc[timestep,
+                                                      ('mv', bus_tmp)])
             else:
-                bus_colors[bus] = abs(voltage_station -
-                                      max(voltage.loc[:, ('mv', bus_tmp)]))
+                bus_colors[bus] = max(abs(1 - voltage.loc[:, ('mv', bus_tmp)]))
             bus_sizes[bus] = 50
         return bus_sizes, bus_colors
 
@@ -449,7 +443,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
         bus_cmap = None
     elif node_color == 'voltage':
         bus_sizes, bus_colors = nodes_by_voltage(
-            pypsa_plot.buses.index, voltage, configs)
+            pypsa_plot.buses.index, voltage)
         bus_cmap = plt.cm.Blues
     elif node_color == 'storage_integration':
         bus_sizes = nodes_storage_integration(pypsa_plot.buses.index)
