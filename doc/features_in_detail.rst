@@ -47,14 +47,14 @@ Identification of overloading and voltage issues is conducted in
 :py:mod:`~edisgo.flex_opt.check_tech_constraints`.
 
 Voltage issues are determined based on allowed voltage deviations set in the config file 
-*config_grid_expansion.cfg* in section `grid_expansion_allowed_voltage_deviations`. It is possible
+:ref:`config_grid_expansion` in section `grid_expansion_allowed_voltage_deviations`. It is possible
 to set one allowed voltage deviation that is used for MV and LV or define separate allowed voltage deviations.
 Which allowed voltage deviation is used is defined through the parameter *combined_analysis* of :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid`.
 By default *combined_analysis* is set to false, resulting in separate voltage limits for MV and LV, as a combined limit
 may currently lead to problems if voltage deviation in MV grid is already close to the allowed limit, in which case the remaining allowed voltage deviation in the LV grids is close to zero.
 
 Overloading is determined based on allowed load factors that are also defined in the config file
-*config_grid_expansion.cfg* in section `grid_expansion_load_factors`.
+:ref:`config_grid_expansion` in section `grid_expansion_load_factors`.
 
 Allowed voltage deviations as well as load factors are in most cases different for load and feed-in case. 
 Load and feed-in case are commonly used worst-cases for grid expansion analyses. 
@@ -62,7 +62,7 @@ Load case defines a situation where all loads in the grid have a high demand whi
 or zero. In this case power is flowing from the high-voltage grid to the distribution grid. 
 In the feed-in case there is a high generator feed-in and a small energy demand leading to a reversed power flow.
 Load and generation assumptions for the two worst-cases are definded in the config file
-`config_timeseries.cfg` in section `worst_case_scale_factor` (scale factors describe actual power
+:ref:`config_timeseries` in section `worst_case_scale_factor` (scale factors describe actual power
 to nominal power ratio of generators and loads).
 
 When conducting grid reinforcement based on given time series instead of worst-case assumptions, load and feed-in
@@ -180,7 +180,8 @@ Curtailment
 
 eDisGo right now provides two curtailment methodologies called 'feedin-proportional' and 'voltage-based', that are implemented in 
 :py:mod:`~edisgo.flex_opt.curtailment`. 
-Both methods take a given curtailment target and allocate it to the generation units in the grids. Curtailment targets can be specified for all 
+Both methods are intended to take a given curtailment target obtained from an optimization of the EHV and HV grids using 
+`eTraGo <https://github.com/openego/eTraGo>`_ and allocate it to the generation units in the grids. Curtailment targets can be specified for all 
 wind and solar generators,
 by generator type (solar or wind) or by generator type in a given weather cell.
 It is also possible to curtail specific generators internally, though a user friendly implementation is still in the works.
