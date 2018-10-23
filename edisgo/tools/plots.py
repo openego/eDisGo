@@ -15,7 +15,11 @@ from edisgo.tools import tools
 if not 'READTHEDOCS' in os.environ:
     from egoio.db_tables.grid import EgoDpMvGriddistrict
     from egoio.db_tables.model_draft import EgoGridMvGriddistrict
-    import geopandas as gpd
+    geopandas = True
+    try:
+        import geopandas as gpd
+    except:
+        geopandas = False
     contextily = True
     try:
         import contextily as ctx
@@ -479,7 +483,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
     ax = plt.gca()
 
     # plot grid district
-    if grid_district_geom:
+    if grid_district_geom and geopandas:
         try:
             subst = pypsa_network.buses[
                 pypsa_network.buses.index.str.contains("MVStation")].index[0]
