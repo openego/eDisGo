@@ -15,12 +15,10 @@ eDisGo -- Optimization of flexibility options and grid expansion for distributio
    quickstart
    usage_details
    features_in_detail
-   data_sources
    dev_notes
    definitions_and_units
    configs
    equipment
-   references
    api
    whatsnew
 
