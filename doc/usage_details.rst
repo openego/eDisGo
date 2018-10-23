@@ -4,13 +4,11 @@ Usage details
 =============
 
 As eDisGo is designed to serve as a toolbox, it provides several methods to
-analyze distribution grids for grid issues and evaluate measures responding these.
-`Examples <https://github.com/openego/eDisGo/tree/dev/edisgo/examples>`_
-are provided to show a typical workflow of how eDisGo can be used. See
-the standard example or take a look at a
-`script <https://gist.github.com/gplssm/e0fd6cb99f7e8c1eed3fd4a4e325dde0>`_
-that is used to assess grid
-extension costs for distribution grids in the upcoming two decades.
+analyze distribution grids for grid issues and to evaluate measures responding these.
+We provide two examples, an 
+:download:`example script <../edisgo/examples/example.py>`
+and :download:`jupyter notebook <../edisgo/examples/edisgo_simple_example.ipynb>`.
+
 Further, we discuss how different features can be used in detail below.
 
 The fundamental data structure
@@ -23,7 +21,7 @@ The class :class:`~.grid.network.EDisGo` serves as the top-level API for setting
 invocation of data import, analysis of hosting capacity, grid reinforcement and flexibility measures.
 
 If you want to set up a scenario to do a worst-case analysis of a ding0 grid (see :ref:`prerequisites`) you simply have
-to provide a grid and set the :attr:`worst_case_analysis` parameter. The following example assums you have a file of a
+to provide a grid and set the :attr:`worst_case_analysis` parameter. The following example assumes you have a file of a
 ding0 grid named "ding0_grids__42.pkl" in current working directory.
 
 .. code-block:: python
@@ -58,7 +56,8 @@ You can also provide your own time series for load and feed-in for the analysis.
 		    timeseries_generation_dispatchable=feedin_dispatchable,
 		    timeseries_load=load)
 
-EDisGo also offers methods to generate load and feed-in time series. See :class:`~.grid.network.EDisGo` for
+EDisGo also offers methods to generate load time series and feed-in time series for fluctuating generators (see last :ref:`edisgo-mwe`).
+See :class:`~.grid.network.EDisGo` for
 more information on which options to choose from and what other data can be provided.
 
 All data is stored in the class :class:`~.grid.network.Network`. The network class serves as an overall 
@@ -83,6 +82,9 @@ The grid data and results can e.g. be accessed via
 
     # Results of network analysis
     edisgo.network.results
+  
+    # MV grid generators
+    edisgo.network.mv_grid.generators
 
 The grid topology is represented by separate undirected graphs for the MV
 grid and each of the LV grids. The :class:`~.grid.network.Graph` is subclassed from
@@ -90,16 +92,8 @@ grid and each of the LV grids. The :class:`~.grid.network.Graph` is subclassed f
 Lines represent edges in the graph. Other equipment is represented by a node.
 
 
-.. todo::
-
-    Add more
-     * Add examples on accessing particular data, i.e. generators
-
-
 Identify grid issues
 --------------------
-
-Use PyPSA's non-linear power flow to perform a stationary power flow analysis.
 
 As detailed in :ref:`edisgo-mwe`, once you set up your scenario by instantiating an
 :class:`~.grid.network.EDisGo` object, you are ready for an analysis of grid
@@ -111,8 +105,10 @@ capacity of the grid by :meth:`~.grid.network.EDisGo.analyze()`:
     # Do non-linear power flow analysis for MV and LV grid
     edisgo.analyze()
 
-The range of time analyzed by the power flow analysis is defined by :attr:`~.grid.network.TimeSeries.timeindex`
-of :class:`~.grid.network.TimeSeries` class.
+The analyze function conducts a non-linear power flow using PyPSA.
+
+The range of time analyzed by the power flow analysis is by default defined by the timeindex 
+given to the EDisGo API but can also be specified by providing the parameter *timesteps* to analyze. 
 
 Grid extension
 --------------
@@ -123,6 +119,10 @@ Grid extension can be invoked by :meth:`~.grid.network.EDisGo.reinforce()`:
 
     # Reinforce grid due to overloading and overvoltage issues
     edisgo.reinforce()
+
+You can further specify e.g. if to conduct a combined analysis for MV and LV (regarding allowed voltage
+deviations) or if to only calculate grid expansion needs without changing the topology of the graph. See
+:meth:`~.grid.network.EDisGo.reinforce()` for more information.
 
 Costs for the grid extension measures can be obtained as follows:
 
@@ -140,7 +140,13 @@ Battery storages
 Battery storages can be integrated into the grid as alternative to classical
 grid extension. A battery in eDisGo is represented by the class
 :class:`~.grid.components.Storage`. 
-In order to integrate a storage into the grid, start from the following exemplary code:
+Using the method :meth:`~.grid.network.EDisGo.integrate_storage()` provides a
+high-level interface to define the position, size and storage operation,
+based on user input and predefined rules. A limited set of storage integration rules are
+implemented. See :class:`~.grid.network.StorageControl` for
+available storage integration strategies.
+
+Here is a small example on how to integrate a storage:
 
 .. code-block:: python
 
@@ -152,11 +158,8 @@ In order to integrate a storage into the grid, start from the following exemplar
                              timeseries='fifty-fifty',
                              parameters=storage_parameters)
 
-Using the method :meth:`~.grid.network.EDisGo.integrate_storage()` provides a
-high-level interface to define the position and storage operation at once,
-based on predefined rules. Thus, a limited set of storage integration rules are
-implemented. See :class:`~.grid.network.StorageControl` for
-available storage integration strategies.
+Further information on the storage integration methodology 'distribute_storages_mv' can be found in section
+:ref:`storage-integration-label`.
 
 Curtailment
 -----------
@@ -164,77 +167,71 @@ Curtailment
 The curtailment function is used to spatially distribute the power that is to be curtailed.
 There are currently two options for doing this distribution:
 
-* `curtail_all`
-    Distributes the curtailed power to all the fluctuating generators depending upon
-    their nominal capacity of the unit. The input to the curtailment function can be modified to
-    curtail certain technologies differently or even further through the weather cell id's.
-* `curtail_voltage`
-    Distributes the curtailed power depending upon the voltage at the terminals
-    of the fluctuating generators
+* `feedin-proportional`
+    Distributes the curtailed power to all the fluctuating generators depending on
+    their weather-dependent availability. 
+* `voltage-based`
+    Distributes the curtailed power depending on the exceedance of the allowed voltage deviation at the nodes
+    of the fluctuating generators.
 
-At the moment further methods for curtailment are being developed (eg. `curtail_loading`) and also
-possibilities for the curtailment of single generators but these are still being developed.
-Curtailment at the moment can be input as a pandas DataFrames with time series indexes and columns
-either providing the type of generation to curtail, the weather cell id's for curtailment or both.
-The curtailment time series as shown in the following examples needs to be provided.
+The input to the curtailment function can be modified to curtail certain technologies or technologies by the weather cell they are in.
+Opposite to the load and feed-in time series curtailment time series need to be given in kW.
+Following are examples of the different options of how to specify curtailment requirements:
 
 .. code-block:: python
 
     timeindex = pd.date_range('1/1/1970', periods=3, freq='H')
 
-    # curtailment is allocated equally to all solar and wind generators
-    curtailment = pd.Series(data=[0.0, 5.0, 3.0],
+    # curtailment is allocated to all solar and wind generators
+    curtailment = pd.Series(data=[0.0, 5000.0, 3000.0],
 			    index=timeindex)
 
-    # curtailment time series for 'wind' is equally allocated to all wind generators, etc.
-    curtailment = pd.DataFrame(data={'wind': [0.0, 5.0, 3.0],
-                                     'solar': [5.0, 5.0, 3.0]},
+    # curtailment is allocated by generator type
+    curtailment = pd.DataFrame(data={'wind': [0.0, 5000.0, 3000.0],
+                                     'solar': [5500.0, 5400.0, 3200.0]},
                                index=timeindex)
 
-    # curtailment time series for ('wind', 1) is equally allocated to all wind generators 
-    # in weather cell 1, etc. 
-    curtailment = pd.DataFrame(data={('wind', 1): [0.0, 5.0, 3.0],
-                                     ('wind', 2): [1.0, 2.0, 3.0],
-    		                     ('solar', 1): [5.0, 5.0, 3.0]},
+    # curtailment is allocated by generator type and weather cell
+    curtailment = pd.DataFrame(data={('wind', 1): [0.0, 5000.0, 3000.0],
+                                     ('wind', 2): [100.0, 2000.0, 300.0],
+    		                     ('solar', 1): [500.0, 5000.0, 300.0]},
     			       index=timeindex)
 
-Set curtailment by calling the method :meth:`~.grid.network.EDisGo.curtail()` with either the
-`curtail_all` method:
+Set curtailment by calling the method :meth:`~.grid.network.EDisGo.curtail()`:
 
 .. code-block:: python
 
-    # curtail all
-    edisgo.curtail(curtailment_methodology='curtail_all',
+    edisgo.curtail(curtailment_methodology='feedin-proportional',
                    timeseries_curtailment=curtailment)
 
 
-or with `curtail_voltage` method:
+or with
 
 .. code-block:: python
 
-    # curtailment based on voltage
-    edisgo.curtail(curtailment_methodology='curtail_voltage',
+    edisgo.curtail(curtailment_methodology='voltage-based',
                    timeseries_curtailment=curtailment)
 
-The `curtail_voltage` method also allows the changing of the lower voltage threshold,
-the generator node voltage below which no curtailment will be assigned to the generator,
-using the `voltage_threshold` keyword argument. By default, this voltage is set to 1.0.
+Plots
+----------------
 
-You can also define curtailment directly upon defining your scenario. Assuming
-you have the load and feed-in time series as well as the curtailment defined
-above you can do the following:
+EDisGo provides a bunch of predefined plots to e.g. plot the MV grid topology, and line loading and node voltages
+in the MV grid or as a histogram.
 
 .. code-block:: python
 
-    edisgo = EDisGo(ding0_grid="ding0_grids__42.pkl",
-                    timeseries_generation_fluctuating=feedin_renewables,
-		    timeseries_generation_dispatchable=feedin_dispatchable,
-		    timeseries_load=load,
-                    curtailment_methodology='curtail_all',
-                    timeseries_curtailment=curtailment)
+    # plot MV grid topology on a map
+    edisgo.plot_mv_grid_topology()
 
+    # plot grid expansion costs for lines in the MV grid and stations on a map
+    edisgo.plot_grid_expansion_costs()
 
-Retrieve results
+    # plot voltage histogram
+    edisgo.histogram_voltage()
+
+See :class:`~.grid.network.EDisGoRemiport` class for more plots and plotting options.
+
+Results
 ----------------
 
 Results such as voltage levels and line loading from the power flow analysis and 
@@ -243,7 +240,6 @@ and can be accessed the following way:
 
 .. code-block:: python
 
-    # Results of network analysis and flexibility measures
     edisgo.network.results
 
 Get voltage levels at nodes from :meth:`~.grid.network.Results.v_res`
@@ -254,4 +250,29 @@ performed during grid extension. Associated costs are determined by
 :attr:`~.grid.network.Results.grid_expansion_costs`.
 Flexibility measures may not entirely resolve all issues.
 These unresolved issues are listed in :attr:`~.grid.network.Results.unresolved_issues`.
+
+Results can be saved to csv files with:
+
+.. code-block:: python
+
+    edisgo.network.results.save('path/to/results/directory/')
+
+To reimport saved results you can use the :class:`~.grid.network.EDisGoRemiport` class.
+After instantiating the class you can access results and plots the same way as you would
+with the EDisGo class.
+
+.. code-block:: python
+
+    # import EDisGoReimport class
+    from edisgo import EDisGoReimport
+
+    # instantiate EDisGoReimport class
+    edisgo = EDisGoReimport('path/to/results/directory/')
+
+    # access results
+    edisgo.network.results.grid_expansion_costs
+
+    # plot MV grid topology on a map
+    edisgo.plot_mv_grid_topology()
+
 

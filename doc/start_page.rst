@@ -12,17 +12,12 @@ The toolbox currently includes
 
 * Data import from data sources of the open_eGo project
 * Power flow analysis for grid issue identification (enabled by `PyPSA <https://pypsa.org>`_)
-* Automatic grid reinforcement solving overloading and overvoltage issues
-* Grid operation optimized curtailment
-
-Features to be included
-
+* Grid reinforcement solving overloading and voltage issues
+* Curtailment methodologies
 * Battery storage integration
-* Cluster based analyses
 
 See :ref:`quickstart` for the first steps. A deeper guide is provided in :ref:`usage-details`.
-We explain in detail how things are done in :ref:`features-in-detail`.
-:ref:`data-sources` details on how to import and suitable available data sources.
+Methodologies are explained in detail in :ref:`features-in-detail`.
 For those of you who want to contribute see :ref:`dev-notes` and the
 :ref:`api` reference.
 
