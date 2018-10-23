@@ -12,7 +12,7 @@ and positioned at the substation's secondary side.
 
 .. _grid_expansion_methodology:
 
-Automatic grid expansion
+Grid expansion
 -------------------------
 
 General methodology
