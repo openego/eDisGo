@@ -189,7 +189,7 @@ class EDisGoReimport:
         plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
 
     def histogram_relative_line_load(self, timestep=None, title=True,
-                                     **kwargs):
+                                     voltage_level='mv_lv', **kwargs):
         """
         Plots histogram of relative line loads.
 
@@ -205,6 +205,10 @@ class EDisGoReimport:
         title : :obj:`str` or :obj:`bool`, optional
             Title for plot. If True title is auto generated. If False plot has
             no title. If :obj:`str`, the provided title is used. Default: True.
+        voltage_level : :obj:`str`
+            Specifies which voltage level to plot voltage histogram for.
+            Possible options are 'mv', 'lv' and 'mv_lv'. 'mv_lv' is also the
+            fallback option in case of wrong input. Default: 'mv_lv'
 
         """
         residual_load = tools.get_residual_load_from_pypsa_network(
@@ -221,11 +225,21 @@ class EDisGoReimport:
                                       'mv_{}_line'.format(case.loc[_])])
                             for _ in timeindex]},
             index=timeindex)
+        if voltage_level == 'mv':
+            lines = self.network.pypsa.lines.loc[
+                self.network.pypsa.lines.v_nom > 1]
+        elif voltage_level == 'lv':
+            lines = self.network.pypsa.lines.loc[
+                self.network.pypsa.lines.v_nom < 1]
+        else:
+            lines = self.network.pypsa.lines
+        s_res = self.network.results.s_res().loc[
+            timeindex, lines.index]
         # get allowed line load
         s_allowed = load_factor.dot(
             self.network.pypsa.lines.s_nom.to_frame().T * 1e3)
         # get line load from pf
-        data = self.network.results.s_res().divide(s_allowed)
+        data = s_res.divide(s_allowed)
 
         if title is True:
             if timestep is not None:
