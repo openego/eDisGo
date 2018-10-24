@@ -224,7 +224,7 @@ in the MV grid or as a histogram.
     edisgo.plot_mv_grid_topology()
 
     # plot grid expansion costs for lines in the MV grid and stations on a map
-    edisgo.plot_grid_expansion_costs()
+    edisgo.plot_mv_grid_expansion_costs()
 
     # plot voltage histogram
     edisgo.histogram_voltage()
