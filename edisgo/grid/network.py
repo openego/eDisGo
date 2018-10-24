@@ -66,7 +66,6 @@ class EDisGoReimport:
                 xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
                 title=kwargs.get('title', ''))
 
-    def plot_line_loading(self, **kwargs):
     def plot_mv_voltages(self, **kwargs):
         """
         Plots voltages in MV grid on grid topology plot.
@@ -95,6 +94,8 @@ class EDisGoReimport:
         else:
             logging.warning("pypsa representation of MV grid needed to "
                             "plot voltages.")
+
+    def plot_mv_line_loading(self, **kwargs):
         """
         Plots relative line loading (current from power flow analysis to
         allowed current) of MV lines.
@@ -129,7 +130,7 @@ class EDisGoReimport:
                 logging.warning("Currents `i_res` from power flow analysis "
                                 "must be available to plot line loading.")
 
-    def plot_grid_expansion_costs(self, **kwargs):
+    def plot_mv_grid_expansion_costs(self, **kwargs):
         """
         Plots costs per MV line.
 
@@ -168,7 +169,7 @@ class EDisGoReimport:
                 logging.warning("Grid expansion cost results needed to plot "
                                 "them.")
 
-    def plot_storage_integration(self, **kwargs):
+    def plot_mv_storage_integration(self, **kwargs):
         """
         Plots storage position in MV grid of integrated storages.
 
