@@ -414,6 +414,12 @@ def get_gen_info(network, level='mvlv', fluctuating=False):
             except AttributeError:
                 gens_w_id.append(np.nan)
         gens_grid = [network.mv_grid]*len(gens)
+    else:
+        gens = []
+        gens_voltage_level = []
+        gens_type = []
+        gens_rating = []
+        gens_grid = []
 
     if 'lv' in level:
         for lv_grid in network.mv_grid.lv_grids:
