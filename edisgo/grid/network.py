@@ -67,6 +67,34 @@ class EDisGoReimport:
                 title=kwargs.get('title', ''))
 
     def plot_line_loading(self, **kwargs):
+    def plot_mv_voltages(self, **kwargs):
+        """
+        Plots voltages in MV grid on grid topology plot.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        if self.network.pypsa is not None:
+            try:
+                v_res = self.network.results.v_res()
+            except:
+                logging.warning("Voltages `pfa_v_mag_pu` from power flow "
+                                "analysis must be available to plot them.")
+                return
+            plots.mv_grid_topology(
+                self.network.pypsa, self.network.config,
+                timestep=kwargs.get('timestep', None),
+                node_color='voltage',
+                filename=kwargs.get('filename', None),
+                grid_district_geom=kwargs.get('grid_district_geom', True),
+                background_map=kwargs.get('background_map', True),
+                voltage=v_res,
+                limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
+                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+                title=kwargs.get('title', ''))
+        else:
+            logging.warning("pypsa representation of MV grid needed to "
+                            "plot voltages.")
         """
         Plots relative line loading (current from power flow analysis to
         allowed current) of MV lines.
