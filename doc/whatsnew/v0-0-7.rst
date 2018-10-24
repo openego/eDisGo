@@ -1,10 +1,17 @@
 Release v0.0.7
 ==============
 
-Release date: <MONTH> <DAY>, 2018
+Release date: October 23, 2018
 
-<Summary>
+This release mainly focuses on new plotting functionalities and making reimporting saved results
+to further analyze and visualize them more comfortable.
 
 Changes
 -------
 
+* new plotting methods in the EDisGo API class (plottings of the MV grid topology showing line loadings,
+  grid expansion costs, voltages and/or integrated storages and histograms
+  for voltages and relative line loadings)
+* new classes EDisGoReimport, NetworkReimport and ResultsReimport to reimport saved results
+  and enable all analysis and plotting functionalities offered by the original classes
+* bug fixes
