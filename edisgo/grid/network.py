@@ -186,7 +186,7 @@ class EDisGoReimport:
                     data.index[0], data.index[-1])
         elif title is False:
             title = None
-        plots.histogram(data=data, title=title, **kwargs)
+        plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
 
     def histogram_relative_line_load(self, timestep=None, title=True,
                                      **kwargs):
