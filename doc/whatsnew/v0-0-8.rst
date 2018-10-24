@@ -1,0 +1,7 @@
+Release v0.0.8
+==============
+
+Release date: <month> <day>, <year>
+
+Changes
+-------
