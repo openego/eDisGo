@@ -503,7 +503,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
                             "to the following error: {}".format(e))
 
     # if scaling factor is given s_nom is plotted as line width
-    if scaling_factor is not None:
+    if scaling_factor_line_width is not None:
         line_width = pypsa_plot.lines.s_nom * scaling_factor_line_width
     else:
         line_width = 2
