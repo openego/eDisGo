@@ -1,5 +1,8 @@
+<img align="right" width="300" height="300" src="https://github.com/openego/eDisGo/blob/dev/doc/images/edisgo_logo.png">
+
 # eDisGo
-Optimization of flexibility options and grid expansion for distribution grids based on PyPSA. See [documentation](http://edisgo.readthedocs.io/en/dev/) for further information.
+The python package eDisGo provides a toolbox to analyze distribution grids for grid issues 
+and to evaluate measures responding these.
 
 LICENSE
 -------
