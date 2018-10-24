@@ -200,7 +200,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
                      grid_district_geom=True, background_map=True,
                      voltage=None, limits_cb_lines=None, limits_cb_nodes=None,
                      xlim=None, ylim=None, lines_cmap='inferno_r',
-                     title=''):
+                     title='', scaling_factor_line_width=None):
     """
     Plot line loading as color on lines.
 
@@ -280,6 +280,10 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
         'expansion_costs'. Default: 'inferno_r'.
     title : :obj:`str`
         Title of the plot. Default: ''.
+    scaling_factor_line_width : :obj:`float` or None
+        If provided line width is set according to the nominal apparent power
+        of the lines. If line width is None a default line width of 2 is used
+        for each line. Default: None.
 
     """
 
@@ -498,10 +502,14 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
             logging.warning("Grid district geometry could not be plotted due "
                             "to the following error: {}".format(e))
 
+    # if scaling factor is given s_nom is plotted as line width
+    if scaling_factor is not None:
+        line_width = pypsa_plot.lines.s_nom * scaling_factor_line_width
+    else:
+        line_width = 2
     cmap = plt.cm.get_cmap(lines_cmap)
     ll = pypsa_plot.plot(line_colors=line_colors, line_cmap=cmap, ax=ax,
-                         title=title,
-                         line_widths=2, #pypsa_plot.lines.s_nom,
+                         title=title, line_widths=line_width,
                          branch_components=['Line'], basemap=True,
                          bus_sizes=bus_sizes, bus_colors=bus_colors,
                          bus_cmap=bus_cmap)

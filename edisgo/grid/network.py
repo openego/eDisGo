@@ -91,7 +91,8 @@ class EDisGoReimport:
                 limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
                 xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
                 lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
-                title=kwargs.get('title', ''))
+                title=kwargs.get('title', ''),
+                scaling_factor_line_width=kwargs.get('scaling_factor', None))
         else:
             if self.network.pypsa is None:
                 logging.warning("pypsa representation of MV grid needed to "
