@@ -40,9 +40,16 @@ class EDisGoReimport:
             logging.error('Results cannot be imported as the specified '
                           'directory {} does not exist.'.format(results_path))
 
-    def plot_mv_grid_topology(self, **kwargs):
+    def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
-        Plots plain MV grid topology.
+        Plots plain MV grid topology and optionally nodes by technology type
+        (e.g. station or generator).
+
+        Parameters
+        ----------
+        technologies : :obj:`Boolean`
+            If True plots stations, generators, etc. in the grid in different
+            colors. If False does not plot any nodes. Default: False.
 
         For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
 
@@ -60,6 +67,7 @@ class EDisGoReimport:
         if self.network.pypsa is not None:
             plots.mv_grid_topology(
                 self.network.pypsa, self.network.config,
+                node_color='technology' if technologies is True else None,
                 filename=kwargs.get('filename', None),
                 grid_district_geom=kwargs.get('grid_district_geom', True),
                 background_map=kwargs.get('background_map', True),
