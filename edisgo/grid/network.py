@@ -1684,10 +1684,12 @@ class CurtailmentControl:
         """
         if not feedin_df.empty:
             feedin_selected_sum = feedin_df.sum(axis=1)
-            bad_time_steps = [_ for _ in curtailment_timeseries.index
-                              if curtailment_timeseries[_] >
-                              feedin_selected_sum[_]]
-            if bad_time_steps:
+            diff = feedin_selected_sum - curtailment_timeseries
+            # add tolerance (set small negative values to zero)
+            diff[diff.between(-1e-1, 0)] = 0
+            if not (diff >= 0).all():
+                bad_time_steps = [_ for _ in diff.index
+                                  if diff[_] < 0]
                 message = 'Curtailment demand exceeds total feed-in in time ' \
                           'steps {}.'.format(bad_time_steps)
                 logging.error(message)
@@ -1721,7 +1723,7 @@ class CurtailmentControl:
         feedin_repr = feedin.loc[:, gen_repr]
         curtailment_repr = curtailment
         curtailment_repr.columns = gen_repr
-        if not ((feedin_repr - curtailment_repr) > -1e-3).all().all():
+        if not ((feedin_repr - curtailment_repr) > -1e-1).all().all():
             message = 'Curtailment exceeds feed-in.'
             logging.error(message)
             raise TypeError(message)
