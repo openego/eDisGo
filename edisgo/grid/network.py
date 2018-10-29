@@ -1686,7 +1686,7 @@ class CurtailmentControl:
             feedin_selected_sum = feedin_df.sum(axis=1)
             diff = feedin_selected_sum - curtailment_timeseries
             # add tolerance (set small negative values to zero)
-            diff[diff.between(-1e-1, 0)] = 0
+            diff[diff.between(-1, 0)] = 0
             if not (diff >= 0).all():
                 bad_time_steps = [_ for _ in diff.index
                                   if diff[_] < 0]
