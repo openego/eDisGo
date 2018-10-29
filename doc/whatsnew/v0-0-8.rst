@@ -1,7 +1,9 @@
 Release v0.0.8
 ==============
 
-Release date: <month> <day>, <year>
+Release date: October 29, 2018
 
 Changes
 -------
+* added tolerance for curtailment targets slightly higher than generator availability to allow small
+  rounding errors
