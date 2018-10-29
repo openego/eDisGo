@@ -188,7 +188,7 @@ class EDisGoReimport:
         if self.network.pypsa is not None:
             plots.mv_grid_topology(
                 self.network.pypsa, self.network.config,
-                node_color=kwargs.get('storage_integration', None),
+                node_color='storage_integration',
                 filename=kwargs.get('filename', None),
                 grid_district_geom=kwargs.get('grid_district_geom', True),
                 background_map=kwargs.get('background_map', True),
