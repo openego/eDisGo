@@ -61,6 +61,8 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         * False
           Costs reduction is never checked.
 
+        Default: False.
+
     """
 
     def _feeder_ranking(grid_expansion_costs):
