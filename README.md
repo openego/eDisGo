@@ -3,6 +3,8 @@
 # eDisGo
 The python package eDisGo provides a toolbox to analyze distribution grids for grid issues 
 and to evaluate measures responding these.
+See [documentation](https://edisgo.readthedocs.io/en/dev/) for further information.
+
 
 LICENSE
 -------
