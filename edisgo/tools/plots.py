@@ -2,13 +2,13 @@ import os
 import pandas as pd
 import numpy as np
 import logging
-from math import sqrt
 from matplotlib import pyplot as plt
 from pypsa import Network as PyPSANetwork
 from egoio.tools.db import connection
 from sqlalchemy.orm import sessionmaker
 from geoalchemy2 import shape
 from pyproj import Proj, transform
+import matplotlib
 
 from edisgo.tools import tools
 
@@ -190,6 +190,7 @@ def get_grid_district_polygon(config, subst_id=None, projection=4326):
     region = gpd.GeoDataFrame(
         Regions, columns=['subst_id', 'geometry'], crs=crs)
     region = region.to_crs(epsg=projection)
+
     return region
 
 
@@ -404,6 +405,11 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
 
         return bus_sizes, bus_colors
 
+    # set font and font size
+    font = {'family': 'serif',
+            'size': 15}
+    matplotlib.rc('font', **font)
+
     # create pypsa network only containing MV buses and lines
     pypsa_plot = PyPSANetwork()
     pypsa_plot.buses = pypsa_network.buses.loc[pypsa_network.buses.v_nom >= 10]
@@ -553,15 +559,32 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
                 pypsa_network.storage_units.loc[:, 'bus'], 'y'],
             c='orangered',
             s=pypsa_network.storage_units.loc[:, 'p_nom'] * 1000 / 3)
-    # add legend for storage size
+    # add legend for storage size and line capacity
     if (node_color == 'storage_integration' or
         node_color == 'expansion_costs') and \
             pypsa_network.storage_units.loc[:, 'p_nom'].any() > 0:
-        scatter_handle = ax.scatter(
+        scatter_handle = plt.scatter(
             [], [], c='orangered', s=100, label='= 300 kW battery storage')
-        ax.legend(handles=[scatter_handle], scatterpoints=1, labelspacing=1,
-                  title='Storage size', borderpad=1.2, loc=2, framealpha=0.5,
-                  fontsize='medium')
+    else:
+        scatter_handle = None
+    if scaling_factor_line_width is not None:
+        line_handle = plt.plot(
+            [], [], c='black', linewidth=scaling_factor_line_width*10,
+            label='= 10 MVA')
+    else:
+        line_handle = None
+    if scatter_handle and line_handle:
+        plt.legend(handles=[scatter_handle, line_handle[0]], labelspacing=1,
+                   title='Storage size and line capacity', borderpad=0.5,
+                   loc=2, framealpha=0.5, fontsize='medium')
+    elif scatter_handle:
+        plt.legend(handles=[scatter_handle], labelspacing=1,
+                   title='Storage size', borderpad=0.5,
+                   loc=2, framealpha=0.5, fontsize='medium')
+    elif line_handle:
+        plt.legend(handles=[line_handle[0]], labelspacing=1,
+                   title='Line capacity', borderpad=0.5,
+                   loc=2, framealpha=0.5, fontsize='medium')
 
     # axes limits
     if xlim is not None:
