@@ -498,12 +498,12 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
             nodes = lv_grid.graph.nodes()
 
         if voltage_levels == 'lv':
-            # get voltage at primary side to calculate upper bound for
-            # feed-in case and lower bound for load case
-            v_lv_station_primary = network.results.v_res(
-                nodes=[lv_grid.station], level='mv').iloc[:, 0]
-            timeindex = v_lv_station_primary.index
-            if mode == 'station':
+            if mode == 'stations':
+                # get voltage at primary side to calculate upper bound for
+                # feed-in case and lower bound for load case
+                v_lv_station_primary = network.results.v_res(
+                    nodes=[lv_grid.station], level='mv').iloc[:, 0]
+                timeindex = v_lv_station_primary.index
                 v_dev_allowed_per_case['feedin_case_upper'] = \
                     v_lv_station_primary + network.config[
                         'grid_expansion_allowed_voltage_deviations'][
@@ -513,12 +513,17 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
                         'grid_expansion_allowed_voltage_deviations'][
                         'mv_lv_station_load_case_max_v_deviation']
             else:
+                # get voltage at secondary side to calculate upper bound for
+                # feed-in case and lower bound for load case
+                v_lv_station_secondary = network.results.v_res(
+                    nodes=[lv_grid.station], level='lv').iloc[:, 0]
+                timeindex = v_lv_station_secondary.index
                 v_dev_allowed_per_case['feedin_case_upper'] = \
-                    v_lv_station_primary + network.config[
+                    v_lv_station_secondary + network.config[
                         'grid_expansion_allowed_voltage_deviations'][
                         'lv_feedin_case_max_v_deviation']
                 v_dev_allowed_per_case['load_case_lower'] = \
-                    v_lv_station_primary - network.config[
+                    v_lv_station_secondary - network.config[
                         'grid_expansion_allowed_voltage_deviations'][
                         'lv_load_case_max_v_deviation']
             v_dev_allowed_per_case['feedin_case_lower'] = pd.Series(
