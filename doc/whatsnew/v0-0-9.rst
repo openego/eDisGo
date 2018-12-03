@@ -1,7 +1,9 @@
 Release v0.0.9
 ==============
 
-Release date: <month> <day>, <year>
+Release date: December 3, 2018
 
 Changes
 -------
+
+* bug fix in determining voltage deviation in LV stations and LV grid
