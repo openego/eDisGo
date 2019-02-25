@@ -12,7 +12,8 @@ logger = logging.getLogger('edisgo')
 
 
 def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
-                   max_while_iterations=10, combined_analysis=False):
+                   max_while_iterations=10, combined_analysis=False,
+                   mode=None):
     """
     Evaluates grid reinforcement needs and performs measures.
 
@@ -57,7 +58,16 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         If True allowed voltage deviations for combined analysis of MV and LV
         grid are used. If False different allowed voltage deviations for MV
         and LV are used. See also config section
-        `grid_expansion_allowed_voltage_deviations`. Default: False.
+        `grid_expansion_allowed_voltage_deviations`. If `mode` is set to 'mv'
+        `combined_analysis` should be False. Default: False.
+    mode : :obj:`str`
+        Determines grid levels reinforcement is conducted for. Specify
+
+        * None to reinforce MV and LV grid levels. None is the default.
+        * 'mv' to reinforce MV grid level only, including MV/LV stations, and
+          neglecting LV grid topology. LV load and generation is aggregated per
+          LV grid and directly connected to the secondary side of the
+          respective MV/LV station.
 
     Returns
     -------
@@ -100,6 +110,10 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                          'quantity': [1] * len(transformer_list)},
                         index=[station] * len(transformer_list)))
 
+    # check if provided mode is valid
+    if mode and mode is not 'mv':
+        raise ValueError("Provided mode {} is not a valid mode.")
+
     # assign MV feeder to every generator, LV station, load, and branch tee
     # to assign grid expansion costs to an MV feeder
     assign_mv_feeder_to_nodes(edisgo.network.mv_grid)
@@ -108,7 +122,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # be obtained more performant in case `timesteps_pfa` = 'snapshot_analysis'
     # plus edisgo and edisgo_reinforce will have pypsa representation in case
     # reinforcement needs to be conducted on a copied graph)
-    edisgo.analyze()
+    edisgo.analyze(mode=mode)
 
     # in case reinforcement needs to be conducted on a copied graph the
     # edisgo object is deep copied
@@ -141,7 +155,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                         timesteps_pfa))
 
     iteration_step = 1
-    edisgo_reinforce.analyze(timesteps=timesteps_pfa)
+    edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
 
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
 
@@ -150,9 +164,10 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     overloaded_lv_stations = checks.mv_lv_station_load(
         edisgo_reinforce.network)
     logger.debug('==> Check line load.')
-    crit_lines_lv = checks.lv_line_load(edisgo_reinforce.network)
-    crit_lines_mv = checks.mv_line_load(edisgo_reinforce.network)
-    crit_lines = crit_lines_lv.append(crit_lines_mv)
+    crit_lines = checks.mv_line_load(edisgo_reinforce.network)
+    if not mode:
+        crit_lines = crit_lines.append(
+            checks.lv_line_load(edisgo_reinforce.network))
 
     while_counter = 0
     while ((not overloaded_mv_station.empty or not overloaded_lv_stations.empty
@@ -192,16 +207,17 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
             edisgo_reinforce.network.results.equipment_changes[
                 edisgo_reinforce.network.results.equipment_changes.
                     iteration_step==iteration_step])
-        edisgo_reinforce.analyze(timesteps=timesteps_pfa)
+        edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
         logger.debug('==> Recheck station load.')
         overloaded_mv_station = checks.hv_mv_station_load(
             edisgo_reinforce.network)
         overloaded_lv_stations = checks.mv_lv_station_load(
             edisgo_reinforce.network)
         logger.debug('==> Recheck line load.')
-        crit_lines_lv = checks.lv_line_load(edisgo_reinforce.network)
-        crit_lines_mv = checks.mv_line_load(edisgo_reinforce.network)
-        crit_lines = crit_lines_lv.append(crit_lines_mv)
+        crit_lines = checks.mv_line_load(edisgo_reinforce.network)
+        if not mode:
+            crit_lines = crit_lines.append(
+                checks.lv_line_load(edisgo_reinforce.network))
 
         iteration_step += 1
         while_counter += 1
@@ -253,7 +269,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
             edisgo_reinforce.network.results.equipment_changes[
                 edisgo_reinforce.network.results.equipment_changes.
                     iteration_step == iteration_step])
-        edisgo_reinforce.analyze(timesteps=timesteps_pfa)
+        edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
         logger.debug('==> Recheck voltage in MV grid.')
         crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce.network,
                                                  voltage_levels=voltage_levels)
@@ -302,7 +318,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
             edisgo_reinforce.network.results.equipment_changes[
                 edisgo_reinforce.network.results.equipment_changes.
                     iteration_step == iteration_step])
-        edisgo_reinforce.analyze(timesteps=timesteps_pfa)
+        edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
         logger.debug('==> Recheck voltage at secondary side of LV stations.')
         crit_stations = checks.lv_voltage_deviation(
             edisgo_reinforce.network, mode='stations',
@@ -326,50 +342,52 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                     'in {} iteration step(s).'.format(while_counter))
 
     # solve voltage problems in LV grids
-    logger.debug('==> Check voltage in LV grids.')
-    crit_nodes = checks.lv_voltage_deviation(edisgo_reinforce.network,
-                                             voltage_levels=voltage_levels)
-
-    while_counter = 0
-    while crit_nodes and while_counter < max_while_iterations:
-        # for every grid in crit_nodes do reinforcement
-        for grid in crit_nodes:
-            # reinforce lines
-            lines_changes = reinforce_measures.reinforce_branches_overvoltage(
-                edisgo_reinforce.network, grid, crit_nodes[grid])
-            # write changed lines to results.equipment_changes
-            _add_lines_changes_to_equipment_changes()
-
-        # run power flow analysis again (after updating pypsa object) and check
-        # if all over-voltage problems were solved
-        logger.debug('==> Run power flow analysis.')
-        pypsa_io.update_pypsa_grid_reinforcement(
-            edisgo_reinforce.network,
-            edisgo_reinforce.network.results.equipment_changes[
-                edisgo_reinforce.network.results.equipment_changes.
-                    iteration_step == iteration_step])
-        edisgo_reinforce.analyze(timesteps=timesteps_pfa)
-        logger.debug('==> Recheck voltage in LV grids.')
+    if not mode:
+        logger.debug('==> Check voltage in LV grids.')
         crit_nodes = checks.lv_voltage_deviation(edisgo_reinforce.network,
                                                  voltage_levels=voltage_levels)
 
-        iteration_step += 1
-        while_counter += 1
+        while_counter = 0
+        while crit_nodes and while_counter < max_while_iterations:
+            # for every grid in crit_nodes do reinforcement
+            for grid in crit_nodes:
+                # reinforce lines
+                lines_changes = \
+                    reinforce_measures.reinforce_branches_overvoltage(
+                        edisgo_reinforce.network, grid, crit_nodes[grid])
+                # write changed lines to results.equipment_changes
+                _add_lines_changes_to_equipment_changes()
 
-    # check if all voltage problems were solved after maximum number of
-    # iterations allowed
-    if while_counter == max_while_iterations and crit_nodes:
-        for k, v in crit_nodes.items():
-            for node in v.index:
-                edisgo_reinforce.network.results.unresolved_issues.update(
-                    {repr(node): v.loc[node, 'v_mag_pu']})
-        raise exceptions.MaximumIterationError(
-            "Over-voltage issues for the following nodes in LV grids could "
-            "not be solved: {}".format(crit_nodes))
-    else:
-        logger.info(
-            '==> Voltage issues in LV grids were solved '
-            'in {} iteration step(s).'.format(while_counter))
+            # run power flow analysis again (after updating pypsa object) and
+            # check if all over-voltage problems were solved
+            logger.debug('==> Run power flow analysis.')
+            pypsa_io.update_pypsa_grid_reinforcement(
+                edisgo_reinforce.network,
+                edisgo_reinforce.network.results.equipment_changes[
+                    edisgo_reinforce.network.results.equipment_changes.
+                        iteration_step == iteration_step])
+            edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
+            logger.debug('==> Recheck voltage in LV grids.')
+            crit_nodes = checks.lv_voltage_deviation(
+                edisgo_reinforce.network, voltage_levels=voltage_levels)
+
+            iteration_step += 1
+            while_counter += 1
+
+        # check if all voltage problems were solved after maximum number of
+        # iterations allowed
+        if while_counter == max_while_iterations and crit_nodes:
+            for k, v in crit_nodes.items():
+                for node in v.index:
+                    edisgo_reinforce.network.results.unresolved_issues.update(
+                        {repr(node): v.loc[node, 'v_mag_pu']})
+            raise exceptions.MaximumIterationError(
+                "Over-voltage issues for the following nodes in LV grids "
+                "could not be solved: {}".format(crit_nodes))
+        else:
+            logger.info(
+                '==> Voltage issues in LV grids were solved '
+                'in {} iteration step(s).'.format(while_counter))
 
     # RECHECK FOR OVERLOADED TRANSFORMERS AND LINES
     logger.debug('==> Recheck station load.')
@@ -377,9 +395,10 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     overloaded_lv_stations = checks.mv_lv_station_load(
         edisgo_reinforce.network)
     logger.debug('==> Recheck line load.')
-    crit_lines_lv = checks.lv_line_load(edisgo_reinforce.network)
-    crit_lines_mv = checks.mv_line_load(edisgo_reinforce.network)
-    crit_lines = crit_lines_lv.append(crit_lines_mv)
+    crit_lines = checks.mv_line_load(edisgo_reinforce.network)
+    if not mode:
+        crit_lines = crit_lines.append(
+            checks.lv_line_load(edisgo_reinforce.network))
 
     while_counter = 0
     while ((not overloaded_mv_station.empty or not overloaded_lv_stations.empty
@@ -418,16 +437,17 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
             edisgo_reinforce.network.results.equipment_changes[
                 edisgo_reinforce.network.results.equipment_changes.
                     iteration_step == iteration_step])
-        edisgo_reinforce.analyze(timesteps=timesteps_pfa)
+        edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
         logger.debug('==> Recheck station load.')
         overloaded_mv_station = checks.hv_mv_station_load(
             edisgo_reinforce.network)
         overloaded_lv_stations = checks.mv_lv_station_load(
             edisgo_reinforce.network)
         logger.debug('==> Recheck line load.')
-        crit_lines_lv = checks.lv_line_load(edisgo_reinforce.network)
-        crit_lines_mv = checks.mv_line_load(edisgo_reinforce.network)
-        crit_lines = crit_lines_lv.append(crit_lines_mv)
+        crit_lines = checks.mv_line_load(edisgo_reinforce.network)
+        if not mode:
+            crit_lines = crit_lines.append(
+                checks.lv_line_load(edisgo_reinforce.network))
 
         iteration_step += 1
         while_counter += 1
