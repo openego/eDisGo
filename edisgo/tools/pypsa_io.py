@@ -623,34 +623,26 @@ def add_aggregated_lv_components(network, components):
         The dictionary components passed to the function is returned altered.
     """
     generators = {}
-
     loads = {}
 
-    # collect aggregated generation capacity by type and subtype
-    # collect aggregated load grouped by sector
+    # collect aggregated generation capacity by type
+    # collect aggregated load
+    # storages are kept separately as e.g. charging efficiency cannot be
+    # aggregated
     for lv_grid in network.mv_grid.lv_grids:
         generators.setdefault(lv_grid, {})
         for gen in lv_grid.generators:
             generators[lv_grid].setdefault(gen.type, {})
-            generators[lv_grid][gen.type].setdefault(gen.subtype, {})
-            generators[lv_grid][gen.type][gen.subtype].setdefault(
-                'capacity', 0)
-            generators[lv_grid][gen.type][gen.subtype][
-                'capacity'] += gen.nominal_capacity
-            generators[lv_grid][gen.type][gen.subtype].setdefault(
-                'name',
-                '_'.join([gen.type,
-                          gen.subtype,
-                          'aggregated',
-                          'LV_grid',
-                          str(lv_grid.id)]))
-        loads.setdefault(lv_grid, {})
+            generators[lv_grid][gen.type].setdefault('capacity', 0)
+            generators[lv_grid][gen.type]['capacity'] += gen.nominal_capacity
+            generators[lv_grid][gen.type].setdefault('name',
+                '_'.join([gen.type, 'aggregated', 'LV_grid', str(lv_grid.id)]))
+        loads.setdefault(lv_grid, 0)
         for lo in lv_grid.graph.nodes_by_attribute('load'):
-            for sector, val in lo.consumption.items():
-                loads[lv_grid].setdefault(sector, 0)
-                loads[lv_grid][sector] += val
+            loads[lv_grid] += sum(lo.consumption.values())
 
-    # define dict for DataFrame creation of aggr. generation and load
+    # define dict for DataFrame creation of aggr. generation, load and storage
+    # capacity
     generator = {'name': [],
                  'bus': [],
                  'control': [],
@@ -659,28 +651,47 @@ def add_aggregated_lv_components(network, components):
 
     load = {'name': [], 'bus': []}
 
+    storage = {
+        'name': [],
+        'bus': [],
+        'p_nom': [],
+        'state_of_charge_initial': [],
+        'efficiency_store': [],
+        'efficiency_dispatch': [],
+        'standing_loss': []}
+
     # fill generators dictionary for DataFrame creation
     for lv_grid_obj, lv_grid in generators.items():
         for _, gen_type in lv_grid.items():
-            for _, gen_subtype in gen_type.items():
-                generator['name'].append(gen_subtype['name'])
-                generator['bus'].append(
-                    '_'.join(['Bus', lv_grid_obj.station.__repr__('lv')]))
-                generator['control'].append('PQ')
-                generator['p_nom'].append(gen_subtype['capacity'])
-                generator['type'].append("")
+            generator['name'].append(gen_type['name'])
+            generator['bus'].append(
+                '_'.join(['Bus', lv_grid_obj.station.__repr__('lv')]))
+            generator['control'].append('PQ')
+            generator['p_nom'].append(gen_type['capacity'])
+            generator['type'].append("")
 
     # fill loads dictionary for DataFrame creation
     for lv_grid_obj, lv_grid in loads.items():
-        for sector, val in lv_grid.items():
-            load['name'].append('_'.join(['Load', sector, repr(lv_grid_obj)]))
-            load['bus'].append(
-                '_'.join(['Bus', lv_grid_obj.station.__repr__('lv')]))
+        load['name'].append('_'.join(['Load', repr(lv_grid_obj)]))
+        load['bus'].append(
+            '_'.join(['Bus', lv_grid_obj.station.__repr__('lv')]))
+
+    for lv_grid in network.mv_grid.lv_grids:
+        for sto in lv_grid.graph.nodes_by_attribute('storage'):
+            storage['name'].append(repr(sto))
+            storage['bus'].append(
+                '_'.join(['Bus', lv_grid.station.__repr__('lv')]))
+            storage['p_nom'].append(sto.nominal_power)
+            storage['state_of_charge_initial'].append(sto.soc_initial)
+            storage['efficiency_store'].append(sto.efficiency_in)
+            storage['efficiency_dispatch'].append(sto.efficiency_out)
+            storage['standing_loss'].append(sto.standing_loss)
 
     components['Generator'] = pd.concat(
         [components['Generator'], pd.DataFrame(generator).set_index('name')])
     components['Load'] = pd.concat(
         [components['Load'], pd.DataFrame(load).set_index('name')])
+    components['StorageUnit'] = pd.DataFrame(storage).set_index('name')
 
     return components
 
@@ -716,9 +727,10 @@ def _pypsa_load_timeseries(network, timesteps, mode=None):
     # add MV grid loads
     if mode is 'mv' or mode is None:
         for load in network.mv_grid.graph.nodes_by_attribute('load'):
-            mv_load_timeseries_q.append(load.pypsa_timeseries('q').rename(
+            pypsa_ts = load.pypsa_timeseries()
+            mv_load_timeseries_q.append(pypsa_ts.q.rename(
                 repr(load)).to_frame().loc[timesteps])
-            mv_load_timeseries_p.append(load.pypsa_timeseries('p').rename(
+            mv_load_timeseries_p.append(pypsa_ts.p.rename(
                 repr(load)).to_frame().loc[timesteps])
         if mode is 'mv':
             lv_load_timeseries_p, lv_load_timeseries_q = \
@@ -729,9 +741,10 @@ def _pypsa_load_timeseries(network, timesteps, mode=None):
     if mode is 'lv' or mode is None:
         for lv_grid in network.mv_grid.lv_grids:
             for load in lv_grid.graph.nodes_by_attribute('load'):
-                lv_load_timeseries_q.append(load.pypsa_timeseries('q').rename(
+                pypsa_ts = load.pypsa_timeseries()
+                lv_load_timeseries_q.append(pypsa_ts.q.rename(
                     repr(load)).to_frame().loc[timesteps])
-                lv_load_timeseries_p.append(load.pypsa_timeseries('p').rename(
+                lv_load_timeseries_p.append(pypsa_ts.p.rename(
                     repr(load)).to_frame().loc[timesteps])
 
     load_df_p = pd.concat(mv_load_timeseries_p + lv_load_timeseries_p, axis=1)
@@ -771,9 +784,10 @@ def _pypsa_generator_timeseries(network, timesteps, mode=None):
     # MV generator timeseries
     if mode is 'mv' or mode is None:
         for gen in network.mv_grid.generators:
-            mv_gen_timeseries_q.append(gen.pypsa_timeseries('q').rename(
+            pypsa_ts = gen.pypsa_timeseries()
+            mv_gen_timeseries_q.append(pypsa_ts.q.rename(
                 repr(gen)).to_frame().loc[timesteps])
-            mv_gen_timeseries_p.append(gen.pypsa_timeseries('p').rename(
+            mv_gen_timeseries_p.append(pypsa_ts.p.rename(
                 repr(gen)).to_frame().loc[timesteps])
         if mode is 'mv':
             lv_gen_timeseries_p, lv_gen_timeseries_q = \
@@ -784,9 +798,10 @@ def _pypsa_generator_timeseries(network, timesteps, mode=None):
     if mode is 'lv' or mode is None:
         for lv_grid in network.mv_grid.lv_grids:
             for gen in lv_grid.generators:
-                lv_gen_timeseries_q.append(gen.pypsa_timeseries('q').rename(
+                pypsa_ts = gen.pypsa_timeseries()
+                lv_gen_timeseries_q.append(pypsa_ts.q.rename(
                     repr(gen)).to_frame().loc[timesteps])
-                lv_gen_timeseries_p.append(gen.pypsa_timeseries('p').rename(
+                lv_gen_timeseries_p.append(pypsa_ts.p.rename(
                     repr(gen)).to_frame().loc[timesteps])
 
     gen_df_p = pd.concat(mv_gen_timeseries_p + lv_gen_timeseries_p, axis=1)
@@ -827,23 +842,25 @@ def _pypsa_storage_timeseries(network, timesteps, mode=None):
     # MV storage time series
     if mode is 'mv' or mode is None:
         for storage in network.mv_grid.graph.nodes_by_attribute('storage'):
-            mv_storage_timeseries_q.append(
-                storage.pypsa_timeseries('q').rename(
-                    repr(storage)).to_frame().loc[timesteps])
-            mv_storage_timeseries_p.append(
-                storage.pypsa_timeseries('p').rename(
-                    repr(storage)).to_frame().loc[timesteps])
+            pypsa_ts = storage.pypsa_timeseries()
+            mv_storage_timeseries_q.append(pypsa_ts.q.rename(
+                repr(storage)).to_frame().loc[timesteps])
+            mv_storage_timeseries_p.append(pypsa_ts.p.rename(
+                repr(storage)).to_frame().loc[timesteps])
+        if mode is 'mv':
+            lv_storage_timeseries_p, lv_storage_timeseries_q = \
+                _pypsa_storage_timeseries_aggregated_at_lv_station(
+                    network, timesteps)
 
     # LV storage time series
     if mode is 'lv' or mode is None:
         for lv_grid in network.mv_grid.lv_grids:
             for storage in lv_grid.graph.nodes_by_attribute('storage'):
-                lv_storage_timeseries_q.append(
-                    storage.pypsa_timeseries('q').rename(
-                        repr(storage)).to_frame().loc[timesteps])
-                lv_storage_timeseries_p.append(
-                    storage.pypsa_timeseries('p').rename(
-                        repr(storage)).to_frame().loc[timesteps])
+                pypsa_ts = storage.pypsa_timeseries()
+                lv_storage_timeseries_q.append(pypsa_ts.q.rename(
+                    repr(storage)).to_frame().loc[timesteps])
+                lv_storage_timeseries_p.append(pypsa_ts.p.rename(
+                    repr(storage)).to_frame().loc[timesteps])
 
     storage_df_p = pd.concat(
         mv_storage_timeseries_p + lv_storage_timeseries_p, axis=1)
@@ -953,41 +970,37 @@ def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
         # Determine aggregated generation at LV stations
         generation = {}
         for gen in lv_grid.generators:
-            # for type in gen.type:
-            #     for subtype in gen.subtype:
             gen_name = '_'.join([gen.type,
-                                 gen.subtype,
                                  'aggregated',
                                  'LV_grid',
                                  str(lv_grid.id)])
 
             generation.setdefault(gen.type, {})
-            generation[gen.type].setdefault(gen.subtype, {})
-            generation[gen.type][gen.subtype].setdefault('timeseries_p', [])
-            generation[gen.type][gen.subtype].setdefault('timeseries_q', [])
-            generation[gen.type][gen.subtype]['timeseries_p'].append(
-                gen.pypsa_timeseries('p').rename(gen_name).to_frame().loc[
+            generation[gen.type].setdefault('timeseries_p', [])
+            generation[gen.type].setdefault('timeseries_q', [])
+            pypsa_ts = gen.pypsa_timeseries()
+            generation[gen.type]['timeseries_p'].append(
+                pypsa_ts.p.rename(gen_name).to_frame().loc[
                     timesteps])
-            generation[gen.type][gen.subtype]['timeseries_q'].append(
-                gen.pypsa_timeseries('q').rename(gen_name).to_frame().loc[
+            generation[gen.type]['timeseries_q'].append(
+                pypsa_ts.q.rename(gen_name).to_frame().loc[
                     timesteps])
 
-        for k_type, v_type in generation.items():
-            for k_type, v_subtype in v_type.items():
-                col_name = v_subtype['timeseries_p'][0].columns[0]
-                generation_p.append(
-                    pd.concat(v_subtype['timeseries_p'],
-                              axis=1).sum(axis=1).rename(col_name).to_frame())
-                generation_q.append(
-                    pd.concat(v_subtype['timeseries_q'], axis=1).sum(
-                        axis=1).rename(col_name).to_frame())
+        for gen_type, ts_type in generation.items():
+            col_name = ts_type['timeseries_p'][0].columns[0]
+            generation_p.append(
+                pd.concat(ts_type['timeseries_p'],
+                    axis=1).sum(axis=1).rename(col_name).to_frame())
+            generation_q.append(
+                pd.concat(ts_type['timeseries_q'], axis=1).sum(
+                    axis=1).rename(col_name).to_frame())
 
     return generation_p, generation_q
 
 
 def _pypsa_load_timeseries_aggregated_at_lv_station(network, timesteps):
     """
-    Aggregates load time series per sector and LV grid.
+    Aggregates load time series per LV grid.
 
     Parameters
     ----------
@@ -1007,10 +1020,6 @@ def _pypsa_load_timeseries_aggregated_at_lv_station(network, timesteps):
             2. 'q_set' of aggregated Load per sector at each LV station
 
     """
-    # ToDo: Load.pypsa_timeseries is not differentiated by sector so this
-    # function will not work (either change here and in
-    # add_aggregated_lv_components or in Load class)
-    
     load_p = []
     load_q = []
 
@@ -1018,27 +1027,75 @@ def _pypsa_load_timeseries_aggregated_at_lv_station(network, timesteps):
         # Determine aggregated load at LV stations
         load = {}
         for lo in lv_grid.graph.nodes_by_attribute('load'):
-            for sector, val in lo.consumption.items():
-                load.setdefault(sector, {})
-                load[sector].setdefault('timeseries_p', [])
-                load[sector].setdefault('timeseries_q', [])
+            load.setdefault('timeseries_p', [])
+            load.setdefault('timeseries_q', [])
 
-                load[sector]['timeseries_p'].append(
-                    lo.pypsa_timeseries('p').rename(repr(lo)).to_frame().loc[
-                        timesteps])
-                load[sector]['timeseries_q'].append(
-                    lo.pypsa_timeseries('q').rename(repr(lo)).to_frame().loc[
-                        timesteps])
+            pypsa_ts = lo.pypsa_timeseries()
+            load['timeseries_p'].append(
+                pypsa_ts.p.rename(repr(lo)).to_frame().loc[
+                    timesteps])
+            load['timeseries_q'].append(
+                pypsa_ts.q.rename(repr(lo)).to_frame().loc[
+                    timesteps])
 
-        for sector, val in load.items():
-            load_p.append(
-                pd.concat(val['timeseries_p'], axis=1).sum(axis=1).rename(
-                    '_'.join(['Load', sector, repr(lv_grid)])).to_frame())
-            load_q.append(
-                pd.concat(val['timeseries_q'], axis=1).sum(axis=1).rename(
-                    '_'.join(['Load', sector, repr(lv_grid)])).to_frame())
+        load_p.append(
+            pd.concat(load['timeseries_p'], axis=1).sum(axis=1).rename(
+                '_'.join(['Load', repr(lv_grid)])).to_frame())
+        load_q.append(
+            pd.concat(load['timeseries_q'], axis=1).sum(axis=1).rename(
+                '_'.join(['Load', repr(lv_grid)])).to_frame())
 
     return load_p, load_q
+
+
+def _pypsa_storage_timeseries_aggregated_at_lv_station(network, timesteps):
+    """
+    Aggregates storage time series per LV grid.
+
+    Parameters
+    ----------
+    network : Network
+        The eDisGo grid topology model overall container
+    timesteps : array_like
+        Timesteps is an array-like object with entries of type
+        :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
+        to export to pypsa representation and use in power flow analysis.
+
+    Returns
+    -------
+    tuple of :pandas:`pandas.DataFrame<dataframe>`
+        Tuple of size two containing DataFrames that represent
+
+            1. 'p_set' of aggregated Load per sector at each LV station
+            2. 'q_set' of aggregated Load per sector at each LV station
+
+    """
+    storage_p = []
+    storage_q = []
+
+    for lv_grid in network.mv_grid.lv_grids:
+        # Determine aggregated load at LV stations
+        storage = {}
+        for sto in lv_grid.graph.nodes_by_attribute('load'):
+            storage.setdefault('timeseries_p', [])
+            storage.setdefault('timeseries_q', [])
+
+            pypsa_ts = sto.pypsa_timeseries()
+            storage['timeseries_p'].append(
+                pypsa_ts.p.rename(repr(sto)).to_frame().loc[
+                    timesteps])
+            storage['timeseries_q'].append(
+                pypsa_ts.q.rename(repr(sto)).to_frame().loc[
+                    timesteps])
+
+        storage_p.append(
+            pd.concat(storage['timeseries_p'], axis=1).sum(axis=1).rename(
+                '_'.join(['Storage', repr(lv_grid)])).to_frame())
+        storage_q.append(
+            pd.concat(storage['timeseries_q'], axis=1).sum(axis=1).rename(
+                '_'.join(['Storage', repr(lv_grid)])).to_frame())
+
+    return storage_p, storage_q
 
 
 def _check_topology(components):
@@ -1726,9 +1783,10 @@ def update_pypsa_storage(pypsa, storages, storages_lines):
     timeseries_storage_p = pd.DataFrame()
     timeseries_storage_q = pd.DataFrame()
     for s in storages:
-        timeseries_storage_p[repr(s)] = s.pypsa_timeseries('p').loc[
+        pypsa_ts = s.pypsa_timeseries()
+        timeseries_storage_p[repr(s)] = pypsa_ts.p.loc[
             pypsa.storage_units_t.p_set.index]
-        timeseries_storage_q[repr(s)] = s.pypsa_timeseries('q').loc[
+        timeseries_storage_q[repr(s)] = pypsa_ts.q.loc[
             pypsa.storage_units_t.q_set.index]
 
     import_series_from_dataframe(pypsa, timeseries_storage_p,
@@ -2003,8 +2061,9 @@ def _update_pypsa_timeseries_by_type(network, type, components_to_update=None,
         q_set = pd.DataFrame()
         for comp in components_to_update:
             if repr(comp) in components_in_pypsa:
-                p_set[repr(comp)] = comp.pypsa_timeseries('p').loc[timesteps]
-                q_set[repr(comp)] = comp.pypsa_timeseries('q').loc[timesteps]
+                pypsa_ts = comp.pypsa_timeseries()
+                p_set[repr(comp)] = pypsa_ts.p.loc[timesteps]
+                q_set[repr(comp)] = pypsa_ts.q.loc[timesteps]
             else:
                 raise KeyError("Tried to update component {} but could not "
                                "find it in pypsa network.".format(comp))

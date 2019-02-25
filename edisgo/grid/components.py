@@ -295,16 +295,12 @@ class Load(Component):
                 "Reactive power time series of load {} needs to be a pandas "
                 "Series.".format(repr(self)))
 
-    def pypsa_timeseries(self, attr):
+    def pypsa_timeseries(self):
         """Return time series in PyPSA format
 
-        Parameters
-        ----------
-        attr : str
-            Attribute name (PyPSA conventions). Choose from {p_set, q_set}
         """
 
-        return self.timeseries[attr] / 1e3
+        return self.timeseries / 1e3
 
     @property
     def consumption(self):
@@ -612,18 +608,14 @@ class Generator(Component):
                 "Reactive power time series of generator {} needs to be a "
                 "pandas Series.".format(repr(self)))
 
-    def pypsa_timeseries(self, attr):
+    def pypsa_timeseries(self):
         """
         Return time series in PyPSA format
 
         Convert from kW, kVA to MW, MVA
 
-        Parameters
-        ----------
-        attr : :obj:`str`
-            Attribute name (PyPSA conventions). Choose from {p_set, q_set}
         """
-        return self.timeseries[attr] / 1e3
+        return self.timeseries / 1e3
 
     @property
     def type(self):
@@ -1049,18 +1041,13 @@ class Storage(Component):
     def timeseries(self, ts):
         self._timeseries = ts
 
-    def pypsa_timeseries(self, attr):
+    def pypsa_timeseries(self):
         """Return time series in PyPSA format
 
         Convert from kW, kVA to MW, MVA
 
-        Parameters
-        ----------
-        attr : str
-            Attribute name (PyPSA conventions). Choose from {p_set, q_set}
-
         """
-        return self.timeseries[attr] / 1e3
+        return self.timeseries / 1e3
 
     @property
     def nominal_power(self):
