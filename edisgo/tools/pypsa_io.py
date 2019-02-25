@@ -1365,27 +1365,34 @@ def process_pfa_results(network, pypsa, timesteps):
     lv_storages_names = []
     lv_branch_t_names = []
     lv_loads_names = []
-    for lv_grid in network.mv_grid.lv_grids:
-        lv_generators_names.extend([repr(g) for g in
-                                    lv_grid.graph.nodes_by_attribute(
-                                        'generator')])
-        lv_storages_names.extend([repr(g) for g in
-                                  lv_grid.graph.nodes_by_attribute(
-                                      'storage')])
-        lv_branch_t_names.extend([repr(bt) for bt in
-                             lv_grid.graph.nodes_by_attribute('branch_tee')])
-        lv_loads_names.extend([repr(lo) for lo in
-                          lv_grid.graph.nodes_by_attribute('load')])
 
-    lv_generators_mapping = {v: k for k, v in
-                             pypsa.generators.loc[lv_generators_names][
-                                 'bus'].to_dict().items()}
-    lv_storages_mapping = {v: k for k, v in
-                           pypsa.storage_units.loc[lv_storages_names][
-                               'bus'].to_dict().items()}
-    lv_branch_t_mapping = {'_'.join(['Bus', v]): v for v in lv_branch_t_names}
-    lv_loads_mapping = {v: k for k, v in pypsa.loads.loc[lv_loads_names][
-        'bus'].to_dict().items()}
+    if pypsa.edisgo_mode is None or 'lv' in pypsa.edisgo_mode:
+        for lv_grid in network.mv_grid.lv_grids:
+            lv_generators_names.extend([repr(g) for g in
+                                        lv_grid.graph.nodes_by_attribute(
+                                            'generator')])
+            lv_storages_names.extend([repr(g) for g in
+                                      lv_grid.graph.nodes_by_attribute(
+                                          'storage')])
+            lv_branch_t_names.extend([repr(bt) for bt in
+                                 lv_grid.graph.nodes_by_attribute('branch_tee')])
+            lv_loads_names.extend([repr(lo) for lo in
+                              lv_grid.graph.nodes_by_attribute('load')])
+
+        lv_generators_mapping = {v: k for k, v in
+                                 pypsa.generators.loc[lv_generators_names][
+                                     'bus'].to_dict().items()}
+        lv_storages_mapping = {v: k for k, v in
+                               pypsa.storage_units.loc[lv_storages_names][
+                                   'bus'].to_dict().items()}
+        lv_branch_t_mapping = {'_'.join(['Bus', v]): v for v in lv_branch_t_names}
+        lv_loads_mapping = {v: k for k, v in pypsa.loads.loc[lv_loads_names][
+            'bus'].to_dict().items()}
+    else:
+        lv_generators_mapping = {}
+        lv_storages_mapping = {}
+        lv_loads_mapping = {}
+        lv_branch_t_mapping = {}
 
     names_mapping = {
         **generators_mapping,
