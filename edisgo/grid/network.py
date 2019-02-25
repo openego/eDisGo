@@ -585,7 +585,8 @@ class EDisGo(EDisGoReimport):
             equals power flow analysis for MV + LV which is the only
             implemented option at the moment. See ToDos section for
             more information.
-        timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+        timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
+            :pandas:`pandas.Timestamp<timestamp>`
             Timesteps specifies for which time steps to conduct the power flow
             analysis. It defaults to None in which case the time steps in
             timeseries.timeindex (see :class:`~.grid.network.TimeSeries`) are

@@ -1242,7 +1242,8 @@ def process_pfa_results(network, pypsa, timesteps):
     pypsa : :pypsa:`pypsa.Network<network>`
         The PyPSA `Network container
         <https://www.pypsa.org/doc/components.html#network>`_
-    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
+        :pandas:`pandas.Timestamp<timestamp>`
         Time steps for which latest power flow analysis was conducted for and
         for which to retrieve pypsa results.
 
@@ -1275,7 +1276,8 @@ def process_pfa_results(network, pypsa, timesteps):
     grid_exchanges = {'p': 1e3 * (pypsa.generators_t['p']['Generator_slack']),
                       'q': 1e3 * (pypsa.generators_t['q']['Generator_slack'])}
 
-    network.results.hv_mv_exchanges = pd.DataFrame(grid_exchanges).loc[timesteps, :]
+    network.results.hv_mv_exchanges = pd.DataFrame(
+        grid_exchanges).loc[timesteps, :]
 
     # get p and q of lines, LV transformers and MV Station (slack generator)
     # in absolute values
@@ -1809,7 +1811,8 @@ def update_pypsa_timeseries(network, loads_to_update=None,
         List with all storages (of type :class:`~.grid.components.Storage`)
         that need to be updated. If None all storages are updated depending on
         mode. See :meth:`~.tools.pypsa_io.to_pypsa` for more information.
-    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
+        :pandas:`pandas.Timestamp<timestamp>`
         Timesteps specifies which time steps of the load time series to export
         to pypsa representation and use in power flow analysis.
         If None all time steps currently existing in pypsa representation are
@@ -1855,7 +1858,8 @@ def update_pypsa_load_timeseries(network, loads_to_update=None,
         List with all loads (of type :class:`~.grid.components.Load`) that need
         to be updated. If None all loads are updated depending on mode. See
         :meth:`~.tools.pypsa_io.to_pypsa` for more information.
-    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
+        :pandas:`pandas.Timestamp<timestamp>`
         Timesteps specifies which time steps of the load time series to export
         to pypsa representation. If None all time steps currently existing in
         pypsa representation are updated. If not None current time steps are
@@ -1891,7 +1895,8 @@ def update_pypsa_generator_timeseries(network, generators_to_update=None,
         List with all generators (of type :class:`~.grid.components.Generator`)
         that need to be updated. If None all generators are updated depending
         on mode. See :meth:`~.tools.pypsa_io.to_pypsa` for more information.
-    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
+        :pandas:`pandas.Timestamp<timestamp>`
         Timesteps specifies which time steps of the generator time series to
         export to pypsa representation. If None all time steps currently
         existing in pypsa representation are updated. If not None current time
@@ -1927,7 +1932,8 @@ def update_pypsa_storage_timeseries(network, storages_to_update=None,
         List with all storages (of type :class:`~.grid.components.Storage`)
         that need to be updated. If None all storages are updated depending on
         mode. See :meth:`~.tools.pypsa_io.to_pypsa` for more information.
-    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
+        :pandas:`pandas.Timestamp<timestamp>`
         Timesteps specifies which time steps of the storage time series to
         export to pypsa representation. If None all time steps currently
         existing in pypsa representation are updated. If not None current time
@@ -1956,7 +1962,8 @@ def update_pypsa_bus_timeseries(network, timesteps=None):
     ----------
     network : Network
         The eDisGo grid topology model overall container
-    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
+        :pandas:`pandas.Timestamp<timestamp>`
         Timesteps specifies which time steps of the time series to
         export to pypsa representation. If None all time steps currently
         existing in pypsa representation are updated. If not None current
@@ -2002,7 +2009,8 @@ def _update_pypsa_timeseries_by_type(network, type, components_to_update=None,
         Components in list must all be of the same type. If None all components
         specified by `type` are updated depending on the mode. See
         :meth:`~.tools.pypsa_io.to_pypsa` for more information on mode.
-    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
+        :pandas:`pandas.Timestamp<timestamp>`
         Timesteps specifies which time steps of the time series to
         export to pypsa representation. If None all time steps currently
         existing in pypsa representation are updated. If not None current
