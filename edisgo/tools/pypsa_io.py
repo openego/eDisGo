@@ -821,27 +821,21 @@ def _pypsa_storage_timeseries(network, timesteps, mode=None):
     lv_storage_timeseries_p = []
 
     # MV storage time series
-    if mode is 'mv' or mode is None:
-        for storage in network.mv_grid.graph.nodes_by_attribute('storage'):
-            pypsa_ts = storage.pypsa_timeseries()
-            mv_storage_timeseries_q.append(pypsa_ts.q.rename(
-                repr(storage)).to_frame().loc[timesteps])
-            mv_storage_timeseries_p.append(pypsa_ts.p.rename(
-                repr(storage)).to_frame().loc[timesteps])
-        if mode is 'mv':
-            lv_storage_timeseries_p, lv_storage_timeseries_q = \
-                _pypsa_storage_timeseries_aggregated_at_lv_station(
-                    network, timesteps)
+    for storage in network.mv_grid.graph.nodes_by_attribute('storage'):
+        pypsa_ts = storage.pypsa_timeseries()
+        mv_storage_timeseries_q.append(pypsa_ts.q.rename(
+            repr(storage)).to_frame().loc[timesteps])
+        mv_storage_timeseries_p.append(pypsa_ts.p.rename(
+            repr(storage)).to_frame().loc[timesteps])
 
     # LV storage time series
-    if mode is 'lv' or mode is None:
-        for lv_grid in network.mv_grid.lv_grids:
-            for storage in lv_grid.graph.nodes_by_attribute('storage'):
-                pypsa_ts = storage.pypsa_timeseries()
-                lv_storage_timeseries_q.append(pypsa_ts.q.rename(
-                    repr(storage)).to_frame().loc[timesteps])
-                lv_storage_timeseries_p.append(pypsa_ts.p.rename(
-                    repr(storage)).to_frame().loc[timesteps])
+    for lv_grid in network.mv_grid.lv_grids:
+        for storage in lv_grid.graph.nodes_by_attribute('storage'):
+            pypsa_ts = storage.pypsa_timeseries()
+            lv_storage_timeseries_q.append(pypsa_ts.q.rename(
+                repr(storage)).to_frame().loc[timesteps])
+            lv_storage_timeseries_p.append(pypsa_ts.p.rename(
+                repr(storage)).to_frame().loc[timesteps])
 
     storage_df_p = pd.concat(
         mv_storage_timeseries_p + lv_storage_timeseries_p, axis=1)
@@ -1018,56 +1012,6 @@ def _pypsa_load_timeseries_aggregated_at_lv_station(network, timesteps):
                 '_'.join(['Load', repr(lv_grid)])).to_frame())
 
     return load_p, load_q
-
-
-def _pypsa_storage_timeseries_aggregated_at_lv_station(network, timesteps):
-    """
-    Aggregates storage time series per LV grid.
-
-    Parameters
-    ----------
-    network : Network
-        The eDisGo grid topology model overall container
-    timesteps : array_like
-        Timesteps is an array-like object with entries of type
-        :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
-        to export to pypsa representation and use in power flow analysis.
-
-    Returns
-    -------
-    tuple of :pandas:`pandas.DataFrame<dataframe>`
-        Tuple of size two containing DataFrames that represent
-
-            1. 'p_set' of aggregated Load per sector at each LV station
-            2. 'q_set' of aggregated Load per sector at each LV station
-
-    """
-    storage_p = []
-    storage_q = []
-
-    for lv_grid in network.mv_grid.lv_grids:
-        # Determine aggregated load at LV stations
-        storage = {}
-        for sto in lv_grid.graph.nodes_by_attribute('load'):
-            storage.setdefault('timeseries_p', [])
-            storage.setdefault('timeseries_q', [])
-
-            pypsa_ts = sto.pypsa_timeseries()
-            storage['timeseries_p'].append(
-                pypsa_ts.p.rename(repr(sto)).to_frame().loc[
-                    timesteps])
-            storage['timeseries_q'].append(
-                pypsa_ts.q.rename(repr(sto)).to_frame().loc[
-                    timesteps])
-
-        storage_p.append(
-            pd.concat(storage['timeseries_p'], axis=1).sum(axis=1).rename(
-                '_'.join(['Storage', repr(lv_grid)])).to_frame())
-        storage_q.append(
-            pd.concat(storage['timeseries_q'], axis=1).sum(axis=1).rename(
-                '_'.join(['Storage', repr(lv_grid)])).to_frame())
-
-    return storage_p, storage_q
 
 
 def _check_topology(components):
