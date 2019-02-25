@@ -33,29 +33,32 @@ def to_pypsa(network, mode, timesteps):
 
     * Medium-voltage only (`mode='mv'`): All medium-voltage grid components are
       exported by :func:`mv_to_pypsa` including the LV station. LV grid load
-      and generation is considered using :func:`add_aggregated_lv_components`.
-      Time series are collected by `_pypsa_load_timeseries` (as example
-      for loads, generators and buses) specifying `mode='mv'`). Timeseries
-      for aggregated load/generation at substations are determined individually.
+      and generation is aggregated and connected to the corresponding LV
+      station's secondary side using :func:`add_aggregated_lv_components`. This
+      function also connects all LV storages separately to the corresponding
+      station's secondary side. Time series are collected by
+      `_pypsa_load_timeseries` (as example for loads, generators and buses)
+      specifying `mode='mv'`). Time series for aggregated load/generation at
+      substations are determined individually.
     * Low-voltage only (`mode='lv'`): LV grid topology including the MV-LV
       transformer is exported. The slack is defind at primary side of the MV-LV
-      transformer.
+      transformer. This mode is not yet implemented.
     * Both level MV+LV (`mode=None`): The entire grid topology is translated to
       PyPSA in order to perform a complete power flow analysis in both levels
-      together. First, both grid levels are translated seperately using
-      :func:`mv_to_pypsa` and :func:`lv_to_pypsa`. Those are merge by
+      together. First, both grid levels are translated separately using
+      :func:`mv_to_pypsa` and :func:`lv_to_pypsa` and then merged by
       :func:`combine_mv_and_lv`. Time series are obtained at once for both grid
       levels.
 
-    This PyPSA interface is aware of translation errors and performs so checks
+    This PyPSA interface is aware of translation errors and performs checks
     on integrity of data converted to PyPSA grid representation
 
     * Sub-graphs/ Sub-networks: It is ensured the grid has no islanded parts
     * Completeness of time series: It is ensured each component has a time
       series
     * Buses available: Each component (load, generator, line, transformer) is
-      connected to a bus. The PyPSA representation is check for completeness of
-      buses.
+      connected to a bus. The PyPSA representation is checked for completeness
+      of buses.
     * Duplicate labels in components DataFrames and components' time series
       DataFrames
 
@@ -69,10 +72,9 @@ def to_pypsa(network, mode, timesteps):
         <https://www.pypsa.org/doc/components.html#network>`_. Specify
 
         * None to export MV and LV grid levels. None is the default.
-        * ('mv' to export MV grid level only. This includes cumulative load and
-          generation from underlying LV grid aggregated at respective LV
-          station. This option is implemented, though the rest of edisgo does
-          not handle it yet.)
+        * 'mv' to export MV grid level only. This includes cumulative load and
+          generation from underlying LV grids aggregated at respective LV
+          station.
         * ('lv' to export LV grid level only. This option is not yet
            implemented)
     timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
@@ -93,60 +95,38 @@ def to_pypsa(network, mode, timesteps):
     if not hasattr(timesteps, "__len__"):
         timesteps = [timesteps]
 
-    # get topology and time series data
+    # get topology
     if mode is None:
         mv_components = mv_to_pypsa(network)
         lv_components = lv_to_pypsa(network)
         components = combine_mv_and_lv(mv_components, lv_components)
-
-        if list(components['Load'].index.values):
-            timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
-                network, mode=mode, timesteps=timesteps)
-
-        if len(list(components['Generator'].index.values)) > 1:
-            timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
-                network, mode=mode, timesteps=timesteps)
-
-        if list(components['Bus'].index.values):
-            timeseries_bus_v_set = _pypsa_bus_timeseries(
-                network, components['Bus'].index.tolist(), timesteps=timesteps)
-
-        if len(list(components['StorageUnit'].index.values)) > 0:
-            timeseries_storage_p, timeseries_storage_q = \
-                _pypsa_storage_timeseries(
-                    network, mode=mode, timesteps=timesteps)
-
     elif mode is 'mv':
-        # the pypsa export works but NotImplementedError is raised since the
-        # rest of edisgo (handling of results from pfa, grid expansion, etc.)
-        # does not yet work
-        raise NotImplementedError
         mv_components = mv_to_pypsa(network)
         components = add_aggregated_lv_components(network, mv_components)
-
-        if list(components['Load'].index.values):
-            timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
-                network, mode=mode, timesteps=timesteps)
-
-        if len(list(components['Generator'].index.values)) > 1:
-            timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
-                network, mode=mode, timesteps=timesteps)
-
-        if list(components['Bus'].index.values):
-            timeseries_bus_v_set = _pypsa_bus_timeseries(
-                network, components['Bus'].index.tolist(), timesteps=timesteps)
-
-        if len(list(components['StorageUnit'].index.values)) > 0:
-            timeseries_storage_p, timeseries_storage_q = \
-                _pypsa_storage_timeseries(
-                    network, mode=mode, timesteps=timesteps)
-
     elif mode is 'lv':
         raise NotImplementedError
         #lv_to_pypsa(network)
     else:
         raise ValueError("Provide proper mode or leave it empty to export "
                          "entire grid topology.")
+
+    # get time series
+    if list(components['Load'].index.values):
+        timeseries_load_p, timeseries_load_q = _pypsa_load_timeseries(
+            network, mode=mode, timesteps=timesteps)
+
+    if len(list(components['Generator'].index.values)) > 1:
+        timeseries_gen_p, timeseries_gen_q = _pypsa_generator_timeseries(
+            network, mode=mode, timesteps=timesteps)
+
+    if list(components['Bus'].index.values):
+        timeseries_bus_v_set = _pypsa_bus_timeseries(
+            network, components['Bus'].index.tolist(), timesteps=timesteps)
+
+    if len(list(components['StorageUnit'].index.values)) > 0:
+        timeseries_storage_p, timeseries_storage_q = \
+            _pypsa_storage_timeseries(
+                network, mode=mode, timesteps=timesteps)
 
     # check topology
     _check_topology(components)
