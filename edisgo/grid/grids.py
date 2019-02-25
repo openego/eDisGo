@@ -246,6 +246,11 @@ class Grid:
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
 
+    def generators_timeseries(self):
+        gens_ts = pd.DataFrame()
+        for gen in self.generators:
+            gens_ts[gen] = gen.timeseries.p
+        return gens_ts
 
 
 class MVGrid(Grid):
