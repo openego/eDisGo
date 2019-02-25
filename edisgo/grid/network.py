@@ -536,7 +536,7 @@ class EDisGo(EDisGoReimport):
         """
         CurtailmentControl(edisgo=self, methodology=methodology,
                            curtailment_timeseries=curtailment_timeseries,
-                           **kwargs)
+                           mode=kwargs.pop('mode', None), **kwargs)
 
     def import_from_ding0(self, file, **kwargs):
         """Import grid data from DINGO file
@@ -803,7 +803,8 @@ class EDisGo(EDisGoReimport):
                 'max_while_iterations', 10),
             copy_graph=kwargs.get('copy_graph', False),
             timesteps_pfa=kwargs.get('timesteps_pfa', None),
-            combined_analysis=kwargs.get('combined_analysis', False))
+            combined_analysis=kwargs.get('combined_analysis', False),
+            mode=kwargs.get('mode', None))
 
         # add measure to Results object
         if not kwargs.get('copy_graph', False):
@@ -1538,7 +1539,8 @@ class CurtailmentControl:
           'solver'. For more information see
           :func:`edisgo.flex_opt.curtailment.voltage_based`.
 
-    curtailment_timeseries : :pandas:`pandas.Series<series>` or :pandas:`pandas.DataFrame<dataframe>`, optional
+    curtailment_timeseries : :pandas:`pandas.Series<series>` or \
+        :pandas:`pandas.DataFrame<dataframe>`, optional
         Series or DataFrame containing the curtailment time series in kW. Index
         needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
         Provide a Series if the curtailment time series applies to wind and
@@ -1564,10 +1566,17 @@ class CurtailmentControl:
         generator if not necessary when 'voltage-based' curtailment methodology
         is chosen. See :func:`edisgo.flex_opt.curtailment.voltage_based` for
         more information. Default: 1.0.
+    mode : :obj:`str`
+        The `mode` is only relevant for curtailment method 'voltage-based'.
+        Possible options are None and 'mv'. Per default `mode` is None in which
+        case a power flow is conducted for both the MV and LV. In case `mode`
+        is set to 'mv' components in underlying LV grids are considered
+        aggregative. Default: None.
 
     """
 
-    def __init__(self, edisgo, methodology, curtailment_timeseries, **kwargs):
+    def __init__(self, edisgo, methodology, curtailment_timeseries, mode=None,
+                 **kwargs):
 
         logging.info("Start curtailment methodology {}.".format(methodology))
 
@@ -1582,19 +1591,33 @@ class CurtailmentControl:
                 '{} is not a valid curtailment methodology.'.format(
                     methodology))
 
+        # check if provided mode is valid
+        if mode and mode is not 'mv':
+            raise ValueError("Provided mode {} is not a valid mode.")
+
         # get all fluctuating generators and their attributes (weather ID,
         # type, etc.)
         generators = get_gen_info(edisgo.network, 'mvlv', fluctuating=True)
 
         # do analyze to get all voltages at generators and feed-in dataframe
-        edisgo.analyze()
+        edisgo.analyze(mode=mode)
 
         # get feed-in time series of all generators
-        feedin = edisgo.network.pypsa.generators_t.p * 1000
-        # drop dispatchable generators and slack generator
-        drop_labels = [_ for _ in feedin.columns
-                       if 'GeneratorFluctuating' not in _] \
-                      + ['Generator_slack']
+        if not mode:
+            feedin = edisgo.network.pypsa.generators_t.p * 1000
+            # drop dispatchable generators and slack generator
+            drop_labels = [_ for _ in feedin.columns
+                           if 'GeneratorFluctuating' not in _] \
+                          + ['Generator_slack']
+        else:
+            feedin = edisgo.network.mv_grid.generators_timeseries()
+            for grid in edisgo.network.mv_grid.lv_grids:
+                feedin = pd.concat([feedin, grid.generators_timeseries()],
+                                   axis=1)
+            feedin.rename(columns=lambda _: repr(_), inplace=True)
+            # drop dispatchable generators
+            drop_labels = [_ for _ in feedin.columns
+                           if 'GeneratorFluctuating' not in _]
         feedin.drop(labels=drop_labels, axis=1, inplace=True)
 
         if isinstance(curtailment_timeseries, pd.Series):
