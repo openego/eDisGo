@@ -584,8 +584,11 @@ def combine_mv_and_lv(mv, lv):
 
 def add_aggregated_lv_components(network, components):
     """
-    Aggregates LV load and generation at LV stations
+    Aggregates LV components.
 
+    LV load and generation (by type) is aggregated per LV grid and connected
+    to the LV station's secondary side. Storages in LV are not aggregrated but
+    individually connected to the station's secondary side.
     Use this function if you aim for MV calculation only. The according
     DataFrames of `components` are extended by load and generators representing
     these aggregated respecting the technology type.
@@ -600,7 +603,7 @@ def add_aggregated_lv_components(network, components):
     Returns
     -------
     :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
-        The dictionary components passed to the function is returned altered.
+        The dictionary `components` passed to the function is returned altered.
     """
     generators = {}
     loads = {}
@@ -656,6 +659,7 @@ def add_aggregated_lv_components(network, components):
         load['bus'].append(
             '_'.join(['Bus', lv_grid_obj.station.__repr__('lv')]))
 
+    # add storages
     for lv_grid in network.mv_grid.lv_grids:
         for sto in lv_grid.graph.nodes_by_attribute('storage'):
             storage['name'].append(repr(sto))
@@ -690,9 +694,8 @@ def _pypsa_load_timeseries(network, timesteps, mode=None):
         to export to pypsa representation and use in power flow analysis.
     mode : str, optional
         Specifically retrieve load time series for MV or LV grid level or both.
-        Either choose 'mv' or 'lv'.
-        Defaults to None, which returns both timeseries for MV and LV in a
-        single DataFrame.
+        Choose between 'mv', 'lv' or None, which returns timeseries for both
+        MV and LV in a single DataFrame. Default: None.
 
     Returns
     -------
@@ -746,9 +749,8 @@ def _pypsa_generator_timeseries(network, timesteps, mode=None):
         to export to pypsa representation and use in power flow analysis.
     mode : str, optional
         Specifically retrieve generator time series for MV or LV grid level or
-        both. Either choose 'mv' or 'lv'.
-        Defaults to None, which returns both timeseries for MV and LV in a
-        single DataFrame.
+        both. Choose 'mv', 'lv' or None, which returns timeseries for both
+        MV and LV in a single DataFrame. Default: None.
 
     Returns
     -------
@@ -804,9 +806,8 @@ def _pypsa_storage_timeseries(network, timesteps, mode=None):
         to export to pypsa representation and use in power flow analysis.
     mode : str, optional
         Specifically retrieve generator time series for MV or LV grid level or
-        both. Either choose 'mv' or 'lv'.
-        Defaults to None, which returns both timeseries for MV and LV in a
-        single DataFrame.
+        both. Choose between 'mv', 'lv' or None, which returns timeseries for
+        both MV and LV in a single DataFrame. Default: None.
 
     Returns
     -------
@@ -854,21 +855,12 @@ def _pypsa_bus_timeseries(network, buses, timesteps):
     """
     Time series in PyPSA compatible format for bus instances
 
-    Set all buses except for the slack bus to voltage of 1 pu (it is assumed
+    Set all buses except for the slack bus to voltage of 1 p.u. (it is assumed
     this setting is entirely ignored during solving the power flow problem).
-    This slack bus is set to an operational voltage which is typically greater
-    than nominal voltage plus a control deviation.
-    The control deviation is always added positively to the operational voltage.
-    For example, the operational voltage (offset) is set to 1.025 pu plus the
-    control deviation of 0.015 pu. This adds up to a set voltage of the slack
-    bus of 1.04 pu.
-
-    .. warning::
-
-        Voltage settings for the slack bus defined by this function assume the
-        feedin case (reverse power flow case) as the worst-case for the power
-        system. Thus, the set point for the slack is always greater 1.
-
+    The slack bus voltage is set based on a given HV/MV transformer offset and
+    a control deviation, both defined in the config files. The control
+    deviation is added to the offset in the reverse power flow case and
+    subtracted from the offset in the heavy load flow case.
 
     Parameters
     ----------
@@ -922,7 +914,7 @@ def _pypsa_bus_timeseries(network, buses, timesteps):
 
 def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
     """
-    Aggregates generator time series per generator subtype and LV grid.
+    Aggregates generator time series per generator type and LV grid.
 
     Parameters
     ----------
@@ -938,8 +930,8 @@ def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
     tuple of :pandas:`pandas.DataFrame<dataframe>`
         Tuple of size two containing DataFrames that represent
 
-            1. 'p_set' of aggregated Generation per subtype at each LV station
-            2. 'q_set' of aggregated Generation per subtype at each LV station
+            1. 'p_set' of aggregated generation per type at each LV station
+            2. 'q_set' of aggregated generation per type at each LV station
 
     """
 
@@ -996,8 +988,8 @@ def _pypsa_load_timeseries_aggregated_at_lv_station(network, timesteps):
     tuple of :pandas:`pandas.DataFrame<dataframe>`
         Tuple of size two containing DataFrames that represent
 
-            1. 'p_set' of aggregated Load per sector at each LV station
-            2. 'q_set' of aggregated Load per sector at each LV station
+            1. 'p_set' of aggregated load at each LV station
+            2. 'q_set' of aggregated load at each LV station
 
     """
     load_p = []
@@ -1433,45 +1425,11 @@ def process_pfa_results(network, pypsa, timesteps):
 
 def update_pypsa_generator_import(network):
     """
-    Translate graph based grid representation to PyPSA Network
+    Updates pypsa grid representation after generator import.
 
-    For details from a user perspective see API documentation of
-    :meth:`~.grid.network.EDisGo.analyze` of the API class
-    :class:`~.grid.network.EDisGo`.
-
-    Translating eDisGo's grid topology to PyPSA representation is structured
-    into translating the topology and adding time series for components of the
-    grid. In both cases translation of MV grid only (`mode='mv'`), LV grid only
-    (`mode='lv'`), MV and LV (`mode=None`) share some code. The
-    code is organized as follows:
-
-    * Medium-voltage only (`mode='mv'`): All medium-voltage grid components are
-      exported by :func:`mv_to_pypsa` including the LV station. LV grid load
-      and generation is considered using :func:`add_aggregated_lv_components`.
-      Time series are collected by `_pypsa_load_timeseries` (as example
-      for loads, generators and buses) specifying `mode='mv'`). Timeseries
-      for aggregated load/generation at substations are determined individually.
-    * Low-voltage only (`mode='lv'`): LV grid topology including the MV-LV
-      transformer is exported. The slack is defind at primary side of the MV-LV
-      transformer.
-    * Both level MV+LV (`mode=None`): The entire grid topology is translated to
-      PyPSA in order to perform a complete power flow analysis in both levels
-      together. First, both grid levels are translated seperately using
-      :func:`mv_to_pypsa` and :func:`lv_to_pypsa`. Those are merge by
-      :func:`combine_mv_and_lv`. Time series are obtained at once for both grid
-      levels.
-
-    This PyPSA interface is aware of translation errors and performs so checks
-    on integrity of data converted to PyPSA grid representation
-
-    * Sub-graphs/ Sub-networks: It is ensured the grid has no islanded parts
-    * Completeness of time series: It is ensured each component has a time
-      series
-    * Buses available: Each component (load, generator, line, transformer) is
-      connected to a bus. The PyPSA representation is check for completeness of
-      buses.
-    * Duplicate labels in components DataFrames and components' time series
-      DataFrames
+    This function creates a whole new pypsa representation, only load time
+    series, whose generation takes quite long but is not affected by the
+    generator import, are taken from existing pypsa representation.
 
     Parameters
     ----------
@@ -1483,10 +1441,9 @@ def update_pypsa_generator_import(network):
         <https://www.pypsa.org/doc/components.html#network>`_. Specify
 
         * None to export MV and LV grid levels. None is the default.
-        * ('mv' to export MV grid level only. This includes cumulative load and
-          generation from underlying LV grid aggregated at respective LV
-          station. This option is implemented, though the rest of edisgo does
-          not handle it yet.)
+        * 'mv' to export MV grid level only. This includes cumulative load and
+          generation from underlying LV grids aggregated at respective LV
+          station.
         * ('lv' to export LV grid level only. This option is not yet
            implemented)
     timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
