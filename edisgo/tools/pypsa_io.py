@@ -1037,12 +1037,13 @@ def _check_topology(components):
     # check if there are duplicate components and print them
     for k, comps in components.items():
         if len(list(comps.index.values)) != len(set(comps.index.values)):
-            raise ValueError("There are duplicates in the {comp} list: {dupl}"
-                             .format(comp=k,
-                                     dupl=[item for item, count in
-                                           collections.Counter(comps.index.values).items()
-                                           if count > 1])
-                             )
+            raise ValueError(
+                "There are duplicates in the {comp} list: {dupl}".format(
+                    comp=k,
+                    dupl=[item for item, count in
+                          collections.Counter(comps.index.values).items()
+                          if count > 1])
+            )
 
 
 def _check_integrity_of_pypsa(pypsa_network):
