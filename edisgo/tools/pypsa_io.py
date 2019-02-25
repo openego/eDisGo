@@ -1404,13 +1404,14 @@ def update_pypsa_generator_import(network):
 
     """
 
-    # get topology and time series data
+    # get topology
     if network.pypsa.edisgo_mode is None:
         mv_components = mv_to_pypsa(network)
         lv_components = lv_to_pypsa(network)
         components = combine_mv_and_lv(mv_components, lv_components)
     elif network.pypsa.edisgo_mode is 'mv':
-        raise NotImplementedError
+        mv_components = mv_to_pypsa(network)
+        components = add_aggregated_lv_components(network, mv_components)
     elif network.pypsa.edisgo_mode is 'lv':
         raise NotImplementedError
     else:
