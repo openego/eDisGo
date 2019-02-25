@@ -125,8 +125,7 @@ def to_pypsa(network, mode, timesteps):
 
     if len(list(components['StorageUnit'].index.values)) > 0:
         timeseries_storage_p, timeseries_storage_q = \
-            _pypsa_storage_timeseries(
-                network, mode=mode, timesteps=timesteps)
+            _pypsa_storage_timeseries(network, timesteps=timesteps)
 
     # check topology
     _check_topology(components)
@@ -792,7 +791,7 @@ def _pypsa_generator_timeseries(network, timesteps, mode=None):
     return gen_df_p, gen_df_q
 
 
-def _pypsa_storage_timeseries(network, timesteps, mode=None):
+def _pypsa_storage_timeseries(network, timesteps):
     """
     Timeseries in PyPSA compatible format for storage instances
 
@@ -804,10 +803,6 @@ def _pypsa_storage_timeseries(network, timesteps, mode=None):
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
         to export to pypsa representation and use in power flow analysis.
-    mode : str, optional
-        Specifically retrieve generator time series for MV or LV grid level or
-        both. Choose between 'mv', 'lv' or None, which returns timeseries for
-        both MV and LV in a single DataFrame. Default: None.
 
     Returns
     -------
@@ -1971,7 +1966,27 @@ def _update_pypsa_timeseries_by_type(network, type, components_to_update=None,
 
     # MV and aggregated LV loads
     elif network.pypsa.edisgo_mode is 'mv':
-        raise NotImplementedError
+        # if no time steps are specified update all time steps currently
+        # contained in pypsa representation
+        if timesteps is None:
+            timesteps = pypsa_ts.p_set.index
+        # check if timesteps is array-like, otherwise convert to list
+        # (necessary to avoid getting a scalar using .loc)
+        if not hasattr(timesteps, "__len__"):
+            timesteps = [timesteps]
+
+        if type == 'generator':
+            p_set, q_set = _pypsa_generator_timeseries(
+                network, timesteps, 'mv')
+        elif type == 'load':
+            p_set, q_set = _pypsa_load_timeseries(
+                network, timesteps, 'mv')
+        elif type == 'storage':
+            p_set, q_set = _pypsa_storage_timeseries(network, timesteps)
+
+        # overwrite pypsa time series
+        pypsa_ts.p_set = p_set
+        pypsa_ts.q_set = q_set
 
     # LV only
     elif network.pypsa.edisgo_mode is 'lv':
