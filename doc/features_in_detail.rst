@@ -30,7 +30,13 @@ The order grid expansion measures are conducted is as follows:
 
 Reinforcement of stations and lines due to overloading issues is performed twice, once in the beginning and again after fixing voltage issues,
 as the changed power flows after reinforcing the grid may lead to new overloading issues. How voltage and overloading issues are identified and
-solved is explained in the following sections.
+solved is shown in figure :ref:`grid_expansion_measures_fig` and further explained in the following sections.
+
+.. _grid_expansion_measures_fig:
+.. figure:: images/grid_expansion_measures.png
+   :scale: 50%
+
+   Grid expansion measures
 
 :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid` offers a few additional options. It is e.g. possible to conduct grid 
 reinforcement measures on a copy
@@ -38,6 +44,7 @@ of the graph so that the original grid topology is not changed. It is also possi
 reinforcement measures for two worst-case snapshots in order to save computing time and to set combined or separate
 allowed voltage deviation limits for MV and LV.
 See documentation of :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid` for more information. 
+
 
 
 Identification of overloading and voltage issues
