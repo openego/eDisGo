@@ -1287,14 +1287,11 @@ def process_pfa_results(network, pypsa, timesteps):
     line_voltage_avg = 0.5 * (bus0_v_mag_pu.loc[:, timesteps] +
                               bus1_v_mag_pu.loc[:, timesteps])
 
-    # Get voltage levels at line (avg. of buses at both sides)
+    # Get line current
     i_res_0 = np.hypot(pypsa.lines_t['p0'], pypsa.lines_t['q0']).truediv(
         pypsa.lines['v_nom'] * bus0_v_mag_pu.T,
             axis='columns') / sqrt(3) * 1e3
-    i_res_1 = np.hypot(pypsa.lines_t['p1'], pypsa.lines_t['q1']).truediv(
-        pypsa.lines['v_nom'] * bus1_v_mag_pu.T,
-        axis='columns') / sqrt(3) * 1e3
-    network.results._i_res = i_res_0.where(i_res_0 > i_res_1, i_res_1)
+    network.results._i_res = i_res_0
 
     # process results at nodes
     generators_names = [repr(g) for g in network.mv_grid.generators]
