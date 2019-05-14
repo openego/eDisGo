@@ -1288,10 +1288,14 @@ def process_pfa_results(network, pypsa, timesteps):
                               bus1_v_mag_pu.loc[:, timesteps])
 
     # Get voltage levels at line (avg. of buses at both sides)
-    network.results._i_res = \
-        network.results.s_res()[pypsa.lines_t['q0'].columns].truediv(
-            pypsa.lines['v_nom'] * line_voltage_avg.T,
-            axis='columns') * sqrt(3)
+    i_res_0 = np.hypot(pypsa.lines_t['p0'], pypsa.lines_t['q0']).truediv(
+        pypsa.lines['v_nom'] * bus0_v_mag_pu.T,
+            axis='columns') / sqrt(3) * 1e3
+    i_res_1 = np.hypot(pypsa.lines_t['p1'], pypsa.lines_t['q1']).truediv(
+        pypsa.lines['v_nom'] * bus1_v_mag_pu.T,
+        axis='columns') / sqrt(3) * 1e3
+    network.results._i_res = i_res_0.where(i_res_0 > i_res_1, i_res_1)
+
     # process results at nodes
     generators_names = [repr(g) for g in network.mv_grid.generators]
     generators_mapping = {v: k for k, v in
