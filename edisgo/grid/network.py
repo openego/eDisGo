@@ -118,7 +118,7 @@ class EDisGoReimport:
                 timestep=kwargs.get('timestep', None),
                 line_color='loading',
                 node_color=kwargs.get('node_color', None),
-                line_load=self.network.results.s_res(),
+                line_load=self.network.results.i_res,
                 filename=kwargs.get('filename', None),
                 arrows=kwargs.get('arrows', None),
                 grid_district_geom=kwargs.get('grid_district_geom', True),
@@ -252,20 +252,7 @@ class EDisGoReimport:
             fallback option in case of wrong input. Default: 'mv_lv'
 
         """
-        residual_load = tools.get_residual_load_from_pypsa_network(
-            self.network.pypsa)
-        case = residual_load.apply(
-            lambda _: 'feedin_case' if _ < 0 else 'load_case')
-        if timestep is not None:
-            timeindex = [timestep]
-        else:
-            timeindex = self.network.results.s_res().index
-        load_factor = pd.DataFrame(
-            data={'s_nom': [float(self.network.config[
-                                      'grid_expansion_load_factors'][
-                                      'mv_{}_line'.format(case.loc[_])])
-                            for _ in timeindex]},
-            index=timeindex)
+
         if voltage_level == 'mv':
             lines = self.network.pypsa.lines.loc[
                 self.network.pypsa.lines.v_nom > 1]
@@ -274,13 +261,9 @@ class EDisGoReimport:
                 self.network.pypsa.lines.v_nom < 1]
         else:
             lines = self.network.pypsa.lines
-        s_res = self.network.results.s_res().loc[
-            timeindex, lines.index]
-        # get allowed line load
-        s_allowed = load_factor.dot(
-            self.network.pypsa.lines.s_nom.to_frame().T * 1e3)
-        # get line load from pf
-        data = s_res.divide(s_allowed)
+
+        data = tools.get_line_loading_from_network(self.network.pypsa ,self.network.config, self.network.results.i_res,
+                                                       self.network.pypsa.lines.v_nom, lines.index,timestep)
 
         if title is True:
             if timestep is not None:

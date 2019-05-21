@@ -422,28 +422,8 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
 
     # line colors
     if line_color == 'loading':
-        # calculate relative line loading
-        # get load factor
-        residual_load = tools.get_residual_load_from_pypsa_network(
-            pypsa_network)
-        case = residual_load.apply(
-                lambda _: 'feedin_case' if _ < 0 else 'load_case')
-        if timestep is not None:
-            timeindex = [timestep]
-        else:
-            timeindex = line_load.index
-        load_factor = pd.DataFrame(
-            data={'s_nom': [float(configs[
-                                      'grid_expansion_load_factors'][
-                                      'mv_{}_line'.format(case.loc[_])])
-                            for _ in timeindex]},
-            index=timeindex)
-        # get allowed line load
-        s_allowed = load_factor.dot(
-            pypsa_plot.lines.s_nom.to_frame().T * 1e3)
-        # get line load from pf
-        line_colors = line_load.loc[:, pypsa_plot.lines.index].divide(
-            s_allowed).max()
+        line_colors = tools.get_line_loading_from_network(pypsa_network,configs, line_load,
+                                                          pypsa_network.lines.v_nom, pypsa_plot.lines.index,timestep).max()
     elif line_color == 'expansion_costs':
         node_color = 'expansion_costs'
         line_costs = pypsa_plot.lines.join(

@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 
 def select_worstcase_snapshots(network):
@@ -133,3 +134,66 @@ def assign_load_feedin_case(network):
             lambda _: 'feedin_case' if _ < 0 else 'load_case')
 
     return timeseries_load_feedin_case
+
+
+def get_line_loading_from_network(network, configs, line_load, line_voltages, indexes=None, timestep=None):
+    """
+    Calculates line loading for the given time step.
+
+    Line loading is calculated by dividing the current at the given time step
+    by the allowed current.
+
+
+    Parameters
+    ----------
+    network : :pypsa:`pypsa.Network<network>`
+        Network for which worst-case snapshots are identified.
+    configs : :obj:`dict`
+        Dictionary with used configurations from config files. See
+        :class:`~.grid.network.Config` for more information.
+    line_load : :pandas:`pandas.DataFrame<dataframe>`
+    line_voltages : :pandas:`pandas.Series<series>`
+    indexes : :pandas:`pandas.core.indexes.base.Index`
+        Indexes of lines that should be examined.
+    timestep : :pandas:`pandas.Timestamp<timestamp>` or None, optional
+        Specifies time step histogram is plotted for. If timestep is None
+        all time steps voltages are calculated for are used. Default: None.
+    Returns
+    --------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Series of line loading at chosen time step.
+
+    """
+
+    if timestep is not None:
+        timeindex = [timestep]
+    else:
+        timeindex = line_load.index
+
+    if indexes is not None:
+        line_indices = indexes
+    else:
+        line_indices = network.lines.index
+
+    residual_load = get_residual_load_from_pypsa_network(
+        network)
+    case = residual_load.apply(
+        lambda _: 'feedin_case' if _ < 0 else 'load_case')
+
+    load_factor = pd.DataFrame(
+        data={'i_nom': [float(configs[
+                                  'grid_expansion_load_factors'][
+                                  'mv_{}_line'.format(case.loc[_])])
+                        for _ in timeindex]},
+        index=timeindex)
+
+    i_res = line_load.loc[
+        timeindex, line_indices]
+    # get allowed line load
+    i_allowed = load_factor.dot(
+        (network.lines.s_nom.T.loc[indexes].divide(
+            line_voltages.T.loc[indexes]) * 1e3 / np.sqrt(3)).to_frame('i_nom').T)
+    # get line load from pf
+    data = i_res.divide(i_allowed)
+
+    return data
