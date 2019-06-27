@@ -372,15 +372,15 @@ def mv_to_pypsa(network):
         v_base = lv_st.mv_grid.voltage_nom
 
         for tr in lv_st.transformers:
-            z_base = v_base ** 2 / tr.type.S_nom
             transformer['name'].append(
                 '_'.join([repr(lv_st), 'transformer', str(transformer_count)]))
             transformer['bus0'].append(bus0_name)
             transformer['bus1'].append(bus1_name)
             transformer['type'].append("")
             transformer['model'].append('pi')
-            transformer['r'].append(tr.type.R / z_base)
-            transformer['x'].append(tr.type.X / z_base)
+            # hier evtl. anpassen wenn spaltenname in equipment geändert wird (auch in lv_to_pypsa
+            transformer['r'].append(tr.type.R)
+            transformer['x'].append(tr.type.X)
             transformer['s_nom'].append(tr.type.S_nom / 1e3)
             transformer['tap_ratio'].append(1)
 

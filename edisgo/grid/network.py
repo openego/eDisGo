@@ -889,8 +889,9 @@ class Network:
                     os.path.join(package_path, equipment_dir,
                                  equipment_parameters),
                     comment='#', index_col='name',
-                    delimiter=',', decimal='.')
+                    delimiter=';', decimal='.')
 
+        # hier pu spalten anhängen
         return data
 
     @property
