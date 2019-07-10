@@ -338,7 +338,7 @@ class Graph(nx.Graph):
         """
 
         return dict([(v, k) for k, v in
-                     nx.get_edge_attributes(self, 'line').items()])[line]
+                     nx.get_edge_attributes(self,name='line').items()])[line]
 
     def line_from_nodes(self, u, v):
         """
@@ -357,10 +357,10 @@ class Graph(nx.Graph):
             Line segment connecting ``u`` and ``v``.
         """
         try:
-            line = nx.get_edge_attributes(self, 'line')[(u, v)]
+            line = nx.get_edge_attributes(self,name='line')[(u, v)]
         except:
             try:
-                line = nx.get_edge_attributes(self, 'line')[(v, u)]
+                line = nx.get_edge_attributes(self,name='line')[(v, u)]
             except:
                 raise nx.NetworkXError('Line between ``u`` and ``v`` not '
                                        'included in the graph.')
@@ -459,7 +459,7 @@ class Graph(nx.Graph):
         """
 
         # get all lines that have the attribute 'type' set
-        lines_attributes = nx.get_edge_attributes(self, attr).items()
+        lines_attributes = nx.get_edge_attributes(self,name=attr).items()
 
         # attribute value provided?
         if attr_val:
