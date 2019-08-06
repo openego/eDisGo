@@ -243,7 +243,7 @@ def mv_to_pypsa(network):
     generators = network.mv_grid.generators
     loads = network.mv_grid.graph.nodes_by_attribute('load')
     branch_tees = network.mv_grid.graph.nodes_by_attribute('branch_tee')
-    lines = network.mv_grid.graph.lines()
+    lines = list(network.mv_grid.graph.lines())
     lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
     mv_stations = network.mv_grid.graph.nodes_by_attribute('mv_station')
     disconnecting_points = network.mv_grid.graph.nodes_by_attribute(
@@ -1555,8 +1555,6 @@ def update_pypsa_grid_reinforcement(network, equipment_changes):
 
         if isinstance(idx, LVStation):
             # we choose voltage of transformers' primary side
-            v_base = idx.mv_grid.voltage_nom
-            z_base = v_base ** 2 / row['equipment'].type.S_nom
 
             transformer['bus0'].append('_'.join(['Bus', idx.__repr__(
                 side='mv')]))
