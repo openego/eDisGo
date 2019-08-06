@@ -342,9 +342,9 @@ def mv_to_pypsa(network):
 
         line['type'].append("")
         line['x'].append(
-            l['line'].type['L'] / l['line'].quantity * omega / 1e3 *
+            l['line'].type['L_l'] / l['line'].quantity * omega / 1e3 *
             l['line'].length)
-        line['r'].append(l['line'].type['R'] / l['line'].quantity *
+        line['r'].append(l['line'].type['R_l'] / l['line'].quantity *
                          l['line'].length)
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] *
@@ -379,8 +379,8 @@ def mv_to_pypsa(network):
             transformer['type'].append("")
             transformer['model'].append('pi')
             # hier evtl. anpassen wenn spaltenname in equipment geändert wird (auch in lv_to_pypsa
-            transformer['r'].append(tr.type.R)
-            transformer['x'].append(tr.type.X)
+            transformer['r'].append(tr.type.r_pu)
+            transformer['x'].append(tr.type.x_pu)
             transformer['s_nom'].append(tr.type.S_nom / 1e3)
             transformer['tap_ratio'].append(1)
 
@@ -556,8 +556,8 @@ def lv_to_pypsa(network):
 
         line['type'].append("")
         line['x'].append(
-            l['line'].type['L'] * omega / 1e3 * l['line'].length)
-        line['r'].append(l['line'].type['R'] * l['line'].length)
+            l['line'].type['L_l'] * omega / 1e3 * l['line'].length)
+        line['r'].append(l['line'].type['R_l'] * l['line'].length)
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
         line['length'].append(l['line'].length)
@@ -1563,8 +1563,8 @@ def update_pypsa_grid_reinforcement(network, equipment_changes):
             transformer['name'].append(repr(row['equipment']))
             transformer['type'].append("")
             transformer['model'].append('pi')
-            transformer['r'].append(row['equipment'].type.R / z_base)
-            transformer['x'].append(row['equipment'].type.X / z_base)
+            transformer['r'].append(row['equipment'].type.r_pu)
+            transformer['x'].append(row['equipment'].type.x_pu)
             transformer['s_nom'].append(row['equipment'].type.S_nom / 1e3)
             transformer['tap_ratio'].append(1)
 
@@ -1587,9 +1587,9 @@ def update_pypsa_grid_reinforcement(network, equipment_changes):
     for idx, row in changed_lines.iterrows():
         # Update line parameters
         network.pypsa.lines.loc[repr(idx), 'r'] = (
-            idx.type['R'] / idx.quantity * idx.length)
+            idx.type['R_l'] / idx.quantity * idx.length)
         network.pypsa.lines.loc[repr(idx), 'x'] = (
-            idx.type['L'] / 1e3 * omega / idx.quantity * idx.length)
+            idx.type['L_l'] / 1e3 * omega / idx.quantity * idx.length)
         network.pypsa.lines.loc[repr(idx), 's_nom'] = (
             sqrt(3) * idx.type['I_max_th'] * idx.type[
                 'U_n'] * idx.quantity / 1e3)
@@ -1706,8 +1706,8 @@ def update_pypsa_storage(pypsa, storages, storages_lines):
                 line['bus1'].append('_'.join(['Bus', repr(adj_nodes[1])]))
 
         line['type'].append("")
-        line['x'].append(l.type['L'] * omega / 1e3 * l.length)
-        line['r'].append(l.type['R'] * l.length)
+        line['x'].append(l.type['L_l'] * omega / 1e3 * l.length)
+        line['r'].append(l.type['R_l'] * l.length)
         line['s_nom'].append(
             sqrt(3) * l.type['I_max_th'] * l.type['U_n'] / 1e3)
         line['length'].append(l.length)
