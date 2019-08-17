@@ -136,9 +136,10 @@ def assign_load_feedin_case(network):
     return timeseries_load_feedin_case
 
 
-def get_line_loading_from_network(network, configs, line_load, line_voltages, indexes=None, timestep=None):
+def get_line_loading_from_network(network, configs, line_load, line_voltages,
+                                  lines=None, timesteps=None):
     """
-    Calculates line loading for the given time step.
+    Calculates relative line loading.
 
     Line loading is calculated by dividing the current at the given time step
     by the allowed current.
@@ -147,36 +148,46 @@ def get_line_loading_from_network(network, configs, line_load, line_voltages, in
     Parameters
     ----------
     network : :pypsa:`pypsa.Network<network>`
-        Network for which worst-case snapshots are identified.
+        Pypsa network with lines to calculate line loading for.
     configs : :obj:`dict`
         Dictionary with used configurations from config files. See
         :class:`~.grid.network.Config` for more information.
     line_load : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe with current results from power flow analysis in A. Index of
+        the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        columns are the line representatives.
     line_voltages : :pandas:`pandas.Series<series>`
-    indexes : :pandas:`pandas.core.indexes.base.Index`
-        Indexes of lines that should be examined.
-    timestep : :pandas:`pandas.Timestamp<timestamp>` or None, optional
-        Specifies time step histogram is plotted for. If timestep is None
-        all time steps voltages are calculated for are used. Default: None.
+        Series with nominal voltages of lines in kV. Index of the dataframe are
+        the line representatives.
+    lines : list(str) or None, optional
+        Line names/representatives of lines to calculate line loading for. If
+        None line loading of all lines in `line_load` dataframe are used.
+        Default: None.
+    timesteps : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+        Specifies time steps to calculate line loading for. If timesteps is
+        None all time steps in `line_load` dataframe are used. Default: None.
+
     Returns
     --------
     :pandas:`pandas.DataFrame<dataframe>`
-        Series of line loading at chosen time step.
+        Dataframe with relative line loading (unitless). Index of
+        the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        columns are the line representatives.
 
     """
 
-    if timestep is not None:
-        timeindex = [timestep]
-    else:
-        timeindex = line_load.index
+    if timesteps is None:
+        timesteps = line_load.index
+    # check if timesteps is array-like, otherwise convert to list
+    if not hasattr(timesteps, "__len__"):
+        timesteps = [timesteps]
 
-    if indexes is not None:
-        line_indices = indexes
+    if lines is not None:
+        line_indices = lines
     else:
-        line_indices = network.lines.index
+        line_indices = line_load.columns
 
-    residual_load = get_residual_load_from_pypsa_network(
-        network)
+    residual_load = get_residual_load_from_pypsa_network(network)
     case = residual_load.apply(
         lambda _: 'feedin_case' if _ < 0 else 'load_case')
 
@@ -184,16 +195,15 @@ def get_line_loading_from_network(network, configs, line_load, line_voltages, in
         data={'i_nom': [float(configs[
                                   'grid_expansion_load_factors'][
                                   'mv_{}_line'.format(case.loc[_])])
-                        for _ in timeindex]},
-        index=timeindex)
+                        for _ in timesteps]},
+        index=timesteps)
 
-    i_res = line_load.loc[
-        timeindex, line_indices]
-    # get allowed line load
+    # current from power flow
+    i_res = line_load.loc[timesteps, line_indices]
+    # allowed current
     i_allowed = load_factor.dot(
-        (network.lines.s_nom.T.loc[indexes].divide(
-            line_voltages.T.loc[indexes]) * 1e3 / np.sqrt(3)).to_frame('i_nom').T)
-    # get line load from pf
-    data = i_res.divide(i_allowed)
+        (network.lines.s_nom.T.loc[line_indices].divide(
+            line_voltages.T.loc[line_indices]) * 1e3 / np.sqrt(3)).to_frame(
+            'i_nom').T)
 
-    return data
+    return i_res.divide(i_allowed)
