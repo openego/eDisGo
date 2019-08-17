@@ -2922,7 +2922,7 @@ class Results:
 
     def v_res(self, nodes=None, level=None):
         """
-        Get resulting voltage level at node.
+        Get voltage results (in p.u.) from power flow analysis.
 
         Parameters
         ----------
