@@ -37,9 +37,9 @@ def histogram(data, **kwargs):
         Data to be plotted, e.g. voltage or current (`v_res` or `i_res` from
         :class:`edisgo.grid.network.Results`). Index of the dataframe must be
         a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-    timeindex : :pandas:`pandas.Timestamp<timestamp>` or None, optional
-        Specifies time step histogram is plotted for. If timeindex is None all
-        time steps provided in dataframe are used. Default: None.
+    timeindex : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+        Specifies time steps histogram is plotted for. If timeindex is None all
+        time steps provided in `data` are used. Default: None.
     directory : :obj:`str` or None, optional
         Path to directory the plot is saved to. Is created if it does not
         exist. Default: None.
@@ -78,6 +78,12 @@ def histogram(data, **kwargs):
 
     """
     timeindex = kwargs.get('timeindex', None)
+    if timeindex is None:
+        timeindex = data.index
+    # check if timesteps is array-like, otherwise convert to list
+    if not hasattr(timeindex, "__len__"):
+        timeindex = [timeindex]
+
     directory = kwargs.get('directory', None)
     filename = kwargs.get('filename', None)
     title = kwargs.get('title', "")
@@ -102,10 +108,7 @@ def histogram(data, **kwargs):
     except:
         fig_size = standard_sizes['a5landscape']
 
-    if timeindex is not None:
-        plot_data = data.loc[timeindex, :]
-    else:
-        plot_data = data.T.stack()
+    plot_data = data.loc[timeindex, :].T.stack()
 
     if binwidth is not None:
         if x_limits is not None:
