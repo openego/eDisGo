@@ -136,8 +136,8 @@ def assign_load_feedin_case(network):
     return timeseries_load_feedin_case
 
 
-def get_line_loading_from_network(network, configs, line_load, line_voltages,
-                                  lines=None, timesteps=None):
+def calculate_relative_line_load(network, configs, line_load, line_voltages,
+                                 lines=None, timesteps=None):
     """
     Calculates relative line loading.
 

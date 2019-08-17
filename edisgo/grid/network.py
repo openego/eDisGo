@@ -272,7 +272,7 @@ class EDisGoReimport:
         else:
             lines = self.network.pypsa.lines
 
-        rel_line_loading = tools.get_line_loading_from_network(
+        rel_line_loading = tools.calculate_relative_line_load(
             self.network.pypsa, self.network.config,
             self.network.results.i_res, self.network.pypsa.lines.v_nom,
             lines.index, timestep)

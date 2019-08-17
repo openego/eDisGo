@@ -1,5 +1,5 @@
 from edisgo import EDisGo, EDisGoReimport
-from edisgo.tools.tools import get_line_loading_from_network
+from edisgo.tools.tools import calculate_relative_line_load
 
 
 ding0_grid = 'ding0_grids__58.pkl'
@@ -75,27 +75,27 @@ def test_get_line_loading():
     edisgo = EDisGoReimport('test_results')
 
     # all time steps, all lines
-    line_load = get_line_loading_from_network(
+    line_load = calculate_relative_line_load(
         edisgo.network.pypsa, edisgo.network.config,
         edisgo.network.results.i_res, edisgo.network.pypsa.lines.v_nom)
     print(line_load.shape)
 
     # single time step, all lines
-    line_load = get_line_loading_from_network(
+    line_load = calculate_relative_line_load(
         edisgo.network.pypsa, edisgo.network.config,
         edisgo.network.results.i_res, edisgo.network.pypsa.lines.v_nom,
         timesteps=edisgo.network.results.i_res.index[0])
     print(line_load.shape)
 
     # single time step, all lines
-    line_load = get_line_loading_from_network(
+    line_load = calculate_relative_line_load(
         edisgo.network.pypsa, edisgo.network.config,
         edisgo.network.results.i_res, edisgo.network.pypsa.lines.v_nom,
         timesteps=[edisgo.network.results.i_res.index[0]])
     print(line_load.shape)
 
     # single time step, selection of lines
-    line_load = get_line_loading_from_network(
+    line_load = calculate_relative_line_load(
         edisgo.network.pypsa, edisgo.network.config,
         edisgo.network.results.i_res, edisgo.network.pypsa.lines.v_nom,
         timesteps=[edisgo.network.results.i_res.index[0]],
