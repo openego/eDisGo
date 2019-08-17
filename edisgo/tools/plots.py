@@ -441,8 +441,9 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
 
     # line colors
     if line_color == 'loading':
-        line_colors = tools.get_line_loading_from_network(pypsa_network,configs, line_load,
-                                                          pypsa_network.lines.v_nom, pypsa_plot.lines.index,timestep).max()
+        line_colors = tools.get_line_loading_from_network(
+            pypsa_network, configs, line_load, pypsa_network.lines.v_nom,
+            pypsa_plot.lines.index, timestep).max()
     elif line_color == 'expansion_costs':
         node_color = 'expansion_costs'
         line_costs = pypsa_plot.lines.join(
