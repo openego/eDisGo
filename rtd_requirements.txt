@@ -1,5 +1,5 @@
 sphinx_rtd_theme
-networkx >= 1.11
+networkx >= 2.0
 pandas >=0.20.3, <=0.20.3
 pypsa >=0.11.0, <=0.11.0
 pyproj >=1.9.5.1, <=1.9.5.1
