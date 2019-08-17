@@ -217,7 +217,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
         Time step to plot analysis results for. If `timestep` is None maximum
         line load and if given, maximum voltage deviation, is used. In that
         case arrows cannot be drawn. Default: None.
-    line_color : :obj:`str`
+    line_color : :obj:`str` or None
         Defines whereby to choose line colors (and implicitly size). Possible
         options are:
 
@@ -234,7 +234,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
           Lines are plotted in black. Is also the fallback option in case of
           wrong input.
 
-    node_color : :obj:`str`
+    node_color : :obj:`str` or None
         Defines whereby to choose node colors (and implicitly size). Possible
         options are:
 
@@ -251,13 +251,16 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
           Nodes are not plotted. Is also the fallback option in case of wrong
           input.
 
-    line_load : :pandas:`pandas.DataFrame<dataframe>`
+    line_load : :pandas:`pandas.DataFrame<dataframe>` or None
         Dataframe with current results from power flow analysis in A. Index of
         the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
-        columns are the line representatives.
-    grid_expansion_costs : :pandas:`pandas.DataFrame<dataframe>`
+        columns are the line representatives. Only needs to be provided when
+        parameter `line_color` is set to 'loading'. Default: None.
+    grid_expansion_costs : :pandas:`pandas.DataFrame<dataframe>` or None
         Dataframe with grid expansion costs in kEUR. See `grid_expansion_costs`
-        in :class:`~.grid.network.Results` for more information.
+        in :class:`~.grid.network.Results` for more information. Only needs to
+        be provided when parameter `line_color` is set to 'expansion_costs'.
+        Default: None.
     filename : :obj:`str`
         Filename to save plot under. If not provided, figure is shown directly.
         Default: None.
@@ -266,12 +269,25 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
         only work when `line_color` option 'loading' is used and a time step
         is given.
         Default: False.
+    grid_district_geom : :obj:`Boolean`
+        If True grid district polygon is plotted in the background. This also
+        requires the geopandas package to be installed. Default: True.
+    background_map : :obj:`Boolean`
+        If True map is drawn in the background. This also requires the
+        contextily package to be installed. Default: True.
+    voltage : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe with voltage results from power flow analysis in p.u.. Index
+        of the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        columns are the bus representatives. Only needs to be provided when
+        parameter `node_color` is set to 'voltage'. Default: None.
     limits_cb_lines : :obj:`tuple`
         Tuple with limits for colorbar of line color. First entry is the
-        minimum and second entry the maximum value. Default: None.
+        minimum and second entry the maximum value. Only needs to be provided
+        when parameter `line_color` is not None. Default: None.
     limits_cb_nodes : :obj:`tuple`
         Tuple with limits for colorbar of nodes. First entry is the
-        minimum and second entry the maximum value. Default: None.
+        minimum and second entry the maximum value. Only needs to be provided
+        when parameter `node_color` is not None. Default: None.
     xlim : :obj:`tuple`
         Limits of x-axis. Default: None.
     ylim : :obj:`tuple`
