@@ -206,12 +206,13 @@ class EDisGoReimport:
         """
         Plots histogram of voltages.
 
-        For more information see :func:`edisgo.tools.plots.histogram`.
+        For more information on the histogram plot and possible configurations
+        see :func:`edisgo.tools.plots.histogram`.
 
         Parameters
         ----------
-        timestep : :pandas:`pandas.Timestamp<timestamp>` or None, optional
-            Specifies time step histogram is plotted for. If timestep is None
+        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+            Specifies time steps histogram is plotted for. If timestep is None
             all time steps voltages are calculated for are used. Default: None.
         title : :obj:`str` or :obj:`bool`, optional
             Title for plot. If True title is auto generated. If False plot has
@@ -219,12 +220,20 @@ class EDisGoReimport:
 
         """
         data = self.network.results.v_res()
+
+        if timestep is None:
+            timestep = data.index
+        # check if timesteps is array-like, otherwise convert to list
+        if not hasattr(timestep, "__len__"):
+            timestep = [timestep]
+
         if title is True:
-            if timestep is not None:
-                title = "Voltage histogram for time step {}".format(timestep)
+            if len(timestep) == 1:
+                title = "Voltage histogram for time step {}".format(
+                    timestep[0])
             else:
                 title = "Voltage histogram \nfor time steps {} to {}".format(
-                    data.index[0], data.index[-1])
+                    timestep[0], timestep[-1])
         elif title is False:
             title = None
         plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
@@ -234,15 +243,17 @@ class EDisGoReimport:
         """
         Plots histogram of relative line loads.
 
-        For more information see :func:`edisgo.tools.plots.histogram`.
+        For more information on how the relative line load is calculated see
+        :func:`edisgo.tools.tools.get_line_loading_from_network`.
+        For more information on the histogram plot and possible configurations
+        see :func:`edisgo.tools.plots.histogram`.
 
         Parameters
         ----------
-        Parameters
-        ----------
-        timestep : :pandas:`pandas.Timestamp<timestamp>` or None, optional
-            Specifies time step histogram is plotted for. If timestep is None
-            all time steps voltages are calculated for are used. Default: None.
+        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+            Specifies time step(s) histogram is plotted for. If `timestep` is
+            None all time steps currents are calculated for are used.
+            Default: None.
         title : :obj:`str` or :obj:`bool`, optional
             Title for plot. If True title is auto generated. If False plot has
             no title. If :obj:`str`, the provided title is used. Default: True.
@@ -252,7 +263,6 @@ class EDisGoReimport:
             fallback option in case of wrong input. Default: 'mv_lv'
 
         """
-
         if voltage_level == 'mv':
             lines = self.network.pypsa.lines.loc[
                 self.network.pypsa.lines.v_nom > 1]
@@ -262,19 +272,27 @@ class EDisGoReimport:
         else:
             lines = self.network.pypsa.lines
 
-        data = tools.get_line_loading_from_network(self.network.pypsa ,self.network.config, self.network.results.i_res,
-                                                       self.network.pypsa.lines.v_nom, lines.index,timestep)
+        rel_line_loading = tools.get_line_loading_from_network(
+            self.network.pypsa, self.network.config,
+            self.network.results.i_res, self.network.pypsa.lines.v_nom,
+            lines.index, timestep)
+
+        if timestep is None:
+            timestep = rel_line_loading.index
+        # check if timesteps is array-like, otherwise convert to list
+        if not hasattr(timestep, "__len__"):
+            timestep = [timestep]
 
         if title is True:
-            if timestep is not None:
+            if len(timestep) == 1:
                 title = "Relative line load histogram for time step {}".format(
-                    timestep)
+                    timestep[0])
             else:
                 title = "Relative line load histogram \nfor time steps " \
-                        "{} to {}".format(data.index[0], data.index[-1])
+                        "{} to {}".format(timestep[0], timestep[-1])
         elif title is False:
             title = None
-        plots.histogram(data=data, title=title, **kwargs)
+        plots.histogram(data=rel_line_loading, title=title, **kwargs)
 
 
 class EDisGo(EDisGoReimport):
