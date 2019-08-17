@@ -431,7 +431,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
 
     # create pypsa network only containing MV buses and lines
     pypsa_plot = PyPSANetwork()
-    pypsa_plot.buses = pypsa_network.buses.loc[pypsa_network.buses.v_nom >= 10]
+    pypsa_plot.buses = pypsa_network.buses.loc[pypsa_network.buses.v_nom > 1]
     # filter buses of aggregated loads and generators
     pypsa_plot.buses = pypsa_plot.buses[
         ~pypsa_plot.buses.index.str.contains("agg")]
