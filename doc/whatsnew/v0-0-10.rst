@@ -5,3 +5,6 @@ Release date: <month> <day>, <year>
 
 Changes
 -------
+
+* Changed data of transformers
+* Updated to networkx 2.0
