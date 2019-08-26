@@ -163,7 +163,7 @@ def calculate_relative_line_load(network, configs, line_load, line_voltages,
         Line names/representatives of lines to calculate line loading for. If
         None line loading of all lines in `line_load` dataframe are used.
         Default: None.
-    timesteps : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+    timesteps : :pandas:`pandas.Timestamp<timestamp>` or :obj:`list`(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
         Specifies time steps to calculate line loading for. If timesteps is
         None all time steps in `line_load` dataframe are used. Default: None.
 
