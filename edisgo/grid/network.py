@@ -2790,7 +2790,7 @@ class Results:
                 storage_results['voltage_level'].append(
                     'mv' if isinstance(grid, MVGrid) else 'lv')
                 storage_results['grid_connection_point'].append(
-                     grid.graph.neighbors(storage)[0])
+                     list(grid.graph.neighbors(storage))[0])
 
         return pd.DataFrame(storage_results).set_index('storage_id')
 
