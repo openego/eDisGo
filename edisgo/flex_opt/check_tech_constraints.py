@@ -345,8 +345,8 @@ def mv_voltage_deviation(network, voltage_levels='mv_lv'):
 
     Notes
     -----
-    Over-voltage is determined based on allowed voltage deviations defined in
-    the config file 'config_grid_expansion' in section
+    Voltage issues are determined based on allowed voltage deviations defined
+    in the config file 'config_grid_expansion' in section
     'grid_expansion_allowed_voltage_deviations'.
 
     """
@@ -445,8 +445,8 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
 
     Notes
     -----
-    Over-voltage is determined based on allowed voltage deviations defined in
-    the config file 'config_grid_expansion' in section
+    Voltage issues are determined based on allowed voltage deviations defined
+    in the config file 'config_grid_expansion' in section
     'grid_expansion_allowed_voltage_deviations'.
 
     """
