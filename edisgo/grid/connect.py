@@ -632,7 +632,7 @@ def _connect_mv_node(network, node, target_obj):
 
         # if target is generator or Load, check if it is aggregated (=> connection not allowed)
         if isinstance(target_obj['obj'], (Generator, Load)):
-            target_is_aggregated = any([_ for _ in network.mv_grid.graph.edges[target_obj['obj']].values()
+            target_is_aggregated = any([_ for _ in network.mv_grid.graph.adj[target_obj['obj']].values()
                                         if _['type'] == 'line_aggr'])
         else:
             target_is_aggregated = False
