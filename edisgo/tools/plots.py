@@ -37,9 +37,9 @@ def histogram(data, **kwargs):
         Data to be plotted, e.g. voltage or current (`v_res` or `i_res` from
         :class:`edisgo.grid.network.Results`). Index of the dataframe must be
         a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-    timeindex : :pandas:`pandas.Timestamp<timestamp>` or None, optional
-        Specifies time step histogram is plotted for. If timeindex is None all
-        time steps provided in dataframe are used. Default: None.
+    timeindex : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+        Specifies time steps histogram is plotted for. If timeindex is None all
+        time steps provided in `data` are used. Default: None.
     directory : :obj:`str` or None, optional
         Path to directory the plot is saved to. Is created if it does not
         exist. Default: None.
@@ -78,6 +78,12 @@ def histogram(data, **kwargs):
 
     """
     timeindex = kwargs.get('timeindex', None)
+    if timeindex is None:
+        timeindex = data.index
+    # check if timesteps is array-like, otherwise convert to list
+    if not hasattr(timeindex, "__len__"):
+        timeindex = [timeindex]
+
     directory = kwargs.get('directory', None)
     filename = kwargs.get('filename', None)
     title = kwargs.get('title', "")
@@ -102,10 +108,7 @@ def histogram(data, **kwargs):
     except:
         fig_size = standard_sizes['a5landscape']
 
-    if timeindex is not None:
-        plot_data = data.loc[timeindex, :]
-    else:
-        plot_data = data.T.stack()
+    plot_data = data.loc[timeindex, :].T.stack()
 
     if binwidth is not None:
         if x_limits is not None:
@@ -217,7 +220,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
         Time step to plot analysis results for. If `timestep` is None maximum
         line load and if given, maximum voltage deviation, is used. In that
         case arrows cannot be drawn. Default: None.
-    line_color : :obj:`str`
+    line_color : :obj:`str` or None
         Defines whereby to choose line colors (and implicitly size). Possible
         options are:
 
@@ -234,7 +237,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
           Lines are plotted in black. Is also the fallback option in case of
           wrong input.
 
-    node_color : :obj:`str`
+    node_color : :obj:`str` or None
         Defines whereby to choose node colors (and implicitly size). Possible
         options are:
 
@@ -251,13 +254,16 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
           Nodes are not plotted. Is also the fallback option in case of wrong
           input.
 
-    line_load : :pandas:`pandas.DataFrame<dataframe>`
+    line_load : :pandas:`pandas.DataFrame<dataframe>` or None
         Dataframe with current results from power flow analysis in A. Index of
         the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
-        columns are the line representatives.
-    grid_expansion_costs : :pandas:`pandas.DataFrame<dataframe>`
+        columns are the line representatives. Only needs to be provided when
+        parameter `line_color` is set to 'loading'. Default: None.
+    grid_expansion_costs : :pandas:`pandas.DataFrame<dataframe>` or None
         Dataframe with grid expansion costs in kEUR. See `grid_expansion_costs`
-        in :class:`~.grid.network.Results` for more information.
+        in :class:`~.grid.network.Results` for more information. Only needs to
+        be provided when parameter `line_color` is set to 'expansion_costs'.
+        Default: None.
     filename : :obj:`str`
         Filename to save plot under. If not provided, figure is shown directly.
         Default: None.
@@ -266,12 +272,25 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
         only work when `line_color` option 'loading' is used and a time step
         is given.
         Default: False.
+    grid_district_geom : :obj:`Boolean`
+        If True grid district polygon is plotted in the background. This also
+        requires the geopandas package to be installed. Default: True.
+    background_map : :obj:`Boolean`
+        If True map is drawn in the background. This also requires the
+        contextily package to be installed. Default: True.
+    voltage : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe with voltage results from power flow analysis in p.u.. Index
+        of the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        columns are the bus representatives. Only needs to be provided when
+        parameter `node_color` is set to 'voltage'. Default: None.
     limits_cb_lines : :obj:`tuple`
         Tuple with limits for colorbar of line color. First entry is the
-        minimum and second entry the maximum value. Default: None.
+        minimum and second entry the maximum value. Only needs to be provided
+        when parameter `line_color` is not None. Default: None.
     limits_cb_nodes : :obj:`tuple`
         Tuple with limits for colorbar of nodes. First entry is the
-        minimum and second entry the maximum value. Default: None.
+        minimum and second entry the maximum value. Only needs to be provided
+        when parameter `node_color` is not None. Default: None.
     xlim : :obj:`tuple`
         Limits of x-axis. Default: None.
     ylim : :obj:`tuple`
@@ -412,7 +431,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
 
     # create pypsa network only containing MV buses and lines
     pypsa_plot = PyPSANetwork()
-    pypsa_plot.buses = pypsa_network.buses.loc[pypsa_network.buses.v_nom >= 10]
+    pypsa_plot.buses = pypsa_network.buses.loc[pypsa_network.buses.v_nom > 1]
     # filter buses of aggregated loads and generators
     pypsa_plot.buses = pypsa_plot.buses[
         ~pypsa_plot.buses.index.str.contains("agg")]
@@ -422,28 +441,9 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
 
     # line colors
     if line_color == 'loading':
-        # calculate relative line loading
-        # get load factor
-        residual_load = tools.get_residual_load_from_pypsa_network(
-            pypsa_network)
-        case = residual_load.apply(
-                lambda _: 'feedin_case' if _ < 0 else 'load_case')
-        if timestep is not None:
-            timeindex = [timestep]
-        else:
-            timeindex = line_load.index
-        load_factor = pd.DataFrame(
-            data={'s_nom': [float(configs[
-                                      'grid_expansion_load_factors'][
-                                      'mv_{}_line'.format(case.loc[_])])
-                            for _ in timeindex]},
-            index=timeindex)
-        # get allowed line load
-        s_allowed = load_factor.dot(
-            pypsa_plot.lines.s_nom.to_frame().T * 1e3)
-        # get line load from pf
-        line_colors = line_load.loc[:, pypsa_plot.lines.index].divide(
-            s_allowed).max()
+        line_colors = tools.calculate_relative_line_load(
+            pypsa_network, configs, line_load, pypsa_network.lines.v_nom,
+            pypsa_plot.lines.index, timestep).max()
     elif line_color == 'expansion_costs':
         node_color = 'expansion_costs'
         line_costs = pypsa_plot.lines.join(

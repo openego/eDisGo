@@ -556,10 +556,13 @@ def lv_to_pypsa(network):
 
         line['type'].append("")
         line['x'].append(
-            l['line'].type['L'] * omega / 1e3 * l['line'].length)
-        line['r'].append(l['line'].type['R'] * l['line'].length)
+            l['line'].type['L'] / l['line'].quantity * omega / 1e3 *
+            l['line'].length)
+        line['r'].append(l['line'].type['R'] / l['line'].quantity *
+                         l['line'].length)
         line['s_nom'].append(
-            sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
+            sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] *
+            l['line'].quantity / 1e3)
         line['length'].append(l['line'].length)
 
     # create dataframe representing storages
@@ -1282,14 +1285,12 @@ def process_pfa_results(network, pypsa, timesteps):
                     list(lines_bus1.values()), :].copy()
     bus1_v_mag_pu.index = list(lines_bus1.keys())
 
-    line_voltage_avg = 0.5 * (bus0_v_mag_pu.loc[:, timesteps] +
-                              bus1_v_mag_pu.loc[:, timesteps])
+    # Get line current
+    network.results._i_res = np.hypot(
+        pypsa.lines_t['p0'], pypsa.lines_t['q0']).truediv(
+        pypsa.lines['v_nom'] * bus0_v_mag_pu.T,
+            axis='columns') / sqrt(3) * 1e3
 
-    # Get voltage levels at line (avg. of buses at both sides)
-    network.results._i_res = \
-        network.results.s_res()[pypsa.lines_t['q0'].columns].truediv(
-            pypsa.lines['v_nom'] * line_voltage_avg.T,
-            axis='columns') * sqrt(3)
     # process results at nodes
     generators_names = [repr(g) for g in network.mv_grid.generators]
     generators_mapping = {v: k for k, v in
