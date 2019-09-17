@@ -231,7 +231,7 @@ def implement_switch_disconnector(mv_grid, node1, node2):
 
     """
     # Get disconnecting point's location
-    line = mv_grid.graph.edge[node1][node2]['line']
+    line = mv_grid.graph.edges[node1, node2]['line']
 
     length_sd_line = .75e-3 # in km
 
@@ -258,7 +258,7 @@ def implement_switch_disconnector(mv_grid, node1, node2):
             grid=mv_grid),
         'type': 'line'}
     mv_grid.graph.remove_edge(node1, node2)
-    mv_grid.graph.add_edge(disconnecting_point, node2, new_line_attr)
+    mv_grid.graph.add_edge(disconnecting_point, node2, **new_line_attr)
 
     # Add disconnecting line segment
     switch_disconnector_line_attr = {
@@ -271,7 +271,7 @@ def implement_switch_disconnector(mv_grid, node1, node2):
         'type': 'line'}
 
     mv_grid.graph.add_edge(node1, disconnecting_point,
-                           switch_disconnector_line_attr)
+                           **switch_disconnector_line_attr)
 
     # Set line to switch disconnector
     disconnecting_point.line = mv_grid.graph.line_from_nodes(
@@ -461,9 +461,9 @@ def assign_mv_feeder_to_nodes(mv_grid):
     mv_grid : :class:`~.grid.grids.MVGrid`
 
     """
-    mv_station_neighbors = mv_grid.graph.neighbors(mv_grid.station)
+    mv_station_neighbors = list(mv_grid.graph.neighbors(mv_grid.station))
     # get all nodes in MV grid and remove MV station to get separate subgraphs
-    mv_graph_nodes = mv_grid.graph.nodes()
+    mv_graph_nodes = list(mv_grid.graph.nodes())
     mv_graph_nodes.remove(mv_grid.station)
     subgraph = mv_grid.graph.subgraph(mv_graph_nodes)
 
@@ -544,7 +544,7 @@ def disconnect_storage(network, storage):
     """
     # does only remove from network.pypsa, not from network.pypsa_lopf
     # remove from pypsa (buses, storage_units, storage_units_t, lines)
-    neighbor = storage.grid.graph.neighbors(storage)[0]
+    neighbor = list(storage.grid.graph.neighbors(storage))[0]
     if network.pypsa is not None:
         line = storage.grid.graph.line_from_nodes(storage, neighbor)
         network.pypsa.storage_units = network.pypsa.storage_units.loc[
@@ -561,7 +561,7 @@ def disconnect_storage(network, storage):
                               network.pypsa.lines.index.drop(
                                   repr(line)), :]
     # delete line
-    neighbor = storage.grid.graph.neighbors(storage)[0]
+    neighbor = list(storage.grid.graph.neighbors(storage))[0]
     storage.grid.graph.remove_edge(storage, neighbor)
     # delete storage
     storage.grid.graph.remove_node(storage)

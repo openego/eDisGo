@@ -246,19 +246,19 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                             lv_load = lv_loads_res_rnd.pop()
 
                         # get cable distributor of building
-                        lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
+                        lv_conn_target = list(lv_grid.graph.neighbors(lv_load))[0]
 
                         if not allow_multiple_genos_per_load:
                             # check if there's an existing generator connected to the load
                             # if so, select next load. If no load is available, connect to station.
                             while any([isinstance(_, Generator)
                                        for _ in lv_grid.graph.neighbors(
-                                    lv_grid.graph.neighbors(lv_load)[0])]):
+                                    list(lv_grid.graph.neighbors(lv_load))[0])]):
                                 if len(lv_loads_res_rnd) > 0:
                                     lv_load = lv_loads_res_rnd.pop()
 
                                     # get cable distributor of building
-                                    lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
+                                    lv_conn_target = list(lv_grid.graph.neighbors(lv_load))[0]
                                 else:
                                     lv_conn_target = lv_grid.station
 
@@ -284,19 +284,19 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                             lv_load = lv_loads_ria_rnd.pop()
 
                         # get cable distributor of building
-                        lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
+                        lv_conn_target = list(lv_grid.graph.neighbors(lv_load))[0]
 
                         if not allow_multiple_genos_per_load:
                             # check if there's an existing generator connected to the load
                             # if so, select next load. If no load is available, connect to station.
                             while any([isinstance(_, Generator)
                                        for _ in lv_grid.graph.neighbors(
-                                    lv_grid.graph.neighbors(lv_load)[0])]):
+                                    list(lv_grid.graph.neighbors(lv_load))[0])]):
                                 if len(lv_loads_ria_rnd) > 0:
                                     lv_load = lv_loads_ria_rnd.pop()
 
                                     # get cable distributor of building
-                                    lv_conn_target = lv_grid.graph.neighbors(lv_load)[0]
+                                    lv_conn_target = list(lv_grid.graph.neighbors(lv_load))[0]
                                 else:
                                     lv_conn_target = lv_grid.station
 
@@ -529,7 +529,7 @@ def _connect_mv_node(network, node, target_obj):
         conn_point_shp = target_obj['shp'].interpolate(target_obj['shp'].project(node_shp))
         conn_point_shp = transform(proj2conformal(network), conn_point_shp)
 
-        line = network.mv_grid.graph.edge[adj_node1][adj_node2]
+        line = network.mv_grid.graph.edges[adj_node1,adj_node2]
 
         # target MV line does currently not connect a load area of type aggregated
         if not line['type'] == 'line_aggr':
@@ -632,7 +632,7 @@ def _connect_mv_node(network, node, target_obj):
 
         # if target is generator or Load, check if it is aggregated (=> connection not allowed)
         if isinstance(target_obj['obj'], (Generator, Load)):
-            target_is_aggregated = any([_ for _ in network.mv_grid.graph.edge[target_obj['obj']].values()
+            target_is_aggregated = any([_ for _ in network.mv_grid.graph.adj[target_obj['obj']].values()
                                         if _['type'] == 'line_aggr'])
         else:
             target_is_aggregated = False

@@ -447,7 +447,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                     # add new edge between node_2_3 and station
                     new_line_data = {'line': crit_line,
                                      'type': 'line'}
-                    grid.graph.add_edge(grid.station, node_2_3, new_line_data)
+                    grid.graph.add_edge(grid.station,node_2_3, **new_line_data)
                     # remove old edge
                     grid.graph.remove_edge(pred_node, node_2_3)
                     # change line length and type
