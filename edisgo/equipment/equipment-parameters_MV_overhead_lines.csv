@@ -1,9 +1,9 @@
-name;U_n;I_max_th;R_l;L_l;C_l
-#-;V;A;ohm/km;mH/km;uF/km
-# Note that only values used for calculation are saved in this table, for more values look into source. Only insert literature values here, calculations in code for better comprehensibility;;;;;
-48-AL1/8-ST1A;10;210;0.35;1.11;0.0104
-94-AL1/15-ST1A;10;350;0.33;1.05;0.0112
-122-AL1/20-ST1A;10;410;0.31;0.99;0.0115
-48-AL1/8-ST1A;20;210;0.37;1.18;0.0098
-94-AL1/15-ST1A;20;350;0.35;1.11;0.0104
-122-AL1/20-ST1A;20;410;0.34;1.08;0.0106
+name,U_n,I_max_th,R_l,L_l,C_l
+#-,V,A,ohm/km,mH/km,uF/km
+# Note that only values used for calculation are saved in this table, for more values look into source. Only insert literature values here, calculations in code for better comprehensibility
+48-AL1/8-ST1A,10,210,0.35,1.11,0.0104
+94-AL1/15-ST1A,10,350,0.33,1.05,0.0112
+122-AL1/20-ST1A,10,410,0.31,0.99,0.0115
+48-AL1/8-ST1A,20,210,0.37,1.18,0.0098
+94-AL1/15-ST1A,20,350,0.35,1.11,0.0104
+122-AL1/20-ST1A,20,410,0.34,1.08,0.0106

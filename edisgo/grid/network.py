@@ -889,7 +889,7 @@ class Network:
                     os.path.join(package_path, equipment_dir,
                                  equipment_parameters),
                     comment='#', index_col='name',
-                    delimiter=';', decimal='.')
+                    delimiter=',', decimal='.')
                 # calculate electrical values of transformer from standard values (so far only for LV transformers, not necessary for MV as MV impedances not used)
                 if voltage_level == 'lv' and i == 'trafos':
                     # Simplification of r = R/Z_nom with R = P_k*(U_n)²/S_nom and Z_nom = (U_n)²/S_nom => r = P_k/S_nom
