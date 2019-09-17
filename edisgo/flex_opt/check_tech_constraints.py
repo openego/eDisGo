@@ -345,8 +345,8 @@ def mv_voltage_deviation(network, voltage_levels='mv_lv'):
 
     Notes
     -----
-    Over-voltage is determined based on allowed voltage deviations defined in
-    the config file 'config_grid_expansion' in section
+    Voltage issues are determined based on allowed voltage deviations defined
+    in the config file 'config_grid_expansion' in section
     'grid_expansion_allowed_voltage_deviations'.
 
     """
@@ -390,7 +390,7 @@ def mv_voltage_deviation(network, voltage_levels='mv_lv'):
         network.timeseries.timesteps_load_feedin_case.case.apply(
             lambda _: v_dev_allowed_per_case['{}_lower'.format(_)])
 
-    nodes = network.mv_grid.graph.nodes()
+    nodes = list(network.mv_grid.graph.nodes())
 
     crit_nodes_grid = _voltage_deviation(
         network, nodes, v_dev_allowed_upper, v_dev_allowed_lower,
@@ -445,8 +445,8 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
 
     Notes
     -----
-    Over-voltage is determined based on allowed voltage deviations defined in
-    the config file 'config_grid_expansion' in section
+    Voltage issues are determined based on allowed voltage deviations defined
+    in the config file 'config_grid_expansion' in section
     'grid_expansion_allowed_voltage_deviations'.
 
     """
@@ -495,7 +495,7 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
                     "function lv_voltage_deviation. Try 'stations' or "
                     "None".format(mode))
         else:
-            nodes = lv_grid.graph.nodes()
+            nodes = list(lv_grid.graph.nodes())
 
         if voltage_levels == 'lv':
             if mode == 'stations':

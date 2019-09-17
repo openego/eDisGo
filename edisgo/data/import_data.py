@@ -215,7 +215,7 @@ def _build_lv_grid(ding0_grid, network):
 
                 edges = []
                 edges_raw = list(nx.get_edge_attributes(
-                    ding0_lv_grid._graph, 'branch').items())
+                    ding0_lv_grid._graph, name='branch').items())
                 for edge in edges_raw:
                     edges.append({'adj_nodes': edge[0], 'branch': edge[1]})
 

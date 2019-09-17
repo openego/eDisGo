@@ -118,7 +118,7 @@ class EDisGoReimport:
                 timestep=kwargs.get('timestep', None),
                 line_color='loading',
                 node_color=kwargs.get('node_color', None),
-                line_load=self.network.results.s_res(),
+                line_load=self.network.results.i_res,
                 filename=kwargs.get('filename', None),
                 arrows=kwargs.get('arrows', None),
                 grid_district_geom=kwargs.get('grid_district_geom', True),
@@ -206,12 +206,13 @@ class EDisGoReimport:
         """
         Plots histogram of voltages.
 
-        For more information see :func:`edisgo.tools.plots.histogram`.
+        For more information on the histogram plot and possible configurations
+        see :func:`edisgo.tools.plots.histogram`.
 
         Parameters
         ----------
-        timestep : :pandas:`pandas.Timestamp<timestamp>` or None, optional
-            Specifies time step histogram is plotted for. If timestep is None
+        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+            Specifies time steps histogram is plotted for. If timestep is None
             all time steps voltages are calculated for are used. Default: None.
         title : :obj:`str` or :obj:`bool`, optional
             Title for plot. If True title is auto generated. If False plot has
@@ -219,12 +220,20 @@ class EDisGoReimport:
 
         """
         data = self.network.results.v_res()
+
+        if timestep is None:
+            timestep = data.index
+        # check if timesteps is array-like, otherwise convert to list
+        if not hasattr(timestep, "__len__"):
+            timestep = [timestep]
+
         if title is True:
-            if timestep is not None:
-                title = "Voltage histogram for time step {}".format(timestep)
+            if len(timestep) == 1:
+                title = "Voltage histogram for time step {}".format(
+                    timestep[0])
             else:
                 title = "Voltage histogram \nfor time steps {} to {}".format(
-                    data.index[0], data.index[-1])
+                    timestep[0], timestep[-1])
         elif title is False:
             title = None
         plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
@@ -234,15 +243,17 @@ class EDisGoReimport:
         """
         Plots histogram of relative line loads.
 
-        For more information see :func:`edisgo.tools.plots.histogram`.
+        For more information on how the relative line load is calculated see
+        :func:`edisgo.tools.tools.get_line_loading_from_network`.
+        For more information on the histogram plot and possible configurations
+        see :func:`edisgo.tools.plots.histogram`.
 
         Parameters
         ----------
-        Parameters
-        ----------
-        timestep : :pandas:`pandas.Timestamp<timestamp>` or None, optional
-            Specifies time step histogram is plotted for. If timestep is None
-            all time steps voltages are calculated for are used. Default: None.
+        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+            Specifies time step(s) histogram is plotted for. If `timestep` is
+            None all time steps currents are calculated for are used.
+            Default: None.
         title : :obj:`str` or :obj:`bool`, optional
             Title for plot. If True title is auto generated. If False plot has
             no title. If :obj:`str`, the provided title is used. Default: True.
@@ -252,20 +263,6 @@ class EDisGoReimport:
             fallback option in case of wrong input. Default: 'mv_lv'
 
         """
-        residual_load = tools.get_residual_load_from_pypsa_network(
-            self.network.pypsa)
-        case = residual_load.apply(
-            lambda _: 'feedin_case' if _ < 0 else 'load_case')
-        if timestep is not None:
-            timeindex = [timestep]
-        else:
-            timeindex = self.network.results.s_res().index
-        load_factor = pd.DataFrame(
-            data={'s_nom': [float(self.network.config[
-                                      'grid_expansion_load_factors'][
-                                      'mv_{}_line'.format(case.loc[_])])
-                            for _ in timeindex]},
-            index=timeindex)
         if voltage_level == 'mv':
             lines = self.network.pypsa.lines.loc[
                 self.network.pypsa.lines.v_nom > 1]
@@ -274,24 +271,28 @@ class EDisGoReimport:
                 self.network.pypsa.lines.v_nom < 1]
         else:
             lines = self.network.pypsa.lines
-        s_res = self.network.results.s_res().loc[
-            timeindex, lines.index]
-        # get allowed line load
-        s_allowed = load_factor.dot(
-            self.network.pypsa.lines.s_nom.to_frame().T * 1e3)
-        # get line load from pf
-        data = s_res.divide(s_allowed)
+
+        rel_line_loading = tools.calculate_relative_line_load(
+            self.network.pypsa, self.network.config,
+            self.network.results.i_res, self.network.pypsa.lines.v_nom,
+            lines.index, timestep)
+
+        if timestep is None:
+            timestep = rel_line_loading.index
+        # check if timesteps is array-like, otherwise convert to list
+        if not hasattr(timestep, "__len__"):
+            timestep = [timestep]
 
         if title is True:
-            if timestep is not None:
+            if len(timestep) == 1:
                 title = "Relative line load histogram for time step {}".format(
-                    timestep)
+                    timestep[0])
             else:
                 title = "Relative line load histogram \nfor time steps " \
-                        "{} to {}".format(data.index[0], data.index[-1])
+                        "{} to {}".format(timestep[0], timestep[-1])
         elif title is False:
             title = None
-        plots.histogram(data=data, title=title, **kwargs)
+        plots.histogram(data=rel_line_loading, title=title, **kwargs)
 
 
 class EDisGo(EDisGoReimport):
@@ -2814,7 +2815,7 @@ class Results:
                 storage_results['voltage_level'].append(
                     'mv' if isinstance(grid, MVGrid) else 'lv')
                 storage_results['grid_connection_point'].append(
-                     grid.graph.neighbors(storage)[0])
+                     list(grid.graph.neighbors(storage))[0])
 
         return pd.DataFrame(storage_results).set_index('storage_id')
 
@@ -2963,7 +2964,7 @@ class Results:
 
     def v_res(self, nodes=None, level=None):
         """
-        Get resulting voltage level at node.
+        Get voltage results (in p.u.) from power flow analysis.
 
         Parameters
         ----------

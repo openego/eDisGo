@@ -332,7 +332,7 @@ def _optimize_voltage_based_curtailment(feedin, voltage_pu, total_curtailment,
     model.solutions.load_from(results)
 
     return pd.DataFrame({g: [model.c[t, g].value for t in model.T]
-                         for g in model.G}, index=model.T.value)
+                         for g in model.G}, index=model.T)
 
 
 def feedin_proportional(feedin, generators, curtailment_timeseries, edisgo,

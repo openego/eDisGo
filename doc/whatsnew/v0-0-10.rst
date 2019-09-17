@@ -5,3 +5,8 @@ Release date: <month> <day>, <year>
 
 Changes
 -------
+* 
+
+Bug fixes
+----------
+* Corrected calculation of current from pypsa power flow results (PR #153 `#153 <https://github.com/openego/eDisGo/pull/153>`_).

@@ -179,7 +179,7 @@ def make_directory(directory):
 
     """
     if not os.path.isdir(directory):
-        os.mkdir(directory)
+        os.makedirs(directory)
         logger.info('Path {} not found, I will create it.'
                     .format(directory))
 
