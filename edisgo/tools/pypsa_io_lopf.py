@@ -12,7 +12,7 @@ import itertools
 from math import pi, sqrt
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
-from networkx import connected_component_subgraphs
+from networkx import connected_components
 import collections
 
 
@@ -870,7 +870,8 @@ def _check_integrity_of_pypsa(pypsa_network):
     """"""
 
     # check for sub-networks
-    subgraphs = list(connected_component_subgraphs(pypsa_network.graph()))
+    subgraphs = list(pypsa_network.graph().subgraph(c) for c in
+                     connected_components(pypsa_network.graph()))
     pypsa_network.determine_network_topology()
 
     if len(subgraphs) > 1 or len(pypsa_network.sub_networks) > 1:
