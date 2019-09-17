@@ -252,8 +252,8 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                             # check if there's an existing generator connected to the load
                             # if so, select next load. If no load is available, connect to station.
                             while any([isinstance(_, Generator)
-                                       for _ in list(lv_grid.graph.neighbors(
-                                    list(lv_grid.graph.neighbors(lv_load))[0]))]):
+                                       for _ in lv_grid.graph.neighbors(
+                                    list(lv_grid.graph.neighbors(lv_load))[0])]):
                                 if len(lv_loads_res_rnd) > 0:
                                     lv_load = lv_loads_res_rnd.pop()
 
@@ -290,8 +290,8 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                             # check if there's an existing generator connected to the load
                             # if so, select next load. If no load is available, connect to station.
                             while any([isinstance(_, Generator)
-                                       for _ in list(lv_grid.graph.neighbors(
-                                    list(lv_grid.graph.neighbors(lv_load))[0]))]):
+                                       for _ in lv_grid.graph.neighbors(
+                                    list(lv_grid.graph.neighbors(lv_load))[0])]):
                                 if len(lv_loads_ria_rnd) > 0:
                                     lv_load = lv_loads_ria_rnd.pop()
 
@@ -529,7 +529,7 @@ def _connect_mv_node(network, node, target_obj):
         conn_point_shp = target_obj['shp'].interpolate(target_obj['shp'].project(node_shp))
         conn_point_shp = transform(proj2conformal(network), conn_point_shp)
 
-        line = network.mv_grid.graph.adj[adj_node1][adj_node2]
+        line = network.mv_grid.graph.edges[adj_node1,adj_node2]
 
         # target MV line does currently not connect a load area of type aggregated
         if not line['type'] == 'line_aggr':

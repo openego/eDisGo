@@ -231,7 +231,7 @@ def implement_switch_disconnector(mv_grid, node1, node2):
 
     """
     # Get disconnecting point's location
-    line = mv_grid.graph.adj[node1][node2]['line']
+    line = mv_grid.graph.edges[node1, node2]['line']
 
     length_sd_line = .75e-3 # in km
 
@@ -250,20 +250,28 @@ def implement_switch_disconnector(mv_grid, node1, node2):
     mv_grid.graph.add_node(disconnecting_point, type='mv_disconnecting_point')
 
     # Replace original line by a new line
-    mv_grid.graph.remove_edge(node1, node2)
-    new_line = Line(id=line.id,
+    new_line_attr = {
+        'line': Line(
+            id=line.id,
             type=line.type,
             length=line.length - length_sd_line,
-            grid=mv_grid)
-    mv_grid.graph.add_edge(disconnecting_point, node2, line = new_line, type = 'line')
+            grid=mv_grid),
+        'type': 'line'}
+    mv_grid.graph.remove_edge(node1, node2)
+    mv_grid.graph.add_edge(disconnecting_point, node2, **new_line_attr)
 
     # Add disconnecting line segment
-    disc_line = Line(id="switch_disconnector_line_{}".format(
+    switch_disconnector_line_attr = {
+        'line': Line(
+                  id="switch_disconnector_line_{}".format(
                       str(mv_dp_number + 1)),
                   type=line.type,
                   length=length_sd_line,
-                  grid=mv_grid)
-    mv_grid.graph.add_edge(node1, disconnecting_point, line = disc_line, type = 'line')
+                  grid=mv_grid),
+        'type': 'line'}
+
+    mv_grid.graph.add_edge(node1, disconnecting_point,
+                           **switch_disconnector_line_attr)
 
     # Set line to switch disconnector
     disconnecting_point.line = mv_grid.graph.line_from_nodes(
