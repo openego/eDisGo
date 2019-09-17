@@ -342,9 +342,9 @@ def mv_to_pypsa(network):
 
         line['type'].append("")
         line['x'].append(
-            l['line'].type['L_l'] / l['line'].quantity * omega / 1e3 *
+            l['line'].type['L_per_km'] / l['line'].quantity * omega / 1e3 *
             l['line'].length)
-        line['r'].append(l['line'].type['R_l'] / l['line'].quantity *
+        line['r'].append(l['line'].type['R_per_km'] / l['line'].quantity *
                          l['line'].length)
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] *
@@ -556,8 +556,8 @@ def lv_to_pypsa(network):
 
         line['type'].append("")
         line['x'].append(
-            l['line'].type['L_l'] * omega / 1e3 * l['line'].length)
-        line['r'].append(l['line'].type['R_l'] * l['line'].length)
+            l['line'].type['L_per_km'] * omega / 1e3 * l['line'].length)
+        line['r'].append(l['line'].type['R_per_km'] * l['line'].length)
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
         line['length'].append(l['line'].length)
@@ -1587,9 +1587,9 @@ def update_pypsa_grid_reinforcement(network, equipment_changes):
     for idx, row in changed_lines.iterrows():
         # Update line parameters
         network.pypsa.lines.loc[repr(idx), 'r'] = (
-            idx.type['R_l'] / idx.quantity * idx.length)
+            idx.type['R_per_km'] / idx.quantity * idx.length)
         network.pypsa.lines.loc[repr(idx), 'x'] = (
-            idx.type['L_l'] / 1e3 * omega / idx.quantity * idx.length)
+            idx.type['L_per_km'] / 1e3 * omega / idx.quantity * idx.length)
         network.pypsa.lines.loc[repr(idx), 's_nom'] = (
             sqrt(3) * idx.type['I_max_th'] * idx.type[
                 'U_n'] * idx.quantity / 1e3)
@@ -1706,8 +1706,8 @@ def update_pypsa_storage(pypsa, storages, storages_lines):
                 line['bus1'].append('_'.join(['Bus', repr(adj_nodes[1])]))
 
         line['type'].append("")
-        line['x'].append(l.type['L_l'] * omega / 1e3 * l.length)
-        line['r'].append(l.type['R_l'] * l.length)
+        line['x'].append(l.type['L_per_km'] * omega / 1e3 * l.length)
+        line['r'].append(l.type['R_per_km'] * l.length)
         line['s_nom'].append(
             sqrt(3) * l.type['I_max_th'] * l.type['U_n'] / 1e3)
         line['length'].append(l.length)
