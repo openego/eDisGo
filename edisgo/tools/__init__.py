@@ -9,14 +9,10 @@ Session = sessionmaker(bind=connection(readonly=True))
 def session_scope():
     """Function to ensure that sessions are closed properly."""
     session = Session()
-    print('start')
     try:
-        print('try')
         yield session
     except:
-        print('except')
         session.rollback()
         raise
     finally:
-        print('finally')
         session.close()
