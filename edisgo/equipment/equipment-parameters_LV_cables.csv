@@ -1,10 +1,12 @@
-name,U_n,I_max_th,R,L,C,Source
-#,kV,A,ohm/km,mH/km,uF/km,
-NAYY 4x1x300,0.4,419,0.1,0.279,,FaberKabel
-NAYY 4x1x240,0.4,364,0.125,0.254,,FaberKabel
-NAYY 4x1x185,0.4,313,0.164,0.256,,FaberKabel
-NAYY 4x1x150,0.4,275,0.206,0.256,,FaberKabel
-NAYY 4x1x120,0.4,245,0.253,0.256,,FaberKabel
-NAYY 4x1x95,0.4,215,0.320,0.261,,FaberKabel
-NAYY 4x1x50,0.4,144,0.449,0.270,,FaberKabel
-NAYY 4x1x35,0.4,123,0.868,0.271,,FaberKabel
+name,U_n,I_max_th,R_per_km,L_per_km
+#-,V,A,ohm/km,mH/km
+# Source FaberKabel Starkstromkabel NAYY-J/-O nach VDE 0276-603
+# Note that only values used for calculation are saved in this table, for more values look into source. Only insert literature values here, calculations in code for better comprehensibility
+NAYY 4x1x300,400,419,0.1,0.279
+NAYY 4x1x240,400,364,0.125,0.254
+NAYY 4x1x185,400,313,0.164,0.256
+NAYY 4x1x150,400,275,0.206,0.256
+NAYY 4x1x120,400,245,0.253,0.256
+NAYY 4x1x95,400,215,0.320,0.261
+NAYY 4x1x50,400,144,0.449,0.270
+NAYY 4x1x35,400,123,0.868,0.271
