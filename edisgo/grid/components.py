@@ -1277,7 +1277,7 @@ class MVDisconnectingPoint(Component):
         """Toggle state to closed switch disconnector"""
         self._state = 'closed'
         self.grid.graph.add_edge(
-            self._nodes[0], self._nodes[1], {'line': self._line})
+            self._nodes[0], self._nodes[1], line=self._line)
 
     @property
     def state(self):

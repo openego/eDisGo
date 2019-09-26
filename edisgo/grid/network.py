@@ -893,7 +893,14 @@ class Network:
                                  equipment_parameters),
                     comment='#', index_col='name',
                     delimiter=',', decimal='.')
-
+                # calculate electrical values of transformer from standard values (so far only for LV transformers, not necessary for MV as MV impedances not used)
+                if voltage_level == 'lv' and i == 'trafos':
+                    # Simplification of r = R/Z_nom with R = P_k*(U_n)²/S_nom and Z_nom = (U_n)²/S_nom => r = P_k/S_nom
+                    data['{}_{}'.format(voltage_level, i)]['r_pu'] = data['{}_{}'.format(voltage_level, i)]['P_k']/\
+                                                                  (data['{}_{}'.format(voltage_level, i)]['S_nom']*1000)
+                    # x = sqrt(z²-r²) with Simplification of z = Z/Z_nom with Z = u_kr[%]/100 * (U_n)²/S_n and Z_nom = (U_n)²/S_nom => z = u_kr[%]/100
+                    data['{}_{}'.format(voltage_level, i)]['x_pu'] = np.sqrt((data['{}_{}'.format(voltage_level, i)]['u_kr']/100)**2\
+                                                                       -data['{}_{}'.format(voltage_level, i)]['r_pu']**2)
         return data
 
     @property
@@ -3007,7 +3014,7 @@ class Results:
         if nodes is None:
             return self.pfa_v_mag_pu.loc[:, (level, slice(None))]
         else:
-            labels = list(map(repr, nodes.copy()))
+            labels = list(map(repr, list(nodes).copy()))
             not_included = [_ for _ in labels
                             if _ not in list(self.pfa_v_mag_pu[level].columns)]
             labels_included = [_ for _ in labels if _ not in not_included]
