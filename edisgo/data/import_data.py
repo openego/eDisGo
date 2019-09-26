@@ -215,7 +215,7 @@ def _build_lv_grid(ding0_grid, network):
 
                 edges = []
                 edges_raw = list(nx.get_edge_attributes(
-                    ding0_lv_grid._graph, 'branch').items())
+                    ding0_lv_grid._graph, name='branch').items())
                 for edge in edges_raw:
                     edges.append({'adj_nodes': edge[0], 'branch': edge[1]})
 
@@ -349,7 +349,7 @@ def _build_mv_grid(ding0_grid, network):
                             geom=_.geo_data,
                             voltage_op=t.v_level,
                             type=pd.Series(dict(
-                                S_nom=t.s_max_a, X=t.x, R=t.r))
+                                S_nom=t.s_max_a, x_pu=t.x_pu, r_pu=t.r_pu))
                         ) for (count, t) in enumerate(_.transformers(), 1)])
                 for _ in ding0_grid._graph.nodes()
                 if isinstance(_, LVStationDing0) and _ not in aggr_stations}
@@ -371,7 +371,7 @@ def _build_mv_grid(ding0_grid, network):
             geom=ding0_grid.station().geo_data,
             voltage_op=_.v_level,
             type=pd.Series(dict(
-                S_nom=_.s_max_a, X=_.x, R=_.r)))
+                S_nom=_.s_max_a, x_pu=_.x_pu, r_pu=_.r_pu)))
             for (count, _) in enumerate(
                 ding0_grid.station().transformers(), 1)])
     grid.graph.add_node(mv_station, type='mv_station')

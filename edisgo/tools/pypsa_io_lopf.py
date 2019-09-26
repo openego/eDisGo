@@ -12,7 +12,7 @@ import itertools
 from math import pi, sqrt
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
-from networkx import connected_component_subgraphs
+from networkx import connected_components
 import collections
 
 
@@ -327,8 +327,8 @@ def mv_to_pypsa(network):
 
         line['type'].append("")
         line['x'].append(
-            l['line'].type['L'] * omega / 1e3 * l['line'].length)
-        line['r'].append(l['line'].type['R'] * l['line'].length)
+            l['line'].type['L_per_km'] * omega / 1e3 * l['line'].length)
+        line['r'].append(l['line'].type['R_per_km'] * l['line'].length)
         s_nom = sqrt(3) * l['line'].type['I_max_th'] * \
                 l['line'].type['U_n'] / 1e3
         line['s_nom'].append(s_nom)
@@ -355,19 +355,16 @@ def mv_to_pypsa(network):
         bus['x'].append(None)
         bus['y'].append(None)
 
-        # we choose voltage of transformers' primary side
-        v_base = lv_st.mv_grid.voltage_nom
 
         for tr in lv_st.transformers:
-            z_base = v_base ** 2 / tr.type.S_nom
             transformer['name'].append(
                 '_'.join([repr(lv_st), 'transformer', str(transformer_count)]))
             transformer['bus0'].append(bus0_name)
             transformer['bus1'].append(bus1_name)
             transformer['type'].append("")
             transformer['model'].append('pi')
-            transformer['r'].append(tr.type.R / z_base)
-            transformer['x'].append(tr.type.X / z_base)
+            transformer['r'].append(tr.type.r_pu)
+            transformer['x'].append(tr.type.x_pu)
             transformer['s_nom'].append(tr.type.S_nom / 1e3)
             transformer['s_nom_extendable'].append(True)
             transformer['capital_cost'].append(100)
@@ -566,8 +563,8 @@ def lv_to_pypsa(network):
 
         line['type'].append("")
         line['x'].append(
-            l['line'].type['L'] * omega / 1e3 * l['line'].length)
-        line['r'].append(l['line'].type['R'] * l['line'].length)
+            l['line'].type['L_per_km'] * omega / 1e3 * l['line'].length)
+        line['r'].append(l['line'].type['R_per_km'] * l['line'].length)
         s_nom = sqrt(3) * l['line'].type['I_max_th'] * \
                 l['line'].type['U_n'] / 1e3
         line['s_nom'].append(s_nom)
@@ -870,7 +867,8 @@ def _check_integrity_of_pypsa(pypsa_network):
     """"""
 
     # check for sub-networks
-    subgraphs = list(connected_component_subgraphs(pypsa_network.graph()))
+    subgraphs = list(pypsa_network.graph().subgraph(c) for c in
+                     connected_components(pypsa_network.graph()))
     pypsa_network.determine_network_topology()
 
     if len(subgraphs) > 1 or len(pypsa_network.sub_networks) > 1:

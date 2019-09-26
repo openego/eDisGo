@@ -10,7 +10,7 @@ import itertools
 from math import pi, sqrt
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
-from networkx import connected_component_subgraphs
+from networkx import connected_components
 import collections
 
 from edisgo.grid.components import Transformer, Line, LVStation, MVStation
@@ -243,7 +243,7 @@ def mv_to_pypsa(network):
     generators = network.mv_grid.generators
     loads = network.mv_grid.graph.nodes_by_attribute('load')
     branch_tees = network.mv_grid.graph.nodes_by_attribute('branch_tee')
-    lines = network.mv_grid.graph.lines()
+    lines = list(network.mv_grid.graph.lines())
     lv_stations = network.mv_grid.graph.nodes_by_attribute('lv_station')
     mv_stations = network.mv_grid.graph.nodes_by_attribute('mv_station')
     disconnecting_points = network.mv_grid.graph.nodes_by_attribute(
@@ -342,9 +342,9 @@ def mv_to_pypsa(network):
 
         line['type'].append("")
         line['x'].append(
-            l['line'].type['L'] / l['line'].quantity * omega / 1e3 *
+            l['line'].type['L_per_km'] / l['line'].quantity * omega / 1e3 *
             l['line'].length)
-        line['r'].append(l['line'].type['R'] / l['line'].quantity *
+        line['r'].append(l['line'].type['R_per_km'] / l['line'].quantity *
                          l['line'].length)
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] *
@@ -372,15 +372,15 @@ def mv_to_pypsa(network):
         v_base = lv_st.mv_grid.voltage_nom
 
         for tr in lv_st.transformers:
-            z_base = v_base ** 2 / tr.type.S_nom
             transformer['name'].append(
                 '_'.join([repr(lv_st), 'transformer', str(transformer_count)]))
             transformer['bus0'].append(bus0_name)
             transformer['bus1'].append(bus1_name)
             transformer['type'].append("")
             transformer['model'].append('pi')
-            transformer['r'].append(tr.type.R / z_base)
-            transformer['x'].append(tr.type.X / z_base)
+            # hier evtl. anpassen wenn spaltenname in equipment geändert wird (auch in lv_to_pypsa
+            transformer['r'].append(tr.type.r_pu)
+            transformer['x'].append(tr.type.x_pu)
             transformer['s_nom'].append(tr.type.S_nom / 1e3)
             transformer['tap_ratio'].append(1)
 
@@ -556,10 +556,8 @@ def lv_to_pypsa(network):
 
         line['type'].append("")
         line['x'].append(
-            l['line'].type['L'] / l['line'].quantity * omega / 1e3 *
-            l['line'].length)
-        line['r'].append(l['line'].type['R'] / l['line'].quantity *
-                         l['line'].length)
+            l['line'].type['L_per_km'] * omega / 1e3 * l['line'].length/ l['line'].quantity)
+        line['r'].append(l['line'].type['R_per_km'] * l['line'].length/ l['line'].quantity)
         line['s_nom'].append(
             sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] *
             l['line'].quantity / 1e3)
@@ -1079,7 +1077,8 @@ def _check_integrity_of_pypsa(pypsa_network):
     """"""
 
     # check for sub-networks
-    subgraphs = list(connected_component_subgraphs(pypsa_network.graph()))
+    subgraphs = list(pypsa_network.graph().subgraph(c) for c in
+                     connected_components(pypsa_network.graph()))
     pypsa_network.determine_network_topology()
 
     if len(subgraphs) > 1 or len(pypsa_network.sub_networks) > 1:
@@ -1556,8 +1555,6 @@ def update_pypsa_grid_reinforcement(network, equipment_changes):
 
         if isinstance(idx, LVStation):
             # we choose voltage of transformers' primary side
-            v_base = idx.mv_grid.voltage_nom
-            z_base = v_base ** 2 / row['equipment'].type.S_nom
 
             transformer['bus0'].append('_'.join(['Bus', idx.__repr__(
                 side='mv')]))
@@ -1566,8 +1563,8 @@ def update_pypsa_grid_reinforcement(network, equipment_changes):
             transformer['name'].append(repr(row['equipment']))
             transformer['type'].append("")
             transformer['model'].append('pi')
-            transformer['r'].append(row['equipment'].type.R / z_base)
-            transformer['x'].append(row['equipment'].type.X / z_base)
+            transformer['r'].append(row['equipment'].type.r_pu)
+            transformer['x'].append(row['equipment'].type.x_pu)
             transformer['s_nom'].append(row['equipment'].type.S_nom / 1e3)
             transformer['tap_ratio'].append(1)
 
@@ -1590,9 +1587,9 @@ def update_pypsa_grid_reinforcement(network, equipment_changes):
     for idx, row in changed_lines.iterrows():
         # Update line parameters
         network.pypsa.lines.loc[repr(idx), 'r'] = (
-            idx.type['R'] / idx.quantity * idx.length)
+            idx.type['R_per_km'] / idx.quantity * idx.length)
         network.pypsa.lines.loc[repr(idx), 'x'] = (
-            idx.type['L'] / 1e3 * omega / idx.quantity * idx.length)
+            idx.type['L_per_km'] / 1e3 * omega / idx.quantity * idx.length)
         network.pypsa.lines.loc[repr(idx), 's_nom'] = (
             sqrt(3) * idx.type['I_max_th'] * idx.type[
                 'U_n'] * idx.quantity / 1e3)
@@ -1709,8 +1706,8 @@ def update_pypsa_storage(pypsa, storages, storages_lines):
                 line['bus1'].append('_'.join(['Bus', repr(adj_nodes[1])]))
 
         line['type'].append("")
-        line['x'].append(l.type['L'] * omega / 1e3 * l.length)
-        line['r'].append(l.type['R'] * l.length)
+        line['x'].append(l.type['L_per_km'] * omega / 1e3 * l.length)
+        line['r'].append(l.type['R_per_km'] * l.length)
         line['s_nom'].append(
             sqrt(3) * l.type['I_max_th'] * l.type['U_n'] / 1e3)
         line['length'].append(l.length)
