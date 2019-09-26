@@ -288,6 +288,9 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             more information.
 
         """
+        # return grid_expansion_costs_feeder_ranking[
+        #     (grid_expansion_costs_feeder_ranking.mv_feeder == feeder) &
+        #     (grid_expansion_costs_feeder_ranking.voltage_level == 'mv')]
         # get all overloaded MV lines
         critical_lines = check_tech_constraints.mv_line_load(edisgo.network)
         # filter overloaded lines in feeder
@@ -329,7 +332,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
     # conduct grid reinforcement on copied edisgo object on worst-case time
     # steps
     grid_expansion_results_init = edisgo.reinforce(
-        copy_graph=True, timesteps_pfa='snapshot_analysis')
+        copy_graph=True, timesteps_pfa='snapshot_analysis', mode='mv')
 
     # only analyse storage integration if there were any grid expansion needs
     if grid_expansion_results_init.equipment_changes.empty:
@@ -354,7 +357,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
     # calculate grid expansion costs without costs for new generators
     # to be used in feeder ranking
     grid_expansion_costs_feeder_ranking = costs.grid_expansion_costs(
-        network, without_generator_import=True)
+        network, without_generator_import=True, mode='mv')
 
     ranked_feeders = _feeder_ranking(grid_expansion_costs_feeder_ranking)
 
