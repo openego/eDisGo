@@ -475,6 +475,6 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
 
     # calculate grid expansion costs
     edisgo_reinforce.network.results.grid_expansion_costs = \
-        grid_expansion_costs(edisgo_reinforce.network)
+        grid_expansion_costs(edisgo_reinforce.network, mode=mode)
 
     return edisgo_reinforce.network.results

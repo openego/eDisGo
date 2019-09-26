@@ -10,7 +10,7 @@ from edisgo.grid.grids import LVGrid, MVGrid
 from edisgo.grid.tools import get_mv_feeder_from_line
 
 
-def grid_expansion_costs(network, without_generator_import=False):
+def grid_expansion_costs(network, without_generator_import=False, mode=None):
     """
     Calculates grid expansion costs for each reinforced transformer and line
     in kEUR.
@@ -22,6 +22,13 @@ def grid_expansion_costs(network, without_generator_import=False):
         If True excludes lines that were added in the generator import to
         connect new generators to the grid from calculation of grid expansion
         costs. Default: False.
+    mode : :obj:`str`
+        Specifies grid levels reinforcement was conducted for to only return
+        costs in the considered grid level. Specify
+
+        * None to return costs in MV and LV grid levels. None is the default.
+        * 'mv' to return costs of MV grid level only, including MV/LV stations.
+          Costs to connect LV generators are excluded as well.
 
     Returns
     -------
@@ -106,6 +113,15 @@ def grid_expansion_costs(network, without_generator_import=False):
             network.results.equipment_changes.iteration_step > 0]
     else:
         equipment_changes = network.results.equipment_changes
+        if mode is 'mv':
+            # filter equipment changes in LV grid level, e.g. from connection
+            # of new generators
+            mv_components = []
+            for comp in network.results.equipment_changes.index:
+                if not(isinstance(comp, Line) and
+                       isinstance(comp.grid, LVGrid)):
+                    mv_components.append(comp)
+            equipment_changes = equipment_changes.loc[mv_components, :]
 
     # costs for transformers
     if not equipment_changes.empty:
