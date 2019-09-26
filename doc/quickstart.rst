@@ -28,27 +28,6 @@ is the only supported data source. You can retrieve data from `Zenodo <https://z
 (make sure you choose latest data) or check
 out the ding0 documentation on how to generate grids yourself.
 
-Aside from grid topology data you may eventually need a dataset on future installation of power plants. You
-may therefore use the scenarios developed in the `open_eGo <https://openegoproject.wordpress.com>`_ that
-are available in `OpenEnergy DataBase (oedb) <https://openenergy-platform.org/dataedit/>`_ hosted on the `OpenEnergy Platform (OEP) <https://oep.iks.cs.ovgu.de/>`_. 
-eDisGo provides an interface to the oedb using the package `ego.io <https://github.com/openego/ego.io>`_. ego.io gives you a python SQL-Alchemy representations of
-the oedb and access to it by using the `oedialect <https://github.com/openego/oedialect>`_, an SQL-Alchemy dialect used by the OEP. 
-
-To retrieve data from the oedb you need to create an account `here <http://openenergy-platform.org/login/>`_.
-Upon retrieving data with eDisGo from the oedb for the first time you will be asked to type in your login information.
-If you wish so, your login data will be saved to the folder ``.egoio`` to the file
-``config.ini`` and your password stored in a keyring, so that you don't need to type it in every time you retrieve data. 
-The ``config.ini`` holds the following information:
-
-.. code-block:: bash
-
-  [oedb]
-  dialect  = oedialect
-  username = <username>
-  database = oedb
-  host     = openenergy-platform.org
-  port     = 80
-
 .. _edisgo-mwe:
 
 A minimum working example
@@ -57,6 +36,13 @@ A minimum working example
 Following you find short examples on how to use eDisGo. Further examples and details are provided in :ref:`usage-details`.
 
 All following examples assume you have a ding0 grid topology file named "ding0_grids__42.pkl" in current working directory.
+
+Aside from grid topology data you may eventually need a dataset on future installation of power plants. You
+may therefore use the scenarios developed in the `open_eGo <https://openegoproject.wordpress.com>`_ project that
+are available in the `OpenEnergy DataBase (oedb) <https://openenergy-platform.org/dataedit/>`_ hosted on the `OpenEnergy Platform (OEP) <https://oep.iks.cs.ovgu.de/>`_.
+eDisGo provides an interface to the oedb using the package `ego.io <https://github.com/openego/ego.io>`_. ego.io gives you a python SQL-Alchemy representations of
+the oedb and access to it by using the `oedialect <https://github.com/openego/oedialect>`_, an SQL-Alchemy dialect used by the OEP.
+
 You can run a worst-case scenario as follows:
 
 Using package included command-line script
@@ -77,7 +63,7 @@ Or coding the script yourself with finer control of details
     edisgo = EDisGo(ding0_grid="ding0_grids__42.pkl",
                     worst_case_analysis='worst-case')
 
-    # Import future generators (OEP account needed!)
+    # Import scenario for future generators from the oedb
     edisgo.import_generators(generator_scenario='nep2035')
 
     # Conduct grid analysis (non-linear power flow)
@@ -119,15 +105,15 @@ Instead of conducting a worst-case analysis you can also provide specific time s
 		      'other': [1] * len(timeindex)},
 		     index=timeindex)
 
+    # Set up the EDisGo object with your own time series and generator scenario
+    # NEP2035
     edisgo = EDisGo(
         ding0_grid="ding0_grids__42.pkl",
+        generator_scenario='nep2035',
         timeseries_load=timeseries_load,
         timeseries_generation_fluctuating=timeseries_generation_fluctuating,
         timeseries_generation_dispatchable=timeseries_generation_dispatchable,
         timeindex=timeindex)
-
-    # Import future generators for NEP2035 scenario
-    edisgo.import_generators(generator_scenario='nep2035')
 
     # Do grid reinforcement
     edisgo.reinforce()
@@ -152,13 +138,11 @@ using the provided API for the oemof demandlib and the OpenEnergy DataBase:
 		     index=timeindex)
     edisgo = EDisGo(
         ding0_grid="ding0_grids__42.pkl",
+        generator_scenario='ego100',
         timeseries_load='demandlib',
         timeseries_generation_fluctuating='oedb',
         timeseries_generation_dispatchable=timeseries_generation_dispatchable,
         timeindex=timeindex)
-
-    # Import future generators for ego100 scenario
-    edisgo.import_generators(generator_scenario='ego100')
 
     # Do grid reinforcement
     edisgo.reinforce()
