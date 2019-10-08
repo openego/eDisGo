@@ -215,7 +215,7 @@ def run_edisgo_twice(run_args):
                costs_before_geno_import, grid_issues_before_geno_import
 
 
-def run_edisgo_pool(ding0_file_list, run_args_opt,
+def run_edisgo_pool(ding0_file_list, run_args_opt = [None, 'worst-case'],
                     workers=mp.cpu_count(), worker_lifetime=1):
     """
     Use python multiprocessing toolbox for parallelization
@@ -228,7 +228,7 @@ def run_edisgo_pool(ding0_file_list, run_args_opt,
         Ding0 grid data file names
     run_args_opt : list
         eDisGo options, see :func:`run_edisgo_basic` and
-        :func:`run_edisgo_twice`
+        :func:`run_edisgo_twice`, has to contain generator_scenario and analysis as entries
     workers: int
         Number of parallel process
     worker_lifetime : int
