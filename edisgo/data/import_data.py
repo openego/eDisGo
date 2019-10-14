@@ -5,11 +5,10 @@ from ..grid.connect import connect_mv_generators, connect_lv_generators
 from ..grid.tools import select_cable, position_switch_disconnectors
 from ..tools.geo import proj2equidistant
 from edisgo.tools import pypsa_io
+from edisgo.tools import session_scope
 
 from egoio.db_tables import model_draft, supply
-from egoio.tools.db import connection
 
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
 from workalendar.europe import Germany
 from demandlib import bdew as bdew, particular_profiles as profiles
@@ -1058,7 +1057,7 @@ def _import_genos_from_oedb(network):
 
     """
 
-    def _import_conv_generators():
+    def _import_conv_generators(session):
         """Import conventional (conv) generators
 
         Returns
@@ -1095,7 +1094,7 @@ def _import_genos_from_oedb(network):
 
         return generators_mv
 
-    def _import_res_generators(types_filter):
+    def _import_res_generators(session):
         """Import renewable (res) generators
 
         Returns
@@ -1112,6 +1111,11 @@ def _import_genos_from_oedb(network):
 
         If subtype is not specified it's set to 'unknown'.
         """
+
+        # Create filter for generation technologies
+        # ToDo: This needs to be removed when all generators can be imported
+        types_filter = orm_re_generators.columns.generation_type.in_(
+            ['solar', 'wind'])
 
         # build basic query
         generators_sqla = session.query(
@@ -1850,11 +1854,6 @@ def _import_genos_from_oedb(network):
                                  'in the MV grid area. Check compatibility of '
                                  'grid and generator datasets.')
 
-    # make DB session
-    conn = connection(section=network.config['db_connection']['section'])
-    Session = sessionmaker(bind=conn)
-    session = Session()
-
     srid = int(network.config['geo']['srid'])
 
     oedb_data_source = network.config['data_source']['oedb_data_source']
@@ -1897,16 +1896,11 @@ def _import_genos_from_oedb(network):
         orm_conv_generators_version = orm_conv_generators.columns.version == data_version
         orm_re_generators_version = orm_re_generators.columns.version == data_version
 
-    # Create filter for generation technologies
-    # ToDo: This needs to be removed when all generators can be imported
-    # (all generators in a scenario should be imported)
-    types_condition = orm_re_generators.columns.generation_type.in_(
-        ['solar', 'wind'])
-
     # get conventional and renewable generators
-    #generators_conv_mv = _import_conv_generators()
-    generators_res_mv, generators_res_lv = _import_res_generators(
-        types_condition)
+    with session_scope() as session:
+        #generators_conv_mv = _import_conv_generators(session)
+        generators_res_mv, generators_res_lv = _import_res_generators(
+            session)
 
     #generators_mv = generators_conv_mv.append(generators_res_mv)
 
@@ -2020,34 +2014,10 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
 
     """
 
-    def _retrieve_timeseries_from_oedb(config_data, weather_cell_ids):
+    def _retrieve_timeseries_from_oedb(session):
         """Retrieve time series from oedb
 
-        Parameters
-        ----------
-        config_data : dict
-            Dictionary containing config data from config files.
-        weather_cell_ids : :obj:`list`
-        List of weather cell id's (integers) to obtain feed-in data for.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Feedin time series
         """
-        if config_data['data_source']['oedb_data_source'] == 'model_draft':
-            orm_feedin_name = config_data['model_draft']['res_feedin_data']
-            orm_feedin = model_draft.__getattribute__(orm_feedin_name)
-            orm_feedin_version = 1 == 1
-        else:
-            orm_feedin_name = config_data['versioned']['res_feedin_data']
-            orm_feedin = supply.__getattribute__(orm_feedin_name)
-            orm_feedin_version = orm_feedin.version == config_data['versioned']['version']
-
-        conn = connection(section=config_data['db_connection']['section'])
-        Session = sessionmaker(bind=conn)
-        session = Session()
-
         # ToDo: add option to retrieve subset of time series
         # ToDo: find the reference power class for mvgrid/w_id and insert instead of 4
         feedin_sqla = session.query(
@@ -2061,29 +2031,39 @@ def import_feedin_timeseries(config_data, weather_cell_ids):
         feedin = pd.read_sql_query(feedin_sqla.statement,
                                    session.bind,
                                    index_col=['source', 'w_id'])
-
-        feedin.sort_index(axis=0, inplace=True)
-
-        timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
-
-        recasted_feedin_dict = {}
-        for type_w_id in feedin.index:
-            recasted_feedin_dict[type_w_id] = feedin.loc[
-                                              type_w_id, :].values[0]
-
-        feedin = pd.DataFrame(recasted_feedin_dict, index=timeindex)
-
-        # rename 'wind_onshore' and 'wind_offshore' to 'wind'
-        new_level = [_ if _ not in ['wind_onshore']
-                     else 'wind' for _ in feedin.columns.levels[0]]
-        feedin.columns.set_levels(new_level, level=0, inplace=True)
-
-        feedin.columns.rename('type', level=0, inplace=True)
-        feedin.columns.rename('weather_cell_id', level=1, inplace=True)
-
         return feedin
 
-    feedin = _retrieve_timeseries_from_oedb(config_data, weather_cell_ids)
+    if config_data['data_source']['oedb_data_source'] == 'model_draft':
+        orm_feedin_name = config_data['model_draft']['res_feedin_data']
+        orm_feedin = model_draft.__getattribute__(orm_feedin_name)
+        orm_feedin_version = 1 == 1
+    else:
+        orm_feedin_name = config_data['versioned']['res_feedin_data']
+        orm_feedin = supply.__getattribute__(orm_feedin_name)
+        orm_feedin_version = orm_feedin.version == config_data['versioned'][
+            'version']
+
+    with session_scope() as session:
+        feedin = _retrieve_timeseries_from_oedb(session)
+
+    feedin.sort_index(axis=0, inplace=True)
+
+    timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
+
+    recasted_feedin_dict = {}
+    for type_w_id in feedin.index:
+        recasted_feedin_dict[type_w_id] = feedin.loc[
+                                          type_w_id, :].values[0]
+
+    feedin = pd.DataFrame(recasted_feedin_dict, index=timeindex)
+
+    # rename 'wind_onshore' and 'wind_offshore' to 'wind'
+    new_level = [_ if _ not in ['wind_onshore']
+                 else 'wind' for _ in feedin.columns.levels[0]]
+    feedin.columns.set_levels(new_level, level=0, inplace=True)
+
+    feedin.columns.rename('type', level=0, inplace=True)
+    feedin.columns.rename('weather_cell_id', level=1, inplace=True)
 
     return feedin
 
@@ -2161,22 +2141,20 @@ def import_load_timeseries(config_data, data_source, mv_grid_id=None,
 
             orm_load_version = 1 == 1
 
-        conn = connection(section=config_data['db_connection']['section'])
-        Session = sessionmaker(bind=conn)
-        session = Session()
+        with session_scope() as session:
 
-        load_sqla = session.query(  # orm_load.id,
-            orm_load.p_set,
-            orm_load.q_set,
-            orm_load_areas.subst_id). \
-            join(orm_load_areas, orm_load.id == orm_load_areas.otg_id). \
-            filter(orm_load_areas.subst_id == mv_grid_id). \
-            filter(orm_load_version). \
-            distinct()
+            load_sqla = session.query(  # orm_load.id,
+                orm_load.p_set,
+                orm_load.q_set,
+                orm_load_areas.subst_id). \
+                join(orm_load_areas, orm_load.id == orm_load_areas.otg_id). \
+                filter(orm_load_areas.subst_id == mv_grid_id). \
+                filter(orm_load_version). \
+                distinct()
 
-        load = pd.read_sql_query(load_sqla.statement,
-                                 session.bind,
-                                 index_col='subst_id')
+            load = pd.read_sql_query(load_sqla.statement,
+                                     session.bind,
+                                     index_col='subst_id')
         return load
 
     def _load_timeseries_demandlib(config_data, year):
