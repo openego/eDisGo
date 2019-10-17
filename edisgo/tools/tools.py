@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 
 def select_worstcase_snapshots(network):
@@ -133,3 +134,76 @@ def assign_load_feedin_case(network):
             lambda _: 'feedin_case' if _ < 0 else 'load_case')
 
     return timeseries_load_feedin_case
+
+
+def calculate_relative_line_load(network, configs, line_load, line_voltages,
+                                 lines=None, timesteps=None):
+    """
+    Calculates relative line loading.
+
+    Line loading is calculated by dividing the current at the given time step
+    by the allowed current.
+
+
+    Parameters
+    ----------
+    network : :pypsa:`pypsa.Network<network>`
+        Pypsa network with lines to calculate line loading for.
+    configs : :obj:`dict`
+        Dictionary with used configurations from config files. See
+        :class:`~.grid.network.Config` for more information.
+    line_load : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe with current results from power flow analysis in A. Index of
+        the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        columns are the line representatives.
+    line_voltages : :pandas:`pandas.Series<series>`
+        Series with nominal voltages of lines in kV. Index of the dataframe are
+        the line representatives.
+    lines : list(str) or None, optional
+        Line names/representatives of lines to calculate line loading for. If
+        None line loading of all lines in `line_load` dataframe are used.
+        Default: None.
+    timesteps : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+        Specifies time steps to calculate line loading for. If timesteps is
+        None all time steps in `line_load` dataframe are used. Default: None.
+
+    Returns
+    --------
+    :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe with relative line loading (unitless). Index of
+        the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        columns are the line representatives.
+
+    """
+
+    if timesteps is None:
+        timesteps = line_load.index
+    # check if timesteps is array-like, otherwise convert to list
+    if not hasattr(timesteps, "__len__"):
+        timesteps = [timesteps]
+
+    if lines is not None:
+        line_indices = lines
+    else:
+        line_indices = line_load.columns
+
+    residual_load = get_residual_load_from_pypsa_network(network)
+    case = residual_load.apply(
+        lambda _: 'feedin_case' if _ < 0 else 'load_case')
+
+    load_factor = pd.DataFrame(
+        data={'i_nom': [float(configs[
+                                  'grid_expansion_load_factors'][
+                                  'mv_{}_line'.format(case.loc[_])])
+                        for _ in timesteps]},
+        index=timesteps)
+
+    # current from power flow
+    i_res = line_load.loc[timesteps, line_indices]
+    # allowed current
+    i_allowed = load_factor.dot(
+        (network.lines.s_nom.T.loc[line_indices].divide(
+            line_voltages.T.loc[line_indices]) * 1e3 / np.sqrt(3)).to_frame(
+            'i_nom').T)
+
+    return i_res.divide(i_allowed)

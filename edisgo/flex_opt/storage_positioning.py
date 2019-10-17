@@ -408,8 +408,8 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                                for _ in
                                edisgo.network.mv_grid.graph.nodes_by_attribute(
                                    'storage') if _ in
-                               edisgo.network.mv_grid.graph.neighbors(
-                                   battery_node)][0]
+                               list(edisgo.network.mv_grid.graph.neighbors(
+                                   battery_node))][0]
                 storage_obj_list.append(storage_obj)
 
                 logger.debug(
