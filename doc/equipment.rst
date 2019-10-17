@@ -11,7 +11,7 @@ The following tables hold all data of cables, lines and transformers used.
    :file: equipment/equipment-parameters_LV_cables.csv
    :delim: ,
    :header-rows: 2
-   :widths: 5, 1, 1, 1, 1, 1, 5
+   :widths: 5, 1, 1, 1, 1
    :stub-columns: 0
 
 .. _mv_cables_table:
@@ -38,7 +38,7 @@ The following tables hold all data of cables, lines and transformers used.
    :file: equipment/equipment-parameters_LV_transformers.csv
    :delim: ,
    :header-rows: 2
-   :widths: 5, 1, 1, 1, 1
+   :widths: 5, 1, 1, 1
    :stub-columns: 0
 
 .. _mv_transformers_table:
@@ -47,5 +47,5 @@ The following tables hold all data of cables, lines and transformers used.
    :file: equipment/equipment-parameters_MV_transformers.csv
    :delim: ,
    :header-rows: 2
-   :widths: 5, 1, 1, 1
+   :widths: 5, 1
    :stub-columns: 0

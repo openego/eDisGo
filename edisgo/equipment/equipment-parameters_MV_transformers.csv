@@ -1,6 +1,5 @@
 name,S_nom
 #,kVA
-# Note that only values used for calculation are saved in this table, for more values look into source. Only insert literature values here, calculations in code for better comprehensibility
 20 MVA,20000
 32 MVA,32000
 40 MVA,40000
