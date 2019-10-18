@@ -4,6 +4,8 @@ import os
 
 BASEPATH = '.eDisGo'
 
+def read(fname):
+    return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 class InstallSetup(install):
     def run(self):
@@ -27,11 +29,13 @@ setup(
     packages=find_packages(),
     url='https://github.com/openego/eDisGo',
     license='GNU Affero General Public License v3.0',
-    author='gplssm, nesnoj, birgits, boltbeard',
-    author_email='',
+    author='gplssm, nesnoj, birgits, boltbeard, AnyaHe',
+    author_email='anya.heider@rl-institut.de',
     description='A python package for distribution grid analysis and optimization',
+    long_description=read('README.md'),
+    long_description_content_type='text/x-rst',
     install_requires=[
-	'demandlib',
+	    'demandlib',
         'ding0 >= 0.1.12',
         'networkx >= 2.0 ',
         'shapely >= 1.5.12, <= 1.6.3',
