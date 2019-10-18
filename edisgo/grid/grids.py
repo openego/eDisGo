@@ -398,7 +398,7 @@ class Graph(nx.Graph):
             value
         """
 
-        temp_nodes = getattr(self, 'node')
+        temp_nodes = getattr(self, 'nodes')
         nodes = list(filter(None, map(lambda x: x if temp_nodes[x][attr] == attr_val else None,
                                       temp_nodes.keys())))
 
