@@ -1,8 +1,8 @@
 name,bus,control,p_nom,type,weather_cell_id,subtype
-GeneratorFluctuating_1,Bus_GeneratorFluctuating_1,PQ,0.775,solar,1122075,solar_solar
-GeneratorFluctuating_2,Bus_GeneratorFluctuating_2,PQ,2.3,wind,1122075,wind_wind_onshore
-GeneratorFluctuating_3,Bus_GeneratorFluctuating_3,PQ,2.673321,solar,1122075,solar_solar_ground_mounted
-GeneratorFluctuating_4,Bus_GeneratorFluctuating_4,PQ,1.934,solar,1122075,solar_solar
+GeneratorFluctuating_1,Bus_GeneratorFluctuating_1,PQ,0.775,solar,1122074,solar_solar
+GeneratorFluctuating_2,Bus_GeneratorFluctuating_2,PQ,2.3,wind,1122074,wind_wind_onshore
+GeneratorFluctuating_3,Bus_GeneratorFluctuating_3,PQ,2.67,solar,1122075,solar_solar_ground_mounted
+GeneratorFluctuating_4,Bus_GeneratorFluctuating_4,PQ,1.93,solar,1122075,solar_solar
 GeneratorFluctuating_5,Bus_GeneratorFluctuating_5,PQ,2.3,wind,1122075,wind_wind_onshore
 GeneratorFluctuating_6,Bus_GeneratorFluctuating_6,PQ,3.05,wind,1122075,wind_wind_onshore
 GeneratorFluctuating_7,Bus_GeneratorFluctuating_7,PQ,3,wind,1122075,wind_wind_onshore
