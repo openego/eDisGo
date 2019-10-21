@@ -5,74 +5,58 @@ from math import acos, tan
 
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString
-from .grids import LVGrid, MVGrid
 
 logger = logging.getLogger('edisgo')
 
 
 class Component:
-    """Generic component
+    """
+    Generic component
 
-    Notes
-    -----
-    In case of a MV-LV voltage station, :attr:`grid` refers to the LV grid.
     """
 
     def __init__(self, **kwargs):
         self._id = kwargs.get('id', None)
-        self._geom = kwargs.get('geom', None)
+        self._network = kwargs.get('network', None)
         self._grid = kwargs.get('grid', None)
 
     @property
     def id(self):
         """
-        Unique ID of component
+        Unique identifier of component as used in component dataframes in
+        :class:`~.grid.network.Network`.
 
         Returns
         --------
-        :obj:`int`
-            Unique ID of component
+        :obj:`str`
+            Unique identifier of component.
 
         """
         return self._id
 
-    @id.setter
-    def id(self, id):
-        self._id = id
-
     @property
-    def geom(self):
+    def network(self):
         """
-        Location of component
+        Network container
 
         Returns
         --------
-        :shapely:`Shapely Point object<points>` or :shapely:`Shapely LineString object<linestrings>`
-            Location of the :class:`Component` as Shapely Point or LineString
+        :class:`~.grid.network.Network`
 
         """
-        return self._geom
-
-    @geom.setter
-    def geom(self, geom):
-        self._geom = geom
+        return self._network
 
     @property
     def grid(self):
         """
-        Grid the component belongs to
+        Grid component is in.
 
         Returns
         --------
-        :class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid`
-            The MV or LV grid the component belongs to
+        :class:`~.grid.components.Grid`
 
         """
         return self._grid
-
-    @grid.setter
-    def grid(self, grid):
-        self._grid = grid
 
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
@@ -148,837 +132,322 @@ class Load(Component):
     """
     Load object
 
-    Attributes
-    ----------
-    _timeseries : :pandas:`pandas.Series<series>`, optional
-        See `timeseries` getter for more information.
-    _consumption : :obj:`dict`, optional
-        See `consumption` getter for more information.
-    _timeseries_reactive : :pandas:`pandas.Series<series>`, optional
-        See `timeseries_reactive` getter for more information.
-    _power_factor : :obj:`float`, optional
-        See `power_factor` getter for more information.
-    _reactive_power_mode : :obj:`str`, optional
-        See `reactive_power_mode` getter for more information.
-    _q_sign : :obj:`int`, optional
-        See `q_sign` getter for more information.
-
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._timeseries = kwargs.get('timeseries', None)
-        self._consumption = kwargs.get('consumption', None)
-        self._timeseries_reactive = kwargs.get('timeseries_reactive', None)
-        self._power_factor = kwargs.get('power_factor', None)
-        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
-        self._q_sign = None
-
-    @property
-    def timeseries(self):
-        """
-        Load time series
-
-        It returns the actual time series used in power flow analysis. If
-        :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
-        :meth:`timeseries()` looks for time series of the according sector in
-        :class:`~.grid.network.TimeSeries` object.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame containing active power in kW in column 'p' and
-            reactive power in kVA in column 'q'.
-
-        """
-        if self._timeseries is None:
-
-            if isinstance(self.grid, MVGrid):
-                voltage_level = 'mv'
-            elif isinstance(self.grid, LVGrid):
-                voltage_level = 'lv'
-
-            ts_total = None
-            for sector in self.consumption.keys():
-                consumption = self.consumption[sector]
-
-                # check if load time series for MV and LV are differentiated
-                try:
-                    ts = self.grid.network.timeseries.load[
-                        sector, voltage_level].to_frame('p')
-                except KeyError:
-                    try:
-                        ts = self.grid.network.timeseries.load[
-                            sector].to_frame('p')
-                    except KeyError:
-                        logger.exception(
-                            "No timeseries for load of type {} "
-                            "given.".format(sector))
-                        raise
-                ts = ts * consumption
-                ts_q = self.timeseries_reactive
-                if ts_q is not None:
-                    ts['q'] = ts_q.q
-                else:
-                    ts['q'] = ts['p'] * self.q_sign * tan(
-                        acos(self.power_factor))
-
-                if ts_total is None:
-                    ts_total = ts
-                else:
-                    ts_total.p += ts.p
-                    ts_total.q += ts.q
-
-            return ts_total
-        else:
-            return self._timeseries
-
-    @property
-    def timeseries_reactive(self):
-        """
-        Reactive power time series in kvar.
-
-        Parameters
-        -----------
-        timeseries_reactive : :pandas:`pandas.Seriese<series>`
-            Series containing reactive power in kvar.
-
-        Returns
-        -------
-        :pandas:`pandas.Series<series>` or None
-            Series containing reactive power time series in kvar. If it is not
-            set it is tried to be retrieved from `load_reactive_power`
-            attribute of global TimeSeries object. If that is not possible
-            None is returned.
-
-        """
-        if self._timeseries_reactive is None:
-            # if normalized reactive power time series are given, they are
-            # scaled by the annual consumption; if none are given reactive
-            # power time series are calculated timeseries getter using a given
-            # power factor
-            if self.grid.network.timeseries.load_reactive_power is not None:
-                self.power_factor = 'not_applicable'
-                self.reactive_power_mode = 'not_applicable'
-                ts_total = None
-                for sector in self.consumption.keys():
-                    consumption = self.consumption[sector]
-
-                    try:
-                        ts = self.grid.network.timeseries.load_reactive_power[
-                            sector].to_frame('q')
-                    except KeyError:
-                        logger.exception(
-                            "No timeseries for load of type {} "
-                            "given.".format(sector))
-                        raise
-                    ts = ts * consumption
-                    if ts_total is None:
-                        ts_total = ts
-                    else:
-                        ts_total.q += ts.q
-                return ts_total
-            else:
-                return None
-
-        else:
-            return self._timeseries_reactive
-
-    @timeseries_reactive.setter
-    def timeseries_reactive(self, timeseries_reactive):
-        if isinstance(timeseries_reactive, pd.Series):
-            self._timeseries_reactive = timeseries_reactive
-            self._power_factor = 'not_applicable'
-            self._reactive_power_mode = 'not_applicable'
-        else:
-            raise ValueError(
-                "Reactive power time series of load {} needs to be a pandas "
-                "Series.".format(repr(self)))
-
-    def pypsa_timeseries(self):
-        """Return time series in PyPSA format
-
-        """
-
-        return self.timeseries / 1e3
-
-    @property
-    def consumption(self):
-        """:obj:`dict` : Annual consumption per sector in kWh
-
-        Sectors
-
-            - retail/industrial
-            - agricultural
-            - residential
-
-        The format of the :obj:`dict` is as follows::
-
-            {
-                'residential': 453.4
-            }
-
-        """
-        return self._consumption
-
-    @consumption.setter
-    def consumption(self, cons_dict):
-        self._consumption = cons_dict
 
     @property
     def peak_load(self):
         """
-        Get sectoral peak load
-        """
-        peak_load = pd.Series(self.consumption).mul(pd.Series(
-            self.grid.network.config['peakload_consumption_ratio']).astype(
-            float), fill_value=0)
-
-        return peak_load
-
-    @property
-    def power_factor(self):
-        """
-        Power factor of load
+        Peak load in MW.
 
         Parameters
         -----------
-        power_factor : :obj:`float`
-            Ratio of real power to apparent power.
+        peak_load : :obj:`float`
+            Peak load in MW.
 
         Returns
         --------
         :obj:`float`
-            Ratio of real power to apparent power. If power factor is not set
-            it is retrieved from the network config object depending on the
-            grid level the load is in.
+            Peak load in MW.
 
         """
-        if self._power_factor is None:
-            if isinstance(self.grid, MVGrid):
-                self._power_factor = self.grid.network.config[
-                    'reactive_power_factor']['mv_load']
-            elif isinstance(self.grid, LVGrid):
-                self._power_factor = self.grid.network.config[
-                    'reactive_power_factor']['lv_load']
-        return self._power_factor
+        return self.network.loads.loc[self.id, 'peak_load']
 
-    @power_factor.setter
-    def power_factor(self, power_factor):
-        self._power_factor = power_factor
+    @peak_load.setter
+    def peak_load(self, peak_load):
+        # ToDo: Maybe perform type check before setting it.
+        self.network.loads.loc[self.id, 'peak_load'] = peak_load
 
     @property
-    def reactive_power_mode(self):
+    def consumption(self):
         """
-        Power factor mode of Load.
+        #ToDo Wo soll consumption hergeholt werden?
+        """
+        return None
 
-        This information is necessary to make the load behave in an inductive
-        or capacitive manner. Essentially this changes the sign of the reactive
-        power.
+    @consumption.setter
+    def consumption(self, consumption):
+        self._consumption = consumption
 
-        The convention used here in a load is that:
-        - when `reactive_power_mode` is 'inductive' then Q is positive
-        - when `reactive_power_mode` is 'capacitive' then Q is negative
+    @property
+    def sector(self):
+        """
+        Sector load is associated with.
+
+        The sector is e.g. used to assign load time series to a load using the
+        demandlib. The following four sectors are considered:
+        'agricultural', 'retail', 'residential', 'industrial'.
 
         Parameters
-        ----------
-        reactive_power_mode : :obj:`str` or None
-            Possible options are 'inductive', 'capacitive' and
-            'not_applicable'. In the case of 'not_applicable' a reactive
-            power time series must be given.
+        -----------
+        sector : :obj:`str`
 
         Returns
-        -------
+        --------
         :obj:`str`
-            In the case that this attribute is not set, it is retrieved from
-            the network config object depending on the voltage level the load
-            is in.
+            Load sector
+
+        #ToDo: Maybe return 'not specified' in case sector is None?
 
         """
-        if self._reactive_power_mode is None:
-            if isinstance(self.grid, MVGrid):
-                self._reactive_power_mode = self.grid.network.config[
-                    'reactive_power_mode']['mv_load']
-            elif isinstance(self.grid, LVGrid):
-                self._reactive_power_mode = self.grid.network.config[
-                    'reactive_power_mode']['lv_load']
+        return self.network.loads.loc[self.id, 'sector']
 
-        return self._reactive_power_mode
-
-    @reactive_power_mode.setter
-    def reactive_power_mode(self, reactive_power_mode):
-        self._reactive_power_mode = reactive_power_mode
+    @sector.setter
+    def sector(self, sector):
+        # ToDo: Maybe perform type check before setting it.
+        self.network.loads.loc[self.id, 'sector'] = sector
 
     @property
-    def q_sign(self):
+    def grid(self):
         """
-        Get the sign of reactive power based on :attr:`_reactive_power_mode`.
+        Grid load is in.
 
         Returns
-        -------
-        :obj:`int` or None
-            In case of inductive reactive power returns +1 and in case of
-            capacitive reactive power returns -1. If reactive power time
-            series is given, `q_sign` is set to None.
+        --------
+        :class:`~.grid.components.Grid`
+            Grid load is in.
 
         """
-        if self.reactive_power_mode.lower() == 'inductive':
-            return 1
-        elif self.reactive_power_mode.lower() == 'capacitive':
-            return -1
-        elif self.reactive_power_mode.lower() == 'not_applicable':
-            return None
+        if self._grid is None:
+            grid = self.network.buses.loc[
+                self.network.loads.loc[self.id, 'bus'],
+                ['mv_grid_id', 'lv_grid_id']]
+            if grid.lv_grid_id is None:
+                return self.network.mv_grid
+            else:
+                return self.network._grids['LVGrid_{}'.format(grid.lv_grid_id)]
         else:
-            raise ValueError("Unknown value {} in reactive_power_mode for "
-                             "Load {}.".format(self.reactive_power_mode,
-                                                    repr(self)))
+            return self._grid
 
-    def __repr__(self):
-        return '_'.join(['Load',
-                         sorted(list(self.consumption.keys()))[0],
-                         repr(self.grid),
-                         str(self.id)])
+    @property
+    def voltage_level(self):
+        """
+        Voltage level the load is connected to ('mv' or 'lv').
+
+        Returns
+        --------
+        :obj:`str`
+            Voltage level
+
+        """
+        return 'lv' if self.grid.nominal_voltage < 1 else 'mv'
+
+    @property
+    def active_power_timeseries(self):
+        """
+        Active power time series of load in MW.
+
+        Returns
+        --------
+        :pandas:`pandas.Series<series>`
+            Active power time series of load in MW.
+
+        """
+        return self.network.loads_t.p_set.loc[self.id]
+
+    @property
+    def reactive_power_timeseries(self):
+        """
+        Reactive power time series of load in Mvar.
+
+        Returns
+        --------
+        :pandas:`pandas.Series<series>`
+            Reactive power time series of load in Mvar.
+
+        """
+        return self.network.loads_t.q_set.loc[self.id]
+
+    @property
+    def geom(self):
+        """
+        Geo location of generator.
+
+        Returns
+        --------
+        shapely Point
+
+        """
+        geom = self.network.buses.loc[
+            self.network.loads.loc[self.id, 'bus'], ['x', 'y']]
+        # ToDo return shapely point
+        pass
 
 
 class Generator(Component):
-    """Generator object
-
-    Attributes
-    ----------
-    _timeseries : :pandas:`pandas.Series<series>`, optional
-        See `timeseries` getter for more information.
-    _nominal_capacity : :obj:`dict`, optional
-        See `nominal_capacity` getter for more information.
-    _type : :pandas:`pandas.Series<series>`, optional
-        See `type` getter for more information.
-    _subtype : :obj:`str`, optional
-        See `subtype` getter for more information.
-    _v_level : :obj:`str`, optional
-        See `v_level` getter for more information.
-    _q_sign : :obj:`int`, optional
-        See `q_sign` getter for more information.
-    _power_factor : :obj:`float`, optional
-        See `power_factor` getter for more information.
-    _reactive_power_mode : :obj:`str`, optional
-        See `reactive_power_mode` getter for more information.
-    _q_sign : :obj:`int`, optional
-        See `q_sign` getter for more information.
-
-    Notes
-    -----
-    The attributes :attr:`_type` and :attr:`_subtype` have to match the
-    corresponding types in :class:`~.grid.network.Timeseries` to
-    allow allocation of time series to generators.
-
-    See also
-    --------
-    edisgo.network.TimeSeries : Details of global
-        :class:`~.grid.network.TimeSeries`
+    """
+    Generator object
 
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self._nominal_capacity = kwargs.get('nominal_capacity', None)
-        self._type = kwargs.get('type', None)
-        self._subtype = kwargs.get('subtype', None)
-        self._v_level = kwargs.get('v_level', None)
-        self._timeseries = kwargs.get('timeseries', None)
-        self._timeseries_reactive = kwargs.get('timeseries_reactive', None)
-        self._power_factor = kwargs.get('power_factor', None)
-        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
-        self._q_sign = None
-
     @property
-    def timeseries(self):
+    def nominal_power(self):
         """
-        Feed-in time series of generator
-
-        It returns the actual dispatch time series used in power flow analysis.
-        If :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
-        :meth:`timeseries` looks for time series of the according type of
-        technology in :class:`~.grid.network.TimeSeries`. If the reactive
-        power time series is provided through :attr:`_timeseries_reactive`,
-        this is added to :attr:`_timeseries`. When :attr:`_timeseries_reactive`
-        is not set, the reactive power is also calculated in
-        :attr:`_timeseries` using :attr:`power_factor` and
-        :attr:`reactive_power_mode`. The :attr:`power_factor` determines the
-        magnitude of the reactive power based on the power factor and active
-        power provided and the :attr:`reactive_power_mode` determines if the
-        reactive power is either consumed (inductive behaviour) or provided
-        (capacitive behaviour).
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame containing active power in kW in column 'p' and
-            reactive power in kvar in column 'q'.
-
-        """
-        if self._timeseries is None:
-            # calculate time series for active and reactive power
-            try:
-                timeseries = \
-                    self.grid.network.timeseries.generation_dispatchable[
-                        self.type].to_frame('p')
-            except KeyError:
-                try:
-                    timeseries = \
-                        self.grid.network.timeseries.generation_dispatchable[
-                            'other'].to_frame('p')
-                except KeyError:
-                    logger.exception("No time series for type {} "
-                                     "given.".format(self.type))
-                    raise
-
-            timeseries = timeseries * self.nominal_capacity
-            if self.timeseries_reactive is not None:
-                timeseries['q'] = self.timeseries_reactive
-            else:
-                timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(
-                    self.power_factor))
-
-            return timeseries
-        else:
-            return self._timeseries.loc[
-                   self.grid.network.timeseries.timeindex, :]
-
-    @property
-    def timeseries_reactive(self):
-        """
-        Reactive power time series in kvar.
+        Nominal power of generator in MW.
 
         Parameters
         -----------
-        timeseries_reactive : :pandas:`pandas.Seriese<series>`
-            Series containing reactive power in kvar.
-
-        Returns
-        -------
-        :pandas:`pandas.Series<series>` or None
-            Series containing reactive power time series in kvar. If it is not
-            set it is tried to be retrieved from `generation_reactive_power`
-            attribute of global TimeSeries object. If that is not possible
-            None is returned.
-
-        """
-        if self._timeseries_reactive is None:
-            if self.grid.network.timeseries.generation_reactive_power \
-                    is not None:
-                try:
-                    timeseries = \
-                        self.grid.network.timeseries.generation_reactive_power[
-                            self.type].to_frame('q')
-                except (KeyError, TypeError):
-                    try:
-                        timeseries = \
-                            self.grid.network.timeseries.generation_reactive_power[
-                                'other'].to_frame('q')
-                    except:
-                        logger.warning(
-                            "No reactive power time series for type {} given. "
-                            "Reactive power time series will be calculated from "
-                            "assumptions in config files and active power "
-                            "timeseries.".format(self.type))
-                        return None
-                self.power_factor = 'not_applicable'
-                self.reactive_power_mode = 'not_applicable'
-                return timeseries * self.nominal_capacity
-            else:
-                return None
-        else:
-            return self._timeseries_reactive.loc[
-                   self.grid.network.timeseries.timeindex, :]
-
-    @timeseries_reactive.setter
-    def timeseries_reactive(self, timeseries_reactive):
-        if isinstance(timeseries_reactive, pd.Series):
-            # check if the values in time series makes sense
-            if timeseries_reactive.max() <= self._nominal_capacity:
-                self._timeseries_reactive = timeseries_reactive
-            else:
-                message = "Maximum reactive power in timeseries at index " \
-                          "{} ".format(timeseries_reactive.idxmax()) + \
-                          "is higher than nominal capacity."
-                logger.error(message)
-                raise ValueError(message)
-        else:
-            raise ValueError(
-                "Reactive power time series of generator {} needs to be a "
-                "pandas Series.".format(repr(self)))
-
-    def pypsa_timeseries(self):
-        """
-        Return time series in PyPSA format
-
-        Convert from kW, kVA to MW, MVA
-
-        """
-        return self.timeseries / 1e3
-
-    @property
-    def type(self):
-        """:obj:`str` : Technology type (e.g. 'solar')"""
-        return self._type
-
-    @property
-    def subtype(self):
-        """:obj:`str` : Technology subtype (e.g. 'solar_roof_mounted')"""
-        return self._subtype
-
-    @property
-    def nominal_capacity(self):
-        """:obj:`float` : Nominal generation capacity in kW"""
-        return self._nominal_capacity
-
-    @nominal_capacity.setter
-    def nominal_capacity(self, nominal_capacity):
-        self._nominal_capacity = nominal_capacity
-
-    @property
-    def v_level(self):
-        """:obj:`int` : Voltage level"""
-        return self._v_level
-
-    @property
-    def power_factor(self):
-        """
-        Power factor of generator
-
-        Parameters
-        -----------
-        power_factor : :obj:`float`
-            Ratio of real power to apparent power.
+        nominal_power : :obj:`float`
+            Nominal power of generator in MW.
 
         Returns
         --------
         :obj:`float`
-            Ratio of real power to apparent power. If power factor is not set
-            it is retrieved from the network config object depending on the
-            grid level the generator is in.
+            Nominal power of generator in MW.
 
         """
-        if self._power_factor is None:
-            if isinstance(self.grid, MVGrid):
-                self._power_factor = self.grid.network.config[
-                    'reactive_power_factor']['mv_gen']
-            elif isinstance(self.grid, LVGrid):
-                self._power_factor = self.grid.network.config[
-                    'reactive_power_factor']['lv_gen']
-        return self._power_factor
+        return self.network.generators_df.loc[self.id, 'nominal_power']
 
-    @power_factor.setter
-    def power_factor(self, power_factor):
-        self._power_factor = power_factor
+    @nominal_power.setter
+    def nominal_power(self, nominal_power):
+        # ToDo: Maybe perform type check before setting it.
+        self.network.generators_df.loc[
+            self.id, 'nominal_power'] = nominal_power
 
     @property
-    def reactive_power_mode(self):
+    def type(self):
         """
-        Power factor mode of generator.
-
-        This information is necessary to make the generator behave in an
-        inductive or capacitive manner. Essentially this changes the sign of
-        the reactive power.
-
-        The convention used here in a generator is that:
-        - when `reactive_power_mode` is 'capacitive' then Q is positive
-        - when `reactive_power_mode` is 'inductive' then Q is negative
-
-        In the case that this attribute is not set, it is retrieved from the
-        network config object depending on the voltage level the generator
-        is in.
+        Technology type of generator (e.g. 'solar').
 
         Parameters
-        ----------
-        reactive_power_mode : :obj:`str` or None
-            Possible options are 'inductive', 'capacitive' and
-            'not_applicable'. In the case of 'not_applicable' a reactive
-            power time series must be given.
+        -----------
+        type : :obj:`str`
 
         Returns
-        -------
-        :obj:`str` : Power factor mode
-            In the case that this attribute is not set, it is retrieved from
-            the network config object depending on the voltage level the
-            generator is in.
+        --------
+        :obj:`str`
+            Technology type
+
+        #ToDo: Maybe return 'not specified' in case type is None?
 
         """
-        if self._reactive_power_mode is None:
-            if isinstance(self.grid, MVGrid):
-                self._reactive_power_mode = self.grid.network.config[
-                    'reactive_power_mode']['mv_gen']
-            elif isinstance(self.grid, LVGrid):
-                self._reactive_power_mode = self.grid.network.config[
-                    'reactive_power_mode']['lv_gen']
+        return self.network.generators_df.loc[self.id, 'type']
 
-        return self._reactive_power_mode
-
-    @reactive_power_mode.setter
-    def reactive_power_mode(self, reactive_power_mode):
-        self._reactive_power_mode = reactive_power_mode
+    @type.setter
+    def type(self, type):
+        #ToDo: Maybe perform type check before setting it.
+        self.network.generators_df.loc[self.id, 'type'] = type
 
     @property
-    def q_sign(self):
+    def subtype(self):
         """
-        Get the sign of reactive power based on :attr:`_reactive_power_mode`.
-
-        Returns
-        -------
-        :obj:`int` or None
-            In case of inductive reactive power returns -1 and in case of
-            capacitive reactive power returns +1. If reactive power time
-            series is given, `q_sign` is set to None.
-
-        """
-        if self.reactive_power_mode.lower() == 'inductive':
-            return -1
-        elif self.reactive_power_mode.lower() == 'capacitive':
-            return 1
-        else:
-            raise ValueError("Unknown value {} in reactive_power_mode for "
-                             "Generator {}.".format(self.reactive_power_mode,
-                                                    repr(self)))
-
-
-class GeneratorFluctuating(Generator):
-    """
-    Generator object for fluctuating renewables.
-
-    Attributes
-    ----------
-    _curtailment : :pandas:`pandas.Series<series>`
-        See `curtailment` getter for more information.
-    _weather_cell_id : :obj:`int`
-        See `weather_cell_id` getter for more information.
-
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-        self._curtailment = kwargs.get('curtailment', None)
-        self._weather_cell_id = kwargs.get('weather_cell_id', None)
-
-    @property
-    def timeseries(self):
-        """
-        Feed-in time series of generator
-
-        It returns the actual time series used in power flow analysis. If
-        :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
-        :meth:`timeseries` looks for generation and curtailment time series
-        of the according type of technology (and weather cell) in
-        :class:`~.grid.network.TimeSeries`.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame containing active power in kW in column 'p' and
-            reactive power in kVA in column 'q'.
-
-        """
-        if self._timeseries is None:
-
-            # get time series for active power depending on if they are
-            # differentiated by weather cell ID or not
-            if isinstance(self.grid.network.timeseries.generation_fluctuating.
-                                  columns, pd.MultiIndex):
-                if self.weather_cell_id:
-                    try:
-                        timeseries = self.grid.network.timeseries.\
-                            generation_fluctuating[
-                            self.type, self.weather_cell_id].to_frame('p')
-                    except KeyError:
-                        logger.exception("No time series for type {} and "
-                                         "weather cell ID {} given.".format(
-                            self.type, self.weather_cell_id))
-                        raise
-                else:
-                    logger.exception("No weather cell ID provided for "
-                                     "fluctuating generator {}.".format(
-                        repr(self)))
-                    raise KeyError
-            else:
-                try:
-                    timeseries = self.grid.network.timeseries.\
-                        generation_fluctuating[self.type].to_frame('p')
-                except KeyError:
-                    logger.exception("No time series for type {} "
-                                     "given.".format(self.type))
-                    raise
-
-            timeseries = timeseries * self.nominal_capacity
-
-            # subtract curtailment
-            if self.curtailment is not None:
-                timeseries = timeseries.join(
-                    self.curtailment.to_frame('curtailment'), how='left')
-                timeseries.p = timeseries.p - timeseries.curtailment.fillna(0)
-
-            if self.timeseries_reactive is not None:
-                timeseries['q'] = self.timeseries_reactive
-            else:
-                timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(
-                    self.power_factor))
-
-            return timeseries
-        else:
-            return self._timeseries.loc[
-                   self.grid.network.timeseries.timeindex, :]
-
-    @property
-    def timeseries_reactive(self):
-        """
-        Reactive power time series in kvar.
+        Technology subtype of generator (e.g. 'solar_roof_mounted').
 
         Parameters
-        -------
+        -----------
+        subtype : :obj:`str`
+
+        Returns
+        --------
+        :obj:`str`
+            Technology subtype
+
+        #ToDo: Maybe return 'not specified' in case subtype is None?
+
+        """
+        return self.network.generators_df.loc[self.id, 'subtype']
+
+    @subtype.setter
+    def subtype(self, subtype):
+        #ToDo: Maybe perform type check before setting it.
+        self.network.generators_df.loc[self.id, 'subtype'] = subtype
+
+    @property
+    def grid(self):
+        """
+        Grid generator is in.
+
+        Returns
+        --------
+        :class:`~.grid.components.Grid`
+            Grid generator is in.
+
+        """
+        if self._grid is None:
+            grid = self.network.buses_df.loc[
+                self.network.generators_df.loc[self.id, 'bus'],
+                ['mv_grid_id', 'lv_grid_id']]
+            if grid.lv_grid_id is None:
+                return self.network.mv_grid
+            else:
+                return self.network._grids['LVGrid_{}'.format(grid.lv_grid_id)]
+        else:
+            return self._grid
+
+    @property
+    def voltage_level(self):
+        """
+        Voltage level the generator is connected to ('mv' or 'lv').
+
+        Returns
+        --------
+        :obj:`str`
+            Voltage level
+
+        """
+        return 'lv' if self.grid.nominal_voltage < 1 else 'mv'
+
+    @property
+    def active_power_timeseries(self):
+        """
+        Active power time series of generator in MW.
+
+        Returns
+        --------
         :pandas:`pandas.Series<series>`
-            Series containing reactive power time series in kvar.
-
-        Returns
-        ----------
-        :pandas:`pandas.DataFrame<dataframe>` or None
-            Series containing reactive power time series in kvar. If it is not
-            set it is tried to be retrieved from `generation_reactive_power`
-            attribute of global TimeSeries object. If that is not possible
-            None is returned.
+            Active power time series of generator in MW.
 
         """
-
-        if self._timeseries_reactive is None:
-            # try to get time series for reactive power depending on if they
-            # are differentiated by weather cell ID or not
-            # raise warning if no time series for generator type (and weather
-            # cell ID) can be retrieved
-            if self.grid.network.timeseries.generation_reactive_power \
-                    is not None:
-                if isinstance(
-                        self.grid.network.timeseries.generation_reactive_power.
-                                columns, pd.MultiIndex):
-                    if self.weather_cell_id:
-                        try:
-                            timeseries = self.grid.network.timeseries. \
-                                generation_reactive_power[
-                                self.type, self.weather_cell_id].to_frame('q')
-                            return timeseries * self.nominal_capacity
-                        except (KeyError, TypeError):
-                            logger.warning("No time series for type {} and "
-                                           "weather cell ID {} given. "
-                                           "Reactive power time series will "
-                                           "be calculated from assumptions "
-                                           "in config files and active power "
-                                           "timeseries.".format(
-                                self.type, self.weather_cell_id))
-                            return None
-                    else:
-                        raise ValueError(
-                            "No weather cell ID provided for fluctuating "
-                            "generator {}, but reactive power is given as a "
-                            "MultiIndex suggesting that it is differentiated "
-                            "by weather cell ID.".format(repr(self)))
-                else:
-                    try:
-                        timeseries = self.grid.network.timeseries. \
-                            generation_reactive_power[self.type].to_frame('q')
-                        return timeseries * self.nominal_capacity
-                    except (KeyError, TypeError):
-                        logger.warning("No reactive power time series for "
-                                       "type {} given. Reactive power time "
-                                       "series will be calculated from "
-                                       "assumptions in config files and "
-                                       "active power timeseries.".format(
-                            self.type))
-                        return None
-            else:
-                return None
-        else:
-            return self._timeseries_reactive.loc[
-                   self.grid.network.timeseries.timeindex, :]
-
-    @timeseries_reactive.setter
-    def timeseries_reactive(self, timeseries_reactive):
-        if isinstance(timeseries_reactive, pd.Series):
-            if timeseries_reactive.max() <= self._nominal_capacity:
-                self._timeseries_reactive = timeseries_reactive
-                self._power_factor = 'not_applicable'
-                self._reactive_power_mode = 'not_applicable'
-            else:
-                message = "Maximum reactive power in time series at " + \
-                          "index {} ".format(timeseries_reactive.idxmax()) + \
-                          "is higher than nominal capacity."
-                logger.error(message)
-                raise ValueError(message)
+        return self.network.generators_t.p_set.loc[self.id]
 
     @property
-    def curtailment(self):
+    def reactive_power_timeseries(self):
         """
-        Parameters
-        ----------
-        curtailment_ts : :pandas:`pandas.Series<series>`
-            See class definition for details.
+        Reactive power time series of generator in Mvar.
 
         Returns
-        -------
+        --------
         :pandas:`pandas.Series<series>`
-            If self._curtailment is set it returns that. Otherwise, if
-            curtailment in :class:`~.grid.network.TimeSeries` for the
-            corresponding technology type (and if given, weather cell ID)
-            is set this is returned.
+            Reactive power time series of generator in Mvar.
 
         """
-        if self._curtailment is not None:
-            return self._curtailment
-        elif isinstance(self.grid.network.timeseries._curtailment,
-                        pd.DataFrame):
-            if isinstance(self.grid.network.timeseries.curtailment.
-                                  columns, pd.MultiIndex):
-                if self.weather_cell_id:
-                    try:
-                        return self.grid.network.timeseries.curtailment[
-                            self.type, self.weather_cell_id]
-                    except KeyError:
-                        logger.exception("No curtailment time series for type "
-                                         "{} and weather cell ID {} "
-                                         "given.".format(self.type,
-                                                         self.weather_cell_id))
-                        raise
-                else:
-                    logger.exception("No weather cell ID provided for "
-                                     "fluctuating generator {}.".format(
-                        repr(self)))
-                    raise KeyError
-            else:
-                try:
-                    return self.grid.network.timeseries.curtailment[self.type]
-                except KeyError:
-                    logger.exception("No curtailment time series for type "
-                                     "{} given.".format(self.type))
-                    raise
-        else:
-            return None
-
-    @curtailment.setter
-    def curtailment(self, curtailment_ts):
-        self._curtailment = curtailment_ts
+        return self.network.generators_t.q_set.loc[self.id]
 
     @property
     def weather_cell_id(self):
         """
-        Get weather cell ID
+        Weather cell ID of generator.
+
+        The weather cell ID is only used to obtain generator feed-in time
+        series for solar and wind generators.
 
         Returns
-        -------
-        :obj:`str`
-            See class definition for details.
+        --------
+        :obj:`int`
+            Weather cell ID of generator.
 
         """
-        return self._weather_cell_id
+        return self.network.generators_df.loc[self.id, 'weather_cell_id']
 
-    @weather_cell_id.setter
-    def weather_cell_id(self, weather_cell):
-        self._weather_cell_id = weather_cell
+    @property
+    def geom(self):
+        """
+        Geo location of generator.
+
+        Returns
+        --------
+        shapely Point
+
+        """
+        geom = self.network.buses_df.loc[
+            self.network.generators_df.loc[self.id, 'bus'], ['x', 'y']]
+        #ToDo return shapely point
+        pass
 
 
 class Storage(Component):
@@ -1152,74 +621,74 @@ class Storage(Component):
         """
         self._operation
 
-    @property
-    def power_factor(self):
-        """
-        Power factor of storage
+    # @property
+    # def power_factor(self):
+    #     """
+    #     Power factor of storage
+    #
+    #     If power factor is not set it is retrieved from the network config
+    #     object depending on the grid level the storage is in.
+    #
+    #     Returns
+    #     --------
+    #     :obj:`float` : Power factor
+    #         Ratio of real power to apparent power.
+    #
+    #     """
+    #     if self._power_factor is None:
+    #         if isinstance(self.grid, MVGrid):
+    #             self._power_factor = self.grid.network.config[
+    #                 'reactive_power_factor']['mv_storage']
+    #         elif isinstance(self.grid, LVGrid):
+    #             self._power_factor = self.grid.network.config[
+    #                 'reactive_power_factor']['lv_storage']
+    #     return self._power_factor
+    #
+    # @power_factor.setter
+    # def power_factor(self, power_factor):
+    #     self._power_factor = power_factor
 
-        If power factor is not set it is retrieved from the network config
-        object depending on the grid level the storage is in.
+    # @property
+    # def reactive_power_mode(self):
+    #     """
+    #     Power factor mode of storage.
+    #
+    #     If the power factor is set, then it is necessary to know whether
+    #     it is leading or lagging. In other words this information is necessary
+    #     to make the storage behave in an inductive or capacitive manner.
+    #     Essentially this changes the sign of the reactive power Q.
+    #
+    #     The convention used here in a storage is that:
+    #     - when `reactive_power_mode` is 'capacitive' then Q is positive
+    #     - when `reactive_power_mode` is 'inductive' then Q is negative
+    #
+    #     In the case that this attribute is not set, it is retrieved from the
+    #     network config object depending on the voltage level the storage
+    #     is in.
+    #
+    #     Returns
+    #     -------
+    #     :obj: `str` : Power factor mode
+    #         Either 'inductive' or 'capacitive'
+    #
+    #     """
+    #     if self._reactive_power_mode is None:
+    #         if isinstance(self.grid, MVGrid):
+    #             self._reactive_power_mode = self.grid.network.config[
+    #                 'reactive_power_mode']['mv_storage']
+    #         elif isinstance(self.grid, LVGrid):
+    #             self._reactive_power_mode = self.grid.network.config[
+    #                 'reactive_power_mode']['lv_storage']
+    #
+    #     return self._reactive_power_mode
 
-        Returns
-        --------
-        :obj:`float` : Power factor
-            Ratio of real power to apparent power.
-
-        """
-        if self._power_factor is None:
-            if isinstance(self.grid, MVGrid):
-                self._power_factor = self.grid.network.config[
-                    'reactive_power_factor']['mv_storage']
-            elif isinstance(self.grid, LVGrid):
-                self._power_factor = self.grid.network.config[
-                    'reactive_power_factor']['lv_storage']
-        return self._power_factor
-
-    @power_factor.setter
-    def power_factor(self, power_factor):
-        self._power_factor = power_factor
-
-    @property
-    def reactive_power_mode(self):
-        """
-        Power factor mode of storage.
-
-        If the power factor is set, then it is necessary to know whether
-        it is leading or lagging. In other words this information is necessary
-        to make the storage behave in an inductive or capacitive manner.
-        Essentially this changes the sign of the reactive power Q.
-
-        The convention used here in a storage is that:
-        - when `reactive_power_mode` is 'capacitive' then Q is positive
-        - when `reactive_power_mode` is 'inductive' then Q is negative
-
-        In the case that this attribute is not set, it is retrieved from the
-        network config object depending on the voltage level the storage
-        is in.
-
-        Returns
-        -------
-        :obj: `str` : Power factor mode
-            Either 'inductive' or 'capacitive'
-
-        """
-        if self._reactive_power_mode is None:
-            if isinstance(self.grid, MVGrid):
-                self._reactive_power_mode = self.grid.network.config[
-                    'reactive_power_mode']['mv_storage']
-            elif isinstance(self.grid, LVGrid):
-                self._reactive_power_mode = self.grid.network.config[
-                    'reactive_power_mode']['lv_storage']
-
-        return self._reactive_power_mode
-
-    @reactive_power_mode.setter
-    def reactive_power_mode(self, reactive_power_mode):
-        """
-        Set the power factor mode of the generator.
-        Should be either 'inductive' or 'capacitive'
-        """
-        self._reactive_power_mode = reactive_power_mode
+    # @reactive_power_mode.setter
+    # def reactive_power_mode(self, reactive_power_mode):
+    #     """
+    #     Set the power factor mode of the generator.
+    #     Should be either 'inductive' or 'capacitive'
+    #     """
+    #     self._reactive_power_mode = reactive_power_mode
 
     @property
     def q_sign(self):

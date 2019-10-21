@@ -12,13 +12,12 @@ from pypsa import Network as PyPSANetwork
 import edisgo
 from edisgo.tools import config, tools
 from edisgo.tools import pypsa_io_lopf, pypsa_io
-from edisgo.data.import_data import import_from_ding0, import_generators, \
+from edisgo.data.import_data import import_ding0_grid, import_generators, \
     import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, \
     curtailment, storage_positioning
-from edisgo.grid.components import Station, BranchTee, Generator, Load, \
-    GeneratorFluctuating
+from edisgo.grid.components import Station, BranchTee, Generator, Load
 from edisgo.grid.tools import get_gen_info, disconnect_storage
 from edisgo.grid.grids import MVGrid
 from edisgo.tools import plots
@@ -321,17 +320,8 @@ class EDisGo(EDisGoReimport):
         * `timeseries_generation_dispatchable`
         * `timeseries_load`
 
-    mv_grid_id : :obj:`str`
-        MV grid ID used in import of ding0 grid.
-
-        .. ToDo: explain where MV grid IDs come from
-
-    ding0_grid : file: :obj:`str` or :class:`ding0.core.NetworkDing0`
-        If a str is provided it is assumed it points to a pickle with Ding0
-        grid data. This file will be read. If an object of the type
-        :class:`ding0.core.NetworkDing0` data will be used directly from this
-        object.
-        This will probably be removed when ding0 grids are in oedb.
+    ding0_grid : :obj:`str`
+        Path to directory containing csv files of grid to be loaded.
     config_path : None or :obj:`str` or :obj:`dict`
         Path to the config directory. Options are:
 
@@ -360,9 +350,6 @@ class EDisGo(EDisGoReimport):
         and config files must exist and are not automatically created.
 
         Default: None.
-    scenario_description : None or :obj:`str`
-        Can be used to describe your scenario but is not used for anything
-        else. Default: None.
     timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
         Parameter used to obtain time series for active power feed-in of
         fluctuating renewables wind and solar.
@@ -465,7 +452,11 @@ class EDisGo(EDisGoReimport):
     Attributes
     ----------
     network : :class:`~.grid.network.Network`
-        The network is a container object holding all data.
+        The network is a container object holding all data concerning the grid,
+        configurations, equipment data, etc.
+    results : :class:`~.grid.network.Results`
+        This is a container holding alls calculation results from power flow
+        analyses, curtailment, storage integration, etc.
 
     Examples
     --------
@@ -490,15 +481,13 @@ class EDisGo(EDisGoReimport):
 
     def __init__(self, **kwargs):
 
-        # create network
+        # create network (loads grid data, configurations, equipment data)
         self.network = Network(
+            ding0_grid=kwargs.get('ding0_grid', None),
             generator_scenario=kwargs.get('generator_scenario', None),
-            config_path=kwargs.get('config_path', None),
-            scenario_description=kwargs.get('scenario_description', None))
-
-        # load grid
-        # ToDo: should at some point work with only MV grid ID
-        self.import_from_ding0(kwargs.get('ding0_grid', None))
+            config_path=kwargs.get('config_path', None))
+        # set up results container
+        self.results = Results(self.network)
 
         # set up time series for feed-in and load
         # worst-case time series
@@ -538,15 +527,6 @@ class EDisGo(EDisGoReimport):
         CurtailmentControl(edisgo=self, methodology=methodology,
                            curtailment_timeseries=curtailment_timeseries,
                            mode=kwargs.pop('mode', None), **kwargs)
-
-    def import_from_ding0(self, file, **kwargs):
-        """Import grid data from DINGO file
-
-        For details see
-        :func:`edisgo.data.import_data.import_from_ding0`
-
-        """
-        import_from_ding0(file=file, network=self.network)
 
     def import_generators(self, generator_scenario=None):
         """Import generators
@@ -652,146 +632,6 @@ class EDisGo(EDisGoReimport):
         else:
             raise ValueError("Power flow analysis did not converge.")
 
-    def analyze_lopf(self, mode=None, timesteps=None,
-                     etrago_max_storage_size=None):
-        """Analyzes the grid by power flow analysis
-
-        Analyze the grid for violations of hosting capacity. Means, perform a
-        power flow analysis and obtain voltages at nodes (load, generator,
-        stations/transformers and branch tees) and active/reactive power at
-        lines.
-
-        The power flow analysis can currently only be performed for both grid
-        levels MV and LV. See ToDos section for more information.
-
-        A static `non-linear power flow analysis is performed using PyPSA
-        <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
-        The high-voltage to medium-voltage transformer are not included in the
-        analysis. The slack bus is defined at secondary side of these
-        transformers assuming an ideal tap changer. Hence, potential
-        overloading of the transformers is not studied here.
-
-        Parameters
-        ----------
-        mode : str
-            Allows to toggle between power flow analysis (PFA) on the whole
-            grid topology (MV + LV), only MV or only LV. Defaults to None which
-            equals power flow analysis for MV + LV which is the only
-            implemented option at the moment. See ToDos section for
-            more information.
-        timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
-            Timesteps specifies for which time steps to conduct the power flow
-            analysis. It defaults to None in which case the time steps in
-            timeseries.timeindex (see :class:`~.grid.network.TimeSeries`) are
-            used.
-
-        Notes
-        -----
-        The current implementation always translates the grid topology
-        representation to the PyPSA format and stores it to
-        :attr:`self.network.pypsa`.
-
-        ToDos
-        ------
-        The option to export only the edisgo MV grid (mode = 'mv') to conduct
-        a power flow analysis is implemented in
-        :func:`~.tools.pypsa_io.to_pypsa` but NotImplementedError is raised
-        since the rest of edisgo does not handle this option yet. The analyze
-        function will throw an error since
-        :func:`~.tools.pypsa_io.process_pfa_results`
-        does not handle aggregated loads and generators in the LV grids. Also,
-        grid reinforcement, pypsa update of time series, and probably other
-        functionalities do not work when only the MV grid is analysed.
-
-        Further ToDos are:
-        * explain how power plants are modeled, if possible use a link
-        * explain where to find and adjust power flow analysis defining
-        parameters
-
-        See Also
-        --------
-        :func:`~.tools.pypsa_io.to_pypsa`
-            Translator to PyPSA data format
-
-        """
-        if timesteps is None:
-            timesteps = self.network.timeseries.timeindex
-        # check if timesteps is array-like, otherwise convert to list
-        if not hasattr(timesteps, "__len__"):
-            timesteps = [timesteps]
-
-        # Translate eDisGo grid topology representation to PyPSA format
-        logging.debug('Translate eDisGo grid topology representation to '
-                      'PyPSA format.')
-        self.network.pypsa_lopf = pypsa_io_lopf.to_pypsa(
-            self.network, mode, timesteps)
-        logging.debug('Translating eDisGo grid topology representation to '
-                      'PyPSA format finished.')
-
-        # add total storage capacity constraint
-        def extra_functionality(network, snapshots):
-            model = network.model
-            # total installed capacity
-            model.storages_p_nom = Constraint(
-                rule=lambda model: sum(
-                    model.generator_p_nom[s]
-                    for s in self.network.pypsa_lopf.generators[
-                        self.network.pypsa_lopf.generators.type ==
-                        'Storage'].index) <= etrago_max_storage_size)
-
-        # run power flow analysis
-        self.network.pypsa_lopf.lopf(
-            snapshots=timesteps, solver_name='cbc', keep_files=False,
-            extra_functionality=extra_functionality,
-            solver_options={'tee': True})
-
-        # self.network.pypsa.model.write(
-        #     io_options={'symbolic_solver_labels': True})
-
-        print('objective: {}'.format(self.network.pypsa_lopf.objective))
-
-        # relevant outputs
-        # plot MV grid
-        plots.storage_size(self.network.mv_grid, self.network.pypsa_lopf,
-                           filename='storage_results_{}.pdf'.format(
-                               self.network.id))
-
-        storages = self.network.mv_grid.graph.nodes_by_attribute('storage')
-        storages_repr = [repr(_) for _ in storages]
-        print('Installed storage capacity: {} MW'.format(
-            self.network.pypsa_lopf.generators.loc[
-                storages_repr, 'p_nom_opt'].sum()))
-
-        # export storage results (pypsa and path to storage)
-        pypsa_storages_df = self.network.pypsa_lopf.generators.loc[
-            storages_repr, :].sort_values(by=['p_nom_opt'], ascending=False)
-
-        storage_repr = []
-        storage_path = []
-        for s in storages:
-            storage_repr.append(repr(s))
-            storage_path.append(nx.shortest_path(self.network.mv_grid.graph,
-                                    self.network.mv_grid.station, s))
-        graph_storages_df = pd.DataFrame({'path': storage_path},
-                                         index=storage_repr)
-        pypsa_storages_df.join(graph_storages_df).to_csv(
-            'storage_results_{}.csv'.format(self.network.id))
-
-        # take largest 8 storages and remove the rest
-        keep_storages = pypsa_storages_df.iloc[:8, :].index
-        remove_storages = pypsa_storages_df.iloc[8:, :].index
-        # write time series to kept storages
-        for s in keep_storages:
-            keep_storage_obj = [_ for _ in storages if repr(_)==s][0]
-            ts = self.network.pypsa_lopf.generators_t.p.loc[:, s]
-            keep_storage_obj.timeseries = pd.DataFrame({'p': ts * 1000,
-                                                        'q': [0] * len(ts)},
-                                                        index=ts.index)
-        # delete small storages
-        for s in remove_storages:
-            disconnect_storage(self.network,
-                               [_ for _ in storages if repr(_)==s][0])
-
     def reinforce(self, **kwargs):
         """
         Reinforces the grid and calculates grid expansion costs.
@@ -831,49 +671,91 @@ class Network:
 
     Parameters
     ----------
-    scenario_description : :obj:`str`, optional
-        Can be used to describe your scenario but is not used for anything
-        else. Default: None.
+    ding0_grid : :obj:`str`
+        Path to directory containing csv files of grid to be loaded.
     config_path : None or :obj:`str` or :obj:`dict`, optional
         See :class:`~.grid.network.Config` for further information.
         Default: None.
-    metadata : :obj:`dict`
-        Metadata of Network such as ?
-    data_sources : :obj:`dict` of :obj:`str`
-        Data Sources of grid, generators etc.
-        Keys: 'grid', 'generators', ?
-    mv_grid : :class:`~.grid.grids.MVGrid`
-        Medium voltage (MV) grid
     generator_scenario : :obj:`str`
         Defines which scenario of future generator park to use.
 
     Attributes
-    ----------
-    results : :class:`~.grid.network.Results`
-        Object with results from power flow analyses
+    -----------
+
+
+    _grid_district : :obj:`dict`
+        Contains the following information about the supplied
+        region (grid district) of the grid:
+        'geom': Shape of grid district as MultiPolygon.
+        'population': Number of inhabitants.
+    _grids : dict
+    generators_t : enthält auch curtailment dataframe (muss bei Erstellung von
+        pypsa Netzwerk beachtet werden)
 
     """
 
     def __init__(self, **kwargs):
-        self._scenario_description = kwargs.get('scenario_description', None)
+
+        # load configuration and equipment data
         self._config = Config(config_path=kwargs.get('config_path', None))
         self._equipment_data = self._load_equipment_data()
-        self._metadata = kwargs.get('metadata', None)
-        self._data_sources = kwargs.get('data_sources', {})
+        # load grid data
+        self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
+
         self._generator_scenario = kwargs.get('generator_scenario', None)
-
-        self._mv_grid = kwargs.get('mv_grid', None)
-        self._pypsa = None
-        self.results = Results(self)
-
+        self._mv_grid = kwargs.get('mv_grid', None) # getter implementieren mit dem mv gefiltert werden kann
+        self._pypsa = None # getter implementieren, der network in pypsa umwandelt
         self._dingo_import_data = []
 
     def _load_equipment_data(self):
-        """Load equipment data for transformers, cables etc.
+        """
+        Load equipment data for transformers, cables etc.
 
         Returns
         -------
-        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+        :obj:`dict`
+            Dictionary with :pandas:`pandas.DataFrame<dataframe>` containing
+            equipment data. Keys of the dictionary are 'mv_trafos', 'mv_lines',
+            'mv_cables', 'lv_trafos', and 'lv_cables'.
+
+        Notes
+        ------
+        This function calculates electrical values of transformer from standard
+        values (so far only for LV transformers, not necessary for MV as MV
+        impedances are not used).
+
+        $z_{pu}$ is calculated as follows:
+
+        .. math:: z_{pu} = \frac{u_{kr}}{100}
+
+        using the following simplification:
+
+        .. math:: z_{pu} = \frac{Z}{Z_{nom}}
+
+        with
+
+        .. math:: Z = \frac{u_{kr}}{100} \cdot \frac{U_n^2}{S_{nom}}
+
+        and
+
+        .. math:: Z_{nom} = \frac{U_n^2}{S_{nom}}
+
+        $r_{pu}$ is calculated as follows:
+
+        .. math:: r_{pu} = \frac{P_k}{S_{nom}}
+
+        using the simplification of
+
+        .. math:: r_{pu} = \frac{R}{Z_{nom}}
+
+        with
+
+        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \cdot \frac{U_{nom}^2}{S_{nom}^2}
+
+        $x_{pu}$ is calculated as follows:
+
+        .. math::  x_{pu} = \sqrt(z_{pu}^2-r_{pu}^2)
+
 
         """
 
@@ -893,15 +775,186 @@ class Network:
                                  equipment_parameters),
                     comment='#', index_col='name',
                     delimiter=',', decimal='.')
-                # calculate electrical values of transformer from standard values (so far only for LV transformers, not necessary for MV as MV impedances not used)
+                # calculate electrical values of transformer from standard
+                # values (so far only for LV transformers, not necessary for
+                # MV as MV impedances are not used)
                 if voltage_level == 'lv' and i == 'trafos':
-                    # Simplification of r = R/Z_nom with R = P_k*(U_n)²/S_nom and Z_nom = (U_n)²/S_nom => r = P_k/S_nom
-                    data['{}_{}'.format(voltage_level, i)]['r_pu'] = data['{}_{}'.format(voltage_level, i)]['P_k']/\
-                                                                  (data['{}_{}'.format(voltage_level, i)]['S_nom']*1000)
-                    # x = sqrt(z²-r²) with Simplification of z = Z/Z_nom with Z = u_kr[%]/100 * (U_n)²/S_n and Z_nom = (U_n)²/S_nom => z = u_kr[%]/100
-                    data['{}_{}'.format(voltage_level, i)]['x_pu'] = np.sqrt((data['{}_{}'.format(voltage_level, i)]['u_kr']/100)**2\
-                                                                       -data['{}_{}'.format(voltage_level, i)]['r_pu']**2)
+                    if voltage_level == 'lv' and i == 'trafos':
+                        data['{}_{}'.format(voltage_level, i)]['r_pu'] = \
+                            data['{}_{}'.format(voltage_level, i)]['P_k'] / \
+                            (data['{}_{}'.format(voltage_level, i)][
+                                 'S_nom'] * 1000)
+                        data['{}_{}'.format(voltage_level, i)][
+                            'x_pu'] = np.sqrt(
+                            (data['{}_{}'.format(voltage_level, i)][
+                                 'u_kr'] / 100) ** 2 \
+                            - data['{}_{}'.format(voltage_level, i)][
+                                'r_pu'] ** 2)
         return data
+
+    def import_ding0_grid(self, path):
+        """
+        Import ding0 grid data from csv files.
+
+        Parameters
+        -----------
+        path : :obj:'str`
+            Path to directory containing csv files of grid to be loaded.
+
+        #ToDo For details see ...
+
+        """
+        #ToDo MV_grid Klasse erstellen die von Pypsa network erbt? oder kann
+        if path is not None:
+            import_ding0_grid(path, self)
+
+    @property
+    def buses_df(self):
+        """
+        Dataframe with all buses in MV grid and underlying LV grids.
+
+        Parameters
+        ----------
+        buses_df : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all buses in MV grid and underlying LV grids.
+            Index of the dataframe are bus names. Columns of the dataframe are:
+            v_nom
+            x
+            y
+            mv_grid_id
+            lv_grid_id
+            in_building
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all buses in MV grid and underlying LV grids.
+
+        """
+        return self._buses_df
+
+    @buses_df.setter
+    def buses_df(self, buses_df):
+        self._buses_df = buses_df
+
+    @property
+    def generators_df(self):
+        """
+        Dataframe with all generators in MV grid and underlying LV grids.
+
+        Parameters
+        ----------
+        generators_df : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all generators in MV grid and underlying LV grids.
+            Index of the dataframe are generator names. Columns of the
+            dataframe are:
+            bus
+            control
+            p_nom
+            type
+            weather_cell_id	subtype
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all generators in MV grid and underlying LV grids.
+
+        """
+        return self._generators_df
+
+    @generators_df.setter
+    def generators_df(self, generators_df):
+        self._generators_df = generators_df
+
+    @property
+    def loads_df(self):
+        """
+        Dataframe with all loads in MV grid and underlying LV grids.
+
+        Parameters
+        ----------
+        loads_df : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all loads in MV grid and underlying LV grids.
+            Index of the dataframe are load names. Columns of the
+            dataframe are:
+            bus
+            peak_load
+            sector
+            annual_consumption
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all loads in MV grid and underlying LV grids.
+
+        """
+        return self._loads_df
+
+    @loads_df.setter
+    def loads_df(self, loads_df):
+        self._loads_df = loads_df
+
+    @property
+    def transformers_df(self):
+        """
+        Dataframe with all transformers.
+
+        Parameters
+        ----------
+        transformers_df : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all transformers.
+            Index of the dataframe are transformer names. Columns of the
+            dataframe are:
+            bus0
+            bus1
+            x_pu
+            r_pu
+            s_nom
+            type
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all transformers.
+
+        """
+        return self._transformers_df
+
+    @transformers_df.setter
+    def transformers_df(self, transformers_df):
+        self._transformers_df = transformers_df
+
+    @property
+    def lines_df(self):
+        """
+        Dataframe with all lines in MV grid and underlying LV grids.
+
+        Parameters
+        ----------
+        lines_df : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all lines in MV grid and underlying LV grids.
+            Index of the dataframe are line names. Columns of the
+            dataframe are:
+            bus0
+            bus1
+            length
+            x
+            r
+            s_nom
+            num_parallel
+            type
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all lines in MV grid and underlying LV grids.
+
+        """
+        return self._lines_df
+
+    @lines_df.setter
+    def lines_df(self, lines_df):
+        self._lines_df = lines_df
 
     @property
     def id(self):
@@ -914,7 +967,8 @@ class Network:
             MV grid ID
 
         """
-        return self._id
+
+        return self.mv_grid.id
 
     @property
     def config(self):
@@ -932,19 +986,6 @@ class Network:
     @config.setter
     def config(self, config_path):
         self._config = Config(config_path=config_path)
-
-    @property
-    def metadata(self):
-        """
-        Metadata of Network
-
-        Returns
-        --------
-        :obj:`dict`
-            Metadata of Network
-
-        """
-        return self._metadata
 
     @property
     def generator_scenario(self):
@@ -967,28 +1008,6 @@ class Network:
     @generator_scenario.setter
     def generator_scenario(self, generator_scenario_name):
         self._generator_scenario = generator_scenario_name
-
-    @property
-    def scenario_description(self):
-        """
-        Used to describe your scenario but not used for anything else.
-
-        Parameters
-        ----------
-        scenario_description : :obj:`str`
-            Description of scenario
-
-        Returns
-        --------
-        :obj:`str`
-            Scenario name
-
-        """
-        return self._scenario_description
-
-    @scenario_description.setter
-    def scenario_description(self, scenario_description):
-        self._scenario_description = scenario_description
 
     @property
     def equipment_data(self):
@@ -1026,65 +1045,62 @@ class Network:
         self._mv_grid = mv_grid
 
     @property
-    def timeseries(self):
+    def grid_district(self):
         """
-        Object containing load and feed-in time series.
+        Medium voltage (MV) grid
 
         Parameters
         ----------
-        timeseries : :class:`~.grid.network.TimeSeries`
-            Object containing load and feed-in time series.
+        mv_grid : :class:`~.grid.grids.MVGrid`
+            Medium voltage (MV) grid
 
         Returns
         --------
-        :class:`~.grid.network.TimeSeries`
-            Object containing load and feed-in time series.
+        :class:`~.grid.grids.MVGrid`
+            Medium voltage (MV) grid
 
         """
-        return self._timeseries
+        return self._grid_district
 
-    @timeseries.setter
-    def timeseries(self, timeseries):
-        self._timeseries = timeseries
+    @grid_district.setter
+    def grid_district(self, grid_district):
+        self._grid_district = grid_district
 
-    @property
-    def data_sources(self):
-        """
-        Dictionary with data sources of grid, generators etc.
+    # ToDo still needed?
+    # @property
+    # def timeseries(self):
+    #     """
+    #     Object containing load and feed-in time series.
+    #
+    #     Parameters
+    #     ----------
+    #     timeseries : :class:`~.grid.network.TimeSeries`
+    #         Object containing load and feed-in time series.
+    #
+    #     Returns
+    #     --------
+    #     :class:`~.grid.network.TimeSeries`
+    #         Object containing load and feed-in time series.
+    #
+    #     """
+    #     return self._timeseries
+    #
+    # @timeseries.setter
+    # def timeseries(self, timeseries):
+    #     self._timeseries = timeseries
 
-        Returns
-        --------
-        :obj:`dict` of :obj:`str`
-            Data Sources of grid, generators etc.
-
-        """
-        return self._data_sources
-
-    def set_data_source(self, key, data_source):
-        """
-        Set data source for key (e.g. 'grid')
-
-        Parameters
-        ----------
-        key : :obj:`str`
-            Specifies data
-        data_source : :obj:`str`
-            Specifies data source
-
-        """
-        self._data_sources[key] = data_source
-
-    @property
-    def dingo_import_data(self):
-        """
-        Temporary data from ding0 import needed for OEP generator update
-
-        """
-        return self._dingo_import_data
-
-    @dingo_import_data.setter
-    def dingo_import_data(self, dingo_data):
-        self._dingo_import_data = dingo_data
+    #ToDo still needed?
+    # @property
+    # def dingo_import_data(self):
+    #     """
+    #     Temporary data from ding0 import needed for OEP generator update
+    #
+    #     """
+    #     return self._dingo_import_data
+    #
+    # @dingo_import_data.setter
+    # def dingo_import_data(self, dingo_data):
+    #     self._dingo_import_data = dingo_data
 
     @property
     def pypsa(self):
@@ -1119,7 +1135,7 @@ class Network:
         self._pypsa = pypsa
 
     def __repr__(self):
-        return 'Network ' + str(self._id)
+        return 'Network ' + str(self.id)
 
 
 class Config:
@@ -1280,8 +1296,6 @@ class TimeSeriesControl:
 
         * 'oedb'
           Time series for 2011 are obtained from the OpenEnergy DataBase.
-          `mv_grid_id` and `scenario_description` have to be provided when
-          choosing this option.
         * :pandas:`pandas.DataFrame<dataframe>`
           DataFrame with time series, normalized with corresponding capacity.
           Time series can either be aggregated by technology type or by type
@@ -1433,6 +1447,418 @@ class TimeSeriesControl:
             # check if time series for the set time index can be obtained
             self._check_timeindex()
 
+    # Generator
+    # @property
+    # def timeseries(self):
+    #     """
+    #     Feed-in time series of generator
+    #
+    #     It returns the actual dispatch time series used in power flow analysis.
+    #     If :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
+    #     :meth:`timeseries` looks for time series of the according type of
+    #     technology in :class:`~.grid.network.TimeSeries`. If the reactive
+    #     power time series is provided through :attr:`_timeseries_reactive`,
+    #     this is added to :attr:`_timeseries`. When :attr:`_timeseries_reactive`
+    #     is not set, the reactive power is also calculated in
+    #     :attr:`_timeseries` using :attr:`power_factor` and
+    #     :attr:`reactive_power_mode`. The :attr:`power_factor` determines the
+    #     magnitude of the reactive power based on the power factor and active
+    #     power provided and the :attr:`reactive_power_mode` determines if the
+    #     reactive power is either consumed (inductive behaviour) or provided
+    #     (capacitive behaviour).
+    #
+    #     Returns
+    #     -------
+    #     :pandas:`pandas.DataFrame<dataframe>`
+    #         DataFrame containing active power in kW in column 'p' and
+    #         reactive power in kvar in column 'q'.
+    #
+    #     """
+    #     if self._timeseries is None:
+    #         # calculate time series for active and reactive power
+    #         try:
+    #             timeseries = \
+    #                 self.grid.network.timeseries.generation_dispatchable[
+    #                     self.type].to_frame('p')
+    #         except KeyError:
+    #             try:
+    #                 timeseries = \
+    #                     self.grid.network.timeseries.generation_dispatchable[
+    #                         'other'].to_frame('p')
+    #             except KeyError:
+    #                 logger.exception("No time series for type {} "
+    #                                  "given.".format(self.type))
+    #                 raise
+    #
+    #         timeseries = timeseries * self.nominal_capacity
+    #         if self.timeseries_reactive is not None:
+    #             timeseries['q'] = self.timeseries_reactive
+    #         else:
+    #             timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(
+    #                 self.power_factor))
+    #
+    #         return timeseries
+    #     else:
+    #         return self._timeseries.loc[
+    #                self.grid.network.timeseries.timeindex, :]
+
+    # @property
+    # def timeseries_reactive(self):
+    #     """
+    #     Reactive power time series in kvar.
+    #
+    #     Parameters
+    #     -----------
+    #     timeseries_reactive : :pandas:`pandas.Seriese<series>`
+    #         Series containing reactive power in kvar.
+    #
+    #     Returns
+    #     -------
+    #     :pandas:`pandas.Series<series>` or None
+    #         Series containing reactive power time series in kvar. If it is not
+    #         set it is tried to be retrieved from `generation_reactive_power`
+    #         attribute of global TimeSeries object. If that is not possible
+    #         None is returned.
+    #
+    #     """
+    #     if self._timeseries_reactive is None:
+    #         if self.grid.network.timeseries.generation_reactive_power \
+    #                 is not None:
+    #             try:
+    #                 timeseries = \
+    #                     self.grid.network.timeseries.generation_reactive_power[
+    #                         self.type].to_frame('q')
+    #             except (KeyError, TypeError):
+    #                 try:
+    #                     timeseries = \
+    #                         self.grid.network.timeseries.generation_reactive_power[
+    #                             'other'].to_frame('q')
+    #                 except:
+    #                     logger.warning(
+    #                         "No reactive power time series for type {} given. "
+    #                         "Reactive power time series will be calculated from "
+    #                         "assumptions in config files and active power "
+    #                         "timeseries.".format(self.type))
+    #                     return None
+    #             self.power_factor = 'not_applicable'
+    #             self.reactive_power_mode = 'not_applicable'
+    #             return timeseries * self.nominal_capacity
+    #         else:
+    #             return None
+    #     else:
+    #         return self._timeseries_reactive.loc[
+    #                self.grid.network.timeseries.timeindex, :]
+
+    # @property
+    # def reactive_power_mode(self):
+    #     """
+    #     Power factor mode of generator.
+    #
+    #     This information is necessary to make the generator behave in an
+    #     inductive or capacitive manner. Essentially this changes the sign of
+    #     the reactive power.
+    #
+    #     The convention used here in a generator is that:
+    #     - when `reactive_power_mode` is 'capacitive' then Q is positive
+    #     - when `reactive_power_mode` is 'inductive' then Q is negative
+    #
+    #     In the case that this attribute is not set, it is retrieved from the
+    #     network config object depending on the voltage level the generator
+    #     is in.
+    #
+    #     Parameters
+    #     ----------
+    #     reactive_power_mode : :obj:`str` or None
+    #         Possible options are 'inductive', 'capacitive' and
+    #         'not_applicable'. In the case of 'not_applicable' a reactive
+    #         power time series must be given.
+    #
+    #     Returns
+    #     -------
+    #     :obj:`str` : Power factor mode
+    #         In the case that this attribute is not set, it is retrieved from
+    #         the network config object depending on the voltage level the
+    #         generator is in.
+    #
+    #     """
+    #     if self._reactive_power_mode is None:
+    #         if isinstance(self.grid, MVGrid):
+    #             self._reactive_power_mode = self.grid.network.config[
+    #                 'reactive_power_mode']['mv_gen']
+    #         elif isinstance(self.grid, LVGrid):
+    #             self._reactive_power_mode = self.grid.network.config[
+    #                 'reactive_power_mode']['lv_gen']
+    #
+    #     return self._reactive_power_mode
+    #
+    # @property
+    # def q_sign(self):
+    #     """
+    #     Get the sign of reactive power based on :attr:`_reactive_power_mode`.
+    #
+    #     Returns
+    #     -------
+    #     :obj:`int` or None
+    #         In case of inductive reactive power returns -1 and in case of
+    #         capacitive reactive power returns +1. If reactive power time
+    #         series is given, `q_sign` is set to None.
+    #
+    #     """
+    #     if self.reactive_power_mode.lower() == 'inductive':
+    #         return -1
+    #     elif self.reactive_power_mode.lower() == 'capacitive':
+    #         return 1
+    #     else:
+    #         raise ValueError("Unknown value {} in reactive_power_mode for "
+    #                          "Generator {}.".format(self.reactive_power_mode,
+    #                                                 repr(self)))
+
+    # @property
+    # def power_factor(self):
+    #     """
+    #     Power factor of generator
+    #
+    #     Parameters
+    #     -----------
+    #     power_factor : :obj:`float`
+    #         Ratio of real power to apparent power.
+    #
+    #     Returns
+    #     --------
+    #     :obj:`float`
+    #         Ratio of real power to apparent power. If power factor is not set
+    #         it is retrieved from the network config object depending on the
+    #         grid level the generator is in.
+    #
+    #     """
+    #     if self._power_factor is None:
+    #         if isinstance(self.grid, MVGrid):
+    #             self._power_factor = self.grid.network.config[
+    #                 'reactive_power_factor']['mv_gen']
+    #         elif isinstance(self.grid, LVGrid):
+    #             self._power_factor = self.grid.network.config[
+    #                 'reactive_power_factor']['lv_gen']
+    #     return self._power_factor
+
+    # Load
+    # @property
+    # def timeseries(self):
+    #     """
+    #     Load time series
+    #
+    #     It returns the actual time series used in power flow analysis. If
+    #     :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
+    #     :meth:`timeseries()` looks for time series of the according sector in
+    #     :class:`~.grid.network.TimeSeries` object.
+    #
+    #     Returns
+    #     -------
+    #     :pandas:`pandas.DataFrame<dataframe>`
+    #         DataFrame containing active power in kW in column 'p' and
+    #         reactive power in kVA in column 'q'.
+    #
+    #     """
+    #     if self._timeseries is None:
+    #
+    #         if isinstance(self.grid, MVGrid):
+    #             voltage_level = 'mv'
+    #         elif isinstance(self.grid, LVGrid):
+    #             voltage_level = 'lv'
+    #
+    #         ts_total = None
+    #         for sector in self.consumption.keys():
+    #             consumption = self.consumption[sector]
+    #
+    #             # check if load time series for MV and LV are differentiated
+    #             try:
+    #                 ts = self.grid.network.timeseries.load[
+    #                     sector, voltage_level].to_frame('p')
+    #             except KeyError:
+    #                 try:
+    #                     ts = self.grid.network.timeseries.load[
+    #                         sector].to_frame('p')
+    #                 except KeyError:
+    #                     logger.exception(
+    #                         "No timeseries for load of type {} "
+    #                         "given.".format(sector))
+    #                     raise
+    #             ts = ts * consumption
+    #             ts_q = self.timeseries_reactive
+    #             if ts_q is not None:
+    #                 ts['q'] = ts_q.q
+    #             else:
+    #                 ts['q'] = ts['p'] * self.q_sign * tan(
+    #                     acos(self.power_factor))
+    #
+    #             if ts_total is None:
+    #                 ts_total = ts
+    #             else:
+    #                 ts_total.p += ts.p
+    #                 ts_total.q += ts.q
+    #
+    #         return ts_total
+    #     else:
+    #         return self._timeseries
+    #
+    # @property
+    # def timeseries_reactive(self):
+    #     """
+    #     Reactive power time series in kvar.
+    #
+    #     Parameters
+    #     -----------
+    #     timeseries_reactive : :pandas:`pandas.Seriese<series>`
+    #         Series containing reactive power in kvar.
+    #
+    #     Returns
+    #     -------
+    #     :pandas:`pandas.Series<series>` or None
+    #         Series containing reactive power time series in kvar. If it is not
+    #         set it is tried to be retrieved from `load_reactive_power`
+    #         attribute of global TimeSeries object. If that is not possible
+    #         None is returned.
+    #
+    #     """
+    #     if self._timeseries_reactive is None:
+    #         # if normalized reactive power time series are given, they are
+    #         # scaled by the annual consumption; if none are given reactive
+    #         # power time series are calculated timeseries getter using a given
+    #         # power factor
+    #         if self.grid.network.timeseries.load_reactive_power is not None:
+    #             self.power_factor = 'not_applicable'
+    #             self.reactive_power_mode = 'not_applicable'
+    #             ts_total = None
+    #             for sector in self.consumption.keys():
+    #                 consumption = self.consumption[sector]
+    #
+    #                 try:
+    #                     ts = self.grid.network.timeseries.load_reactive_power[
+    #                         sector].to_frame('q')
+    #                 except KeyError:
+    #                     logger.exception(
+    #                         "No timeseries for load of type {} "
+    #                         "given.".format(sector))
+    #                     raise
+    #                 ts = ts * consumption
+    #                 if ts_total is None:
+    #                     ts_total = ts
+    #                 else:
+    #                     ts_total.q += ts.q
+    #             return ts_total
+    #         else:
+    #             return None
+    #
+    #     else:
+    #         return self._timeseries_reactive
+    #
+    # @timeseries_reactive.setter
+    # def timeseries_reactive(self, timeseries_reactive):
+    #     if isinstance(timeseries_reactive, pd.Series):
+    #         self._timeseries_reactive = timeseries_reactive
+    #         self._power_factor = 'not_applicable'
+    #         self._reactive_power_mode = 'not_applicable'
+    #     else:
+    #         raise ValueError(
+    #             "Reactive power time series of load {} needs to be a pandas "
+    #             "Series.".format(repr(self)))
+
+    # @property
+    # def power_factor(self):
+    #     """
+    #     Power factor of load
+    #
+    #     Parameters
+    #     -----------
+    #     power_factor : :obj:`float`
+    #         Ratio of real power to apparent power.
+    #
+    #     Returns
+    #     --------
+    #     :obj:`float`
+    #         Ratio of real power to apparent power. If power factor is not set
+    #         it is retrieved from the network config object depending on the
+    #         grid level the load is in.
+    #
+    #     """
+    #     if self._power_factor is None:
+    #         if isinstance(self.grid, MVGrid):
+    #             self._power_factor = self.grid.network.config[
+    #                 'reactive_power_factor']['mv_load']
+    #         elif isinstance(self.grid, LVGrid):
+    #             self._power_factor = self.grid.network.config[
+    #                 'reactive_power_factor']['lv_load']
+    #     return self._power_factor
+
+    # @power_factor.setter
+    # def power_factor(self, power_factor):
+    #     self._power_factor = power_factor
+    #
+    # @property
+    # def reactive_power_mode(self):
+    #     """
+    #     Power factor mode of Load.
+    #
+    #     This information is necessary to make the load behave in an inductive
+    #     or capacitive manner. Essentially this changes the sign of the reactive
+    #     power.
+    #
+    #     The convention used here in a load is that:
+    #     - when `reactive_power_mode` is 'inductive' then Q is positive
+    #     - when `reactive_power_mode` is 'capacitive' then Q is negative
+    #
+    #     Parameters
+    #     ----------
+    #     reactive_power_mode : :obj:`str` or None
+    #         Possible options are 'inductive', 'capacitive' and
+    #         'not_applicable'. In the case of 'not_applicable' a reactive
+    #         power time series must be given.
+    #
+    #     Returns
+    #     -------
+    #     :obj:`str`
+    #         In the case that this attribute is not set, it is retrieved from
+    #         the network config object depending on the voltage level the load
+    #         is in.
+    #
+    #     """
+    #     if self._reactive_power_mode is None:
+    #         if isinstance(self.grid, MVGrid):
+    #             self._reactive_power_mode = self.grid.network.config[
+    #                 'reactive_power_mode']['mv_load']
+    #         elif isinstance(self.grid, LVGrid):
+    #             self._reactive_power_mode = self.grid.network.config[
+    #                 'reactive_power_mode']['lv_load']
+    #
+    #     return self._reactive_power_mode
+    #
+    # @reactive_power_mode.setter
+    # def reactive_power_mode(self, reactive_power_mode):
+    #     self._reactive_power_mode = reactive_power_mode
+
+    # @property
+    # def q_sign(self):
+    #     """
+    #     Get the sign of reactive power based on :attr:`_reactive_power_mode`.
+    #
+    #     Returns
+    #     -------
+    #     :obj:`int` or None
+    #         In case of inductive reactive power returns +1 and in case of
+    #         capacitive reactive power returns -1. If reactive power time
+    #         series is given, `q_sign` is set to None.
+    #
+    #     """
+    #     if self.reactive_power_mode.lower() == 'inductive':
+    #         return 1
+    #     elif self.reactive_power_mode.lower() == 'capacitive':
+    #         return -1
+    #     elif self.reactive_power_mode.lower() == 'not_applicable':
+    #         return None
+    #     else:
+    #         raise ValueError("Unknown value {} in reactive_power_mode for "
+    #                          "Load {}.".format(self.reactive_power_mode,
+    #                                            repr(self)))
+
     def _check_timeindex(self):
         """
         Check function to check if all feed-in and load time series contain
@@ -1582,7 +2008,7 @@ class CurtailmentControl:
         aggregative. Default: None.
 
     """
-
+    # ToDo move some properties from grid here (e.g. peak_load, generators,...)
     def __init__(self, edisgo, methodology, curtailment_timeseries, mode=None,
                  **kwargs):
 
