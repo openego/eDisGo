@@ -1,7 +1,5 @@
 name,U_n,I_max_th,R_per_km,L_per_km
 #-,V,A,ohm/km,mH/km
-# Source FaberKabel Starkstromkabel NAYY-J/-O nach VDE 0276-603
-# Note that only values used for calculation are saved in this table, for more values look into source. Only insert literature values here, calculations in code for better comprehensibility
 NAYY 4x1x300,400,419,0.1,0.279
 NAYY 4x1x240,400,364,0.125,0.254
 NAYY 4x1x185,400,313,0.164,0.256

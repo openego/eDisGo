@@ -1,6 +1,5 @@
 name,U_n,I_max_th,R_per_km,L_per_km,C_per_km
-#-,V,A,ohm/km,mH/km,uF/km
-# Note that only values used for calculation are saved in this table, for more values look into source. Only insert literature values here, calculations in code for better comprehensibility,# Note that only values used for calculation are saved in this table, for more values look into source. Only insert literature values here, calculations in code for better comprehensibility,,,,
+#-,kV,A,ohm/km,mH/km,uF/km
 NA2XS2Y 3x1x185 RM/25,10,357,0.164,0.38,0.41
 NA2XS2Y 3x1x240 RM/25,10,417,0.125,0.36,0.47
 NA2XS2Y 3x1x300 RM/25,10,466,0.1,0.35,0.495

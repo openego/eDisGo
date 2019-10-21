@@ -1,14 +1,15 @@
 Release v0.0.10
 ================
 
-Release date: <month> <day>, <year>
+Release date: October 18, 2019
 
 Changes
 -------
 * Updated to networkx 2.0
 * Changed data of transformers `#240 <https://github.com/openego/ding0/issues/240>`_
+* Proper session handling and readonly usage (PR `#160 <https://github.com/openego/eDisGo/pull/160>`_)
 
 Bug fixes
 ----------
-* Corrected calculation of current from pypsa power flow results (PR #153 `#153 <https://github.com/openego/eDisGo/pull/153>`_).
+* Corrected calculation of current from pypsa power flow results (PR `#153 <https://github.com/openego/eDisGo/pull/153>`_).
 

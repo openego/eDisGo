@@ -13,7 +13,7 @@ config_db_tables
 The config file ``config_db_tables.cfg`` holds data about which database connection
 to use from your saved database connections and which dataprocessing version.
 
-.. include:: config/config_db_tables_default.cfg
+.. include:: ../edisgo/config/config_db_tables_default.cfg
    :literal:
 
 .. _config_grid_expansion:
@@ -25,7 +25,7 @@ The config file ``config_grid_expansion.cfg`` holds data mainly needed to determ
 grid expansion needs and costs - these are standard equipment to use in grid expansion and
 its costs, as well as allowed voltage deviations and line load factors.
 
-.. include:: config/config_grid_expansion_default.cfg
+.. include:: ../edisgo/config/config_grid_expansion_default.cfg
    :literal:
 
 .. _config_timeseries:
@@ -39,7 +39,7 @@ used in conventional grid expansion planning, power factors and modes (inductive
 or capacitative) to generate reactive power time series, as well as configurations
 of the demandlib in case load time series are generated using the oemof demandlib.
 
-.. include:: config/config_timeseries_default.cfg
+.. include:: ../edisgo/config/config_timeseries_default.cfg
    :literal:
 
 .. _config_grid:
@@ -47,8 +47,8 @@ of the demandlib in case load time series are generated using the oemof demandli
 config_grid
 ----------------------
 
-The config file ``config_grid.cfg`` holds data to specify parameters used when 
+The config file ``config_grid.cfg`` holds data to specify parameters used when
 connecting new generators to the grid and where to position disconnecting points.
 
-.. include:: config/config_grid_default.cfg
+.. include:: ../edisgo/config/config_grid_default.cfg
    :literal:
