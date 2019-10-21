@@ -27,4 +27,4 @@ GeneratorFluctuating_24,Bus_GeneratorFluctuating_24,PQ,0.003,solar,1122075,solar
 GeneratorFluctuating_25,Bus_GeneratorFluctuating_25,PQ,0.006,solar,1122075,solar_solar_roof_mounted
 GeneratorFluctuating_26,Bus_GeneratorFluctuating_26,PQ,0.004,solar,1122075,solar_solar_roof_mounted
 GeneratorFluctuating_27,Bus_GeneratorFluctuating_27,PQ,0.021,solar,1122075,solar_solar_roof_mounted
-Generator_slack,Bus_MVStation_1,Slack,0,Slack generator,,
+MV_1_slack,Bus_MVStation_1,Slack,0,Slack generator,,
