@@ -703,9 +703,7 @@ class Network:
         self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
 
         self._generator_scenario = kwargs.get('generator_scenario', None)
-        self._mv_grid = kwargs.get('mv_grid', None) # getter implementieren mit dem mv gefiltert werden kann
         self._pypsa = None # getter implementieren, der network in pypsa umwandelt
-        self._dingo_import_data = []
 
     def _load_equipment_data(self):
         """
@@ -955,6 +953,92 @@ class Network:
     @lines_df.setter
     def lines_df(self, lines_df):
         self._lines_df = lines_df
+
+    @property
+    def switches_df(self):
+        """
+        Dataframe with all switches in MV grid and underlying LV grids.
+
+        Parameters
+        ----------
+        switches_df : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all switches in MV grid and underlying LV grids.
+            Index of the dataframe are switch names. Columns of the
+            dataframe are:
+            bus_open
+            bus_closed
+            branch
+            type
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all switches in MV grid and underlying LV grids.
+
+        """
+        return self._switches_df
+
+    @switches_df.setter
+    def switches_df(self, switches_df):
+        self._switches_df = switches_df
+
+    @property
+    def storages_df(self):
+        """
+        Dataframe with all storages in MV grid and underlying LV grids.
+
+        Parameters
+        ----------
+        storages_df : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all storages in MV grid and underlying LV grids.
+            Index of the dataframe are storage names. Columns of the
+            dataframe are:
+            bus
+            control
+            p_nom
+            capacity
+            efficiency_store
+            efficiency_dispatch
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all storages in MV grid and underlying LV grids.
+
+        """
+        return self._storages_df
+
+    @storages_df.setter
+    def storages_df(self, storages_df):
+        self._storages_df = storages_df
+
+    @property
+    def generators(self):
+        """
+        Connected generators within the network.
+
+        Returns
+        -------
+        list(:class:`~.grid.components.Generator`)
+            List of generators within the network.
+
+        """
+        for gen in self.generators_df.index:
+            yield Generator(id=gen, network=self)
+
+    @property
+    def loads(self):
+        """
+        Connected loads within the network.
+
+        Returns
+        -------
+        list(:class:`~.grid.components.Load`)
+            List of loads within the network.
+
+        """
+        for l in self.loads_df.index:
+            yield Load(id=l, network=self)
 
     @property
     def id(self):

@@ -1,4 +1,4 @@
-from edisgo.grid.components import Generator
+from edisgo.grid.components import Generator, Load, Storage
 
 
 class Grid:
@@ -25,7 +25,7 @@ class Grid:
         # # ToDo Implement if necessary
         # self._transformers = None
         # self._station = None
-        # ToDo maybe add lines_df and lines property id needed
+        # ToDo maybe add lines_df and lines property if needed
 
     @property
     def id(self):
@@ -86,6 +86,20 @@ class Grid:
         """
         return self.network.loads_df[
             self.network.loads_df.bus.isin(self.buses_df.index)]
+
+    @property
+    def loads(self):
+        """
+        Connected loads within the grid.
+
+        Returns
+        -------
+        list(:class:`~.grid.components.Load`)
+            List of loads within the grid.
+
+        """
+        for l in self.loads_df.index:
+            yield Load(id=l, network=self.network, grid=self)
 
     @property
     def weather_cells(self):

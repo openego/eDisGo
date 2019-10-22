@@ -8,6 +8,7 @@ from edisgo.data import import_data
 
 
 class TestImportFromDing0:
+    #ToDo add tests for switches_df and storages_df
 
     @classmethod
     def setup_class(self):
