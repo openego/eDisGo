@@ -2,6 +2,7 @@ import os
 import math
 import logging
 from math import acos, tan
+from abc import ABC, abstractmethod
 
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import Point, LineString
@@ -9,7 +10,7 @@ if not 'READTHEDOCS' in os.environ:
 logger = logging.getLogger('edisgo')
 
 
-class Component:
+class BasicComponent(ABC):
     """
     Generic component
 
@@ -18,7 +19,6 @@ class Component:
     def __init__(self, **kwargs):
         self._id = kwargs.get('id', None)
         self._network = kwargs.get('network', None)
-        self._grid = kwargs.get('grid', None)
 
     @property
     def id(self):
@@ -45,6 +45,105 @@ class Component:
 
         """
         return self._network
+
+    @property
+    def voltage_level(self):
+        """
+        Voltage level the component is connected to ('mv' or 'lv').
+
+        Returns
+        --------
+        :obj:`str`
+            Voltage level. Returns 'lv' if component connected to the low
+            voltage and 'mv' if component is connected to the medium voltage.
+
+        """
+        return 'lv' if self.grid.nominal_voltage < 1 else 'mv'
+
+    def __repr__(self):
+        return '_'.join([self.__class__.__name__, str(self._id)])
+
+
+class Component(BasicComponent):
+    """
+    Generic component for all components that can be considered nodes,
+    e.g. generators and loads.
+
+    """
+
+    @property
+    @abstractmethod
+    def _network_component_df(self):
+        """
+        Dataframe in :class:`~.grid.network.Network` containing all components
+        of same type, e.g. for loads this is
+        :attr:`~.grid.network.Network.loads_df`.
+
+        """
+
+    @property
+    def bus(self):
+        """
+        Bus component is connected to.
+
+        Parameters
+        -----------
+        bus : :obj:`str`
+            ID of bus to connect component to.
+
+        Returns
+        --------
+        :obj:`str`
+            Bus component is connected to.
+
+        """
+        return self._network_component_df.loc[self.id, 'bus']
+
+    @bus.setter
+    def bus(self, bus):
+        # check if bus is valid
+        if bus in self.network.buses_df.index:
+            self._network_component_df.loc[self.id, 'bus'] = bus
+            # reset grid
+            self._grid = None
+        else:
+            raise AttributeError("Given bus ID does not exist.")
+
+    @property
+    def grid(self):
+        """
+        Grid component is in.
+
+        Returns
+        --------
+        :class:`~.grid.components.Grid`
+            Grid component is in.
+
+        """
+        grid = self.network.buses_df.loc[
+            self._network_component_df.loc[self.id, 'bus'],
+            ['mv_grid_id', 'lv_grid_id']]
+        if math.isnan(grid.lv_grid_id):
+            return self.network.mv_grid
+        else:
+            return self.network._grids['LVGrid_{}'.format(grid.lv_grid_id)]
+
+    @property
+    def geom(self):
+        """
+        Geo location of component.
+
+        Returns
+        --------
+        :shapely:`Point`
+
+        """
+        [x, y] = self.network.buses_df.loc[
+            self._network_component_df.loc[self.id, 'bus'], ['x', 'y']]
+        if math.isnan(x) or math.isnan(y):
+            return None
+        else:
+            return Point(x, y)
 
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
@@ -127,6 +226,21 @@ class Load(Component):
         super().__init__(**kwargs)
 
     @property
+    def _network_component_df(self):
+        """
+        Dataframe in :class:`~.grid.network.Network` containing all loads.
+
+        For loads this is :attr:`~.grid.network.Network.loads_df`.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            See :attr:`~.grid.network.Network.loads_df` for more information.
+
+        """
+        return self.network.loads_df
+
+    @property
     def peak_load(self):
         """
         Peak load in MW.
@@ -201,70 +315,6 @@ class Load(Component):
         self.network.loads_df.loc[self.id, 'sector'] = sector
 
     @property
-    def bus(self):
-        """
-        Bus load is connected to.
-
-        Parameters
-        -----------
-        bus : :obj:`str`
-            ID of bus to connect load to.
-
-        Returns
-        --------
-        :obj:`str`
-            Bus load is connected to.
-
-        """
-        return self.network.loads_df.loc[self.id, 'bus']
-
-    @bus.setter
-    def bus(self, bus):
-        # check if bus is valid
-        if bus in self.network.buses_df.index:
-            self.network.loads_df.loc[self.id, 'bus'] = bus
-            # reset grid
-            self._grid = None
-        else:
-            raise AttributeError("Given bus ID does not exist.")
-
-    @property
-    def grid(self):
-        """
-        Grid load is in.
-
-        Returns
-        --------
-        :class:`~.grid.components.Grid`
-            Grid load is in.
-
-        """
-        if self._grid is None:
-            grid = self.network.buses_df.loc[
-                self.network.loads_df.loc[self.id, 'bus'],
-                ['mv_grid_id', 'lv_grid_id']]
-            if math.isnan(grid.lv_grid_id):
-                return self.network.mv_grid
-            else:
-                return self.network._grids['LVGrid_{}'.format(grid.lv_grid_id)]
-        else:
-            return self._grid
-
-    @property
-    def voltage_level(self):
-        """
-        Voltage level the load is connected to ('mv' or 'lv').
-
-        Returns
-        --------
-        :obj:`str`
-            Voltage level. Returns 'lv' if load connected to the low voltage
-            and 'mv' if load is connected to the medium voltage.
-
-        """
-        return 'lv' if self.grid.nominal_voltage < 1 else 'mv'
-
-    @property
     def active_power_timeseries(self):
         """
         Active power time series of load in MW.
@@ -290,23 +340,6 @@ class Load(Component):
         """
         return self.network.loads_t.q_set.loc[self.id]
 
-    @property
-    def geom(self):
-        """
-        Geo location of load.
-
-        Returns
-        --------
-        :shapely:`Point`
-
-        """
-        [x, y] = self.network.buses_df.loc[
-            self.network.loads_df.loc[self.id, 'bus'], ['x', 'y']]
-        if math.isnan(x) or math.isnan(y):
-            return None
-        else:
-            return Point(x, y)
-
 
 class Generator(Component):
     """
@@ -316,6 +349,22 @@ class Generator(Component):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    @property
+    def _network_component_df(self):
+        """
+        Dataframe in :class:`~.grid.network.Network` containing generators.
+
+        For generators this is :attr:`~.grid.network.Network.generators_df`.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            See :attr:`~.grid.network.Network.generators_df` for more
+            information.
+
+        """
+        return self.network.generators_df
 
     @property
     def nominal_power(self):
@@ -333,13 +382,13 @@ class Generator(Component):
             Nominal power of generator in MW.
 
         """
-        return self.network.generators_df.loc[self.id, 'nominal_power']
+        return self.network.generators_df.loc[self.id, 'p_nom']
 
     @nominal_power.setter
     def nominal_power(self, nominal_power):
         # ToDo: Maybe perform type check before setting it.
         self.network.generators_df.loc[
-            self.id, 'nominal_power'] = nominal_power
+            self.id, 'p_nom'] = nominal_power
 
     @property
     def type(self):
@@ -390,42 +439,6 @@ class Generator(Component):
         self.network.generators_df.loc[self.id, 'subtype'] = subtype
 
     @property
-    def grid(self):
-        """
-        Grid generator is in.
-
-        Returns
-        --------
-        :class:`~.grid.components.Grid`
-            Grid generator is in.
-
-        """
-        if self._grid is None:
-            grid = self.network.buses_df.loc[
-                self.network.generators_df.loc[self.id, 'bus'],
-                ['mv_grid_id', 'lv_grid_id']]
-            if grid.lv_grid_id is None:
-                return self.network.mv_grid
-            else:
-                return self.network._grids['LVGrid_{}'.format(grid.lv_grid_id)]
-        else:
-            return self._grid
-
-    @property
-    def voltage_level(self):
-        """
-        Voltage level the generator is connected to ('mv' or 'lv').
-
-        Returns
-        --------
-        :obj:`str`
-            Voltage level. Returns 'lv' if generator connected to the low
-            voltage and 'mv' if generator is connected to the medium voltage.
-
-        """
-        return 'lv' if self.grid.nominal_voltage < 1 else 'mv'
-
-    @property
     def active_power_timeseries(self):
         """
         Active power time series of generator in MW.
@@ -459,6 +472,11 @@ class Generator(Component):
         The weather cell ID is only used to obtain generator feed-in time
         series for solar and wind generators.
 
+        Parameters
+        -----------
+        weather_cell_id : int
+            Weather cell ID of generator.
+
         Returns
         --------
         :obj:`int`
@@ -467,19 +485,10 @@ class Generator(Component):
         """
         return self.network.generators_df.loc[self.id, 'weather_cell_id']
 
-    @property
-    def geom(self):
-        """
-        Geo location of generator.
-
-        Returns
-        --------
-        :shapely:`Point`
-
-        """
-        [x, y] = self.network.buses_df.loc[
-            self.network.generators_df.loc[self.id, 'bus'], ['x', 'y']]
-        return Point(x, y)
+    @weather_cell_id.setter
+    def weather_cell_id(self, weather_cell_id):
+        self.network.generators_df.loc[
+            self.id, 'weather_cell_id'] = weather_cell_id
 
 
 class Storage(Component):
@@ -734,7 +743,7 @@ class Storage(Component):
         return str(self._id)
 
 
-class Switch(Component):
+class Switch(BasicComponent):
     """
     Switch object
 
@@ -754,11 +763,27 @@ class Switch(Component):
         self._state = kwargs.get('state', None)
 
     @property
+    def _network_component_df(self):
+        """
+        Dataframe in :class:`~.grid.network.Network` containing all switches.
+
+        For switches this is :attr:`~.grid.network.Network.switches_df`.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            See :attr:`~.grid.network.Network.switches_df` for more
+            information.
+
+        """
+        return self.network.switches_df
+
+    @property
     def type(self):
         """
         Type of switch.
 
-        So far edisgo only considers disconnecting points.
+        So far edisgo only considers switch disconnectors.
 
         Parameters
         -----------
@@ -786,11 +811,6 @@ class Switch(Component):
         `bus_open` specifies the bus the branch is connected to in the open
         state.
 
-        Parameters
-        -----------
-        type : :obj:`str`
-            Bus in 'open' state.
-
         Returns
         --------
         :obj:`str`
@@ -798,10 +818,6 @@ class Switch(Component):
 
         """
         return self.network.switches_df.loc[self.id, 'bus_open']
-
-    @bus_open.setter
-    def bus_open(self, bus_open):
-        self.network.switches_df.loc[self.id, 'bus_open'] = bus_open
 
     @property
     def bus_closed(self):
@@ -812,11 +828,6 @@ class Switch(Component):
         `bus_closed` specifies the bus the branch is connected to in the closed
         state.
 
-        Parameters
-        -----------
-        type : :obj:`str`
-            Bus in 'closed' state.
-
         Returns
         --------
         :obj:`str`
@@ -824,10 +835,6 @@ class Switch(Component):
 
         """
         return self.network.switches_df.loc[self.id, 'bus_closed']
-
-    @bus_closed.setter
-    def bus_closed(self, bus_closed):
-        self.network.switches_df.loc[self.id, 'bus_closed'] = bus_closed
 
     @property
     def state(self):
@@ -876,15 +883,12 @@ class Switch(Component):
             Grid switch is in.
 
         """
-        if self._grid is None:
-            grid = self.network.buses_df.loc[
-                self.bus_closed, ['mv_grid_id', 'lv_grid_id']]
-            if math.isnan(grid.lv_grid_id):
-                return self.network.mv_grid
-            else:
-                return self.network._grids['LVGrid_{}'.format(grid.lv_grid_id)]
+        grid = self.network.buses_df.loc[
+            self.bus_closed, ['mv_grid_id', 'lv_grid_id']]
+        if math.isnan(grid.lv_grid_id):
+            return self.network.mv_grid
         else:
-            return self._grid
+            return self.network._grids['LVGrid_{}'.format(grid.lv_grid_id)]
 
     def open(self):
         """

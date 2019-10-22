@@ -50,6 +50,42 @@ class TestImportFromDing0:
             load.bus = 'None'
         # ToDo add test for active_power_timeseries and reactive_power_timeseries once implemented
 
+    def test_generator_class(self):
+        """Test Generator class getter, setter, methods"""
+
+        gen = Generator(id='GeneratorFluctuating_7', network=self.network)
+        #GeneratorFluctuating_7,Bus_GeneratorFluctuating_7,PQ,3,wind,1122075,wind_wind_onshore
+        # test getter
+        assert gen.id == 'GeneratorFluctuating_7'
+        assert gen.bus == 'Bus_GeneratorFluctuating_7'
+        assert gen.grid == self.network.mv_grid
+        assert gen.voltage_level == 'mv'
+        assert pytest.approx(gen.geom.x, abs=1e-10) == 7.97127568152858
+        assert pytest.approx(gen.geom.y, abs=1e-10) == 48.0666552118727
+        assert gen.nominal_power == 3
+        assert gen.type == 'wind'
+        assert gen.subtype == 'wind_wind_onshore'
+        assert gen.weather_cell_id == 1122075
+        #ToDo add test for active_power_timeseries and reactive_power_timeseries once implemented
+
+        # test setter
+        gen.nominal_power = 4
+        assert gen.nominal_power == 4
+        gen.type = 'solar'
+        assert gen.type == 'solar'
+        gen.subtype = 'rooftop'
+        assert gen.subtype == 'rooftop'
+        gen.weather_cell_id = 2
+        assert gen.weather_cell_id == 2
+        gen.bus = 'Bus_GeneratorFluctuating_9'
+        assert gen.bus == 'Bus_GeneratorFluctuating_9'
+        assert gen.grid == self.network._grids['LVGrid_1.0']
+        assert gen.voltage_level == 'lv'
+        msg = "Given bus ID does not exist."
+        with pytest.raises(AttributeError, match=msg):
+            gen.bus = 'None'
+        # ToDo add test for active_power_timeseries and reactive_power_timeseries once implemented
+
     def test_switch_class(self):
         """Test Switch class"""
 
@@ -63,8 +99,12 @@ class TestImportFromDing0:
         assert switch.type == 'Switch Disconnector'
         assert switch.state == 'closed'
         assert switch.grid == self.network.mv_grid
+        assert switch.voltage_level == 'mv'
 
         # test setter
+        switch.type = 'test'
+        assert switch.type == 'test'
+
         # test methods
         switch.open()
         switch._state = None

@@ -7,7 +7,7 @@ class Grid:
 
     Parameters
     -----------
-    _id : :obj:`str`
+    _id : str or int
         Identifier
     _network : :class:`~.grid.network.Network`
         Network container.
@@ -70,7 +70,7 @@ class Grid:
 
         """
         for gen in self.generators_df.index:
-            yield Generator(id=gen, network=self.network, grid=self)
+            yield Generator(id=gen, network=self.network)
 
     @property
     def loads_df(self):
@@ -99,7 +99,7 @@ class Grid:
 
         """
         for l in self.loads_df.index:
-            yield Load(id=l, network=self.network, grid=self)
+            yield Load(id=l, network=self.network)
 
     @property
     def weather_cells(self):
