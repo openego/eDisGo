@@ -1,10 +1,10 @@
 import os
+import math
 import logging
-import pandas as pd
 from math import acos, tan
 
 if not 'READTHEDOCS' in os.environ:
-    from shapely.geometry import LineString
+    from shapely.geometry import Point, LineString
 
 logger = logging.getLogger('edisgo')
 
@@ -46,86 +46,75 @@ class Component:
         """
         return self._network
 
-    @property
-    def grid(self):
-        """
-        Grid component is in.
-
-        Returns
-        --------
-        :class:`~.grid.components.Grid`
-
-        """
-        return self._grid
-
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
 
 
-class Station(Component):
-    """Station object (medium or low voltage)
-
-    Represents a station, contains transformers.
-
-    Attributes
-    ----------
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-        self._transformers = kwargs.get('transformers', None)
-
-    @property
-    def transformers(self):
-        """:obj:`list` of :class:`Transformer` : Transformers located in
-        station"""
-        return self._transformers
-
-    @transformers.setter
-    def transformers(self, transformer):
-        """
-        Parameters
-        ----------
-        transformer : :obj:`list` of :class:`Transformer`
-        """
-        self._transformers = transformer
-
-    def add_transformer(self, transformer):
-        self._transformers.append(transformer)
-
-
-class Transformer(Component):
-    """Transformer object
-
-    Attributes
-    ----------
-    _voltage_op : :obj:`float`
-        Operational voltage
-    _type : :pandas:`pandas.DataFrame<dataframe>`
-        Specification of type, refers to  ToDo: ADD CORRECT REF TO (STATIC) DATA
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._mv_grid = kwargs.get('mv_grid', None)
-        self._voltage_op = kwargs.get('voltage_op', None)
-        self._type = kwargs.get('type', None)
-
-    @property
-    def mv_grid(self):
-        return self._mv_grid
-
-    @property
-    def voltage_op(self):
-        return self._voltage_op
-
-    @property
-    def type(self):
-        return self._type
-
-    def __repr__(self):
-        return str(self._id)
+#ToDo implement if needed
+# class Station(Component):
+#     """Station object (medium or low voltage)
+#
+#     Represents a station, contains transformers.
+#
+#     Attributes
+#     ----------
+#     """
+#
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+#
+#         self._transformers = kwargs.get('transformers', None)
+#
+#     @property
+#     def transformers(self):
+#         """:obj:`list` of :class:`Transformer` : Transformers located in
+#         station"""
+#         return self._transformers
+#
+#     @transformers.setter
+#     def transformers(self, transformer):
+#         """
+#         Parameters
+#         ----------
+#         transformer : :obj:`list` of :class:`Transformer`
+#         """
+#         self._transformers = transformer
+#
+#     def add_transformer(self, transformer):
+#         self._transformers.append(transformer)
+#
+#
+# class Transformer(Component):
+#     """Transformer object
+#
+#     Attributes
+#     ----------
+#     _voltage_op : :obj:`float`
+#         Operational voltage
+#     _type : :pandas:`pandas.DataFrame<dataframe>`
+#         Specification of type, refers to  ToDo: ADD CORRECT REF TO (STATIC) DATA
+#     """
+#
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+#         self._mv_grid = kwargs.get('mv_grid', None)
+#         self._voltage_op = kwargs.get('voltage_op', None)
+#         self._type = kwargs.get('type', None)
+#
+#     @property
+#     def mv_grid(self):
+#         return self._mv_grid
+#
+#     @property
+#     def voltage_op(self):
+#         return self._voltage_op
+#
+#     @property
+#     def type(self):
+#         return self._type
+#
+#     def __repr__(self):
+#         return str(self._id)
 
 
 class Load(Component):
@@ -153,23 +142,35 @@ class Load(Component):
             Peak load in MW.
 
         """
-        return self.network.loads.loc[self.id, 'peak_load']
+        return self.network.loads_df.loc[self.id, 'peak_load']
 
     @peak_load.setter
     def peak_load(self, peak_load):
         # ToDo: Maybe perform type check before setting it.
-        self.network.loads.loc[self.id, 'peak_load'] = peak_load
+        self.network.loads_df.loc[self.id, 'peak_load'] = peak_load
 
     @property
-    def consumption(self):
+    def annual_consumption(self):
         """
-        #ToDo Wo soll consumption hergeholt werden?
-        """
-        return None
+        Annual consumption of load in MWh.
 
-    @consumption.setter
-    def consumption(self, consumption):
-        self._consumption = consumption
+        Parameters
+        -----------
+        annual_consumption : :obj:`float`
+            Annual consumption in MWh.
+
+        Returns
+        --------
+        :obj:`float`
+            Annual consumption of load in MWh.
+
+        """
+        return self.network.loads_df.loc[self.id, 'annual_consumption']
+
+    @annual_consumption.setter
+    def annual_consumption(self, annual_consumption):
+        self.network.loads_df.loc[
+            self.id, 'annual_consumption'] = annual_consumption
 
     @property
     def sector(self):
@@ -192,12 +193,40 @@ class Load(Component):
         #ToDo: Maybe return 'not specified' in case sector is None?
 
         """
-        return self.network.loads.loc[self.id, 'sector']
+        return self.network.loads_df.loc[self.id, 'sector']
 
     @sector.setter
     def sector(self, sector):
         # ToDo: Maybe perform type check before setting it.
-        self.network.loads.loc[self.id, 'sector'] = sector
+        self.network.loads_df.loc[self.id, 'sector'] = sector
+
+    @property
+    def bus(self):
+        """
+        Bus load is connected to.
+
+        Parameters
+        -----------
+        bus : :obj:`str`
+            ID of bus to connect load to.
+
+        Returns
+        --------
+        :obj:`str`
+            Bus load is connected to.
+
+        """
+        return self.network.loads_df.loc[self.id, 'bus']
+
+    @bus.setter
+    def bus(self, bus):
+        # check if bus is valid
+        if bus in self.network.buses_df.index:
+            self.network.loads_df.loc[self.id, 'bus'] = bus
+            # reset grid
+            self._grid = None
+        else:
+            raise AttributeError("Given bus ID does not exist.")
 
     @property
     def grid(self):
@@ -211,10 +240,10 @@ class Load(Component):
 
         """
         if self._grid is None:
-            grid = self.network.buses.loc[
-                self.network.loads.loc[self.id, 'bus'],
+            grid = self.network.buses_df.loc[
+                self.network.loads_df.loc[self.id, 'bus'],
                 ['mv_grid_id', 'lv_grid_id']]
-            if grid.lv_grid_id is None:
+            if math.isnan(grid.lv_grid_id):
                 return self.network.mv_grid
             else:
                 return self.network._grids['LVGrid_{}'.format(grid.lv_grid_id)]
@@ -229,7 +258,8 @@ class Load(Component):
         Returns
         --------
         :obj:`str`
-            Voltage level
+            Voltage level. Returns 'lv' if load connected to the low voltage
+            and 'mv' if load is connected to the medium voltage.
 
         """
         return 'lv' if self.grid.nominal_voltage < 1 else 'mv'
@@ -263,17 +293,19 @@ class Load(Component):
     @property
     def geom(self):
         """
-        Geo location of generator.
+        Geo location of load.
 
         Returns
         --------
-        shapely Point
+        :shapely:`Point`
 
         """
-        geom = self.network.buses.loc[
-            self.network.loads.loc[self.id, 'bus'], ['x', 'y']]
-        # ToDo return shapely point
-        pass
+        [x, y] = self.network.buses_df.loc[
+            self.network.loads_df.loc[self.id, 'bus'], ['x', 'y']]
+        if math.isnan(x) or math.isnan(y):
+            return None
+        else:
+            return Point(x, y)
 
 
 class Generator(Component):
@@ -387,7 +419,8 @@ class Generator(Component):
         Returns
         --------
         :obj:`str`
-            Voltage level
+            Voltage level. Returns 'lv' if generator connected to the low
+            voltage and 'mv' if generator is connected to the medium voltage.
 
         """
         return 'lv' if self.grid.nominal_voltage < 1 else 'mv'
@@ -441,17 +474,17 @@ class Generator(Component):
 
         Returns
         --------
-        shapely Point
+        :shapely:`Point`
 
         """
-        geom = self.network.buses_df.loc[
+        [x, y] = self.network.buses_df.loc[
             self.network.generators_df.loc[self.id, 'bus'], ['x', 'y']]
-        #ToDo return shapely point
-        pass
+        return Point(x, y)
 
 
 class Storage(Component):
-    """Storage object
+    """
+    Storage object
 
     Describes a single storage instance in the eDisGo grid. Includes technical
     parameters such as :attr:`Storage.efficiency_in` or
@@ -506,17 +539,6 @@ class Storage(Component):
             return self._timeseries.loc[
                    self.grid.network.timeseries.timeindex, :]
 
-    @timeseries.setter
-    def timeseries(self, ts):
-        self._timeseries = ts
-
-    def pypsa_timeseries(self):
-        """Return time series in PyPSA format
-
-        Convert from kW, kVA to MW, MVA
-
-        """
-        return self.timeseries / 1e3
 
     @property
     def nominal_power(self):
@@ -712,229 +734,314 @@ class Storage(Component):
         return str(self._id)
 
 
-class MVDisconnectingPoint(Component):
-    """Disconnecting point object
+class Switch(Component):
+    """
+    Switch object
 
-    Medium voltage disconnecting points = points where MV rings are split under
-    normal operation conditions (= switch disconnectors in DINGO).
+    Switches are for example medium voltage disconnecting points (points
+    where MV rings are split under normal operation conditions). They are
+    represented as branches and can have two states: 'open' or 'closed'. When
+    the switch is open the branch it is represented by connects some bus and
+    the bus specified in `bus_open`. When it is closed bus `bus_open` is
+    substitued by the bus specified in `bus_closed`.
 
-    Attributes
-    ----------
-    _nodes : tuple
-        Nodes of switch disconnector line segment
+
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
         self._state = kwargs.get('state', None)
-        self._line = kwargs.get('line', None)
-        self._nodes = kwargs.get('nodes', None)
 
-    def open(self):
-        """Toggle state to open switch disconnector"""
-        if self._state != 'open':
-            if self._line is not None:
-                self._state = 'open'
-                self._nodes = self.grid.graph.nodes_from_line(self._line)
-                self.grid.graph.remove_edge(
-                    self._nodes[0], self._nodes[1])
-            else:
-                raise ValueError('``line`` is not set')
+    @property
+    def type(self):
+        """
+        Type of switch.
 
-    def close(self):
-        """Toggle state to closed switch disconnector"""
-        self._state = 'closed'
-        self.grid.graph.add_edge(
-            self._nodes[0], self._nodes[1], line=self._line)
+        So far edisgo only considers disconnecting points.
+
+        Parameters
+        -----------
+        type : :obj:`str`
+            Type of switch.
+
+        Returns
+        --------
+        :obj:`str`
+            Type of switch.
+
+        """
+        return self.network.switches_df.loc[self.id, 'type_info']
+
+    @type.setter
+    def type(self, type):
+        self.network.switches_df.loc[self.id, 'type_info'] = type
+
+    @property
+    def bus_open(self):
+        """
+        Bus ID of bus the switch is 'connected' to when state is 'open'.
+
+        As switches are represented as branches they connect two buses.
+        `bus_open` specifies the bus the branch is connected to in the open
+        state.
+
+        Parameters
+        -----------
+        type : :obj:`str`
+            Bus in 'open' state.
+
+        Returns
+        --------
+        :obj:`str`
+            Bus in 'open' state.
+
+        """
+        return self.network.switches_df.loc[self.id, 'bus_open']
+
+    @bus_open.setter
+    def bus_open(self, bus_open):
+        self.network.switches_df.loc[self.id, 'bus_open'] = bus_open
+
+    @property
+    def bus_closed(self):
+        """
+        Bus ID of bus the switch is 'connected' to when state is 'closed'.
+
+        As switches are represented as branches they connect two buses.
+        `bus_closed` specifies the bus the branch is connected to in the closed
+        state.
+
+        Parameters
+        -----------
+        type : :obj:`str`
+            Bus in 'closed' state.
+
+        Returns
+        --------
+        :obj:`str`
+            Bus in 'closed' state.
+
+        """
+        return self.network.switches_df.loc[self.id, 'bus_closed']
+
+    @bus_closed.setter
+    def bus_closed(self, bus_closed):
+        self.network.switches_df.loc[self.id, 'bus_closed'] = bus_closed
 
     @property
     def state(self):
         """
-        Get state of switch disconnector
+        State of switch (open or closed).
 
         Returns
         -------
-        str or None
-            State of MV ring disconnector: 'open' or 'closed'.
+        str
+            State of switch: 'open' or 'closed'.
 
-            Returns `None` if switch disconnector line segment is not set. This
-            refers to an open ring, but it's unknown if the grid topology was
-            built correctly.
         """
+        if self._state is None:
+            col_closed = self._get_bus_column(self.bus_closed)
+            col_open = self._get_bus_column(self.bus_open)
+            if col_closed is None and col_open is not None:
+                self._state = 'open'
+            elif col_closed is not None and col_open is None:
+                self._state = 'closed'
+            else:
+                raise AttributeError(
+                    "State of switch could not be determined.")
         return self._state
 
     @property
-    def line(self):
+    def branch(self):
         """
-        Get or set line segment that belongs to the switch disconnector
-
-        The setter allows only to set the respective line initially. Once the
-        line segment representing the switch disconnector is set, it cannot be
-        changed.
+        Branch the switch is represented by.
 
         Returns
         -------
-        Line
-            Line segment that is part of the switch disconnector model
+        str
+            Branch the switch is represented by.
+
         """
-        return self._line
+        return self.network.switches_df.loc[self.id, 'branch']
 
-    @line.setter
-    def line(self, line):
-        if self._line is None:
-            if isinstance(line, Line):
-                self._line = line
+    @property
+    def grid(self):
+        """
+        Grid switch is in.
+
+        Returns
+        --------
+        :class:`~.grid.components.Grid`
+            Grid switch is in.
+
+        """
+        if self._grid is None:
+            grid = self.network.buses_df.loc[
+                self.bus_closed, ['mv_grid_id', 'lv_grid_id']]
+            if math.isnan(grid.lv_grid_id):
+                return self.network.mv_grid
             else:
-                raise TypeError('``line`` must be of type {}'.format(Line))
+                return self.network._grids['LVGrid_{}'.format(grid.lv_grid_id)]
         else:
-            raise ValueError('``line`` can only be set initially. Too late '
-                             'dude!')
+            return self._grid
 
+    def open(self):
+        """
+        Open switch.
 
-class BranchTee(Component):
-    """Branch tee object
-
-    A branch tee is used to branch off a line to connect another node
-    (german: Abzweigmuffe)
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.in_building = kwargs.get('in_building', None)
-
-        # set id of BranchTee automatically if not provided
-        if not self._id:
-            ids = [_.id for _ in
-                   self.grid.graph.nodes_by_attribute('branch_tee')]
-            if ids:
-                self._id = max(ids) + 1
+        """
+        if self.state != 'open':
+            self._state = 'open'
+            col = self._get_bus_column(self.bus_closed)
+            if col is not None:
+                self.network.lines_df.loc[self.branch, col] = self.bus_open
             else:
-                self._id = 1
+                raise AttributeError(
+                    "Could not open switch {}. Specified branch {} of switch "
+                    "has no bus {}. Please check the switch.".format(
+                        self.id, self.branch, self.bus_closed))
 
-    def __repr__(self):
-        return '_'.join(
-            [self.__class__.__name__, repr(self.grid), str(self._id)])
+    def close(self):
+        """
+        Close switch.
 
+        """
+        if self.state != 'closed':
+            self._state = 'closed'
+            col = self._get_bus_column(self.bus_open)
+            if col is not None:
+                self.network.lines_df.loc[self.branch, col] = self.bus_closed
+            else:
+                raise AttributeError(
+                    "Could not close switch {}. Specified branch {} of switch "
+                    "has no bus {}. Please check the switch.".format(
+                        self.id, self.branch, self.bus_closed))
 
-class MVStation(Station):
-    """MV Station object"""
+    def _get_bus_column(self, bus):
+        """
+        Returns column name of lines_df given bus is in.
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def __repr__(self, side=None):
-        repr_base = super().__repr__()
-
-        # As we don't consider HV-MV transformers in PFA, we don't have to care
-        # about primary side bus of MV station. Hence, the general repr()
-        # currently returned, implicitely refers to the secondary side (MV level)
-        # if side == 'hv':
-        #     return '_'.join(['primary', repr_base])
-        # elif side == 'mv':
-        #     return '_'.join(['secondary', repr_base])
-        # else:
-        #     return repr_base
-        return repr_base
-
-
-class LVStation(Station):
-    """LV Station object"""
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._mv_grid = kwargs.get('mv_grid', None)
-
-    @property
-    def mv_grid(self):
-        return self._mv_grid
-
-    def __repr__(self, side=None):
-        repr_base = super().__repr__()
-
-        if side == 'mv':
-            return '_'.join(['primary', repr_base])
-        elif side == 'lv':
-            return '_'.join(['secondary', repr_base])
+        """
+        if bus == self.network.lines_df.loc[self.branch, 'bus0']:
+            col = 'bus0'
+        elif bus == self.network.lines_df.loc[self.branch, 'bus1']:
+            col = 'bus1'
         else:
-            return repr_base
+            return None
+        return col
 
 
-class Line(Component):
-    """
-    Line object
+#ToDo implement if needed
+# class MVStation(Station):
+#     """MV Station object"""
+#
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+#
+#     def __repr__(self, side=None):
+#         repr_base = super().__repr__()
+#
+#         # As we don't consider HV-MV transformers in PFA, we don't have to care
+#         # about primary side bus of MV station. Hence, the general repr()
+#         # currently returned, implicitely refers to the secondary side (MV level)
+#         # if side == 'hv':
+#         #     return '_'.join(['primary', repr_base])
+#         # elif side == 'mv':
+#         #     return '_'.join(['secondary', repr_base])
+#         # else:
+#         #     return repr_base
+#         return repr_base
+#
+#
+# class LVStation(Station):
+#     """LV Station object"""
+#
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+#         self._mv_grid = kwargs.get('mv_grid', None)
+#
+#     @property
+#     def mv_grid(self):
+#         return self._mv_grid
+#
+#     def __repr__(self, side=None):
+#         repr_base = super().__repr__()
+#
+#         if side == 'mv':
+#             return '_'.join(['primary', repr_base])
+#         elif side == 'lv':
+#             return '_'.join(['secondary', repr_base])
+#         else:
+#             return repr_base
 
-    Parameters
-    ----------
-    _type: :pandas:`pandas.Series<series>`
-        Equipment specification including R and X for power flow analysis
-        Columns:
-
-        ======== ================== ====== =========
-        Column   Description        Unit   Data type
-        ======== ================== ====== =========
-        name     Name (e.g. NAYY..) -      str
-        U_n      Nominal voltage    kV     int
-        I_max_th Max. th. current   A      float
-        R        Resistance         Ohm/km float
-        L        Inductance         mH/km  float
-        C        Capacitance        uF/km  float
-        Source   Data source        -      str
-        ============================================
-
-    _length: float
-        Length of the line calculated in linear distance. Unit: m
-    _quantity: float
-        Quantity of parallel installed lines.
-    _kind: String
-        Specifies whether the line is an underground cable ('cable') or an
-        overhead line ('line').
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._type = kwargs.get('type', None)
-        self._length = kwargs.get('length', None)
-        self._quantity = kwargs.get('quantity', 1)
-        self._kind = kwargs.get('kind', None)
-
-    @property
-    def geom(self):
-        """Provide :shapely:`Shapely LineString object<linestrings>` geometry of
-        :class:`Line`"""
-        adj_nodes = self._grid._graph.nodes_from_line(self)
-
-        return LineString([adj_nodes[0].geom, adj_nodes[1].geom])
-
-    @property
-    def type(self):
-        return self._type
-
-    @type.setter
-    def type(self, new_type):
-        self._type = new_type
-
-    @property
-    def length(self):
-        return self._length
-
-    @length.setter
-    def length(self, new_length):
-        self._length = new_length
-
-    @property
-    def quantity(self):
-        return self._quantity
-
-    @quantity.setter
-    def quantity(self, new_quantity):
-        self._quantity = new_quantity
-
-    @property
-    def kind(self):
-        return self._kind
-
-    @kind.setter
-    def kind(self, new_kind):
-        self._kind = new_kind
-
+#ToDo Implement if necessary
+# class Line(Component):
+#     """
+#     Line object
+#
+#     Parameters
+#     ----------
+#     _type: :pandas:`pandas.Series<series>`
+#         Equipment specification including R and X for power flow analysis
+#         Columns:
+#
+#         ======== ================== ====== =========
+#         Column   Description        Unit   Data type
+#         ======== ================== ====== =========
+#         name     Name (e.g. NAYY..) -      str
+#         U_n      Nominal voltage    kV     int
+#         I_max_th Max. th. current   A      float
+#         R        Resistance         Ohm/km float
+#         L        Inductance         mH/km  float
+#         C        Capacitance        uF/km  float
+#         Source   Data source        -      str
+#         ============================================
+#
+#     _length: float
+#         Length of the line calculated in linear distance. Unit: m
+#     _quantity: float
+#         Quantity of parallel installed lines.
+#     _kind: String
+#         Specifies whether the line is an underground cable ('cable') or an
+#         overhead line ('line').
+#     """
+#
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+#         self._type = kwargs.get('type', None)
+#         self._length = kwargs.get('length', None)
+#         self._quantity = kwargs.get('quantity', 1)
+#         self._kind = kwargs.get('kind', None)
+#
+#     @property
+#     def geom(self):
+#         """Provide :shapely:`Shapely LineString object<linestrings>` geometry of
+#         :class:`Line`"""
+#         adj_nodes = self._grid._graph.nodes_from_line(self)
+#
+#         return LineString([adj_nodes[0].geom, adj_nodes[1].geom])
+#
+#     @property
+#     def type(self):
+#         return self._type
+#
+#     @type.setter
+#     def type(self, new_type):
+#         self._type = new_type
+#
+#     @property
+#     def length(self):
+#         return self._length
+#
+#     @length.setter
+#     def length(self, new_length):
+#         self._length = new_length
+#
+#     @property
+#     def quantity(self):
+#         return self._quantity
+#
+#     @quantity.setter
+#     def quantity(self, new_quantity):
+#         self._quantity = new_quantity
