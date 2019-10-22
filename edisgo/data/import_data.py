@@ -19,6 +19,7 @@ import pandas as pd
 from math import isnan
 import random
 import os
+import numpy as np
 
 if not 'READTHEDOCS' in os.environ:
     from shapely.ops import transform
@@ -74,7 +75,6 @@ def import_ding0_grid(path, network):
     network.transformers_df = grid.transformers.rename(
         columns={'r': 'r_pu', 'x': 'x_pu'})[COLUMNS['transformers_df']]
     network.lines_df = grid.lines[COLUMNS['lines_df']]
-    # ToDo add switches to test network and import here
     network.switches_df = pd.read_csv(os.path.join(path, 'switches.csv'),
                                       index_col=[0])
     network.storages_df = None
@@ -102,8 +102,7 @@ def import_ding0_grid(path, network):
     #                                   'position'])
 
     # Check data integrity
-    #ToDo
-    #_validate_ding0_grid_import(network)
+    _validate_ding0_grid_import(network)
 
 
 def _set_up_mv_grid(grid, network):
@@ -128,21 +127,82 @@ def _set_up_mv_grid(grid, network):
     pass
 
 
-def _validate_ding0_grid_import(mv_grid, ding0_mv_grid, lv_grid_mapping):
-    """Cross-check imported data with original data source
+def _validate_ding0_grid_import(network):
+    """Check imported data integrity
 
     Parameters
     ----------
-    mv_grid: MVGrid
-        eDisGo MV grid instance
-    ding0_mv_grid: MVGridDing0
-        Ding0 MV grid instance
-    lv_grid_mapping: dict
-        Translates Ding0 LV grids to associated, newly created eDisGo LV grids
+    network: Network
+        network class containing mv and lv grids
     """
+    # check for duplicate labels (of components)
+    duplicated_labels = []
+    if any(network.buses_df.index.duplicated()):
+        duplicated_labels.append(network.buses_df.index[
+                                     network.buses_df.index.duplicated()])
+    if any(network.generators_df.index.duplicated()):
+        duplicated_labels.append(network.generators_df.index[
+                                     network.generators_df.index.duplicated()])
+    if any(network.loads_df.index.duplicated()):
+        duplicated_labels.append(network.loads_df.index[
+                                     network.loads_df.index.duplicated()])
+    if any(network.transformers_df.index.duplicated()):
+        duplicated_labels.append(network.transformers_df.index[
+                                     network.transformers_df.index.duplicated()])
+    if any(network.lines_df.index.duplicated()):
+        duplicated_labels.append(network.lines_df.index[
+                                     network.lines_df.index.duplicated()])
+    if any(network.switches_df.index.duplicated()):
+        duplicated_labels.append(network.switches_df.index[
+                                     network.switches_df.index.duplicated()])
+    if duplicated_labels:
+        raise ValueError("{labels} have duplicate entry in "
+                         "one of the components dataframes".format(
+            labels=duplicated_labels))
 
-    #ToDo implement (z.B. wie in pypsa_io)
-    pass
+    # consistency check
+    buses = []
+
+    for nodal_component in ["load", "generator"]:
+        df = getattr(network, nodal_component + "s_df")
+        missing = df.index[~df.bus.isin(network.buses_df.index)]
+        buses.append(df.bus.values)
+        if len(missing) > 0:
+            raise Exception(
+                "The following %s have buses which are not defined:\n%s",
+                nodal_component, missing.values)
+
+
+    for branch_component in ["line", "transformer"]:
+        df = getattr(network, branch_component + "s_df")
+        for attr in ["bus0", "bus1"]:
+            buses.append(df[attr].values)
+            missing = df.index[~df[attr].isin(network.buses_df.index)]
+            if len(missing) > 0:
+                raise Exception(
+                    "The following %s have %s which are not defined:\n%s",
+                    branch_component, attr, missing)
+
+    # check switches
+    for attr in ["bus_open", "bus_closed"]:
+        missing = network.switches_df.index[~network.switches_df[attr].isin(network.buses_df.index)]
+        buses.append(network.switches_df[attr].values)
+        if len(missing) > 0:
+            raise Exception("The following switches have %s which are not defined:\n%s",
+                            attr, missing)
+
+    # check transformer
+    bad = network.transformers_df.index[network.transformers_df["s_nom"] == 0.]
+    if len(bad) > 0:
+        raise Exception(
+            "The following tranformers have zero s_nom, which is used to define the impedance and will thus break the load flow:\n%s",
+                bad)
+
+    # check that there are no isolated nodes
+    all_buses = np.unique(np.concatenate(buses,axis=None))
+    missing = network.buses_df.index[~network.buses_df.index.isin(all_buses)]
+    if len(missing)>0:
+        raise Exception("The following nodes are isolated nodes:", missing.values)
 
 
 def import_generators(network, data_source=None, file=None):
