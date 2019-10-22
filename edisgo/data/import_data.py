@@ -1,7 +1,6 @@
 from pypsa import Network as PyPSANetwork
 
-from ..grid.components import Load, Generator, MVStation, Line, \
-    Transformer, LVStation
+from ..grid.components import Load, Generator
 from ..grid.grids import MVGrid, LVGrid
 from ..grid.connect import connect_mv_generators, connect_lv_generators
 from ..grid.tools import select_cable, position_switch_disconnectors
@@ -75,6 +74,9 @@ def import_ding0_grid(path, network):
     network.transformers_df = grid.transformers.rename(
         columns={'r': 'r_pu', 'x': 'x_pu'})[COLUMNS['transformers_df']]
     network.lines_df = grid.lines[COLUMNS['lines_df']]
+    # ToDo add switches to test network and import here
+    network.switches_df = None
+    network.storages_df = None
     network.grid_district = {'population': grid.mv_grid_district_population,
                              'geom': wkt_loads(grid.mv_grid_district_geom)}
 

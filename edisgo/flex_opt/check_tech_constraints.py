@@ -2,7 +2,6 @@ import pandas as pd
 import logging
 
 from edisgo.grid.grids import LVGrid
-from edisgo.grid.components import LVStation
 
 logger = logging.getLogger('edisgo')
 

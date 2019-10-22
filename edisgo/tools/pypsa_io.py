@@ -13,7 +13,6 @@ from pypsa.io import import_series_from_dataframe
 from networkx import connected_components
 import collections
 
-from edisgo.grid.components import Transformer, Line, LVStation, MVStation
 from edisgo.grid.grids import LVGrid
 
 
