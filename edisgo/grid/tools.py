@@ -4,9 +4,7 @@ import numpy as np
 import pandas as pd
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import Point
-from edisgo.grid.components import LVStation, BranchTee, Generator, Load, \
-    MVDisconnectingPoint, Line, MVStation
-from edisgo.grid.grids import LVGrid
+from edisgo.grid.components import Generator, Load
 from edisgo.flex_opt import exceptions
 
 import logging

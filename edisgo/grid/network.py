@@ -11,13 +11,13 @@ from pypsa import Network as PyPSANetwork
 
 import edisgo
 from edisgo.tools import config, tools
-from edisgo.tools import pypsa_io_lopf, pypsa_io
+from edisgo.tools import pypsa_io
 from edisgo.data.import_data import import_ding0_grid, import_generators, \
     import_feedin_timeseries, import_load_timeseries
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, \
     curtailment, storage_positioning
-from edisgo.grid.components import Station, BranchTee, Generator, Load
+from edisgo.grid.components import Generator, Load
 from edisgo.grid.tools import get_gen_info, disconnect_storage
 from edisgo.grid.grids import MVGrid
 from edisgo.tools import plots

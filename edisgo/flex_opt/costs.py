@@ -5,7 +5,6 @@ import os
 if not 'READTHEDOCS' in os.environ:
     from shapely.ops import transform
 
-from edisgo.grid.components import Transformer, Line, LVStation
 from edisgo.grid.grids import LVGrid, MVGrid
 from edisgo.grid.tools import get_mv_feeder_from_line
 

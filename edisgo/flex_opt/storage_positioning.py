@@ -6,7 +6,6 @@ import numpy as np
 from math import sqrt, ceil
 
 from edisgo.grid import tools
-from edisgo.grid.components import LVStation
 from edisgo.flex_opt import check_tech_constraints, costs
 from edisgo.tools import plots
 

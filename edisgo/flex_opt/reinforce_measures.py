@@ -4,8 +4,7 @@ import networkx as nx
 from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
     dijkstra_shortest_path_length
 
-from edisgo.grid.components import Transformer, BranchTee, Generator, Load, \
-    LVStation
+from edisgo.grid.components import Generator, Load
 from edisgo.grid.grids import LVGrid
 
 import logging
