@@ -75,7 +75,8 @@ def import_ding0_grid(path, network):
         columns={'r': 'r_pu', 'x': 'x_pu'})[COLUMNS['transformers_df']]
     network.lines_df = grid.lines[COLUMNS['lines_df']]
     # ToDo add switches to test network and import here
-    network.switches_df = None
+    network.switches_df = pd.read_csv(os.path.join(path, 'switches.csv'),
+                                      index_col=[0])
     network.storages_df = None
     network.grid_district = {'population': grid.mv_grid_district_population,
                              'geom': wkt_loads(grid.mv_grid_district_geom)}
