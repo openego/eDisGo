@@ -1,0 +1,3 @@
+name,bus_closed,bus_open,branch,type_info
+circuit_breaker_1,Bus_primary_LVStation_5,virtual_Bus_primary_LVStation_5,Line_10012,Switch Disconnector
+circuit_breaker_2,Bus_primary_LVStation_9,virtual_Bus_primary_LVStation_9,Line_10016,Switch Disconnector
