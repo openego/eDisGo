@@ -1,5 +1,5 @@
 name,bus,control,p_nom,type,weather_cell_id,subtype
-GeneratorFluctuating_1,Bus_GeneratorFluctuating_1,PQ,0.775,solar,1122074,solar_solar
+Generator_1,Bus_Generator_1,PQ,0.775,gas,,
 GeneratorFluctuating_2,Bus_GeneratorFluctuating_2,PQ,2.3,wind,1122074,wind_wind_onshore
 GeneratorFluctuating_3,Bus_GeneratorFluctuating_3,PQ,2.67,solar,1122075,solar_solar_ground_mounted
 GeneratorFluctuating_4,Bus_GeneratorFluctuating_4,PQ,1.93,solar,1122075,solar_solar
