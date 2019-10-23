@@ -93,11 +93,11 @@ class TestImportFromDing0:
 
         # test getter
         assert switch.id == 'circuit_breaker_1'
-        assert switch.bus_closed == 'Bus_primary_LVStation_5'
-        assert switch.bus_open == 'virtual_Bus_primary_LVStation_5'
-        assert switch.branch == 'Line_10012'
+        assert switch.bus_closed == 'Bus_primary_LVStation_4'
+        assert switch.bus_open == 'virtual_Bus_primary_LVStation_4'
+        assert switch.branch == 'Line_10031'
         assert switch.type == 'Switch Disconnector'
-        assert switch.state == 'closed'
+        assert switch.state == 'open'
         assert switch.grid == self.network.mv_grid
         assert switch.voltage_level == 'mv'
 
@@ -106,12 +106,13 @@ class TestImportFromDing0:
         assert switch.type == 'test'
 
         # test methods
-        switch.open()
-        switch._state = None
-        assert switch.state == 'open'
         switch.close()
         switch._state = None
         assert switch.state == 'closed'
+        switch.open()
+        switch._state = None
+        assert switch.state == 'open'
+
 
 
 
