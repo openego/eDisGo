@@ -95,12 +95,6 @@ def import_ding0_grid(path, network):
         network.mv_grid._lv_grids.append(lv_grid)
         network._grids[str(lv_grid)] = lv_grid
 
-    # ToDo still necessary? Need to be added to mv_grid
-    # # Integrate disconnecting points
-    # position_switch_disconnectors(network.mv_grid,
-    #                               mode=network.config['disconnecting_point'][
-    #                                   'position'])
-
     # Check data integrity
     _validate_ding0_grid_import(network)
 

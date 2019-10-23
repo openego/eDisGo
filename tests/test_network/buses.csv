@@ -1,6 +1,6 @@
 name,v_nom,x,y,mv_grid_id,lv_grid_id,in_building
 Bus_MVStation_1,20,7.94859122759009,48.0844553685898,1,,
-Bus_GeneratorFluctuating_1,20,7.9270478194687,48.076758003523,1,,
+Bus_Generator_1,20,7.9270478194687,48.076758003523,1,,
 Bus_GeneratorFluctuating_2,20,8.06868539549975,48.0498283526783,1,,
 Bus_GeneratorFluctuating_3,20,7.99929765404084,48.0724282356729,1,,
 Bus_GeneratorFluctuating_4,20,7.9752788204589,48.0844553685898,1,,

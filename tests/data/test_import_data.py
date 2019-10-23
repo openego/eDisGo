@@ -64,15 +64,14 @@ class TestImportFromDing0:
         assert 'Bus_BranchTee_MVGrid_1_7' in mv_grid.buses_df.index
         assert len(mv_grid.generators_df.index) == 9
         assert 'Generator_slack' not in mv_grid.generators_df.index
-        assert 'GeneratorFluctuating_1' in mv_grid.generators_df.index
+        assert 'Generator_1' in mv_grid.generators_df.index
         assert len(mv_grid.loads_df.index) == 1
         assert 'Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1' in \
                mv_grid.loads_df.index
 
         assert sorted(mv_grid.weather_cells) == [1122074, 1122075]
         assert mv_grid.peak_generation_capacity == 22.075
-        assert mv_grid.peak_generation_capacity_per_technology['solar'] == \
-               5.375
+        assert mv_grid.peak_generation_capacity_per_technology['solar'] == 4.6
         assert mv_grid.peak_load == 0.31
         assert mv_grid.peak_load_per_sector['retail'] == 0.31
 
@@ -106,13 +105,3 @@ class TestImportFromDing0:
     # def test_import_ding0_grid(self):
     #     """Test where validation fails"""
     #     import_data.import_ding0_grid(self.path, self.network)
-
-# path = '/home/birgit/virtualenvs/edisgo_refactoring/git_repos/eDisGo/tests/test_network/'
-# network = Network()
-# import_data.import_ding0_grid(path, network)
-# mv_grid = network.mv_grid
-# lv_grid = [_ for _ in network.mv_grid.lv_grids if _.id == 1][0]
-# network.buses.shape
-# ToDo import COLUMNS
-#ToDo test generators
-#ToDo implement loads class
