@@ -72,7 +72,8 @@ def import_ding0_grid(path, network):
     grid.generators.rename(index={slack: 'Generator_slack'}, inplace=True)
     network.generators_df = grid.generators[COLUMNS['generators_df']]
     network.loads_df = grid.loads[COLUMNS['loads_df']]
-    network.transformers_df = grid.transformers.rename(
+    network.transformers_df = grid.transformers.drop(
+        labels=['x_pu','r_pu'], axis=1).rename(
         columns={'r': 'r_pu', 'x': 'x_pu'})[COLUMNS['transformers_df']]
     network.lines_df = grid.lines[COLUMNS['lines_df']]
     network.switches_df = pd.read_csv(os.path.join(path, 'switches.csv'),
