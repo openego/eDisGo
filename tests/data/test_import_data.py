@@ -103,9 +103,107 @@ class TestImportFromDing0:
         with pytest.raises(AttributeError, match=msg):
             import_data.import_ding0_grid('wrong_directory', self.network)
 
-    # def test_import_ding0_grid(self):
-    #     """Test where validation fails"""
-    #     import_data.import_ding0_grid(self.path, self.network)
+    def test_validate_ding0_grid_import(self):
+        """
+        Test of validation of grids
+        """
+        comps_dict = {'buses': 'Bus_primary_LVStation_2',
+                      'generators': 'GeneratorFluctuating_14',
+                      'loads': 'Load_residential_LVGrid_3_2',
+                      'transformers':'LVStation_5_transformer_1',
+                      'lines':'Line_10014',
+                      'switches':'circuit_breaker_1'}
+        # check duplicate node
+        for comp, name in comps_dict.items():
+            new_comp = getattr(self.network, comp + '_df').loc[name]
+            comps = getattr(self.network, comp + '_df')
+            setattr(self.network, comp + '_df', comps.append(new_comp))
+            try:
+                import_data._validate_ding0_grid_import(self.network)
+                raise Exception('Appending components {} in check duplicate '
+                                'did not work properly.'.format(comp))
+            except ValueError as e:
+                assert e.args[0] == '{} have duplicate entry in one ' \
+                                    'of the components dataframes'.format(
+                    name)
+            setattr(self.network, comp + '_df', comps)
+            import_data._validate_ding0_grid_import(self.network)
+        print('Check duplicates finished.')
+
+        # check not connected generator and load
+        for nodal_component in ["loads", "generators"]:
+            comps = getattr(self.network, nodal_component + '_df')
+            new_comp = comps.loc[comps_dict[nodal_component]]
+            new_comp.name = 'new_nodal_component'
+            new_comp.bus = 'Non_existant_bus_'+nodal_component
+            setattr(self.network, nodal_component + '_df', comps.append(new_comp))
+            try:
+                import_data._validate_ding0_grid_import(self.network)
+                raise Exception('Appending components {} did not work properly.'.format(nodal_component))
+            except ValueError as e:
+                assert e.args[0] == 'The following {} have buses which are ' \
+                                    'not defined: {}'.format(
+                    nodal_component, new_comp.name)
+            setattr(self.network, nodal_component + '_df', comps)
+            import_data._validate_ding0_grid_import(self.network)
+        print('Check nodal components finished.')
+
+        # check branch components
+        i = 0
+        for branch_component in ["lines", "transformers"]:
+            comps = getattr(self.network, branch_component + '_df')
+            new_comp = comps.loc[comps_dict[branch_component]]
+            new_comp.name = 'new_branch_component'
+            setattr(new_comp, 'bus'+str(i),'Non_existant_bus_' + branch_component)
+            setattr(self.network, branch_component + '_df',
+                    comps.append(new_comp))
+            try:
+                import_data._validate_ding0_grid_import(self.network)
+                raise Exception('Appending components {} did not work properly.'.format(branch_component))
+            except ValueError as e:
+                assert e.args[0] == 'The following {} have bus{} which are ' \
+                                    'not defined: {}'.format(
+                    branch_component, i, new_comp.name)
+            setattr(self.network, branch_component + '_df', comps)
+            import_data._validate_ding0_grid_import(self.network)
+            i=+1
+        print('Check branch elements finished.')
+
+        # check switches
+        comps = self.network.switches_df
+        for attr in ["bus_open", "bus_closed"]:
+            new_comp = comps.loc[comps_dict['switches']]
+            new_comp.name = 'new_switch'
+            new_comps = comps.append(new_comp)
+            new_comps.at[new_comp.name,attr] = 'Non_existant_'+attr
+            self.network.switches_df = new_comps
+            try:
+                import_data._validate_ding0_grid_import(self.network)
+                raise Exception('Appending components switches did not work properly.')
+            except ValueError as e:
+                assert e.args[0] == 'The following switches have {} which are ' \
+                                    'not defined: {}'.format(
+                    attr, new_comp.name)
+            self.network.switches_df = comps
+            import_data._validate_ding0_grid_import(self.network)
+        print('Check switches finished')
+
+        # check isolated node
+        bus = self.network.buses_df.loc[comps_dict['buses']]
+        bus.name = 'New_bus'
+        self.network.buses_df = self.network.buses_df.append(bus)
+        try:
+            import_data._validate_ding0_grid_import(self.network)
+            raise Exception('Appending components buses did not work properly.')
+        except ValueError as e:
+            assert e.args[0] == 'The following buses are isolated nodes: ' \
+                                '{}'.format(bus.name)
+        print('Check isolated nodes finished.')
+
+        print('OK')
+
+
+
 
 # path = '/home/birgit/virtualenvs/edisgo_refactoring/git_repos/eDisGo/tests/test_network/'
 # network = Network()
