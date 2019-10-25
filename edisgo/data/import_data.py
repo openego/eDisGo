@@ -1,6 +1,6 @@
 from pypsa import Network as PyPSANetwork
 
-from ..grid.components import Load, Generator
+from ..grid.components import Generator
 from ..grid.grids import MVGrid, LVGrid
 from ..grid.connect import connect_mv_generators, connect_lv_generators
 from ..grid.tools import select_cable
@@ -64,7 +64,7 @@ def import_ding0_grid(path, network):
 
     # check if buses dataframe is not empty to make sure specified directory
     # exists and contains grid data
-    if grid.buses.empty == True:
+    if grid.buses.empty:
         raise AttributeError("Specified directory containing ding0 grid data "
                              "does not exist or does not contain grid data.")
     # write dataframes to network
