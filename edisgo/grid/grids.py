@@ -1,7 +1,9 @@
-from edisgo.grid.components import Generator, Load, Storage
+from abc import ABC, abstractmethod
+
+from edisgo.grid.components import Generator, Load, Switch
 
 
-class Grid:
+class Grid(ABC):
     """
     Defines a basic grid in eDisGo
 
@@ -51,7 +53,7 @@ class Grid:
 
         """
         if self._nominal_voltage is None:
-            self.nominal_voltage = self.buses_df.v_nom.max()
+            self._nominal_voltage = self.buses_df.v_nom.max()
         return self._nominal_voltage
 
     @nominal_voltage.setter
@@ -115,6 +117,54 @@ class Grid:
         """
         for l in self.loads_df.index:
             yield Load(id=l, network=self.network)
+
+    @property
+    def switch_disconnectors_df(self):
+        """
+        Switch disconnectors in grid.
+
+        Switch disconnectors are points where rings are split under normal
+        operating conditions.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all switch disconnectors in grid. For more
+            information on the dataframe see
+            :attr:`~.grid.network.Network.switches_df`.
+
+        """
+        return self.network.switches_df[
+            self.network.switches_df.bus_closed.isin(self.buses_df.index)][
+            self.network.switches_df.type_info=='Switch Disconnector']
+
+    @property
+    def switch_disconnectors(self):
+        """
+        Switch disconnectors within the grid.
+
+        Returns
+        -------
+        list(:class:`~.grid.components.Switch`)
+            List of switch disconnectory within the grid.
+
+        """
+        for s in self.switch_disconnectors_df.index:
+            yield Switch(id=s, network=self.network)
+
+    @property
+    @abstractmethod
+    def buses_df(self):
+        """
+        Buses within the grid.
+
+         Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all buses in grid. For more information on the
+            dataframe see :attr:`~.grid.network.Network.buses_df`.
+
+        """
 
     @property
     def weather_cells(self):
@@ -210,7 +260,6 @@ class MVGrid(Grid):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self._disconnecting_points = kwargs.get('disconnecting_points', None)
         self._lv_grids = kwargs.get('lv_grids', [])
 
     @property
@@ -235,30 +284,6 @@ class MVGrid(Grid):
     @lv_grids.setter
     def lv_grids(self, lv_grids):
         self._lv_grids = lv_grids
-
-    @property
-    def disconnecting_points(self):
-        """
-        Medium voltage disconnecting points.
-
-        Medium voltage disconnecting points are points where MV rings are split
-        under normal operation conditions.
-
-        Parameters
-        ----------
-        disconnecting_points : list(:class:`~.grid.components.MVDisconnectingPoint`)
-
-        Returns
-        -------
-        list(:class:`~.grid.components.MVDisconnectingPoint`)
-            List of medium voltage disconnecting points.
-
-        """
-        return self._disconnecting_points
-
-    @disconnecting_points.setter
-    def disconnecting_points(self, disconnecting_points):
-        self._disconnecting_points = disconnecting_points
 
     @property
     def buses_df(self):

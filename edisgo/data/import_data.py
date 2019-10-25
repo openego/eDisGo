@@ -3,7 +3,7 @@ from pypsa import Network as PyPSANetwork
 from ..grid.components import Load, Generator
 from ..grid.grids import MVGrid, LVGrid
 from ..grid.connect import connect_mv_generators, connect_lv_generators
-from ..grid.tools import select_cable, position_switch_disconnectors
+from ..grid.tools import select_cable
 from ..tools.geo import proj2equidistant
 from edisgo.tools import pypsa_io
 from edisgo.tools import session_scope
@@ -21,7 +21,7 @@ import random
 import os
 import numpy as np
 
-if not 'READTHEDOCS' in os.environ:
+if 'READTHEDOCS' not in os.environ:
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
 
@@ -36,7 +36,9 @@ COLUMNS = {
     'loads_df': ['bus', 'peak_load', 'sector', 'annual_consumption'],
     'transformers_df': ['bus0', 'bus1', 'x_pu', 'r_pu', 's_nom', 'type'],
     'lines_df': ['bus0', 'bus1', 'length', 'x', 'r', 's_nom', 'type',
-                 'num_parallel']
+                 'num_parallel'],
+    'switches_df': ['bus_open', 'bus_closed', 'branch', 'type_info'],
+    'storages_df': []
 }
 
 
@@ -78,7 +80,7 @@ def import_ding0_grid(path, network):
     network.lines_df = grid.lines[COLUMNS['lines_df']]
     network.switches_df = pd.read_csv(os.path.join(path, 'switches.csv'),
                                       index_col=[0])
-    network.storages_df = None
+    network.storages_df = grid.storage_units
     network.grid_district = {'population': grid.mv_grid_district_population,
                              'geom': wkt_loads(grid.mv_grid_district_geom)}
 
