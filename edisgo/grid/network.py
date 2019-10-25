@@ -696,6 +696,8 @@ class Network:
 
     def __init__(self, **kwargs):
 
+        global NETWORK
+        NETWORK = self
         # load configuration and equipment data
         self._config = Config(config_path=kwargs.get('config_path', None))
         self._equipment_data = self._load_equipment_data()
@@ -1025,7 +1027,7 @@ class Network:
 
         """
         for gen in self.generators_df.drop(labels=['Generator_slack']).index:
-            yield Generator(id=gen, network=self)
+            yield Generator(id=gen)
 
     @property
     def loads(self):
@@ -1039,7 +1041,7 @@ class Network:
 
         """
         for l in self.loads_df.index:
-            yield Load(id=l, network=self)
+            yield Load(id=l)
 
     @property
     def id(self):

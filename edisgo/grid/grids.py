@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 from edisgo.grid.components import Generator, Load, Switch
+from edisgo.grid import network
 
 
 class Grid(ABC):
@@ -20,7 +21,7 @@ class Grid(ABC):
 
     def __init__(self, **kwargs):
         self._id = kwargs.get('id', None)
-        self._network = kwargs.get('network', None)
+        self._network = network.NETWORK
 
         self._nominal_voltage = None
 
@@ -87,7 +88,7 @@ class Grid(ABC):
 
         """
         for gen in self.generators_df.index:
-            yield Generator(id=gen, network=self.network)
+            yield Generator(id=gen)
 
     @property
     def loads_df(self):
@@ -116,7 +117,7 @@ class Grid(ABC):
 
         """
         for l in self.loads_df.index:
-            yield Load(id=l, network=self.network)
+            yield Load(id=l)
 
     @property
     def switch_disconnectors_df(self):
@@ -150,7 +151,7 @@ class Grid(ABC):
 
         """
         for s in self.switch_disconnectors_df.index:
-            yield Switch(id=s, network=self.network)
+            yield Switch(id=s)
 
     @property
     @abstractmethod

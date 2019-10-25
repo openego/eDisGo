@@ -4,6 +4,8 @@ import logging
 from math import acos, tan
 from abc import ABC, abstractmethod
 
+from edisgo.grid import network
+
 if 'READTHEDOCS' not in os.environ:
     from shapely.geometry import Point
 
@@ -18,7 +20,7 @@ class BasicComponent(ABC):
 
     def __init__(self, **kwargs):
         self._id = kwargs.get('id', None)
-        self._network = kwargs.get('network', None)
+        self._network = network.NETWORK
 
     @property
     def id(self):
