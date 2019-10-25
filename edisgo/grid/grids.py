@@ -59,6 +59,21 @@ class Grid:
         self._nominal_voltage = nominal_voltage
 
     @property
+    def generators_df(self):
+        """
+        Connected generators within the grid.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all generators in grid. For more information on the
+            dataframe see :attr:`~.grid.network.Network.generators_df`.
+
+        """
+        return self.network.generators_df[
+            self.network.generators_df.bus.isin(self.buses_df.index)]
+
+    @property
     def generators(self):
         """
         Connected generators within the grid.
@@ -170,7 +185,7 @@ class Grid:
         return self.loads_df.groupby(['sector']).sum()['peak_load']
 
     def __repr__(self):
-        return '_'.join([self.__class__.__name__, str(self._id)])
+        return '_'.join([self.__class__.__name__, str(self.id)])
 
     def connect_generators(self, generators):
         """
@@ -220,22 +235,6 @@ class MVGrid(Grid):
     @lv_grids.setter
     def lv_grids(self, lv_grids):
         self._lv_grids = lv_grids
-
-    @property
-    def generators_df(self):
-        """
-        Connected generators within the grid.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all generators in grid. For more information on the
-            dataframe see :attr:`~.grid.network.Network.generators_df`.
-
-        """
-        return self.network.generators_df[
-            self.network.generators_df.bus.isin(self.buses_df.index)].drop(
-            labels=['Generator_slack'])
 
     @property
     def disconnecting_points(self):
@@ -308,21 +307,6 @@ class LVGrid(Grid):
         """
         return self.network.buses_df.loc[
             self.network.buses_df.lv_grid_id == self.id]
-
-    @property
-    def generators_df(self):
-        """
-        Connected generators within the grid.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all generators in grid. For more information on the
-            dataframe see :attr:`~.grid.network.Network.generators_df`.
-
-        """
-        return self.network.generators_df[
-            self.network.generators_df.bus.isin(self.buses_df.index)]
 
     def draw(self):
         """

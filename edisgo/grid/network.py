@@ -487,7 +487,7 @@ class EDisGo(EDisGoReimport):
             generator_scenario=kwargs.get('generator_scenario', None),
             config_path=kwargs.get('config_path', None))
         # set up results container
-        self.results = Results(self.network)
+        #self.results = Results(self.network)
 
         # set up time series for feed-in and load
         # worst-case time series
@@ -856,9 +856,10 @@ class Network:
         --------
         :pandas:`pandas.DataFrame<dataframe>`
             Dataframe with all generators in MV grid and underlying LV grids.
+            Slack generator is excluded.
 
         """
-        return self._generators_df
+        return self._generators_df.drop(labels=['Generator_slack'])
 
     @generators_df.setter
     def generators_df(self, generators_df):
@@ -1023,7 +1024,7 @@ class Network:
             List of generators within the network.
 
         """
-        for gen in self.generators_df.index:
+        for gen in self.generators_df.drop(labels=['Generator_slack']).index:
             yield Generator(id=gen, network=self)
 
     @property

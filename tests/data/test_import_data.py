@@ -24,7 +24,7 @@ class TestImportFromDing0:
         # buses, generators, loads, lines, transformers dataframes
         # check number of imported components
         assert self.network.buses_df.shape[0] == 208
-        assert self.network.generators_df.shape[0] == 29
+        assert self.network.generators_df.shape[0] == 28
         assert self.network.loads_df.shape[0] == 50
         assert self.network.lines_df.shape[0] == 198
         assert self.network.transformers_df.shape[0] == 9

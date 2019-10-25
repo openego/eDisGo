@@ -4,8 +4,8 @@ import logging
 from math import acos, tan
 from abc import ABC, abstractmethod
 
-if not 'READTHEDOCS' in os.environ:
-    from shapely.geometry import Point, LineString
+if 'READTHEDOCS' not in os.environ:
+    from shapely.geometry import Point
 
 logger = logging.getLogger('edisgo')
 
@@ -60,6 +60,19 @@ class BasicComponent(ABC):
         """
         return 'lv' if self.grid.nominal_voltage < 1 else 'mv'
 
+    @property
+    @abstractmethod
+    def grid(self):
+        """
+        Grid component is in.
+
+        Returns
+        --------
+        :class:`~.grid.components.Grid`
+            Grid component is in.
+
+        """
+
     def __repr__(self):
         return '_'.join([self.__class__.__name__, str(self._id)])
 
@@ -101,6 +114,7 @@ class Component(BasicComponent):
 
     @bus.setter
     def bus(self, bus):
+        self._set_bus(bus)
         # check if bus is valid
         if bus in self.network.buses_df.index:
             self._network_component_df.loc[self.id, 'bus'] = bus
@@ -108,6 +122,9 @@ class Component(BasicComponent):
             self._grid = None
         else:
             raise AttributeError("Given bus ID does not exist.")
+
+    def _set_bus(self, bus):
+        raise NotImplementedError
 
     @property
     def grid(self):
@@ -261,7 +278,7 @@ class Load(Component):
     @peak_load.setter
     def peak_load(self, peak_load):
         # ToDo: Maybe perform type check before setting it.
-        self.network.loads_df.loc[self.id, 'peak_load'] = peak_load
+        self.network._loads_df.loc[self.id, 'peak_load'] = peak_load
 
     @property
     def annual_consumption(self):
@@ -283,7 +300,7 @@ class Load(Component):
 
     @annual_consumption.setter
     def annual_consumption(self, annual_consumption):
-        self.network.loads_df.loc[
+        self.network._loads_df.loc[
             self.id, 'annual_consumption'] = annual_consumption
 
     @property
@@ -312,7 +329,7 @@ class Load(Component):
     @sector.setter
     def sector(self, sector):
         # ToDo: Maybe perform type check before setting it.
-        self.network.loads_df.loc[self.id, 'sector'] = sector
+        self.network._loads_df.loc[self.id, 'sector'] = sector
 
     @property
     def active_power_timeseries(self):
@@ -339,6 +356,15 @@ class Load(Component):
 
         """
         return self.network.loads_t.q_set.loc[self.id]
+
+    def _set_bus(self, bus):
+        # check if bus is valid
+        if bus in self.network.buses_df.index:
+            self.network._loads_df.loc[self.id, 'bus'] = bus
+            # reset grid
+            self._grid = None
+        else:
+            raise AttributeError("Given bus ID does not exist.")
 
 
 class Generator(Component):
@@ -387,8 +413,7 @@ class Generator(Component):
     @nominal_power.setter
     def nominal_power(self, nominal_power):
         # ToDo: Maybe perform type check before setting it.
-        self.network.generators_df.loc[
-            self.id, 'p_nom'] = nominal_power
+        self.network._generators_df.loc[self.id, 'p_nom'] = nominal_power
 
     @property
     def type(self):
@@ -412,7 +437,7 @@ class Generator(Component):
     @type.setter
     def type(self, type):
         #ToDo: Maybe perform type check before setting it.
-        self.network.generators_df.loc[self.id, 'type'] = type
+        self.network._generators_df.loc[self.id, 'type'] = type
 
     @property
     def subtype(self):
@@ -435,8 +460,7 @@ class Generator(Component):
 
     @subtype.setter
     def subtype(self, subtype):
-        #ToDo: Maybe perform type check before setting it.
-        self.network.generators_df.loc[self.id, 'subtype'] = subtype
+        self.network._generators_df.loc[self.id, 'subtype'] = subtype
 
     @property
     def active_power_timeseries(self):
@@ -487,8 +511,17 @@ class Generator(Component):
 
     @weather_cell_id.setter
     def weather_cell_id(self, weather_cell_id):
-        self.network.generators_df.loc[
+        self.network._generators_df.loc[
             self.id, 'weather_cell_id'] = weather_cell_id
+
+    def _set_bus(self, bus):
+        # check if bus is valid
+        if bus in self.network.buses_df.index:
+            self.network._generators_df.loc[self.id, 'bus'] = bus
+            # reset grid
+            self._grid = None
+        else:
+            raise AttributeError("Given bus ID does not exist.")
 
 
 class Storage(Component):
@@ -517,6 +550,22 @@ class Storage(Component):
         self._operation = kwargs.get('operation', None)
         self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
         self._q_sign = None
+
+    @property
+    def _network_component_df(self):
+        """
+        Dataframe in :class:`~.grid.network.Network` containing all switches.
+
+        For switches this is :attr:`~.grid.network.Network.switches_df`.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            See :attr:`~.grid.network.Network.switches_df` for more
+            information.
+
+        """
+        return self.network.switches_df
 
     @property
     def timeseries(self):
@@ -800,7 +849,7 @@ class Switch(BasicComponent):
 
     @type.setter
     def type(self, type):
-        self.network.switches_df.loc[self.id, 'type_info'] = type
+        self.network._switches_df.loc[self.id, 'type_info'] = type
 
     @property
     def bus_open(self):
