@@ -110,18 +110,11 @@ class Component(BasicComponent):
             Bus component is connected to.
 
         """
-        return self._network_component_df.loc[self.id, 'bus']
+        return self._network_component_df.at[self.id, 'bus']
 
     @bus.setter
     def bus(self, bus):
         self._set_bus(bus)
-        # check if bus is valid
-        if bus in self.network.buses_df.index:
-            self._network_component_df.loc[self.id, 'bus'] = bus
-            # reset grid
-            self._grid = None
-        else:
-            raise AttributeError("Given bus ID does not exist.")
 
     def _set_bus(self, bus):
         raise NotImplementedError
@@ -273,12 +266,12 @@ class Load(Component):
             Peak load in MW.
 
         """
-        return self.network.loads_df.loc[self.id, 'peak_load']
+        return self.network.loads_df.at[self.id, 'peak_load']
 
     @peak_load.setter
     def peak_load(self, peak_load):
         # ToDo: Maybe perform type check before setting it.
-        self.network._loads_df.loc[self.id, 'peak_load'] = peak_load
+        self.network._loads_df.at[self.id, 'peak_load'] = peak_load
 
     @property
     def annual_consumption(self):
@@ -296,11 +289,11 @@ class Load(Component):
             Annual consumption of load in MWh.
 
         """
-        return self.network.loads_df.loc[self.id, 'annual_consumption']
+        return self.network.loads_df.at[self.id, 'annual_consumption']
 
     @annual_consumption.setter
     def annual_consumption(self, annual_consumption):
-        self.network._loads_df.loc[
+        self.network._loads_df.at[
             self.id, 'annual_consumption'] = annual_consumption
 
     @property
@@ -324,12 +317,12 @@ class Load(Component):
         #ToDo: Maybe return 'not specified' in case sector is None?
 
         """
-        return self.network.loads_df.loc[self.id, 'sector']
+        return self.network.loads_df.at[self.id, 'sector']
 
     @sector.setter
     def sector(self, sector):
         # ToDo: Maybe perform type check before setting it.
-        self.network._loads_df.loc[self.id, 'sector'] = sector
+        self.network._loads_df.at[self.id, 'sector'] = sector
 
     @property
     def active_power_timeseries(self):
@@ -360,7 +353,7 @@ class Load(Component):
     def _set_bus(self, bus):
         # check if bus is valid
         if bus in self.network.buses_df.index:
-            self.network._loads_df.loc[self.id, 'bus'] = bus
+            self.network._loads_df.at[self.id, 'bus'] = bus
             # reset grid
             self._grid = None
         else:
@@ -408,12 +401,12 @@ class Generator(Component):
             Nominal power of generator in MW.
 
         """
-        return self.network.generators_df.loc[self.id, 'p_nom']
+        return self.network.generators_df.at[self.id, 'p_nom']
 
     @nominal_power.setter
     def nominal_power(self, nominal_power):
         # ToDo: Maybe perform type check before setting it.
-        self.network._generators_df.loc[self.id, 'p_nom'] = nominal_power
+        self.network._generators_df.at[self.id, 'p_nom'] = nominal_power
 
     @property
     def type(self):
@@ -432,12 +425,12 @@ class Generator(Component):
         #ToDo: Maybe return 'not specified' in case type is None?
 
         """
-        return self.network.generators_df.loc[self.id, 'type']
+        return self.network.generators_df.at[self.id, 'type']
 
     @type.setter
     def type(self, type):
         #ToDo: Maybe perform type check before setting it.
-        self.network._generators_df.loc[self.id, 'type'] = type
+        self.network._generators_df.at[self.id, 'type'] = type
 
     @property
     def subtype(self):
@@ -456,11 +449,11 @@ class Generator(Component):
         #ToDo: Maybe return 'not specified' in case subtype is None?
 
         """
-        return self.network.generators_df.loc[self.id, 'subtype']
+        return self.network.generators_df.at[self.id, 'subtype']
 
     @subtype.setter
     def subtype(self, subtype):
-        self.network._generators_df.loc[self.id, 'subtype'] = subtype
+        self.network._generators_df.at[self.id, 'subtype'] = subtype
 
     @property
     def active_power_timeseries(self):
@@ -507,17 +500,17 @@ class Generator(Component):
             Weather cell ID of generator.
 
         """
-        return self.network.generators_df.loc[self.id, 'weather_cell_id']
+        return self.network.generators_df.at[self.id, 'weather_cell_id']
 
     @weather_cell_id.setter
     def weather_cell_id(self, weather_cell_id):
-        self.network._generators_df.loc[
+        self.network._generators_df.at[
             self.id, 'weather_cell_id'] = weather_cell_id
 
     def _set_bus(self, bus):
         # check if bus is valid
         if bus in self.network.buses_df.index:
-            self.network._generators_df.loc[self.id, 'bus'] = bus
+            self.network._generators_df.at[self.id, 'bus'] = bus
             # reset grid
             self._grid = None
         else:
@@ -845,11 +838,11 @@ class Switch(BasicComponent):
             Type of switch.
 
         """
-        return self.network.switches_df.loc[self.id, 'type_info']
+        return self.network.switches_df.at[self.id, 'type_info']
 
     @type.setter
     def type(self, type):
-        self.network._switches_df.loc[self.id, 'type_info'] = type
+        self.network._switches_df.at[self.id, 'type_info'] = type
 
     @property
     def bus_open(self):
@@ -866,7 +859,7 @@ class Switch(BasicComponent):
             Bus in 'open' state.
 
         """
-        return self.network.switches_df.loc[self.id, 'bus_open']
+        return self.network.switches_df.at[self.id, 'bus_open']
 
     @property
     def bus_closed(self):
@@ -883,7 +876,7 @@ class Switch(BasicComponent):
             Bus in 'closed' state.
 
         """
-        return self.network.switches_df.loc[self.id, 'bus_closed']
+        return self.network.switches_df.at[self.id, 'bus_closed']
 
     @property
     def state(self):
@@ -919,7 +912,7 @@ class Switch(BasicComponent):
             Branch the switch is represented by.
 
         """
-        return self.network.switches_df.loc[self.id, 'branch']
+        return self.network.switches_df.at[self.id, 'branch']
 
     @property
     def grid(self):
@@ -948,7 +941,7 @@ class Switch(BasicComponent):
             self._state = 'open'
             col = self._get_bus_column(self.bus_closed)
             if col is not None:
-                self.network.lines_df.loc[self.branch, col] = self.bus_open
+                self.network.lines_df.at[self.branch, col] = self.bus_open
             else:
                 raise AttributeError(
                     "Could not open switch {}. Specified branch {} of switch "
@@ -964,7 +957,7 @@ class Switch(BasicComponent):
             self._state = 'closed'
             col = self._get_bus_column(self.bus_open)
             if col is not None:
-                self.network.lines_df.loc[self.branch, col] = self.bus_closed
+                self.network.lines_df.at[self.branch, col] = self.bus_closed
             else:
                 raise AttributeError(
                     "Could not close switch {}. Specified branch {} of switch "
@@ -976,9 +969,9 @@ class Switch(BasicComponent):
         Returns column name of lines_df given bus is in.
 
         """
-        if bus == self.network.lines_df.loc[self.branch, 'bus0']:
+        if bus == self.network.lines_df.at[self.branch, 'bus0']:
             col = 'bus0'
-        elif bus == self.network.lines_df.loc[self.branch, 'bus1']:
+        elif bus == self.network.lines_df.at[self.branch, 'bus1']:
             col = 'bus1'
         else:
             return None
