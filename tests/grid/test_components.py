@@ -29,7 +29,7 @@ class TestComponents:
         assert math.isnan(load.annual_consumption)
         assert load.sector == 'agricultural'
         assert load.bus == 'Bus_Load_agricultural_LVGrid_1_1'
-        assert load.grid == self.network._grids['LVGrid_1.0']
+        assert load.grid == self.network._grids['LVGrid_1']
         assert load.voltage_level == 'lv'
         assert load.geom == None
         #ToDo add test for active_power_timeseries and reactive_power_timeseries once implemented
@@ -79,7 +79,7 @@ class TestComponents:
         assert gen.weather_cell_id == 2
         gen.bus = 'Bus_GeneratorFluctuating_9'
         assert gen.bus == 'Bus_GeneratorFluctuating_9'
-        assert gen.grid == self.network._grids['LVGrid_1.0']
+        assert gen.grid == self.network._grids['LVGrid_1']
         assert gen.voltage_level == 'lv'
         msg = "Given bus ID does not exist."
         with pytest.raises(AttributeError, match=msg):

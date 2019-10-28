@@ -138,7 +138,7 @@ class Component(BasicComponent):
         if math.isnan(grid.lv_grid_id):
             return self.network.mv_grid
         else:
-            return self.network._grids['LVGrid_{}'.format(grid.lv_grid_id)]
+            return self.network._grids['LVGrid_{}'.format(int(grid.lv_grid_id))]
 
     @property
     def geom(self):
@@ -932,7 +932,7 @@ class Switch(BasicComponent):
         if math.isnan(grid.lv_grid_id):
             return self.network.mv_grid
         else:
-            return self.network._grids['LVGrid_{}'.format(grid.lv_grid_id)]
+            return self.network._grids['LVGrid_{}'.format(int(grid.lv_grid_id))]
 
     def open(self):
         """

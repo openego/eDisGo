@@ -21,6 +21,8 @@ class Grid(ABC):
 
     def __init__(self, **kwargs):
         self._id = kwargs.get('id', None)
+        if isinstance(self._id, float):
+            self._id = int(self._id)
         self._network = network.NETWORK
 
         self._nominal_voltage = None
