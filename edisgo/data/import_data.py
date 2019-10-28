@@ -34,8 +34,9 @@ COLUMNS = {
     'generators_df': ['bus', 'control', 'p_nom', 'type', 'subtype',
                       'weather_cell_id'],
     'loads_df': ['bus', 'peak_load', 'sector', 'annual_consumption'],
-    'transformers_df': ['bus0', 'bus1', 'x_pu', 'r_pu', 's_nom', 'type'],
-    'lines_df': ['bus0', 'bus1', 'length', 'x', 'r', 's_nom', 'type',
+    'transformers_df': ['bus0', 'bus1', 'x_pu', 'r_pu', 's_nom', 'type',
+                        'type_info'],
+    'lines_df': ['bus0', 'bus1', 'length', 'x', 'r', 's_nom', 'type_info',
                  'num_parallel'],
     'switches_df': ['bus_open', 'bus_closed', 'branch', 'type_info'],
     'storages_df': []

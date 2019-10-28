@@ -1,4 +1,4 @@
-name,bus0,bus1,length,x,r,s_nom,num_parallel,type
+name,bus0,bus1,length,x,r,s_nom,num_parallel,type_info
 Line_10001,Bus_MVStation_1,Bus_GeneratorFluctuating_agg-1,0.001,,,,,
 Line_10002,Bus_MVStation_1,Bus_Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1,0.001,,,,,
 Line_10003,Bus_MVStation_1,Bus_BranchTee_MVGrid_1_1,0.083904310632546,,,,,
