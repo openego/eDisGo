@@ -83,7 +83,7 @@ class TestImportFromDing0:
                                 'did not work properly.'.format(comp))
             except ValueError as e:
                 assert e.args[0] == '{} have duplicate entry in one ' \
-                                    'of the components dataframes'.format(
+                                    'of the components dataframes.'.format(
                     name)
             # reset dataframe
             setattr(self.network, '_{}_df'.format(comp), comps)
@@ -103,7 +103,7 @@ class TestImportFromDing0:
                                 'properly.'.format(nodal_component))
             except ValueError as e:
                 assert e.args[0] == 'The following {} have buses which are ' \
-                                    'not defined: {}'.format(
+                                    'not defined: {}.'.format(
                     nodal_component, new_comp.name)
             # reset dataframe
             setattr(self.network, '_{}_df'.format(nodal_component), comps)
@@ -125,7 +125,7 @@ class TestImportFromDing0:
                                 'properly.'.format(branch_component))
             except ValueError as e:
                 assert e.args[0] == 'The following {} have bus{} which are ' \
-                                    'not defined: {}'.format(
+                                    'not defined: {}.'.format(
                     branch_component, i, new_comp.name)
             # reset dataframe
             setattr(self.network, '_{}_df'.format(branch_component), comps)
@@ -146,7 +146,7 @@ class TestImportFromDing0:
                                 'properly.')
             except ValueError as e:
                 assert e.args[0] == 'The following switches have {} which ' \
-                                    'are not defined: {}'.format(
+                                    'are not defined: {}.'.format(
                     attr, new_comp.name)
             self.network.switches_df = comps
             import_data._validate_ding0_grid_import(self.network)
@@ -160,5 +160,5 @@ class TestImportFromDing0:
             raise Exception('Appending components buses did not work '
                             'properly.')
         except ValueError as e:
-            assert e.args[0] == 'The following buses are isolated nodes: ' \
-                                '{}'.format(bus.name)
+            assert e.args[0] == 'The following buses are isolated: ' \
+                                '{}.'.format(bus.name)

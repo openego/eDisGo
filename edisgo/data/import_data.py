@@ -126,39 +126,46 @@ def _set_up_mv_grid(grid, network):
 
 
 def _validate_ding0_grid_import(network):
-    """Check imported data integrity
+    """
+    Check imported data integrity.
 
     Parameters
     ----------
     network: Network
         network class containing mv and lv grids
+
     """
     # check for duplicate labels (of components)
     duplicated_labels = []
     if any(network.buses_df.index.duplicated()):
-        duplicated_labels.append(network.buses_df.index[
-                                     network.buses_df.index.duplicated()].values)
+        duplicated_labels.append(
+            network.buses_df.index[network.buses_df.index.duplicated()].values)
     if any(network.generators_df.index.duplicated()):
-        duplicated_labels.append(network.generators_df.index[
-                                     network.generators_df.index.duplicated()].values)
+        duplicated_labels.append(
+            network.generators_df.index[
+                network.generators_df.index.duplicated()].values)
     if any(network.loads_df.index.duplicated()):
-        duplicated_labels.append(network.loads_df.index[
-                                     network.loads_df.index.duplicated()].values)
+        duplicated_labels.append(
+            network.loads_df.index[network.loads_df.index.duplicated()].values)
     if any(network.transformers_df.index.duplicated()):
-        duplicated_labels.append(network.transformers_df.index[
-                                     network.transformers_df.index.duplicated()].values)
+        duplicated_labels.append(
+            network.transformers_df.index[
+                network.transformers_df.index.duplicated()].values)
     if any(network.lines_df.index.duplicated()):
-        duplicated_labels.append(network.lines_df.index[
-                                     network.lines_df.index.duplicated()].values)
+        duplicated_labels.append(
+            network.lines_df.index[network.lines_df.index.duplicated()].values)
     if any(network.switches_df.index.duplicated()):
-        duplicated_labels.append(network.switches_df.index[
-                                     network.switches_df.index.duplicated()].values)
+        duplicated_labels.append(
+            network.switches_df.index[
+                network.switches_df.index.duplicated()].values)
     if duplicated_labels:
-        raise ValueError("{labels} have duplicate entry in "
-                         "one of the components dataframes".format(
-            labels=', '.join(np.concatenate([list.tolist() for list in duplicated_labels]))))
+        raise ValueError(
+            "{labels} have duplicate entry in one of the components "
+            "dataframes.".format(labels=', '.join(
+                np.concatenate([list.tolist() for list in duplicated_labels])))
+        )
 
-    # consistency check
+    # check for isolated or not defined buses
     buses = []
 
     for nodal_component in ["loads", "generators"]:
@@ -167,9 +174,9 @@ def _validate_ding0_grid_import(network):
         buses.append(df.bus.values)
         if len(missing) > 0:
             raise ValueError(
-                "The following {} have buses which are not defined: {}".format(
-                nodal_component, ', '.join(missing.values)))
-
+                "The following {} have buses which are not defined: "
+                "{}.".format(
+                    nodal_component, ', '.join(missing.values)))
 
     for branch_component in ["lines", "transformers"]:
         df = getattr(network, branch_component + "_df")
@@ -178,23 +185,24 @@ def _validate_ding0_grid_import(network):
             missing = df.index[~df[attr].isin(network.buses_df.index)]
             if len(missing) > 0:
                 raise ValueError(
-                    "The following {} have {} which are not defined: {}".format(
-                    branch_component, attr, ', '.join(missing.values)))
+                    "The following {} have {} which are not defined: "
+                    "{}.".format(
+                        branch_component, attr, ', '.join(missing.values)))
 
-    # check switches
     for attr in ["bus_open", "bus_closed"]:
-        missing = network.switches_df.index[~network.switches_df[attr].isin(network.buses_df.index)]
+        missing = network.switches_df.index[
+            ~network.switches_df[attr].isin(network.buses_df.index)]
         buses.append(network.switches_df[attr].values)
         if len(missing) > 0:
-            raise ValueError("The following switches have {} which are not defined: {}".format(
-                            attr, ', '.join(missing.values)))
+            raise ValueError(
+                "The following switches have {} which are not defined: "
+                "{}.".format(
+                    attr, ', '.join(missing.values)))
 
-
-    # check that there are no isolated nodes
-    all_buses = np.unique(np.concatenate(buses,axis=None))
+    all_buses = np.unique(np.concatenate(buses, axis=None))
     missing = network.buses_df.index[~network.buses_df.index.isin(all_buses)]
-    if len(missing)>0:
-        raise ValueError("The following buses are isolated nodes: {}".format(
+    if len(missing) > 0:
+        raise ValueError("The following buses are isolated: {}.".format(
             ', '.join(missing.values)))
 
 
