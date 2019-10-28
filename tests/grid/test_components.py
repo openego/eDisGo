@@ -26,7 +26,7 @@ class TestComponents:
         # test getter
         assert load.id == 'Load_agricultural_LVGrid_1_1'
         assert load.peak_load == 0.0523
-        assert math.isnan(load.annual_consumption)
+        assert load.annual_consumption == 238
         assert load.sector == 'agricultural'
         assert load.bus == 'Bus_Load_agricultural_LVGrid_1_1'
         assert load.grid == self.network._grids['LVGrid_1']
