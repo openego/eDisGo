@@ -1453,7 +1453,8 @@ class TimeSeriesControl:
 
     def __init__(self, network, **kwargs):
 
-        self.timeseries = TimeSeries(network=network)
+        self.network = network
+        self.timeseries = TimeSeries(network=self.network)
         mode = kwargs.get('mode', None)
         config_data = network.config
         weather_cell_ids = network.mv_grid.weather_cells
@@ -1531,6 +1532,205 @@ class TimeSeriesControl:
 
             # check if time series for the set time index can be obtained
             self._check_timeindex()
+
+    def _worst_case_generation(self, worst_case_scale_factors, modes):
+        """
+        #ToDo: docstring
+        Define worst case generation time series for fluctuating and
+        dispatchable generators.
+
+        Parameters
+        ----------
+        worst_case_scale_factors : dict
+            Scale factors defined in config file 'config_timeseries.cfg'.
+            Scale factors describe actual power to nominal power ratio of in
+            worst-case scenarios.
+        modes : list
+            List with worst-cases to generate time series for. Can be
+            'feedin_case', 'load_case' or both.
+
+        """
+        # ToDo check that all generators have type and p_nom
+
+        # active power
+        worst_case_ts = pd.DataFrame(
+            {'solar': [worst_case_scale_factors[
+                           '{}_feedin_pv'.format(mode)] for mode in modes],
+             'other': [worst_case_scale_factors[
+                           '{}_feedin_other'.format(mode)] for mode in modes]
+             },
+            index=self.timeseries.timeindex)
+
+        gen_ts = pd.DataFrame(index=self.timeseries.timeindex,
+                              columns=self.network.generators_df.index)
+
+        # solar
+        cols = gen_ts[self.network.generators_df.index[
+            self.network.generators_df.type == 'solar']].columns
+        gen_ts[cols] = pd.concat([worst_case_ts.loc[:, ['solar']]] * len(cols),
+                                 axis=1)
+        # other
+        cols = gen_ts[self.network.generators_df.index[
+            self.network.generators_df.type != 'solar']].columns
+        gen_ts[cols] = pd.concat([worst_case_ts.loc[:, ['other']]] * len(cols),
+                                 axis=1)
+
+        self.timeseries.generators_active_power = gen_ts.mul(
+            self.network.generators_df.p_nom)
+
+        # reactive power
+        gens_df = self.network.generators_df.loc[:, ['bus', 'type']]
+        gens_df['voltage_level'] = gens_df.apply(
+            lambda _: 'lv' if self.network.buses_df.at[_.bus, 'v_nom'] < 1
+            else 'mv', axis=1)
+
+        q_sign = pd.Series(index=self.network.generators_df.index)
+        power_factor = pd.Series(index=self.network.generators_df.index)
+        for voltage_level in ['mv', 'lv']:
+            cols = gens_df.index[gens_df.voltage_level == voltage_level]
+            if len(cols) > 0:
+                q_sign[cols] = self._get_q_sign_generator(
+                    self.network.config['reactive_power_mode'][
+                        '{}_gen'.format(voltage_level)])
+                power_factor[cols] = self.network.config[
+                    'reactive_power_factor']['{}_gen'.format(voltage_level)]
+
+        self.timeseries.generators_reactive_power = self._fixed_cosphi(
+            self.timeseries.generators_active_power, q_sign, power_factor)
+
+    def _worst_case_load(self, worst_case_scale_factors,
+                         peakload_consumption_ratio, modes):
+        """
+        #ToDo: docstring
+        Define worst case load time series for each sector.
+
+        Parameters
+        ----------
+        worst_case_scale_factors : dict
+            Scale factors defined in config file 'config_timeseries.cfg'.
+            Scale factors describe actual power to nominal power ratio of in
+            worst-case scenarios.
+        peakload_consumption_ratio : dict
+            Ratios of peak load to annual consumption per sector, defined in
+            config file 'config_timeseries.cfg'
+        modes : list
+            List with worst-cases to generate time series for. Can be
+            'feedin_case', 'load_case' or both.
+
+        """
+        #ToDo check that all loads have sector, annual consumption
+        sectors = ['residential', 'retail', 'industrial', 'agricultural']
+        voltage_levels = ['mv', 'lv']
+
+        # assign voltage level to loads
+        loads_df = self.network.loads_df.loc[:, ['bus', 'sector']]
+        loads_df['voltage_level'] = loads_df.apply(
+            lambda _: 'lv' if self.network.buses_df.at[_.bus, 'v_nom'] < 1
+            else 'mv', axis=1)
+        load_ts = pd.DataFrame(index=self.timeseries.timeindex,
+                               columns=self.network.loads_df.index)
+
+        # get power scaling factors for different voltage levels
+        power_scaling = {}
+        for voltage_level in voltage_levels:
+            power_scaling[voltage_level] = np.array(
+                [[worst_case_scale_factors['{}_{}_load'.format(
+                    voltage_level, mode)]] for mode in modes])
+
+        for voltage_level in voltage_levels:
+            for sector in sectors:
+                cols = load_ts[loads_df.index[
+                    (loads_df.sector == sector) &
+                    (loads_df.voltage_level == voltage_level)]].columns
+                if len(cols) > 0:
+                    load_ts[cols] = np.concatenate(
+                        [peakload_consumption_ratio[sector] *
+                         power_scaling[voltage_level]] *
+                        len(cols), axis=1)
+
+        self.timeseries.loads_active_power = load_ts.mul(
+            self.network.loads_df.annual_consumption)
+
+        # reactive power
+        q_sign = pd.Series(index=self.network.loads_df.index)
+        power_factor = pd.Series(index=self.network.loads_df.index)
+        for voltage_level in voltage_levels:
+            cols = loads_df.index[loads_df.voltage_level == voltage_level]
+            if len(cols) > 0:
+                q_sign[cols] = self._get_q_sign_load(
+                    self.network.config['reactive_power_mode'][
+                        '{}_load'.format(voltage_level)])
+                power_factor[cols] = self.network.config[
+                    'reactive_power_factor']['{}_load'.format(voltage_level)]
+
+        self.timeseries.loads_reactive_power = self._fixed_cosphi(
+            self.timeseries.loads_active_power, q_sign, power_factor)
+
+    def _get_q_sign_generator(self, reactive_power_mode):
+        """
+        Get the sign of reactive power in generator sign convention.
+
+        In the generator sign convention the reactive power is negative in
+        inductive operation (`reactive_power_mode` is 'inductive') and positive
+        in capacitive operation (`reactive_power_mode` is 'capacitive').
+
+        Parameters
+        ----------
+        reactive_power_mode : str
+            Possible options are 'inductive' and 'capacitive'.
+
+        Returns
+        --------
+        int
+            Sign of reactive power in generator sign convention.
+
+        """
+        if reactive_power_mode.lower() == 'inductive':
+            return -1
+        elif reactive_power_mode.lower() == 'capacitive':
+            return 1
+        else:
+            raise ValueError("reactive_power_mode must either be 'capacitive' "
+                             "or 'inductive' but is {}.".format(
+                reactive_power_mode))
+
+    def _get_q_sign_load(self, reactive_power_mode):
+        """
+        Get the sign of reactive power in load sign convention.
+
+        In the load sign convention the reactive power is positive in
+        inductive operation (`reactive_power_mode` is 'inductive') and negative
+        in capacitive operation (`reactive_power_mode` is 'capacitive').
+
+        Parameters
+        ----------
+        reactive_power_mode : str
+            Possible options are 'inductive' and 'capacitive'.
+
+        Returns
+        --------
+        int
+            Sign of reactive power in load sign convention.
+
+        """
+        if reactive_power_mode.lower() == 'inductive':
+            return 1
+        elif reactive_power_mode.lower() == 'capacitive':
+            return -1
+        else:
+            raise ValueError("reactive_power_mode must either be 'capacitive' "
+                             "or 'inductive' but is {}.".format(
+                reactive_power_mode))
+
+    def _fixed_cosphi(self, active_power, q_sign, power_factor):
+        """
+        ToDo: docstring
+        :param active_power:
+        :param q_sign:
+        :param power_factor:
+        :return:
+        """
+        return active_power * q_sign * np.tan(np.arccos(power_factor))
 
     # Generator
     # @property
@@ -1634,69 +1834,6 @@ class TimeSeriesControl:
     #         return self._timeseries_reactive.loc[
     #                self.grid.network.timeseries.timeindex, :]
 
-    # @property
-    # def reactive_power_mode(self):
-    #     """
-    #     Power factor mode of generator.
-    #
-    #     This information is necessary to make the generator behave in an
-    #     inductive or capacitive manner. Essentially this changes the sign of
-    #     the reactive power.
-    #
-    #     The convention used here in a generator is that:
-    #     - when `reactive_power_mode` is 'capacitive' then Q is positive
-    #     - when `reactive_power_mode` is 'inductive' then Q is negative
-    #
-    #     In the case that this attribute is not set, it is retrieved from the
-    #     network config object depending on the voltage level the generator
-    #     is in.
-    #
-    #     Parameters
-    #     ----------
-    #     reactive_power_mode : :obj:`str` or None
-    #         Possible options are 'inductive', 'capacitive' and
-    #         'not_applicable'. In the case of 'not_applicable' a reactive
-    #         power time series must be given.
-    #
-    #     Returns
-    #     -------
-    #     :obj:`str` : Power factor mode
-    #         In the case that this attribute is not set, it is retrieved from
-    #         the network config object depending on the voltage level the
-    #         generator is in.
-    #
-    #     """
-    #     if self._reactive_power_mode is None:
-    #         if isinstance(self.grid, MVGrid):
-    #             self._reactive_power_mode = self.grid.network.config[
-    #                 'reactive_power_mode']['mv_gen']
-    #         elif isinstance(self.grid, LVGrid):
-    #             self._reactive_power_mode = self.grid.network.config[
-    #                 'reactive_power_mode']['lv_gen']
-    #
-    #     return self._reactive_power_mode
-    #
-    # @property
-    # def q_sign(self):
-    #     """
-    #     Get the sign of reactive power based on :attr:`_reactive_power_mode`.
-    #
-    #     Returns
-    #     -------
-    #     :obj:`int` or None
-    #         In case of inductive reactive power returns -1 and in case of
-    #         capacitive reactive power returns +1. If reactive power time
-    #         series is given, `q_sign` is set to None.
-    #
-    #     """
-    #     if self.reactive_power_mode.lower() == 'inductive':
-    #         return -1
-    #     elif self.reactive_power_mode.lower() == 'capacitive':
-    #         return 1
-    #     else:
-    #         raise ValueError("Unknown value {} in reactive_power_mode for "
-    #                          "Generator {}.".format(self.reactive_power_mode,
-    #                                                 repr(self)))
 
     # @property
     # def power_factor(self):
@@ -1874,76 +2011,6 @@ class TimeSeriesControl:
     #                 'reactive_power_factor']['lv_load']
     #     return self._power_factor
 
-    # @power_factor.setter
-    # def power_factor(self, power_factor):
-    #     self._power_factor = power_factor
-    #
-    # @property
-    # def reactive_power_mode(self):
-    #     """
-    #     Power factor mode of Load.
-    #
-    #     This information is necessary to make the load behave in an inductive
-    #     or capacitive manner. Essentially this changes the sign of the reactive
-    #     power.
-    #
-    #     The convention used here in a load is that:
-    #     - when `reactive_power_mode` is 'inductive' then Q is positive
-    #     - when `reactive_power_mode` is 'capacitive' then Q is negative
-    #
-    #     Parameters
-    #     ----------
-    #     reactive_power_mode : :obj:`str` or None
-    #         Possible options are 'inductive', 'capacitive' and
-    #         'not_applicable'. In the case of 'not_applicable' a reactive
-    #         power time series must be given.
-    #
-    #     Returns
-    #     -------
-    #     :obj:`str`
-    #         In the case that this attribute is not set, it is retrieved from
-    #         the network config object depending on the voltage level the load
-    #         is in.
-    #
-    #     """
-    #     if self._reactive_power_mode is None:
-    #         if isinstance(self.grid, MVGrid):
-    #             self._reactive_power_mode = self.grid.network.config[
-    #                 'reactive_power_mode']['mv_load']
-    #         elif isinstance(self.grid, LVGrid):
-    #             self._reactive_power_mode = self.grid.network.config[
-    #                 'reactive_power_mode']['lv_load']
-    #
-    #     return self._reactive_power_mode
-    #
-    # @reactive_power_mode.setter
-    # def reactive_power_mode(self, reactive_power_mode):
-    #     self._reactive_power_mode = reactive_power_mode
-
-    # @property
-    # def q_sign(self):
-    #     """
-    #     Get the sign of reactive power based on :attr:`_reactive_power_mode`.
-    #
-    #     Returns
-    #     -------
-    #     :obj:`int` or None
-    #         In case of inductive reactive power returns +1 and in case of
-    #         capacitive reactive power returns -1. If reactive power time
-    #         series is given, `q_sign` is set to None.
-    #
-    #     """
-    #     if self.reactive_power_mode.lower() == 'inductive':
-    #         return 1
-    #     elif self.reactive_power_mode.lower() == 'capacitive':
-    #         return -1
-    #     elif self.reactive_power_mode.lower() == 'not_applicable':
-    #         return None
-    #     else:
-    #         raise ValueError("Unknown value {} in reactive_power_mode for "
-    #                          "Load {}.".format(self.reactive_power_mode,
-    #                                            repr(self)))
-
     def _check_timeindex(self):
         """
         Check function to check if all feed-in and load time series contain
@@ -1961,72 +2028,6 @@ class TimeSeriesControl:
                       'not match.'
             logging.error(message)
             raise KeyError(message)
-
-    def _worst_case_generation(self, worst_case_scale_factors, modes):
-        """
-        Define worst case generation time series for fluctuating and
-        dispatchable generators.
-
-        Parameters
-        ----------
-        worst_case_scale_factors : dict
-            Scale factors defined in config file 'config_timeseries.cfg'.
-            Scale factors describe actual power to nominal power ratio of in
-            worst-case scenarios.
-        modes : list
-            List with worst-cases to generate time series for. Can be
-            'feedin_case', 'load_case' or both.
-
-        """
-
-        self.timeseries.generation_fluctuating = pd.DataFrame(
-            {'solar': [worst_case_scale_factors[
-                           '{}_feedin_pv'.format(mode)] for mode in modes],
-             'wind': [worst_case_scale_factors[
-                          '{}_feedin_other'.format(mode)] for mode in modes]},
-            index=self.timeseries.timeindex)
-
-        self.timeseries.generation_dispatchable = pd.DataFrame(
-            {'other': [worst_case_scale_factors[
-                           '{}_feedin_other'.format(mode)] for mode in modes]},
-            index=self.timeseries.timeindex)
-
-    def _worst_case_load(self, worst_case_scale_factors,
-                         peakload_consumption_ratio, modes):
-        """
-        Define worst case load time series for each sector.
-
-        Parameters
-        ----------
-        worst_case_scale_factors : dict
-            Scale factors defined in config file 'config_timeseries.cfg'.
-            Scale factors describe actual power to nominal power ratio of in
-            worst-case scenarios.
-        peakload_consumption_ratio : dict
-            Ratios of peak load to annual consumption per sector, defined in
-            config file 'config_timeseries.cfg'
-        modes : list
-            List with worst-cases to generate time series for. Can be
-            'feedin_case', 'load_case' or both.
-
-        """
-
-        sectors = ['residential', 'retail', 'industrial', 'agricultural']
-        lv_power_scaling = np.array(
-            [worst_case_scale_factors['lv_{}_load'.format(mode)]
-             for mode in modes])
-        mv_power_scaling = np.array(
-            [worst_case_scale_factors['mv_{}_load'.format(mode)]
-             for mode in modes])
-
-        lv = {(sector, 'lv'): peakload_consumption_ratio[sector] *
-                              lv_power_scaling
-              for sector in sectors}
-        mv = {(sector, 'mv'): peakload_consumption_ratio[sector] *
-                              mv_power_scaling
-              for sector in sectors}
-        self.timeseries.load = pd.DataFrame({**lv, **mv},
-                                            index=self.timeseries.timeindex)
 
 
 class CurtailmentControl:
@@ -2701,8 +2702,9 @@ class TimeSeries:
         self._timesteps_load_feedin_case = None
 
     @property
-    def generation_dispatchable(self):
+    def generators_active_power(self):
         """
+        #ToDo docstring
         Get generation time series of dispatchable generators (only active
         power)
 
@@ -2713,38 +2715,18 @@ class TimeSeries:
 
         """
         try:
-            return self._generation_dispatchable.loc[[self.timeindex], :]
+            return self._generators_active_power.loc[[self.timeindex], :]
         except:
-            return self._generation_dispatchable.loc[self.timeindex, :]
+            return self._generators_active_power.loc[self.timeindex, :]
 
-    @generation_dispatchable.setter
-    def generation_dispatchable(self, generation_dispatchable_timeseries):
-        self._generation_dispatchable = generation_dispatchable_timeseries
+    @generators_active_power.setter
+    def generators_active_power(self, generators_active_power_ts):
+        self._generators_active_power = generators_active_power_ts
 
     @property
-    def generation_fluctuating(self):
+    def generators_reactive_power(self):
         """
-        Get generation time series of fluctuating renewables (only active
-        power)
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            See class definition for details.
-
-        """
-        try:
-            return self._generation_fluctuating.loc[[self.timeindex], :]
-        except:
-            return self._generation_fluctuating.loc[self.timeindex, :]
-
-    @generation_fluctuating.setter
-    def generation_fluctuating(self, generation_fluc_timeseries):
-        self._generation_fluctuating = generation_fluc_timeseries
-
-    @property
-    def generation_reactive_power(self):
-        """
+        #ToDo docstring
         Get reactive power time series for generators normalized by nominal
         active power.
 
@@ -2754,18 +2736,19 @@ class TimeSeries:
             See class definition for details.
 
         """
-        if self._generation_reactive_power is not None:
-            return self._generation_reactive_power.loc[self.timeindex, :]
-        else:
-            return None
+        try:
+            return self._generators_reactive_power.loc[[self.timeindex], :]
+        except:
+            return self._generators_reactive_power.loc[self.timeindex, :]
 
-    @generation_reactive_power.setter
-    def generation_reactive_power(self, generation_reactive_power_timeseries):
-        self._generation_reactive_power = generation_reactive_power_timeseries
+    @generators_reactive_power.setter
+    def generators_reactive_power(self, generators_reactive_power_ts):
+        self._generators_reactive_power = generators_reactive_power_ts
 
     @property
-    def load(self):
+    def loads_active_power(self):
         """
+        #ToDo docstring
         Get load time series (only active power)
 
         Returns
@@ -2775,17 +2758,18 @@ class TimeSeries:
 
         """
         try:
-            return self._load.loc[[self.timeindex], :]
+            return self._loads_active_power.loc[[self.timeindex], :]
         except:
-            return self._load.loc[self.timeindex, :]
+            return self._loads_active_power.loc[self.timeindex, :]
 
-    @load.setter
-    def load(self, load_timeseries):
-        self._load = load_timeseries
+    @loads_active_power.setter
+    def loads_active_power(self, loads_active_power_ts):
+        self._loads_active_power = loads_active_power_ts
 
     @property
-    def load_reactive_power(self):
+    def loads_reactive_power(self):
         """
+        #ToDo docstring
         Get reactive power time series for load normalized by annual
         consumption.
 
@@ -2795,14 +2779,14 @@ class TimeSeries:
             See class definition for details.
 
         """
-        if self._load_reactive_power is not None:
-            return self._load_reactive_power.loc[self.timeindex, :]
-        else:
-            return None
+        try:
+            return self._loads_reactive_power.loc[[self.timeindex], :]
+        except:
+            return self._loads_reactive_power.loc[self.timeindex, :]
 
-    @load_reactive_power.setter
-    def load_reactive_power(self, load_reactive_power_timeseries):
-        self._load_reactive_power = load_reactive_power_timeseries
+    @loads_reactive_power.setter
+    def loads_reactive_power(self, loads_reactive_power_ts):
+        self._loads_reactive_power = loads_reactive_power_ts
 
     @property
     def timeindex(self):
