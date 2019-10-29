@@ -103,7 +103,7 @@ def to_pypsa(network, mode, timesteps):
             'StorageUnit': network.storages_df.loc[:, ['bus', 'control']],
             'Line': network.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r']],
             'Transformer': network.transformers_df.loc[
-                           :, ['bus0', 'bus1', 'x', 'r']].rename(
+                           :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type', 's_nom']].rename(
                 columns={'r_pu': 'r', 'x_pu': 'x'})
         }
 
