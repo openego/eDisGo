@@ -16,7 +16,7 @@ from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, \
     curtailment, storage_positioning
 from edisgo.grid.components import Generator, Load
-from edisgo.grid.tools import get_gen_info, disconnect_storage
+from edisgo.grid.tools import get_gen_info
 from edisgo.grid.grids import MVGrid
 from edisgo.tools import plots
 
@@ -703,7 +703,7 @@ class Network:
         self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
 
         self._generator_scenario = kwargs.get('generator_scenario', None)
-        self._pypsa = None # getter implementieren, der network in pypsa umwandelt
+        #self._pypsa = None # getter implementieren, der network in pypsa umwandelt
 
     def _load_equipment_data(self):
         """
@@ -1187,8 +1187,7 @@ class Network:
     # def dingo_import_data(self, dingo_data):
     #     self._dingo_import_data = dingo_data
 
-    @property
-    def pypsa(self):
+    def to_pypsa(self, mode=None, timesteps=None):
         """
         PyPSA grid representation
 
@@ -1213,11 +1212,12 @@ class Network:
             :meth:`~.grid.network.EDisGo.analyze` for more information.
 
         """
-        return self._pypsa
-
-    @pypsa.setter
-    def pypsa(self, pypsa):
-        self._pypsa = pypsa
+        if timesteps is None:
+            timesteps = self.timeseries.timeindex
+        # check if timesteps is array-like, otherwise convert to list
+        if not hasattr(timesteps, "__len__"):
+            timesteps = [timesteps]
+        return pypsa_io.to_pypsa(self, mode=mode, timesteps=timesteps)
 
     def __repr__(self):
         return 'Network ' + str(self.id)
@@ -2789,6 +2789,49 @@ class TimeSeries:
         self._loads_reactive_power = loads_reactive_power_ts
 
     @property
+    def storages_active_power(self):
+        """
+        #ToDo docstring
+        Get load time series (only active power)
+
+        Returns
+        -------
+        dict or :pandas:`pandas.DataFrame<dataframe>`
+            See class definition for details.
+
+        """
+        try:
+            return self._storages_active_power.loc[[self.timeindex], :]
+        except:
+            return self._storages_active_power.loc[self.timeindex, :]
+
+    @storages_active_power.setter
+    def storages_active_power(self, storages_active_power_ts):
+        self._storages_active_power = storages_active_power_ts
+
+    @property
+    def storages_reactive_power(self):
+        """
+        #ToDo docstring
+        Get reactive power time series for load normalized by annual
+        consumption.
+
+        Returns
+        -------
+        :pandas: `pandas.DataFrame<dataframe>`
+            See class definition for details.
+
+        """
+        try:
+            return self._storages_reactive_power.loc[[self.timeindex], :]
+        except:
+            return self._storages_reactive_power.loc[self.timeindex, :]
+
+    @storages_reactive_power.setter
+    def storages_reactive_power(self, storages_reactive_power_ts):
+        self._storages_reactive_power = storages_reactive_power_ts
+
+    @property
     def timeindex(self):
         """
         Parameters
@@ -2878,6 +2921,7 @@ class TimeSeries:
         Returns
         -------
         :pandas:`pandas.Series<series>`
+
             Series with information on whether time step is handled as load
             case ('load_case') or feed-in case ('feedin_case') for each time
             step in :py:attr:`~timeindex`.
@@ -2887,7 +2931,11 @@ class TimeSeries:
             load and 'feedin_case' for negative residual load.
 
         """
-        return tools.assign_load_feedin_case(self.network)
+        residual_load = self.network.timeseries.generators_active_power.sum(
+            axis=1) - self.network.timeseries.loads_active_power.sum(axis=1)
+
+        return residual_load.apply(
+            lambda _: 'feedin_case' if _ < 0 else 'load_case')
 
 
 class Results:
