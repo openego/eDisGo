@@ -1567,13 +1567,15 @@ class TimeSeriesControl:
         # solar
         cols = gen_ts[self.network.generators_df.index[
             self.network.generators_df.type == 'solar']].columns
-        gen_ts[cols] = pd.concat([worst_case_ts.loc[:, ['solar']]] * len(cols),
-                                 axis=1)
+        if len(cols)>0:
+            gen_ts[cols] = pd.concat(
+                [worst_case_ts.loc[:, ['solar']]] * len(cols), axis=1)
         # other
         cols = gen_ts[self.network.generators_df.index[
             self.network.generators_df.type != 'solar']].columns
-        gen_ts[cols] = pd.concat([worst_case_ts.loc[:, ['other']]] * len(cols),
-                                 axis=1)
+        if len(cols)>0:
+            gen_ts[cols] = pd.concat(
+                [worst_case_ts.loc[:, ['other']]] * len(cols), axis=1)
 
         self.timeseries.generators_active_power = gen_ts.mul(
             self.network.generators_df.p_nom)
