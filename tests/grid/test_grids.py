@@ -1,6 +1,8 @@
 import os
+import numpy as np
+import pandas as pd
 
-from edisgo.grid.network import Network
+from edisgo.grid.network import Network, TimeSeriesControl
 from edisgo.data import import_data
 from edisgo.grid.components import Generator, Load, Switch
 from edisgo.grid.grids import LVGrid
@@ -55,6 +57,42 @@ class TestGrids:
         assert mv_grid.peak_generation_capacity_per_technology['solar'] == 4.6
         assert mv_grid.peak_load == 0.31
         assert mv_grid.peak_load_per_sector['retail'] == 0.31
+
+    def test_mv_grid_to_pypsa(self):
+        TimeSeriesControl(network=self.network, mode='worst-case')
+        # ToDo: Remove and convert into csv table
+        omega = 2 * np.pi * 50
+        valid_lines = self.network.equipment_data['mv_lines'][
+            self.network.equipment_data['mv_lines'].U_n ==
+            self.network.buses_df.v_nom.iloc[0]]
+        std_line = valid_lines.loc[valid_lines.I_max_th.idxmin()]
+        self.network.lines_df[np.isnan(self.network.lines_df.x)] = \
+            self.network.lines_df[
+                np.isnan(self.network.lines_df.x)].assign(
+                num_parallel=1,
+                r=lambda _: _.length * std_line.loc['R_per_km'],
+                x=lambda _: _.length * std_line.loc['L_per_km'] * omega / 1e3,
+                s_nom=np.sqrt(3) * std_line.loc['I_max_th'] *
+                      std_line.loc['U_n'] / 1e3,
+                type_info=std_line.name)
+        # run powerflow and check results
+        timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
+        pypsa_network = self.network.mv_grid.to_pypsa()
+        pf_results = pypsa_network.pf(timesteps)
+
+        if all(pf_results['converged']['0'].tolist()):
+            print('converged mv')
+        else:
+            raise ValueError("Power flow analysis mv did not converge.")
+
+        pypsa_network = self.network.mv_grid.to_pypsa(mode='mvlv')
+        pf_results = pypsa_network.pf(timesteps)
+
+        if all(pf_results['converged']['0'].tolist()):
+            print('converged mvlv')
+        else:
+            raise ValueError("Power flow analysis mvlv did not converge.")
+
 
     def test_lv_grid(self):
         """Test LVGrid class getter, setter, methods"""
