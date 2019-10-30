@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 from edisgo.grid.components import Generator, Load, Switch
 from edisgo.grid import network
+from edisgo.tools import pypsa_io
 
 
 class Grid(ABC):
@@ -28,7 +29,6 @@ class Grid(ABC):
         self._nominal_voltage = None
 
         # # ToDo Implement if necessary
-        # self._transformers = None
         # self._station = None
         # ToDo maybe add lines_df and lines property if needed
 
@@ -62,6 +62,36 @@ class Grid(ABC):
     @nominal_voltage.setter
     def nominal_voltage(self, nominal_voltage):
         self._nominal_voltage = nominal_voltage
+
+    @property
+    def station(self):
+        """
+        Bus that represents station of grid.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe that contains station bus. Format is the same as for
+            buses_df.
+        """
+        return self.network.buses_df.loc[
+            self.transformers_df.bus1.unique()
+        ]
+
+    @property
+    def transformers_df(self):
+        """
+        Transformers to overlaying grid.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all transformers to overlaying grid. For more
+            information on the dataframe see
+            :attr:`~.grid.network.Network.transformers_df`.
+        """
+        return self.network.transformers_df[
+            self.network.transformers_df.bus1.isin(self.buses_df.index)]
 
     @property
     def generators_df(self):
@@ -122,6 +152,20 @@ class Grid(ABC):
             yield Load(id=l)
 
     @property
+    def storages_df(self):
+        """
+        Connected storage units within the grid.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all storages in grid. For more information on the
+            dataframe see :attr:`~.grid.network.Network.storages_df`.
+        """
+        return self.network.storages_df[
+            self.network.storages_df.bus.isin(self.buses_df.index)]
+
+    @property
     def switch_disconnectors_df(self):
         """
         Switch disconnectors in grid.
@@ -154,6 +198,21 @@ class Grid(ABC):
         """
         for s in self.switch_disconnectors_df.index:
             yield Switch(id=s)
+
+    @property
+    def lines_df(self):
+        """
+        Lines within the grid.
+
+         Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all buses in grid. For more information on the
+            dataframe see :attr:`~.grid.network.Network.lines_df`.
+        """
+        return self.network.lines_df[
+            self.network.lines_df.bus0.isin(self.buses_df.index)][
+            self.network.lines_df.bus1.isin(self.buses_df.index)]
 
     @property
     @abstractmethod
@@ -252,6 +311,34 @@ class Grid(ABC):
         """
         # ToDo: Should we implement this or move function from tools here?
         raise NotImplementedError
+
+    def to_pypsa(self, mode = 'mv', timesteps=None):
+        """
+        PyPSA grid representation
+
+        A grid topology representation based on
+        :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
+        this data model, the :pypsa:`pypsa.Network<network>`,
+        is assigned to this attribute.
+        Todo: Docstring
+        :param mode:
+        :param timesteps:
+
+        Returns
+        -------
+        :pypsa:`pypsa.Network<network>`
+            PyPSA grid representation. The attribute `edisgo_mode` is added
+            to specify if pypsa representation of the edisgo network
+            was created for the whole grid topology (MV + LV), only MV or only
+            LV. See parameter `mode` in
+            :meth:`~.grid.network.EDisGo.analyze` for more information.
+        """
+        if timesteps is None:
+            timesteps = self.network.timeseries.timeindex
+        # check if timesteps is array-like, otherwise convert to list
+        if not hasattr(timesteps, "__len__"):
+            timesteps = [timesteps]
+        return pypsa_io.to_pypsa(self, mode=mode, timesteps=timesteps)
 
 
 class MVGrid(Grid):
