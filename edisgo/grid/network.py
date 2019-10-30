@@ -490,11 +490,11 @@ class EDisGo(EDisGoReimport):
         # set up time series for feed-in and load
         # worst-case time series
         if kwargs.get('worst_case_analysis', None):
-            self.network.timeseries = TimeSeriesControl(
+            TimeSeriesControl(
                 network=self.network,
-                mode=kwargs.get('worst_case_analysis', None)).timeseries
+                mode=kwargs.get('worst_case_analysis', None))
         else:
-            self.network.timeseries = TimeSeriesControl(
+            TimeSeriesControl(
                 network=self.network,
                 timeseries_generation_fluctuating=kwargs.get(
                     'timeseries_generation_fluctuating', None),
@@ -506,7 +506,7 @@ class EDisGo(EDisGoReimport):
                     'timeseries_load', None),
                 timeseries_load_reactive_power = kwargs.get(
                     'timeseries_load_reactive_power', None),
-                timeindex=kwargs.get('timeindex', None)).timeseries
+                timeindex=kwargs.get('timeindex', None))
 
         # import new generators
         if self.network.generator_scenario is not None:
@@ -703,7 +703,7 @@ class Network:
         self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
 
         self._generator_scenario = kwargs.get('generator_scenario', None)
-        #self._pypsa = None # getter implementieren, der network in pypsa umwandelt
+        self._timeseries = TimeSeries()
 
     def _load_equipment_data(self):
         """
@@ -799,10 +799,9 @@ class Network:
         path : :obj:'str`
             Path to directory containing csv files of grid to be loaded.
 
-        #ToDo For details see ...
+        #ToDo docstring
 
         """
-        #ToDo MV_grid Klasse erstellen die von Pypsa network erbt? oder kann
         if path is not None:
             import_ding0_grid(path, self)
 
@@ -1151,24 +1150,23 @@ class Network:
     def grid_district(self, grid_district):
         self._grid_district = grid_district
 
-    # ToDo still needed?
-    # @property
-    # def timeseries(self):
-    #     """
-    #     Object containing load and feed-in time series.
-    #
-    #     Parameters
-    #     ----------
-    #     timeseries : :class:`~.grid.network.TimeSeries`
-    #         Object containing load and feed-in time series.
-    #
-    #     Returns
-    #     --------
-    #     :class:`~.grid.network.TimeSeries`
-    #         Object containing load and feed-in time series.
-    #
-    #     """
-    #     return self._timeseries
+    @property
+    def timeseries(self):
+        """
+        Object containing load and feed-in time series.
+
+        Parameters
+        ----------
+        timeseries : :class:`~.grid.network.TimeSeries`
+            Object containing load and feed-in time series.
+
+        Returns
+        --------
+        :class:`~.grid.network.TimeSeries`
+            Object containing load and feed-in time series.
+
+        """
+        return self._timeseries
     #
     # @timeseries.setter
     # def timeseries(self, timeseries):
@@ -1454,10 +1452,7 @@ class TimeSeriesControl:
     def __init__(self, network, **kwargs):
 
         self.network = network
-        self.timeseries = TimeSeries(network=self.network)
         mode = kwargs.get('mode', None)
-        config_data = network.config
-        weather_cell_ids = network.mv_grid.weather_cells
 
         if mode:
             if mode == 'worst-case':
@@ -1468,21 +1463,20 @@ class TimeSeriesControl:
                 raise ValueError('{} is not a valid mode.'.format(mode))
 
             # set random timeindex
-            self.timeseries._timeindex = pd.date_range(
+            self.network.timeseries._timeindex = pd.date_range(
                 '1/1/1970', periods=len(modes), freq='H')
-            self._worst_case_generation(config_data['worst_case_scale_factor'],
-                                        modes)
-            self._worst_case_load(config_data['worst_case_scale_factor'],
-                                  config_data['peakload_consumption_ratio'],
-                                  modes)
+            self._worst_case_generation(modes)
+            self._worst_case_load(modes)
 
         else:
+            config_data = network.config
+            weather_cell_ids = network.mv_grid.weather_cells
             # feed-in time series of fluctuating renewables
             ts = kwargs.get('timeseries_generation_fluctuating', None)
             if isinstance(ts, pd.DataFrame):
-                self.timeseries.generation_fluctuating = ts
+                self.network.timeseries.generation_fluctuating = ts
             elif isinstance(ts, str) and ts == 'oedb':
-                self.timeseries.generation_fluctuating = \
+                self.network.timeseries.generation_fluctuating = \
                     import_feedin_timeseries(config_data,
                                              weather_cell_ids)
             else:
@@ -1492,7 +1486,7 @@ class TimeSeriesControl:
             # feed-in time series for dispatchable generators
             ts = kwargs.get('timeseries_generation_dispatchable', None)
             if isinstance(ts, pd.DataFrame):
-                self.timeseries.generation_dispatchable = ts
+                self.network.timeseries.generation_dispatchable = ts
             else:
                 # check if there are any dispatchable generators, and
                 # throw error if there are
@@ -1533,18 +1527,16 @@ class TimeSeriesControl:
             # check if time series for the set time index can be obtained
             self._check_timeindex()
 
-    def _worst_case_generation(self, worst_case_scale_factors, modes):
+    def _worst_case_generation(self, modes):
         """
         #ToDo: docstring
         Define worst case generation time series for fluctuating and
         dispatchable generators.
 
+        Overwrites active and reactive power time series of generators
+
         Parameters
         ----------
-        worst_case_scale_factors : dict
-            Scale factors defined in config file 'config_timeseries.cfg'.
-            Scale factors describe actual power to nominal power ratio of in
-            worst-case scenarios.
         modes : list
             List with worst-cases to generate time series for. Can be
             'feedin_case', 'load_case' or both.
@@ -1553,15 +1545,19 @@ class TimeSeriesControl:
         # ToDo check that all generators have type and p_nom
 
         # active power
+
+        worst_case_scale_factors = self.network.config[
+            'worst_case_scale_factor']
+
         worst_case_ts = pd.DataFrame(
             {'solar': [worst_case_scale_factors[
                            '{}_feedin_pv'.format(mode)] for mode in modes],
              'other': [worst_case_scale_factors[
                            '{}_feedin_other'.format(mode)] for mode in modes]
              },
-            index=self.timeseries.timeindex)
+            index=self.network.timeseries.timeindex)
 
-        gen_ts = pd.DataFrame(index=self.timeseries.timeindex,
+        gen_ts = pd.DataFrame(index=self.network.timeseries.timeindex,
                               columns=self.network.generators_df.index)
 
         # solar
@@ -1577,7 +1573,7 @@ class TimeSeriesControl:
             gen_ts[cols] = pd.concat(
                 [worst_case_ts.loc[:, ['other']]] * len(cols), axis=1)
 
-        self.timeseries.generators_active_power = gen_ts.mul(
+        self.network.timeseries.generators_active_power = gen_ts.mul(
             self.network.generators_df.p_nom)
 
         # reactive power
@@ -1597,11 +1593,11 @@ class TimeSeriesControl:
                 power_factor[cols] = self.network.config[
                     'reactive_power_factor']['{}_gen'.format(voltage_level)]
 
-        self.timeseries.generators_reactive_power = self._fixed_cosphi(
-            self.timeseries.generators_active_power, q_sign, power_factor)
+        self.network.timeseries.generators_reactive_power = self._fixed_cosphi(
+            self.network.timeseries.generators_active_power,
+            q_sign, power_factor)
 
-    def _worst_case_load(self, worst_case_scale_factors,
-                         peakload_consumption_ratio, modes):
+    def _worst_case_load(self, modes):
         """
         #ToDo: docstring
         Define worst case load time series for each sector.
@@ -1620,6 +1616,13 @@ class TimeSeriesControl:
             'feedin_case', 'load_case' or both.
 
         """
+        # active power
+
+        worst_case_scale_factors = self.network.config[
+            'worst_case_scale_factor']
+        peakload_consumption_ratio = self.network.config[
+            'peakload_consumption_ratio']
+
         #ToDo check that all loads have sector, annual consumption
         sectors = ['residential', 'retail', 'industrial', 'agricultural']
         voltage_levels = ['mv', 'lv']
@@ -1629,7 +1632,7 @@ class TimeSeriesControl:
         loads_df['voltage_level'] = loads_df.apply(
             lambda _: 'lv' if self.network.buses_df.at[_.bus, 'v_nom'] < 1
             else 'mv', axis=1)
-        load_ts = pd.DataFrame(index=self.timeseries.timeindex,
+        load_ts = pd.DataFrame(index=self.network.timeseries.timeindex,
                                columns=self.network.loads_df.index)
 
         # get power scaling factors for different voltage levels
@@ -1650,7 +1653,7 @@ class TimeSeriesControl:
                          power_scaling[voltage_level]] *
                         len(cols), axis=1)
 
-        self.timeseries.loads_active_power = load_ts.mul(
+        self.network.timeseries.loads_active_power = load_ts.mul(
             self.network.loads_df.annual_consumption)
 
         # reactive power
@@ -1665,8 +1668,8 @@ class TimeSeriesControl:
                 power_factor[cols] = self.network.config[
                     'reactive_power_factor']['{}_load'.format(voltage_level)]
 
-        self.timeseries.loads_reactive_power = self._fixed_cosphi(
-            self.timeseries.loads_active_power, q_sign, power_factor)
+        self.network.timeseries.loads_reactive_power = self._fixed_cosphi(
+            self.network.timeseries.loads_active_power, q_sign, power_factor)
 
     def _get_q_sign_generator(self, reactive_power_mode):
         """
@@ -1694,7 +1697,7 @@ class TimeSeriesControl:
         else:
             raise ValueError("reactive_power_mode must either be 'capacitive' "
                              "or 'inductive' but is {}.".format(
-                reactive_power_mode))
+                                reactive_power_mode))
 
     def _get_q_sign_load(self, reactive_power_mode):
         """
@@ -1722,15 +1725,28 @@ class TimeSeriesControl:
         else:
             raise ValueError("reactive_power_mode must either be 'capacitive' "
                              "or 'inductive' but is {}.".format(
-                reactive_power_mode))
+                                reactive_power_mode))
 
     def _fixed_cosphi(self, active_power, q_sign, power_factor):
         """
-        ToDo: docstring
-        :param active_power:
-        :param q_sign:
-        :param power_factor:
-        :return:
+        Calculates reactive power for a fixed cosphi operation.
+
+        Parameters
+        ----------
+        active_power : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with active power time series.
+        q_sign : int
+            `q_sign` defines whether the reactive power is positive or
+            negative and must either be -1 or +1.
+        power_factor :
+            Ratio of real to apparent power.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with the same format as the `active_power` dataframe,
+            containing the reactive power.
+
         """
         return active_power * q_sign * np.tan(np.arccos(power_factor))
 
@@ -2689,19 +2705,22 @@ class TimeSeries:
 
     """
 
-    def __init__(self, network, **kwargs):
-        self.network = network
-        self._generation_dispatchable = kwargs.get('generation_dispatchable',
-                                                   None)
-        self._generation_fluctuating = kwargs.get('generation_fluctuating',
-                                                  None)
-        self._generation_reactive_power = kwargs.get(
-            'generation_reactive_power', None)
-        self._load = kwargs.get('load', None)
-        self._load_reactive_power = kwargs.get('load_reacitve_power', None)
-        self._curtailment = kwargs.get('curtailment', None)
+    def __init__(self, **kwargs):
+
         self._timeindex = kwargs.get('timeindex', None)
-        self._timesteps_load_feedin_case = None
+        self._generators_active_power = kwargs.get(
+            'generators_active_power', None)
+        self._generators_reactive_power = kwargs.get(
+            'generators_reactive_power', None)
+        self._loads_active_power = kwargs.get(
+            'loads_active_power', None)
+        self._loads_reactive_power = kwargs.get(
+            'loads_reacitve_power', None)
+        self._storages_active_power = kwargs.get(
+            'storages_active_power', None)
+        self._storages_reactive_power = kwargs.get(
+            'storages_reacitve_power', None)
+        self._curtailment = kwargs.get('curtailment', None)
 
     @property
     def generators_active_power(self):
@@ -2933,8 +2952,8 @@ class TimeSeries:
             load and 'feedin_case' for negative residual load.
 
         """
-        residual_load = self.network.timeseries.generators_active_power.sum(
-            axis=1) - self.network.timeseries.loads_active_power.sum(axis=1)
+        residual_load = self.generators_active_power.sum(axis=1) - \
+                        self.loads_active_power.sum(axis=1)
 
         return residual_load.apply(
             lambda _: 'feedin_case' if _ < 0 else 'load_case')

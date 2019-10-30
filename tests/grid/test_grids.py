@@ -1,6 +1,4 @@
-import pytest
 import os
-import math
 
 from edisgo.grid.network import Network
 from edisgo.data import import_data
