@@ -113,7 +113,7 @@ def to_pypsa(grid_object, mode, timesteps):
             network.buses_df.loc[:, ['v_nom']], 'Bus')
         buses = network.buses_df.index
 
-    if 'mv' in mode:
+    elif 'mv' in mode:
         grid = grid_object
         network = grid.network
         lv_components_to_aggregate = {'Load': 'loads_df',

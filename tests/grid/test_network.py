@@ -148,9 +148,7 @@ class TestTimeSeriesControl:
         # test for only feed-in or load case
 
     def test_reinforce(self):
-        self.network.timeseries = TimeSeriesControl(
-            network=self.network,
-            mode='worst-case').timeseries
+        TimeSeriesControl(network=self.network, mode='worst-case')
         # ToDo: Remove and convert into csv table
         omega = 2 * np.pi * 50
         valid_lines = self.network.equipment_data['mv_lines'][
