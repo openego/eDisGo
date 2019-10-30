@@ -211,7 +211,7 @@ class Grid(ABC):
             dataframe see :attr:`~.grid.network.Network.lines_df`.
         """
         return self.network.lines_df[
-            self.network.lines_df.bus0.isin(self.buses_df.index)][
+            self.network.lines_df.bus0.isin(self.buses_df.index) &
             self.network.lines_df.bus1.isin(self.buses_df.index)]
 
     @property

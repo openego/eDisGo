@@ -113,60 +113,103 @@ def to_pypsa(grid_object, mode, timesteps):
             network.buses_df.loc[:, ['v_nom']], 'Bus')
         buses = network.buses_df.index
 
-    # mv grid with lv loads and generators connected to mv side of station
-    elif mode is 'mv':
+    if 'mv' in mode:
         grid = grid_object
         network = grid.network
-
-        # get mv_components
-        mv_components = {
-            'Load': grid.loads_df.loc[:, ['bus']],
-            'Generator': grid.generators_df.loc[:, ['bus', 'control']].append(
-                grid.network._generators_df.loc['Generator_slack',
-                                                ['bus', 'control']]), # Todo: mit birgit absprechen, ob slack irgendwo gespeichert werden soll
-            'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
-            'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r']],
-            'Transformer': grid.transformers_df[grid.transformers_df.bus1.isin(
-                grid.buses_df.index
-            )].loc[
-                           :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type',
-                               's_nom']].rename(
-                columns={'r_pu': 'r', 'x_pu': 'x'})
-        }
-        # get lv_components
         lv_components_to_aggregate = {'Load': 'loads_df',
                                       'Generator': 'generators_df',
                                       'StorageUnit': 'storages_df'}
-        lv_components = {key:{} for key in lv_components_to_aggregate}
-        for lv_grid in grid.lv_grids:
-            # get primary side of station to append loads and generators to
-            station_bus = grid.buses_df.loc[
-                lv_grid.transformers_df.bus0.unique()]
-            # handle one gate component
-            for comp, df in lv_components_to_aggregate.items():
-                comps = getattr(lv_grid, df).copy()
-                comps.bus = station_bus.index.values[0]
-                if hasattr(comps,'control'):
-                    lv_components[comp][str(lv_grid.id)] = \
-                        comps.loc[:,['bus', 'control']]
-                else:
-                    lv_components[comp][str(lv_grid.id)] = comps.loc[:,['bus']]
-            # Todo: accumulate loads?
+        lv_components = {key: {} for key in lv_components_to_aggregate}
+        buses_df = grid.buses_df.loc[:, ['v_nom']]
+        buses = grid.buses_df.index
+    # mv grid with lv loads and generators connected to mv side of station
+        if mode is 'mv':
+            # get mv_components
+            mv_components = {
+                'Load': grid.loads_df.loc[:, ['bus']],
+                'Generator': grid.generators_df.loc[:, ['bus', 'control']].append(
+                    grid.network._generators_df.loc['Generator_slack',
+                                                    ['bus', 'control']]), # Todo: mit birgit absprechen, ob slack irgendwo gespeichert werden soll
+                'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
+                'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r']],
+                'Transformer': grid.transformers_df[grid.transformers_df.bus1.isin(
+                    grid.buses_df.index
+                )].loc[
+                               :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type',
+                                   's_nom']].rename(
+                    columns={'r_pu': 'r', 'x_pu': 'x'})
+            }
+
+            # get lv_components
+            for lv_grid in grid.lv_grids:
+                # get primary side of station to append loads and generators to
+                station_bus = grid.buses_df.loc[
+                    lv_grid.transformers_df.bus0.unique()]
+                # handle one gate component
+                for comp, df in lv_components_to_aggregate.items():
+                    comps = getattr(lv_grid, df).copy()
+                    comps.bus = station_bus.index.values[0]
+                    if hasattr(comps,'control'):
+                        lv_components[comp][str(lv_grid.id)] = \
+                            comps.loc[:,['bus', 'control']]
+                    else:
+                        lv_components[comp][str(lv_grid.id)] = comps.loc[:,['bus']]
+                # Todo: accumulate loads?
+
+        # mv grid with accumulated loads and generators at lv side of station
+        elif mode is 'mvlv':
+
+            mv_components = {
+                'Load': grid.loads_df.loc[:, ['bus']],
+                'Generator': grid.generators_df.loc[:, ['bus', 'control']].append(
+                    grid.network._generators_df.loc['Generator_slack',
+                                                    ['bus', 'control']]), # Todo: mit birgit absprechen, ob slack irgendwo gespeichert werden soll,
+                'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
+                'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r']],
+                'Transformer': network.transformers_df.loc[
+                               :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type',
+                                   's_nom']].rename(
+                    columns={'r_pu': 'r', 'x_pu': 'x'})
+            }
+
+
+            # get lv_components
+            lv_components_to_aggregate = {'Load': 'loads_df',
+                                          'Generator': 'generators_df',
+                                          'StorageUnit': 'storages_df'}
+            lv_components = {key: {} for key in lv_components_to_aggregate}
+            for lv_grid in grid.lv_grids:
+                # get primary side of station to append loads and generators to
+                station_bus = lv_grid.station
+                buses_df = buses_df.append(station_bus.loc[:, ['v_nom']])
+                buses = buses.append(station_bus.index)
+                # handle one gate component
+                for comp, df in lv_components_to_aggregate.items():
+                    comps = getattr(lv_grid, df).copy()
+                    comps.bus = station_bus.index.values[0]
+                    if hasattr(comps, 'control'):
+                        lv_components[comp][str(lv_grid.id)] = \
+                            comps.loc[:, ['bus', 'control']]
+                    else:
+                        lv_components[comp][str(lv_grid.id)] = comps.loc[:,
+                                                               ['bus']]
+                # Todo: accumulate loads?
+
+        else:
+            raise ValueError("Provide proper mode for mv grid export.")
+
         for key in lv_components:
             lv_components[key] = pd.concat(lv_components[key].values())
         # merge components
         components = collections.defaultdict(pd.DataFrame)
-        for comps in (mv_components,lv_components):
+        for comps in (mv_components, lv_components):
             for key, value in comps.items():
                 components[key] = components[key].append(value)
 
         # import grid topology to PyPSA network
         # buses are created first to avoid warnings
         pypsa_network.import_components_from_dataframe(
-            grid.buses_df.loc[:, ['v_nom']], 'Bus')
-        buses = grid.buses_df.index
-
-
+            buses_df, 'Bus')
 
     elif mode is 'lv':
         raise NotImplementedError
