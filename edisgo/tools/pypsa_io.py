@@ -102,10 +102,12 @@ def to_pypsa(grid_object, mode, timesteps):
         # loads generators buses storages lines transformers
         #ToDo change getting generators once slack is separate dataframe
         components = {
-            'Load': network.loads_df.loc[:, ['bus']],
-            'Generator': network._generators_df.loc[:, ['bus', 'control']],
+            'Load': network.loads_df.loc[:, ['bus', 'peak_load']].rename(
+                columns={'peak_load':'p_set'}
+            ),
+            'Generator': network._generators_df.loc[:, ['bus', 'control', 'p_nom']],
             'StorageUnit': network.storages_df.loc[:, ['bus', 'control']],
-            'Line': network.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r']],
+            'Line': network.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
             'Transformer': network.transformers_df.loc[
                            :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type', 's_nom']].rename(
                 columns={'r_pu': 'r', 'x_pu': 'x'})
@@ -125,12 +127,14 @@ def to_pypsa(grid_object, mode, timesteps):
         if mode is 'mv':
             # get mv_components
             mv_components = {
-                'Load': grid.loads_df.loc[:, ['bus']],
-                'Generator': grid.generators_df.loc[:, ['bus', 'control']].append(
+                'Load': grid.loads_df.loc[:, ['bus', 'peak_load']].rename(
+                columns={'peak_load': 'p_set'}
+            ),
+                'Generator': grid.generators_df.loc[:, ['bus', 'control', 'p_nom']].append(
                     grid.network._generators_df.loc['Generator_slack',
-                                                    ['bus', 'control']]), # Todo: change when slack is dataframe
+                                                    ['bus', 'control', 'p_nom']]), # Todo: change when slack is dataframe
                 'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
-                'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r']],
+                'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
                 'Transformer': grid.transformers_df[grid.transformers_df.bus1.isin(
                     grid.buses_df.index
                 )].loc[
@@ -148,23 +152,21 @@ def to_pypsa(grid_object, mode, timesteps):
                 for comp, df in lv_components_to_aggregate.items():
                     comps = getattr(lv_grid, df).copy()
                     comps.bus = station_bus.index.values[0]
-                    if hasattr(comps,'control'):
-                        lv_components[comp][str(lv_grid.id)] = \
-                            comps.loc[:,['bus', 'control']]
-                    else:
-                        lv_components[comp][str(lv_grid.id)] = comps.loc[:,['bus']]
+                    append_lv_components(comp, comps, lv_components, lv_grid)
+
                 # Todo: accumulate loads?
 
         # mv grid with accumulated loads and generators at lv side of station
         elif mode is 'mvlv':
 
             mv_components = {
-                'Load': grid.loads_df.loc[:, ['bus']],
-                'Generator': grid.generators_df.loc[:, ['bus', 'control']].append(
+                'Load': grid.loads_df.loc[:, ['bus', 'peak_load']].rename(
+                columns={'peak_load':'p_set'}),
+                'Generator': grid.generators_df.loc[:, ['bus', 'control', 'p_nom']].append(
                     grid.network._generators_df.loc['Generator_slack',
-                                                    ['bus', 'control']]), # Todo: change when slack is dataframe
+                                                    ['bus', 'control', 'p_nom']]), # Todo: change when slack is dataframe
                 'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
-                'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r']],
+                'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
                 'Transformer': network.transformers_df.loc[
                                :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type',
                                    's_nom']].rename(
@@ -186,12 +188,7 @@ def to_pypsa(grid_object, mode, timesteps):
                 for comp, df in lv_components_to_aggregate.items():
                     comps = getattr(lv_grid, df).copy()
                     comps.bus = station_bus.index.values[0]
-                    if hasattr(comps, 'control'):
-                        lv_components[comp][str(lv_grid.id)] = \
-                            comps.loc[:, ['bus', 'control']]
-                    else:
-                        lv_components[comp][str(lv_grid.id)] = comps.loc[:,
-                                                               ['bus']]
+                    append_lv_components(comp, comps, lv_components, lv_grid)
                 # Todo: accumulate loads?
 
         else:
@@ -216,15 +213,16 @@ def to_pypsa(grid_object, mode, timesteps):
         buses_df = grid.buses_df.loc[:, ['v_nom']]
         buses = grid.buses_df.index
 
-        slack = pd.DataFrame({'name':['Generator_slack'],
-                              'bus':[grid.station.index.values[0]],
-                              'control':['Slack']}).set_index('name')
+        slack = pd.DataFrame({'name': ['Generator_slack'],
+                              'bus': [grid.station.index.values[0]],
+                              'control': ['Slack']}).set_index('name')
         components = {
-            'Load': grid.loads_df.loc[:, ['bus']],
-            'Generator': grid.generators_df.loc[:, ['bus', 'control']].append(
+            'Load': grid.loads_df.loc[:, ['bus', 'peak_load']].rename(
+                columns={'peak_load': 'p_set'}),
+            'Generator': grid.generators_df.loc[:, ['bus', 'control', 'p_nom']].append(
                 slack),
             'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
-            'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r']]
+            'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']]
         }
     else:
         raise ValueError("Provide proper mode or leave it empty to export "
@@ -284,6 +282,21 @@ def to_pypsa(grid_object, mode, timesteps):
     _check_integrity_of_pypsa(pypsa_network)
 
     return pypsa_network
+
+
+def append_lv_components(comp, comps, lv_components, lv_grid):
+    if comp is 'Load':
+        lv_components[comp][str(lv_grid.id)] = \
+            comps.loc[:, ['bus', 'peak_load']].rename(
+                columns={'peak_load': 'p_set'})
+    elif comp is 'Generator':
+        lv_components[comp][str(lv_grid.id)] = \
+            comps.loc[:, ['bus', 'control', 'p_nom']]
+    elif comp is 'StorageUnit':
+        lv_components[comp][str(lv_grid.id)] = comps.loc[:,
+                                               ['bus', 'control']]
+    else:
+        raise ValueError('Component Type not defined.')
 
 
 def _buses_voltage_set_point(network, buses, timesteps):
