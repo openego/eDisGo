@@ -1542,13 +1542,29 @@ class TimeSeriesControl:
             'feedin_case', 'load_case' or both.
 
         """
-        # ToDo check that all generators have type and p_nom
+
+        gens_df = self.network.generators_df.loc[:, ['bus', 'type', 'p_nom']]
+
+        # check that all generators have bus, type, nominal power
+        check_gens = gens_df.isna().any(axis=1)
+        if check_gens.any():
+            raise AttributeError(
+                "The following generators have either missing bus, type or "
+                "nominal power: {}.".format(
+                    check_gens[check_gens].index.values))
+
+        # assign voltage level to generators
+        gens_df['voltage_level'] = gens_df.apply(
+            lambda _: 'lv' if self.network.buses_df.at[_.bus, 'v_nom'] < 1
+            else 'mv', axis=1)
 
         # active power
-
+        # get worst case configurations
         worst_case_scale_factors = self.network.config[
             'worst_case_scale_factor']
 
+        # get worst case scaling factors for different generator types and
+        # feed-in/load case
         worst_case_ts = pd.DataFrame(
             {'solar': [worst_case_scale_factors[
                            '{}_feedin_pv'.format(mode)] for mode in modes],
@@ -1558,30 +1574,26 @@ class TimeSeriesControl:
             index=self.network.timeseries.timeindex)
 
         gen_ts = pd.DataFrame(index=self.network.timeseries.timeindex,
-                              columns=self.network.generators_df.index)
-
-        # solar
-        cols = gen_ts[self.network.generators_df.index[
-            self.network.generators_df.type == 'solar']].columns
-        if len(cols)>0:
+                              columns=gens_df.index)
+        # assign normalized active power time series to solar generators
+        cols = gen_ts[gens_df.index[gens_df.type == 'solar']].columns
+        if len(cols) > 0:
             gen_ts[cols] = pd.concat(
                 [worst_case_ts.loc[:, ['solar']]] * len(cols), axis=1)
-        # other
+        # assign normalized active power time series to other generators
         cols = gen_ts[self.network.generators_df.index[
             self.network.generators_df.type != 'solar']].columns
         if len(cols)>0:
             gen_ts[cols] = pd.concat(
                 [worst_case_ts.loc[:, ['other']]] * len(cols), axis=1)
 
+        # multiply normalized time series by nominal power of generator
         self.network.timeseries.generators_active_power = gen_ts.mul(
             self.network.generators_df.p_nom)
 
         # reactive power
-        gens_df = self.network.generators_df.loc[:, ['bus', 'type']]
-        gens_df['voltage_level'] = gens_df.apply(
-            lambda _: 'lv' if self.network.buses_df.at[_.bus, 'v_nom'] < 1
-            else 'mv', axis=1)
-
+        # write dataframes with sign of reactive power and power factor
+        # for each generator
         q_sign = pd.Series(index=self.network.generators_df.index)
         power_factor = pd.Series(index=self.network.generators_df.index)
         for voltage_level in ['mv', 'lv']:
@@ -1593,6 +1605,7 @@ class TimeSeriesControl:
                 power_factor[cols] = self.network.config[
                     'reactive_power_factor']['{}_gen'.format(voltage_level)]
 
+        # calculate reactive power time series for each generator
         self.network.timeseries.generators_reactive_power = self._fixed_cosphi(
             self.network.timeseries.generators_active_power,
             q_sign, power_factor)
@@ -1616,32 +1629,45 @@ class TimeSeriesControl:
             'feedin_case', 'load_case' or both.
 
         """
-        # active power
 
+        sectors = ['residential', 'retail', 'industrial', 'agricultural']
+        voltage_levels = ['mv', 'lv']
+
+        loads_df = self.network.loads_df.loc[
+                   :, ['bus', 'sector', 'annual_consumption']]
+
+        # check that all loads have bus, sector, annual consumption
+        check_loads = loads_df.isna().any(axis=1)
+        if check_loads.any():
+            raise AttributeError(
+                "The following loads have either missing bus, sector or "
+                "annual consumption: {}.".format(
+                    check_loads[check_loads].index.values))
+
+        # assign voltage level to loads
+        loads_df['voltage_level'] = loads_df.apply(
+            lambda _: 'lv' if self.network.buses_df.at[_.bus, 'v_nom'] < 1
+            else 'mv', axis=1)
+
+        # active power
+        # get worst case configurations
         worst_case_scale_factors = self.network.config[
             'worst_case_scale_factor']
         peakload_consumption_ratio = self.network.config[
             'peakload_consumption_ratio']
 
-        #ToDo check that all loads have sector, annual consumption
-        sectors = ['residential', 'retail', 'industrial', 'agricultural']
-        voltage_levels = ['mv', 'lv']
-
-        # assign voltage level to loads
-        loads_df = self.network.loads_df.loc[:, ['bus', 'sector']]
-        loads_df['voltage_level'] = loads_df.apply(
-            lambda _: 'lv' if self.network.buses_df.at[_.bus, 'v_nom'] < 1
-            else 'mv', axis=1)
-        load_ts = pd.DataFrame(index=self.network.timeseries.timeindex,
-                               columns=self.network.loads_df.index)
-
-        # get power scaling factors for different voltage levels
+        # get power scaling factors for different voltage levels and feed-in/
+        # load case
         power_scaling = {}
         for voltage_level in voltage_levels:
             power_scaling[voltage_level] = np.array(
                 [[worst_case_scale_factors['{}_{}_load'.format(
                     voltage_level, mode)]] for mode in modes])
 
+        # write normalized active power time series for each voltage level
+        # and sector to dataframe
+        load_ts = pd.DataFrame(index=self.network.timeseries.timeindex,
+                               columns=loads_df.index)
         for voltage_level in voltage_levels:
             for sector in sectors:
                 cols = load_ts[loads_df.index[
@@ -1653,21 +1679,29 @@ class TimeSeriesControl:
                          power_scaling[voltage_level]] *
                         len(cols), axis=1)
 
+        # multiply normalized time series by annual consumption of load
         self.network.timeseries.loads_active_power = load_ts.mul(
-            self.network.loads_df.annual_consumption)
+            loads_df.annual_consumption)
 
         # reactive power
+        # get worst case configurations
+        reactive_power_mode = self.network.config['reactive_power_mode']
+        reactive_power_factor = self.network.config[
+                    'reactive_power_factor']
+
+        # write dataframes with sign of reactive power and power factor
+        # for each load
         q_sign = pd.Series(index=self.network.loads_df.index)
         power_factor = pd.Series(index=self.network.loads_df.index)
         for voltage_level in voltage_levels:
             cols = loads_df.index[loads_df.voltage_level == voltage_level]
             if len(cols) > 0:
                 q_sign[cols] = self._get_q_sign_load(
-                    self.network.config['reactive_power_mode'][
-                        '{}_load'.format(voltage_level)])
-                power_factor[cols] = self.network.config[
-                    'reactive_power_factor']['{}_load'.format(voltage_level)]
+                    reactive_power_mode['{}_load'.format(voltage_level)])
+                power_factor[cols] = reactive_power_factor[
+                    '{}_load'.format(voltage_level)]
 
+        # calculate reactive power time series for each load
         self.network.timeseries.loads_reactive_power = self._fixed_cosphi(
             self.network.timeseries.loads_active_power, q_sign, power_factor)
 

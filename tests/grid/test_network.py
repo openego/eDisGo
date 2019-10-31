@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from pandas.util.testing import assert_series_equal
 from math import tan, acos
+import pytest
 
 from edisgo.grid.network import Network, TimeSeriesControl
 from edisgo.data import import_data
@@ -20,7 +21,7 @@ class TestTimeSeriesControl:
     def test_worst_case(self):
         """Test creation of worst case time series"""
 
-        TimeSeriesControl(network=self.network, mode='worst-case')
+        ts_control = TimeSeriesControl(network=self.network, mode='worst-case')
 
         # check type
         assert isinstance(
@@ -142,5 +143,22 @@ class TestTimeSeriesControl:
             self.network.timeseries.loads_reactive_power.loc[:, load],
             exp * pf, check_exact=False, check_dtype=False)
 
-        # test when p_nom, type, etc. is missing
+        # test error raising in case of missing load/generator parameter
+
+        gen = 'GeneratorFluctuating_14'
+        self.network._generators_df.at[gen, 'bus'] = None
+        with pytest.raises(AttributeError, match=gen):
+            ts_control._worst_case_generation(modes=None)
+        gen = 'GeneratorFluctuating_24'
+        self.network._generators_df.at[gen, 'p_nom'] = None
+        with pytest.raises(AttributeError, match=gen):
+            ts_control._worst_case_generation(modes=None)
+
+        load = 'Load_agricultural_LVGrid_1_1'
+        self.network._loads_df.at[load, 'annual_consumption'] = None
+        with pytest.raises(AttributeError, match=load):
+            ts_control._worst_case_load(modes=None)
+
         # test for only feed-in or load case
+        # test no other generators
+
