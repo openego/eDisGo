@@ -6,6 +6,46 @@ import pytest
 
 from edisgo.grid.network import Network, TimeSeriesControl
 from edisgo.data import import_data
+from edisgo import EDisGo
+
+
+class TestEDisGo:
+
+    @classmethod
+    def setup_class(self):
+        """Setup default values"""
+        parent_dirname = os.path.dirname(os.path.dirname(__file__))
+        test_network_directory = os.path.join(parent_dirname, 'test_network')
+        self.edisgo = EDisGo(ding0_grid=test_network_directory,
+                             worst_case_analysis='worst-case')
+
+    def test_reinforce(self):
+
+        timesteps = self.edisgo.network.timeseries.timeindex
+        pypsa_network = self.edisgo.network.to_pypsa(timesteps=timesteps)
+
+
+class TestNetwork:
+
+    @classmethod
+    def setup_class(self):
+        """Setup default values"""
+        parent_dirname = os.path.dirname(os.path.dirname(__file__))
+        test_network_directory = os.path.join(parent_dirname, 'test_network')
+        self.network = Network()
+        import_data.import_ding0_grid(test_network_directory, self.network)
+        TimeSeriesControl(network=self.network, mode='worst-case')
+
+    def test_to_pypsa(self):
+        # run powerflow and check results
+        timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
+        pypsa_network = self.network.to_pypsa()
+        pf_results = pypsa_network.pf(timesteps)
+
+        if all(pf_results['converged']['0'].tolist()):
+            print('converged')
+        else:
+            raise ValueError("Power flow analysis did not converge.")
 
 
 class TestTimeSeriesControl:
@@ -161,4 +201,3 @@ class TestTimeSeriesControl:
 
         # test for only feed-in or load case
         # test no other generators
-
