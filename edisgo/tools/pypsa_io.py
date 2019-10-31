@@ -786,14 +786,14 @@ def _check_integrity_of_pypsa(pypsa_network):
             labels=duplicate_v_mag_set))
 
 
-def process_pfa_results(network, pypsa, timesteps):
+def process_pfa_results(edisgo, pypsa, timesteps):
     """
     Assing values from PyPSA to
     :meth:`results <edisgo.grid.network.Network.results>`
 
     Parameters
     ----------
-    network : Network
+    edisgo : Network
         The eDisGo grid topology model overall container
     pypsa : :pypsa:`pypsa.Network<network>`
         The PyPSA `Network container
@@ -820,18 +820,18 @@ def process_pfa_results(network, pypsa, timesteps):
     """
     # get the absolute losses in the system
     # subtracting total generation (including slack) from total load
-    grid_losses = {'p': 1e3 * (pypsa.generators_t['p'].sum(axis=1) -
+    grid_losses = {'p': (pypsa.generators_t['p'].sum(axis=1) -
                                pypsa.loads_t['p'].sum(axis=1)),
-                   'q': 1e3 * (pypsa.generators_t['q'].sum(axis=1) -
+                   'q': (pypsa.generators_t['q'].sum(axis=1) -
                                pypsa.loads_t['q'].sum(axis=1))}
 
-    network.results.grid_losses = pd.DataFrame(grid_losses).loc[timesteps, :]
+    edisgo.results.grid_losses = pd.DataFrame(grid_losses).loc[timesteps, :]
 
     # get slack results
-    grid_exchanges = {'p': 1e3 * (pypsa.generators_t['p']['Generator_slack']),
-                      'q': 1e3 * (pypsa.generators_t['q']['Generator_slack'])}
+    grid_exchanges = {'p': (pypsa.generators_t['p']['Generator_slack']),
+                      'q': (pypsa.generators_t['q']['Generator_slack'])}
 
-    network.results.hv_mv_exchanges = pd.DataFrame(grid_exchanges).loc[
+    edisgo.results.hv_mv_exchanges = pd.DataFrame(grid_exchanges).loc[
                                       timesteps, :]
 
     # get p and q of lines, LV transformers and MV Station (slack generator)
@@ -840,31 +840,32 @@ def process_pfa_results(network, pypsa, timesteps):
         [np.abs(pypsa.lines_t['q0']),
          np.abs(pypsa.transformers_t['q0']),
          np.abs(pypsa.generators_t['q']['Generator_slack'].rename(
-             repr(network.mv_grid.station)))], axis=1).loc[timesteps, :]
+             repr(edisgo.network.mv_grid.station)))], axis=1).loc[timesteps, :]
     q1 = pd.concat(
         [np.abs(pypsa.lines_t['q1']),
          np.abs(pypsa.transformers_t['q1']),
          np.abs(pypsa.generators_t['q']['Generator_slack'].rename(
-             repr(network.mv_grid.station)))], axis=1).loc[timesteps, :]
+             repr(edisgo.network.mv_grid.station)))], axis=1).loc[timesteps, :]
     p0 = pd.concat(
         [np.abs(pypsa.lines_t['p0']),
          np.abs(pypsa.transformers_t['p0']),
          np.abs(pypsa.generators_t['p']['Generator_slack'].rename(
-             repr(network.mv_grid.station)))], axis=1).loc[timesteps, :]
+             repr(edisgo.network.mv_grid.station)))], axis=1).loc[timesteps, :]
     p1 = pd.concat(
         [np.abs(pypsa.lines_t['p1']),
          np.abs(pypsa.transformers_t['p1']),
          np.abs(pypsa.generators_t['p']['Generator_slack'].rename(
-             repr(network.mv_grid.station)))], axis=1).loc[timesteps, :]
+             repr(edisgo.network.mv_grid.station)))], axis=1).loc[timesteps, :]
 
     # determine apparent power and line endings/transformers' side
     s0 = np.hypot(p0, q0)
     s1 = np.hypot(p1, q1)
 
     # choose p and q from line ending with max(s0,s1)
-    network.results.pfa_p = p0.where(s0 > s1, p1) * 1e3
-    network.results.pfa_q = q0.where(s0 > s1, q1) * 1e3
+    edisgo.results.pfa_p = p0.where(s0 > s1, p1)
+    edisgo.results.pfa_q = q0.where(s0 > s1, q1)
 
+    # Todo: delete?
     lines_bus0 = pypsa.lines['bus0'].to_dict()
     bus0_v_mag_pu = pypsa.buses_t['v_mag_pu'].T.loc[
                     list(lines_bus0.values()), :].copy()
@@ -876,62 +877,38 @@ def process_pfa_results(network, pypsa, timesteps):
     bus1_v_mag_pu.index = list(lines_bus1.keys())
 
     # Get line current
-    network.results._i_res = np.hypot(
+    edisgo.results._i_res = np.hypot(
         pypsa.lines_t['p0'], pypsa.lines_t['q0']).truediv(
         pypsa.lines['v_nom'] * bus0_v_mag_pu.T,
         axis='columns') / sqrt(3) * 1e3
 
+    #Todo: overthink mapping, should results not be assigned to original nodes?
+
     # process results at nodes
-    generators_names = [repr(g) for g in network.mv_grid.generators]
+    generators_names = edisgo.network.mv_grid.generators_df.index.values
     generators_mapping = {v: k for k, v in
                           pypsa.generators.loc[generators_names][
                               'bus'].to_dict().items()}
-    storages_names = [repr(g) for g in
-                      network.mv_grid.graph.nodes_by_attribute('storage')]
+    storages_names = edisgo.network.mv_grid.storages_df.index.values
     storages_mapping = {v: k for k, v in
                         pypsa.storage_units.loc[storages_names][
                             'bus'].to_dict().items()}
-    branch_t_names = [repr(bt) for bt in
-                      network.mv_grid.graph.nodes_by_attribute('branch_tee')]
-    branch_t_mapping = {'_'.join(['Bus', v]): v for v in branch_t_names}
-    mv_station_names = [repr(m) for m in
-                        network.mv_grid.graph.nodes_by_attribute('mv_station')]
-    mv_station_mapping_sec = {'_'.join(['Bus', v]): v for v in
-                              mv_station_names}
-    mv_switch_disconnector_names = [repr(sd) for sd in
-                                    network.mv_grid.graph.nodes_by_attribute(
-                                        'mv_disconnecting_point')]
-    mv_switch_disconnector_mapping = {'_'.join(['Bus', v]): v for v in
-                                      mv_switch_disconnector_names}
-
-    lv_station_mapping_pri = {
-        '_'.join(['Bus', l.__repr__('mv')]): repr(l)
-        for l in network.mv_grid.graph.nodes_by_attribute('lv_station')}
-    lv_station_mapping_sec = {
-        '_'.join(['Bus', l.__repr__('lv')]): repr(l)
-        for l in network.mv_grid.graph.nodes_by_attribute('lv_station')}
-    loads_names = [repr(lo) for lo in
-                   network.mv_grid.graph.nodes_by_attribute('load')]
+    loads_names = edisgo.network.mv_grid.loads_df.index.values
     loads_mapping = {v: k for k, v in
-                     pypsa.loads.loc[loads_names][
-                         'bus'].to_dict().items()}
+                        pypsa.loads.loc[loads_names][
+                            'bus'].to_dict().items()}
+    buses_names = edisgo.network.mv_grid.buses_df.index.values
+    buses_mapping = {k: k for k in buses_names}
 
     lv_generators_names = []
     lv_storages_names = []
-    lv_branch_t_names = []
     lv_loads_names = []
-    for lv_grid in network.mv_grid.lv_grids:
-        lv_generators_names.extend([repr(g) for g in
-                                    lv_grid.graph.nodes_by_attribute(
-                                        'generator')])
-        lv_storages_names.extend([repr(g) for g in
-                                  lv_grid.graph.nodes_by_attribute(
-                                      'storage')])
-        lv_branch_t_names.extend([repr(bt) for bt in
-                                  lv_grid.graph.nodes_by_attribute(
-                                      'branch_tee')])
-        lv_loads_names.extend([repr(lo) for lo in
-                               lv_grid.graph.nodes_by_attribute('load')])
+    lv_buses_names = []
+    for lv_grid in edisgo.network.mv_grid.lv_grids:
+        lv_generators_names.extend(list(lv_grid.generators_df.index.values))
+        lv_storages_names.extend(list(lv_grid.storages_df.index.values))
+        lv_loads_names.extend(list(lv_grid.loads_df.index.values))
+        lv_buses_names.extend(list(lv_grid.buses_df.index.values))
 
     lv_generators_mapping = {v: k for k, v in
                              pypsa.generators.loc[lv_generators_names][
@@ -939,41 +916,33 @@ def process_pfa_results(network, pypsa, timesteps):
     lv_storages_mapping = {v: k for k, v in
                            pypsa.storage_units.loc[lv_storages_names][
                                'bus'].to_dict().items()}
-    lv_branch_t_mapping = {'_'.join(['Bus', v]): v for v in lv_branch_t_names}
     lv_loads_mapping = {v: k for k, v in pypsa.loads.loc[lv_loads_names][
         'bus'].to_dict().items()}
+    lv_buses_mapping = {k: k for k in buses_names}
 
     names_mapping = {
         **generators_mapping,
         **storages_mapping,
-        **branch_t_mapping,
-        **mv_station_mapping_sec,
-        **lv_station_mapping_pri,
-        **lv_station_mapping_sec,
-        **mv_switch_disconnector_mapping,
         **loads_mapping,
+        **buses_mapping,
         **lv_generators_mapping,
         **lv_storages_mapping,
         **lv_loads_mapping,
-        **lv_branch_t_mapping
+        **lv_buses_mapping
     }
 
     # write voltage levels obtained from power flow to results object
     pfa_v_mag_pu_mv = (pypsa.buses_t['v_mag_pu'][
         list(generators_mapping) +
         list(storages_mapping) +
-        list(branch_t_mapping) +
-        list(mv_station_mapping_sec) +
-        list(mv_switch_disconnector_mapping) +
-        list(lv_station_mapping_pri) +
-        list(loads_mapping)]).rename(columns=names_mapping)
+        list(loads_mapping) +
+        list(buses_mapping)]).rename(columns=names_mapping)
     pfa_v_mag_pu_lv = (pypsa.buses_t['v_mag_pu'][
-        list(lv_station_mapping_sec) +
         list(lv_generators_mapping) +
         list(lv_storages_mapping) +
-        list(lv_branch_t_mapping) +
-        list(lv_loads_mapping)]).rename(columns=names_mapping)
-    network.results.pfa_v_mag_pu = pd.concat(
+        list(lv_loads_mapping)+
+        list(lv_buses_mapping)]).rename(columns=names_mapping)
+    edisgo.results.pfa_v_mag_pu = pd.concat(
         {'mv': pfa_v_mag_pu_mv.loc[timesteps, :],
          'lv': pfa_v_mag_pu_lv.loc[timesteps, :]}, axis=1)
 

@@ -51,7 +51,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
 
     copy_graph : :obj:`Boolean`
         If True reinforcement is conducted on a copied graph and discarded.
-        Default: False.
+        Default: False. Todo: Do we still need this? If so, rename.
     max_while_iterations : :obj:`int`
         Maximum number of times each while loop is conducted.
     combined_analysis : :obj:`Boolean`
@@ -116,7 +116,8 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
 
     # assign MV feeder to every generator, LV station, load, and branch tee
     # to assign grid expansion costs to an MV feeder
-    assign_mv_feeder_to_nodes(edisgo.network.mv_grid)
+    # Todo: Necessary? If so change
+    #assign_mv_feeder_to_nodes(edisgo.network.mv_grid)
 
     # analyze for all time steps (advantage is that load and feed-in case can
     # be obtained more performant in case `timesteps_pfa` = 'snapshot_analysis'

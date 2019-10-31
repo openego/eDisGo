@@ -37,6 +37,12 @@ class EDisGoReimport:
             logging.error('Results cannot be imported as the specified '
                           'directory {} does not exist.'.format(results_path))
 
+        parameters = kwargs.get('parameters', 'all')
+
+        # create ResultsReimport class
+        self.results = ResultsReimport(
+            results_path, parameters=parameters)
+
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
         Plots plain MV grid topology and optionally nodes by technology type
@@ -473,7 +479,7 @@ class EDisGo(EDisGoReimport):
 
     >>> lv_stations = edisgo.network.mv_grid.graph.nodes_by_attribute(
     >>>     'lv_station')
-    >>> print(edisgo.network.results.v_res(lv_stations, 'lv'))
+    >>> print(edisgo.results.v_res(lv_stations, 'lv'))
 
     """
 
@@ -485,7 +491,7 @@ class EDisGo(EDisGoReimport):
             generator_scenario=kwargs.get('generator_scenario', None),
             config_path=kwargs.get('config_path', None))
         # set up results container
-        #self.results = Results(self.network)
+        self.results = Results(self.network)
 
         # set up time series for feed-in and load
         # worst-case time series
@@ -606,27 +612,22 @@ class EDisGo(EDisGoReimport):
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
 
-        if self.network.pypsa is None:
-            # Translate eDisGo grid topology representation to PyPSA format
-            self.network.pypsa = pypsa_io.to_pypsa(
-                self.network, mode, timesteps)
-        else:
-            if self.network.pypsa.edisgo_mode is not mode:
-                # Translate eDisGo grid topology representation to PyPSA format
-                self.network.pypsa = pypsa_io.to_pypsa(
+
+        pypsa_network = pypsa_io.to_pypsa(
                     self.network, mode, timesteps)
 
+        # Todo: check if still needed, if so update to new structure, at this point not needed, maybe later
         # check if all timesteps are in pypsa.snapshots, if not update time
         # series
-        if False in [True if _ in self.network.pypsa.snapshots else False
+        if False in [True if _ in pypsa_network.snapshots else False
                      for _ in timesteps]:
             pypsa_io.update_pypsa_timeseries(self.network, timesteps=timesteps)
         # run power flow analysis
-        pf_results = self.network.pypsa.pf(timesteps)
+        pf_results = pypsa_network.pf(timesteps)
 
         if all(pf_results['converged']['0'].tolist()):
             pypsa_io.process_pfa_results(
-                self.network, self.network.pypsa, timesteps)
+                self, pypsa_network, timesteps)
         else:
             raise ValueError("Power flow analysis did not converge.")
 
@@ -647,7 +648,7 @@ class EDisGo(EDisGoReimport):
 
         # add measure to Results object
         if not kwargs.get('copy_graph', False):
-            self.network.results.measures = 'grid_expansion'
+            self.results.measures = 'grid_expansion'
 
         return results
 
@@ -2236,7 +2237,7 @@ class CurtailmentControl:
             pypsa_io.update_pypsa_generator_timeseries(edisgo.network)
 
         # add measure to Results object
-        edisgo.network.results.measures = 'curtailment'
+        edisgo.results.measures = 'curtailment'
 
     def _check_timeindex(self, curtailment_timeseries, network):
         """
@@ -2495,7 +2496,7 @@ class StorageControl:
                                     **kwargs)
 
         # add measure to Results object
-        self.edisgo.network.results.measures = 'storage_integration'
+        self.edisgo.results.measures = 'storage_integration'
 
     def _integrate_storage(self, timeseries, position, params, voltage_level,
                            reactive_power_timeseries, **kwargs):
@@ -3854,20 +3855,7 @@ class NetworkReimport:
                 a = iter(row[1:])
                 self.config[row[0]] = dict(zip(a, a))
 
-        parameters = kwargs.get('parameters', 'all')
 
-        # import pypsa network
-        if ('pypsa_network' in parameters or parameters == 'all') and \
-                os.path.isdir(os.path.join(results_path, 'pypsa_network')):
-            self.pypsa = PyPSANetwork()
-            self.pypsa.import_from_csv_folder(
-                os.path.join(results_path, 'pypsa_network'))
-        else:
-            self.pypsa = None
-
-        # create ResultsReimport class
-        self.results = ResultsReimport(
-            results_path, parameters=parameters)
 
 
 class ResultsReimport:
