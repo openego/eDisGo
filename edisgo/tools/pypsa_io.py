@@ -96,22 +96,21 @@ def to_pypsa(grid_object, mode, timesteps):
     # get topology and time series data
     if mode is None:
         network = grid_object
+        buses_df = network.buses_df.loc[:, ['v_nom']]
+        buses = network.buses_df.index
+
         # loads generators buses storages lines transformers
         #ToDo change getting generators once slack is separate dataframe
         components = {
             'Load': network.loads_df.loc[:, ['bus']],
-            'Generator': network._generators_df.loc[:, ['bus', 'control']], #Todo:change to generators_df, mit birgit besprechen wg. generator_slack
+            'Generator': network._generators_df.loc[:, ['bus', 'control']],
             'StorageUnit': network.storages_df.loc[:, ['bus', 'control']],
             'Line': network.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r']],
             'Transformer': network.transformers_df.loc[
                            :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type', 's_nom']].rename(
                 columns={'r_pu': 'r', 'x_pu': 'x'})
         }
-        # import grid topology to PyPSA network
-        # buses are created first to avoid warnings
-        pypsa_network.import_components_from_dataframe(
-            network.buses_df.loc[:, ['v_nom']], 'Bus')
-        buses = network.buses_df.index
+
 
     elif 'mv' in mode:
         grid = grid_object
@@ -129,7 +128,7 @@ def to_pypsa(grid_object, mode, timesteps):
                 'Load': grid.loads_df.loc[:, ['bus']],
                 'Generator': grid.generators_df.loc[:, ['bus', 'control']].append(
                     grid.network._generators_df.loc['Generator_slack',
-                                                    ['bus', 'control']]), # Todo: mit birgit absprechen, ob slack irgendwo gespeichert werden soll
+                                                    ['bus', 'control']]), # Todo: change when slack is dataframe
                 'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
                 'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r']],
                 'Transformer': grid.transformers_df[grid.transformers_df.bus1.isin(
@@ -163,7 +162,7 @@ def to_pypsa(grid_object, mode, timesteps):
                 'Load': grid.loads_df.loc[:, ['bus']],
                 'Generator': grid.generators_df.loc[:, ['bus', 'control']].append(
                     grid.network._generators_df.loc['Generator_slack',
-                                                    ['bus', 'control']]), # Todo: mit birgit absprechen, ob slack irgendwo gespeichert werden soll,
+                                                    ['bus', 'control']]), # Todo: change when slack is dataframe
                 'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
                 'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r']],
                 'Transformer': network.transformers_df.loc[
@@ -212,10 +211,29 @@ def to_pypsa(grid_object, mode, timesteps):
             buses_df, 'Bus')
 
     elif mode is 'lv':
-        raise NotImplementedError
+        grid = grid_object
+        network = grid.network
+        buses_df = grid.buses_df.loc[:, ['v_nom']]
+        buses = grid.buses_df.index
+
+        slack = pd.DataFrame({'name':['Generator_slack'],
+                              'bus':[grid.station.index.values[0]],
+                              'control':['Slack']}).set_index('name')
+        components = {
+            'Load': grid.loads_df.loc[:, ['bus']],
+            'Generator': grid.generators_df.loc[:, ['bus', 'control']].append(
+                slack),
+            'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
+            'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r']]
+        }
     else:
         raise ValueError("Provide proper mode or leave it empty to export "
                          "entire grid topology.")
+
+    # import grid topology to PyPSA network
+    # buses are created first to avoid warnings
+    pypsa_network.import_components_from_dataframe(
+        buses_df, 'Bus')
 
     for k, comps in components.items():
         pypsa_network.import_components_from_dataframe(comps, k)

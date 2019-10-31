@@ -430,3 +430,6 @@ class LVGrid(Grid):
         """
         # ToDo: implement networkx graph plot
         raise NotImplementedError
+
+    def to_pypsa(self, mode = 'lv', timesteps=None):
+        return super().to_pypsa(mode=mode, timesteps=timesteps)
