@@ -1546,7 +1546,7 @@ class TimeSeriesControl:
         gens_df = self.network.generators_df.loc[:, ['bus', 'type', 'p_nom']]
 
         # check that all generators have bus, type, nominal power
-        check_gens = gens_df.isna().any(axis=1)
+        check_gens = gens_df.isnull().any(axis=1)
         if check_gens.any():
             raise AttributeError(
                 "The following generators have either missing bus, type or "
@@ -1637,7 +1637,7 @@ class TimeSeriesControl:
                    :, ['bus', 'sector', 'annual_consumption']]
 
         # check that all loads have bus, sector, annual consumption
-        check_loads = loads_df.isna().any(axis=1)
+        check_loads = loads_df.isnull().any(axis=1)
         if check_loads.any():
             raise AttributeError(
                 "The following loads have either missing bus, sector or "
