@@ -5,6 +5,9 @@ from pyomo.environ import ConcreteModel, Set, Param, Objective, Constraint, \
     minimize, Var
 from pyomo.opt import SolverFactory
 
+from edisgo.tools import pypsa_io
+from edisgo.network.tools import get_gen_info
+
 
 def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
                   curtailment_key, **kwargs):
@@ -453,3 +456,249 @@ def _assign_curtailment(curtailment, edisgo, generators, curtailment_key):
         # a new key is added to results._curtailment
         edisgo.network.results._curtailment = \
             {curtailment_key: gen_object_list.copy()}
+
+
+class CurtailmentControl:
+    """
+    Allocates given curtailment targets to solar and wind generators.
+
+    Parameters
+    ----------
+    edisgo: :class:`edisgo.EDisGo`
+        The parent EDisGo object that this instance is a part of.
+    methodology : :obj:`str`
+        Defines the curtailment strategy. Possible options are:
+
+        * 'feedin-proportional'
+          The curtailment that has to be met in each time step is allocated
+          equally to all generators depending on their share of total
+          feed-in in that time step. For more information see
+          :func:`edisgo.flex_opt.curtailment.feedin_proportional`.
+        * 'voltage-based'
+          The curtailment that has to be met in each time step is allocated
+          based on the voltages at the generator connection points and a
+          defined voltage threshold. Generators at higher voltages
+          are curtailed more. The default voltage threshold is 1.0 but
+          can be changed by providing the argument 'voltage_threshold'. This
+          method formulates the allocation of curtailment as a linear
+          optimization problem using :py:mod:`Pyomo` and requires a linear
+          programming solver like coin-or cbc (cbc) or gnu linear programming
+          kit (glpk). The solver can be specified through the parameter
+          'solver'. For more information see
+          :func:`edisgo.flex_opt.curtailment.voltage_based`.
+
+    curtailment_timeseries : :pandas:`pandas.Series<series>` or \
+        :pandas:`pandas.DataFrame<dataframe>`, optional
+        Series or DataFrame containing the curtailment time series in kW. Index
+        needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Provide a Series if the curtailment time series applies to wind and
+        solar generators. Provide a DataFrame if the curtailment time series
+        applies to a specific technology and optionally weather cell. In the
+        first case columns of the DataFrame are e.g. 'solar' and 'wind'; in the
+        second case columns need to be a
+        :pandas:`pandas.MultiIndex<multiindex>` with the first level containing
+        the type and the second level the weather cell ID. Default: None.
+    solver: :obj:`str`
+        The solver used to optimize the curtailment assigned to the generators
+        when 'voltage-based' curtailment methodology is chosen.
+        Possible options are:
+
+        * 'cbc'
+        * 'glpk'
+        * any other available solver compatible with 'pyomo' such as 'gurobi'
+          or 'cplex'
+
+        Default: 'cbc'.
+    voltage_threshold : :obj:`float`
+        Voltage below which no curtailment is assigned to the respective
+        generator if not necessary when 'voltage-based' curtailment methodology
+        is chosen. See :func:`edisgo.flex_opt.curtailment.voltage_based` for
+        more information. Default: 1.0.
+    mode : :obj:`str`
+        The `mode` is only relevant for curtailment method 'voltage-based'.
+        Possible options are None and 'mv'. Per default `mode` is None in which
+        case a power flow is conducted for both the MV and LV. In case `mode`
+        is set to 'mv' components in underlying LV grids are considered
+        aggregative. Default: None.
+
+    """
+    # ToDo move some properties from network here (e.g. peak_load, generators,...)
+    def __init__(self, edisgo, methodology, curtailment_timeseries, mode=None,
+                 **kwargs):
+
+        logging.info("Start curtailment methodology {}.".format(methodology))
+
+        self._check_timeindex(curtailment_timeseries, edisgo.network)
+
+        if methodology == 'feedin-proportional':
+            curtailment_method = feedin_proportional
+        elif methodology == 'voltage-based':
+            curtailment_method = voltage_based
+        else:
+            raise ValueError(
+                '{} is not a valid curtailment methodology.'.format(
+                    methodology))
+
+        # check if provided mode is valid
+        if mode and mode is not 'mv':
+            raise ValueError("Provided mode {} is not a valid mode.")
+
+        # get all fluctuating generators and their attributes (weather ID,
+        # type, etc.)
+        generators = get_gen_info(edisgo.network, 'mvlv', fluctuating=True)
+
+        # do analyze to get all voltages at generators and feed-in dataframe
+        edisgo.analyze(mode=mode)
+
+        # get feed-in time series of all generators
+        if not mode:
+            feedin = edisgo.network.pypsa.generators_t.p * 1000
+            # drop dispatchable generators and slack generator
+            drop_labels = [_ for _ in feedin.columns
+                           if 'GeneratorFluctuating' not in _] \
+                          + ['Generator_slack']
+        else:
+            feedin = edisgo.network.mv_grid.generators_timeseries()
+            for grid in edisgo.network.mv_grid.lv_grids:
+                feedin = pd.concat([feedin, grid.generators_timeseries()],
+                                   axis=1)
+            feedin.rename(columns=lambda _: repr(_), inplace=True)
+            # drop dispatchable generators
+            drop_labels = [_ for _ in feedin.columns
+                           if 'GeneratorFluctuating' not in _]
+        feedin.drop(labels=drop_labels, axis=1, inplace=True)
+
+        if isinstance(curtailment_timeseries, pd.Series):
+            # check if curtailment exceeds feed-in
+            self._precheck(curtailment_timeseries, feedin,
+                           'all_fluctuating_generators')
+
+            # do curtailment
+            curtailment_method(
+                feedin, generators, curtailment_timeseries, edisgo,
+                'all_fluctuating_generators', **kwargs)
+
+        elif isinstance(curtailment_timeseries, pd.DataFrame):
+            for col in curtailment_timeseries.columns:
+                logging.debug('Calculating curtailment for {}'.format(col))
+
+                # filter generators
+                if isinstance(curtailment_timeseries.columns, pd.MultiIndex):
+                    selected_generators = generators.loc[
+                        (generators.type == col[0]) &
+                        (generators.weather_cell_id == col[1])]
+                else:
+                    selected_generators = generators.loc[
+                        (generators.type == col)]
+
+                # check if curtailment exceeds feed-in
+                feedin_selected_generators = \
+                    feedin.loc[:, selected_generators.gen_repr.values]
+                self._precheck(curtailment_timeseries.loc[:, col],
+                               feedin_selected_generators, col)
+
+                # do curtailment
+                if not feedin_selected_generators.empty:
+                    curtailment_method(
+                        feedin_selected_generators, selected_generators,
+                        curtailment_timeseries.loc[:, col], edisgo,
+                        col, **kwargs)
+
+        # check if curtailment exceeds feed-in
+        self._postcheck(edisgo.network, feedin)
+
+        # update generator time series in pypsa network
+        if edisgo.network.pypsa is not None:
+            pypsa_io.update_pypsa_generator_timeseries(edisgo.network)
+
+        # add measure to Results object
+        edisgo.results.measures = 'curtailment'
+
+    def _check_timeindex(self, curtailment_timeseries, network):
+        """
+        Raises an error if time index of curtailment time series does not
+        comply with the time index of load and feed-in time series.
+
+        Parameters
+        -----------
+        curtailment_timeseries : :pandas:`pandas.Series<series>` or \
+            :pandas:`pandas.DataFrame<dataframe>`
+            See parameter `curtailment_timeseries` in class definition for more
+            information.
+
+        """
+        if curtailment_timeseries is None:
+            message = 'No curtailment given.'
+            logging.error(message)
+            raise KeyError(message)
+        try:
+            curtailment_timeseries.loc[network.timeseries.timeindex]
+        except:
+            message = 'Time index of curtailment time series does not match ' \
+                      'with load and feed-in time series.'
+            logging.error(message)
+            raise KeyError(message)
+
+    def _precheck(self, curtailment_timeseries, feedin_df, curtailment_key):
+        """
+        Raises an error if the curtailment at any time step exceeds the
+        total feed-in of all generators curtailment can be distributed among
+        at that time.
+
+        Parameters
+        -----------
+        curtailment_timeseries : :pandas:`pandas.Series<series>`
+            Curtailment time series in kW for the technology (and weather
+            cell) specified in `curtailment_key`.
+        feedin_df : :pandas:`pandas.Series<series>`
+            Feed-in time series in kW for all generators of type (and in
+            weather cell) specified in `curtailment_key`.
+        curtailment_key : :obj:`str` or :obj:`tuple` with :obj:`str`
+            Technology (and weather cell) curtailment is given for.
+
+        """
+        if not feedin_df.empty:
+            feedin_selected_sum = feedin_df.sum(axis=1)
+            diff = feedin_selected_sum - curtailment_timeseries
+            # add tolerance (set small negative values to zero)
+            diff[diff.between(-1, 0)] = 0
+            if not (diff >= 0).all():
+                bad_time_steps = [_ for _ in diff.index
+                                  if diff[_] < 0]
+                message = 'Curtailment demand exceeds total feed-in in time ' \
+                          'steps {}.'.format(bad_time_steps)
+                logging.error(message)
+                raise ValueError(message)
+        else:
+            bad_time_steps = [_ for _ in curtailment_timeseries.index
+                              if curtailment_timeseries[_] > 0]
+            if bad_time_steps:
+                message = 'Curtailment given for time steps {} but there ' \
+                          'are no generators to meet the curtailment target ' \
+                          'for {}.'.format(bad_time_steps, curtailment_key)
+                logging.error(message)
+                raise ValueError(message)
+
+    def _postcheck(self, network, feedin):
+        """
+        Raises an error if the curtailment of a generator exceeds the
+        feed-in of that generator at any time step.
+
+        Parameters
+        -----------
+        network : :class:`~.network.network.Network`
+        feedin : :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with feed-in time series in kW. Columns of the dataframe
+            are :class:`~.network.components.GeneratorFluctuating`, index is
+            time index.
+
+        """
+        curtailment = network.timeseries.curtailment
+        gen_repr = [repr(_) for _ in curtailment.columns]
+        feedin_repr = feedin.loc[:, gen_repr]
+        curtailment_repr = curtailment
+        curtailment_repr.columns = gen_repr
+        if not ((feedin_repr - curtailment_repr) > -1e-1).all().all():
+            message = 'Curtailment exceeds feed-in.'
+            logging.error(message)
+            raise TypeError(message)
