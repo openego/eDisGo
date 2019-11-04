@@ -63,11 +63,6 @@ def import_ding0_grid(path, network):
     grid = PyPSANetwork()
     grid.import_from_csv_folder(path)
 
-    # check if buses dataframe is not empty to make sure specified directory
-    # exists and contains grid data
-    if grid.buses.empty:
-        raise AttributeError("Specified directory containing ding0 grid data "
-                             "does not exist or does not contain grid data.")
     # write dataframes to network
     network.buses_df = grid.buses[COLUMNS['buses_df']]
     # rename slack generator

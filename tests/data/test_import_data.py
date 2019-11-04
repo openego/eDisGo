@@ -58,9 +58,8 @@ class TestImportFromDing0:
 
     def test_path_error(self):
         """Test catching error when path to network does not exist."""
-        msg = "Specified directory containing ding0 grid data does not " \
-              "exist or does not contain grid data."
-        with pytest.raises(AttributeError, match=msg):
+        msg = "Directory wrong_directory does not exist."
+        with pytest.raises(AssertionError, match=msg):
             import_data.import_ding0_grid('wrong_directory', self.network)
 
     def test_validate_ding0_grid_import(self):
