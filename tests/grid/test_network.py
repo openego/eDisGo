@@ -4,7 +4,8 @@ from pandas.util.testing import assert_series_equal
 from math import tan, acos
 import pytest
 
-from edisgo.network.network import Network, TimeSeriesControl, TimeSeries, Config
+from edisgo.network.network import Network, Config
+from edisgo.network.timeseries import TimeSeriesControl, TimeSeries
 from edisgo.data import import_data
 from edisgo import EDisGo
 

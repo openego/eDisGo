@@ -1,7 +1,8 @@
 import os
 import pandas as pd
 
-from edisgo.network.network import Network, TimeSeriesControl, TimeSeries, Config
+from edisgo.network.network import Network, Config
+from edisgo.network.timeseries import TimeSeriesControl, TimeSeries
 from edisgo.data import import_data
 from edisgo.network.components import Generator, Load, Switch
 from edisgo.network.grids import LVGrid
