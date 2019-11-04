@@ -186,50 +186,50 @@ class TestTimeSeriesControl:
             exp * pf, check_exact=False, check_dtype=False)
 
         # test for only feed-in case
-        TimeSeriesControl(network=self.network, mode='worst-case-feedin')
+        TimeSeriesControl(edisgo_obj=self, mode='worst-case-feedin')
 
         # value
         gen = 'Generator_1'  # gas, mv
         exp = pd.Series(data=[1 * 0.775], name=gen,
-                        index=self.network.timeseries.timeindex)
+                        index=self.timeseries.timeindex)
         assert_series_equal(
-            self.network.timeseries.generators_active_power.loc[:, gen], exp)
+            self.timeseries.generators_active_power.loc[:, gen], exp)
         pf = -tan(acos(0.9))
         assert_series_equal(
-            self.network.timeseries.generators_reactive_power.loc[:, gen],
+            self.timeseries.generators_reactive_power.loc[:, gen],
             exp * pf)
         load = 'Load_retail_LVGrid_9_14'  # industrial, lv
         exp = pd.Series(data=[0.1 * 143 * 0.0002404],
-                        name=load, index=self.network.timeseries.timeindex)
+                        name=load, index=self.timeseries.timeindex)
         assert_series_equal(
-            self.network.timeseries.loads_active_power.loc[:, load], exp,
+            self.timeseries.loads_active_power.loc[:, load], exp,
             check_exact=False, check_dtype=False)
         pf = tan(acos(0.95))
         assert_series_equal(
-            self.network.timeseries.loads_reactive_power.loc[:, load],
+            self.timeseries.loads_reactive_power.loc[:, load],
             exp * pf, check_exact=False, check_dtype=False)
 
         # test for only load case
-        TimeSeriesControl(network=self.network, mode='worst-case-load')
+        TimeSeriesControl(edisgo_obj=self, mode='worst-case-load')
 
         gen = 'Generator_1'  # gas, mv
         exp = pd.Series(data=[0 * 0.775], name=gen,
-                        index=self.network.timeseries.timeindex)
+                        index=self.timeseries.timeindex)
         assert_series_equal(
-            self.network.timeseries.generators_active_power.loc[:, gen], exp)
+            self.timeseries.generators_active_power.loc[:, gen], exp)
         pf = -tan(acos(0.9))
         assert_series_equal(
-            self.network.timeseries.generators_reactive_power.loc[:, gen],
+            self.timeseries.generators_reactive_power.loc[:, gen],
             exp * pf)
         load = 'Load_retail_LVGrid_9_14'  # industrial, lv
         exp = pd.Series(data=[1.0 * 143 * 0.0002404],
-                        name=load, index=self.network.timeseries.timeindex)
+                        name=load, index=self.timeseries.timeindex)
         assert_series_equal(
-            self.network.timeseries.loads_active_power.loc[:, load], exp,
+            self.timeseries.loads_active_power.loc[:, load], exp,
             check_exact=False, check_dtype=False)
         pf = tan(acos(0.95))
         assert_series_equal(
-            self.network.timeseries.loads_reactive_power.loc[:, load],
+            self.timeseries.loads_reactive_power.loc[:, load],
             exp * pf, check_exact=False, check_dtype=False)
 
         # test error raising in case of missing load/generator parameter
