@@ -1,1 +1,1 @@
-from edisgo.network.network import EDisGo, EDisGoReimport
+from edisgo.edisgo import EDisGo, EDisGoReimport
