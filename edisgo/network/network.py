@@ -1,13 +1,10 @@
 import os
 import pandas as pd
-import numpy as np
 from math import sqrt
 import logging
-import datetime
 import csv
 
 
-from edisgo.tools import config
 from edisgo.tools import pypsa_io
 from edisgo.flex_opt import storage_integration, storage_operation, \
     curtailment, storage_positioning
@@ -390,144 +387,6 @@ class Network:
 
     def __repr__(self):
         return 'Network ' + str(self.id)
-
-
-class Config:
-    """
-    Container for all configurations.
-
-    Parameters
-    -----------
-    config_path : None or :obj:`str` or :obj:`dict`
-        Path to the config directory. Options are:
-
-        * None
-          If `config_path` is None configs are loaded from the edisgo
-          default config directory ($HOME$/.edisgo). If the directory
-          does not exist it is created. If config files don't exist the
-          default config files are copied into the directory.
-        * :obj:`str`
-          If `config_path` is a string configs will be loaded from the
-          directory specified by `config_path`. If the directory
-          does not exist it is created. If config files don't exist the
-          default config files are copied into the directory.
-        * :obj:`dict`
-          A dictionary can be used to specify different paths to the
-          different config files. The dictionary must have the following
-          keys:
-          * 'config_db_tables'
-          * 'config_grid'
-          * 'config_grid_expansion'
-          * 'config_timeseries'
-
-          Values of the dictionary are paths to the corresponding
-          config file. In contrast to the other two options the directories
-          and config files must exist and are not automatically created.
-
-        Default: None.
-
-    Notes
-    -----
-    The Config object can be used like a dictionary. See example on how to use
-    it.
-
-    Examples
-    --------
-    Create Config object from default config files
-
-    >>> from edisgo.network.network import Config
-    >>> config = Config()
-
-    Get reactive power factor for generators in the MV network
-
-    >>> config['reactive_power_factor']['mv_gen']
-
-    """
-
-    def __init__(self, **kwargs):
-        self._data = self._load_config(kwargs.get('config_path', None))
-
-    @staticmethod
-    def _load_config(config_path=None):
-        """
-        Load config files.
-
-        Parameters
-        -----------
-        config_path : None or :obj:`str` or dict
-            See class definition for more information.
-
-        Returns
-        -------
-        :obj:`collections.OrderedDict`
-            eDisGo configuration data from config files.
-
-        """
-
-        config_files = ['config_db_tables', 'config_grid',
-                        'config_grid_expansion', 'config_timeseries']
-
-        # load configs
-        if isinstance(config_path, dict):
-            for conf in config_files:
-                config.load_config(filename='{}.cfg'.format(conf),
-                                   config_dir=config_path[conf],
-                                   copy_default_config=False)
-        else:
-            for conf in config_files:
-                config.load_config(filename='{}.cfg'.format(conf),
-                                   config_dir=config_path)
-
-        config_dict = config.cfg._sections
-
-        # convert numeric values to float
-        for sec, subsecs in config_dict.items():
-            for subsec, val in subsecs.items():
-                # try str -> float conversion
-                try:
-                    config_dict[sec][subsec] = float(val)
-                except:
-                    pass
-
-        # convert to time object
-        config_dict['demandlib']['day_start'] = datetime.datetime.strptime(
-            config_dict['demandlib']['day_start'], "%H:%M")
-        config_dict['demandlib']['day_start'] = datetime.time(
-            config_dict['demandlib']['day_start'].hour,
-            config_dict['demandlib']['day_start'].minute)
-        config_dict['demandlib']['day_end'] = datetime.datetime.strptime(
-            config_dict['demandlib']['day_end'], "%H:%M")
-        config_dict['demandlib']['day_end'] = datetime.time(
-            config_dict['demandlib']['day_end'].hour,
-            config_dict['demandlib']['day_end'].minute)
-
-        return config_dict
-
-    def __getitem__(self, key1, key2=None):
-        if key2 is None:
-            try:
-                return self._data[key1]
-            except:
-                raise KeyError(
-                    "Config does not contain section {}.".format(key1))
-        else:
-            try:
-                return self._data[key1][key2]
-            except:
-                raise KeyError("Config does not contain value for {} or "
-                               "section {}.".format(key2, key1))
-
-    def __setitem__(self, key, value):
-        self._data[key] = value
-
-    def __delitem__(self, key):
-        del self._data[key]
-
-    def __iter__(self):
-        return iter(self._data)
-
-    def __len__(self):
-        return len(self._data)
 
 
 class CurtailmentControl:

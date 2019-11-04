@@ -4,7 +4,6 @@ import math
 
 from edisgo import EDisGo
 from edisgo.network.components import Load, Generator, Storage, Switch
-from edisgo.data import import_data
 
 
 class TestComponents:

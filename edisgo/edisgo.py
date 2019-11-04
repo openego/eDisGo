@@ -4,12 +4,13 @@ import pandas as pd
 import numpy as np
 
 import edisgo
-from edisgo.network.network import NetworkReimport, ResultsReimport, Config, \
+from edisgo.network.network import NetworkReimport, ResultsReimport,  \
     Results, Network, CurtailmentControl, StorageControl
 from edisgo.network.timeseries import TimeSeries, TimeSeriesControl
 from edisgo.tools import pypsa_io, plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.data.import_data import import_ding0_grid, import_generators
+from edisgo.tools.config import Config
 
 logger = logging.getLogger('edisgo')
 
