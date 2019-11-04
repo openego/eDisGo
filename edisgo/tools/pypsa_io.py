@@ -95,20 +95,20 @@ def to_pypsa(grid_object, mode, timesteps):
 
     # get topology and time series data
     if mode is None:
-        network = grid_object
-        buses_df = network.buses_df.loc[:, ['v_nom']]
-        buses = network.buses_df.index
+        edisgo_obj = grid_object
+        buses_df = edisgo_obj.network.buses_df.loc[:, ['v_nom']]
+        buses = edisgo_obj.network.buses_df.index
 
         # loads generators buses storages lines transformers
         #ToDo change getting generators once slack is separate dataframe
         components = {
-            'Load': network.loads_df.loc[:, ['bus', 'peak_load']].rename(
+            'Load': edisgo_obj.network.loads_df.loc[:, ['bus', 'peak_load']].rename(
                 columns={'peak_load':'p_set'}
             ),
-            'Generator': network._generators_df.loc[:, ['bus', 'control', 'p_nom']],
-            'StorageUnit': network.storages_df.loc[:, ['bus', 'control']],
-            'Line': network.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
-            'Transformer': network.transformers_df.loc[
+            'Generator': edisgo_obj.network._generators_df.loc[:, ['bus', 'control', 'p_nom']],
+            'StorageUnit': edisgo_obj.network.storages_df.loc[:, ['bus', 'control']],
+            'Line': edisgo_obj.network.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
+            'Transformer': edisgo_obj.network.transformers_df.loc[
                            :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type', 's_nom']].rename(
                 columns={'r_pu': 'r', 'x_pu': 'x'})
         }
@@ -116,7 +116,7 @@ def to_pypsa(grid_object, mode, timesteps):
 
     elif 'mv' in mode:
         grid = grid_object
-        network = grid.network
+        edisgo_obj = grid.edisgo_obj
         lv_components_to_aggregate = {'Load': 'loads_df',
                                       'Generator': 'generators_df',
                                       'StorageUnit': 'storages_df'}
@@ -131,7 +131,7 @@ def to_pypsa(grid_object, mode, timesteps):
                 columns={'peak_load': 'p_set'}
             ),
                 'Generator': grid.generators_df.loc[:, ['bus', 'control', 'p_nom']].append(
-                    grid.network._generators_df.loc['Generator_slack',
+                    grid.edisgo_obj.network._generators_df.loc['Generator_slack',
                                                     ['bus', 'control', 'p_nom']]), # Todo: change when slack is dataframe
                 'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
                 'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
@@ -163,11 +163,11 @@ def to_pypsa(grid_object, mode, timesteps):
                 'Load': grid.loads_df.loc[:, ['bus', 'peak_load']].rename(
                 columns={'peak_load':'p_set'}),
                 'Generator': grid.generators_df.loc[:, ['bus', 'control', 'p_nom']].append(
-                    grid.network._generators_df.loc['Generator_slack',
+                    grid.edisgo_obj.network._generators_df.loc['Generator_slack',
                                                     ['bus', 'control', 'p_nom']]), # Todo: change when slack is dataframe
                 'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
                 'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
-                'Transformer': network.transformers_df.loc[
+                'Transformer': edisgo_obj.network.transformers_df.loc[
                                :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type',
                                    's_nom']].rename(
                     columns={'r_pu': 'r', 'x_pu': 'x'})
@@ -209,7 +209,7 @@ def to_pypsa(grid_object, mode, timesteps):
 
     elif mode is 'lv':
         grid = grid_object
-        network = grid.network
+        edisgo_obj = grid.edisgo_obj
         buses_df = grid.buses_df.loc[:, ['v_nom']]
         buses = grid.buses_df.index
 
@@ -239,43 +239,43 @@ def to_pypsa(grid_object, mode, timesteps):
     if len(buses) > 0:
         import_series_from_dataframe(
             pypsa_network,
-            _buses_voltage_set_point(network, buses, timesteps),
+            _buses_voltage_set_point(edisgo_obj, buses, timesteps),
             'Bus', 'v_mag_pu_set')
 
     # import time series to PyPSA network
     if len(components['Generator'].index) > 0:
         import_series_from_dataframe(
             pypsa_network,
-            network.timeseries.generators_active_power.loc[
+            edisgo_obj.timeseries.generators_active_power.loc[
                 timesteps, components['Generator'].index],
             'Generator', 'p_set')
         import_series_from_dataframe(
             pypsa_network,
-            network.timeseries.generators_reactive_power.loc[
+            edisgo_obj.timeseries.generators_reactive_power.loc[
                 timesteps, components['Generator'].index],
             'Generator', 'q_set')
 
     if len(components['Load'].index) > 0:
         import_series_from_dataframe(
             pypsa_network,
-            network.timeseries.loads_active_power.loc[
+            edisgo_obj.timeseries.loads_active_power.loc[
                 timesteps, components['Load'].index],
             'Load', 'p_set')
         import_series_from_dataframe(
             pypsa_network,
-            network.timeseries.loads_reactive_power.loc[
+            edisgo_obj.timeseries.loads_reactive_power.loc[
                 timesteps, components['Load'].index],
             'Load', 'q_set')
 
     if len(components['StorageUnit'].index) > 0:
         import_series_from_dataframe(
             pypsa_network,
-            network.timeseries.storages_active_power.loc[
+            edisgo_obj.timeseries.storages_active_power.loc[
                 timesteps, components['StorageUnit'].index],
             'StorageUnit', 'p_set')
         import_series_from_dataframe(
             pypsa_network,
-            network.timeseries.storages_reactive_power.loc[
+            edisgo_obj.timeseries.storages_reactive_power.loc[
                 timesteps, components['StorageUnit'].index],
             'StorageUnit', 'q_set')
 
@@ -299,7 +299,7 @@ def append_lv_components(comp, comps, lv_components, lv_grid):
         raise ValueError('Component Type not defined.')
 
 
-def _buses_voltage_set_point(network, buses, timesteps):
+def _buses_voltage_set_point(edisgo_obj, buses, timesteps):
     """
     Time series in PyPSA compatible format for bus instances
 
@@ -329,26 +329,26 @@ def _buses_voltage_set_point(network, buses, timesteps):
 
     # get slack bus label
     #ToDo change once slack is property in network
-    slack_bus = network._generators_df.at['Generator_slack', 'bus']
+    slack_bus = edisgo_obj.network._generators_df.at['Generator_slack', 'bus'] # Todo: change to at['Slack', 'control']
 
     # set all buses to nominal voltage
     v_nom = pd.DataFrame(1, columns=buses, index=timesteps)
 
     # set slack bus to operational voltage (includes offset and control
     # deviation)
-    control_deviation = network.config[
+    control_deviation = edisgo_obj.config[
         'grid_expansion_allowed_voltage_deviations'][
         'hv_mv_trafo_control_deviation']
     if control_deviation != 0:
         control_deviation_ts = \
-            network.timeseries.timesteps_load_feedin_case.apply(
+            edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
                 lambda _: control_deviation if _ == 'feedin_case'
                 else -control_deviation).loc[timesteps]
     else:
         control_deviation_ts = pd.Series(0, index=timesteps)
 
     slack_voltage_pu = \
-        control_deviation_ts + 1 + network.config[
+        control_deviation_ts + 1 + edisgo_obj.config[
             'grid_expansion_allowed_voltage_deviations']['hv_mv_trafo_offset']
 
     v_nom.loc[timesteps, slack_bus] = slack_voltage_pu

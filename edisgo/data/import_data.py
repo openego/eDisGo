@@ -43,7 +43,7 @@ COLUMNS = {
 }
 
 
-def import_ding0_grid(path, network):
+def import_ding0_grid(path, edisgo_obj):
     """
     Import an eDisGo grid topology from
     `Ding0 data <https://github.com/openego/ding0>`_.
@@ -56,7 +56,7 @@ def import_ding0_grid(path, network):
     ----------
     path: :obj:`str`
         path to ding0 grid csv files
-    network: :class:`~.grid.network.Network`
+    edisgo_obj: :class:`~.grid.edisgo_obj.Network`
         The eDisGo data container object
 
     """
@@ -68,39 +68,39 @@ def import_ding0_grid(path, network):
     if grid.buses.empty:
         raise AttributeError("Specified directory containing ding0 grid data "
                              "does not exist or does not contain grid data.")
-    # write dataframes to network
-    network.buses_df = grid.buses[COLUMNS['buses_df']]
+    # write dataframes to edisgo_obj
+    edisgo_obj.network.buses_df = grid.buses[COLUMNS['buses_df']]
     # rename slack generator
     slack = [_ for _ in grid.generators.index if 'slack' in _.lower()][0]
     grid.generators.rename(index={slack: 'Generator_slack'}, inplace=True)
-    network.generators_df = grid.generators[COLUMNS['generators_df']]
-    network.loads_df = grid.loads[COLUMNS['loads_df']]
-    network.transformers_df = grid.transformers.drop(
+    edisgo_obj.network.generators_df = grid.generators[COLUMNS['generators_df']]
+    edisgo_obj.network.loads_df = grid.loads[COLUMNS['loads_df']]
+    edisgo_obj.network.transformers_df = grid.transformers.drop(
         labels=['x_pu','r_pu'], axis=1).rename(
         columns={'r': 'r_pu', 'x': 'x_pu'})[COLUMNS['transformers_df']]
-    network.lines_df = grid.lines[COLUMNS['lines_df']]
-    network.switches_df = pd.read_csv(os.path.join(path, 'switches.csv'),
-                                      index_col=[0])
-    network.storages_df = grid.storage_units
-    network.grid_district = {'population': grid.mv_grid_district_population,
+    edisgo_obj.network.lines_df = grid.lines[COLUMNS['lines_df']]
+    edisgo_obj.network.switches_df = pd.read_csv(os.path.join(path, 'switches.csv'),
+                                         index_col=[0])
+    edisgo_obj.network.storages_df = grid.storage_units
+    edisgo_obj.network.grid_district = {'population': grid.mv_grid_district_population,
                              'geom': wkt_loads(grid.mv_grid_district_geom)}
 
-    network._grids = {}
+    edisgo_obj.network._grids = {}
 
     # set up medium voltage grid
     mv_grid_id = list(set(grid.buses.mv_grid_id))[0]
-    network.mv_grid = MVGrid(id=mv_grid_id, network=network)
-    network._grids[str(network.mv_grid)] = network.mv_grid
+    edisgo_obj.network.mv_grid = MVGrid(id=mv_grid_id, edisgo_obj=edisgo_obj)
+    edisgo_obj.network._grids[str(edisgo_obj.network.mv_grid)] = edisgo_obj.network.mv_grid
 
     # set up low voltage grids
     lv_grid_ids = set(grid.buses.lv_grid_id.dropna())
     for lv_grid_id in lv_grid_ids:
-        lv_grid = LVGrid(id=lv_grid_id, network=network)
-        network.mv_grid._lv_grids.append(lv_grid)
-        network._grids[str(lv_grid)] = lv_grid
+        lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=edisgo_obj)
+        edisgo_obj.network.mv_grid._lv_grids.append(lv_grid)
+        edisgo_obj.network._grids[str(lv_grid)] = lv_grid
 
     # Check data integrity
-    _validate_ding0_grid_import(network)
+    _validate_ding0_grid_import(edisgo_obj.network)
 
 
 def _set_up_mv_grid(grid, network):
@@ -855,7 +855,7 @@ def _import_genos_from_oedb(network):
 
                             # select cable type
                             line_type, line_count = select_cable(
-                                network=network,
+                                edisgo_obj=network,
                                 level='mv',
                                 apparent_power=gen.nominal_capacity /
                                 pfac_mv_gen)
@@ -1129,7 +1129,7 @@ def _import_genos_from_oedb(network):
 
     _validate_generation()
 
-    connect_mv_generators(network=network)
+    connect_mv_generators(edisgo_obj=network)
     connect_lv_generators(network=network)
 
 

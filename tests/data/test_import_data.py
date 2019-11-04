@@ -15,7 +15,7 @@ class TestImportFromDing0:
         parent_dirname = os.path.dirname(os.path.dirname(__file__))
         test_network_directory = os.path.join(parent_dirname, 'test_network')
         self.network = Network()
-        import_data.import_ding0_grid(test_network_directory, self.network)
+        import_data.import_ding0_grid(test_network_directory, self)
 
     def test_import_ding0_grid(self):
         """Test successful import of ding0 grid."""

@@ -485,23 +485,27 @@ class EDisGo(EDisGoReimport):
 
     def __init__(self, **kwargs):
 
+        # load configuration and equipment data
+        self._config = Config(config_path=kwargs.get('config_path', None))
+        self._equipment_data = self._load_equipment_data()
         # create network (loads grid data, configurations, equipment data)
         self.network = Network(
-            ding0_grid=kwargs.get('ding0_grid', None),
-            generator_scenario=kwargs.get('generator_scenario', None),
-            config_path=kwargs.get('config_path', None))
+            generator_scenario=kwargs.get('generator_scenario', None))
+        # load grid data
+        self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
         # set up results container
         self.results = Results(self.network)
+        self._timeseries = TimeSeries()
 
         # set up time series for feed-in and load
         # worst-case time series
         if kwargs.get('worst_case_analysis', None):
             TimeSeriesControl(
-                network=self.network,
+                edisgo_obj=self,
                 mode=kwargs.get('worst_case_analysis', None))
         else:
             TimeSeriesControl(
-                network=self.network,
+                edisgo_obj=self,
                 timeseries_generation_fluctuating=kwargs.get(
                     'timeseries_generation_fluctuating', None),
                 timeseries_generation_dispatchable=kwargs.get(
@@ -517,6 +521,187 @@ class EDisGo(EDisGoReimport):
         # import new generators
         if self.network.generator_scenario is not None:
             self.import_generators()
+
+    @property
+    def config(self):
+        """
+        eDisGo configuration data.
+
+        Returns
+        -------
+        :class:`~.grid.network.Config`
+            Config object with configuration data from config files.
+
+        """
+        return self._config
+
+    @config.setter
+    def config(self, config_path):
+        self._config = Config(config_path=config_path)
+
+    @property
+    def equipment_data(self):
+        """
+        Technical data of electrical equipment such as lines and transformers
+
+        Returns
+        --------
+        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+            Data of electrical equipment
+
+        """
+        return self._equipment_data
+
+    @property
+    def timeseries(self):
+        """
+        Object containing load and feed-in time series.
+
+        Parameters
+        ----------
+        timeseries : :class:`~.grid.network.TimeSeries`
+            Object containing load and feed-in time series.
+
+        Returns
+        --------
+        :class:`~.grid.network.TimeSeries`
+            Object containing load and feed-in time series.
+
+        """
+        return self._timeseries
+
+    def _load_equipment_data(self):
+        """
+        Load equipment data for transformers, cables etc.
+
+        Returns
+        -------
+        :obj:`dict`
+            Dictionary with :pandas:`pandas.DataFrame<dataframe>` containing
+            equipment data. Keys of the dictionary are 'mv_trafos', 'mv_lines',
+            'mv_cables', 'lv_trafos', and 'lv_cables'.
+
+        Notes
+        ------
+        This function calculates electrical values of transformer from standard
+        values (so far only for LV transformers, not necessary for MV as MV
+        impedances are not used).
+
+        $z_{pu}$ is calculated as follows:
+
+        .. math:: z_{pu} = \frac{u_{kr}}{100}
+
+        using the following simplification:
+
+        .. math:: z_{pu} = \frac{Z}{Z_{nom}}
+
+        with
+
+        .. math:: Z = \frac{u_{kr}}{100} \cdot \frac{U_n^2}{S_{nom}}
+
+        and
+
+        .. math:: Z_{nom} = \frac{U_n^2}{S_{nom}}
+
+        $r_{pu}$ is calculated as follows:
+
+        .. math:: r_{pu} = \frac{P_k}{S_{nom}}
+
+        using the simplification of
+
+        .. math:: r_{pu} = \frac{R}{Z_{nom}}
+
+        with
+
+        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \cdot \frac{U_{nom}^2}{S_{nom}^2}
+
+        $x_{pu}$ is calculated as follows:
+
+        .. math::  x_{pu} = \sqrt(z_{pu}^2-r_{pu}^2)
+
+
+        """
+
+        package_path = edisgo.__path__[0]
+        equipment_dir = self.config['system_dirs']['equipment_dir']
+
+        data = {}
+        equipment = {'mv': ['trafos', 'lines', 'cables'],
+                     'lv': ['trafos', 'cables']}
+
+        for voltage_level, eq_list in equipment.items():
+            for i in eq_list:
+                equipment_parameters = self.config['equipment'][
+                    'equipment_{}_parameters_{}'.format(voltage_level, i)]
+                data['{}_{}'.format(voltage_level, i)] = pd.read_csv(
+                    os.path.join(package_path, equipment_dir,
+                                 equipment_parameters),
+                    comment='#', index_col='name',
+                    delimiter=',', decimal='.')
+                # calculate electrical values of transformer from standard
+                # values (so far only for LV transformers, not necessary for
+                # MV as MV impedances are not used)
+                if voltage_level == 'lv' and i == 'trafos':
+                    if voltage_level == 'lv' and i == 'trafos':
+                        data['{}_{}'.format(voltage_level, i)]['r_pu'] = \
+                            data['{}_{}'.format(voltage_level, i)]['P_k'] / \
+                            (data['{}_{}'.format(voltage_level, i)][
+                                 'S_nom'] * 1000)
+                        data['{}_{}'.format(voltage_level, i)][
+                            'x_pu'] = np.sqrt(
+                            (data['{}_{}'.format(voltage_level, i)][
+                                 'u_kr'] / 100) ** 2 \
+                            - data['{}_{}'.format(voltage_level, i)][
+                                'r_pu'] ** 2)
+        return data
+
+
+    def import_ding0_grid(self, path):
+        """
+        Import ding0 grid data from csv files.
+
+        Parameters
+        -----------
+        path : :obj:'str`
+            Path to directory containing csv files of grid to be loaded.
+
+        #ToDo docstring
+
+        """
+        if path is not None:
+            import_ding0_grid(path, self)
+
+    def to_pypsa(self, mode=None, timesteps=None):
+        """
+        PyPSA grid representation
+
+        A grid topology representation based on
+        :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
+        this data model, the :pypsa:`pypsa.Network<network>`,
+        is assigned to this attribute.
+
+        Parameters
+        ----------
+        pypsa : :pypsa:`pypsa.Network<network>`
+            The `PyPSA network
+            <https://www.pypsa.org/doc/components.html#network>`_ container.
+
+        Returns
+        -------
+        :pypsa:`pypsa.Network<network>`
+            PyPSA grid representation. The attribute `edisgo_mode` is added
+            to specify if pypsa representation of the edisgo network
+            was created for the whole grid topology (MV + LV), only MV or only
+            LV. See parameter `mode` in
+            :meth:`~.grid.network.EDisGo.analyze` for more information.
+
+        """
+        if timesteps is None:
+            timesteps = self.timeseries.timeindex
+        # check if timesteps is array-like, otherwise convert to list
+        if not hasattr(timesteps, "__len__"):
+            timesteps = [timesteps]
+        return pypsa_io.to_pypsa(self, mode=mode, timesteps=timesteps)
 
     def curtail(self, methodology, curtailment_timeseries, **kwargs):
         """
@@ -607,7 +792,7 @@ class EDisGo(EDisGoReimport):
 
         """
         if timesteps is None:
-            timesteps = self.network.timeseries.timeindex
+            timesteps = self.timeseries.timeindex
         # check if timesteps is array-like, otherwise convert to list
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
@@ -621,7 +806,7 @@ class EDisGo(EDisGoReimport):
         # series
         if False in [True if _ in pypsa_network.snapshots else False
                      for _ in timesteps]:
-            pypsa_io.update_pypsa_timeseries(self.network, timesteps=timesteps)
+            pypsa_io.update_pypsa_timeseries(self, timesteps=timesteps)
         # run power flow analysis
         pf_results = pypsa_network.pf(timesteps)
 
@@ -695,116 +880,8 @@ class Network:
 
     def __init__(self, **kwargs):
 
-        global NETWORK
-        NETWORK = self
-        # load configuration and equipment data
-        self._config = Config(config_path=kwargs.get('config_path', None))
-        self._equipment_data = self._load_equipment_data()
-        # load grid data
-        self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
-
         self._generator_scenario = kwargs.get('generator_scenario', None)
-        self._timeseries = TimeSeries()
 
-    def _load_equipment_data(self):
-        """
-        Load equipment data for transformers, cables etc.
-
-        Returns
-        -------
-        :obj:`dict`
-            Dictionary with :pandas:`pandas.DataFrame<dataframe>` containing
-            equipment data. Keys of the dictionary are 'mv_trafos', 'mv_lines',
-            'mv_cables', 'lv_trafos', and 'lv_cables'.
-
-        Notes
-        ------
-        This function calculates electrical values of transformer from standard
-        values (so far only for LV transformers, not necessary for MV as MV
-        impedances are not used).
-
-        $z_{pu}$ is calculated as follows:
-
-        .. math:: z_{pu} = \frac{u_{kr}}{100}
-
-        using the following simplification:
-
-        .. math:: z_{pu} = \frac{Z}{Z_{nom}}
-
-        with
-
-        .. math:: Z = \frac{u_{kr}}{100} \cdot \frac{U_n^2}{S_{nom}}
-
-        and
-
-        .. math:: Z_{nom} = \frac{U_n^2}{S_{nom}}
-
-        $r_{pu}$ is calculated as follows:
-
-        .. math:: r_{pu} = \frac{P_k}{S_{nom}}
-
-        using the simplification of
-
-        .. math:: r_{pu} = \frac{R}{Z_{nom}}
-
-        with
-
-        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \cdot \frac{U_{nom}^2}{S_{nom}^2}
-
-        $x_{pu}$ is calculated as follows:
-
-        .. math::  x_{pu} = \sqrt(z_{pu}^2-r_{pu}^2)
-
-
-        """
-
-        package_path = edisgo.__path__[0]
-        equipment_dir = self.config['system_dirs']['equipment_dir']
-
-        data = {}
-        equipment = {'mv': ['trafos', 'lines', 'cables'],
-                     'lv': ['trafos', 'cables']}
-
-        for voltage_level, eq_list in equipment.items():
-            for i in eq_list:
-                equipment_parameters = self.config['equipment'][
-                    'equipment_{}_parameters_{}'.format(voltage_level, i)]
-                data['{}_{}'.format(voltage_level, i)] = pd.read_csv(
-                    os.path.join(package_path, equipment_dir,
-                                 equipment_parameters),
-                    comment='#', index_col='name',
-                    delimiter=',', decimal='.')
-                # calculate electrical values of transformer from standard
-                # values (so far only for LV transformers, not necessary for
-                # MV as MV impedances are not used)
-                if voltage_level == 'lv' and i == 'trafos':
-                    if voltage_level == 'lv' and i == 'trafos':
-                        data['{}_{}'.format(voltage_level, i)]['r_pu'] = \
-                            data['{}_{}'.format(voltage_level, i)]['P_k'] / \
-                            (data['{}_{}'.format(voltage_level, i)][
-                                 'S_nom'] * 1000)
-                        data['{}_{}'.format(voltage_level, i)][
-                            'x_pu'] = np.sqrt(
-                            (data['{}_{}'.format(voltage_level, i)][
-                                 'u_kr'] / 100) ** 2 \
-                            - data['{}_{}'.format(voltage_level, i)][
-                                'r_pu'] ** 2)
-        return data
-
-    def import_ding0_grid(self, path):
-        """
-        Import ding0 grid data from csv files.
-
-        Parameters
-        -----------
-        path : :obj:'str`
-            Path to directory containing csv files of grid to be loaded.
-
-        #ToDo docstring
-
-        """
-        if path is not None:
-            import_ding0_grid(path, self)
 
     @property
     def buses_df(self):
@@ -1056,23 +1133,6 @@ class Network:
         return self.mv_grid.id
 
     @property
-    def config(self):
-        """
-        eDisGo configuration data.
-
-        Returns
-        -------
-        :class:`~.grid.network.Config`
-            Config object with configuration data from config files.
-
-        """
-        return self._config
-
-    @config.setter
-    def config(self, config_path):
-        self._config = Config(config_path=config_path)
-
-    @property
     def generator_scenario(self):
         """
         Defines which scenario of future generator park to use.
@@ -1093,19 +1153,6 @@ class Network:
     @generator_scenario.setter
     def generator_scenario(self, generator_scenario_name):
         self._generator_scenario = generator_scenario_name
-
-    @property
-    def equipment_data(self):
-        """
-        Technical data of electrical equipment such as lines and transformers
-
-        Returns
-        --------
-        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
-            Data of electrical equipment
-
-        """
-        return self._equipment_data
 
     @property
     def mv_grid(self):
@@ -1150,24 +1197,6 @@ class Network:
     @grid_district.setter
     def grid_district(self, grid_district):
         self._grid_district = grid_district
-
-    @property
-    def timeseries(self):
-        """
-        Object containing load and feed-in time series.
-
-        Parameters
-        ----------
-        timeseries : :class:`~.grid.network.TimeSeries`
-            Object containing load and feed-in time series.
-
-        Returns
-        --------
-        :class:`~.grid.network.TimeSeries`
-            Object containing load and feed-in time series.
-
-        """
-        return self._timeseries
     #
     # @timeseries.setter
     # def timeseries(self, timeseries):
@@ -1186,37 +1215,7 @@ class Network:
     # def dingo_import_data(self, dingo_data):
     #     self._dingo_import_data = dingo_data
 
-    def to_pypsa(self, mode=None, timesteps=None):
-        """
-        PyPSA grid representation
 
-        A grid topology representation based on
-        :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
-        this data model, the :pypsa:`pypsa.Network<network>`,
-        is assigned to this attribute.
-
-        Parameters
-        ----------
-        pypsa : :pypsa:`pypsa.Network<network>`
-            The `PyPSA network
-            <https://www.pypsa.org/doc/components.html#network>`_ container.
-
-        Returns
-        -------
-        :pypsa:`pypsa.Network<network>`
-            PyPSA grid representation. The attribute `edisgo_mode` is added
-            to specify if pypsa representation of the edisgo network
-            was created for the whole grid topology (MV + LV), only MV or only
-            LV. See parameter `mode` in
-            :meth:`~.grid.network.EDisGo.analyze` for more information.
-
-        """
-        if timesteps is None:
-            timesteps = self.timeseries.timeindex
-        # check if timesteps is array-like, otherwise convert to list
-        if not hasattr(timesteps, "__len__"):
-            timesteps = [timesteps]
-        return pypsa_io.to_pypsa(self, mode=mode, timesteps=timesteps)
 
     def __repr__(self):
         return 'Network ' + str(self.id)
@@ -1450,9 +1449,9 @@ class TimeSeriesControl:
 
     """
 
-    def __init__(self, network, **kwargs):
+    def __init__(self, edisgo_obj, **kwargs):
 
-        self.network = network
+        self.edisgo_obj = edisgo_obj
         mode = kwargs.get('mode', None)
 
         if mode:
@@ -1464,20 +1463,20 @@ class TimeSeriesControl:
                 raise ValueError('{} is not a valid mode.'.format(mode))
 
             # set random timeindex
-            self.network.timeseries._timeindex = pd.date_range(
+            self.edisgo_obj.timeseries._timeindex = pd.date_range(
                 '1/1/1970', periods=len(modes), freq='H')
             self._worst_case_generation(modes)
             self._worst_case_load(modes)
 
         else:
-            config_data = network.config
-            weather_cell_ids = network.mv_grid.weather_cells
+            config_data = edisgo_obj.config
+            weather_cell_ids = edisgo_obj.network.mv_grid.weather_cells
             # feed-in time series of fluctuating renewables
             ts = kwargs.get('timeseries_generation_fluctuating', None)
             if isinstance(ts, pd.DataFrame):
-                self.network.timeseries.generation_fluctuating = ts
+                self.edisgo_obj.timeseries.generation_fluctuating = ts
             elif isinstance(ts, str) and ts == 'oedb':
-                self.network.timeseries.generation_fluctuating = \
+                self.edisgo_obj.timeseries.generation_fluctuating = \
                     import_feedin_timeseries(config_data,
                                              weather_cell_ids)
             else:
@@ -1487,12 +1486,12 @@ class TimeSeriesControl:
             # feed-in time series for dispatchable generators
             ts = kwargs.get('timeseries_generation_dispatchable', None)
             if isinstance(ts, pd.DataFrame):
-                self.network.timeseries.generation_dispatchable = ts
+                self.edisgo_obj.timeseries.generation_dispatchable = ts
             else:
                 # check if there are any dispatchable generators, and
                 # throw error if there are
-                gens = network.mv_grid.generators + [
-                    gen for lv_grid in network.mv_grid.lv_grids
+                gens = edisgo_obj.mv_grid.generators + [
+                    gen for lv_grid in edisgo_obj.mv_grid.lv_grids
                     for gen in lv_grid.generators]
                 if False in [True if isinstance(g, GeneratorFluctuating)
                              else False for g in gens]:
@@ -1544,7 +1543,7 @@ class TimeSeriesControl:
 
         """
 
-        gens_df = self.network.generators_df.loc[:, ['bus', 'type', 'p_nom']]
+        gens_df = self.edisgo_obj.network.generators_df.loc[:, ['bus', 'type', 'p_nom']]
 
         # check that all generators have bus, type, nominal power
         check_gens = gens_df.isnull().any(axis=1)
@@ -1556,12 +1555,12 @@ class TimeSeriesControl:
 
         # assign voltage level to generators
         gens_df['voltage_level'] = gens_df.apply(
-            lambda _: 'lv' if self.network.buses_df.at[_.bus, 'v_nom'] < 1
+            lambda _: 'lv' if self.edisgo_obj.network.buses_df.at[_.bus, 'v_nom'] < 1
             else 'mv', axis=1)
 
         # active power
         # get worst case configurations
-        worst_case_scale_factors = self.network.config[
+        worst_case_scale_factors = self.edisgo_obj.config[
             'worst_case_scale_factor']
 
         # get worst case scaling factors for different generator types and
@@ -1572,9 +1571,9 @@ class TimeSeriesControl:
              'other': [worst_case_scale_factors[
                            '{}_feedin_other'.format(mode)] for mode in modes]
              },
-            index=self.network.timeseries.timeindex)
+            index=self.edisgo_obj.timeseries.timeindex)
 
-        gen_ts = pd.DataFrame(index=self.network.timeseries.timeindex,
+        gen_ts = pd.DataFrame(index=self.edisgo_obj.timeseries.timeindex,
                               columns=gens_df.index)
         # assign normalized active power time series to solar generators
         cols = gen_ts[gens_df.index[gens_df.type == 'solar']].columns
@@ -1582,33 +1581,33 @@ class TimeSeriesControl:
             gen_ts[cols] = pd.concat(
                 [worst_case_ts.loc[:, ['solar']]] * len(cols), axis=1)
         # assign normalized active power time series to other generators
-        cols = gen_ts[self.network.generators_df.index[
-            self.network.generators_df.type != 'solar']].columns
+        cols = gen_ts[self.edisgo_obj.network.generators_df.index[
+            self.edisgo_obj.network.generators_df.type != 'solar']].columns
         if len(cols)>0:
             gen_ts[cols] = pd.concat(
                 [worst_case_ts.loc[:, ['other']]] * len(cols), axis=1)
 
         # multiply normalized time series by nominal power of generator
-        self.network.timeseries.generators_active_power = gen_ts.mul(
-            self.network.generators_df.p_nom)
+        self.edisgo_obj.timeseries.generators_active_power = gen_ts.mul(
+            self.edisgo_obj.network.generators_df.p_nom)
 
         # reactive power
         # write dataframes with sign of reactive power and power factor
         # for each generator
-        q_sign = pd.Series(index=self.network.generators_df.index)
-        power_factor = pd.Series(index=self.network.generators_df.index)
+        q_sign = pd.Series(index=self.edisgo_obj.network.generators_df.index)
+        power_factor = pd.Series(index=self.edisgo_obj.network.generators_df.index)
         for voltage_level in ['mv', 'lv']:
             cols = gens_df.index[gens_df.voltage_level == voltage_level]
             if len(cols) > 0:
                 q_sign[cols] = self._get_q_sign_generator(
-                    self.network.config['reactive_power_mode'][
+                    self.edisgo_obj.config['reactive_power_mode'][
                         '{}_gen'.format(voltage_level)])
-                power_factor[cols] = self.network.config[
+                power_factor[cols] = self.edisgo_obj.config[
                     'reactive_power_factor']['{}_gen'.format(voltage_level)]
 
         # calculate reactive power time series for each generator
-        self.network.timeseries.generators_reactive_power = self._fixed_cosphi(
-            self.network.timeseries.generators_active_power,
+        self.edisgo_obj.timeseries.generators_reactive_power = self._fixed_cosphi(
+            self.edisgo_obj.timeseries.generators_active_power,
             q_sign, power_factor)
 
     def _worst_case_load(self, modes):
@@ -1634,7 +1633,7 @@ class TimeSeriesControl:
         sectors = ['residential', 'retail', 'industrial', 'agricultural']
         voltage_levels = ['mv', 'lv']
 
-        loads_df = self.network.loads_df.loc[
+        loads_df = self.edisgo_obj.network.loads_df.loc[
                    :, ['bus', 'sector', 'annual_consumption']]
 
         # check that all loads have bus, sector, annual consumption
@@ -1647,14 +1646,14 @@ class TimeSeriesControl:
 
         # assign voltage level to loads
         loads_df['voltage_level'] = loads_df.apply(
-            lambda _: 'lv' if self.network.buses_df.at[_.bus, 'v_nom'] < 1
+            lambda _: 'lv' if self.edisgo_obj.network.buses_df.at[_.bus, 'v_nom'] < 1
             else 'mv', axis=1)
 
         # active power
         # get worst case configurations
-        worst_case_scale_factors = self.network.config[
+        worst_case_scale_factors = self.edisgo_obj.config[
             'worst_case_scale_factor']
-        peakload_consumption_ratio = self.network.config[
+        peakload_consumption_ratio = self.edisgo_obj.config[
             'peakload_consumption_ratio']
 
         # get power scaling factors for different voltage levels and feed-in/
@@ -1667,7 +1666,7 @@ class TimeSeriesControl:
 
         # write normalized active power time series for each voltage level
         # and sector to dataframe
-        load_ts = pd.DataFrame(index=self.network.timeseries.timeindex,
+        load_ts = pd.DataFrame(index=self.edisgo_obj.timeseries.timeindex,
                                columns=loads_df.index)
         for voltage_level in voltage_levels:
             for sector in sectors:
@@ -1681,19 +1680,19 @@ class TimeSeriesControl:
                         len(cols), axis=1)
 
         # multiply normalized time series by annual consumption of load
-        self.network.timeseries.loads_active_power = load_ts.mul(
+        self.edisgo_obj.timeseries.loads_active_power = load_ts.mul(
             loads_df.annual_consumption)
 
         # reactive power
         # get worst case configurations
-        reactive_power_mode = self.network.config['reactive_power_mode']
-        reactive_power_factor = self.network.config[
+        reactive_power_mode = self.edisgo_obj.config['reactive_power_mode']
+        reactive_power_factor = self.edisgo_obj.config[
                     'reactive_power_factor']
 
         # write dataframes with sign of reactive power and power factor
         # for each load
-        q_sign = pd.Series(index=self.network.loads_df.index)
-        power_factor = pd.Series(index=self.network.loads_df.index)
+        q_sign = pd.Series(index=self.edisgo_obj.network.loads_df.index)
+        power_factor = pd.Series(index=self.edisgo_obj.network.loads_df.index)
         for voltage_level in voltage_levels:
             cols = loads_df.index[loads_df.voltage_level == voltage_level]
             if len(cols) > 0:
@@ -1703,8 +1702,8 @@ class TimeSeriesControl:
                     '{}_load'.format(voltage_level)]
 
         # calculate reactive power time series for each load
-        self.network.timeseries.loads_reactive_power = self._fixed_cosphi(
-            self.network.timeseries.loads_active_power, q_sign, power_factor)
+        self.edisgo_obj.timeseries.loads_reactive_power = self._fixed_cosphi(
+            self.edisgo_obj.timeseries.loads_active_power, q_sign, power_factor)
 
     def _get_q_sign_generator(self, reactive_power_mode):
         """

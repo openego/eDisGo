@@ -24,7 +24,7 @@ class Grid(ABC):
         self._id = kwargs.get('id', None)
         if isinstance(self._id, float):
             self._id = int(self._id)
-        self._network = network.NETWORK
+        self._edisgo_obj = kwargs.get('edisgo_obj', None)
 
         self._nominal_voltage = None
 
@@ -37,8 +37,8 @@ class Grid(ABC):
         return self._id
 
     @property
-    def network(self):
-        return self._network
+    def edisgo_obj(self):
+        return self._edisgo_obj
 
     @property
     def nominal_voltage(self):
@@ -74,7 +74,7 @@ class Grid(ABC):
             Dataframe that contains station bus. Format is the same as for
             buses_df.
         """
-        return self.network.buses_df.loc[
+        return self.edisgo_obj.network.buses_df.loc[
             self.transformers_df.bus1.unique()
         ]
 
@@ -90,8 +90,8 @@ class Grid(ABC):
             information on the dataframe see
             :attr:`~.grid.network.Network.transformers_df`.
         """
-        return self.network.transformers_df[
-            self.network.transformers_df.bus1.isin(self.buses_df.index)]
+        return self.edisgo_obj.network.transformers_df[
+            self.edisgo_obj.network.transformers_df.bus1.isin(self.buses_df.index)]
 
     @property
     def generators_df(self):
@@ -105,8 +105,8 @@ class Grid(ABC):
             dataframe see :attr:`~.grid.network.Network.generators_df`.
 
         """
-        return self.network.generators_df[
-            self.network.generators_df.bus.isin(self.buses_df.index)]
+        return self.edisgo_obj.network.generators_df[
+            self.edisgo_obj.network.generators_df.bus.isin(self.buses_df.index)]
 
     @property
     def generators(self):
@@ -134,8 +134,8 @@ class Grid(ABC):
             dataframe see :attr:`~.grid.network.Network.loads_df`.
 
         """
-        return self.network.loads_df[
-            self.network.loads_df.bus.isin(self.buses_df.index)]
+        return self.edisgo_obj.network.loads_df[
+            self.edisgo_obj.network.loads_df.bus.isin(self.buses_df.index)]
 
     @property
     def loads(self):
@@ -162,8 +162,8 @@ class Grid(ABC):
             Dataframe with all storages in grid. For more information on the
             dataframe see :attr:`~.grid.network.Network.storages_df`.
         """
-        return self.network.storages_df[
-            self.network.storages_df.bus.isin(self.buses_df.index)]
+        return self.edisgo_obj.network.storages_df[
+            self.edisgo_obj.network.storages_df.bus.isin(self.buses_df.index)]
 
     @property
     def switch_disconnectors_df(self):
@@ -181,9 +181,9 @@ class Grid(ABC):
             :attr:`~.grid.network.Network.switches_df`.
 
         """
-        return self.network.switches_df[
-            self.network.switches_df.bus_closed.isin(self.buses_df.index)][
-            self.network.switches_df.type_info=='Switch Disconnector']
+        return self.edisgo_obj.network.switches_df[
+            self.edisgo_obj.network.switches_df.bus_closed.isin(self.buses_df.index)][
+            self.edisgo_obj.network.switches_df.type_info=='Switch Disconnector']
 
     @property
     def switch_disconnectors(self):
@@ -210,9 +210,9 @@ class Grid(ABC):
             Dataframe with all buses in grid. For more information on the
             dataframe see :attr:`~.grid.network.Network.lines_df`.
         """
-        return self.network.lines_df[
-            self.network.lines_df.bus0.isin(self.buses_df.index) &
-            self.network.lines_df.bus1.isin(self.buses_df.index)]
+        return self.edisgo_obj.network.lines_df[
+            self.edisgo_obj.network.lines_df.bus0.isin(self.buses_df.index) &
+            self.edisgo_obj.network.lines_df.bus1.isin(self.buses_df.index)]
 
     @property
     @abstractmethod
@@ -334,7 +334,7 @@ class Grid(ABC):
             :meth:`~.grid.network.EDisGo.analyze` for more information.
         """
         if timesteps is None:
-            timesteps = self.network.timeseries.timeindex
+            timesteps = self.edisgo_obj.timeseries.timeindex
         # check if timesteps is array-like, otherwise convert to list
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
@@ -387,8 +387,8 @@ class MVGrid(Grid):
             dataframe see :attr:`~.grid.network.Network.buses_df`.
 
         """
-        return self.network.buses_df.drop(
-            self.network.buses_df.lv_grid_id.dropna().index)
+        return self.edisgo_obj.network.buses_df.drop(
+            self.edisgo_obj.network.buses_df.lv_grid_id.dropna().index)
 
     def draw(self):
         """
@@ -420,8 +420,8 @@ class LVGrid(Grid):
             dataframe see :attr:`~.grid.network.Network.buses_df`.
 
         """
-        return self.network.buses_df.loc[
-            self.network.buses_df.lv_grid_id == self.id]
+        return self.edisgo_obj.network.buses_df.loc[
+            self.edisgo_obj.network.buses_df.lv_grid_id == self.id]
 
     def draw(self):
         """

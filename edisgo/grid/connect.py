@@ -17,7 +17,7 @@ import logging
 logger = logging.getLogger('edisgo')
 
 
-def connect_mv_generators(network):
+def connect_mv_generators(edisgo_obj):
     """Connect MV generators to existing grids.
 
     This function searches for unconnected generators in MV grids and connects them.
@@ -35,7 +35,7 @@ def connect_mv_generators(network):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    edisgo_obj : :class:`~.grid.edisgo_obj.Network`
         The eDisGo container object
 
     Notes
@@ -46,54 +46,54 @@ def connect_mv_generators(network):
     """
 
     # get params from config
-    buffer_radius = int(network.config[
+    buffer_radius = int(edisgo_obj.config[
                             'grid_connection']['conn_buffer_radius'])
-    buffer_radius_inc = int(network.config[
+    buffer_radius_inc = int(edisgo_obj.config[
                                 'grid_connection']['conn_buffer_radius_inc'])
 
     # get standard equipment
-    std_line_type = network.equipment_data['mv_cables'].loc[
-        network.config['grid_expansion_standard_equipment']['mv_line']]
+    std_line_type = edisgo_obj.equipment_data['mv_cables'].loc[
+        edisgo_obj.config['grid_expansion_standard_equipment']['mv_line']]
 
-    for geno in sorted(network.mv_grid.graph.nodes_by_attribute('generator'),
+    for geno in sorted(edisgo_obj.network.mv_grid.graph.nodes_by_attribute('generator'),
                        key=lambda _: repr(_)):
-        if nx.is_isolate(network.mv_grid.graph, geno):
+        if nx.is_isolate(edisgo_obj.network.mv_grid.graph, geno):
 
             # ===== voltage level 4: generator has to be connected to MV station =====
             if geno.v_level == 4:
 
-                line_length = calc_geo_dist_vincenty(network=network,
+                line_length = calc_geo_dist_vincenty(network=edisgo_obj,
                                                      node_source=geno,
-                                                     node_target=network.mv_grid.station)
+                                                     node_target=edisgo_obj.network.mv_grid.station)
 
                 line = Line(id=random.randint(10**8, 10**9),
                             type=std_line_type,
                             kind='cable',
                             quantity=1,
                             length=line_length / 1e3,
-                            grid=network.mv_grid)
+                            grid=edisgo_obj.network.mv_grid)
 
-                network.mv_grid.graph.add_edge(network.mv_grid.station,
-                                               geno,
-                                               line=line,
-                                               type='line')
+                edisgo_obj.network.mv_grid.graph.add_edge(edisgo_obj.network.mv_grid.station,
+                                                  geno,
+                                                  line=line,
+                                                  type='line')
 
                 # add line to equipment changes to track costs
-                _add_cable_to_equipment_changes(network=network,
+                _add_cable_to_equipment_changes(network=edisgo_obj,
                                                 line=line)
 
             # ===== voltage level 5: generator has to be connected to MV grid (next-neighbor) =====
             elif geno.v_level == 5:
 
                 # get branches within a the predefined radius `generator_buffer_radius`
-                branches = calc_geo_lines_in_buffer(network=network,
+                branches = calc_geo_lines_in_buffer(network=edisgo_obj,
                                                     node=geno,
-                                                    grid=network.mv_grid,
+                                                    grid=edisgo_obj.mv_grid,
                                                     radius=buffer_radius,
                                                     radius_inc=buffer_radius_inc)
 
                 # calc distance between generator and grid's lines -> find nearest line
-                conn_objects_min_stack = _find_nearest_conn_objects(network=network,
+                conn_objects_min_stack = _find_nearest_conn_objects(network=edisgo_obj,
                                                                     node=geno,
                                                                     branches=branches)
 
@@ -101,7 +101,7 @@ def connect_mv_generators(network):
                 # go through the stack (from nearest to most far connection target object)
                 generator_connected = False
                 for dist_min_obj in conn_objects_min_stack:
-                    target_obj_result = _connect_mv_node(network=network,
+                    target_obj_result = _connect_mv_node(network=edisgo_obj,
                                                          node=geno,
                                                          target_obj=dist_min_obj)
 

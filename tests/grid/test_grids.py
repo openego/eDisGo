@@ -1,8 +1,7 @@
 import os
-import numpy as np
 import pandas as pd
 
-from edisgo.grid.network import Network, TimeSeriesControl
+from edisgo.grid.network import Network, TimeSeriesControl, TimeSeries, Config
 from edisgo.data import import_data
 from edisgo.grid.components import Generator, Load, Switch
 from edisgo.grid.grids import LVGrid
@@ -16,7 +15,9 @@ class TestGrids:
         parent_dirname = os.path.dirname(os.path.dirname(__file__))
         test_network_directory = os.path.join(parent_dirname, 'test_network')
         self.network = Network()
-        import_data.import_ding0_grid(test_network_directory, self.network)
+        import_data.import_ding0_grid(test_network_directory, self)
+        self.timeseries = TimeSeries()
+        self.config = Config()
 
     def test_mv_grid(self):
         """Test MVGrid class getter, setter, methods"""
@@ -59,7 +60,7 @@ class TestGrids:
         assert mv_grid.peak_load_per_sector['retail'] == 0.31
 
     def test_mv_grid_to_pypsa(self):
-        TimeSeriesControl(network=self.network, mode='worst-case')
+        TimeSeriesControl(edisgo_obj=self, mode='worst-case')
         # run powerflow and check results
         timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
         pypsa_network = self.network.mv_grid.to_pypsa()
@@ -112,7 +113,7 @@ class TestGrids:
 
 
     def test_lv_grid_to_pypsa(self):
-        TimeSeriesControl(network=self.network, mode='worst-case')
+        TimeSeriesControl(edisgo_obj=self, mode='worst-case')
         # run powerflow and check results
         timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
         pypsa_network = self.network.mv_grid._lv_grids[0].to_pypsa()

@@ -126,8 +126,8 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
         else:
             return (0, 0)
 
-    cos_phi_load = mv_grid.network.config['reactive_power_factor']['mv_load']
-    cos_phi_gen = mv_grid.network.config['reactive_power_factor']['mv_gen']
+    cos_phi_load = mv_grid.edisgo_obj.config['reactive_power_factor']['mv_load']
+    cos_phi_gen = mv_grid.edisgo_obj.config['reactive_power_factor']['mv_gen']
 
     # Identify position of switch disconnector (SD)
     rings = nx.algorithms.cycle_basis(mv_grid.graph, root=mv_grid.station)
@@ -276,7 +276,7 @@ def implement_switch_disconnector(mv_grid, node1, node2):
         disconnecting_point, node1)
 
 
-def select_cable(network, level, apparent_power):
+def select_cable(edisgo_obj, level, apparent_power):
     """Selects an appropriate cable type and quantity using given apparent
     power.
 
@@ -284,7 +284,7 @@ def select_cable(network, level, apparent_power):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    edisgo_obj : :class:`~.grid.network.Network`
         The eDisGo container object
     level : :obj:`str`
         Grid level ('mv' or 'lv')
@@ -309,20 +309,20 @@ def select_cable(network, level, apparent_power):
 
     if level == 'mv':
 
-        available_cables = network.equipment_data['mv_cables'][
-            network.equipment_data['mv_cables']['U_n'] ==
-            network.mv_grid.voltage_nom]
+        available_cables = edisgo_obj.equipment_data['mv_cables'][
+            edisgo_obj.equipment_data['mv_cables']['U_n'] ==
+            edisgo_obj.network.mv_grid.voltage_nom]
 
         suitable_cables = available_cables[
             available_cables['I_max_th'] *
-            network.mv_grid.voltage_nom > apparent_power]
+            edisgo_obj.network.mv_grid.voltage_nom > apparent_power]
 
         # increase cable count until appropriate cable type is found
         while suitable_cables.empty and cable_count < 20:
             cable_count += 1
             suitable_cables = available_cables[
                 available_cables['I_max_th'] *
-                network.mv_grid.voltage_nom *
+                edisgo_obj.network.mv_grid.voltage_nom *
                 cable_count > apparent_power]
         if suitable_cables.empty and cable_count == 20:
             raise exceptions.MaximumIterationError(
@@ -333,16 +333,16 @@ def select_cable(network, level, apparent_power):
 
     elif level == 'lv':
 
-        suitable_cables = network.equipment_data['lv_cables'][
-            network.equipment_data['lv_cables']['I_max_th'] *
-            network.equipment_data['lv_cables']['U_n'] > apparent_power]
+        suitable_cables = edisgo_obj.equipment_data['lv_cables'][
+            edisgo_obj.equipment_data['lv_cables']['I_max_th'] *
+            edisgo_obj.equipment_data['lv_cables']['U_n'] > apparent_power]
 
         # increase cable count until appropriate cable type is found
         while suitable_cables.empty and cable_count < 20:
             cable_count += 1
-            suitable_cables = network.equipment_data['lv_cables'][
-                network.equipment_data['lv_cables']['I_max_th'] *
-                network.equipment_data['lv_cables']['U_n'] *
+            suitable_cables = edisgo_obj.equipment_data['lv_cables'][
+                edisgo_obj.equipment_data['lv_cables']['I_max_th'] *
+                edisgo_obj.equipment_data['lv_cables']['U_n'] *
                 cable_count > apparent_power]
         if suitable_cables.empty and cable_count == 20:
             raise exceptions.MaximumIterationError(
