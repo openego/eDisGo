@@ -29,7 +29,7 @@ class TestComponents:
         assert load.annual_consumption == 238
         assert load.sector == 'agricultural'
         assert load.bus == 'Bus_Load_agricultural_LVGrid_1_1'
-        assert load.grid == self.edisgo_obj.network._grids['LVGrid_1']
+        assert load.grid == self.edisgo_obj.topology._grids['LVGrid_1']
         assert load.voltage_level == 'lv'
         assert load.geom == None
         #ToDo add test for active_power_timeseries and reactive_power_timeseries once implemented
@@ -43,7 +43,7 @@ class TestComponents:
         assert load.sector == 'residential'
         load.bus = 'Bus_BranchTee_MVGrid_1_1'
         assert load.bus == 'Bus_BranchTee_MVGrid_1_1'
-        assert load.grid == self.edisgo_obj.network.mv_grid
+        assert load.grid == self.edisgo_obj.topology.mv_grid
         assert load.voltage_level == 'mv'
         msg = "Given bus ID does not exist."
         with pytest.raises(AttributeError, match=msg):
@@ -58,7 +58,7 @@ class TestComponents:
         # test getter
         assert gen.id == 'GeneratorFluctuating_7'
         assert gen.bus == 'Bus_GeneratorFluctuating_7'
-        assert gen.grid == self.edisgo_obj.network.mv_grid
+        assert gen.grid == self.edisgo_obj.topology.mv_grid
         assert gen.voltage_level == 'mv'
         assert pytest.approx(gen.geom.x, abs=1e-10) == 7.97127568152858
         assert pytest.approx(gen.geom.y, abs=1e-10) == 48.0666552118727
@@ -79,7 +79,7 @@ class TestComponents:
         assert gen.weather_cell_id == 2
         gen.bus = 'Bus_GeneratorFluctuating_9'
         assert gen.bus == 'Bus_GeneratorFluctuating_9'
-        assert gen.grid == self.edisgo_obj.network._grids['LVGrid_1']
+        assert gen.grid == self.edisgo_obj.topology._grids['LVGrid_1']
         assert gen.voltage_level == 'lv'
         msg = "Given bus ID does not exist."
         with pytest.raises(AttributeError, match=msg):
@@ -98,7 +98,7 @@ class TestComponents:
         assert switch.branch == 'Line_10031'
         assert switch.type == 'Switch Disconnector'
         assert switch.state == 'open'
-        assert switch.grid == self.edisgo_obj.network.mv_grid
+        assert switch.grid == self.edisgo_obj.topology.mv_grid
         assert switch.voltage_level == 'mv'
 
         # test setter

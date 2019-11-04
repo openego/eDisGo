@@ -284,7 +284,7 @@ def select_cable(edisgo_obj, level, apparent_power):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.network.network.Network`
+    edisgo_obj : :class:`~.network.topology.Topology`
         The eDisGo container object
     level : :obj:`str`
         Grid level ('mv' or 'lv')
@@ -311,18 +311,18 @@ def select_cable(edisgo_obj, level, apparent_power):
 
         available_cables = edisgo_obj.equipment_data['mv_cables'][
             edisgo_obj.equipment_data['mv_cables']['U_n'] ==
-            edisgo_obj.network.mv_grid.voltage_nom]
+            edisgo_obj.topology.mv_grid.voltage_nom]
 
         suitable_cables = available_cables[
             available_cables['I_max_th'] *
-            edisgo_obj.network.mv_grid.voltage_nom > apparent_power]
+            edisgo_obj.topology.mv_grid.voltage_nom > apparent_power]
 
         # increase cable count until appropriate cable type is found
         while suitable_cables.empty and cable_count < 20:
             cable_count += 1
             suitable_cables = available_cables[
                 available_cables['I_max_th'] *
-                edisgo_obj.network.mv_grid.voltage_nom *
+                edisgo_obj.topology.mv_grid.voltage_nom *
                 cable_count > apparent_power]
         if suitable_cables.empty and cable_count == 20:
             raise exceptions.MaximumIterationError(
@@ -363,8 +363,8 @@ def get_gen_info(network, level='mvlv', fluctuating=False):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
-        Network object holding the network data.
+    network : :class:`~.network.topology.Topology`
+        Topology object holding the topology data.
     level : :obj:`str`
         Defines which generators are returned. Possible options are:
 

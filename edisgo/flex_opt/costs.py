@@ -11,22 +11,22 @@ from edisgo.network.tools import get_mv_feeder_from_line
 
 def grid_expansion_costs(network, without_generator_import=False, mode=None):
     """
-    Calculates network expansion costs for each reinforced transformer and line
+    Calculates topology expansion costs for each reinforced transformer and line
     in kEUR.
 
     Attributes
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
     without_generator_import : Boolean
         If True excludes lines that were added in the generator import to
-        connect new generators to the network from calculation of network expansion
+        connect new generators to the topology from calculation of topology expansion
         costs. Default: False.
     mode : :obj:`str`
-        Specifies network levels reinforcement was conducted for to only return
-        costs in the considered network level. Specify
+        Specifies topology levels reinforcement was conducted for to only return
+        costs in the considered topology level. Specify
 
-        * None to return costs in MV and LV network levels. None is the default.
-        * 'mv' to return costs of MV network level only, including MV/LV stations.
+        * None to return costs in MV and LV topology levels. None is the default.
+        * 'mv' to return costs of MV topology level only, including MV/LV stations.
           Costs to connect LV generators are excluded as well.
 
     Returns

@@ -57,8 +57,8 @@ def to_pypsa(grid_object, mode, timesteps):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
-        eDisGo network container
+    topology : :class:`~.network.topology.Topology`
+        eDisGo topology container
     mode : str
         Determines network levels that are translated to
         `PyPSA network representation
@@ -96,19 +96,19 @@ def to_pypsa(grid_object, mode, timesteps):
     # get topology and time series data
     if mode is None:
         edisgo_obj = grid_object
-        buses_df = edisgo_obj.network.buses_df.loc[:, ['v_nom']]
-        buses = edisgo_obj.network.buses_df.index
+        buses_df = edisgo_obj.topology.buses_df.loc[:, ['v_nom']]
+        buses = edisgo_obj.topology.buses_df.index
 
         # loads generators buses storages lines transformers
         #ToDo change getting generators once slack is separate dataframe
         components = {
-            'Load': edisgo_obj.network.loads_df.loc[:, ['bus', 'peak_load']].rename(
+            'Load': edisgo_obj.topology.loads_df.loc[:, ['bus', 'peak_load']].rename(
                 columns={'peak_load':'p_set'}
             ),
-            'Generator': edisgo_obj.network._generators_df.loc[:, ['bus', 'control', 'p_nom']],
-            'StorageUnit': edisgo_obj.network.storages_df.loc[:, ['bus', 'control']],
-            'Line': edisgo_obj.network.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
-            'Transformer': edisgo_obj.network.transformers_df.loc[
+            'Generator': edisgo_obj.topology._generators_df.loc[:, ['bus', 'control', 'p_nom']],
+            'StorageUnit': edisgo_obj.topology.storages_df.loc[:, ['bus', 'control']],
+            'Line': edisgo_obj.topology.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
+            'Transformer': edisgo_obj.topology.transformers_df.loc[
                            :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type', 's_nom']].rename(
                 columns={'r_pu': 'r', 'x_pu': 'x'})
         }
@@ -131,7 +131,7 @@ def to_pypsa(grid_object, mode, timesteps):
                 columns={'peak_load': 'p_set'}
             ),
                 'Generator': grid.generators_df.loc[:, ['bus', 'control', 'p_nom']].append(
-                    grid.edisgo_obj.network._generators_df.loc['Generator_slack',
+                    grid.edisgo_obj.topology._generators_df.loc['Generator_slack',
                                                     ['bus', 'control', 'p_nom']]), # Todo: change when slack is dataframe
                 'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
                 'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
@@ -163,11 +163,11 @@ def to_pypsa(grid_object, mode, timesteps):
                 'Load': grid.loads_df.loc[:, ['bus', 'peak_load']].rename(
                 columns={'peak_load':'p_set'}),
                 'Generator': grid.generators_df.loc[:, ['bus', 'control', 'p_nom']].append(
-                    grid.edisgo_obj.network._generators_df.loc['Generator_slack',
+                    grid.edisgo_obj.topology._generators_df.loc['Generator_slack',
                                                     ['bus', 'control', 'p_nom']]), # Todo: change when slack is dataframe
                 'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
                 'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
-                'Transformer': edisgo_obj.network.transformers_df.loc[
+                'Transformer': edisgo_obj.topology.transformers_df.loc[
                                :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type',
                                    's_nom']].rename(
                     columns={'r_pu': 'r', 'x_pu': 'x'})
@@ -312,8 +312,8 @@ def _buses_voltage_set_point(edisgo_obj, buses, timesteps):
 
     Parameters
     ----------
-    network : Network
-        The eDisGo network topology model overall container
+    topology : Topology
+        The eDisGo topology topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
@@ -328,8 +328,8 @@ def _buses_voltage_set_point(edisgo_obj, buses, timesteps):
     """
 
     # get slack bus label
-    #ToDo change once slack is property in network
-    slack_bus = edisgo_obj.network._generators_df.at['Generator_slack', 'bus'] # Todo: change to at['Slack', 'control']
+    #ToDo change once slack is property in topology
+    slack_bus = edisgo_obj.topology._generators_df.at['Generator_slack', 'bus'] # Todo: change to at['Slack', 'control']
 
     # set all buses to nominal voltage
     v_nom = pd.DataFrame(1, columns=buses, index=timesteps)
@@ -366,8 +366,8 @@ def add_aggregated_lv_components(network, components):
 
     Parameters
     ----------
-    network : Network
-        The eDisGo network topology model overall container
+    network : Topology
+        The eDisGo topology topology model overall container
     components : dict of :pandas:`pandas.DataFrame<dataframe>`
         PyPSA components in tabular format
 
@@ -461,8 +461,8 @@ def _pypsa_bus_timeseries(network, buses, timesteps):
 
     Parameters
     ----------
-    network : Network
-        The eDisGo network topology model overall container
+    network : Topology
+        The eDisGo topology topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
@@ -511,12 +511,12 @@ def _pypsa_bus_timeseries(network, buses, timesteps):
 
 def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
     """
-    Aggregates generator time series per generator subtype and LV network.
+    Aggregates generator time series per generator subtype and LV topology.
 
     Parameters
     ----------
-    network : Network
-        The eDisGo network topology model overall container
+    network : Topology
+        The eDisGo topology topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
@@ -573,12 +573,12 @@ def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
 
 def _pypsa_load_timeseries_aggregated_at_lv_station(network, timesteps):
     """
-    Aggregates load time series per sector and LV network.
+    Aggregates load time series per sector and LV topology.
 
     Parameters
     ----------
-    network : Network
-        The eDisGo network topology model overall container
+    network : Topology
+        The eDisGo topology topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
@@ -789,14 +789,14 @@ def _check_integrity_of_pypsa(pypsa_network):
 def process_pfa_results(edisgo, pypsa, timesteps):
     """
     Assing values from PyPSA to
-    :meth:`results <edisgo.network.network.Network.results>`
+    :meth:`results <edisgo.network.topology.Topology.results>`
 
     Parameters
     ----------
-    edisgo : Network
-        The eDisGo network topology model overall container
-    pypsa : :pypsa:`pypsa.Network<network>`
-        The PyPSA `Network container
+    edisgo : Topology
+        The eDisGo topology topology model overall container
+    pypsa : :pypsa:`pypsa.Topology<topology>`
+        The PyPSA `Topology container
         <https://www.pypsa.org/doc/components.html#network>`_
     timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
         Time steps for which latest power flow analysis was conducted for and

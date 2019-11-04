@@ -56,7 +56,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         Maximum number of times each while loop is conducted.
     combined_analysis : :obj:`Boolean`
         If True allowed voltage deviations for combined analysis of MV and LV
-        network are used. If False different allowed voltage deviations for MV
+        topology are used. If False different allowed voltage deviations for MV
         and LV are used. See also config section
         `grid_expansion_allowed_voltage_deviations`. If `mode` is set to 'mv'
         `combined_analysis` should be False. Default: False.
@@ -117,7 +117,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # assign MV feeder to every generator, LV station, load, and branch tee
     # to assign network expansion costs to an MV feeder
     # Todo: Necessary? If so change
-    #assign_mv_feeder_to_nodes(edisgo.network.mv_grid)
+    #assign_mv_feeder_to_nodes(edisgo.topology.mv_grid)
 
     # analyze for all time steps (advantage is that load and feed-in case can
     # be obtained more performant in case `timesteps_pfa` = 'snapshot_analysis'
@@ -243,8 +243,8 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # REINFORCE BRANCHES DUE TO VOLTAGE ISSUES
     iteration_step += 1
 
-    # solve voltage problems in MV network
-    logger.debug('==> Check voltage in MV network.')
+    # solve voltage problems in MV topology
+    logger.debug('==> Check voltage in MV topology.')
     if combined_analysis:
         voltage_levels = 'mv_lv'
     else:
@@ -271,7 +271,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                 edisgo_reinforce.network.results.equipment_changes.
                     iteration_step == iteration_step])
         edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
-        logger.debug('==> Recheck voltage in MV network.')
+        logger.debug('==> Recheck voltage in MV topology.')
         crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce.network,
                                                  voltage_levels=voltage_levels)
 
@@ -286,10 +286,10 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                 edisgo_reinforce.network.results.unresolved_issues.update(
                     {repr(node): v.loc[node, 'v_mag_pu']})
         raise exceptions.MaximumIterationError(
-            "Over-voltage issues for the following nodes in MV network could "
+            "Over-voltage issues for the following nodes in MV topology could "
             "not be solved: {}".format(crit_nodes))
     else:
-        logger.info('==> Voltage issues in MV network were solved in {} '
+        logger.info('==> Voltage issues in MV topology were solved in {} '
                     'iteration step(s).'.format(while_counter))
 
     # solve voltage problems at secondary side of LV stations
@@ -350,7 +350,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
 
         while_counter = 0
         while crit_nodes and while_counter < max_while_iterations:
-            # for every network in crit_nodes do reinforcement
+            # for every topology in crit_nodes do reinforcement
             for grid in crit_nodes:
                 # reinforce lines
                 lines_changes = \
@@ -474,7 +474,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # final check 10% criteria
     checks.check_ten_percent_voltage_deviation(edisgo_reinforce.network)
 
-    # calculate network expansion costs
+    # calculate topology expansion costs
     edisgo_reinforce.network.results.grid_expansion_costs = \
         grid_expansion_costs(edisgo_reinforce.network, mode=mode)
 

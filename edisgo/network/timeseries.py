@@ -355,7 +355,7 @@ class TimeSeriesControl:
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo data container
     mode : :obj:`str`, optional
         Mode must be set in case of worst-case analyses and can either be
@@ -460,7 +460,7 @@ class TimeSeriesControl:
 
         else:
             config_data = edisgo_obj.config
-            weather_cell_ids = edisgo_obj.network.mv_grid.weather_cells
+            weather_cell_ids = edisgo_obj.topology.mv_grid.weather_cells
             # feed-in time series of fluctuating renewables
             ts = kwargs.get('timeseries_generation_fluctuating', None)
             if isinstance(ts, pd.DataFrame):
@@ -533,7 +533,7 @@ class TimeSeriesControl:
 
         """
 
-        gens_df = self.edisgo_obj.network.generators_df.loc[:, ['bus', 'type', 'p_nom']]
+        gens_df = self.edisgo_obj.topology.generators_df.loc[:, ['bus', 'type', 'p_nom']]
 
         # check that all generators have bus, type, nominal power
         check_gens = gens_df.isnull().any(axis=1)
@@ -545,7 +545,7 @@ class TimeSeriesControl:
 
         # assign voltage level to generators
         gens_df['voltage_level'] = gens_df.apply(
-            lambda _: 'lv' if self.edisgo_obj.network.buses_df.at[_.bus, 'v_nom'] < 1
+            lambda _: 'lv' if self.edisgo_obj.topology.buses_df.at[_.bus, 'v_nom'] < 1
             else 'mv', axis=1)
 
         # active power
@@ -571,21 +571,21 @@ class TimeSeriesControl:
             gen_ts[cols] = pd.concat(
                 [worst_case_ts.loc[:, ['solar']]] * len(cols), axis=1)
         # assign normalized active power time series to other generators
-        cols = gen_ts[self.edisgo_obj.network.generators_df.index[
-            self.edisgo_obj.network.generators_df.type != 'solar']].columns
+        cols = gen_ts[self.edisgo_obj.topology.generators_df.index[
+            self.edisgo_obj.topology.generators_df.type != 'solar']].columns
         if len(cols)>0:
             gen_ts[cols] = pd.concat(
                 [worst_case_ts.loc[:, ['other']]] * len(cols), axis=1)
 
         # multiply normalized time series by nominal power of generator
         self.edisgo_obj.timeseries.generators_active_power = gen_ts.mul(
-            self.edisgo_obj.network.generators_df.p_nom)
+            self.edisgo_obj.topology.generators_df.p_nom)
 
         # reactive power
         # write dataframes with sign of reactive power and power factor
         # for each generator
-        q_sign = pd.Series(index=self.edisgo_obj.network.generators_df.index)
-        power_factor = pd.Series(index=self.edisgo_obj.network.generators_df.index)
+        q_sign = pd.Series(index=self.edisgo_obj.topology.generators_df.index)
+        power_factor = pd.Series(index=self.edisgo_obj.topology.generators_df.index)
         for voltage_level in ['mv', 'lv']:
             cols = gens_df.index[gens_df.voltage_level == voltage_level]
             if len(cols) > 0:
@@ -623,7 +623,7 @@ class TimeSeriesControl:
         sectors = ['residential', 'retail', 'industrial', 'agricultural']
         voltage_levels = ['mv', 'lv']
 
-        loads_df = self.edisgo_obj.network.loads_df.loc[
+        loads_df = self.edisgo_obj.topology.loads_df.loc[
                    :, ['bus', 'sector', 'annual_consumption']]
 
         # check that all loads have bus, sector, annual consumption
@@ -636,7 +636,7 @@ class TimeSeriesControl:
 
         # assign voltage level to loads
         loads_df['voltage_level'] = loads_df.apply(
-            lambda _: 'lv' if self.edisgo_obj.network.buses_df.at[_.bus, 'v_nom'] < 1
+            lambda _: 'lv' if self.edisgo_obj.topology.buses_df.at[_.bus, 'v_nom'] < 1
             else 'mv', axis=1)
 
         # active power
@@ -681,8 +681,8 @@ class TimeSeriesControl:
 
         # write dataframes with sign of reactive power and power factor
         # for each load
-        q_sign = pd.Series(index=self.edisgo_obj.network.loads_df.index)
-        power_factor = pd.Series(index=self.edisgo_obj.network.loads_df.index)
+        q_sign = pd.Series(index=self.edisgo_obj.topology.loads_df.index)
+        power_factor = pd.Series(index=self.edisgo_obj.topology.loads_df.index)
         for voltage_level in voltage_levels:
             cols = loads_df.index[loads_df.voltage_level == voltage_level]
             if len(cols) > 0:
@@ -896,11 +896,11 @@ class TimeSeriesControl:
     #
     #     """
     #     if self._power_factor is None:
-    #         if isinstance(self.network, MVGrid):
-    #             self._power_factor = self.network.network.config[
+    #         if isinstance(self.topology, MVGrid):
+    #             self._power_factor = self.topology.topology.config[
     #                 'reactive_power_factor']['mv_gen']
-    #         elif isinstance(self.network, LVGrid):
-    #             self._power_factor = self.network.network.config[
+    #         elif isinstance(self.topology, LVGrid):
+    #             self._power_factor = self.topology.topology.config[
     #                 'reactive_power_factor']['lv_gen']
     #     return self._power_factor
 
@@ -924,9 +924,9 @@ class TimeSeriesControl:
     #     """
     #     if self._timeseries is None:
     #
-    #         if isinstance(self.network, MVGrid):
+    #         if isinstance(self.topology, MVGrid):
     #             voltage_level = 'mv'
-    #         elif isinstance(self.network, LVGrid):
+    #         elif isinstance(self.topology, LVGrid):
     #             voltage_level = 'lv'
     #
     #         ts_total = None
@@ -1045,11 +1045,11 @@ class TimeSeriesControl:
     #
     #     """
     #     if self._power_factor is None:
-    #         if isinstance(self.network, MVGrid):
-    #             self._power_factor = self.network.network.config[
+    #         if isinstance(self.topology, MVGrid):
+    #             self._power_factor = self.topology.topology.config[
     #                 'reactive_power_factor']['mv_load']
-    #         elif isinstance(self.network, LVGrid):
-    #             self._power_factor = self.network.network.config[
+    #         elif isinstance(self.topology, LVGrid):
+    #             self._power_factor = self.topology.topology.config[
     #                 'reactive_power_factor']['lv_load']
     #     return self._power_factor
 

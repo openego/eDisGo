@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 
-from edisgo.network.network import Network
+from edisgo.network.topology import Topology
 from edisgo.network.timeseries import TimeSeriesControl, TimeSeries
 from edisgo.data import import_data
 from edisgo.network.components import Generator, Load, Switch
@@ -16,7 +16,7 @@ class TestGrids:
         """Setup default values"""
         parent_dirname = os.path.dirname(os.path.dirname(__file__))
         test_network_directory = os.path.join(parent_dirname, 'test_network')
-        self.network = Network()
+        self.topology = Topology()
         import_data.import_ding0_grid(test_network_directory, self)
         self.timeseries = TimeSeries()
         self.config = Config()
@@ -24,7 +24,7 @@ class TestGrids:
     def test_mv_grid(self):
         """Test MVGrid class getter, setter, methods"""
 
-        mv_grid = self.network.mv_grid
+        mv_grid = self.topology.mv_grid
 
         # test getter
         assert mv_grid.id == 1
@@ -65,7 +65,7 @@ class TestGrids:
         TimeSeriesControl(edisgo_obj=self, mode='worst-case')
         # run powerflow and check results
         timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
-        pypsa_network = self.network.mv_grid.to_pypsa()
+        pypsa_network = self.topology.mv_grid.to_pypsa()
         pf_results = pypsa_network.pf(timesteps)
 
         if all(pf_results['converged']['0'].tolist()):
@@ -73,7 +73,7 @@ class TestGrids:
         else:
             raise ValueError("Power flow analysis mv did not converge.")
 
-        pypsa_network = self.network.mv_grid.to_pypsa(mode='mvlv')
+        pypsa_network = self.topology.mv_grid.to_pypsa(mode='mvlv')
         pf_results = pypsa_network.pf(timesteps)
 
         if all(pf_results['converged']['0'].tolist()):
@@ -84,7 +84,7 @@ class TestGrids:
 
     def test_lv_grid(self):
         """Test LVGrid class getter, setter, methods"""
-        lv_grid = [_ for _ in self.network.mv_grid.lv_grids if _.id == 3][0]
+        lv_grid = [_ for _ in self.topology.mv_grid.lv_grids if _.id == 3][0]
 
         assert isinstance(lv_grid, LVGrid)
         assert lv_grid.id == 3
@@ -118,7 +118,7 @@ class TestGrids:
         TimeSeriesControl(edisgo_obj=self, mode='worst-case')
         # run powerflow and check results
         timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
-        pypsa_network = self.network.mv_grid._lv_grids[0].to_pypsa()
+        pypsa_network = self.topology.mv_grid._lv_grids[0].to_pypsa()
         pf_results = pypsa_network.pf(timesteps)
 
         if all(pf_results['converged']['0'].tolist()):

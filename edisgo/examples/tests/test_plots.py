@@ -7,7 +7,7 @@ ding0_grid = 'ding0_grids__58.pkl'
 
 def create_pypsa_test_network(ding0_grid):
     """
-    Creates test csv data to use for EDisGoReimport class for given ding0 network
+    Creates test csv data to use for EDisGoReimport class for given ding0 topology
     with power flow results for worst cases and saves it into directory
     'test_results'.
 
@@ -15,7 +15,7 @@ def create_pypsa_test_network(ding0_grid):
     edisgo = EDisGo(ding0_grid=ding0_grid,
                     worst_case_analysis='worst-case')
     edisgo.analyze()
-    edisgo.network.results.save('test_results')
+    edisgo.topology.results.save('test_results')
 
 
 def test_histogram_line_load():
@@ -31,15 +31,15 @@ def test_histogram_line_load():
 
     # single timestep
     edisgo.histogram_relative_line_load(
-        timestep=edisgo.network.results.i_res.index[0])
+        timestep=edisgo.topology.results.i_res.index[0])
 
     # single timestep as list
     edisgo.histogram_relative_line_load(
-        timestep=[edisgo.network.results.i_res.index[0]])
+        timestep=[edisgo.topology.results.i_res.index[0]])
 
     # voltage level mv
     edisgo.histogram_relative_line_load(
-        timestep=[edisgo.network.results.i_res.index[0]], voltage_level='mv')
+        timestep=[edisgo.topology.results.i_res.index[0]], voltage_level='mv')
 
 
 def test_histogram_voltage():
@@ -55,11 +55,11 @@ def test_histogram_voltage():
 
     # single timestep
     edisgo.histogram_voltage(
-        timestep=edisgo.network.results.v_res().index[0])
+        timestep=edisgo.topology.results.v_res().index[0])
 
     # single timestep as list
     edisgo.histogram_voltage(
-        timestep=[edisgo.network.results.v_res().index[0]])
+        timestep=[edisgo.topology.results.v_res().index[0]])
 
 
 def test_mv_line_loading_plot():
@@ -76,30 +76,30 @@ def test_get_line_loading():
 
     # all time steps, all lines
     line_load = calculate_relative_line_load(
-        edisgo.network.pypsa, edisgo.network.config,
-        edisgo.network.results.i_res, edisgo.network.pypsa.lines.v_nom)
+        edisgo.topology.pypsa, edisgo.topology.config,
+        edisgo.topology.results.i_res, edisgo.topology.pypsa.lines.v_nom)
     print(line_load.shape)
 
     # single time step, all lines
     line_load = calculate_relative_line_load(
-        edisgo.network.pypsa, edisgo.network.config,
-        edisgo.network.results.i_res, edisgo.network.pypsa.lines.v_nom,
-        timesteps=edisgo.network.results.i_res.index[0])
+        edisgo.topology.pypsa, edisgo.topology.config,
+        edisgo.topology.results.i_res, edisgo.topology.pypsa.lines.v_nom,
+        timesteps=edisgo.topology.results.i_res.index[0])
     print(line_load.shape)
 
     # single time step, all lines
     line_load = calculate_relative_line_load(
-        edisgo.network.pypsa, edisgo.network.config,
-        edisgo.network.results.i_res, edisgo.network.pypsa.lines.v_nom,
-        timesteps=[edisgo.network.results.i_res.index[0]])
+        edisgo.topology.pypsa, edisgo.topology.config,
+        edisgo.topology.results.i_res, edisgo.topology.pypsa.lines.v_nom,
+        timesteps=[edisgo.topology.results.i_res.index[0]])
     print(line_load.shape)
 
     # single time step, selection of lines
     line_load = calculate_relative_line_load(
-        edisgo.network.pypsa, edisgo.network.config,
-        edisgo.network.results.i_res, edisgo.network.pypsa.lines.v_nom,
-        timesteps=[edisgo.network.results.i_res.index[0]],
-        lines=edisgo.network.pypsa.lines.index[0:2])
+        edisgo.topology.pypsa, edisgo.topology.config,
+        edisgo.topology.results.i_res, edisgo.topology.pypsa.lines.v_nom,
+        timesteps=[edisgo.topology.results.i_res.index[0]],
+        lines=edisgo.topology.pypsa.lines.index[0:2])
     print(line_load.shape)
 
 

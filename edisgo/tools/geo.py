@@ -17,7 +17,7 @@ def proj2equidistant(network):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
 
     Returns
@@ -39,7 +39,7 @@ def proj2conformal(network):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
 
     Returns
@@ -62,7 +62,7 @@ def calc_geo_lines_in_buffer(network, node, grid, radius, radius_inc):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
     node : :class:`~.network.components.Component`
         Origin node the buffer is created around (e.g. :class:`~.network.components.Generator`).
@@ -107,7 +107,7 @@ def calc_geo_dist_vincenty(network, node_source, node_target):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
     node_source : :class:`~.network.components.Component`
         Node to connect (e.g. :class:`~.network.components.Generator`)

@@ -21,7 +21,7 @@ def extend_distribution_substation_overloading(network, critical_stations):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
     critical_stations : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing over-loaded MV/LV stations, their apparent power
         at maximal over-loading and the corresponding time step.
@@ -123,7 +123,7 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
     critical_stations : :obj:`dict`
         Dictionary with :class:`~.network.grids.LVGrid` as key and a
         :pandas:`pandas.DataFrame<dataframe>` with its critical station and
@@ -185,7 +185,7 @@ def extend_substation_overloading(network, critical_stations):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
     critical_stations : pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing over-loaded HV/MV stations, their apparent power
         at maximal over-loading and the corresponding time step.
@@ -283,7 +283,7 @@ def extend_substation_overloading(network, critical_stations):
 
 def reinforce_branches_overvoltage(network, grid, crit_nodes):
     """
-    Reinforce MV and LV network due to voltage issues.
+    Reinforce MV and LV topology due to voltage issues.
 
     Parameters
     ----------
@@ -456,7 +456,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                     crit_line.quantity = 1
                     lines_changes[crit_line] = 1
                     # add node_2_3 to representatives list to not further
-                    # reinforce this part off the network in this iteration step
+                    # reinforce this part off the topology in this iteration step
                     rep_main_line.append(node_2_3)
                     main_line_reinforced.append(node_2_3)
 
@@ -475,11 +475,11 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
 
 def reinforce_branches_overloading(network, crit_lines):
     """
-    Reinforce MV or LV network due to overloading.
+    Reinforce MV or LV topology due to overloading.
     
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
     crit_lines : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing over-loaded lines, their maximum relative
         over-loading and the corresponding time step.

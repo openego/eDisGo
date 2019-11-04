@@ -11,7 +11,7 @@ from edisgo.network.components import Generator, Load
 logger = logging.getLogger('edisgo')
 
 
-class Network:
+class Topology:
     """
     Used as container for all data related to a single
     :class:`~.network.grids.MVGrid`.

@@ -8,11 +8,11 @@ logger = logging.getLogger('edisgo')
 
 def mv_line_load(network):
     """
-    Checks for over-loading issues in MV network.
+    Checks for over-loading issues in MV topology.
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
 
     Returns
     -------
@@ -37,10 +37,10 @@ def mv_line_load(network):
     crit_lines = _line_load(network, network.mv_grid, crit_lines)
 
     if not crit_lines.empty:
-        logger.debug('==> {} line(s) in MV network has/have load issues.'.format(
+        logger.debug('==> {} line(s) in MV topology has/have load issues.'.format(
             crit_lines.shape[0]))
     else:
-        logger.debug('==> No line load issues in MV network.')
+        logger.debug('==> No line load issues in MV topology.')
 
     return crit_lines
 
@@ -51,7 +51,7 @@ def lv_line_load(network):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
 
     Returns
     -------
@@ -158,7 +158,7 @@ def hv_mv_station_load(edisgo):
 
     Parameters
     ----------
-    edisgo : :class:`~.network.network.Edisgo`
+    edisgo : :class:`~.topology.topology.Edisgo`
 
     Returns
     -------
@@ -195,7 +195,7 @@ def mv_lv_station_load(network):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
 
     Returns
     -------
@@ -270,7 +270,7 @@ def _station_load(edisgo, grid, crit_stations):
     elif isinstance(grid, MVGrid):
         grid_level = 'mv'
     else:
-        raise ValueError('Inserted network of unknown type.')
+        raise ValueError('Inserted topology of unknown type.')
 
     # maximum allowed apparent power of station for feed-in and load case
     s_station = sum([grid.transformers_df.loc[_,'s_nom'] for _ in grid.transformers_df.index])
@@ -318,21 +318,21 @@ def _station_load(edisgo, grid, crit_stations):
 
 def mv_voltage_deviation(network, voltage_levels='mv_lv'):
     """
-    Checks for voltage stability issues in MV network.
+    Checks for voltage stability issues in MV topology.
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
     voltage_levels : :obj:`str`
         Specifies which allowed voltage deviations to use. Possible options
         are:
 
         * 'mv_lv'
           This is the default. The allowed voltage deviation for nodes in the
-          MV network is the same as for nodes in the LV network. Further load and
+          MV topology is the same as for nodes in the LV topology. Further load and
           feed-in case are not distinguished.
         * 'mv'
-          Use this to handle allowed voltage deviations in the MV and LV network
+          Use this to handle allowed voltage deviations in the MV and LV topology
           differently. Here, load and feed-in case are differentiated as well.
 
     Returns
@@ -405,10 +405,10 @@ def mv_voltage_deviation(network, voltage_levels='mv_lv'):
         crit_nodes[network.mv_grid] = crit_nodes_grid.sort_values(
             by=['v_mag_pu'], ascending=False)
         logger.debug(
-            '==> {} node(s) in MV network has/have voltage issues.'.format(
+            '==> {} node(s) in MV topology has/have voltage issues.'.format(
                 crit_nodes[network.mv_grid].shape[0]))
     else:
-        logger.debug('==> No voltage issues in MV network.')
+        logger.debug('==> No voltage issues in MV topology.')
 
     return crit_nodes
 
@@ -419,9 +419,9 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
     mode : None or String
-        If None voltage at all nodes in LV network is checked. If mode is set to
+        If None voltage at all nodes in LV topology is checked. If mode is set to
         'stations' only voltage at busbar is checked.
     voltage_levels : :obj:`str`
         Specifies which allowed voltage deviations to use. Possible options
@@ -429,10 +429,10 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
 
         * 'mv_lv'
           This is the default. The allowed voltage deviation for nodes in the
-          MV network is the same as for nodes in the LV network. Further load and
+          MV topology is the same as for nodes in the LV topology. Further load and
           feed-in case are not distinguished.
         * 'lv'
-          Use this to handle allowed voltage deviations in the MV and LV network
+          Use this to handle allowed voltage deviations in the MV and LV topology
           differently. Here, load and feed-in case are differentiated as well.
 
     Returns
@@ -568,7 +568,7 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
                     len(crit_nodes)))
         else:
             logger.debug(
-                '==> {} LV network(s) has/have voltage issues.'.format(
+                '==> {} LV topology(s) has/have voltage issues.'.format(
                     len(crit_nodes)))
     else:
         if mode == 'stations':
@@ -585,7 +585,7 @@ def _voltage_deviation(network, nodes, v_dev_allowed_upper,
     Checks for voltage stability issues in LV grids.
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
     nodes : :obj:`list`
         List of nodes (of type :class:`~.network.components.Generator`,
         :class:`~.network.components.Load`, etc.) to check voltage deviation for.
@@ -663,7 +663,7 @@ def check_ten_percent_voltage_deviation(network):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
 
     """
 

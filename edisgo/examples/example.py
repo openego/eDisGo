@@ -5,8 +5,8 @@ This example shows the general usage of eDisGo. Grid expansion costs for
 distribution grids generated with ding0 are calculated assuming renewable
 and conventional power plant capacities as stated in the scenario framework of
 the German Grid Development Plan 2015 (Netzentwicklungsplan) for the year 2035
-(scenario B2). To determine network expansion needs worst-case scenarios (heavy
-load flow and reverse power flow) used in conventional network expansion planning
+(scenario B2). To determine topology expansion needs worst-case scenarios (heavy
+load flow and reverse power flow) used in conventional topology expansion planning
 are set up.
 
 The example assumes you have ding0 grids in the current working directory. If
@@ -14,9 +14,9 @@ you need more information on how to get ding0 grids see the ding0 documentation
 or the Quickstart section of the eDisGo documentation.
 
 As the grids generated with ding0 should represent current stable grids but
-have in some cases stability issues, network expansion is first conducted before
-connecting future generators in order to obtain stable grids. Final network
-expansion costs in the DataFrame 'costs' only contain network expansion costs
+have in some cases stability issues, topology expansion is first conducted before
+connecting future generators in order to obtain stable grids. Final topology
+expansion costs in the DataFrame 'costs' only contain topology expansion costs
 of measures conducted after future generators are connected to the stable
 grids.
 
@@ -27,7 +27,7 @@ import sys
 import pandas as pd
 
 from edisgo import EDisGo
-from edisgo.network.network import Results
+from edisgo.network.topology import Results
 from edisgo.flex_opt.exceptions import MaximumIterationError
 
 import logging
@@ -51,8 +51,8 @@ if __name__ == '__main__':
     scenario = 'nep2035'
 
     # initialize containers that will hold any error messages
-    faulty_grids_before_geno_import = {'network': [], 'msg': []}
-    faulty_grids = {'network': [], 'msg': []}
+    faulty_grids_before_geno_import = {'topology': [], 'msg': []}
+    faulty_grids = {'topology': [], 'msg': []}
 
     for dingo_grid in grids:
 
@@ -63,13 +63,13 @@ if __name__ == '__main__':
                         worst_case_analysis='worst-case')
 
         try:
-            # Calculate network expansion costs before generator import
+            # Calculate topology expansion costs before generator import
             logging.info('Grid expansion before generator import.')
             before_geno_import = True
 
             # overwrite config parameters for allowed voltage deviations in
-            # initial network reinforcement (status quo)
-            edisgo.network.config[
+            # initial topology reinforcement (status quo)
+            edisgo.topology.config[
                 'grid_expansion_allowed_voltage_deviations'] = {
                 'hv_mv_trafo_offset': 0.04,
                 'hv_mv_trafo_control_deviation': 0.0,
@@ -80,51 +80,51 @@ if __name__ == '__main__':
                 'mv_lv_station_load_case_max_v_deviation': 0.02,
                 'mv_lv_station_feedin_case_max_v_deviation': 0.01
             }
-            # Do network reinforcement
+            # Do topology reinforcement
             edisgo.reinforce()
             # Save results
-            edisgo.network.results.save(
+            edisgo.topology.results.save(
                 'results_grid_{}_before_generator_import'.format(
-                    edisgo.network.id))
+                    edisgo.topology.id))
 
             # Clear results and reset configs
-            edisgo.network.results = Results(edisgo.network)
-            edisgo.network.config = None
+            edisgo.topology.results = Results(edisgo.topology)
+            edisgo.topology.config = None
 
-            # Calculate network expansion costs after generator import
+            # Calculate topology expansion costs after generator import
             logging.info('Grid expansion after generator import.')
             before_geno_import = False
 
             # Import generators
             edisgo.import_generators(generator_scenario=scenario)
 
-            # Do network reinforcement
+            # Do topology reinforcement
             edisgo.reinforce()
             # Save results
-            edisgo.network.results.save('results_grid_{}'.format(
-                edisgo.network.id))
+            edisgo.topology.results.save('results_grid_{}'.format(
+                edisgo.topology.id))
 
             logging.info('SUCCESS!')
 
         except MaximumIterationError:
             if before_geno_import:
-                faulty_grids_before_geno_import['network'].append(
-                    edisgo.network.id)
+                faulty_grids_before_geno_import['topology'].append(
+                    edisgo.topology.id)
                 faulty_grids_before_geno_import['msg'].append(
-                    str(edisgo.network.results.unresolved_issues))
+                    str(edisgo.topology.results.unresolved_issues))
             else:
-                faulty_grids['network'].append(edisgo.network.id)
+                faulty_grids['topology'].append(edisgo.topology.id)
                 faulty_grids['msg'].append(
-                    str(edisgo.network.results.unresolved_issues))
-            logging.info('Unresolved issues left after network expansion.')
+                    str(edisgo.topology.results.unresolved_issues))
+            logging.info('Unresolved issues left after topology expansion.')
 
         except Exception as e:
             if before_geno_import:
-                faulty_grids_before_geno_import['network'].append(
-                    edisgo.network.id)
+                faulty_grids_before_geno_import['topology'].append(
+                    edisgo.topology.id)
                 faulty_grids_before_geno_import['msg'].append(repr(e))
             else:
-                faulty_grids['network'].append(edisgo.network.id)
+                faulty_grids['topology'].append(edisgo.topology.id)
                 faulty_grids['msg'].append(repr(e))
             logging.info('Something went wrong.')
 

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from edisgo.network.components import Generator, Load, Switch
-from edisgo.network import network
+from edisgo.network import topology
 from edisgo.tools import pypsa_io
 
 
@@ -13,8 +13,8 @@ class Grid(ABC):
     -----------
     _id : str or int
         Identifier
-    _network : :class:`~.network.network.Network`
-        Network container.
+    _network : :class:`~.network.topology.Topology`
+        Topology container.
 
     # ToDo add annual_consumption property?
 
@@ -74,7 +74,7 @@ class Grid(ABC):
             Dataframe that contains station bus. Format is the same as for
             buses_df.
         """
-        return self.edisgo_obj.network.buses_df.loc[
+        return self.edisgo_obj.topology.buses_df.loc[
             self.transformers_df.bus1.unique()
         ]
 
@@ -88,10 +88,10 @@ class Grid(ABC):
         :pandas:`pandas.DataFrame<dataframe>`
             Dataframe with all transformers to overlaying network. For more
             information on the dataframe see
-            :attr:`~.network.network.Network.transformers_df`.
+            :attr:`~.network.topology.Topology.transformers_df`.
         """
-        return self.edisgo_obj.network.transformers_df[
-            self.edisgo_obj.network.transformers_df.bus1.isin(self.buses_df.index)]
+        return self.edisgo_obj.topology.transformers_df[
+            self.edisgo_obj.topology.transformers_df.bus1.isin(self.buses_df.index)]
 
     @property
     def generators_df(self):
@@ -101,12 +101,12 @@ class Grid(ABC):
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all generators in network. For more information on the
-            dataframe see :attr:`~.network.network.Network.generators_df`.
+            Dataframe with all generators in topology. For more information on the
+            dataframe see :attr:`~.network.topology.Topology.generators_df`.
 
         """
-        return self.edisgo_obj.network.generators_df[
-            self.edisgo_obj.network.generators_df.bus.isin(self.buses_df.index)]
+        return self.edisgo_obj.topology.generators_df[
+            self.edisgo_obj.topology.generators_df.bus.isin(self.buses_df.index)]
 
     @property
     def generators(self):
@@ -130,12 +130,12 @@ class Grid(ABC):
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all loads in network. For more information on the
-            dataframe see :attr:`~.network.network.Network.loads_df`.
+            Dataframe with all loads in topology. For more information on the
+            dataframe see :attr:`~.network.topology.Topology.loads_df`.
 
         """
-        return self.edisgo_obj.network.loads_df[
-            self.edisgo_obj.network.loads_df.bus.isin(self.buses_df.index)]
+        return self.edisgo_obj.topology.loads_df[
+            self.edisgo_obj.topology.loads_df.bus.isin(self.buses_df.index)]
 
     @property
     def loads(self):
@@ -159,11 +159,11 @@ class Grid(ABC):
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all storages in network. For more information on the
-            dataframe see :attr:`~.network.network.Network.storages_df`.
+            Dataframe with all storages in topology. For more information on the
+            dataframe see :attr:`~.network.topology.Topology.storages_df`.
         """
-        return self.edisgo_obj.network.storages_df[
-            self.edisgo_obj.network.storages_df.bus.isin(self.buses_df.index)]
+        return self.edisgo_obj.topology.storages_df[
+            self.edisgo_obj.topology.storages_df.bus.isin(self.buses_df.index)]
 
     @property
     def switch_disconnectors_df(self):
@@ -178,12 +178,12 @@ class Grid(ABC):
         :pandas:`pandas.DataFrame<dataframe>`
             Dataframe with all switch disconnectors in network. For more
             information on the dataframe see
-            :attr:`~.network.network.Network.switches_df`.
+            :attr:`~.network.topology.Topology.switches_df`.
 
         """
-        return self.edisgo_obj.network.switches_df[
-            self.edisgo_obj.network.switches_df.bus_closed.isin(self.buses_df.index)][
-            self.edisgo_obj.network.switches_df.type_info=='Switch Disconnector']
+        return self.edisgo_obj.topology.switches_df[
+            self.edisgo_obj.topology.switches_df.bus_closed.isin(self.buses_df.index)][
+            self.edisgo_obj.topology.switches_df.type_info=='Switch Disconnector']
 
     @property
     def switch_disconnectors(self):
@@ -207,12 +207,12 @@ class Grid(ABC):
          Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all buses in network. For more information on the
-            dataframe see :attr:`~.network.network.Network.lines_df`.
+            Dataframe with all buses in topology. For more information on the
+            dataframe see :attr:`~.network.topology.Topology.lines_df`.
         """
-        return self.edisgo_obj.network.lines_df[
-            self.edisgo_obj.network.lines_df.bus0.isin(self.buses_df.index) &
-            self.edisgo_obj.network.lines_df.bus1.isin(self.buses_df.index)]
+        return self.edisgo_obj.topology.lines_df[
+            self.edisgo_obj.topology.lines_df.bus0.isin(self.buses_df.index) &
+            self.edisgo_obj.topology.lines_df.bus1.isin(self.buses_df.index)]
 
     @property
     @abstractmethod
@@ -223,8 +223,8 @@ class Grid(ABC):
          Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all buses in network. For more information on the
-            dataframe see :attr:`~.network.network.Network.buses_df`.
+            Dataframe with all buses in topology. For more information on the
+            dataframe see :attr:`~.network.topology.Topology.buses_df`.
 
         """
 
@@ -383,12 +383,12 @@ class MVGrid(Grid):
          Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all buses in network. For more information on the
-            dataframe see :attr:`~.network.network.Network.buses_df`.
+            Dataframe with all buses in topology. For more information on the
+            dataframe see :attr:`~.network.topology.Topology.buses_df`.
 
         """
-        return self.edisgo_obj.network.buses_df.drop(
-            self.edisgo_obj.network.buses_df.lv_grid_id.dropna().index)
+        return self.edisgo_obj.topology.buses_df.drop(
+            self.edisgo_obj.topology.buses_df.lv_grid_id.dropna().index)
 
     def draw(self):
         """
@@ -416,12 +416,12 @@ class LVGrid(Grid):
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all buses in network. For more information on the
-            dataframe see :attr:`~.network.network.Network.buses_df`.
+            Dataframe with all buses in topology. For more information on the
+            dataframe see :attr:`~.network.topology.Topology.buses_df`.
 
         """
-        return self.edisgo_obj.network.buses_df.loc[
-            self.edisgo_obj.network.buses_df.lv_grid_id == self.id]
+        return self.edisgo_obj.topology.buses_df.loc[
+            self.edisgo_obj.topology.buses_df.lv_grid_id == self.id]
 
     def draw(self):
         """

@@ -1,7 +1,7 @@
 """
 This "test" runs curtailment for different curtailment requirements and
 methods `voltage-based` and `feedin-proportional`.
-It requires a ding0 network called ding0_grid_example.pkl in the same directory.
+It requires a ding0 topology called ding0_grid_example.pkl in the same directory.
 
 """
 import pandas as pd

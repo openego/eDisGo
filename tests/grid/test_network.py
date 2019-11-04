@@ -4,7 +4,7 @@ from pandas.util.testing import assert_series_equal
 from math import tan, acos
 import pytest
 
-from edisgo.network.network import Network
+from edisgo.network.topology import Topology
 from edisgo.network.timeseries import TimeSeriesControl, TimeSeries
 from edisgo.tools.config import Config
 from edisgo.data import import_data
@@ -55,7 +55,7 @@ class TestTimeSeriesControl:
         """Setup default values"""
         parent_dirname = os.path.dirname(os.path.dirname(__file__))
         test_network_directory = os.path.join(parent_dirname, 'test_network')
-        self.network = Network()
+        self.topology = Topology()
         self.timeseries = TimeSeries()
         self.config = Config()
         import_data.import_ding0_grid(test_network_directory, self)
@@ -77,12 +77,12 @@ class TestTimeSeriesControl:
 
         # check shape
         number_of_timesteps = len(self.timeseries.timeindex)
-        number_of_cols = len(self.network.generators_df.index)
+        number_of_cols = len(self.topology.generators_df.index)
         assert self.timeseries.generators_active_power.shape == (
             number_of_timesteps, number_of_cols)
         assert self.timeseries.generators_reactive_power.shape == (
             number_of_timesteps, number_of_cols)
-        number_of_cols = len(self.network.loads_df.index)
+        number_of_cols = len(self.topology.loads_df.index)
         assert self.timeseries.loads_active_power.shape == (
             number_of_timesteps, number_of_cols)
         assert self.timeseries.loads_reactive_power.shape == (
@@ -188,16 +188,16 @@ class TestTimeSeriesControl:
         # test error raising in case of missing load/generator parameter
 
         gen = 'GeneratorFluctuating_14'
-        self.network._generators_df.at[gen, 'bus'] = None
+        self.topology._generators_df.at[gen, 'bus'] = None
         with pytest.raises(AttributeError, match=gen):
             ts_control._worst_case_generation(modes=None)
         gen = 'GeneratorFluctuating_24'
-        self.network._generators_df.at[gen, 'p_nom'] = None
+        self.topology._generators_df.at[gen, 'p_nom'] = None
         with pytest.raises(AttributeError, match=gen):
             ts_control._worst_case_generation(modes=None)
 
         load = 'Load_agricultural_LVGrid_1_1'
-        self.network._loads_df.at[load, 'annual_consumption'] = None
+        self.topology._loads_df.at[load, 'annual_consumption'] = None
         with pytest.raises(AttributeError, match=load):
             ts_control._worst_case_load(modes=None)
 

@@ -83,7 +83,7 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
             nodes=generators.loc[(generators.voltage_level == 'lv')].index,
             level='lv')
     else:
-        # if only MV network was analyzed (edisgo_mode = 'mv') all LV
+        # if only MV topology was analyzed (edisgo_mode = 'mv') all LV
         # generators are assigned the voltage at the corresponding station's
         # primary side
         lv_gens = generators[generators.voltage_level == 'lv']
@@ -522,13 +522,13 @@ class CurtailmentControl:
         aggregative. Default: None.
 
     """
-    # ToDo move some properties from network here (e.g. peak_load, generators,...)
+    # ToDo move some properties from topology here (e.g. peak_load, generators,...)
     def __init__(self, edisgo, methodology, curtailment_timeseries, mode=None,
                  **kwargs):
 
         logging.info("Start curtailment methodology {}.".format(methodology))
 
-        self._check_timeindex(curtailment_timeseries, edisgo.network)
+        self._check_timeindex(curtailment_timeseries, edisgo.topology)
 
         if methodology == 'feedin-proportional':
             curtailment_method = feedin_proportional
@@ -545,21 +545,21 @@ class CurtailmentControl:
 
         # get all fluctuating generators and their attributes (weather ID,
         # type, etc.)
-        generators = get_gen_info(edisgo.network, 'mvlv', fluctuating=True)
+        generators = get_gen_info(edisgo.topology, 'mvlv', fluctuating=True)
 
         # do analyze to get all voltages at generators and feed-in dataframe
         edisgo.analyze(mode=mode)
 
         # get feed-in time series of all generators
         if not mode:
-            feedin = edisgo.network.pypsa.generators_t.p * 1000
+            feedin = edisgo.topology.pypsa.generators_t.p * 1000
             # drop dispatchable generators and slack generator
             drop_labels = [_ for _ in feedin.columns
                            if 'GeneratorFluctuating' not in _] \
                           + ['Generator_slack']
         else:
-            feedin = edisgo.network.mv_grid.generators_timeseries()
-            for grid in edisgo.network.mv_grid.lv_grids:
+            feedin = edisgo.topology.mv_grid.generators_timeseries()
+            for grid in edisgo.topology.mv_grid.lv_grids:
                 feedin = pd.concat([feedin, grid.generators_timeseries()],
                                    axis=1)
             feedin.rename(columns=lambda _: repr(_), inplace=True)
@@ -605,11 +605,11 @@ class CurtailmentControl:
                         col, **kwargs)
 
         # check if curtailment exceeds feed-in
-        self._postcheck(edisgo.network, feedin)
+        self._postcheck(edisgo.topology, feedin)
 
-        # update generator time series in pypsa network
-        if edisgo.network.pypsa is not None:
-            pypsa_io.update_pypsa_generator_timeseries(edisgo.network)
+        # update generator time series in pypsa topology
+        if edisgo.topology.pypsa is not None:
+            pypsa_io.update_pypsa_generator_timeseries(edisgo.topology)
 
         # add measure to Results object
         edisgo.results.measures = 'curtailment'
@@ -686,7 +686,7 @@ class CurtailmentControl:
 
         Parameters
         -----------
-        network : :class:`~.network.network.Network`
+        network : :class:`~.network.topology.Topology`
         feedin : :pandas:`pandas.DataFrame<dataframe>`
             DataFrame with feed-in time series in kW. Columns of the dataframe
             are :class:`~.network.components.GeneratorFluctuating`, index is

@@ -18,8 +18,8 @@ def select_worstcase_snapshots(network):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
-        Network for which worst-case snapshots are identified.
+    network : :class:`~.network.topology.Topology`
+        Topology for which worst-case snapshots are identified.
 
     Returns
     -------

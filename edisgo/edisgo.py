@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 
 import edisgo
-from edisgo.network.network import NetworkReimport, \
-     Network
+from edisgo.network.topology import NetworkReimport, \
+     Topology
 from edisgo.network.results import Results, ResultsReimport
 from edisgo.network.timeseries import TimeSeries, TimeSeriesControl
 from edisgo.tools import pypsa_io, plots, tools
@@ -25,8 +25,8 @@ class EDisGoReimport:
     def __init__(self, results_path, **kwargs):
 
         if os.path.isdir(results_path):
-            # create network
-            self.network = NetworkReimport(results_path, **kwargs)
+            # create topology
+            self.topology = NetworkReimport(results_path, **kwargs)
         else:
             logging.error('Results cannot be imported as the specified '
                           'directory {} does not exist.'.format(results_path))
@@ -45,25 +45,25 @@ class EDisGoReimport:
         Parameters
         ----------
         technologies : :obj:`Boolean`
-            If True plots stations, generators, etc. in the network in different
+            If True plots stations, generators, etc. in the topology in different
             colors. If False does not plot any nodes. Default: False.
 
         For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
 
         """
-        if self.network.pypsa is None:
+        if self.topology.pypsa is None:
             try:
-                timesteps = self.network.timeseries.timeindex
-                self.network.pypsa = pypsa_io.to_pypsa(
-                    self.network, mode=None, timesteps=timesteps)
+                timesteps = self.topology.timeseries.timeindex
+                self.topology.pypsa = pypsa_io.to_pypsa(
+                    self.topology, mode=None, timesteps=timesteps)
             except:
                 logging.warning(
-                    "pypsa representation of MV network needed to plot MV "
-                    "network topology.")
+                    "pypsa representation of MV topology needed to plot MV "
+                    "topology topology.")
 
-        if self.network.pypsa is not None:
+        if self.topology.pypsa is not None:
             plots.mv_grid_topology(
-                self.network.pypsa, self.network.config,
+                self.topology.pypsa, self.topology.config,
                 node_color='technology' if technologies is True else None,
                 filename=kwargs.get('filename', None),
                 grid_district_geom=kwargs.get('grid_district_geom', True),
@@ -78,15 +78,15 @@ class EDisGoReimport:
         For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
 
         """
-        if self.network.pypsa is not None:
+        if self.topology.pypsa is not None:
             try:
-                v_res = self.network.results.v_res()
+                v_res = self.topology.results.v_res()
             except:
                 logging.warning("Voltages `pfa_v_mag_pu` from power flow "
                                 "analysis must be available to plot them.")
                 return
             plots.mv_grid_topology(
-                self.network.pypsa, self.network.config,
+                self.topology.pypsa, self.topology.config,
                 timestep=kwargs.get('timestep', None),
                 node_color='voltage',
                 filename=kwargs.get('filename', None),
@@ -108,19 +108,19 @@ class EDisGoReimport:
         For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
 
         """
-        if self.network.pypsa is not None and \
-                self.network.results.i_res is not None:
+        if self.topology.pypsa is not None and \
+                self.topology.results.i_res is not None:
             plots.mv_grid_topology(
-                self.network.pypsa, self.network.config,
+                self.topology.pypsa, self.topology.config,
                 timestep=kwargs.get('timestep', None),
                 line_color='loading',
                 node_color=kwargs.get('node_color', None),
-                line_load=self.network.results.i_res,
+                line_load=self.topology.results.i_res,
                 filename=kwargs.get('filename', None),
                 arrows=kwargs.get('arrows', None),
                 grid_district_geom=kwargs.get('grid_district_geom', True),
                 background_map=kwargs.get('background_map', True),
-                voltage=self.network.results.v_res(),
+                voltage=self.topology.results.v_res(),
                 limits_cb_lines=kwargs.get('limits_cb_lines', None),
                 limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
                 xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
@@ -129,10 +129,10 @@ class EDisGoReimport:
                 scaling_factor_line_width=kwargs.get(
                     'scaling_factor_line_width', None))
         else:
-            if self.network.pypsa is None:
-                logging.warning("pypsa representation of MV network needed to "
+            if self.topology.pypsa is None:
+                logging.warning("pypsa representation of MV topology needed to "
                                 "plot line loading.")
-            if self.network.results.i_res is None:
+            if self.topology.results.i_res is None:
                 logging.warning("Currents `i_res` from power flow analysis "
                                 "must be available to plot line loading.")
 
@@ -143,21 +143,21 @@ class EDisGoReimport:
         For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
 
         """
-        if self.network.pypsa is not None and \
-                self.network.results.grid_expansion_costs is not None:
+        if self.topology.pypsa is not None and \
+                self.topology.results.grid_expansion_costs is not None:
             if isinstance(self, EDisGo):
-                # convert index of network expansion costs to str
+                # convert index of topology expansion costs to str
                 grid_expansion_costs = \
-                    self.network.results.grid_expansion_costs.reset_index()
+                    self.topology.results.grid_expansion_costs.reset_index()
                 grid_expansion_costs['index'] = \
                     grid_expansion_costs['index'].apply(lambda _: repr(_))
                 grid_expansion_costs.set_index('index', inplace=True)
             else:
                 grid_expansion_costs = \
-                    self.network.results.grid_expansion_costs
+                    self.topology.results.grid_expansion_costs
 
             plots.mv_grid_topology(
-                self.network.pypsa, self.network.config,
+                self.topology.pypsa, self.topology.config,
                 line_color='expansion_costs',
                 grid_expansion_costs=grid_expansion_costs,
                 filename=kwargs.get('filename', None),
@@ -171,23 +171,23 @@ class EDisGoReimport:
                     'scaling_factor_line_width', None)
             )
         else:
-            if self.network.pypsa is None:
-                logging.warning("pypsa representation of MV network needed to "
-                                "plot network expansion costs.")
-            if self.network.results.grid_expansion_costs is None:
+            if self.topology.pypsa is None:
+                logging.warning("pypsa representation of MV topology needed to "
+                                "plot topology expansion costs.")
+            if self.topology.results.grid_expansion_costs is None:
                 logging.warning("Grid expansion cost results needed to plot "
                                 "them.")
 
     def plot_mv_storage_integration(self, **kwargs):
         """
-        Plots storage position in MV network of integrated storages.
+        Plots storage position in MV topology of integrated storages.
 
         For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
 
         """
-        if self.network.pypsa is not None:
+        if self.topology.pypsa is not None:
             plots.mv_grid_topology(
-                self.network.pypsa, self.network.config,
+                self.topology.pypsa, self.topology.config,
                 node_color='storage_integration',
                 filename=kwargs.get('filename', None),
                 grid_district_geom=kwargs.get('grid_district_geom', True),
@@ -195,9 +195,9 @@ class EDisGoReimport:
                 xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
                 title=kwargs.get('title', ''))
         else:
-            if self.network.pypsa is None:
-                logging.warning("pypsa representation of MV network needed to "
-                                "plot storage integration in MV network.")
+            if self.topology.pypsa is None:
+                logging.warning("pypsa representation of MV topology needed to "
+                                "plot storage integration in MV topology.")
 
     def histogram_voltage(self, timestep=None, title=True, **kwargs):
         """
@@ -216,7 +216,7 @@ class EDisGoReimport:
             no title. If :obj:`str`, the provided title is used. Default: True.
 
         """
-        data = self.network.results.v_res()
+        data = self.topology.results.v_res()
 
         if timestep is None:
             timestep = data.index
@@ -261,17 +261,17 @@ class EDisGoReimport:
 
         """
         if voltage_level == 'mv':
-            lines = self.network.pypsa.lines.loc[
-                self.network.pypsa.lines.v_nom > 1]
+            lines = self.topology.pypsa.lines.loc[
+                self.topology.pypsa.lines.v_nom > 1]
         elif voltage_level == 'lv':
-            lines = self.network.pypsa.lines.loc[
-                self.network.pypsa.lines.v_nom < 1]
+            lines = self.topology.pypsa.lines.loc[
+                self.topology.pypsa.lines.v_nom < 1]
         else:
-            lines = self.network.pypsa.lines
+            lines = self.topology.pypsa.lines
 
         rel_line_loading = tools.calculate_relative_line_load(
-            self.network.pypsa, self.network.config,
-            self.network.results.i_res, self.network.pypsa.lines.v_nom,
+            self.topology.pypsa, self.topology.config,
+            self.topology.results.i_res, self.topology.pypsa.lines.v_nom,
             lines.index, timestep)
 
         if timestep is None:
@@ -449,8 +449,8 @@ class EDisGo(EDisGoReimport):
 
     Attributes
     ----------
-    network : :class:`~.network.network.Network`
-        The network is a container object holding all data concerning the network,
+    network : :class:`~.network.topology.Topology`
+        The topology is a container object holding all data concerning the topology,
         configurations, equipment data, etc.
     results : :class:`~.network.network.Results`
         This is a container holding alls calculation results from power flow
@@ -471,7 +471,7 @@ class EDisGo(EDisGoReimport):
 
     Print LV station secondary side voltage levels returned by PFA
 
-    >>> lv_stations = edisgo.network.mv_grid.graph.nodes_by_attribute(
+    >>> lv_stations = edisgo.topology.mv_grid.graph.nodes_by_attribute(
     >>>     'lv_station')
     >>> print(edisgo.results.v_res(lv_stations, 'lv'))
 
@@ -488,7 +488,7 @@ class EDisGo(EDisGoReimport):
         # load network data
         self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
         # set up results container
-        self.results = Results(self.network)
+        self.results = Results(self.topology)
         self._timeseries = TimeSeries()
 
         # set up time series for feed-in and load
@@ -513,7 +513,7 @@ class EDisGo(EDisGoReimport):
                 timeindex=kwargs.get('timeindex', None))
 
         # import new generators
-        if self.network.generator_scenario is not None:
+        if self.topology.generator_scenario is not None:
             self.import_generators()
 
     @property
@@ -719,9 +719,9 @@ class EDisGo(EDisGoReimport):
 
         """
         if generator_scenario:
-            self.network.generator_scenario = generator_scenario
+            self.topology.generator_scenario = generator_scenario
         data_source = 'oedb'
-        import_generators(network=self.network, data_source=data_source)
+        import_generators(network=self.topology, data_source=data_source)
 
     def analyze(self, mode=None, timesteps=None):
         """Analyzes the network by power flow analysis
@@ -760,7 +760,7 @@ class EDisGo(EDisGoReimport):
         -----
         The current implementation always translates the network topology
         representation to the PyPSA format and stores it to
-        :attr:`self.network.pypsa`.
+        :attr:`self.topology.pypsa`.
 
         ToDos
         ------
@@ -793,7 +793,7 @@ class EDisGo(EDisGoReimport):
 
 
         pypsa_network = pypsa_io.to_pypsa(
-                    self.network, mode, timesteps)
+                    self.topology, mode, timesteps)
 
         # Todo: check if still needed, if so update to new structure, at this point not needed, maybe later
         # check if all timesteps are in pypsa.snapshots, if not update time

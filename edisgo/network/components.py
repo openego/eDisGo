@@ -4,7 +4,7 @@ import logging
 from math import acos, tan
 from abc import ABC, abstractmethod
 
-from edisgo.network import network
+from edisgo.network import topology
 
 if 'READTHEDOCS' not in os.environ:
     from shapely.geometry import Point
@@ -26,7 +26,7 @@ class BasicComponent(ABC):
     def id(self):
         """
         Unique identifier of component as used in component dataframes in
-        :class:`~.network.network.Network`.
+        :class:`~.network.topology.Topology`.
 
         Returns
         --------
@@ -43,7 +43,7 @@ class BasicComponent(ABC):
 
         Returns
         --------
-        :class:`~.network.network.Network`
+        :class:`~.network.topology.Topology`
 
         """
         return self._edisgo_obj
@@ -90,9 +90,9 @@ class Component(BasicComponent):
     @abstractmethod
     def _network_component_df(self):
         """
-        Dataframe in :class:`~.network.network.Network` containing all components
+        Dataframe in :class:`~.network.topology.Topology` containing all components
         of same type, e.g. for loads this is
-        :attr:`~.network.network.Network.loads_df`.
+        :attr:`~.network.topology.Topology.loads_df`.
 
         """
 
@@ -132,13 +132,13 @@ class Component(BasicComponent):
             Grid component is in.
 
         """
-        grid = self.edisgo_obj.network.buses_df.loc[
+        grid = self.edisgo_obj.topology.buses_df.loc[
             self._network_component_df.loc[self.id, 'bus'],
             ['mv_grid_id', 'lv_grid_id']]
         if math.isnan(grid.lv_grid_id):
-            return self.edisgo_obj.network.mv_grid
+            return self.edisgo_obj.topology.mv_grid
         else:
-            return self.edisgo_obj.network._grids['LVGrid_{}'.format(int(grid.lv_grid_id))]
+            return self.edisgo_obj.topology._grids['LVGrid_{}'.format(int(grid.lv_grid_id))]
 
     @property
     def geom(self):
@@ -150,7 +150,7 @@ class Component(BasicComponent):
         :shapely:`Point`
 
         """
-        [x, y] = self.edisgo_obj.network.buses_df.loc[
+        [x, y] = self.edisgo_obj.topology.buses_df.loc[
             self._network_component_df.loc[self.id, 'bus'], ['x', 'y']]
         if math.isnan(x) or math.isnan(y):
             return None
@@ -240,17 +240,17 @@ class Load(Component):
     @property
     def _network_component_df(self):
         """
-        Dataframe in :class:`~.network.network.Network` containing all loads.
+        Dataframe in :class:`~.network.topology.Topology` containing all loads.
 
-        For loads this is :attr:`~.network.network.Network.loads_df`.
+        For loads this is :attr:`~.network.topology.Topology.loads_df`.
 
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            See :attr:`~.network.network.Network.loads_df` for more information.
+            See :attr:`~.network.topology.Topology.loads_df` for more information.
 
         """
-        return self.edisgo_obj.network.loads_df
+        return self.edisgo_obj.topology.loads_df
 
     @property
     def peak_load(self):
@@ -268,12 +268,12 @@ class Load(Component):
             Peak load in MW.
 
         """
-        return self.edisgo_obj.network.loads_df.at[self.id, 'peak_load']
+        return self.edisgo_obj.topology.loads_df.at[self.id, 'peak_load']
 
     @peak_load.setter
     def peak_load(self, peak_load):
         # ToDo: Maybe perform type check before setting it.
-        self.edisgo_obj.network._loads_df.at[self.id, 'peak_load'] = peak_load
+        self.edisgo_obj.topology._loads_df.at[self.id, 'peak_load'] = peak_load
 
     @property
     def annual_consumption(self):
@@ -291,11 +291,11 @@ class Load(Component):
             Annual consumption of load in MWh.
 
         """
-        return self.edisgo_obj.network.loads_df.at[self.id, 'annual_consumption']
+        return self.edisgo_obj.topology.loads_df.at[self.id, 'annual_consumption']
 
     @annual_consumption.setter
     def annual_consumption(self, annual_consumption):
-        self.edisgo_obj.network._loads_df.at[
+        self.edisgo_obj.topology._loads_df.at[
             self.id, 'annual_consumption'] = annual_consumption
 
     @property
@@ -319,12 +319,12 @@ class Load(Component):
         #ToDo: Maybe return 'not specified' in case sector is None?
 
         """
-        return self.edisgo_obj.network.loads_df.at[self.id, 'sector']
+        return self.edisgo_obj.topology.loads_df.at[self.id, 'sector']
 
     @sector.setter
     def sector(self, sector):
         # ToDo: Maybe perform type check before setting it.
-        self.edisgo_obj.network._loads_df.at[self.id, 'sector'] = sector
+        self.edisgo_obj.topology._loads_df.at[self.id, 'sector'] = sector
 
     @property
     def active_power_timeseries(self):
@@ -337,7 +337,7 @@ class Load(Component):
             Active power time series of load in MW.
 
         """
-        return self.edisgo_obj.network.loads_t.p_set.loc[self.id]
+        return self.edisgo_obj.topology.loads_t.p_set.loc[self.id]
 
     @property
     def reactive_power_timeseries(self):
@@ -350,13 +350,13 @@ class Load(Component):
             Reactive power time series of load in Mvar.
 
         """
-        return self.edisgo_obj.network.loads_t.q_set.loc[self.id]
+        return self.edisgo_obj.topology.loads_t.q_set.loc[self.id]
 
     def _set_bus(self, bus):
         # check if bus is valid
-        if bus in self.edisgo_obj.network.buses_df.index:
-            self.edisgo_obj.network._loads_df.at[self.id, 'bus'] = bus
-            # reset network
+        if bus in self.edisgo_obj.topology.buses_df.index:
+            self.edisgo_obj.topology._loads_df.at[self.id, 'bus'] = bus
+            # reset topology
             self._grid = None
         else:
             raise AttributeError("Given bus ID does not exist.")
@@ -374,18 +374,18 @@ class Generator(Component):
     @property
     def _network_component_df(self):
         """
-        Dataframe in :class:`~.network.network.Network` containing generators.
+        Dataframe in :class:`~.network.topology.Topology` containing generators.
 
-        For generators this is :attr:`~.network.network.Network.generators_df`.
+        For generators this is :attr:`~.network.topology.Topology.generators_df`.
 
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            See :attr:`~.network.network.Network.generators_df` for more
+            See :attr:`~.network.topology.Topology.generators_df` for more
             information.
 
         """
-        return self.edisgo_obj.network.generators_df
+        return self.edisgo_obj.topology.generators_df
 
     @property
     def nominal_power(self):
@@ -403,12 +403,12 @@ class Generator(Component):
             Nominal power of generator in MW.
 
         """
-        return self.edisgo_obj.network.generators_df.at[self.id, 'p_nom']
+        return self.edisgo_obj.topology.generators_df.at[self.id, 'p_nom']
 
     @nominal_power.setter
     def nominal_power(self, nominal_power):
         # ToDo: Maybe perform type check before setting it.
-        self.edisgo_obj.network._generators_df.at[self.id, 'p_nom'] = nominal_power
+        self.edisgo_obj.topology._generators_df.at[self.id, 'p_nom'] = nominal_power
 
     @property
     def type(self):
@@ -427,12 +427,12 @@ class Generator(Component):
         #ToDo: Maybe return 'not specified' in case type is None?
 
         """
-        return self.edisgo_obj.network.generators_df.at[self.id, 'type']
+        return self.edisgo_obj.topology.generators_df.at[self.id, 'type']
 
     @type.setter
     def type(self, type):
         #ToDo: Maybe perform type check before setting it.
-        self.edisgo_obj.network._generators_df.at[self.id, 'type'] = type
+        self.edisgo_obj.topology._generators_df.at[self.id, 'type'] = type
 
     @property
     def subtype(self):
@@ -451,11 +451,11 @@ class Generator(Component):
         #ToDo: Maybe return 'not specified' in case subtype is None?
 
         """
-        return self.edisgo_obj.network.generators_df.at[self.id, 'subtype']
+        return self.edisgo_obj.topology.generators_df.at[self.id, 'subtype']
 
     @subtype.setter
     def subtype(self, subtype):
-        self.edisgo_obj.network._generators_df.at[self.id, 'subtype'] = subtype
+        self.edisgo_obj.topology._generators_df.at[self.id, 'subtype'] = subtype
 
     @property
     def active_power_timeseries(self):
@@ -468,7 +468,7 @@ class Generator(Component):
             Active power time series of generator in MW.
 
         """
-        return self.edisgo_obj.network.generators_t.p_set.loc[self.id]
+        return self.edisgo_obj.topology.generators_t.p_set.loc[self.id]
 
     @property
     def reactive_power_timeseries(self):
@@ -481,7 +481,7 @@ class Generator(Component):
             Reactive power time series of generator in Mvar.
 
         """
-        return self.edisgo_obj.network.generators_t.q_set.loc[self.id]
+        return self.edisgo_obj.topology.generators_t.q_set.loc[self.id]
 
     @property
     def weather_cell_id(self):
@@ -502,18 +502,18 @@ class Generator(Component):
             Weather cell ID of generator.
 
         """
-        return self.edisgo_obj.network.generators_df.at[self.id, 'weather_cell_id']
+        return self.edisgo_obj.topology.generators_df.at[self.id, 'weather_cell_id']
 
     @weather_cell_id.setter
     def weather_cell_id(self, weather_cell_id):
-        self.edisgo_obj.network._generators_df.at[
+        self.edisgo_obj.topology._generators_df.at[
             self.id, 'weather_cell_id'] = weather_cell_id
 
     def _set_bus(self, bus):
         # check if bus is valid
-        if bus in self.edisgo_obj.network.buses_df.index:
-            self.edisgo_obj.network._generators_df.at[self.id, 'bus'] = bus
-            # reset network
+        if bus in self.edisgo_obj.topology.buses_df.index:
+            self.edisgo_obj.topology._generators_df.at[self.id, 'bus'] = bus
+            # reset topology
             self._grid = None
         else:
             raise AttributeError("Given bus ID does not exist.")
@@ -549,18 +549,18 @@ class Storage(Component):
     @property
     def _network_component_df(self):
         """
-        Dataframe in :class:`~.network.network.Network` containing all switches.
+        Dataframe in :class:`~.network.topology.Topology` containing all switches.
 
-        For switches this is :attr:`~.network.network.Network.switches_df`.
+        For switches this is :attr:`~.network.topology.Topology.switches_df`.
 
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            See :attr:`~.network.network.Network.switches_df` for more
+            See :attr:`~.network.topology.Topology.switches_df` for more
             information.
 
         """
-        return self.edisgo_obj.network.switches_df
+        return self.edisgo_obj.topology.switches_df
 
     @property
     def timeseries(self):
@@ -571,7 +571,7 @@ class Storage(Component):
         ----------
         ts : :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power the storage is charged (negative)
-            and discharged (positive) with (on the network side) in kW in column
+            and discharged (positive) with (on the topology side) in kW in column
             'p' and reactive power in kvar in column 'q'. When 'q' is positive,
             reactive power is supplied (behaving as a capacitor) and when 'q'
             is negative reactive power is consumed (behaving as an inductor).
@@ -701,8 +701,8 @@ class Storage(Component):
     #     """
     #     Power factor of storage
     #
-    #     If power factor is not set it is retrieved from the network config
-    #     object depending on the network level the storage is in.
+    #     If power factor is not set it is retrieved from the topology config
+    #     object depending on the topology level the storage is in.
     #
     #     Returns
     #     --------
@@ -711,11 +711,11 @@ class Storage(Component):
     #
     #     """
     #     if self._power_factor is None:
-    #         if isinstance(self.network, MVGrid):
-    #             self._power_factor = self.network.network.config[
+    #         if isinstance(self.topology, MVGrid):
+    #             self._power_factor = self.topology.topology.config[
     #                 'reactive_power_factor']['mv_storage']
-    #         elif isinstance(self.network, LVGrid):
-    #             self._power_factor = self.network.network.config[
+    #         elif isinstance(self.topology, LVGrid):
+    #             self._power_factor = self.topology.topology.config[
     #                 'reactive_power_factor']['lv_storage']
     #     return self._power_factor
     #
@@ -738,7 +738,7 @@ class Storage(Component):
     #     - when `reactive_power_mode` is 'inductive' then Q is negative
     #
     #     In the case that this attribute is not set, it is retrieved from the
-    #     network config object depending on the voltage level the storage
+    #     topology config object depending on the voltage level the storage
     #     is in.
     #
     #     Returns
@@ -748,11 +748,11 @@ class Storage(Component):
     #
     #     """
     #     if self._reactive_power_mode is None:
-    #         if isinstance(self.network, MVGrid):
-    #             self._reactive_power_mode = self.network.network.config[
+    #         if isinstance(self.topology, MVGrid):
+    #             self._reactive_power_mode = self.topology.topology.config[
     #                 'reactive_power_mode']['mv_storage']
-    #         elif isinstance(self.network, LVGrid):
-    #             self._reactive_power_mode = self.network.network.config[
+    #         elif isinstance(self.topology, LVGrid):
+    #             self._reactive_power_mode = self.topology.topology.config[
     #                 'reactive_power_mode']['lv_storage']
     #
     #     return self._reactive_power_mode
@@ -809,18 +809,18 @@ class Switch(BasicComponent):
     @property
     def _network_component_df(self):
         """
-        Dataframe in :class:`~.network.network.Network` containing all switches.
+        Dataframe in :class:`~.network.topology.Topology` containing all switches.
 
-        For switches this is :attr:`~.network.network.Network.switches_df`.
+        For switches this is :attr:`~.network.topology.Topology.switches_df`.
 
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            See :attr:`~.network.network.Network.switches_df` for more
+            See :attr:`~.network.topology.Topology.switches_df` for more
             information.
 
         """
-        return self.edisgo_obj.network.switches_df
+        return self.edisgo_obj.topology.switches_df
 
     @property
     def type(self):
@@ -840,11 +840,11 @@ class Switch(BasicComponent):
             Type of switch.
 
         """
-        return self.edisgo_obj.network.switches_df.at[self.id, 'type_info']
+        return self.edisgo_obj.topology.switches_df.at[self.id, 'type_info']
 
     @type.setter
     def type(self, type):
-        self.edisgo_obj.network._switches_df.at[self.id, 'type_info'] = type
+        self.edisgo_obj.topology._switches_df.at[self.id, 'type_info'] = type
 
     @property
     def bus_open(self):
@@ -861,7 +861,7 @@ class Switch(BasicComponent):
             Bus in 'open' state.
 
         """
-        return self.edisgo_obj.network.switches_df.at[self.id, 'bus_open']
+        return self.edisgo_obj.topology.switches_df.at[self.id, 'bus_open']
 
     @property
     def bus_closed(self):
@@ -878,7 +878,7 @@ class Switch(BasicComponent):
             Bus in 'closed' state.
 
         """
-        return self.edisgo_obj.network.switches_df.at[self.id, 'bus_closed']
+        return self.edisgo_obj.topology.switches_df.at[self.id, 'bus_closed']
 
     @property
     def state(self):
@@ -914,7 +914,7 @@ class Switch(BasicComponent):
             Branch the switch is represented by.
 
         """
-        return self.edisgo_obj.network.switches_df.at[self.id, 'branch']
+        return self.edisgo_obj.topology.switches_df.at[self.id, 'branch']
 
     @property
     def grid(self):
@@ -923,16 +923,16 @@ class Switch(BasicComponent):
 
         Returns
         --------
-        :class:`~.network.components.Grid`
+        :class:`~.topology.components.Grid`
             Grid switch is in.
 
         """
-        grid = self.edisgo_obj.network.buses_df.loc[
+        grid = self.edisgo_obj.topology.buses_df.loc[
             self.bus_closed, ['mv_grid_id', 'lv_grid_id']]
         if math.isnan(grid.lv_grid_id):
-            return self.edisgo_obj.network.mv_grid
+            return self.edisgo_obj.topology.mv_grid
         else:
-            return self.edisgo_obj.network._grids['LVGrid_{}'.format(int(grid.lv_grid_id))]
+            return self.edisgo_obj.topology._grids['LVGrid_{}'.format(int(grid.lv_grid_id))]
 
     def open(self):
         """
@@ -943,7 +943,7 @@ class Switch(BasicComponent):
             self._state = 'open'
             col = self._get_bus_column(self.bus_closed)
             if col is not None:
-                self.edisgo_obj.network.lines_df.at[self.branch, col] = self.bus_open
+                self.edisgo_obj.topology.lines_df.at[self.branch, col] = self.bus_open
             else:
                 raise AttributeError(
                     "Could not open switch {}. Specified branch {} of switch "
@@ -959,7 +959,7 @@ class Switch(BasicComponent):
             self._state = 'closed'
             col = self._get_bus_column(self.bus_open)
             if col is not None:
-                self.edisgo_obj.network.lines_df.at[self.branch, col] = self.bus_closed
+                self.edisgo_obj.topology.lines_df.at[self.branch, col] = self.bus_closed
             else:
                 raise AttributeError(
                     "Could not close switch {}. Specified branch {} of switch "
@@ -971,9 +971,9 @@ class Switch(BasicComponent):
         Returns column name of lines_df given bus is in.
 
         """
-        if bus == self.edisgo_obj.network.lines_df.at[self.branch, 'bus0']:
+        if bus == self.edisgo_obj.topology.lines_df.at[self.branch, 'bus0']:
             col = 'bus0'
-        elif bus == self.edisgo_obj.network.lines_df.at[self.branch, 'bus1']:
+        elif bus == self.edisgo_obj.topology.lines_df.at[self.branch, 'bus1']:
             col = 'bus1'
         else:
             return None

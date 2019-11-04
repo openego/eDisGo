@@ -55,25 +55,25 @@ def connect_mv_generators(edisgo_obj):
     std_line_type = edisgo_obj.equipment_data['mv_cables'].loc[
         edisgo_obj.config['grid_expansion_standard_equipment']['mv_line']]
 
-    for geno in sorted(edisgo_obj.network.mv_grid.graph.nodes_by_attribute('generator'),
+    for geno in sorted(edisgo_obj.topology.mv_grid.graph.nodes_by_attribute('generator'),
                        key=lambda _: repr(_)):
-        if nx.is_isolate(edisgo_obj.network.mv_grid.graph, geno):
+        if nx.is_isolate(edisgo_obj.topology.mv_grid.graph, geno):
 
             # ===== voltage level 4: generator has to be connected to MV station =====
             if geno.v_level == 4:
 
                 line_length = calc_geo_dist_vincenty(network=edisgo_obj,
                                                      node_source=geno,
-                                                     node_target=edisgo_obj.network.mv_grid.station)
+                                                     node_target=edisgo_obj.topology.mv_grid.station)
 
                 line = Line(id=random.randint(10**8, 10**9),
                             type=std_line_type,
                             kind='cable',
                             quantity=1,
                             length=line_length / 1e3,
-                            grid=edisgo_obj.network.mv_grid)
+                            grid=edisgo_obj.topology.mv_grid)
 
-                edisgo_obj.network.mv_grid.graph.add_edge(edisgo_obj.network.mv_grid.station,
+                edisgo_obj.topology.mv_grid.graph.add_edge(edisgo_obj.topology.mv_grid.station,
                                                   geno,
                                                   line=line,
                                                   type='line')
@@ -137,7 +137,7 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
     allow_multiple_genos_per_load : :obj:`bool`
         If True, more than one generator can be connected to one load
@@ -361,7 +361,7 @@ def _add_cable_to_equipment_changes(network, line):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
     line : class:`~.network.components.Line`
         Line instance which is to be added
@@ -388,7 +388,7 @@ def _del_cable_from_equipment_changes(network, line):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
     line : class:`~.network.components.Line`
         Line instance which is to be deleted
@@ -407,7 +407,7 @@ def _find_nearest_conn_objects(network, node, branches):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
     node : :class:`~.network.components.Component`
         Node to connect (e.g. :class:`~.network.components.Generator`)
@@ -490,7 +490,7 @@ def _connect_mv_node(network, node, target_obj):
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
     node : :class:`~.network.components.Component`
         Node to connect (e.g. :class:`~.network.components.Generator`)

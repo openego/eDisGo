@@ -17,8 +17,8 @@ class Results:
 
     Attributes
     ----------
-    network : :class:`~.network.network.Network`
-        The network is a container object holding all data.
+    network : :class:`~.network.topology.Topology`
+        The topology is a container object holding all data.
 
     """
 
