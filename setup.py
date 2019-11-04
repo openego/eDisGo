@@ -31,7 +31,7 @@ setup(
     license='GNU Affero General Public License v3.0',
     author='gplssm, nesnoj, birgits, boltbeard, AnyaHe',
     author_email='anya.heider@rl-institut.de',
-    description='A python package for distribution grid analysis and optimization',
+    description='A python package for distribution network analysis and optimization',
     long_description=read('README.md'),
     long_description_content_type='text/x-rst',
     install_requires=[

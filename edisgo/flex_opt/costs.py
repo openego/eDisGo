@@ -5,28 +5,28 @@ import os
 if not 'READTHEDOCS' in os.environ:
     from shapely.ops import transform
 
-from edisgo.grid.grids import LVGrid, MVGrid
-from edisgo.grid.tools import get_mv_feeder_from_line
+from edisgo.network.grids import LVGrid, MVGrid
+from edisgo.network.tools import get_mv_feeder_from_line
 
 
 def grid_expansion_costs(network, without_generator_import=False, mode=None):
     """
-    Calculates grid expansion costs for each reinforced transformer and line
+    Calculates network expansion costs for each reinforced transformer and line
     in kEUR.
 
     Attributes
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
     without_generator_import : Boolean
         If True excludes lines that were added in the generator import to
-        connect new generators to the grid from calculation of grid expansion
+        connect new generators to the network from calculation of network expansion
         costs. Default: False.
     mode : :obj:`str`
-        Specifies grid levels reinforcement was conducted for to only return
-        costs in the considered grid level. Specify
+        Specifies network levels reinforcement was conducted for to only return
+        costs in the considered network level. Specify
 
-        * None to return costs in MV and LV grid levels. None is the default.
-        * 'mv' to return costs of MV grid level only, including MV/LV stations.
+        * None to return costs in MV and LV network levels. None is the default.
+        * 'mv' to return costs of MV network level only, including MV/LV stations.
           Costs to connect LV generators are excluded as well.
 
     Returns
@@ -35,8 +35,8 @@ def grid_expansion_costs(network, without_generator_import=False, mode=None):
         DataFrame containing type and costs plus in the case of lines the
         line length and number of parallel lines of each reinforced
         transformer and line. Index of the DataFrame is the respective object
-        that can either be a :class:`~.grid.components.Line` or a
-        :class:`~.grid.components.Transformer`. Columns are the following:
+        that can either be a :class:`~.network.components.Line` or a
+        :class:`~.network.components.Transformer`. Columns are the following:
 
         type: String
             Transformer size or cable name
@@ -55,13 +55,13 @@ def grid_expansion_costs(network, without_generator_import=False, mode=None):
         voltage_level : :obj:`str` {'lv' | 'mv' | 'mv/lv'}
             Specifies voltage level the equipment is in.
 
-        mv_feeder : :class:`~.grid.components.Line`
+        mv_feeder : :class:`~.network.components.Line`
             First line segment of half-ring used to identify in which
-            feeder the grid expansion was conducted in.
+            feeder the network expansion was conducted in.
 
     Notes
     -------
-    Total grid expansion costs can be obtained through
+    Total network expansion costs can be obtained through
     self.grid_expansion_costs.total_costs.sum().
 
     """
@@ -113,7 +113,7 @@ def grid_expansion_costs(network, without_generator_import=False, mode=None):
     else:
         equipment_changes = network.results.equipment_changes
         if mode is 'mv':
-            # filter equipment changes in LV grid level, e.g. from connection
+            # filter equipment changes in LV network level, e.g. from connection
             # of new generators
             mv_components = []
             for comp in network.results.equipment_changes.index:

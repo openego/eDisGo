@@ -7,7 +7,7 @@ ding0_grid = 'ding0_grids__58.pkl'
 
 def create_pypsa_test_network(ding0_grid):
     """
-    Creates test csv data to use for EDisGoReimport class for given ding0 grid
+    Creates test csv data to use for EDisGoReimport class for given ding0 network
     with power flow results for worst cases and saves it into directory
     'test_results'.
 

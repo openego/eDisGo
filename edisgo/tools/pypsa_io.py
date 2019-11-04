@@ -1,6 +1,6 @@
 """
-This module provides tools to convert graph based representation of the grid
-topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA grid
+This module provides tools to convert graph based representation of the network
+topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA network
 container.
 """
 
@@ -15,38 +15,38 @@ import collections
 
 def to_pypsa(grid_object, mode, timesteps):
     """
-    Translate graph based grid representation to PyPSA Network
+    Translate graph based network representation to PyPSA Network
 
     For details from a user perspective see API documentation of
-    :meth:`~.grid.network.EDisGo.analyze` of the API class
-    :class:`~.grid.network.EDisGo`.
+    :meth:`~.network.network.EDisGo.analyze` of the API class
+    :class:`~.network.network.EDisGo`.
 
-    Translating eDisGo's grid topology to PyPSA representation is structured
+    Translating eDisGo's network topology to PyPSA representation is structured
     into translating the topology and adding time series for components of the
-    grid. In both cases translation of MV grid only (`mode='mv'`), LV grid only
+    network. In both cases translation of MV network only (`mode='mv'`), LV network only
     (`mode='lv'`), MV and LV (`mode=None`) share some code. The
     code is organized as follows:
 
-    * Medium-voltage only (`mode='mv'`): All medium-voltage grid components are
-      exported by :func:`mv_to_pypsa` including the LV station. LV grid load
+    * Medium-voltage only (`mode='mv'`): All medium-voltage network components are
+      exported by :func:`mv_to_pypsa` including the LV station. LV network load
       and generation is considered using :func:`add_aggregated_lv_components`.
       Time series are collected by `_pypsa_load_timeseries` (as example
       for loads, generators and buses) specifying `mode='mv'`). Timeseries
       for aggregated load/generation at substations are determined individually.
-    * Low-voltage only (`mode='lv'`): LV grid topology including the MV-LV
+    * Low-voltage only (`mode='lv'`): LV network topology including the MV-LV
       transformer is exported. The slack is defind at primary side of the MV-LV
       transformer.
-    * Both level MV+LV (`mode=None`): The entire grid topology is translated to
+    * Both level MV+LV (`mode=None`): The entire network topology is translated to
       PyPSA in order to perform a complete power flow analysis in both levels
-      together. First, both grid levels are translated seperately using
+      together. First, both network levels are translated seperately using
       :func:`mv_to_pypsa` and :func:`lv_to_pypsa`. Those are merge by
-      :func:`combine_mv_and_lv`. Time series are obtained at once for both grid
+      :func:`combine_mv_and_lv`. Time series are obtained at once for both network
       levels.
 
     This PyPSA interface is aware of translation errors and performs so checks
-    on integrity of data converted to PyPSA grid representation
+    on integrity of data converted to PyPSA network representation
 
-    * Sub-graphs/ Sub-networks: It is ensured the grid has no islanded parts
+    * Sub-graphs/ Sub-networks: It is ensured the network has no islanded parts
     * Completeness of time series: It is ensured each component has a time
       series
     * Buses available: Each component (load, generator, line, transformer) is
@@ -57,19 +57,19 @@ def to_pypsa(grid_object, mode, timesteps):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
-        eDisGo grid container
+    network : :class:`~.network.network.Network`
+        eDisGo network container
     mode : str
-        Determines grid levels that are translated to
-        `PyPSA grid representation
+        Determines network levels that are translated to
+        `PyPSA network representation
         <https://www.pypsa.org/doc/components.html#network>`_. Specify
 
-        * None to export MV and LV grid levels. None is the default.
-        * ('mv' to export MV grid level only. This includes cumulative load and
-          generation from underlying LV grid aggregated at respective LV
+        * None to export MV and LV network levels. None is the default.
+        * ('mv' to export MV network level only. This includes cumulative load and
+          generation from underlying LV network aggregated at respective LV
           station. This option is implemented, though the rest of edisgo does
           not handle it yet.)
-        * ('lv' to export LV grid level only. This option is not yet
+        * ('lv' to export LV network level only. This option is not yet
            implemented)
     timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
         :pandas:`pandas.Timestamp<timestamp>`
@@ -123,7 +123,7 @@ def to_pypsa(grid_object, mode, timesteps):
         lv_components = {key: {} for key in lv_components_to_aggregate}
         buses_df = grid.buses_df.loc[:, ['v_nom']]
         buses = grid.buses_df.index
-    # mv grid with lv loads and generators connected to mv side of station
+    # mv network with lv loads and generators connected to mv side of station
         if mode is 'mv':
             # get mv_components
             mv_components = {
@@ -156,7 +156,7 @@ def to_pypsa(grid_object, mode, timesteps):
 
                 # Todo: accumulate loads?
 
-        # mv grid with accumulated loads and generators at lv side of station
+        # mv network with accumulated loads and generators at lv side of station
         elif mode is 'mvlv':
 
             mv_components = {
@@ -192,7 +192,7 @@ def to_pypsa(grid_object, mode, timesteps):
                 # Todo: accumulate loads?
 
         else:
-            raise ValueError("Provide proper mode for mv grid export.")
+            raise ValueError("Provide proper mode for mv network export.")
 
         for key in lv_components:
             lv_components[key] = pd.concat(lv_components[key].values())
@@ -202,7 +202,7 @@ def to_pypsa(grid_object, mode, timesteps):
             for key, value in comps.items():
                 components[key] = components[key].append(value)
 
-        # import grid topology to PyPSA network
+        # import network topology to PyPSA network
         # buses are created first to avoid warnings
         pypsa_network.import_components_from_dataframe(
             buses_df, 'Bus')
@@ -226,9 +226,9 @@ def to_pypsa(grid_object, mode, timesteps):
         }
     else:
         raise ValueError("Provide proper mode or leave it empty to export "
-                         "entire grid topology.")
+                         "entire network topology.")
 
-    # import grid topology to PyPSA network
+    # import network topology to PyPSA network
     # buses are created first to avoid warnings
     pypsa_network.import_components_from_dataframe(
         buses_df, 'Bus')
@@ -313,7 +313,7 @@ def _buses_voltage_set_point(edisgo_obj, buses, timesteps):
     Parameters
     ----------
     network : Network
-        The eDisGo grid topology model overall container
+        The eDisGo network topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
@@ -367,7 +367,7 @@ def add_aggregated_lv_components(network, components):
     Parameters
     ----------
     network : Network
-        The eDisGo grid topology model overall container
+        The eDisGo network topology model overall container
     components : dict of :pandas:`pandas.DataFrame<dataframe>`
         PyPSA components in tabular format
 
@@ -462,7 +462,7 @@ def _pypsa_bus_timeseries(network, buses, timesteps):
     Parameters
     ----------
     network : Network
-        The eDisGo grid topology model overall container
+        The eDisGo network topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
@@ -511,12 +511,12 @@ def _pypsa_bus_timeseries(network, buses, timesteps):
 
 def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
     """
-    Aggregates generator time series per generator subtype and LV grid.
+    Aggregates generator time series per generator subtype and LV network.
 
     Parameters
     ----------
     network : Network
-        The eDisGo grid topology model overall container
+        The eDisGo network topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
@@ -573,12 +573,12 @@ def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
 
 def _pypsa_load_timeseries_aggregated_at_lv_station(network, timesteps):
     """
-    Aggregates load time series per sector and LV grid.
+    Aggregates load time series per sector and LV network.
 
     Parameters
     ----------
     network : Network
-        The eDisGo grid topology model overall container
+        The eDisGo network topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
@@ -789,12 +789,12 @@ def _check_integrity_of_pypsa(pypsa_network):
 def process_pfa_results(edisgo, pypsa, timesteps):
     """
     Assing values from PyPSA to
-    :meth:`results <edisgo.grid.network.Network.results>`
+    :meth:`results <edisgo.network.network.Network.results>`
 
     Parameters
     ----------
     edisgo : Network
-        The eDisGo grid topology model overall container
+        The eDisGo network topology model overall container
     pypsa : :pypsa:`pypsa.Network<network>`
         The PyPSA `Network container
         <https://www.pypsa.org/doc/components.html#network>`_
@@ -814,7 +814,7 @@ def process_pfa_results(edisgo, pypsa, timesteps):
 
     See Also
     --------
-    :class:`~.grid.network.Results`
+    :class:`~.network.network.Results`
         Understand how results of power flow analysis are structured in eDisGo.
 
     """

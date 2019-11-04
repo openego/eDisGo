@@ -1,7 +1,7 @@
 """
 This "test" runs storage for different curtailment requirements and
 methods `voltage-based` and `feedin-proportional`.
-It requires a ding0 grid called ding0_grid_example.pkl in the same directory.
+It requires a ding0 network called ding0_grid_example.pkl in the same directory.
 
 """
 

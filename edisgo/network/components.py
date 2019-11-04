@@ -4,7 +4,7 @@ import logging
 from math import acos, tan
 from abc import ABC, abstractmethod
 
-from edisgo.grid import network
+from edisgo.network import network
 
 if 'READTHEDOCS' not in os.environ:
     from shapely.geometry import Point
@@ -26,7 +26,7 @@ class BasicComponent(ABC):
     def id(self):
         """
         Unique identifier of component as used in component dataframes in
-        :class:`~.grid.network.Network`.
+        :class:`~.network.network.Network`.
 
         Returns
         --------
@@ -43,7 +43,7 @@ class BasicComponent(ABC):
 
         Returns
         --------
-        :class:`~.grid.network.Network`
+        :class:`~.network.network.Network`
 
         """
         return self._edisgo_obj
@@ -70,7 +70,7 @@ class BasicComponent(ABC):
 
         Returns
         --------
-        :class:`~.grid.components.Grid`
+        :class:`~.network.components.Grid`
             Grid component is in.
 
         """
@@ -90,9 +90,9 @@ class Component(BasicComponent):
     @abstractmethod
     def _network_component_df(self):
         """
-        Dataframe in :class:`~.grid.network.Network` containing all components
+        Dataframe in :class:`~.network.network.Network` containing all components
         of same type, e.g. for loads this is
-        :attr:`~.grid.network.Network.loads_df`.
+        :attr:`~.network.network.Network.loads_df`.
 
         """
 
@@ -128,7 +128,7 @@ class Component(BasicComponent):
 
         Returns
         --------
-        :class:`~.grid.components.Grid`
+        :class:`~.network.components.Grid`
             Grid component is in.
 
         """
@@ -240,14 +240,14 @@ class Load(Component):
     @property
     def _network_component_df(self):
         """
-        Dataframe in :class:`~.grid.network.Network` containing all loads.
+        Dataframe in :class:`~.network.network.Network` containing all loads.
 
-        For loads this is :attr:`~.grid.network.Network.loads_df`.
+        For loads this is :attr:`~.network.network.Network.loads_df`.
 
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            See :attr:`~.grid.network.Network.loads_df` for more information.
+            See :attr:`~.network.network.Network.loads_df` for more information.
 
         """
         return self.edisgo_obj.network.loads_df
@@ -356,7 +356,7 @@ class Load(Component):
         # check if bus is valid
         if bus in self.edisgo_obj.network.buses_df.index:
             self.edisgo_obj.network._loads_df.at[self.id, 'bus'] = bus
-            # reset grid
+            # reset network
             self._grid = None
         else:
             raise AttributeError("Given bus ID does not exist.")
@@ -374,14 +374,14 @@ class Generator(Component):
     @property
     def _network_component_df(self):
         """
-        Dataframe in :class:`~.grid.network.Network` containing generators.
+        Dataframe in :class:`~.network.network.Network` containing generators.
 
-        For generators this is :attr:`~.grid.network.Network.generators_df`.
+        For generators this is :attr:`~.network.network.Network.generators_df`.
 
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            See :attr:`~.grid.network.Network.generators_df` for more
+            See :attr:`~.network.network.Network.generators_df` for more
             information.
 
         """
@@ -513,7 +513,7 @@ class Generator(Component):
         # check if bus is valid
         if bus in self.edisgo_obj.network.buses_df.index:
             self.edisgo_obj.network._generators_df.at[self.id, 'bus'] = bus
-            # reset grid
+            # reset network
             self._grid = None
         else:
             raise AttributeError("Given bus ID does not exist.")
@@ -523,7 +523,7 @@ class Storage(Component):
     """
     Storage object
 
-    Describes a single storage instance in the eDisGo grid. Includes technical
+    Describes a single storage instance in the eDisGo network. Includes technical
     parameters such as :attr:`Storage.efficiency_in` or
     :attr:`Storage.standing_loss` as well as its time series of operation
     :meth:`Storage.timeseries`.
@@ -549,14 +549,14 @@ class Storage(Component):
     @property
     def _network_component_df(self):
         """
-        Dataframe in :class:`~.grid.network.Network` containing all switches.
+        Dataframe in :class:`~.network.network.Network` containing all switches.
 
-        For switches this is :attr:`~.grid.network.Network.switches_df`.
+        For switches this is :attr:`~.network.network.Network.switches_df`.
 
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            See :attr:`~.grid.network.Network.switches_df` for more
+            See :attr:`~.network.network.Network.switches_df` for more
             information.
 
         """
@@ -571,7 +571,7 @@ class Storage(Component):
         ----------
         ts : :pandas:`pandas.DataFrame<dataframe>`
             DataFrame containing active power the storage is charged (negative)
-            and discharged (positive) with (on the grid side) in kW in column 
+            and discharged (positive) with (on the network side) in kW in column
             'p' and reactive power in kvar in column 'q'. When 'q' is positive,
             reactive power is supplied (behaving as a capacitor) and when 'q'
             is negative reactive power is consumed (behaving as an inductor).
@@ -702,7 +702,7 @@ class Storage(Component):
     #     Power factor of storage
     #
     #     If power factor is not set it is retrieved from the network config
-    #     object depending on the grid level the storage is in.
+    #     object depending on the network level the storage is in.
     #
     #     Returns
     #     --------
@@ -711,11 +711,11 @@ class Storage(Component):
     #
     #     """
     #     if self._power_factor is None:
-    #         if isinstance(self.grid, MVGrid):
-    #             self._power_factor = self.grid.network.config[
+    #         if isinstance(self.network, MVGrid):
+    #             self._power_factor = self.network.network.config[
     #                 'reactive_power_factor']['mv_storage']
-    #         elif isinstance(self.grid, LVGrid):
-    #             self._power_factor = self.grid.network.config[
+    #         elif isinstance(self.network, LVGrid):
+    #             self._power_factor = self.network.network.config[
     #                 'reactive_power_factor']['lv_storage']
     #     return self._power_factor
     #
@@ -748,11 +748,11 @@ class Storage(Component):
     #
     #     """
     #     if self._reactive_power_mode is None:
-    #         if isinstance(self.grid, MVGrid):
-    #             self._reactive_power_mode = self.grid.network.config[
+    #         if isinstance(self.network, MVGrid):
+    #             self._reactive_power_mode = self.network.network.config[
     #                 'reactive_power_mode']['mv_storage']
-    #         elif isinstance(self.grid, LVGrid):
-    #             self._reactive_power_mode = self.grid.network.config[
+    #         elif isinstance(self.network, LVGrid):
+    #             self._reactive_power_mode = self.network.network.config[
     #                 'reactive_power_mode']['lv_storage']
     #
     #     return self._reactive_power_mode
@@ -809,14 +809,14 @@ class Switch(BasicComponent):
     @property
     def _network_component_df(self):
         """
-        Dataframe in :class:`~.grid.network.Network` containing all switches.
+        Dataframe in :class:`~.network.network.Network` containing all switches.
 
-        For switches this is :attr:`~.grid.network.Network.switches_df`.
+        For switches this is :attr:`~.network.network.Network.switches_df`.
 
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            See :attr:`~.grid.network.Network.switches_df` for more
+            See :attr:`~.network.network.Network.switches_df` for more
             information.
 
         """
@@ -923,7 +923,7 @@ class Switch(BasicComponent):
 
         Returns
         --------
-        :class:`~.grid.components.Grid`
+        :class:`~.network.components.Grid`
             Grid switch is in.
 
         """

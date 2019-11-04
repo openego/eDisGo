@@ -10,8 +10,8 @@ import argparse
 import logging
 
 import pandas as pd
-from edisgo.grid.network import EDisGo
-from edisgo.grid.network import Results
+from edisgo.network.network import EDisGo
+from edisgo.network.network import Results
 from edisgo.flex_opt.exceptions import MaximumIterationError
 
 
@@ -53,7 +53,7 @@ def setup_logging(logfilename=None,
 
 def _get_griddistrict(ding0_filepath):
     """
-    Just get the grid district number from ding0 data file path
+    Just get the network district number from ding0 data file path
 
     Parameters
     ----------
@@ -79,7 +79,7 @@ def run_edisgo_basic(ding0_filepath,
                      analysis='worst-case',
                      *edisgo_grid):
     """
-    Analyze edisgo grid extension cost as reference scenario
+    Analyze edisgo network extension cost as reference scenario
 
     Parameters
     ----------
@@ -97,10 +97,10 @@ def run_edisgo_basic(ding0_filepath,
 
     Returns
     -------
-    edisgo_grid : :class:`~.grid.network.EDisGo`
+    edisgo_grid : :class:`~.network.network.EDisGo`
         eDisGo network container
     costs : :pandas:`pandas.Dataframe<dataframe>`
-        Cost of grid extension
+        Cost of network extension
     grid_issues : dict
         Grids resulting in an error including error message
 
@@ -110,7 +110,7 @@ def run_edisgo_basic(ding0_filepath,
 
     grid_issues = {}
 
-    logging.info('Grid expansion for MV grid district {}'.format(grid_district))
+    logging.info('Grid expansion for MV network district {}'.format(grid_district))
 
     if edisgo_grid: # if an edisgo_grid is passed in arg then ignore everything else
         edisgo_grid = edisgo_grid[0]
@@ -124,7 +124,7 @@ def run_edisgo_basic(ding0_filepath,
                                      timeseries_generation_fluctuating='oedb',
                                      timeseries_load='demandlib')
         except FileNotFoundError as e:
-            return None, pd.DataFrame(), {'grid': grid_district, 'msg': str(e)}
+            return None, pd.DataFrame(), {'network': grid_district, 'msg': str(e)}
 
     # Import generators
     if generator_scenario:
@@ -134,7 +134,7 @@ def run_edisgo_basic(ding0_filepath,
         logging.info('Grid expansion with no generator imports based on scenario')
 
     try:
-        # Do grid reinforcement
+        # Do network reinforcement
         edisgo_grid.reinforce()
 
         # Get costs
@@ -145,19 +145,19 @@ def run_edisgo_basic(ding0_filepath,
                              columns=costs_grouped.columns,
                              index=[[edisgo_grid.network.id] * len(costs_grouped),
                                     costs_grouped.index]).reset_index()
-        costs.rename(columns={'level_0': 'grid'}, inplace=True)
+        costs.rename(columns={'level_0': 'network'}, inplace=True)
 
-        grid_issues['grid'] = None
+        grid_issues['network'] = None
         grid_issues['msg'] = None
 
         logging.info('SUCCESS!')
     except MaximumIterationError:
-        grid_issues['grid'] = edisgo_grid.network.id
+        grid_issues['network'] = edisgo_grid.network.id
         grid_issues['msg'] = str(edisgo_grid.network.results.unresolved_issues)
         costs = pd.DataFrame()
-        logging.warning('Unresolved issues left after grid expansion.')
+        logging.warning('Unresolved issues left after network expansion.')
     except Exception as e:
-        grid_issues['grid'] = edisgo_grid.network.id
+        grid_issues['network'] = edisgo_grid.network.id
         grid_issues['msg'] = repr(e)
         costs = pd.DataFrame()
         logging.exception()
@@ -167,11 +167,11 @@ def run_edisgo_basic(ding0_filepath,
 
 def run_edisgo_twice(run_args):
     """
-    Run grid analysis twice on same grid: once w/ and once w/o new generators
+    Run network analysis twice on same network: once w/ and once w/o new generators
 
-    First run without connection of new generators approves sufficient grid
-    hosting capacity. Otherwise, grid is reinforced.
-    Second run assessment grid extension needs in terms of RES integration
+    First run without connection of new generators approves sufficient network
+    hosting capacity. Otherwise, network is reinforced.
+    Second run assessment network extension needs in terms of RES integration
 
     Parameters
     ----------
@@ -181,13 +181,13 @@ def run_edisgo_twice(run_args):
     Returns
     -------
     all_costs_before_geno_import : :pandas:`pandas.Dataframe<dataframe>`
-        Grid extension cost before grid connection of new generators
+        Grid extension cost before network connection of new generators
     all_grid_issues_before_geno_import : dict
-        Remaining overloading or over-voltage issues in grid
+        Remaining overloading or over-voltage issues in network
     all_costs : :pandas:`pandas.Dataframe<dataframe>`
-        Grid extension cost due to grid connection of new generators
+        Grid extension cost due to network connection of new generators
     all_grid_issues : dict
-        Remaining overloading or over-voltage issues in grid
+        Remaining overloading or over-voltage issues in network
     """
 
     # base case with no generator import
@@ -225,7 +225,7 @@ def run_edisgo_pool(ding0_file_list, run_args_opt = [None, 'worst-case'],
     Parameters
     ----------
     ding0_file_list : list
-        Ding0 grid data file names
+        Ding0 network data file names
     run_args_opt : list
         eDisGo options, see :func:`run_edisgo_basic` and
         :func:`run_edisgo_twice`, has to contain generator_scenario and analysis as entries
@@ -237,13 +237,13 @@ def run_edisgo_pool(ding0_file_list, run_args_opt = [None, 'worst-case'],
     Returns
     -------
     all_costs_before_geno_import : list
-        Grid extension cost before grid connection of new generators
+        Grid extension cost before network connection of new generators
     all_grid_issues_before_geno_import : list
-        Remaining overloading or over-voltage issues in grid
+        Remaining overloading or over-voltage issues in network
     all_costs : list
-        Grid extension cost due to grid connection of new generators
+        Grid extension cost due to network connection of new generators
     all_grid_issues : list
-        Remaining overloading or over-voltage issues in grid
+        Remaining overloading or over-voltage issues in network
     """
     def collect_pool_results(result):
         results.append(result)
@@ -283,7 +283,7 @@ def run_edisgo_pool_flexible(ding0_id_list, func, func_arguments,
     Parameters
     ----------
     ding0_id_list : list of int
-        List of ding0 grid data IDs (also known as HV/MV substation IDs)
+        List of ding0 network data IDs (also known as HV/MV substation IDs)
     func : any function
         Your custom function that shall be parallelized
     func_arguments : tuple
@@ -299,7 +299,7 @@ def run_edisgo_pool_flexible(ding0_id_list, func, func_arguments,
     be executed in parallel
 
     #. It must return an instance of the type :class:`~.edisgo.EDisGo`.
-    #. The first positional argument is the MV grid district id (as int). It is
+    #. The first positional argument is the MV network district id (as int). It is
        prepended to the tuple of arguments ``func_arguments``
 
 
@@ -345,7 +345,7 @@ def edisgo_run():
     
     ...assumes all files located in PWD.
     
-    Analyze a single grid in 'worst-case'
+    Analyze a single network in 'worst-case'
     
          edisgo_run -f ding0_grids__997.pkl -wc
          
@@ -379,11 +379,11 @@ def edisgo_run():
                                         action='store',
                                         dest='ding0_dir_select',
                                         help='Path to a directory of ding0 files, ' + \
-                                             'Path to file with list of grid district numbers ' + \
+                                             'Path to file with list of network district numbers ' + \
                                              '(one number per line), ' + \
                                              'and file name template using {} where number ' + \
                                              'is to be inserted . Convention is to use ' + \
-                                             'a double underscore before grid district number ' + \
+                                             'a double underscore before network district number ' + \
                                              ' like so \'__{}\'.')
 
     analysis_parsegroup = parser.add_mutually_exclusive_group()
@@ -486,9 +486,9 @@ def edisgo_run():
         run_args_opt.append('timeseries')
 
     all_costs_before_geno_import = []
-    all_grid_issues_before_geno_import = {'grid': [], 'msg': []}
+    all_grid_issues_before_geno_import = {'network': [], 'msg': []}
     all_costs = []
-    all_grid_issues = {'grid': [], 'msg': []}
+    all_grid_issues = {'network': [], 'msg': []}
 
     if not args.parallel:
         for ding0_filename in ding0_file_list:
@@ -502,10 +502,10 @@ def edisgo_run():
                 costs, grid_issues = run_edisgo_twice(run_args)
             
             all_costs_before_geno_import.append(costs_before_geno_import)
-            all_grid_issues_before_geno_import['grid'].append(grid_issues_before_geno_import['grid'])
+            all_grid_issues_before_geno_import['network'].append(grid_issues_before_geno_import['network'])
             all_grid_issues_before_geno_import['msg'].append(grid_issues_before_geno_import['msg'])
             all_costs.append(costs)
-            all_grid_issues['grid'].append(grid_issues['grid'])
+            all_grid_issues['network'].append(grid_issues['network'])
             all_grid_issues['msg'].append(grid_issues['msg'])
     else:
         all_costs_before_geno_import, \

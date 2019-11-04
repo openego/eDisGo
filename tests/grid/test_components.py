@@ -3,7 +3,7 @@ import os
 import math
 
 from edisgo import EDisGo
-from edisgo.grid.components import Load, Generator, Storage, Switch
+from edisgo.network.components import Load, Generator, Storage, Switch
 from edisgo.data import import_data
 
 

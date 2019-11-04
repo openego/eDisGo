@@ -42,7 +42,7 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
     generators : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with all generators of the type (and in weather cell)
         specified in `curtailment_key` parameter. See return value of
-        :func:`edisgo.grid.tools.get_gen_info` for more information.
+        :func:`edisgo.network.tools.get_gen_info` for more information.
     curtailment_timeseries : :pandas:`pandas.Series<series>`
         The curtailment in kW to be distributed amongst the generators in
         `generators` parameter. Index of the series is a
@@ -80,7 +80,7 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
             nodes=generators.loc[(generators.voltage_level == 'lv')].index,
             level='lv')
     else:
-        # if only MV grid was analyzed (edisgo_mode = 'mv') all LV
+        # if only MV network was analyzed (edisgo_mode = 'mv') all LV
         # generators are assigned the voltage at the corresponding station's
         # primary side
         lv_gens = generators[generators.voltage_level == 'lv']
@@ -355,7 +355,7 @@ def feedin_proportional(feedin, generators, curtailment_timeseries, edisgo,
     generators : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with all generators of the type (and in weather cell)
         specified in `curtailment_key` parameter. See return value of
-        :func:`edisgo.grid.tools.get_gen_info` for more information.
+        :func:`edisgo.network.tools.get_gen_info` for more information.
     curtailment_timeseries : :pandas:`pandas.Series<series>`
         The curtailment in kW to be distributed amongst the generators in
         `generators` parameter. Index of the series is a
@@ -412,8 +412,8 @@ def _assign_curtailment(curtailment, edisgo, generators, curtailment_key):
     Helper function to write curtailment time series to generator objects.
 
     This function also writes a list of the curtailed generators to curtailment
-    in :class:`edisgo.grid.network.TimeSeries` and
-    :class:`edisgo.grid.network.Results`.
+    in :class:`edisgo.network.network.TimeSeries` and
+    :class:`edisgo.network.network.Results`.
 
     Parameters
     ----------
@@ -427,7 +427,7 @@ def _assign_curtailment(curtailment, edisgo, generators, curtailment_key):
     generators : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with all generators of the type (and in weather cell)
         specified in `curtailment_key` parameter. See return value of
-        :func:`edisgo.grid.tools.get_gen_info` for more information.
+        :func:`edisgo.network.tools.get_gen_info` for more information.
     curtailment_key : :obj:`str` or :obj:`tuple` with :obj:`str`
         The technology and weather cell ID if :obj:`tuple` or only
         the technology if :obj:`str` the curtailment is specified for.

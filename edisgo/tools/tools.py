@@ -18,7 +18,7 @@ def select_worstcase_snapshots(network):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
         Network for which worst-case snapshots are identified.
 
     Returns
@@ -43,7 +43,7 @@ def select_worstcase_snapshots(network):
 
 def get_residual_load_from_pypsa_network(pypsa_network):
     """
-    Calculates residual load in MW in MV grid and underlying LV grids.
+    Calculates residual load in MW in MV network and underlying LV grids.
 
     Parameters
     ----------
@@ -84,7 +84,7 @@ def calculate_relative_line_load(network, configs, line_load, line_voltages,
         Pypsa network with lines to calculate line loading for.
     configs : :obj:`dict`
         Dictionary with used configurations from config files. See
-        :class:`~.grid.network.Config` for more information.
+        :class:`~.network.network.Config` for more information.
     line_load : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with current results from power flow analysis in A. Index of
         the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,

@@ -2,8 +2,8 @@ import pytest
 import shapely
 import os
 
-from edisgo.grid.network import Network
-from edisgo.grid.grids import MVGrid, LVGrid
+from edisgo.network.network import Network
+from edisgo.network.grids import MVGrid, LVGrid
 from edisgo.data import import_data
 
 
@@ -18,7 +18,7 @@ class TestImportFromDing0:
         import_data.import_ding0_grid(test_network_directory, self)
 
     def test_import_ding0_grid(self):
-        """Test successful import of ding0 grid."""
+        """Test successful import of ding0 network."""
 
         # buses, generators, loads, lines, transformers dataframes
         # check number of imported components
@@ -45,7 +45,7 @@ class TestImportFromDing0:
         assert all([col in self.network.storages_df.columns for col in
                     import_data.COLUMNS['storages_df']])
 
-        # grid district
+        # network district
         assert self.network.grid_district['population'] == 23358
         assert isinstance(self.network.grid_district['geom'],
                           shapely.geometry.Polygon)
@@ -58,8 +58,8 @@ class TestImportFromDing0:
 
     def test_path_error(self):
         """Test catching error when path to network does not exist."""
-        msg = "Specified directory containing ding0 grid data does not " \
-              "exist or does not contain grid data."
+        msg = "Specified directory containing ding0 network data does not " \
+              "exist or does not contain network data."
         with pytest.raises(AttributeError, match=msg):
             import_data.import_ding0_grid('wrong_directory', self.network)
 

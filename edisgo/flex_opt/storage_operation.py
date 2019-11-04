@@ -11,8 +11,8 @@ def fifty_fifty(network, storage, feedin_threshold=0.5):
 
     Parameters
     -----------
-    network : :class:`~.grid.network.Network`
-    storage : :class:`~.grid.components.Storage`
+    network : :class:`~.network.network.Network`
+    storage : :class:`~.network.components.Storage`
         Storage instance for which to generate time series.
     feedin_threshold : :obj:`float`
         Ratio of generation to installed power specifying when to charge or

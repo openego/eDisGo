@@ -4,8 +4,8 @@ import networkx as nx
 from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
     dijkstra_shortest_path_length
 
-from edisgo.grid.components import Generator, Load
-from edisgo.grid.grids import LVGrid
+from edisgo.network.components import Generator, Load
+from edisgo.network.grids import LVGrid
 
 import logging
 logger = logging.getLogger('edisgo')
@@ -21,12 +21,12 @@ def extend_distribution_substation_overloading(network, critical_stations):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
     critical_stations : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing over-loaded MV/LV stations, their apparent power
         at maximal over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded stations of type
-        :class:`~.grid.components.LVStation`. Columns are 's_pfa'
+        :class:`~.network.components.LVStation`. Columns are 's_pfa'
         containing the apparent power at maximal over-loading as float and
         'time_index' containing the corresponding time step the over-loading
         occured in as :pandas:`pandas.Timestamp<timestamp>`. See
@@ -123,12 +123,12 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
     critical_stations : :obj:`dict`
-        Dictionary with :class:`~.grid.grids.LVGrid` as key and a
+        Dictionary with :class:`~.network.grids.LVGrid` as key and a
         :pandas:`pandas.DataFrame<dataframe>` with its critical station and
         maximum voltage deviation as value.
-        Index of the dataframe is the :class:`~.grid.components.LVStation`
+        Index of the dataframe is the :class:`~.network.components.LVStation`
         with over-voltage issues. Columns are 'v_mag_pu' containing the
         maximum voltage deviation as float and 'time_index' containing the
         corresponding time step the over-voltage occured in as
@@ -185,12 +185,12 @@ def extend_substation_overloading(network, critical_stations):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
     critical_stations : pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing over-loaded HV/MV stations, their apparent power
         at maximal over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded stations of type
-        :class:`~.grid.components.MVStation`. Columns are 's_pfa'
+        :class:`~.network.components.MVStation`. Columns are 's_pfa'
         containing the apparent power at maximal over-loading as float and
         'time_index' containing the corresponding time step the over-loading
         occured in as :pandas:`pandas.Timestamp<timestamp>`. See
@@ -283,16 +283,16 @@ def extend_substation_overloading(network, critical_stations):
 
 def reinforce_branches_overvoltage(network, grid, crit_nodes):
     """
-    Reinforce MV and LV grid due to voltage issues.
+    Reinforce MV and LV network due to voltage issues.
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
-    grid : :class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid`
+    network : :class:`~.network.network.Network`
+    grid : :class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
     crit_nodes : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with critical nodes, sorted descending by voltage deviation.
         Index of the dataframe are nodes (of type
-        :class:`~.grid.components.Generator`, :class:`~.grid.components.Load`,
+        :class:`~.network.components.Generator`, :class:`~.network.components.Load`,
         etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
         maximum voltage deviation as float and 'time_index' containing the
         corresponding time step the over-voltage occured in as
@@ -300,7 +300,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
 
     Returns
     -------
-    Dictionary with :class:`~.grid.components.Line` and the number of lines
+    Dictionary with :class:`~.network.components.Line` and the number of lines
     added.
 
     Notes
@@ -352,7 +352,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
         # because voltage issues should have been solved during extension of
         # distribution substations due to overvoltage issues.
         if len(path) == 1:
-            logging.error("Voltage issues at busbar in LV grid {} should have "
+            logging.error("Voltage issues at busbar in LV network {} should have "
                           "been solved in previous steps.".format(grid))
         else:
             # check if representative of line is already in list
@@ -456,13 +456,13 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                     crit_line.quantity = 1
                     lines_changes[crit_line] = 1
                     # add node_2_3 to representatives list to not further
-                    # reinforce this part off the grid in this iteration step
+                    # reinforce this part off the network in this iteration step
                     rep_main_line.append(node_2_3)
                     main_line_reinforced.append(node_2_3)
 
             else:
                 logger.debug(
-                    '==> Main line of node {} in grid {} '.format(
+                    '==> Main line of node {} in network {} '.format(
                         repr(node), str(grid)) +
                     'has already been reinforced.')
 
@@ -475,23 +475,23 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
 
 def reinforce_branches_overloading(network, crit_lines):
     """
-    Reinforce MV or LV grid due to overloading.
+    Reinforce MV or LV network due to overloading.
     
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
     crit_lines : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing over-loaded lines, their maximum relative
         over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded lines of type
-        :class:`~.grid.components.Line`. Columns are 'max_rel_overload'
+        :class:`~.network.components.Line`. Columns are 'max_rel_overload'
         containing the maximum relative over-loading as float and 'time_index'
         containing the corresponding time step the over-loading occured in as
         :pandas:`pandas.Timestamp<timestamp>`.
 
     Returns
     -------
-    Dictionary with :class:`~.grid.components.Line` and the number of Lines
+    Dictionary with :class:`~.network.components.Line` and the number of Lines
     added.
         
     Notes

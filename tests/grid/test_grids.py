@@ -1,10 +1,10 @@
 import os
 import pandas as pd
 
-from edisgo.grid.network import Network, TimeSeriesControl, TimeSeries, Config
+from edisgo.network.network import Network, TimeSeriesControl, TimeSeries, Config
 from edisgo.data import import_data
-from edisgo.grid.components import Generator, Load, Switch
-from edisgo.grid.grids import LVGrid
+from edisgo.network.components import Generator, Load, Switch
+from edisgo.network.grids import LVGrid
 
 
 class TestGrids:

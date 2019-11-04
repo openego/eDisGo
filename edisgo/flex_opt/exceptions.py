@@ -5,7 +5,7 @@ class Error(Exception):
 
 class MaximumIterationError(Error):
     """
-    Exception raised when maximum number of iterations in grid reinforcement
+    Exception raised when maximum number of iterations in network reinforcement
     is exceeded.
 
     Attributes:

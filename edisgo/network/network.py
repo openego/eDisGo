@@ -15,9 +15,9 @@ from edisgo.data.import_data import import_ding0_grid, import_generators, \
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.flex_opt import storage_integration, storage_operation, \
     curtailment, storage_positioning
-from edisgo.grid.components import Generator, Load
-from edisgo.grid.tools import get_gen_info
-from edisgo.grid.grids import MVGrid
+from edisgo.network.components import Generator, Load
+from edisgo.network.tools import get_gen_info
+from edisgo.network.grids import MVGrid
 from edisgo.tools import plots
 
 logger = logging.getLogger('edisgo')
@@ -45,13 +45,13 @@ class EDisGoReimport:
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
-        Plots plain MV grid topology and optionally nodes by technology type
+        Plots plain MV network topology and optionally nodes by technology type
         (e.g. station or generator).
 
         Parameters
         ----------
         technologies : :obj:`Boolean`
-            If True plots stations, generators, etc. in the grid in different
+            If True plots stations, generators, etc. in the network in different
             colors. If False does not plot any nodes. Default: False.
 
         For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
@@ -64,8 +64,8 @@ class EDisGoReimport:
                     self.network, mode=None, timesteps=timesteps)
             except:
                 logging.warning(
-                    "pypsa representation of MV grid needed to plot MV "
-                    "grid topology.")
+                    "pypsa representation of MV network needed to plot MV "
+                    "network topology.")
 
         if self.network.pypsa is not None:
             plots.mv_grid_topology(
@@ -79,7 +79,7 @@ class EDisGoReimport:
 
     def plot_mv_voltages(self, **kwargs):
         """
-        Plots voltages in MV grid on grid topology plot.
+        Plots voltages in MV network on network topology plot.
 
         For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
 
@@ -103,7 +103,7 @@ class EDisGoReimport:
                 xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
                 title=kwargs.get('title', ''))
         else:
-            logging.warning("pypsa representation of MV grid needed to "
+            logging.warning("pypsa representation of MV network needed to "
                             "plot voltages.")
 
     def plot_mv_line_loading(self, **kwargs):
@@ -136,7 +136,7 @@ class EDisGoReimport:
                     'scaling_factor_line_width', None))
         else:
             if self.network.pypsa is None:
-                logging.warning("pypsa representation of MV grid needed to "
+                logging.warning("pypsa representation of MV network needed to "
                                 "plot line loading.")
             if self.network.results.i_res is None:
                 logging.warning("Currents `i_res` from power flow analysis "
@@ -152,7 +152,7 @@ class EDisGoReimport:
         if self.network.pypsa is not None and \
                 self.network.results.grid_expansion_costs is not None:
             if isinstance(self, EDisGo):
-                # convert index of grid expansion costs to str
+                # convert index of network expansion costs to str
                 grid_expansion_costs = \
                     self.network.results.grid_expansion_costs.reset_index()
                 grid_expansion_costs['index'] = \
@@ -178,15 +178,15 @@ class EDisGoReimport:
             )
         else:
             if self.network.pypsa is None:
-                logging.warning("pypsa representation of MV grid needed to "
-                                "plot grid expansion costs.")
+                logging.warning("pypsa representation of MV network needed to "
+                                "plot network expansion costs.")
             if self.network.results.grid_expansion_costs is None:
                 logging.warning("Grid expansion cost results needed to plot "
                                 "them.")
 
     def plot_mv_storage_integration(self, **kwargs):
         """
-        Plots storage position in MV grid of integrated storages.
+        Plots storage position in MV network of integrated storages.
 
         For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
 
@@ -202,8 +202,8 @@ class EDisGoReimport:
                 title=kwargs.get('title', ''))
         else:
             if self.network.pypsa is None:
-                logging.warning("pypsa representation of MV grid needed to "
-                                "plot storage integration in MV grid.")
+                logging.warning("pypsa representation of MV network needed to "
+                                "plot storage integration in MV network.")
 
     def histogram_voltage(self, timestep=None, title=True, **kwargs):
         """
@@ -301,7 +301,7 @@ class EDisGoReimport:
 class EDisGo(EDisGoReimport):
     """
     Provides the top-level API for invocation of data import, analysis of
-    hosting capacity, grid reinforcement and flexibility measures.
+    hosting capacity, network reinforcement and flexibility measures.
 
     Parameters
     ----------
@@ -325,7 +325,7 @@ class EDisGo(EDisGoReimport):
         * `timeseries_load`
 
     ding0_grid : :obj:`str`
-        Path to directory containing csv files of grid to be loaded.
+        Path to directory containing csv files of network to be loaded.
     config_path : None or :obj:`str` or :obj:`dict`
         Path to the config directory. Options are:
 
@@ -403,8 +403,8 @@ class EDisGo(EDisGoReimport):
         is given, reactive power will be calculated from power factor and
         power factor mode in the config sections `reactive_power_factor` and
         `reactive_power_mode` and a warning will be raised. See
-        :class:`~.grid.components.Generator` and
-        :class:`~.grid.components.GeneratorFluctuating` for more information.
+        :class:`~.network.components.Generator` and
+        :class:`~.network.components.GeneratorFluctuating` for more information.
     timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
         Parameter used to obtain time series of active power of (cumulative)
         loads.
@@ -438,7 +438,7 @@ class EDisGo(EDisGoReimport):
         If no time series for the load sector is given, reactive power will be
         calculated from power factor and power factor mode in the config
         sections `reactive_power_factor` and `reactive_power_mode` and a
-        warning will be raised. See :class:`~.grid.components.Load` for
+        warning will be raised. See :class:`~.network.components.Load` for
         more information.
     generator_scenario : None or :obj:`str`
         If provided defines which scenario of future generator park to use
@@ -455,10 +455,10 @@ class EDisGo(EDisGoReimport):
 
     Attributes
     ----------
-    network : :class:`~.grid.network.Network`
-        The network is a container object holding all data concerning the grid,
+    network : :class:`~.network.network.Network`
+        The network is a container object holding all data concerning the network,
         configurations, equipment data, etc.
-    results : :class:`~.grid.network.Results`
+    results : :class:`~.network.network.Results`
         This is a container holding alls calculation results from power flow
         analyses, curtailment, storage integration, etc.
 
@@ -468,10 +468,10 @@ class EDisGo(EDisGoReimport):
 
     Create eDisGo Network object by loading Ding0 file
 
-    >>> from edisgo.grid.network import EDisGo
+    >>> from edisgo.network.network import EDisGo
     >>> edisgo = EDisGo(ding0_grid='ding0_data.pkl', mode='worst-case-feedin')
 
-    Analyze hosting capacity for MV and LV grid level
+    Analyze hosting capacity for MV and LV network level
 
     >>> edisgo.analyze()
 
@@ -488,10 +488,10 @@ class EDisGo(EDisGoReimport):
         # load configuration and equipment data
         self._config = Config(config_path=kwargs.get('config_path', None))
         self._equipment_data = self._load_equipment_data()
-        # create network (loads grid data, configurations, equipment data)
+        # create network (loads network data, configurations, equipment data)
         self.network = Network(
             generator_scenario=kwargs.get('generator_scenario', None))
-        # load grid data
+        # load network data
         self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
         # set up results container
         self.results = Results(self.network)
@@ -529,7 +529,7 @@ class EDisGo(EDisGoReimport):
 
         Returns
         -------
-        :class:`~.grid.network.Config`
+        :class:`~.network.network.Config`
             Config object with configuration data from config files.
 
         """
@@ -559,12 +559,12 @@ class EDisGo(EDisGoReimport):
 
         Parameters
         ----------
-        timeseries : :class:`~.grid.network.TimeSeries`
+        timeseries : :class:`~.network.network.TimeSeries`
             Object containing load and feed-in time series.
 
         Returns
         --------
-        :class:`~.grid.network.TimeSeries`
+        :class:`~.network.network.TimeSeries`
             Object containing load and feed-in time series.
 
         """
@@ -658,12 +658,12 @@ class EDisGo(EDisGoReimport):
 
     def import_ding0_grid(self, path):
         """
-        Import ding0 grid data from csv files.
+        Import ding0 network data from csv files.
 
         Parameters
         -----------
         path : :obj:'str`
-            Path to directory containing csv files of grid to be loaded.
+            Path to directory containing csv files of network to be loaded.
 
         #ToDo docstring
 
@@ -673,9 +673,9 @@ class EDisGo(EDisGoReimport):
 
     def to_pypsa(self, mode=None, timesteps=None):
         """
-        PyPSA grid representation
+        PyPSA network representation
 
-        A grid topology representation based on
+        A network topology representation based on
         :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
         this data model, the :pypsa:`pypsa.Network<network>`,
         is assigned to this attribute.
@@ -689,11 +689,11 @@ class EDisGo(EDisGoReimport):
         Returns
         -------
         :pypsa:`pypsa.Network<network>`
-            PyPSA grid representation. The attribute `edisgo_mode` is added
+            PyPSA network representation. The attribute `edisgo_mode` is added
             to specify if pypsa representation of the edisgo network
-            was created for the whole grid topology (MV + LV), only MV or only
+            was created for the whole network topology (MV + LV), only MV or only
             LV. See parameter `mode` in
-            :meth:`~.grid.network.EDisGo.analyze` for more information.
+            :meth:`~.network.network.EDisGo.analyze` for more information.
 
         """
         if timesteps is None:
@@ -708,8 +708,8 @@ class EDisGo(EDisGoReimport):
         Sets up curtailment time series.
 
         Curtailment time series are written into
-        :class:`~.grid.network.TimeSeries`. See
-        :class:`~.grid.network.CurtailmentControl` for more information on
+        :class:`~.network.network.TimeSeries`. See
+        :class:`~.network.network.CurtailmentControl` for more information on
         parameters and methodologies.
 
         """
@@ -730,14 +730,14 @@ class EDisGo(EDisGoReimport):
         import_generators(network=self.network, data_source=data_source)
 
     def analyze(self, mode=None, timesteps=None):
-        """Analyzes the grid by power flow analysis
+        """Analyzes the network by power flow analysis
 
-        Analyze the grid for violations of hosting capacity. Means, perform a
+        Analyze the network for violations of hosting capacity. Means, perform a
         power flow analysis and obtain voltages at nodes (load, generator,
         stations/transformers and branch tees) and active/reactive power at
         lines.
 
-        The power flow analysis can currently only be performed for both grid
+        The power flow analysis can currently only be performed for both network
         levels MV and LV. See ToDos section for more information.
 
         A static `non-linear power flow analysis is performed using PyPSA
@@ -751,7 +751,7 @@ class EDisGo(EDisGoReimport):
         ----------
         mode : str
             Allows to toggle between power flow analysis (PFA) on the whole
-            grid topology (MV + LV), only MV or only LV. Defaults to None which
+            network topology (MV + LV), only MV or only LV. Defaults to None which
             equals power flow analysis for MV + LV which is the only
             implemented option at the moment. See ToDos section for
             more information.
@@ -759,26 +759,26 @@ class EDisGo(EDisGoReimport):
             :pandas:`pandas.Timestamp<timestamp>`
             Timesteps specifies for which time steps to conduct the power flow
             analysis. It defaults to None in which case the time steps in
-            timeseries.timeindex (see :class:`~.grid.network.TimeSeries`) are
+            timeseries.timeindex (see :class:`~.network.network.TimeSeries`) are
             used.
 
         Notes
         -----
-        The current implementation always translates the grid topology
+        The current implementation always translates the network topology
         representation to the PyPSA format and stores it to
         :attr:`self.network.pypsa`.
 
         ToDos
         ------
-        The option to export only the edisgo MV grid (mode = 'mv') to conduct
+        The option to export only the edisgo MV network (mode = 'mv') to conduct
         a power flow analysis is implemented in
         :func:`~.tools.pypsa_io.to_pypsa` but NotImplementedError is raised
         since the rest of edisgo does not handle this option yet. The analyze
         function will throw an error since
         :func:`~.tools.pypsa_io.process_pfa_results`
         does not handle aggregated loads and generators in the LV grids. Also,
-        grid reinforcement, pypsa update of time series, and probably other
-        functionalities do not work when only the MV grid is analysed.
+        network reinforcement, pypsa update of time series, and probably other
+        functionalities do not work when only the MV network is analysed.
 
         Further ToDos are:
         * explain how power plants are modeled, if possible use a link
@@ -818,7 +818,7 @@ class EDisGo(EDisGoReimport):
 
     def reinforce(self, **kwargs):
         """
-        Reinforces the grid and calculates grid expansion costs.
+        Reinforces the network and calculates network expansion costs.
 
         See :meth:`edisgo.flex_opt.reinforce_grid` for more information.
 
@@ -839,9 +839,9 @@ class EDisGo(EDisGoReimport):
 
     def integrate_storage(self, timeseries, position, **kwargs):
         """
-        Integrates storage into grid.
+        Integrates storage into network.
 
-        See :class:`~.grid.network.StorageControl` for more information.
+        See :class:`~.network.network.StorageControl` for more information.
 
         """
         StorageControl(edisgo=self, timeseries=timeseries,
@@ -851,14 +851,14 @@ class EDisGo(EDisGoReimport):
 class Network:
     """
     Used as container for all data related to a single
-    :class:`~.grid.grids.MVGrid`.
+    :class:`~.network.grids.MVGrid`.
 
     Parameters
     ----------
     ding0_grid : :obj:`str`
-        Path to directory containing csv files of grid to be loaded.
+        Path to directory containing csv files of network to be loaded.
     config_path : None or :obj:`str` or :obj:`dict`, optional
-        See :class:`~.grid.network.Config` for further information.
+        See :class:`~.network.network.Config` for further information.
         Default: None.
     generator_scenario : :obj:`str`
         Defines which scenario of future generator park to use.
@@ -869,8 +869,8 @@ class Network:
 
     _grid_district : :obj:`dict`
         Contains the following information about the supplied
-        region (grid district) of the grid:
-        'geom': Shape of grid district as MultiPolygon.
+        region (network district) of the network:
+        'geom': Shape of network district as MultiPolygon.
         'population': Number of inhabitants.
     _grids : dict
     generators_t : enthält auch curtailment dataframe (muss bei Erstellung von
@@ -886,12 +886,12 @@ class Network:
     @property
     def buses_df(self):
         """
-        Dataframe with all buses in MV grid and underlying LV grids.
+        Dataframe with all buses in MV network and underlying LV grids.
 
         Parameters
         ----------
         buses_df : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all buses in MV grid and underlying LV grids.
+            Dataframe with all buses in MV network and underlying LV grids.
             Index of the dataframe are bus names. Columns of the dataframe are:
             v_nom
             x
@@ -903,7 +903,7 @@ class Network:
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all buses in MV grid and underlying LV grids.
+            Dataframe with all buses in MV network and underlying LV grids.
 
         """
         return self._buses_df
@@ -915,12 +915,12 @@ class Network:
     @property
     def generators_df(self):
         """
-        Dataframe with all generators in MV grid and underlying LV grids.
+        Dataframe with all generators in MV network and underlying LV grids.
 
         Parameters
         ----------
         generators_df : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all generators in MV grid and underlying LV grids.
+            Dataframe with all generators in MV network and underlying LV grids.
             Index of the dataframe are generator names. Columns of the
             dataframe are:
             bus
@@ -932,7 +932,7 @@ class Network:
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all generators in MV grid and underlying LV grids.
+            Dataframe with all generators in MV network and underlying LV grids.
             Slack generator is excluded.
 
         """
@@ -945,12 +945,12 @@ class Network:
     @property
     def loads_df(self):
         """
-        Dataframe with all loads in MV grid and underlying LV grids.
+        Dataframe with all loads in MV network and underlying LV grids.
 
         Parameters
         ----------
         loads_df : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all loads in MV grid and underlying LV grids.
+            Dataframe with all loads in MV network and underlying LV grids.
             Index of the dataframe are load names. Columns of the
             dataframe are:
             bus
@@ -961,7 +961,7 @@ class Network:
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all loads in MV grid and underlying LV grids.
+            Dataframe with all loads in MV network and underlying LV grids.
 
         """
         return self._loads_df
@@ -1003,12 +1003,12 @@ class Network:
     @property
     def lines_df(self):
         """
-        Dataframe with all lines in MV grid and underlying LV grids.
+        Dataframe with all lines in MV network and underlying LV grids.
 
         Parameters
         ----------
         lines_df : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all lines in MV grid and underlying LV grids.
+            Dataframe with all lines in MV network and underlying LV grids.
             Index of the dataframe are line names. Columns of the
             dataframe are:
             bus0
@@ -1023,7 +1023,7 @@ class Network:
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all lines in MV grid and underlying LV grids.
+            Dataframe with all lines in MV network and underlying LV grids.
 
         """
         return self._lines_df
@@ -1035,12 +1035,12 @@ class Network:
     @property
     def switches_df(self):
         """
-        Dataframe with all switches in MV grid and underlying LV grids.
+        Dataframe with all switches in MV network and underlying LV grids.
 
         Parameters
         ----------
         switches_df : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all switches in MV grid and underlying LV grids.
+            Dataframe with all switches in MV network and underlying LV grids.
             Index of the dataframe are switch names. Columns of the
             dataframe are:
             bus_open
@@ -1051,7 +1051,7 @@ class Network:
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all switches in MV grid and underlying LV grids.
+            Dataframe with all switches in MV network and underlying LV grids.
 
         """
         return self._switches_df
@@ -1063,12 +1063,12 @@ class Network:
     @property
     def storages_df(self):
         """
-        Dataframe with all storages in MV grid and underlying LV grids.
+        Dataframe with all storages in MV network and underlying LV grids.
 
         Parameters
         ----------
         storages_df : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all storages in MV grid and underlying LV grids.
+            Dataframe with all storages in MV network and underlying LV grids.
             Index of the dataframe are storage names. Columns of the
             dataframe are:
             bus
@@ -1081,7 +1081,7 @@ class Network:
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all storages in MV grid and underlying LV grids.
+            Dataframe with all storages in MV network and underlying LV grids.
 
         """
         return self._storages_df
@@ -1097,7 +1097,7 @@ class Network:
 
         Returns
         -------
-        list(:class:`~.grid.components.Generator`)
+        list(:class:`~.network.components.Generator`)
             List of generators within the network.
 
         """
@@ -1111,7 +1111,7 @@ class Network:
 
         Returns
         -------
-        list(:class:`~.grid.components.Load`)
+        list(:class:`~.network.components.Load`)
             List of loads within the network.
 
         """
@@ -1121,12 +1121,12 @@ class Network:
     @property
     def id(self):
         """
-        MV grid ID
+        MV network ID
 
         Returns
         --------
         :obj:`str`
-            MV grid ID
+            MV network ID
 
         """
 
@@ -1157,17 +1157,17 @@ class Network:
     @property
     def mv_grid(self):
         """
-        Medium voltage (MV) grid
+        Medium voltage (MV) network
 
         Parameters
         ----------
-        mv_grid : :class:`~.grid.grids.MVGrid`
-            Medium voltage (MV) grid
+        mv_grid : :class:`~.network.grids.MVGrid`
+            Medium voltage (MV) network
 
         Returns
         --------
-        :class:`~.grid.grids.MVGrid`
-            Medium voltage (MV) grid
+        :class:`~.network.grids.MVGrid`
+            Medium voltage (MV) network
 
         """
         return self._mv_grid
@@ -1179,17 +1179,17 @@ class Network:
     @property
     def grid_district(self):
         """
-        Medium voltage (MV) grid
+        Medium voltage (MV) network
 
         Parameters
         ----------
-        mv_grid : :class:`~.grid.grids.MVGrid`
-            Medium voltage (MV) grid
+        mv_grid : :class:`~.network.grids.MVGrid`
+            Medium voltage (MV) network
 
         Returns
         --------
-        :class:`~.grid.grids.MVGrid`
-            Medium voltage (MV) grid
+        :class:`~.network.grids.MVGrid`
+            Medium voltage (MV) network
 
         """
         return self._grid_district
@@ -1264,10 +1264,10 @@ class Config:
     --------
     Create Config object from default config files
 
-    >>> from edisgo.grid.network import Config
+    >>> from edisgo.network.network import Config
     >>> config = Config()
 
-    Get reactive power factor for generators in the MV grid
+    Get reactive power factor for generators in the MV network
 
     >>> config['reactive_power_factor']['mv_gen']
 
@@ -1365,7 +1365,7 @@ class TimeSeriesControl:
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
         The eDisGo data container
     mode : :obj:`str`, optional
         Mode must be set in case of worst-case analyses and can either be
@@ -1793,7 +1793,7 @@ class TimeSeriesControl:
     #     It returns the actual dispatch time series used in power flow analysis.
     #     If :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
     #     :meth:`timeseries` looks for time series of the according type of
-    #     technology in :class:`~.grid.network.TimeSeries`. If the reactive
+    #     technology in :class:`~.network.network.TimeSeries`. If the reactive
     #     power time series is provided through :attr:`_timeseries_reactive`,
     #     this is added to :attr:`_timeseries`. When :attr:`_timeseries_reactive`
     #     is not set, the reactive power is also calculated in
@@ -1815,12 +1815,12 @@ class TimeSeriesControl:
     #         # calculate time series for active and reactive power
     #         try:
     #             timeseries = \
-    #                 self.grid.network.timeseries.generation_dispatchable[
+    #                 self.network.network.timeseries.generation_dispatchable[
     #                     self.type].to_frame('p')
     #         except KeyError:
     #             try:
     #                 timeseries = \
-    #                     self.grid.network.timeseries.generation_dispatchable[
+    #                     self.network.network.timeseries.generation_dispatchable[
     #                         'other'].to_frame('p')
     #             except KeyError:
     #                 logger.exception("No time series for type {} "
@@ -1837,7 +1837,7 @@ class TimeSeriesControl:
     #         return timeseries
     #     else:
     #         return self._timeseries.loc[
-    #                self.grid.network.timeseries.timeindex, :]
+    #                self.network.network.timeseries.timeindex, :]
 
     # @property
     # def timeseries_reactive(self):
@@ -1859,16 +1859,16 @@ class TimeSeriesControl:
     #
     #     """
     #     if self._timeseries_reactive is None:
-    #         if self.grid.network.timeseries.generation_reactive_power \
+    #         if self.network.network.timeseries.generation_reactive_power \
     #                 is not None:
     #             try:
     #                 timeseries = \
-    #                     self.grid.network.timeseries.generation_reactive_power[
+    #                     self.network.network.timeseries.generation_reactive_power[
     #                         self.type].to_frame('q')
     #             except (KeyError, TypeError):
     #                 try:
     #                     timeseries = \
-    #                         self.grid.network.timeseries.generation_reactive_power[
+    #                         self.network.network.timeseries.generation_reactive_power[
     #                             'other'].to_frame('q')
     #                 except:
     #                     logger.warning(
@@ -1884,7 +1884,7 @@ class TimeSeriesControl:
     #             return None
     #     else:
     #         return self._timeseries_reactive.loc[
-    #                self.grid.network.timeseries.timeindex, :]
+    #                self.network.network.timeseries.timeindex, :]
 
 
     # @property
@@ -1902,15 +1902,15 @@ class TimeSeriesControl:
     #     :obj:`float`
     #         Ratio of real power to apparent power. If power factor is not set
     #         it is retrieved from the network config object depending on the
-    #         grid level the generator is in.
+    #         network level the generator is in.
     #
     #     """
     #     if self._power_factor is None:
-    #         if isinstance(self.grid, MVGrid):
-    #             self._power_factor = self.grid.network.config[
+    #         if isinstance(self.network, MVGrid):
+    #             self._power_factor = self.network.network.config[
     #                 'reactive_power_factor']['mv_gen']
-    #         elif isinstance(self.grid, LVGrid):
-    #             self._power_factor = self.grid.network.config[
+    #         elif isinstance(self.network, LVGrid):
+    #             self._power_factor = self.network.network.config[
     #                 'reactive_power_factor']['lv_gen']
     #     return self._power_factor
 
@@ -1923,7 +1923,7 @@ class TimeSeriesControl:
     #     It returns the actual time series used in power flow analysis. If
     #     :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
     #     :meth:`timeseries()` looks for time series of the according sector in
-    #     :class:`~.grid.network.TimeSeries` object.
+    #     :class:`~.network.network.TimeSeries` object.
     #
     #     Returns
     #     -------
@@ -1934,9 +1934,9 @@ class TimeSeriesControl:
     #     """
     #     if self._timeseries is None:
     #
-    #         if isinstance(self.grid, MVGrid):
+    #         if isinstance(self.network, MVGrid):
     #             voltage_level = 'mv'
-    #         elif isinstance(self.grid, LVGrid):
+    #         elif isinstance(self.network, LVGrid):
     #             voltage_level = 'lv'
     #
     #         ts_total = None
@@ -1945,11 +1945,11 @@ class TimeSeriesControl:
     #
     #             # check if load time series for MV and LV are differentiated
     #             try:
-    #                 ts = self.grid.network.timeseries.load[
+    #                 ts = self.network.network.timeseries.load[
     #                     sector, voltage_level].to_frame('p')
     #             except KeyError:
     #                 try:
-    #                     ts = self.grid.network.timeseries.load[
+    #                     ts = self.network.network.timeseries.load[
     #                         sector].to_frame('p')
     #                 except KeyError:
     #                     logger.exception(
@@ -1998,7 +1998,7 @@ class TimeSeriesControl:
     #         # scaled by the annual consumption; if none are given reactive
     #         # power time series are calculated timeseries getter using a given
     #         # power factor
-    #         if self.grid.network.timeseries.load_reactive_power is not None:
+    #         if self.network.network.timeseries.load_reactive_power is not None:
     #             self.power_factor = 'not_applicable'
     #             self.reactive_power_mode = 'not_applicable'
     #             ts_total = None
@@ -2006,7 +2006,7 @@ class TimeSeriesControl:
     #                 consumption = self.consumption[sector]
     #
     #                 try:
-    #                     ts = self.grid.network.timeseries.load_reactive_power[
+    #                     ts = self.network.network.timeseries.load_reactive_power[
     #                         sector].to_frame('q')
     #                 except KeyError:
     #                     logger.exception(
@@ -2051,15 +2051,15 @@ class TimeSeriesControl:
     #     :obj:`float`
     #         Ratio of real power to apparent power. If power factor is not set
     #         it is retrieved from the network config object depending on the
-    #         grid level the load is in.
+    #         network level the load is in.
     #
     #     """
     #     if self._power_factor is None:
-    #         if isinstance(self.grid, MVGrid):
-    #             self._power_factor = self.grid.network.config[
+    #         if isinstance(self.network, MVGrid):
+    #             self._power_factor = self.network.network.config[
     #                 'reactive_power_factor']['mv_load']
-    #         elif isinstance(self.grid, LVGrid):
-    #             self._power_factor = self.grid.network.config[
+    #         elif isinstance(self.network, LVGrid):
+    #             self._power_factor = self.network.network.config[
     #                 'reactive_power_factor']['lv_load']
     #     return self._power_factor
 
@@ -2146,7 +2146,7 @@ class CurtailmentControl:
         aggregative. Default: None.
 
     """
-    # ToDo move some properties from grid here (e.g. peak_load, generators,...)
+    # ToDo move some properties from network here (e.g. peak_load, generators,...)
     def __init__(self, edisgo, methodology, curtailment_timeseries, mode=None,
                  **kwargs):
 
@@ -2310,10 +2310,10 @@ class CurtailmentControl:
 
         Parameters
         -----------
-        network : :class:`~.grid.network.Network`
+        network : :class:`~.network.network.Network`
         feedin : :pandas:`pandas.DataFrame<dataframe>`
             DataFrame with feed-in time series in kW. Columns of the dataframe
-            are :class:`~.grid.components.GeneratorFluctuating`, index is
+            are :class:`~.network.components.GeneratorFluctuating`, index is
             time index.
 
         """
@@ -2330,11 +2330,11 @@ class CurtailmentControl:
 
 class StorageControl:
     """
-    Integrates storages into the grid.
+    Integrates storages into the network.
 
     Parameters
     ----------
-    edisgo : :class:`~.grid.network.EDisGo`
+    edisgo : :class:`~.network.network.EDisGo`
     timeseries : :obj:`str` or :pandas:`pandas.Series<series>` or :obj:`dict`
         Parameter used to obtain time series of active power the
         storage(s) is/are charged (negative) or discharged (positive) with. Can
@@ -2363,19 +2363,19 @@ class StorageControl:
           the storage. See `parameters` for more information.
 
         Default: None.
-    position : None or :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`  or :class:`~.grid.components.Generator` or :class:`~.grid.components.Load` or :obj:`dict`
+    position : None or :obj:`str` or :class:`~.network.components.Station` or :class:`~.network.components.BranchTee`  or :class:`~.network.components.Generator` or :class:`~.network.components.Load` or :obj:`dict`
         To position the storage a positioning strategy can be used or a
-        node in the grid can be directly specified. Possible options are:
+        node in the network can be directly specified. Possible options are:
 
         * 'hvmv_substation_busbar'
           Places a storage unit directly at the HV/MV station's bus bar.
-        * :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :class:`~.grid.components.Generator` or :class:`~.grid.components.Load`
+        * :class:`~.network.components.Station` or :class:`~.network.components.BranchTee` or :class:`~.network.components.Generator` or :class:`~.network.components.Load`
           Specifies a node the storage should be connected to. In the case
-          this parameter is of type :class:`~.grid.components.LVStation` an
+          this parameter is of type :class:`~.network.components.LVStation` an
           additional parameter, `voltage_level`, has to be provided to define
           which side of the LV station the storage is connected to.
         * 'distribute_storages_mv'
-          Places one storage in each MV feeder if it reduces grid expansion
+          Places one storage in each MV feeder if it reduces network expansion
           costs. This method needs a given time series of active power.
           ToDo: Elaborate
 
@@ -2398,7 +2398,7 @@ class StorageControl:
                 'standing_loss': <float> # in per unit 0..1
             }
 
-        See :class:`~.grid.components.Storage` for more information on storage
+        See :class:`~.network.components.Storage` for more information on storage
         parameters.
         In case of more than one storage provide a :obj:`dict` where each
         entry represents a storage. Keys of the dictionary have to match
@@ -2410,7 +2410,7 @@ class StorageControl:
         Default: {}.
     voltage_level : :obj:`str` or :obj:`dict`, optional
         This parameter only needs to be provided if any entry in `position` is
-        of type :class:`~.grid.components.LVStation`. In that case
+        of type :class:`~.network.components.LVStation`. In that case
         `voltage_level` defines which side of the LV station the storage is
         connected to. Valid options are 'lv' and 'mv'.
         In case of more than one storage provide a :obj:`dict` specifying the
@@ -2500,7 +2500,7 @@ class StorageControl:
     def _integrate_storage(self, timeseries, position, params, voltage_level,
                            reactive_power_timeseries, **kwargs):
         """
-        Integrate storage units in the grid.
+        Integrate storage units in the network.
 
         Parameters
         ----------
@@ -2509,7 +2509,7 @@ class StorageControl:
             storage is charged (negative) or discharged (positive) with. Can
             either be a given time series or an operation strategy. See class
             definition for more information
-        position : :obj:`str` or :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee` or :class:`~.grid.components.Generator` or :class:`~.grid.components.Load`
+        position : :obj:`str` or :class:`~.network.components.Station` or :class:`~.network.components.BranchTee` or :class:`~.network.components.Generator` or :class:`~.network.components.Load`
             Parameter used to place the storage. See class definition for more
             information.
         params : :obj:`dict`
@@ -2733,9 +2733,9 @@ class TimeSeries:
 
     See also
     --------
-    `timeseries` getter in :class:`~.grid.components.Generator`,
-    :class:`~.grid.components.GeneratorFluctuating` and
-    :class:`~.grid.components.Load`.
+    `timeseries` getter in :class:`~.network.components.Generator`,
+    :class:`~.network.components.GeneratorFluctuating` and
+    :class:`~.network.components.Load`.
 
     """
 
@@ -2954,7 +2954,7 @@ class TimeSeries:
         """
         Contains residual load and information on feed-in and load case.
 
-        Residual load is calculated from total (load - generation) in the grid.
+        Residual load is calculated from total (load - generation) in the network.
         Grid losses are not considered.
 
         Feed-in and load case are identified based on the
@@ -2998,11 +2998,11 @@ class Results:
     Power flow analysis results management
 
     Includes raw power flow analysis results, history of measures to increase
-    the grid's hosting capacity and information about changes of equipment.
+    the network's hosting capacity and information about changes of equipment.
 
     Attributes
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
         The network is a container object holding all data.
 
     """
@@ -3026,20 +3026,20 @@ class Results:
     @property
     def measures(self):
         """
-        List with the history of measures to increase grid's hosting capacity.
+        List with the history of measures to increase network's hosting capacity.
 
         Parameters
         ----------
         measure : :obj:`str`
-            Measure to increase grid's hosting capacity. Possible options are
+            Measure to increase network's hosting capacity. Possible options are
             'grid_expansion', 'storage_integration', 'curtailment'.
 
         Returns
         -------
         measures : :obj:`list`
-            A stack that details the history of measures to increase grid's
+            A stack that details the history of measures to increase network's
             hosting capacity. The last item refers to the latest measure. The
-            key `original` refers to the state of the grid topology as it was
+            key `original` refers to the state of the network topology as it was
             initially imported.
 
         """
@@ -3057,7 +3057,7 @@ class Results:
         Holds power flow analysis results for active power for the last
         iteration step. Index of the DataFrame is a DatetimeIndex indicating
         the time period the power flow analysis was conducted for; columns
-        of the DataFrame are the edges as well as stations of the grid
+        of the DataFrame are the edges as well as stations of the network
         topology.
 
         Parameters
@@ -3089,7 +3089,7 @@ class Results:
         Holds power flow analysis results for reactive power for the last
         iteration step. Index of the DataFrame is a DatetimeIndex indicating
         the time period the power flow analysis was conducted for; columns
-        of the DataFrame are the edges as well as stations of the grid
+        of the DataFrame are the edges as well as stations of the network
         topology.
 
         Parameters
@@ -3121,7 +3121,7 @@ class Results:
         Holds power flow analysis results for relative voltage deviation for
         the last iteration step. Index of the DataFrame is a DatetimeIndex
         indicating the time period the power flow analysis was conducted for;
-        columns of the DataFrame are the nodes as well as stations of the grid
+        columns of the DataFrame are the nodes as well as stations of the network
         topology.
 
         Parameters
@@ -3136,7 +3136,7 @@ class Results:
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Voltage level nodes of grid
+            Voltage level nodes of network
 
         """
         return self._pfa_v_mag_pu
@@ -3153,7 +3153,7 @@ class Results:
         Holds power flow analysis results for current for the last
         iteration step. Index of the DataFrame is a DatetimeIndex indicating
         the time period the power flow analysis was conducted for; columns
-        of the DataFrame are the edges as well as stations of the grid
+        of the DataFrame are the edges as well as stations of the network
         topology.
 
         Parameters
@@ -3183,7 +3183,7 @@ class Results:
         Tracks changes in the equipment (e.g. replaced or added cable, etc.)
 
         The DataFrame is indexed by the component(
-        :class:`~.grid.components.Line`, :class:`~.grid.components.Station`,
+        :class:`~.network.components.Line`, :class:`~.network.components.Station`,
         etc.) and has the following columns:
 
         equipment : detailing what was changed (line, station, storage,
@@ -3202,7 +3202,7 @@ class Results:
 
         quantity : :obj:`int`
             Number of components added or removed. Only relevant for
-            calculation of grid expansion costs to keep track of how many
+            calculation of network expansion costs to keep track of how many
             new standard lines were added.
 
         Parameters
@@ -3226,7 +3226,7 @@ class Results:
     @property
     def grid_expansion_costs(self):
         """
-        Holds grid expansion costs in kEUR due to grid expansion measures
+        Holds network expansion costs in kEUR due to network expansion measures
         tracked in self.equipment_changes and calculated in
         edisgo.flex_opt.costs.grid_expansion_costs()
 
@@ -3241,8 +3241,8 @@ class Results:
             argument.
 
             Index of the DataFrame is the respective object
-            that can either be a :class:`~.grid.components.Line` or a
-            :class:`~.grid.components.Transformer`. Columns are the following:
+            that can either be a :class:`~.network.components.Line` or a
+            :class:`~.network.components.Transformer`. Columns are the following:
 
             type : :obj:`str`
                 Transformer size or cable name
@@ -3263,9 +3263,9 @@ class Results:
                 Specifies voltage level the equipment is in ('lv', 'mv' or
                 'mv/lv').
 
-            mv_feeder : :class:`~.grid.components.Line`
+            mv_feeder : :class:`~.network.components.Line`
                 First line segment of half-ring used to identify in which
-                feeder the grid expansion was conducted in.
+                feeder the network expansion was conducted in.
 
         Returns
         -------
@@ -3274,7 +3274,7 @@ class Results:
 
         Notes
         -------
-        Total grid expansion costs can be obtained through
+        Total network expansion costs can be obtained through
         costs.total_costs.sum().
 
         """
@@ -3287,19 +3287,19 @@ class Results:
     @property
     def grid_losses(self):
         """
-        Holds active and reactive grid losses in kW and kvar, respectively.
+        Holds active and reactive network losses in kW and kvar, respectively.
 
         Parameters
         ----------
         pypsa_grid_losses : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe holding active and reactive grid losses in columns 'p'
+            Dataframe holding active and reactive network losses in columns 'p'
             and 'q' and in kW and kvar, respectively. Index is a
             :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe holding active and reactive grid losses in columns 'p'
+            Dataframe holding active and reactive network losses in columns 'p'
             and 'q' and in kW and kvar, respectively. Index is a
             :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
@@ -3325,25 +3325,25 @@ class Results:
     @property
     def hv_mv_exchanges(self):
         """
-        Holds active and reactive power exchanged with the HV grid.
+        Holds active and reactive power exchanged with the HV network.
 
         The exchanges are essentially the slack results. As the slack is placed
         at the secondary side of the HV/MV station, this gives the energy
-        transferred to and taken from the HV grid at the secondary side of the
+        transferred to and taken from the HV network at the secondary side of the
         HV/MV station.
 
         Parameters
         ----------
         hv_mv_exchanges : :pandas:`pandas.DataFrame<dataframe>`
             Dataframe holding active and reactive power exchanged with the HV
-            grid in columns 'p' and 'q' and in kW and kvar, respectively. Index
+            network in columns 'p' and 'q' and in kW and kvar, respectively. Index
             is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>
             Dataframe holding active and reactive power exchanged with the HV
-            grid in columns 'p' and 'q' and in kW and kvar, respectively. Index
+            network in columns 'p' and 'q' and in kW and kvar, respectively. Index
             is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         """
@@ -3372,7 +3372,7 @@ class Results:
             kW per generator and time step. Index of the dataframe is a
             :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
             generators of type
-            :class:`edisgo.grid.components.GeneratorFluctuating`.
+            :class:`edisgo.network.components.GeneratorFluctuating`.
 
         """
         if self._curtailment is not None:
@@ -3395,7 +3395,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
 
-            Dataframe containing all storages installed in the MV grid and
+            Dataframe containing all storages installed in the MV network and
             LV grids. Index of the dataframe are the storage representatives,
             columns are the following:
 
@@ -3433,7 +3433,7 @@ class Results:
         :pandas:`pandas.DataFrame<dataframe>`
 
             Dataframe containing time series of all storages installed in the
-            MV grid and LV grids. Index of the dataframe is a
+            MV network and LV grids. Index of the dataframe is a
             :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
             storage representatives.
 
@@ -3457,19 +3457,19 @@ class Results:
         Parameters
         ----------
         costs_df : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe containing grid expansion costs in kEUR before and after
+            Dataframe containing network expansion costs in kEUR before and after
             storage integration in columns 'grid_expansion_costs_initial' and
             'grid_expansion_costs_with_storages', respectively. Index of the
-            dataframe is the MV grid id.
+            dataframe is the MV network id.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
 
-            Dataframe containing grid expansion costs in kEUR before and after
+            Dataframe containing network expansion costs in kEUR before and after
             storage integration in columns 'grid_expansion_costs_initial' and
             'grid_expansion_costs_with_storages', respectively. Index of the
-            dataframe is the MV grid id.
+            dataframe is the MV network id.
 
         """
         return self._storages_costs_reduction
@@ -3482,11 +3482,11 @@ class Results:
     def unresolved_issues(self):
         """
         Holds lines and nodes where over-loading or over-voltage issues
-        could not be solved in grid reinforcement.
+        could not be solved in network reinforcement.
 
         In case over-loading or over-voltage issues could not be solved
-        after maximum number of iterations, grid reinforcement is not
-        aborted but grid expansion costs are still calculated and unresolved
+        after maximum number of iterations, network reinforcement is not
+        aborted but network expansion costs are still calculated and unresolved
         issues listed here.
 
         Parameters
@@ -3533,10 +3533,10 @@ class Results:
         Parameters
         ----------
         components : :obj:`list`
-            List with all components (of type :class:`~.grid.components.Line`
-            or :class:`~.grid.components.Transformer`) to get apparent power
+            List with all components (of type :class:`~.network.components.Line`
+            or :class:`~.network.components.Transformer`) to get apparent power
             for. If not provided defaults to return apparent power of all lines
-            and transformers in the grid.
+            and transformers in the network.
 
         Returns
         -------
@@ -3573,13 +3573,13 @@ class Results:
 
         Parameters
         ----------
-        nodes : :class:`~.grid.components.Load`, \
-            :class:`~.grid.components.Generator`, etc. or :obj:`list`
-            Grid topology component or list of grid topology components.
-            If not provided defaults to column names available in grid level
+        nodes : :class:`~.network.components.Load`, \
+            :class:`~.network.components.Generator`, etc. or :obj:`list`
+            Grid topology component or list of network topology components.
+            If not provided defaults to column names available in network level
             `level`.
         level : str
-            Either 'mv' or 'lv' or None (default). Depending on which grid
+            Either 'mv' or 'lv' or None (default). Depending on which network
             level results you are interested in. It is required to provide this
             argument in order to distinguish voltage levels at primary and
             secondary side of the transformer/LV station.
@@ -3723,11 +3723,11 @@ class Results:
                 self.s_res().to_csv(
                     os.path.join(target_dir, 'apparent_powers.csv'))
 
-                # grid losses
+                # network losses
                 self.grid_losses.to_csv(
                     os.path.join(target_dir, 'grid_losses.csv'))
 
-                # grid exchanges
+                # network exchanges
                 self.hv_mv_exchanges.to_csv(os.path.join(
                     target_dir, 'hv_mv_exchanges.csv'))
 
@@ -3742,7 +3742,7 @@ class Results:
                 # create directory
                 os.makedirs(target_dir, exist_ok=True)
 
-                # grid expansion costs
+                # network expansion costs
                 self.grid_expansion_costs.to_csv(os.path.join(
                     target_dir, 'grid_expansion_costs.csv'))
 
@@ -3906,12 +3906,12 @@ class ResultsReimport:
                 os.path.join(
                     results_path, 'powerflow_results', 'apparent_powers.csv'),
                 index_col=0, parse_dates=True)
-            # grid losses
+            # network losses
             self.grid_losses = pd.read_csv(
                 os.path.join(
                     results_path, 'powerflow_results', 'grid_losses.csv'),
                 index_col=0, parse_dates=True)
-            # grid exchanges
+            # network exchanges
             self.hv_mv_exchanges = pd.read_csv(
                 os.path.join(
                     results_path, 'powerflow_results', 'hv_mv_exchanges.csv'),
@@ -3925,10 +3925,10 @@ class ResultsReimport:
             self.grid_losses = None
             self.hv_mv_exchanges = None
 
-        # import grid expansion results
+        # import network expansion results
         if 'grid_expansion_results' in parameters and os.path.isdir(
                 os.path.join(results_path, 'grid_expansion_results')):
-            # grid expansion costs
+            # network expansion costs
             self.grid_expansion_costs = pd.read_csv(
                 os.path.join(
                     results_path, 'grid_expansion_results',
@@ -4012,11 +4012,11 @@ class ResultsReimport:
         Parameters
         ----------
         nodes : :obj:`list`
-            List of string representatives of grid topology components, e.g.
-            :class:`~.grid.components.Generator`. If not provided defaults to
-            all nodes available in grid level `level`.
+            List of string representatives of network topology components, e.g.
+            :class:`~.network.components.Generator`. If not provided defaults to
+            all nodes available in network level `level`.
         level : :obj:`str`
-            Either 'mv' or 'lv' or None (default). Depending on which grid
+            Either 'mv' or 'lv' or None (default). Depending on which network
             level results you are interested in. It is required to provide this
             argument in order to distinguish voltage levels at primary and
             secondary side of the transformer/LV station.
@@ -4057,9 +4057,9 @@ class ResultsReimport:
         Parameters
         ----------
         components : :obj:`list`
-            List of string representatives of :class:`~.grid.components.Line`
-            or :class:`~.grid.components.Transformer`. If not provided defaults
-            to return apparent power of all lines and transformers in the grid.
+            List of string representatives of :class:`~.network.components.Line`
+            or :class:`~.network.components.Transformer`. If not provided defaults
+            to return apparent power of all lines and transformers in the network.
 
         Returns
         -------
@@ -4089,7 +4089,7 @@ class ResultsReimport:
         :pandas:`pandas.DataFrame<dataframe>`
 
             Dataframe containing time series of all storages installed in the
-            MV grid and LV grids. Index of the dataframe is a
+            MV network and LV grids. Index of the dataframe is a
             :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
             storage representatives.
 

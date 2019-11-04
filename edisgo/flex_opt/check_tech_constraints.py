@@ -1,18 +1,18 @@
 import pandas as pd
 import logging
 
-from edisgo.grid.grids import LVGrid, MVGrid
+from edisgo.network.grids import LVGrid, MVGrid
 
 logger = logging.getLogger('edisgo')
 
 
 def mv_line_load(network):
     """
-    Checks for over-loading issues in MV grid.
+    Checks for over-loading issues in MV network.
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
 
     Returns
     -------
@@ -20,7 +20,7 @@ def mv_line_load(network):
         Dataframe containing over-loaded MV lines, their maximum relative
         over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded lines of type
-        :class:`~.grid.components.Line`. Columns are 'max_rel_overload'
+        :class:`~.network.components.Line`. Columns are 'max_rel_overload'
         containing the maximum relative over-loading as float and 'time_index'
         containing the corresponding time step the over-loading occured in as
         :pandas:`pandas.Timestamp<timestamp>`.
@@ -37,10 +37,10 @@ def mv_line_load(network):
     crit_lines = _line_load(network, network.mv_grid, crit_lines)
 
     if not crit_lines.empty:
-        logger.debug('==> {} line(s) in MV grid has/have load issues.'.format(
+        logger.debug('==> {} line(s) in MV network has/have load issues.'.format(
             crit_lines.shape[0]))
     else:
-        logger.debug('==> No line load issues in MV grid.')
+        logger.debug('==> No line load issues in MV network.')
 
     return crit_lines
 
@@ -51,7 +51,7 @@ def lv_line_load(network):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
 
     Returns
     -------
@@ -59,7 +59,7 @@ def lv_line_load(network):
         Dataframe containing over-loaded LV lines, their maximum relative
         over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded lines of type
-        :class:`~.grid.components.Line`. Columns are 'max_rel_overload'
+        :class:`~.network.components.Line`. Columns are 'max_rel_overload'
         containing the maximum relative over-loading as float and 'time_index'
         containing the corresponding time step the over-loading occured in as
         :pandas:`pandas.Timestamp<timestamp>`.
@@ -92,13 +92,13 @@ def _line_load(network, grid, crit_lines):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
-    grid : :class:`~.grid.grids.LVGrid` or :class:`~.grid.grids.MVGrid`
+    network : :class:`~.network.network.Network`
+    grid : :class:`~.network.grids.LVGrid` or :class:`~.network.grids.MVGrid`
     crit_lines : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing over-loaded lines, their maximum relative
         over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded lines of type
-        :class:`~.grid.components.Line`. Columns are 'max_rel_overload'
+        :class:`~.network.components.Line`. Columns are 'max_rel_overload'
         containing the maximum relative over-loading as float and 'time_index'
         containing the corresponding time step the over-loading occured in as
         :pandas:`pandas.Timestamp<timestamp>`.
@@ -109,7 +109,7 @@ def _line_load(network, grid, crit_lines):
         Dataframe containing over-loaded lines, their maximum relative
         over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded lines of type
-        :class:`~.grid.components.Line`. Columns are 'max_rel_overload'
+        :class:`~.network.components.Line`. Columns are 'max_rel_overload'
         containing the maximum relative over-loading as float and 'time_index'
         containing the corresponding time step the over-loading occured in as
         :pandas:`pandas.Timestamp<timestamp>`.
@@ -158,7 +158,7 @@ def hv_mv_station_load(edisgo):
 
     Parameters
     ----------
-    edisgo : :class:`~.grid.network.Edisgo`
+    edisgo : :class:`~.network.network.Edisgo`
 
     Returns
     -------
@@ -166,7 +166,7 @@ def hv_mv_station_load(edisgo):
         Dataframe containing over-loaded HV/MV stations, their apparent power
         at maximal over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded stations of type
-        :class:`~.grid.components.MVStation`. Columns are 's_pfa'
+        :class:`~.network.components.MVStation`. Columns are 's_pfa'
         containing the apparent power at maximal over-loading as float and
         'time_index' containing the corresponding time step the over-loading
         occured in as :pandas:`pandas.Timestamp<timestamp>`.
@@ -195,7 +195,7 @@ def mv_lv_station_load(network):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
 
     Returns
     -------
@@ -203,7 +203,7 @@ def mv_lv_station_load(network):
         Dataframe containing over-loaded MV/LV stations, their apparent power
         at maximal over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded stations of type
-        :class:`~.grid.components.LVStation`. Columns are 's_pfa'
+        :class:`~.network.components.LVStation`. Columns are 's_pfa'
         containing the apparent power at maximal over-loading as float and
         'time_index' containing the corresponding time step the over-loading
         occured in as :pandas:`pandas.Timestamp<timestamp>`.
@@ -236,14 +236,14 @@ def _station_load(edisgo, grid, crit_stations):
 
     Parameters
     ----------
-    edisgo : :class:`~.grid.network.Edisgo`
-    grid : :class:`~.grid.grids.LVGrid` or :class:`~.grid.grids.MVGrid`
+    edisgo : :class:`~.network.network.Edisgo`
+    grid : :class:`~.network.grids.LVGrid` or :class:`~.network.grids.MVGrid`
     crit_stations : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing over-loaded stations, their apparent power at
         maximal over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded stations either of type
-        :class:`~.grid.components.LVStation` or
-        :class:`~.grid.components.MVStation`. Columns are 's_pfa'
+        :class:`~.network.components.LVStation` or
+        :class:`~.network.components.MVStation`. Columns are 's_pfa'
         containing the apparent power at maximal over-loading as float and
         'time_index' containing the corresponding time step the over-loading
         occured in as :pandas:`pandas.Timestamp<timestamp>`.
@@ -254,8 +254,8 @@ def _station_load(edisgo, grid, crit_stations):
         Dataframe containing over-loaded stations, their apparent power at
         maximal over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded stations either of type
-        :class:`~.grid.components.LVStation` or
-        :class:`~.grid.components.MVStation`. Columns are 's_pfa'
+        :class:`~.network.components.LVStation` or
+        :class:`~.network.components.MVStation`. Columns are 's_pfa'
         containing the apparent power at maximal over-loading as float and
         'time_index' containing the corresponding time step the over-loading
         occured in as :pandas:`pandas.Timestamp<timestamp>`.
@@ -270,7 +270,7 @@ def _station_load(edisgo, grid, crit_stations):
     elif isinstance(grid, MVGrid):
         grid_level = 'mv'
     else:
-        raise ValueError('Inserted grid of unknown type.')
+        raise ValueError('Inserted network of unknown type.')
 
     # maximum allowed apparent power of station for feed-in and load case
     s_station = sum([grid.transformers_df.loc[_,'s_nom'] for _ in grid.transformers_df.index])
@@ -318,31 +318,31 @@ def _station_load(edisgo, grid, crit_stations):
 
 def mv_voltage_deviation(network, voltage_levels='mv_lv'):
     """
-    Checks for voltage stability issues in MV grid.
+    Checks for voltage stability issues in MV network.
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
     voltage_levels : :obj:`str`
         Specifies which allowed voltage deviations to use. Possible options
         are:
 
         * 'mv_lv'
           This is the default. The allowed voltage deviation for nodes in the
-          MV grid is the same as for nodes in the LV grid. Further load and
+          MV network is the same as for nodes in the LV network. Further load and
           feed-in case are not distinguished.
         * 'mv'
-          Use this to handle allowed voltage deviations in the MV and LV grid
+          Use this to handle allowed voltage deviations in the MV and LV network
           differently. Here, load and feed-in case are differentiated as well.
 
     Returns
     -------
     :obj:`dict`
-        Dictionary with :class:`~.grid.grids.MVGrid` as key and a
+        Dictionary with :class:`~.network.grids.MVGrid` as key and a
         :pandas:`pandas.DataFrame<dataframe>` with its critical nodes, sorted
         descending by voltage deviation, as value.
         Index of the dataframe are all nodes (of type
-        :class:`~.grid.components.Generator`, :class:`~.grid.components.Load`,
+        :class:`~.network.components.Generator`, :class:`~.network.components.Load`,
         etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
         maximum voltage deviation as float and 'time_index' containing the
         corresponding time step the over-voltage occured in as
@@ -405,10 +405,10 @@ def mv_voltage_deviation(network, voltage_levels='mv_lv'):
         crit_nodes[network.mv_grid] = crit_nodes_grid.sort_values(
             by=['v_mag_pu'], ascending=False)
         logger.debug(
-            '==> {} node(s) in MV grid has/have voltage issues.'.format(
+            '==> {} node(s) in MV network has/have voltage issues.'.format(
                 crit_nodes[network.mv_grid].shape[0]))
     else:
-        logger.debug('==> No voltage issues in MV grid.')
+        logger.debug('==> No voltage issues in MV network.')
 
     return crit_nodes
 
@@ -419,9 +419,9 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
     mode : None or String
-        If None voltage at all nodes in LV grid is checked. If mode is set to
+        If None voltage at all nodes in LV network is checked. If mode is set to
         'stations' only voltage at busbar is checked.
     voltage_levels : :obj:`str`
         Specifies which allowed voltage deviations to use. Possible options
@@ -429,20 +429,20 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
 
         * 'mv_lv'
           This is the default. The allowed voltage deviation for nodes in the
-          MV grid is the same as for nodes in the LV grid. Further load and
+          MV network is the same as for nodes in the LV network. Further load and
           feed-in case are not distinguished.
         * 'lv'
-          Use this to handle allowed voltage deviations in the MV and LV grid
+          Use this to handle allowed voltage deviations in the MV and LV network
           differently. Here, load and feed-in case are differentiated as well.
 
     Returns
     -------
     :obj:`dict`
-        Dictionary with :class:`~.grid.grids.LVGrid` as key and a
+        Dictionary with :class:`~.network.grids.LVGrid` as key and a
         :pandas:`pandas.DataFrame<dataframe>` with its critical nodes, sorted
         descending by voltage deviation, as value.
         Index of the dataframe are all nodes (of type
-        :class:`~.grid.components.Generator`, :class:`~.grid.components.Load`,
+        :class:`~.network.components.Generator`, :class:`~.network.components.Load`,
         etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
         maximum voltage deviation as float and 'time_index' containing the
         corresponding time step the over-voltage occured in as
@@ -568,7 +568,7 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
                     len(crit_nodes)))
         else:
             logger.debug(
-                '==> {} LV grid(s) has/have voltage issues.'.format(
+                '==> {} LV network(s) has/have voltage issues.'.format(
                     len(crit_nodes)))
     else:
         if mode == 'stations':
@@ -585,10 +585,10 @@ def _voltage_deviation(network, nodes, v_dev_allowed_upper,
     Checks for voltage stability issues in LV grids.
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
     nodes : :obj:`list`
-        List of nodes (of type :class:`~.grid.components.Generator`,
-        :class:`~.grid.components.Load`, etc.) to check voltage deviation for.
+        List of nodes (of type :class:`~.network.components.Generator`,
+        :class:`~.network.components.Load`, etc.) to check voltage deviation for.
     v_dev_allowed_upper : :pandas:`pandas.Series<series>`
         Series with time steps (of type :pandas:`pandas.Timestamp<timestamp>`)
         power flow analysis was conducted for and the allowed upper limit of
@@ -606,7 +606,7 @@ def _voltage_deviation(network, nodes, v_dev_allowed_upper,
     :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with critical nodes, sorted descending by voltage deviation.
         Index of the dataframe are all nodes (of type
-        :class:`~.grid.components.Generator`, :class:`~.grid.components.Load`,
+        :class:`~.network.components.Generator`, :class:`~.network.components.Load`,
         etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
         maximum voltage deviation as float and 'time_index' containing the
         corresponding time step the over-voltage occured in as
@@ -663,7 +663,7 @@ def check_ten_percent_voltage_deviation(network):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
 
     """
 

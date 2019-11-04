@@ -5,7 +5,7 @@ from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import reinforce_measures, exceptions
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.tools import tools, pypsa_io
-from edisgo.grid.tools import assign_mv_feeder_to_nodes
+from edisgo.network.tools import assign_mv_feeder_to_nodes
 import logging
 
 logger = logging.getLogger('edisgo')
@@ -15,13 +15,13 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                    max_while_iterations=10, combined_analysis=False,
                    mode=None):
     """
-    Evaluates grid reinforcement needs and performs measures.
+    Evaluates network reinforcement needs and performs measures.
 
-    This function is the parent function for all grid reinforcements.
+    This function is the parent function for all network reinforcements.
 
     Parameters
     ----------
-    edisgo : :class:`~.grid.network.EDisGo`
+    edisgo : :class:`~.network.network.EDisGo`
         The eDisGo API object
     timesteps_pfa : :obj:`str` or \
         :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
@@ -30,12 +30,12 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         conducted and therefore which time steps to consider when checking
         for over-loading and over-voltage issues.
         It defaults to None in which case all timesteps in
-        timeseries.timeindex (see :class:`~.grid.network.TimeSeries`) are used.
+        timeseries.timeindex (see :class:`~.network.network.TimeSeries`) are used.
         Possible options are:
 
         * None
           Time steps in timeseries.timeindex (see
-          :class:`~.grid.network.TimeSeries`) are used.
+          :class:`~.network.network.TimeSeries`) are used.
         * 'snapshot_analysis'
           Reinforcement is conducted for two worst-case snapshots. See
           :meth:`edisgo.tools.tools.select_worstcase_snapshots()` for further
@@ -56,28 +56,28 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         Maximum number of times each while loop is conducted.
     combined_analysis : :obj:`Boolean`
         If True allowed voltage deviations for combined analysis of MV and LV
-        grid are used. If False different allowed voltage deviations for MV
+        network are used. If False different allowed voltage deviations for MV
         and LV are used. See also config section
         `grid_expansion_allowed_voltage_deviations`. If `mode` is set to 'mv'
         `combined_analysis` should be False. Default: False.
     mode : :obj:`str`
-        Determines grid levels reinforcement is conducted for. Specify
+        Determines network levels reinforcement is conducted for. Specify
 
-        * None to reinforce MV and LV grid levels. None is the default.
-        * 'mv' to reinforce MV grid level only, including MV/LV stations, and
-          neglecting LV grid topology. LV load and generation is aggregated per
-          LV grid and directly connected to the secondary side of the
+        * None to reinforce MV and LV network levels. None is the default.
+        * 'mv' to reinforce MV network level only, including MV/LV stations, and
+          neglecting LV network topology. LV load and generation is aggregated per
+          LV network and directly connected to the secondary side of the
           respective MV/LV station.
 
     Returns
     -------
-    :class:`~.grid.network.Results`
-        Returns the Results object holding grid expansion costs, equipment
+    :class:`~.network.network.Results`
+        Returns the Results object holding network expansion costs, equipment
         changes, etc.
 
     Notes
     -----
-    See :ref:`features-in-detail` for more information on how grid
+    See :ref:`features-in-detail` for more information on how network
     reinforcement is conducted.
 
     """
@@ -115,7 +115,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         raise ValueError("Provided mode {} is not a valid mode.")
 
     # assign MV feeder to every generator, LV station, load, and branch tee
-    # to assign grid expansion costs to an MV feeder
+    # to assign network expansion costs to an MV feeder
     # Todo: Necessary? If so change
     #assign_mv_feeder_to_nodes(edisgo.network.mv_grid)
 
@@ -243,8 +243,8 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # REINFORCE BRANCHES DUE TO VOLTAGE ISSUES
     iteration_step += 1
 
-    # solve voltage problems in MV grid
-    logger.debug('==> Check voltage in MV grid.')
+    # solve voltage problems in MV network
+    logger.debug('==> Check voltage in MV network.')
     if combined_analysis:
         voltage_levels = 'mv_lv'
     else:
@@ -271,7 +271,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                 edisgo_reinforce.network.results.equipment_changes.
                     iteration_step == iteration_step])
         edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
-        logger.debug('==> Recheck voltage in MV grid.')
+        logger.debug('==> Recheck voltage in MV network.')
         crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce.network,
                                                  voltage_levels=voltage_levels)
 
@@ -286,10 +286,10 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                 edisgo_reinforce.network.results.unresolved_issues.update(
                     {repr(node): v.loc[node, 'v_mag_pu']})
         raise exceptions.MaximumIterationError(
-            "Over-voltage issues for the following nodes in MV grid could "
+            "Over-voltage issues for the following nodes in MV network could "
             "not be solved: {}".format(crit_nodes))
     else:
-        logger.info('==> Voltage issues in MV grid were solved in {} '
+        logger.info('==> Voltage issues in MV network were solved in {} '
                     'iteration step(s).'.format(while_counter))
 
     # solve voltage problems at secondary side of LV stations
@@ -350,7 +350,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
 
         while_counter = 0
         while crit_nodes and while_counter < max_while_iterations:
-            # for every grid in crit_nodes do reinforcement
+            # for every network in crit_nodes do reinforcement
             for grid in crit_nodes:
                 # reinforce lines
                 lines_changes = \
@@ -474,7 +474,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # final check 10% criteria
     checks.check_ten_percent_voltage_deviation(edisgo_reinforce.network)
 
-    # calculate grid expansion costs
+    # calculate network expansion costs
     edisgo_reinforce.network.results.grid_expansion_costs = \
         grid_expansion_costs(edisgo_reinforce.network, mode=mode)
 

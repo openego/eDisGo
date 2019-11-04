@@ -1,19 +1,19 @@
 from abc import ABC, abstractmethod
 
-from edisgo.grid.components import Generator, Load, Switch
-from edisgo.grid import network
+from edisgo.network.components import Generator, Load, Switch
+from edisgo.network import network
 from edisgo.tools import pypsa_io
 
 
 class Grid(ABC):
     """
-    Defines a basic grid in eDisGo
+    Defines a basic network in eDisGo
 
     Parameters
     -----------
     _id : str or int
         Identifier
-    _network : :class:`~.grid.network.Network`
+    _network : :class:`~.network.network.Network`
         Network container.
 
     # ToDo add annual_consumption property?
@@ -43,7 +43,7 @@ class Grid(ABC):
     @property
     def nominal_voltage(self):
         """
-        Nominal voltage of grid in V.
+        Nominal voltage of network in V.
 
         Parameters
         ----------
@@ -52,7 +52,7 @@ class Grid(ABC):
         Returns
         -------
         float
-            Nominal voltage of grid in V.
+            Nominal voltage of network in V.
 
         """
         if self._nominal_voltage is None:
@@ -66,7 +66,7 @@ class Grid(ABC):
     @property
     def station(self):
         """
-        Bus that represents station of grid.
+        Bus that represents station of network.
 
         Returns
         -------
@@ -81,14 +81,14 @@ class Grid(ABC):
     @property
     def transformers_df(self):
         """
-        Transformers to overlaying grid.
+        Transformers to overlaying network.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all transformers to overlaying grid. For more
+            Dataframe with all transformers to overlaying network. For more
             information on the dataframe see
-            :attr:`~.grid.network.Network.transformers_df`.
+            :attr:`~.network.network.Network.transformers_df`.
         """
         return self.edisgo_obj.network.transformers_df[
             self.edisgo_obj.network.transformers_df.bus1.isin(self.buses_df.index)]
@@ -96,13 +96,13 @@ class Grid(ABC):
     @property
     def generators_df(self):
         """
-        Connected generators within the grid.
+        Connected generators within the network.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all generators in grid. For more information on the
-            dataframe see :attr:`~.grid.network.Network.generators_df`.
+            Dataframe with all generators in network. For more information on the
+            dataframe see :attr:`~.network.network.Network.generators_df`.
 
         """
         return self.edisgo_obj.network.generators_df[
@@ -111,12 +111,12 @@ class Grid(ABC):
     @property
     def generators(self):
         """
-        Connected generators within the grid.
+        Connected generators within the network.
 
         Returns
         -------
-        list(:class:`~.grid.components.Generator`)
-            List of generators within the grid.
+        list(:class:`~.network.components.Generator`)
+            List of generators within the network.
 
         """
         for gen in self.generators_df.index:
@@ -125,13 +125,13 @@ class Grid(ABC):
     @property
     def loads_df(self):
         """
-        Connected loads within the grid.
+        Connected loads within the network.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all loads in grid. For more information on the
-            dataframe see :attr:`~.grid.network.Network.loads_df`.
+            Dataframe with all loads in network. For more information on the
+            dataframe see :attr:`~.network.network.Network.loads_df`.
 
         """
         return self.edisgo_obj.network.loads_df[
@@ -140,12 +140,12 @@ class Grid(ABC):
     @property
     def loads(self):
         """
-        Connected loads within the grid.
+        Connected loads within the network.
 
         Returns
         -------
-        list(:class:`~.grid.components.Load`)
-            List of loads within the grid.
+        list(:class:`~.network.components.Load`)
+            List of loads within the network.
 
         """
         for l in self.loads_df.index:
@@ -154,13 +154,13 @@ class Grid(ABC):
     @property
     def storages_df(self):
         """
-        Connected storage units within the grid.
+        Connected storage units within the network.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all storages in grid. For more information on the
-            dataframe see :attr:`~.grid.network.Network.storages_df`.
+            Dataframe with all storages in network. For more information on the
+            dataframe see :attr:`~.network.network.Network.storages_df`.
         """
         return self.edisgo_obj.network.storages_df[
             self.edisgo_obj.network.storages_df.bus.isin(self.buses_df.index)]
@@ -168,7 +168,7 @@ class Grid(ABC):
     @property
     def switch_disconnectors_df(self):
         """
-        Switch disconnectors in grid.
+        Switch disconnectors in network.
 
         Switch disconnectors are points where rings are split under normal
         operating conditions.
@@ -176,9 +176,9 @@ class Grid(ABC):
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all switch disconnectors in grid. For more
+            Dataframe with all switch disconnectors in network. For more
             information on the dataframe see
-            :attr:`~.grid.network.Network.switches_df`.
+            :attr:`~.network.network.Network.switches_df`.
 
         """
         return self.edisgo_obj.network.switches_df[
@@ -188,12 +188,12 @@ class Grid(ABC):
     @property
     def switch_disconnectors(self):
         """
-        Switch disconnectors within the grid.
+        Switch disconnectors within the network.
 
         Returns
         -------
-        list(:class:`~.grid.components.Switch`)
-            List of switch disconnectory within the grid.
+        list(:class:`~.network.components.Switch`)
+            List of switch disconnectory within the network.
 
         """
         for s in self.switch_disconnectors_df.index:
@@ -202,13 +202,13 @@ class Grid(ABC):
     @property
     def lines_df(self):
         """
-        Lines within the grid.
+        Lines within the network.
 
          Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all buses in grid. For more information on the
-            dataframe see :attr:`~.grid.network.Network.lines_df`.
+            Dataframe with all buses in network. For more information on the
+            dataframe see :attr:`~.network.network.Network.lines_df`.
         """
         return self.edisgo_obj.network.lines_df[
             self.edisgo_obj.network.lines_df.bus0.isin(self.buses_df.index) &
@@ -218,25 +218,25 @@ class Grid(ABC):
     @abstractmethod
     def buses_df(self):
         """
-        Buses within the grid.
+        Buses within the network.
 
          Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all buses in grid. For more information on the
-            dataframe see :attr:`~.grid.network.Network.buses_df`.
+            Dataframe with all buses in network. For more information on the
+            dataframe see :attr:`~.network.network.Network.buses_df`.
 
         """
 
     @property
     def weather_cells(self):
         """
-        Weather cells in grid.
+        Weather cells in network.
 
         Returns
         -------
         list(int)
-            List of weather cell IDs in grid.
+            List of weather cell IDs in network.
 
         """
         return self.generators_df.weather_cell_id.dropna().unique()
@@ -244,12 +244,12 @@ class Grid(ABC):
     @property
     def peak_generation_capacity(self):
         """
-        Cumulative peak generation capacity of generators in the grid in MW.
+        Cumulative peak generation capacity of generators in the network in MW.
 
         Returns
         -------
         float
-            Cumulative peak generation capacity of generators in the grid
+            Cumulative peak generation capacity of generators in the network
             in MW.
 
         """
@@ -258,13 +258,13 @@ class Grid(ABC):
     @property
     def peak_generation_capacity_per_technology(self):
         """
-        Cumulative peak generation capacity of generators in the grid per
+        Cumulative peak generation capacity of generators in the network per
         technology type in MW.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Cumulative peak generation capacity of generators in the grid per
+            Cumulative peak generation capacity of generators in the network per
             technology type in MW.
 
         """
@@ -273,12 +273,12 @@ class Grid(ABC):
     @property
     def peak_load(self):
         """
-        Cumulative peak load of loads in the grid in MW.
+        Cumulative peak load of loads in the network in MW.
 
         Returns
         -------
         float
-            Cumulative peak load of loads in the grid in MW.
+            Cumulative peak load of loads in the network in MW.
 
         """
         return self.loads_df.peak_load.sum()
@@ -286,12 +286,12 @@ class Grid(ABC):
     @property
     def peak_load_per_sector(self):
         """
-        Cumulative peak load of loads in the grid per sector in MW.
+        Cumulative peak load of loads in the network per sector in MW.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Cumulative peak load of loads in the grid per sector in MW.
+            Cumulative peak load of loads in the network per sector in MW.
 
         """
         return self.loads_df.groupby(['sector']).sum()['peak_load']
@@ -301,7 +301,7 @@ class Grid(ABC):
 
     def connect_generators(self, generators):
         """
-        Connects generators to grid.
+        Connects generators to network.
 
         Parameters
         ----------
@@ -314,9 +314,9 @@ class Grid(ABC):
 
     def to_pypsa(self, mode = 'mv', timesteps=None):
         """
-        PyPSA grid representation
+        PyPSA network representation
 
-        A grid topology representation based on
+        A network topology representation based on
         :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
         this data model, the :pypsa:`pypsa.Network<network>`,
         is assigned to this attribute.
@@ -327,11 +327,11 @@ class Grid(ABC):
         Returns
         -------
         :pypsa:`pypsa.Network<network>`
-            PyPSA grid representation. The attribute `edisgo_mode` is added
+            PyPSA network representation. The attribute `edisgo_mode` is added
             to specify if pypsa representation of the edisgo network
-            was created for the whole grid topology (MV + LV), only MV or only
+            was created for the whole network topology (MV + LV), only MV or only
             LV. See parameter `mode` in
-            :meth:`~.grid.network.EDisGo.analyze` for more information.
+            :meth:`~.network.network.EDisGo.analyze` for more information.
         """
         if timesteps is None:
             timesteps = self.edisgo_obj.timeseries.timeindex
@@ -343,7 +343,7 @@ class Grid(ABC):
 
 class MVGrid(Grid):
     """
-    Defines a medium voltage grid in eDisGo.
+    Defines a medium voltage network in eDisGo.
 
     """
 
@@ -359,13 +359,13 @@ class MVGrid(Grid):
 
         Parameters
         ----------
-        lv_grids : list(:class:`~.grid.grids.LVGrid`)
+        lv_grids : list(:class:`~.network.grids.LVGrid`)
 
         Returns
         -------
         list generator
             Generator object of underlying LV grids of type
-            :class:`~.grid.grids.LVGrid`.
+            :class:`~.network.grids.LVGrid`.
 
         """
         for lv_grid in self._lv_grids:
@@ -378,13 +378,13 @@ class MVGrid(Grid):
     @property
     def buses_df(self):
         """
-        Buses within the grid.
+        Buses within the network.
 
          Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all buses in grid. For more information on the
-            dataframe see :attr:`~.grid.network.Network.buses_df`.
+            Dataframe with all buses in network. For more information on the
+            dataframe see :attr:`~.network.network.Network.buses_df`.
 
         """
         return self.edisgo_obj.network.buses_df.drop(
@@ -392,7 +392,7 @@ class MVGrid(Grid):
 
     def draw(self):
         """
-        Draw MV grid.
+        Draw MV network.
 
         """
         # ToDo call EDisGoReimport.plot_mv_grid_topology
@@ -401,7 +401,7 @@ class MVGrid(Grid):
 
 class LVGrid(Grid):
     """
-    Defines a low voltage grid in eDisGo.
+    Defines a low voltage network in eDisGo.
 
     """
 
@@ -411,13 +411,13 @@ class LVGrid(Grid):
     @property
     def buses_df(self):
         """
-        Buses within the grid.
+        Buses within the network.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all buses in grid. For more information on the
-            dataframe see :attr:`~.grid.network.Network.buses_df`.
+            Dataframe with all buses in network. For more information on the
+            dataframe see :attr:`~.network.network.Network.buses_df`.
 
         """
         return self.edisgo_obj.network.buses_df.loc[
@@ -425,7 +425,7 @@ class LVGrid(Grid):
 
     def draw(self):
         """
-        Draw LV grid.
+        Draw LV network.
 
         """
         # ToDo: implement networkx graph plot

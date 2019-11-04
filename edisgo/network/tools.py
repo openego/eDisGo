@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import Point
-from edisgo.grid.components import Generator, Load
+from edisgo.network.components import Generator, Load
 from edisgo.flex_opt import exceptions
 
 import logging
@@ -13,7 +13,7 @@ logger = logging.getLogger('edisgo')
 
 def position_switch_disconnectors(mv_grid, mode='load', status='open'):
     """
-    Determine position of switch disconnector in MV grid rings
+    Determine position of switch disconnector in MV network rings
 
     Determination of the switch disconnector location is motivated by placing
     it to minimized load flows in both parts of the ring (half-rings).
@@ -23,15 +23,15 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
 
     Parameters
     ----------
-    mv_grid : :class:`~.grid.grids.MVGrid`
-        MV grid instance
+    mv_grid : :class:`~.network.grids.MVGrid`
+        MV network instance
     mode : str
         Define modus switch disconnector positioning: can be performed based of
         'load', 'generation' or both 'loadgen'. Defaults to 'load'
     status : str
         Either 'open' or 'closed'. Define which status is should be set
         initially. Defaults to 'open' (which refers to conditions of normal
-        grid operation).
+        network operation).
 
     Returns
     -------
@@ -43,7 +43,7 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
     Notes
     -----
     This function uses `nx.algorithms.find_cycle()` to identify nodes that are
-    part of the MV grid ring(s). Make sure grid topology data that is provided
+    part of the MV network ring(s). Make sure network topology data that is provided
     has closed rings. Otherwise, no location for a switch disconnector can be
     identified.
 
@@ -55,7 +55,7 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
         Parameters
         ----------
         node : object
-            Node instance in the grid topology graph
+            Node instance in the network topology graph
 
         Returns
         -------
@@ -91,7 +91,7 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
         Parameters
         ----------
         graph : networkx.Graph
-            The graph representing the MV grid topology
+            The graph representing the MV network topology
         ring : list
             A list of ring nodes
         node : networkx.Node
@@ -208,9 +208,9 @@ def position_switch_disconnectors(mv_grid, mode='load', status='open'):
 
 def implement_switch_disconnector(mv_grid, node1, node2):
     """
-    Install switch disconnector in grid topology
+    Install switch disconnector in network topology
 
-    The graph that represents the grid's topology is altered in such way that
+    The graph that represents the network's topology is altered in such way that
     it explicitly includes a switch disconnector.
     The switch disconnector is always located at ``node1``. Technically, it
     does not make any difference. This is just an convention ensuring
@@ -220,8 +220,8 @@ def implement_switch_disconnector(mv_grid, node1, node2):
 
     Parameters
     ----------
-    mv_grid : :class:`~.grid.grids.MVGrid`
-        MV grid instance
+    mv_grid : :class:`~.network.grids.MVGrid`
+        MV network instance
     node1
         A rings node
     node2
@@ -284,7 +284,7 @@ def select_cable(edisgo_obj, level, apparent_power):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.grid.network.Network`
+    edisgo_obj : :class:`~.network.network.Network`
         The eDisGo container object
     level : :obj:`str`
         Grid level ('mv' or 'lv')
@@ -363,17 +363,17 @@ def get_gen_info(network, level='mvlv', fluctuating=False):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
-        Network object holding the grid data.
+    network : :class:`~.network.network.Network`
+        Network object holding the network data.
     level : :obj:`str`
         Defines which generators are returned. Possible options are:
 
         * 'mv'
-          Only generators connected to the MV grid are returned.
+          Only generators connected to the MV network are returned.
         * 'lv'
           Only generators connected to the LV grids are returned.
         * 'mvlv'
-          All generators connected to the MV grid and LV grids are returned.
+          All generators connected to the MV network and LV grids are returned.
 
         Default: 'mvlv'.
     fluctuating : :obj:`bool`
@@ -384,7 +384,7 @@ def get_gen_info(network, level='mvlv', fluctuating=False):
     :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with all generators connected to the specified voltage
         level. Index of the dataframe are the generator objects of type
-        :class:`~.grid.components.Generator`. Columns of the dataframe are:
+        :class:`~.network.components.Generator`. Columns of the dataframe are:
 
         * 'gen_repr'
           The representative of the generator as :obj:`str`.
@@ -439,7 +439,7 @@ def get_gen_info(network, level='mvlv', fluctuating=False):
                            'voltage_level': gens_voltage_level,
                            'nominal_capacity': gens_rating,
                            'weather_cell_id': gens_w_id,
-                           'grid': gens_grid})
+                           'network': gens_grid})
 
     gen_df.set_index('generator', inplace=True, drop=True)
 
@@ -456,11 +456,11 @@ def assign_mv_feeder_to_nodes(mv_grid):
 
     Parameters
     -----------
-    mv_grid : :class:`~.grid.grids.MVGrid`
+    mv_grid : :class:`~.network.grids.MVGrid`
 
     """
     mv_station_neighbors = list(mv_grid.graph.neighbors(mv_grid.station))
-    # get all nodes in MV grid and remove MV station to get separate subgraphs
+    # get all nodes in MV network and remove MV station to get separate subgraphs
     mv_graph_nodes = list(mv_grid.graph.nodes())
     mv_graph_nodes.remove(mv_grid.station)
     subgraph = mv_grid.graph.subgraph(mv_graph_nodes)
@@ -473,7 +473,7 @@ def assign_mv_feeder_to_nodes(mv_grid):
         subgraph_neighbor = nx.dfs_tree(subgraph, source=neighbor)
         for node in subgraph_neighbor.nodes():
             # in case of an LV station assign feeder to all nodes in that LV
-            # grid
+            # network
             if isinstance(node, LVStation):
                 for lv_node in node.grid.graph.nodes():
                     lv_node.mv_feeder = mv_feeder
@@ -489,12 +489,12 @@ def get_mv_feeder_from_line(line):
 
     Parameters
     ----------
-    line : :class:`~.grid.components.Line`
+    line : :class:`~.network.components.Line`
         Line to find the MV feeder for.
 
     Returns
     -------
-    :class:`~.grid.components.Line`
+    :class:`~.network.components.Line`
         MV feeder identifier (representative of the first line segment
         of the half-ring)
 
@@ -535,8 +535,8 @@ def disconnect_storage(network, storage):
 
     Parameters
     -----------
-    network : :class:`~.grid.network.Network`
-    storage : :class:`~.grid.components.Storage`
+    network : :class:`~.network.network.Network`
+    storage : :class:`~.network.components.Storage`
         Storage instance to be removed.
 
     """

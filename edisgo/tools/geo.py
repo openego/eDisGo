@@ -17,7 +17,7 @@ def proj2equidistant(network):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
         The eDisGo container object
 
     Returns
@@ -39,7 +39,7 @@ def proj2conformal(network):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
         The eDisGo container object
 
     Returns
@@ -62,12 +62,12 @@ def calc_geo_lines_in_buffer(network, node, grid, radius, radius_inc):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
         The eDisGo container object
-    node : :class:`~.grid.components.Component`
-        Origin node the buffer is created around (e.g. :class:`~.grid.components.Generator`).
-        Node must be a member of grid's graph (grid.graph)
-    grid : :class:`~.grid.grids.Grid`
+    node : :class:`~.network.components.Component`
+        Origin node the buffer is created around (e.g. :class:`~.network.components.Generator`).
+        Node must be a member of network's graph (network.graph)
+    grid : :class:`~.network.grids.Grid`
         Grid whose lines are searched
     radius : :obj:`float`
         Buffer radius in m
@@ -76,7 +76,7 @@ def calc_geo_lines_in_buffer(network, node, grid, radius, radius_inc):
 
     Returns
     -------
-    :obj:`list` of :class:`~.grid.components.Line`
+    :obj:`list` of :class:`~.network.components.Line`
         Sorted (by repr()) list of lines
 
     Notes
@@ -107,12 +107,12 @@ def calc_geo_dist_vincenty(network, node_source, node_target):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.network.Network`
         The eDisGo container object
-    node_source : :class:`~.grid.components.Component`
-        Node to connect (e.g. :class:`~.grid.components.Generator`)
-    node_target : :class:`~.grid.components.Component`
-        Target node (e.g. :class:`~.grid.components.BranchTee`)
+    node_source : :class:`~.network.components.Component`
+        Node to connect (e.g. :class:`~.network.components.Generator`)
+    node_target : :class:`~.network.components.Component`
+        Target node (e.g. :class:`~.network.components.BranchTee`)
 
     Returns
     -------

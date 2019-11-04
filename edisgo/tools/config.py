@@ -1,4 +1,4 @@
-"""This file is part of eDisGo, a python package for distribution grid
+"""This file is part of eDisGo, a python package for distribution network
 analysis and optimization.
 
 It is developed in the project open_eGo: https://openegoproject.wordpress.com

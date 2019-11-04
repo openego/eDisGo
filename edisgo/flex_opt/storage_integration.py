@@ -1,7 +1,7 @@
 from math import sqrt
-from edisgo.grid.components import Storage
-from edisgo.grid.grids import MVGrid
-from edisgo.grid.tools import select_cable
+from edisgo.network.components import Storage
+from edisgo.network.grids import MVGrid
+from edisgo.network.tools import select_cable
 
 
 def storage_at_hvmv_substation(mv_grid, parameters, mode=None):
@@ -10,19 +10,19 @@ def storage_at_hvmv_substation(mv_grid, parameters, mode=None):
 
     Parameters
     ----------
-    mv_grid : :class:`~.grid.grids.MVGrid`
-        MV grid instance
+    mv_grid : :class:`~.network.grids.MVGrid`
+        MV network instance
     parameters : :obj:`dict`
         Dictionary with storage parameters. Must at least contain
-        'nominal_power'. See :class:`~.grid.network.StorageControl` for more
+        'nominal_power'. See :class:`~.network.network.StorageControl` for more
         information.
     mode : :obj:`str`, optional
-        Operational mode. See :class:`~.grid.network.StorageControl` for
+        Operational mode. See :class:`~.network.network.StorageControl` for
         possible options and more information. Default: None.
 
     Returns
     -------
-    :class:`~.grid.components.Storage`, :class:`~.grid.components.Line`
+    :class:`~.network.components.Storage`, :class:`~.network.components.Line`
         Created storage instance and newly added line to connect storage.
 
     """
@@ -39,19 +39,19 @@ def set_up_storage(node, parameters,
 
     Parameters
     ----------
-    node : :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
+    node : :class:`~.network.components.Station` or :class:`~.network.components.BranchTee`
         Node the storage will be connected to.
     parameters : :obj:`dict`, optional
         Dictionary with storage parameters. Must at least contain
-        'nominal_power'. See :class:`~.grid.network.StorageControl` for more
+        'nominal_power'. See :class:`~.network.network.StorageControl` for more
         information.
     voltage_level : :obj:`str`, optional
         This parameter only needs to be provided if `node` is of type
-        :class:`~.grid.components.LVStation`. In that case `voltage_level`
+        :class:`~.network.components.LVStation`. In that case `voltage_level`
         defines which side of the LV station the storage is connected to. Valid
         options are 'lv' and 'mv'. Default: None.
     operational_mode : :obj:`str`, optional
-        Operational mode. See :class:`~.grid.network.StorageControl` for
+        Operational mode. See :class:`~.network.network.StorageControl` for
         possible options and more information. Default: None.
 
     """
@@ -90,14 +90,14 @@ def connect_storage(storage, node):
 
     Parameters
     ----------
-    storage : :class:`~.grid.components.Storage`
-        Storage instance to be integrated into the grid.
-    node : :class:`~.grid.components.Station` or :class:`~.grid.components.BranchTee`
+    storage : :class:`~.network.components.Storage`
+        Storage instance to be integrated into the network.
+    node : :class:`~.network.components.Station` or :class:`~.network.components.BranchTee`
         Node the storage will be connected to.
 
     Returns
     -------
-    :class:`~.grid.components.Line`
+    :class:`~.network.components.Line`
         Newly added line to connect storage.
 
     """
