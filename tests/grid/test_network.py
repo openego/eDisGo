@@ -185,6 +185,53 @@ class TestTimeSeriesControl:
             self.timeseries.loads_reactive_power.loc[:, load],
             exp * pf, check_exact=False, check_dtype=False)
 
+        # test for only feed-in case
+        TimeSeriesControl(network=self.network, mode='worst-case-feedin')
+
+        # value
+        gen = 'Generator_1'  # gas, mv
+        exp = pd.Series(data=[1 * 0.775], name=gen,
+                        index=self.network.timeseries.timeindex)
+        assert_series_equal(
+            self.network.timeseries.generators_active_power.loc[:, gen], exp)
+        pf = -tan(acos(0.9))
+        assert_series_equal(
+            self.network.timeseries.generators_reactive_power.loc[:, gen],
+            exp * pf)
+        load = 'Load_retail_LVGrid_9_14'  # industrial, lv
+        exp = pd.Series(data=[0.1 * 143 * 0.0002404],
+                        name=load, index=self.network.timeseries.timeindex)
+        assert_series_equal(
+            self.network.timeseries.loads_active_power.loc[:, load], exp,
+            check_exact=False, check_dtype=False)
+        pf = tan(acos(0.95))
+        assert_series_equal(
+            self.network.timeseries.loads_reactive_power.loc[:, load],
+            exp * pf, check_exact=False, check_dtype=False)
+
+        # test for only load case
+        TimeSeriesControl(network=self.network, mode='worst-case-load')
+
+        gen = 'Generator_1'  # gas, mv
+        exp = pd.Series(data=[0 * 0.775], name=gen,
+                        index=self.network.timeseries.timeindex)
+        assert_series_equal(
+            self.network.timeseries.generators_active_power.loc[:, gen], exp)
+        pf = -tan(acos(0.9))
+        assert_series_equal(
+            self.network.timeseries.generators_reactive_power.loc[:, gen],
+            exp * pf)
+        load = 'Load_retail_LVGrid_9_14'  # industrial, lv
+        exp = pd.Series(data=[1.0 * 143 * 0.0002404],
+                        name=load, index=self.network.timeseries.timeindex)
+        assert_series_equal(
+            self.network.timeseries.loads_active_power.loc[:, load], exp,
+            check_exact=False, check_dtype=False)
+        pf = tan(acos(0.95))
+        assert_series_equal(
+            self.network.timeseries.loads_reactive_power.loc[:, load],
+            exp * pf, check_exact=False, check_dtype=False)
+
         # test error raising in case of missing load/generator parameter
 
         gen = 'GeneratorFluctuating_14'
@@ -201,5 +248,4 @@ class TestTimeSeriesControl:
         with pytest.raises(AttributeError, match=load):
             ts_control._worst_case_load(modes=None)
 
-        # test for only feed-in or load case
         # test no other generators
