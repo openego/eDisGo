@@ -4,8 +4,9 @@ import pandas as pd
 import numpy as np
 
 import edisgo
-from edisgo.network.network import NetworkReimport, ResultsReimport,  \
-    Results, Network, CurtailmentControl, StorageControl
+from edisgo.network.network import NetworkReimport, \
+     Network, CurtailmentControl, StorageControl
+from edisgo.network.results import Results, ResultsReimport
 from edisgo.network.timeseries import TimeSeries, TimeSeriesControl
 from edisgo.tools import pypsa_io, plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
