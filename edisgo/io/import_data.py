@@ -293,7 +293,7 @@ def _import_genos_from_oedb(network):
         Notes
         -----
         You can find a full list of columns in
-        :func:`edisgo.data.import_data._update_grids`
+        :func:`edisgo.io.import_data._update_grids`
         """
 
         # build query
@@ -332,7 +332,7 @@ def _import_genos_from_oedb(network):
         Notes
         -----
         You can find a full list of columns in
-        :func:`edisgo.data.import_data._update_grids`
+        :func:`edisgo.io.import_data._update_grids`
 
         If subtype is not specified it's set to 'unknown'.
         """
@@ -910,7 +910,7 @@ def _import_genos_from_oedb(network):
 
             * MV generators: use geom from EnergyMap.
             * LV generators: set geom to None. It is re-set in
-                :func:`edisgo.data.import_data._check_mvlv_subst_id`
+                :func:`edisgo.io.import_data._check_mvlv_subst_id`
                 to MV-LV station's geom. EnergyMap's geom is not used
                 since it is more inaccurate than the station's geom.
 

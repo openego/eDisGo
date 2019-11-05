@@ -4,7 +4,7 @@ import os
 
 from edisgo.network.topology import Topology
 from edisgo.network.grids import MVGrid, LVGrid
-from edisgo.data import import_data
+from edisgo.io import import_data
 
 
 class TestImportFromDing0:

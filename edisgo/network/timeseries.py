@@ -2,7 +2,7 @@ import logging
 import pandas as pd
 import numpy as np
 
-from edisgo.data.import_data import import_feedin_timeseries, import_load_timeseries
+from edisgo.io.import_data import import_feedin_timeseries, import_load_timeseries
 
 logger = logging.getLogger('edisgo')
 

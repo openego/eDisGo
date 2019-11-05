@@ -7,7 +7,7 @@ import pytest
 from edisgo.network.topology import Topology
 from edisgo.network.timeseries import TimeSeriesControl, TimeSeries
 from edisgo.tools.config import Config
-from edisgo.data import import_data
+from edisgo.io import import_data
 from edisgo import EDisGo
 
 

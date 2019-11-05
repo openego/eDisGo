@@ -3,7 +3,7 @@ import pandas as pd
 
 from edisgo.network.topology import Topology
 from edisgo.network.timeseries import TimeSeriesControl, TimeSeries
-from edisgo.data import import_data
+from edisgo.io import import_data
 from edisgo.network.components import Generator, Load, Switch
 from edisgo.network.grids import LVGrid
 from edisgo.tools.config import Config
