@@ -564,7 +564,7 @@ class TimeSeriesControl:
             index=self.edisgo_obj.timeseries.timeindex)
 
         gen_ts = pd.DataFrame(index=self.edisgo_obj.timeseries.timeindex,
-                              columns=gens_df.index)
+                              columns=gens_df.index, dtype='float64')
         # assign normalized active power time series to solar generators
         cols = gen_ts[gens_df.index[gens_df.type == 'solar']].columns
         if len(cols) > 0:
@@ -573,7 +573,7 @@ class TimeSeriesControl:
         # assign normalized active power time series to other generators
         cols = gen_ts[self.edisgo_obj.topology.generators_df.index[
             self.edisgo_obj.topology.generators_df.type != 'solar']].columns
-        if len(cols)>0:
+        if len(cols) > 0:
             gen_ts[cols] = pd.concat(
                 [worst_case_ts.loc[:, ['other']]] * len(cols), axis=1)
 
@@ -657,7 +657,7 @@ class TimeSeriesControl:
         # write normalized active power time series for each voltage level
         # and sector to dataframe
         load_ts = pd.DataFrame(index=self.edisgo_obj.timeseries.timeindex,
-                               columns=loads_df.index)
+                               columns=loads_df.index, dtype='float64')
         for voltage_level in voltage_levels:
             for sector in sectors:
                 cols = load_ts[loads_df.index[

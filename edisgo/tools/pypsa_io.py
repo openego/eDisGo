@@ -105,7 +105,7 @@ def to_pypsa(grid_object, mode, timesteps):
             'Load': edisgo_obj.topology.loads_df.loc[:, ['bus', 'peak_load']].rename(
                 columns={'peak_load':'p_set'}
             ),
-            'Generator': edisgo_obj.topology._generators_df.loc[:, ['bus', 'control', 'p_nom']],
+            'Generator': edisgo_obj.topology.generators_df.loc[:, ['bus', 'control', 'p_nom']],
             'StorageUnit': edisgo_obj.topology.storages_df.loc[:, ['bus', 'control']],
             'Line': edisgo_obj.topology.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
             'Transformer': edisgo_obj.topology.transformers_df.loc[
