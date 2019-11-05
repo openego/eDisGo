@@ -665,7 +665,7 @@ class EDisGo(EDisGoReimport):
         if path is not None:
             import_ding0_grid(path, self)
 
-    def to_pypsa(self, mode=None, timesteps=None):
+    def to_pypsa(self, mode=None, timesteps=None, lv_grid_name = None):
         """
         PyPSA network representation
 
@@ -695,7 +695,22 @@ class EDisGo(EDisGoReimport):
         # check if timesteps is array-like, otherwise convert to list
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
-        return pypsa_io.to_pypsa(self, mode=mode, timesteps=timesteps)
+        # export grid
+        if not mode:
+            return pypsa_io.to_pypsa(self, mode=mode, timesteps=timesteps)
+        elif 'mv' in mode:
+            return pypsa_io.to_pypsa(self.topology.mv_grid, mode=mode,
+                                     timesteps=timesteps)
+        elif mode == 'lv':
+            if not lv_grid_name:
+                raise ValueError("For exporting lv grids, name of lv_grid has "
+                                 "to be provided.")
+            # Todo: property grids in Topology?
+            return pypsa_io.to_pypsa(self.topology._grids[lv_grid_name],
+                                     mode=mode, timesteps=timesteps)
+        else:
+            raise ValueError("The entered mode is not a valid option.")
+
 
     def curtail(self, methodology, curtailment_timeseries, **kwargs):
         """

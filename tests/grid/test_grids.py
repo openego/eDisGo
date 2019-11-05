@@ -18,8 +18,6 @@ class TestGrids:
         test_network_directory = os.path.join(parent_dirname, 'test_network')
         self.topology = Topology()
         import_data.import_ding0_grid(test_network_directory, self)
-        self.timeseries = TimeSeries()
-        self.config = Config()
 
     def test_mv_grid(self):
         """Test MVGrid class getter, setter, methods"""
@@ -61,27 +59,6 @@ class TestGrids:
         assert mv_grid.peak_load == 0.31
         assert mv_grid.peak_load_per_sector['retail'] == 0.31
 
-    def test_mv_grid_to_pypsa(self):
-        TimeSeriesControl(edisgo_obj=self, mode='worst-case')
-        # run powerflow and check results
-        timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
-        pypsa_network = self.topology.mv_grid.to_pypsa()
-        pf_results = pypsa_network.pf(timesteps)
-
-        if all(pf_results['converged']['0'].tolist()):
-            print('converged mv')
-        else:
-            raise ValueError("Power flow analysis mv did not converge.")
-
-        pypsa_network = self.topology.mv_grid.to_pypsa(mode='mvlv')
-        pf_results = pypsa_network.pf(timesteps)
-
-        if all(pf_results['converged']['0'].tolist()):
-            print('converged mvlv')
-        else:
-            raise ValueError("Power flow analysis mvlv did not converge.")
-
-
     def test_lv_grid(self):
         """Test LVGrid class getter, setter, methods"""
         lv_grid = [_ for _ in self.topology.mv_grid.lv_grids if _.id == 3][0]
@@ -112,18 +89,5 @@ class TestGrids:
         assert lv_grid.peak_generation_capacity_per_technology.empty
         assert lv_grid.peak_load == 0.054627
         assert lv_grid.peak_load_per_sector['agricultural'] == 0.051
-
-
-    def test_lv_grid_to_pypsa(self):
-        TimeSeriesControl(edisgo_obj=self, mode='worst-case')
-        # run powerflow and check results
-        timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
-        pypsa_network = self.topology.mv_grid._lv_grids[0].to_pypsa()
-        pf_results = pypsa_network.pf(timesteps)
-
-        if all(pf_results['converged']['0'].tolist()):
-            print('converged lv')
-        else:
-            raise ValueError("Power flow analysis lv did not converge.")
 
 

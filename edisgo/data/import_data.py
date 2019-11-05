@@ -60,6 +60,20 @@ def import_ding0_grid(path, edisgo_obj):
         The eDisGo data container object
 
     """
+
+    def sort_transformer_buses(trafos):
+        """
+        Sort buses of inserted transformers in a way that bus1 always
+        represents secondary side of transformer.
+        """
+        voltage_bus0 = edisgo_obj.topology.buses_df.loc[
+            trafos.bus0].v_nom.values
+        voltage_bus1 = edisgo_obj.topology.buses_df.loc[
+            trafos.bus1].v_nom.values
+        trafos.loc[voltage_bus1 > voltage_bus0, ['bus0', 'bus1']] = \
+            trafos.loc[voltage_bus1 > voltage_bus0, ['bus1', 'bus0']].values
+        return trafos
+
     grid = PyPSANetwork()
     grid.import_from_csv_folder(path)
 
@@ -70,9 +84,9 @@ def import_ding0_grid(path, edisgo_obj):
     grid.generators.rename(index={slack: 'Generator_slack'}, inplace=True)
     edisgo_obj.topology.generators_df = grid.generators[COLUMNS['generators_df']]
     edisgo_obj.topology.loads_df = grid.loads[COLUMNS['loads_df']]
-    edisgo_obj.topology.transformers_df = grid.transformers.drop(
-        labels=['x_pu','r_pu'], axis=1).rename(
-        columns={'r': 'r_pu', 'x': 'x_pu'})[COLUMNS['transformers_df']]
+    edisgo_obj.topology.transformers_df = sort_transformer_buses(
+        grid.transformers.drop(labels=['x_pu','r_pu'], axis=1).rename(
+        columns={'r': 'r_pu', 'x': 'x_pu'})[COLUMNS['transformers_df']])
     edisgo_obj.topology.lines_df = grid.lines[COLUMNS['lines_df']]
     edisgo_obj.topology.switches_df = pd.read_csv(os.path.join(path, 'switches.csv'),
                                          index_col=[0])

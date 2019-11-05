@@ -161,3 +161,18 @@ class TestImportFromDing0:
         except ValueError as e:
             assert e.args[0] == 'The following buses are isolated: ' \
                                 '{}.'.format(bus.name)
+
+    def test_transformer_buses(self):
+        assert((self.topology.buses_df.loc[
+                   self.topology.transformers_df.bus1].v_nom.values <
+               self.topology.buses_df.loc[
+                   self.topology.transformers_df.bus0].v_nom.values).all())
+        self.topology.transformers_df.loc[
+            'LVStation_7_transformer_1', 'bus0'] = 'Bus_secondary_LVStation_7'
+        self.topology.transformers_df.loc[
+            'LVStation_7_transformer_1', 'bus1'] = 'Bus_primary_LVStation_7'
+        with pytest.raises(AssertionError):
+            assert ((self.topology.buses_df.loc[
+                     self.topology.transformers_df.bus1].v_nom.values <
+                 self.topology.buses_df.loc[
+                     self.topology.transformers_df.bus0].v_nom.values).all())

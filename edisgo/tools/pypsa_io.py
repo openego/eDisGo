@@ -181,8 +181,9 @@ def to_pypsa(grid_object, mode, timesteps):
             lv_components = {key: {} for key in lv_components_to_aggregate}
             for lv_grid in grid.lv_grids:
                 # get primary side of station to append loads and generators to
-                station_bus = lv_grid.station
-                buses_df = buses_df.append(station_bus.loc[:, ['v_nom']])
+                station_bus = lv_grid.buses_df.loc[
+                    [lv_grid.transformers_df.bus1.unique()[0]]]
+                buses_df = buses_df.append(station_bus.loc[:,['v_nom']])
                 buses = buses.append(station_bus.index)
                 # handle one gate component
                 for comp, df in lv_components_to_aggregate.items():
@@ -214,7 +215,7 @@ def to_pypsa(grid_object, mode, timesteps):
         buses = grid.buses_df.index
 
         slack = pd.DataFrame({'name': ['Generator_slack'],
-                              'bus': [grid.station.index.values[0]],
+                              'bus': [grid.transformers_df.bus1.unique()[0]],
                               'control': ['Slack']}).set_index('name')
         components = {
             'Load': grid.loads_df.loc[:, ['bus', 'peak_load']].rename(

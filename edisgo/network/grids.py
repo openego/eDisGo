@@ -64,21 +64,6 @@ class Grid(ABC):
         self._nominal_voltage = nominal_voltage
 
     @property
-    def station(self):
-        """
-        Bus that represents station of network.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe that contains station bus. Format is the same as for
-            buses_df.
-        """
-        return self.edisgo_obj.topology.buses_df.loc[
-            self.transformers_df.bus1.unique()
-        ]
-
-    @property
     def transformers_df(self):
         """
         Transformers to overlaying network.
@@ -312,34 +297,6 @@ class Grid(ABC):
         # ToDo: Should we implement this or move function from tools here?
         raise NotImplementedError
 
-    def to_pypsa(self, mode = 'mv', timesteps=None):
-        """
-        PyPSA network representation
-
-        A network topology representation based on
-        :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
-        this data model, the :pypsa:`pypsa.Network<network>`,
-        is assigned to this attribute.
-        Todo: Docstring
-        :param mode:
-        :param timesteps:
-
-        Returns
-        -------
-        :pypsa:`pypsa.Network<network>`
-            PyPSA network representation. The attribute `edisgo_mode` is added
-            to specify if pypsa representation of the edisgo network
-            was created for the whole network topology (MV + LV), only MV or only
-            LV. See parameter `mode` in
-            :meth:`~.network.network.EDisGo.analyze` for more information.
-        """
-        if timesteps is None:
-            timesteps = self.edisgo_obj.timeseries.timeindex
-        # check if timesteps is array-like, otherwise convert to list
-        if not hasattr(timesteps, "__len__"):
-            timesteps = [timesteps]
-        return pypsa_io.to_pypsa(self, mode=mode, timesteps=timesteps)
-
 
 class MVGrid(Grid):
     """
@@ -430,6 +387,3 @@ class LVGrid(Grid):
         """
         # ToDo: implement networkx graph plot
         raise NotImplementedError
-
-    def to_pypsa(self, mode = 'lv', timesteps=None):
-        return super().to_pypsa(mode=mode, timesteps=timesteps)

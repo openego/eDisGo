@@ -43,9 +43,49 @@ class TestNetwork:
         pf_results = pypsa_network.pf(timesteps)
 
         if all(pf_results['converged']['0'].tolist()):
-            print('converged')
+            print('network converged')
         else:
             raise ValueError("Power flow analysis did not converge.")
+        # test exception
+        msg = "The entered mode is not a valid option."
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo.to_pypsa(mode='unknown')
+
+    def test_mv_to_pypsa(self):
+        # test only mv
+        timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
+        pypsa_network = self.edisgo.to_pypsa(mode='mv')
+        pf_results = pypsa_network.pf(timesteps)
+        # check if pf converged
+        if all(pf_results['converged']['0'].tolist()):
+            print('mv converged')
+        else:
+            raise ValueError("Power flow analysis did not converge.")
+        # test mvlv
+        pypsa_network = self.edisgo.to_pypsa(mode='mvlv')
+        pf_results = pypsa_network.pf(timesteps)
+        # check if pf converged
+        if all(pf_results['converged']['0'].tolist()):
+            print('mvlv converged')
+        else:
+            raise ValueError("Power flow analysis did not converge.")
+
+    def test_lv_to_pypsa(self):
+        # test lv to pypsa
+        timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
+        pypsa_network = self.edisgo.to_pypsa(mode='lv', lv_grid_name='LVGrid_2')
+        pf_results = pypsa_network.pf(timesteps)
+        # check if pf converged
+        if all(pf_results['converged']['0'].tolist()):
+            print('lv converged')
+        else:
+            raise ValueError("Power flow analysis did not converge.")
+        # test exception
+        msg = "For exporting lv grids, name of lv_grid has to be provided."
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo.to_pypsa(mode='lv')
+
+
 
 
 class TestTimeSeriesControl:
