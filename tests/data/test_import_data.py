@@ -4,7 +4,7 @@ import os
 
 from edisgo.network.topology import Topology
 from edisgo.network.grids import MVGrid, LVGrid
-from edisgo.io import import_data
+from edisgo.io import ding0_import
 
 
 class TestImportFromDing0:
@@ -15,7 +15,7 @@ class TestImportFromDing0:
         parent_dirname = os.path.dirname(os.path.dirname(__file__))
         test_network_directory = os.path.join(parent_dirname, 'test_network')
         self.topology = Topology()
-        import_data.import_ding0_grid(test_network_directory, self)
+        ding0_import.import_ding0_grid(test_network_directory, self)
 
     def test_import_ding0_grid(self):
         """Test successful import of ding0 network."""
@@ -31,19 +31,19 @@ class TestImportFromDing0:
         assert self.topology.storages_df.shape[0] == 0
         # check necessary columns
         assert all([col in self.topology.buses_df.columns for col in
-                    import_data.COLUMNS['buses_df']])
+                    ding0_import.COLUMNS['buses_df']])
         assert all([col in self.topology.generators_df.columns
-                    for col in import_data.COLUMNS['generators_df']])
+                    for col in ding0_import.COLUMNS['generators_df']])
         assert all([col in self.topology.loads_df.columns for col in
-                    import_data.COLUMNS['loads_df']])
+                    ding0_import.COLUMNS['loads_df']])
         assert all([col in self.topology.transformers_df.columns
-                    for col in import_data.COLUMNS['transformers_df']])
+                    for col in ding0_import.COLUMNS['transformers_df']])
         assert all([col in self.topology.lines_df.columns for col in
-                    import_data.COLUMNS['lines_df']])
+                    ding0_import.COLUMNS['lines_df']])
         assert all([col in self.topology.switches_df.columns for col in
-                    import_data.COLUMNS['switches_df']])
+                    ding0_import.COLUMNS['switches_df']])
         assert all([col in self.topology.storages_df.columns for col in
-                    import_data.COLUMNS['storages_df']])
+                    ding0_import.COLUMNS['storages_df']])
 
         # grid district
         assert self.topology.grid_district['population'] == 23358
@@ -60,7 +60,7 @@ class TestImportFromDing0:
         """Test catching error when path to network does not exist."""
         msg = "Directory wrong_directory does not exist."
         with pytest.raises(AssertionError, match=msg):
-            import_data.import_ding0_grid('wrong_directory', self.topology)
+            ding0_import.import_ding0_grid('wrong_directory', self.topology)
 
     def test_validate_ding0_grid_import(self):
         """Test of validation of grids."""
@@ -77,7 +77,7 @@ class TestImportFromDing0:
             setattr(self.topology, '_{}_df'.format(comp),
                     comps.append(new_comp))
             try:
-                import_data._validate_ding0_grid_import(self.topology)
+                ding0_import._validate_ding0_grid_import(self.topology)
                 raise Exception('Appending components {} in check duplicate '
                                 'did not work properly.'.format(comp))
             except ValueError as e:
@@ -86,7 +86,7 @@ class TestImportFromDing0:
                     name)
             # reset dataframe
             setattr(self.topology, '_{}_df'.format(comp), comps)
-            import_data._validate_ding0_grid_import(self.topology)
+            ding0_import._validate_ding0_grid_import(self.topology)
 
         # check not connected generator and load
         for nodal_component in ["loads", "generators"]:
@@ -97,7 +97,7 @@ class TestImportFromDing0:
             setattr(self.topology, '_{}_df'.format(nodal_component),
                     comps.append(new_comp))
             try:
-                import_data._validate_ding0_grid_import(self.topology)
+                ding0_import._validate_ding0_grid_import(self.topology)
                 raise Exception('Appending components {} did not work '
                                 'properly.'.format(nodal_component))
             except ValueError as e:
@@ -106,7 +106,7 @@ class TestImportFromDing0:
                     nodal_component, new_comp.name)
             # reset dataframe
             setattr(self.topology, '_{}_df'.format(nodal_component), comps)
-            import_data._validate_ding0_grid_import(self.topology)
+            ding0_import._validate_ding0_grid_import(self.topology)
 
         # check branch components
         i = 0
@@ -119,7 +119,7 @@ class TestImportFromDing0:
             setattr(self.topology, '_{}_df'.format(branch_component),
                     comps.append(new_comp))
             try:
-                import_data._validate_ding0_grid_import(self.topology)
+                ding0_import._validate_ding0_grid_import(self.topology)
                 raise Exception('Appending components {} did not work '
                                 'properly.'.format(branch_component))
             except ValueError as e:
@@ -128,7 +128,7 @@ class TestImportFromDing0:
                     branch_component, i, new_comp.name)
             # reset dataframe
             setattr(self.topology, '_{}_df'.format(branch_component), comps)
-            import_data._validate_ding0_grid_import(self.topology)
+            ding0_import._validate_ding0_grid_import(self.topology)
             i += 1
 
         # check switches
@@ -140,7 +140,7 @@ class TestImportFromDing0:
             new_comps.at[new_comp.name, attr] = 'Non_existent_' + attr
             self.topology.switches_df = new_comps
             try:
-                import_data._validate_ding0_grid_import(self.topology)
+                ding0_import._validate_ding0_grid_import(self.topology)
                 raise Exception('Appending components switches did not work '
                                 'properly.')
             except ValueError as e:
@@ -148,14 +148,14 @@ class TestImportFromDing0:
                                     'are not defined: {}.'.format(
                     attr, new_comp.name)
             self.topology.switches_df = comps
-            import_data._validate_ding0_grid_import(self.topology)
+            ding0_import._validate_ding0_grid_import(self.topology)
 
         # check isolated node
         bus = self.topology.buses_df.loc[comps_dict['buses']]
         bus.name = 'New_bus'
         self.topology.buses_df = self.topology.buses_df.append(bus)
         try:
-            import_data._validate_ding0_grid_import(self.topology)
+            ding0_import._validate_ding0_grid_import(self.topology)
             raise Exception('Appending components buses did not work '
                             'properly.')
         except ValueError as e:

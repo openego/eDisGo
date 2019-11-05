@@ -1,13 +1,9 @@
 import os
-import pandas as pd
 
 from edisgo.network.topology import Topology
-from edisgo.network.timeseries import TimeSeriesControl, TimeSeries
-from edisgo.io import import_data
+from edisgo.io import ding0_import
 from edisgo.network.components import Generator, Load, Switch
 from edisgo.network.grids import LVGrid
-from edisgo.tools.config import Config
-
 
 class TestGrids:
 
@@ -17,7 +13,7 @@ class TestGrids:
         parent_dirname = os.path.dirname(os.path.dirname(__file__))
         test_network_directory = os.path.join(parent_dirname, 'test_network')
         self.topology = Topology()
-        import_data.import_ding0_grid(test_network_directory, self)
+        ding0_import.import_ding0_grid(test_network_directory, self)
 
     def test_mv_grid(self):
         """Test MVGrid class getter, setter, methods"""

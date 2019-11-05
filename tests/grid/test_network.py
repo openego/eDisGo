@@ -7,7 +7,7 @@ import pytest
 from edisgo.network.topology import Topology
 from edisgo.network.timeseries import TimeSeriesControl, TimeSeries
 from edisgo.tools.config import Config
-from edisgo.io import import_data
+from edisgo.io import ding0_import
 from edisgo import EDisGo
 
 
@@ -98,7 +98,7 @@ class TestTimeSeriesControl:
         self.topology = Topology()
         self.timeseries = TimeSeries()
         self.config = Config()
-        import_data.import_ding0_grid(test_network_directory, self)
+        ding0_import.import_ding0_grid(test_network_directory, self)
 
     def test_worst_case(self):
         """Test creation of worst case time series"""

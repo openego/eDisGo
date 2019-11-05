@@ -10,7 +10,8 @@ from edisgo.network.results import Results, ResultsReimport
 from edisgo.network.timeseries import TimeSeries, TimeSeriesControl
 from edisgo.tools import pypsa_io, plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
-from edisgo.io.import_data import import_ding0_grid, import_generators
+from edisgo.io.ding0_import import import_ding0_grid
+from edisgo.io.generators_import import import_generators
 from edisgo.tools.config import Config
 from edisgo.flex_opt.curtailment import CurtailmentControl
 from edisgo.flex_opt.storage_integration import StorageControl
