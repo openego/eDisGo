@@ -63,11 +63,6 @@ def import_ding0_grid(path, edisgo_obj):
     grid = PyPSANetwork()
     grid.import_from_csv_folder(path)
 
-    # check if buses dataframe is not empty to make sure specified directory
-    # exists and contains topology data
-    if grid.buses.empty:
-        raise AttributeError("Specified directory containing ding0 topology data "
-                             "does not exist or does not contain topology data.")
     # write dataframes to edisgo_obj
     edisgo_obj.topology.buses_df = grid.buses[COLUMNS['buses_df']]
     # rename slack generator
@@ -87,7 +82,7 @@ def import_ding0_grid(path, edisgo_obj):
 
     edisgo_obj.topology._grids = {}
 
-    # set up medium voltage topology
+    # set up medium voltage grid
     mv_grid_id = list(set(grid.buses.mv_grid_id))[0]
     edisgo_obj.topology.mv_grid = MVGrid(id=mv_grid_id, edisgo_obj=edisgo_obj)
     edisgo_obj.topology._grids[str(edisgo_obj.topology.mv_grid)] = edisgo_obj.topology.mv_grid
@@ -112,13 +107,13 @@ def _set_up_mv_grid(grid, network):
     # if la_centers:
     #     aggregated, aggr_stations, dingo_import_data = \
     #         _determine_aggregated_nodes(la_centers)
-    #     topology.dingo_import_data = dingo_import_data
+    #     network.dingo_import_data = dingo_import_data
     # else:
     #     aggregated = {}
     #     aggr_stations = []
     #
     #     # create empty DF for imported agg. generators
-    #     topology.dingo_import_data = pd.DataFrame(columns=('id',
+    #     network.dingo_import_data = pd.DataFrame(columns=('id',
     #                                                       'capacity',
     #                                                       'agg_geno')
     #                                              )
@@ -379,12 +374,12 @@ def _import_genos_from_oedb(network):
         return generators_mv, generators_lv
 
     def _update_grids(network, generators_mv, generators_lv, remove_missing=True):
-        """Update imported status quo DINGO-topology according to new generator dataset
+        """Update imported status quo DINGO-network according to new generator dataset
 
         It
-            * adds new generators to topology if they do not exist
+            * adds new generators to network if they do not exist
             * updates existing generators if parameters have changed
-            * removes existing generators from topology which do not exist in the imported dataset
+            * removes existing generators from network which do not exist in the imported dataset
 
         Steps:
 
@@ -418,8 +413,8 @@ def _import_genos_from_oedb(network):
             List of LV generators
             Columns:
                 * id: :obj:`int` (index column)
-                * mvlv_subst_id: :obj:`int` (id of MV-LV substation in topology
-                  = topology which the generator will be connected to)
+                * mvlv_subst_id: :obj:`int` (id of MV-LV substation in grid
+                  = grid which the generator will be connected to)
                 * electrical_capacity: :obj:`float` (unit: kW)
                 * generation_type: :obj:`str` (e.g. 'solar')
                 * generation_subtype: :obj:`str` (e.g. 'solar_roof_mounted')
@@ -430,7 +425,7 @@ def _import_genos_from_oedb(network):
                   (CRS see config_grid.cfg)
 
         remove_missing: :obj:`bool`
-            If true, remove generators from topology which are not included in the imported dataset.
+            If true, remove generators from network which are not included in the imported dataset.
         """
 
         # set capacity difference threshold
@@ -458,7 +453,7 @@ def _import_genos_from_oedb(network):
         g_mv_existing = g_mv[g_mv['id'].isin(list(generators_mv.index.values))]
         # get existing genos (new genos DF format)
         generators_mv_existing = generators_mv[generators_mv.index.isin(list(g_mv_existing['id']))]
-        # remove existing ones from topology's geno list
+        # remove existing ones from grid's geno list
         g_mv = g_mv[~g_mv.isin(g_mv_existing)].dropna()
 
         # TEMP: BACKUP 1 GENO FOR TESTING
@@ -502,7 +497,7 @@ def _import_genos_from_oedb(network):
         generators_mv_new = generators_mv[~generators_mv.index.isin(
             list(g_mv_existing['id']))]
 
-        # remove them from topology's geno list
+        # remove them from grid's geno list
         g_mv = g_mv[~g_mv.isin(list(generators_mv_new.index.values))].dropna()
 
         # TEMP: INSERT BACKUPPED GENO IN DF FOR TESTING
@@ -517,7 +512,7 @@ def _import_genos_from_oedb(network):
                                'not be imported!'.format(id))
                 continue
 
-            # create generator object and add it to MV topology's graph
+            # create generator object and add it to MV grid's graph
             if row['generation_type'] in ['solar', 'wind']:
                 network.mv_grid.graph.add_node(
                     GeneratorFluctuating(
@@ -552,7 +547,7 @@ def _import_genos_from_oedb(network):
                      )
 
         # remove decommissioned genos
-        # (genos which exist in topology but not in the new dataset)
+        # (genos which exist in grid but not in the new dataset)
         log_geno_cap = 0
         if not g_mv.empty and remove_missing:
             log_geno_count = 0
@@ -580,7 +575,7 @@ def _import_genos_from_oedb(network):
         # TEMP: BACKUP 1 GENO FOR TESTING
         # temp_geno = g_lv.iloc[0]
 
-        # remove existing ones from topology's geno list
+        # remove existing ones from grid's geno list
         g_lv = g_lv[~g_lv.isin(g_lv_existing)].dropna()
 
         # iterate over exiting generators and check whether capacity has changed
@@ -610,7 +605,7 @@ def _import_genos_from_oedb(network):
         # g_lv.loc[len(g_lv)] = temp_geno
 
         # remove decommissioned genos
-        # (genos which exist in topology but not in the new dataset)
+        # (genos which exist in grid but not in the new dataset)
         log_geno_cap = 0
         if not g_lv.empty and remove_missing:
             log_geno_count = 0
@@ -669,7 +664,7 @@ def _import_genos_from_oedb(network):
         # g_lv_agg.loc[len(g_lv_agg)] = temp_geno
 
         # remove decommissioned genos
-        # (genos which exist in topology but not in the new dataset)
+        # (genos which exist in grid but not in the new dataset)
         log_geno_cap = 0
         if not g_lv_agg.empty and remove_missing:
             log_geno_count = 0
@@ -683,7 +678,7 @@ def _import_genos_from_oedb(network):
                 row['agg_geno'].id = '-'.join([id[0], id[1], '_'.join(ids)])
 
                 # after removing the LV geno from agg geno, is the agg. geno empty?
-                # if yes, remove it from topology
+                # if yes, remove it from grid
                 if not ids:
                     row['agg_geno'].grid.graph.remove_node(row['agg_geno'])
 
@@ -714,18 +709,18 @@ def _import_genos_from_oedb(network):
 
         # dict for new agg. generators
         agg_geno_new = {}
-        # get LV topology districts
+        # get LV grid districts
         lv_grid_dict = _build_lv_grid_dict(network)
 
         # get predefined random seed and initialize random generator
         seed = int(network.config['grid_connection']['random_seed'])
         random.seed(a=seed)
 
-        # check if none of new generators can be allocated to an existing  LV topology
+        # check if none of new generators can be allocated to an existing  LV grid
         if not any([_ in lv_grid_dict.keys()
                     for _ in list(generators_lv_new['mvlv_subst_id'])]):
             logger.warning('None of the imported generators can be allocated '
-                           'to an existing LV topology. Check compatibility of topology '
+                           'to an existing LV grid. Check compatibility of grid '
                            'and generator datasets.')
 
         # iterate over new (single unit or part of agg. unit) generators and create them
@@ -855,7 +850,7 @@ def _import_genos_from_oedb(network):
 
                             # select cable type
                             line_type, line_count = select_cable(
-                                edisgo_obj=network,
+                                edisgo_obj=edisgo_obj,
                                 level='mv',
                                 apparent_power=gen.nominal_capacity /
                                 pfac_mv_gen)
@@ -941,24 +936,24 @@ def _import_genos_from_oedb(network):
 
         Parameters
         ----------
-        generator : :class:`~.topology.components.Generator`
+        generator : :class:`~.network.components.Generator`
             LV generator
         mvlv_subst_id : :obj:`int`
             MV-LV substation id
         lv_grid_dict : :obj:`dict`
             Dict of existing LV grids
-            Format: {:obj:`int`: :class:`~.topology.grids.LVGrid`}
+            Format: {:obj:`int`: :class:`~.network.grids.LVGrid`}
 
         Returns
         -------
-        :class:`~.topology.grids.LVGrid`
-            LV topology of generator
+        :class:`~.network.grids.LVGrid`
+            LV network of generator
         """
 
         if mvlv_subst_id and not isnan(mvlv_subst_id):
             # assume that given LA exists
             try:
-                # get LV topology
+                # get LV grid
                 lv_grid = lv_grid_dict[mvlv_subst_id]
 
                 # if no geom, use geom of station
@@ -1030,7 +1025,7 @@ def _import_genos_from_oedb(network):
         if abs(capacity_imported - capacity_grid) > cap_diff_threshold:
             raise ValueError('Cumulative capacity of imported generators ({} kW) '
                              'differ from cumulative capacity of generators '
-                             'in updated topology ({} kW) by {} kW.'
+                             'in updated grid ({} kW) by {} kW.'
                              .format(str(round(capacity_imported, 1)),
                                      str(round(capacity_grid, 1)),
                                      str(round(capacity_imported - capacity_grid, 1))
@@ -1058,7 +1053,7 @@ def _import_genos_from_oedb(network):
                                                           .item())
                                                 )
 
-            # get geom of MV topology district
+            # get geom of MV grid district
             mvgd_geom_shp = transform(proj2equidistant(network),
                                       network.mv_grid.grid_district['geom']
                                       )
@@ -1067,8 +1062,8 @@ def _import_genos_from_oedb(network):
             if not (mvgd_geom_shp.contains(sample_mv_geno_geom_shp) and
                         mvgd_geom_shp.contains(sample_lv_geno_geom_shp)):
                 raise ValueError('At least one imported generator is not located '
-                                 'in the MV topology area. Check compatibility of '
-                                 'topology and generator datasets.')
+                                 'in the MV grid area. Check compatibility of '
+                                 'grid and generator datasets.')
 
     srid = int(network.config['geo']['srid'])
 
@@ -1129,8 +1124,8 @@ def _import_genos_from_oedb(network):
 
     _validate_generation()
 
-    connect_mv_generators(edisgo_obj=network)
-    connect_lv_generators(network=network)
+    connect_mv_generators(edisgo_obj=edisgo_obj)
+    connect_lv_generators(edisgo_obj=edisgo_obj)
 
 
 def _import_genos_from_pypsa(network, file):
@@ -1193,7 +1188,7 @@ def _build_generator_list(network):
 def _build_lv_grid_dict(network):
     """Creates dict of LV grids
 
-    LV topology ids are used as keys, LV topology references as values.
+    LV grid ids are used as keys, LV grid references as values.
 
     Parameters
     ----------
@@ -1203,7 +1198,7 @@ def _build_lv_grid_dict(network):
     Returns
     -------
     :obj:`dict`
-        Format: {:obj:`int`: :class:`~.topology.grids.LVGrid`}
+        Format: {:obj:`int`: :class:`~.network.grids.LVGrid`}
     """
 
     lv_grid_dict = {}
@@ -1301,7 +1296,7 @@ def import_load_timeseries(config_data, data_source, mv_grid_id=None,
             This calculates standard load profiles for 4 different sectors.
 
     mv_grid_id : :obj:`str`
-        MV topology ID as used in oedb. Provide this if `data_source` is 'oedb'.
+        MV grid ID as used in oedb. Provide this if `data_source` is 'oedb'.
         Default: None.
     year : int
         Year for which to generate load time series. Provide this if

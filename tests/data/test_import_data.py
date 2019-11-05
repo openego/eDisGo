@@ -18,7 +18,7 @@ class TestImportFromDing0:
         import_data.import_ding0_grid(test_network_directory, self)
 
     def test_import_ding0_grid(self):
-        """Test successful import of ding0 topology."""
+        """Test successful import of ding0 network."""
 
         # buses, generators, loads, lines, transformers dataframes
         # check number of imported components
@@ -45,7 +45,7 @@ class TestImportFromDing0:
         assert all([col in self.topology.storages_df.columns for col in
                     import_data.COLUMNS['storages_df']])
 
-        # topology district
+        # grid district
         assert self.topology.grid_district['population'] == 23358
         assert isinstance(self.topology.grid_district['geom'],
                           shapely.geometry.Polygon)
@@ -57,10 +57,9 @@ class TestImportFromDing0:
         assert isinstance(lv_grid, LVGrid)
 
     def test_path_error(self):
-        """Test catching error when path to topology does not exist."""
-        msg = "Specified directory containing ding0 topology data does not " \
-              "exist or does not contain topology data."
-        with pytest.raises(AttributeError, match=msg):
+        """Test catching error when path to network does not exist."""
+        msg = "Directory wrong_directory does not exist."
+        with pytest.raises(AssertionError, match=msg):
             import_data.import_ding0_grid('wrong_directory', self.topology)
 
     def test_validate_ding0_grid_import(self):

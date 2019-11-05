@@ -35,12 +35,11 @@ setup(
     long_description=read('README.md'),
     long_description_content_type='text/x-rst',
     install_requires=[
-	'demandlib',
-        'ding0 >= 0.1.12',
+	    'demandlib',
         'networkx >= 2.0 ',
         'shapely >= 1.5.12, <= 1.6.3',
-        'pandas',
-        'pypsa >=0.11.0, <=0.11.0',
+        'pandas < 0.25.0',
+        'pypsa', #with bug fix snapshots.csv...
         'pyproj >= 1.9.5.1, <= 1.9.5.1',
         'geopy >= 1.11.0, <= 1.11.0',
         'pyomo >= 5.5.0',

@@ -483,7 +483,7 @@ class EDisGo(EDisGoReimport):
         self._config = Config(config_path=kwargs.get('config_path', None))
         self._equipment_data = self._load_equipment_data()
         # create network (loads network data, configurations, equipment data)
-        self.network = Network(
+        self.topology = Topology(
             generator_scenario=kwargs.get('generator_scenario', None))
         # load network data
         self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
