@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 from pandas.util.testing import assert_series_equal
 from math import tan, acos
 import pytest
@@ -20,6 +21,31 @@ class TestEDisGo:
         test_network_directory = os.path.join(parent_dirname, 'test_network')
         self.edisgo = EDisGo(ding0_grid=test_network_directory,
                              worst_case_analysis='worst-case')
+
+    def test_analyze(self):
+        timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
+        self.edisgo.analyze()
+        # check results
+        assert(np.isclose(self.edisgo.results.grid_losses.loc[timesteps].values,
+               np.array([[0.20826765, 0.20945498], [0.06309538, 0.06346827]])).all())
+        assert(np.isclose(self.edisgo.results.hv_mv_exchanges.loc[timesteps].values,
+                np.array([[-21.26234, 10.69626], [1.29379, 0.52485]])).all())
+        assert(np.isclose(self.edisgo.results.pfa_v_mag_pu.lv.loc[
+                    timesteps, 'GeneratorFluctuating_18'].values,
+                np.array([1.01699, 0.99915])).all())
+        assert(np.isclose(self.edisgo.results.pfa_v_mag_pu.mv.loc[
+                     timesteps, 'virtual_Bus_primary_LVStation_4'].values,
+                 np.array([1.00629, 0.99917])).all())
+        assert (np.isclose(
+            self.edisgo.results.pfa_p.loc[timesteps, 'Line_60000003'].values,
+            np.array([0.00765636, 0.07659877])).all())
+        assert (np.isclose(
+            self.edisgo.results.pfa_q.loc[timesteps, 'Line_60000003'].values,
+            np.array([0.00251644, 0.0251678])).all())
+        assert (np.isclose(self.edisgo.results.i_res.loc[
+                     timesteps, ['Line_10002', 'Line_90000025']].values,
+                 np.array(
+                     [[1.75807, 0.15960], [11.72047, 1.64367]])).all())
 
     def test_reinforce(self):
         print()

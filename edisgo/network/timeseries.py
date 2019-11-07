@@ -536,8 +536,8 @@ class TimeSeriesControl:
             'feedin_case', 'load_case' or both.
 
         """
-
-        gens_df = self.edisgo_obj.topology.generators_df.loc[:, ['bus', 'type', 'p_nom']]
+        # Todo: change back once slack handeling is added
+        gens_df = self.edisgo_obj.topology._generators_df.loc[:, ['bus', 'type', 'p_nom']]
 
         # check that all generators have bus, type, nominal power
         check_gens = gens_df.isnull().any(axis=1)
@@ -575,21 +575,21 @@ class TimeSeriesControl:
             gen_ts[cols] = pd.concat(
                 [worst_case_ts.loc[:, ['solar']]] * len(cols), axis=1)
         # assign normalized active power time series to other generators
-        cols = gen_ts[self.edisgo_obj.topology.generators_df.index[
-            self.edisgo_obj.topology.generators_df.type != 'solar']].columns
+        cols = gen_ts[self.edisgo_obj.topology._generators_df.index[
+            self.edisgo_obj.topology._generators_df.type != 'solar']].columns
         if len(cols) > 0:
             gen_ts[cols] = pd.concat(
                 [worst_case_ts.loc[:, ['other']]] * len(cols), axis=1)
 
         # multiply normalized time series by nominal power of generator
         self.edisgo_obj.timeseries.generators_active_power = gen_ts.mul(
-            self.edisgo_obj.topology.generators_df.p_nom)
+            self.edisgo_obj.topology._generators_df.p_nom)
 
         # reactive power
         # write dataframes with sign of reactive power and power factor
         # for each generator
-        q_sign = pd.Series(index=self.edisgo_obj.topology.generators_df.index)
-        power_factor = pd.Series(index=self.edisgo_obj.topology.generators_df.index)
+        q_sign = pd.Series(index=self.edisgo_obj.topology._generators_df.index)
+        power_factor = pd.Series(index=self.edisgo_obj.topology._generators_df.index)
         for voltage_level in ['mv', 'lv']:
             cols = gens_df.index[gens_df.voltage_level == voltage_level]
             if len(cols) > 0:

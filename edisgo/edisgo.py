@@ -809,7 +809,7 @@ class EDisGo(EDisGoReimport):
 
 
         pypsa_network = pypsa_io.to_pypsa(
-                    self.topology, mode, timesteps)
+                    self, mode, timesteps)
 
         # Todo: check if still needed, if so update to new structure, at this point not needed, maybe later
         # check if all timesteps are in pypsa.snapshots, if not update time
