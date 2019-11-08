@@ -76,7 +76,7 @@ Or coding the script yourself with finer control of details
     costs = edisgo.network.results.grid_expansion_costs
 
 
-Instead of conducting a worst-case analysis you can also provide specific time series:
+Instead of conducting a worst-case analysis you can also provide specific time series (be aware that the following time series just serve as an example to present the required format of time series but may not ensure convergence of the power flow):
 
 .. code-block:: python
 
@@ -89,7 +89,7 @@ Instead of conducting a worst-case analysis you can also provide specific time s
     timeindex = pd.date_range('1/1/2011', periods=4, freq='H')
     # load time series (scaled by annual demand)
     timeseries_load = pd.DataFrame({'residential': [0.0001] * len(timeindex),
-				    'commercial': [0.0002] * len(timeindex),
+				    'retail': [0.0002] * len(timeindex),
 				    'industrial': [0.0015] * len(timeindex),
                                     'agricultural': [0.00005] * len(timeindex)},
 			           index=timeindex)
