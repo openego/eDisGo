@@ -189,7 +189,7 @@ def hv_mv_station_load(edisgo):
     return crit_stations
 
 
-def mv_lv_station_load(network):
+def mv_lv_station_load(edisgo_obj):
     """
     Checks for over-loading of MV/LV stations.
 
