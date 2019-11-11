@@ -10,6 +10,7 @@ from edisgo.network.timeseries import TimeSeriesControl, TimeSeries
 from edisgo.tools.config import Config
 from edisgo.io import ding0_import
 from edisgo import EDisGo
+from edisgo.flex_opt import check_tech_constraints as checks
 
 
 class TestEDisGo:
@@ -46,6 +47,29 @@ class TestEDisGo:
                      timesteps, ['Line_10002', 'Line_90000025']].values,
                  np.array(
                      [[1.75807, 0.15960], [11.72047, 1.64367]])).all())
+
+    def test_crit_station(self):
+        timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
+        # check exception
+        overloaded_mv_station = checks.hv_mv_station_load(self.edisgo)
+        assert overloaded_mv_station.empty
+        msg = "No results to check. Please analyze grid first."
+        with pytest.raises(Exception, match=msg):
+            checks.mv_lv_station_load(self.edisgo)
+        # check results
+        self.edisgo.analyze()
+        overloaded_lv_station = checks.mv_lv_station_load(self.edisgo)
+        assert(len(overloaded_lv_station) == 6)
+        assert (np.isclose(
+            overloaded_lv_station.at['Bus_secondary_LVStation_1', 's_pfa'],
+            0.41762))
+        assert (overloaded_lv_station.at[
+                    'Bus_secondary_LVStation_1', 'time_index'] == timesteps[1])
+        assert (np.isclose(
+            overloaded_lv_station.at['Bus_secondary_LVStation_4', 's_pfa'],
+            0.084253))
+        assert (overloaded_lv_station.at[
+                    'Bus_secondary_LVStation_4', 'time_index'] == timesteps[0])
 
     def test_reinforce(self):
         print()

@@ -179,7 +179,7 @@ def hv_mv_station_load(edisgo):
 
     """
     crit_stations = pd.DataFrame()
-    crit_stations = _station_load(edisgo, edisgo.network.mv_grid,
+    crit_stations = _station_load(edisgo, edisgo.topology.mv_grid,
                                   crit_stations)
     if not crit_stations.empty:
         logger.debug('==> HV/MV station has load issues.')
@@ -195,7 +195,7 @@ def mv_lv_station_load(network):
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
+    edisgo_obj : :class:`~.edisgo.EDisGo`
 
     Returns
     -------
@@ -218,8 +218,8 @@ def mv_lv_station_load(network):
 
     crit_stations = pd.DataFrame()
 
-    for lv_grid in network.mv_grid.lv_grids:
-        crit_stations = _station_load(network, lv_grid,
+    for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
+        crit_stations = _station_load(edisgo_obj, lv_grid,
                                       crit_stations)
     if not crit_stations.empty:
         logger.debug('==> {} MV/LV station(s) has/have load issues.'.format(
@@ -261,7 +261,7 @@ def _station_load(edisgo, grid, crit_stations):
         occured in as :pandas:`pandas.Timestamp<timestamp>`.
 
     """
-    if len(grid.station) < 1:
+    if len(grid.transformers_df) < 1:
         logger.warning('No station found, cannot check station.')
         return crit_stations
 
@@ -273,12 +273,12 @@ def _station_load(edisgo, grid, crit_stations):
         raise ValueError('Inserted topology of unknown type.')
 
     # maximum allowed apparent power of station for feed-in and load case
-    s_station = sum([grid.transformers_df.loc[_,'s_nom'] for _ in grid.transformers_df.index])
+    s_station = sum(grid.transformers_df.s_nom)
     s_station_allowed_per_case = {}
-    s_station_allowed_per_case['feedin_case'] = s_station * edisgo.network.config[
+    s_station_allowed_per_case['feedin_case'] = s_station * edisgo.config[
         'grid_expansion_load_factors']['{}_feedin_case_transformer'.format(
         grid_level)]
-    s_station_allowed_per_case['load_case'] = s_station * edisgo.network.config[
+    s_station_allowed_per_case['load_case'] = s_station * edisgo.config[
         'grid_expansion_load_factors']['{}_load_case_transformer'.format(
         grid_level)]
     # maximum allowed apparent power of station in each time step
@@ -287,11 +287,14 @@ def _station_load(edisgo, grid, crit_stations):
             lambda _: s_station_allowed_per_case[_])
 
     try:
-        if isinstance(grid, LVGrid):
+        if grid_level == 'lv':
             s_station_pfa = edisgo.results.s_res(
-                grid.transformers).sum(axis=1)
+                grid.transformers_df).sum(axis=1)
+        elif grid_level == 'mv':
+            s_station_pfa = (edisgo.results.hv_mv_exchanges.p ** 2 + \
+                edisgo.results.hv_mv_exchanges.q ** 2) ** 0.5
         else:
-            s_station_pfa = edisgo.results.s_res([grid.station]).iloc[:, 0]
+            raise ValueError('Unknown grid level. Please check.')
         s_res = s_station_allowed - s_station_pfa
         s_res = s_res[s_res < 0]
         # check if maximum allowed apparent power of station exceeds
@@ -299,7 +302,7 @@ def _station_load(edisgo, grid, crit_stations):
         if not s_res.empty:
             # find out largest relative deviation
             load_factor = \
-                edisgo.timeseries.timesteps_load_feedin_case.case.apply(
+                edisgo.timeseries.timesteps_load_feedin_case.apply(
                     lambda _: edisgo.config[
                         'grid_expansion_load_factors'][
                         '{}_{}_transformer'.format(grid_level, _)])
@@ -307,7 +310,7 @@ def _station_load(edisgo, grid, crit_stations):
             crit_stations = crit_stations.append(pd.DataFrame(
                 {'s_pfa': s_station_pfa.loc[relative_s_res.idxmin()],
                  'time_index': relative_s_res.idxmin()},
-                index=[grid.station]))
+                index=grid.transformers_df.bus1.unique()))
 
     except KeyError:
         logger.debug('No results for {} station to check overloading.'.format(

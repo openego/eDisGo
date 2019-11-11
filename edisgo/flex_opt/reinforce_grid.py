@@ -161,9 +161,9 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
 
     logger.debug('==> Check station load.')
-    overloaded_mv_station = checks.hv_mv_station_load(edisgo_reinforce.network)
+    overloaded_mv_station = checks.hv_mv_station_load(edisgo_reinforce)
     overloaded_lv_stations = checks.mv_lv_station_load(
-        edisgo_reinforce.network)
+        edisgo_reinforce)
     logger.debug('==> Check line load.')
     crit_lines = checks.mv_line_load(edisgo_reinforce.network)
     if not mode:

@@ -534,7 +534,7 @@ class Results:
     def unresolved_issues(self, issues):
         self._unresolved_issues = issues
 
-    def s_res(self, components=None):
+    def s_res(self, components_df=None):
         """
         Get resulting apparent power in kVA at line(s) and transformer(s).
 
@@ -559,18 +559,18 @@ class Results:
             Apparent power in kVA for lines and/or transformers.
 
         """
+        if self.pfa_p is None:
+            raise Exception('No results to check. Please analyze grid first.')
 
-        if components is not None:
-            labels_included = []
-            labels_not_included = []
-            labels = [repr(l) for l in components]
-            for label in labels:
-                if (label in list(self.pfa_p.columns) and
-                        label in list(self.pfa_q.columns)):
-                    labels_included.append(label)
-                else:
-                    labels_not_included.append(label)
-            if labels_not_included:
+        if components_df is not None:
+            labels_included = components_df.index[components_df.index.isin(
+                self.pfa_p.columns) and components_df.index.isin(
+                self.pfa_q.columns)]
+            labels_not_included = components_df.index[
+                ~components_df.index.isin(
+                    self.pfa_p.columns) or ~components_df.index.isin(
+                    self.pfa_q.columns)]
+            if len(labels_not_included)>0:
                 logging.warning(
                     "Apparent power for {lines} are not returned from "
                     "PFA".format(lines=labels_not_included))

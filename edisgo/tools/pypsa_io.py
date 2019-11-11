@@ -873,7 +873,7 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     edisgo.results._i_res = np.hypot(
         pypsa.lines_t['p0'], pypsa.lines_t['q0']).truediv(
         pypsa.lines['v_nom'] * bus0_v_mag_pu.T,
-        axis='columns') / sqrt(3) * 1e3
+        axis='columns') / sqrt(3)
 
     #Todo: overthink mapping, should results not be assigned to original nodes?
 
