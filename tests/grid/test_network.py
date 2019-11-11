@@ -40,7 +40,7 @@ class TestEDisGo:
     def test_crit_station(self):
         timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
         # calculate results if not already existing
-        if self.edisgo.pfa_p is None:
+        if self.edisgo.results.pfa_p is None:
             self.edisgo.analyze()
         # check results
         overloaded_mv_station = checks.hv_mv_station_load(self.edisgo)
