@@ -23,16 +23,28 @@ class TestEDisGo:
         self.edisgo = EDisGo(ding0_grid=test_network_directory,
                              worst_case_analysis='worst-case')
 
-    def test_crit_station(self):
-        timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
-        # check exception
-        overloaded_mv_station = checks.hv_mv_station_load(self.edisgo)
-        assert overloaded_mv_station.empty
-        msg = "No results to check. Please analyze grid first."
+    def test_exceptions(self):
+        msg = "No results pfa_p to check. Please analyze grid first."
         with pytest.raises(Exception, match=msg):
             checks.mv_lv_station_load(self.edisgo)
-        # check results
+        msg = "No results i_res to check. Please analyze grid first."
+        with pytest.raises(Exception, match=msg):
+            checks.mv_line_load(self.edisgo)
         self.edisgo.analyze()
+        msg = "Inserted grid of unknown type."
+        with pytest.raises(ValueError, match=msg):
+            checks._line_load(self.edisgo, None, pd.DataFrame)
+        with pytest.raises(ValueError, match=msg):
+            checks._station_load(self.edisgo, None, pd.DataFrame)
+
+    def test_crit_station(self):
+        timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
+        # calculate results if not already existing
+        if self.edisgo.pfa_p is None:
+            self.edisgo.analyze()
+        # check results
+        overloaded_mv_station = checks.hv_mv_station_load(self.edisgo)
+        assert overloaded_mv_station.empty
         overloaded_lv_station = checks.mv_lv_station_load(self.edisgo)
         assert(len(overloaded_lv_station) == 6)
         assert (np.isclose(
@@ -45,6 +57,25 @@ class TestEDisGo:
             0.084253))
         assert (overloaded_lv_station.at[
                     'Bus_secondary_LVStation_4', 'time_index'] == timesteps[0])
+
+    def test_crit_lines(self):
+        timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
+        if self.edisgo.results.i_res is None:
+            self.edisgo.analyze()
+        mv_crit_lines = checks.mv_line_load(self.edisgo)
+        lv_crit_lines = checks.lv_line_load(self.edisgo)
+        assert len(lv_crit_lines) == 10
+        assert (lv_crit_lines.time_index == timesteps[1]).all()
+        assert lv_crit_lines.at[
+                   'Line_10000016', 'max_rel_overload'] == 1.1936977825332047
+        assert lv_crit_lines.at[
+                   'Line_50000007', 'max_rel_overload'] == 1.418679228498681
+        assert len(mv_crit_lines) == 9
+        assert (mv_crit_lines.time_index == timesteps[0]).all()
+        assert mv_crit_lines.at[
+                   'Line_10006', 'max_rel_overload'] == 2.3256986822390515
+        assert mv_crit_lines.at[
+                   'Line_10026', 'max_rel_overload'] == 2.1246019520230495
 
     def test_analyze(self):
         timesteps = pd.date_range('1/1/1970', periods=2, freq='H')

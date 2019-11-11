@@ -1,18 +1,19 @@
 import pandas as pd
 import logging
+from math import sqrt
 
 from edisgo.network.grids import LVGrid, MVGrid
 
 logger = logging.getLogger('edisgo')
 
 
-def mv_line_load(network):
+def mv_line_load(edisgo_obj):
     """
     Checks for over-loading issues in MV topology.
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
+    edisgo_obj : :class:`~.edisgo.EDisGo`
 
     Returns
     -------
@@ -34,7 +35,7 @@ def mv_line_load(network):
     """
 
     crit_lines = pd.DataFrame()
-    crit_lines = _line_load(network, network.mv_grid, crit_lines)
+    crit_lines = _line_load(edisgo_obj, edisgo_obj.topology.mv_grid, crit_lines)
 
     if not crit_lines.empty:
         logger.debug('==> {} line(s) in MV topology has/have load issues.'.format(
@@ -45,13 +46,13 @@ def mv_line_load(network):
     return crit_lines
 
 
-def lv_line_load(network):
+def lv_line_load(edisgo_obj):
     """
     Checks for over-loading issues in LV grids.
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
+    edisgo_obj : :class:`~.edisgo.EDisGo`
 
     Returns
     -------
@@ -74,8 +75,8 @@ def lv_line_load(network):
 
     crit_lines = pd.DataFrame()
 
-    for lv_grid in network.mv_grid.lv_grids:
-        crit_lines = _line_load(network, lv_grid, crit_lines)
+    for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
+        crit_lines = _line_load(edisgo_obj, lv_grid, crit_lines)
 
     if not crit_lines.empty:
         logger.debug('==> {} line(s) in LV grids has/have load issues.'.format(
@@ -86,7 +87,7 @@ def lv_line_load(network):
     return crit_lines
 
 
-def _line_load(network, grid, crit_lines):
+def _line_load(edisgo_obj, grid, crit_lines):
     """
     Checks for over-loading issues of lines.
 
@@ -115,39 +116,57 @@ def _line_load(network, grid, crit_lines):
         :pandas:`pandas.Timestamp<timestamp>`.
 
     """
+    if edisgo_obj.results.i_res is None:
+        raise Exception ('No results i_res to check. '
+                         'Please analyze grid first.')
+
     if isinstance(grid, LVGrid):
         grid_level = 'lv'
-    else:
+    elif isinstance(grid, MVGrid):
         grid_level = 'mv'
+    else:
+        raise ValueError("Inserted grid of unknown type.")
 
-    for line in list(grid.graph.lines()):
-        i_line_allowed_per_case = {}
-        i_line_allowed_per_case['feedin_case'] = \
-            line['line'].type['I_max_th'] * line['line'].quantity * \
-            network.config['grid_expansion_load_factors'][
-                '{}_feedin_case_line'.format(grid_level)]
-        i_line_allowed_per_case['load_case'] = \
-            line['line'].type['I_max_th'] * line['line'].quantity * \
-            network.config['grid_expansion_load_factors'][
-                '{}_load_case_line'.format(grid_level)]
-        # maximum allowed line load in each time step
-        i_line_allowed = \
-            network.timeseries.timesteps_load_feedin_case.case.apply(
-                lambda _: i_line_allowed_per_case[_])
-        try:
-            # check if maximum current from power flow analysis exceeds
-            # allowed maximum current
-            i_line_pfa = network.results.i_res[repr(line['line'])]
-            if any((i_line_allowed - i_line_pfa) < 0):
-                # find out largest relative deviation
-                relative_i_res = i_line_pfa / i_line_allowed
-                crit_lines = crit_lines.append(pd.DataFrame(
-                    {'max_rel_overload': relative_i_res.max(),
-                     'time_index': relative_i_res.idxmax()},
-                    index=[line['line']]))
-        except KeyError:
-            logger.debug('No results for line {} '.format(str(line)) +
-                         'to check overloading.')
+    i_lines_allowed_per_case = {}
+    i_lines_allowed_per_case['feedin_case'] = \
+        grid.lines_df.s_nom / sqrt(3) / grid.nominal_voltage * grid.lines_df.num_parallel * \
+        edisgo_obj.config['grid_expansion_load_factors'][
+            '{}_feedin_case_line'.format(grid_level)]
+    i_lines_allowed_per_case['load_case'] = \
+        grid.lines_df.s_nom / sqrt(3) / grid.nominal_voltage * grid.lines_df.num_parallel * \
+        edisgo_obj.config['grid_expansion_load_factors'][
+            '{}_load_case_line'.format(grid_level)]
+    i_lines_allowed = \
+        edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
+            lambda _: i_lines_allowed_per_case[_])
+    try:
+        i_lines_pfa = edisgo_obj.results.i_res[grid.lines_df.index]
+        relative_i_res = i_lines_pfa/i_lines_allowed
+        crit_lines_relative_load = relative_i_res[
+            relative_i_res > 1].max().dropna()
+        crit_lines = crit_lines.append(pd.concat([crit_lines_relative_load,
+                                                  relative_i_res.idxmax()[
+                                                      crit_lines_relative_load.index]],
+                                                 axis=1,
+                                                 keys=['max_rel_overload',
+                                                       'time_index']))
+    except KeyError:
+        logger.debug('No results for line to check overloading. Checking lines '
+                     'one by one')
+        for line_name, line in grid.lines_df.iterrows():
+            try:
+                i_line_pfa = edisgo_obj.results.i_res[line_name]
+                i_line_allowed = i_line_allowed[line_name]
+                if any((i_line_allowed - i_line_pfa) < 0):
+                    # find out largest relative deviation
+                    relative_i_res = i_line_pfa / i_line_allowed
+                    crit_lines = crit_lines.append(pd.DataFrame(
+                        {'max_rel_overload': relative_i_res.max(),
+                         'time_index': relative_i_res.idxmax()},
+                        index=[line_name]))
+            except KeyError:
+                logger.debug('No results for line {} '.format(line.name) +
+                             'to check overloading.')
 
     return crit_lines
 
@@ -261,16 +280,17 @@ def _station_load(edisgo, grid, crit_stations):
         occured in as :pandas:`pandas.Timestamp<timestamp>`.
 
     """
-    if len(grid.transformers_df) < 1:
-        logger.warning('No station found, cannot check station.')
-        return crit_stations
 
     if isinstance(grid, LVGrid):
         grid_level = 'lv'
     elif isinstance(grid, MVGrid):
         grid_level = 'mv'
     else:
-        raise ValueError('Inserted topology of unknown type.')
+        raise ValueError('Inserted grid of unknown type.')
+
+    if len(grid.transformers_df) < 1:
+        logger.warning('No station found, cannot check station.')
+        return crit_stations
 
     # maximum allowed apparent power of station for feed-in and load case
     s_station = sum(grid.transformers_df.s_nom)
