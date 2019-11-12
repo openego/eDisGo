@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 
 from edisgo.network.components import Generator, Load, Switch
-from edisgo.network import topology
-from edisgo.tools import pypsa_io
 
 
 class Grid(ABC):
@@ -76,7 +74,8 @@ class Grid(ABC):
             :attr:`~.network.topology.Topology.transformers_df`.
         """
         return self.edisgo_obj.topology.transformers_df[
-            self.edisgo_obj.topology.transformers_df.bus1.isin(self.buses_df.index)]
+            self.edisgo_obj.topology.transformers_df.bus1.isin(
+                self.buses_df.index)]
 
     @property
     def generators_df(self):
@@ -86,12 +85,14 @@ class Grid(ABC):
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all generators in topology. For more information on the
-            dataframe see :attr:`~.network.topology.Topology.generators_df`.
+            Dataframe with all generators in topology. For more information on
+            the dataframe see
+            :attr:`~.network.topology.Topology.generators_df`.
 
         """
         return self.edisgo_obj.topology.generators_df[
-            self.edisgo_obj.topology.generators_df.bus.isin(self.buses_df.index)]
+            self.edisgo_obj.topology.generators_df.bus.isin(
+                self.buses_df.index)]
 
     @property
     def generators(self):
@@ -144,8 +145,9 @@ class Grid(ABC):
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all storages in topology. For more information on the
-            dataframe see :attr:`~.network.topology.Topology.storages_df`.
+            Dataframe with all storages in topology. For more information on
+            the dataframe see :attr:`~.network.topology.Topology.storages_df`.
+
         """
         return self.edisgo_obj.topology.storages_df[
             self.edisgo_obj.topology.storages_df.bus.isin(self.buses_df.index)]
@@ -167,8 +169,10 @@ class Grid(ABC):
 
         """
         return self.edisgo_obj.topology.switches_df[
-            self.edisgo_obj.topology.switches_df.bus_closed.isin(self.buses_df.index)][
-            self.edisgo_obj.topology.switches_df.type_info=='Switch Disconnector']
+            self.edisgo_obj.topology.switches_df.bus_closed.isin(
+                self.buses_df.index)][
+            self.edisgo_obj.topology.switches_df.type_info ==
+            'Switch Disconnector']
 
     @property
     def switch_disconnectors(self):
@@ -249,8 +253,8 @@ class Grid(ABC):
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Cumulative peak generation capacity of generators in the network per
-            technology type in MW.
+            Cumulative peak generation capacity of generators in the network
+            per technology type in MW.
 
         """
         return self.generators_df.groupby(['type']).sum()['p_nom']
