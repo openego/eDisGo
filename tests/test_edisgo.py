@@ -160,7 +160,8 @@ class TestEDisGo:
     def test_lv_to_pypsa(self):
         # test lv to pypsa
         timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
-        pypsa_network = self.edisgo.to_pypsa(mode='lv', lv_grid_name='LVGrid_2')
+        pypsa_network = self.edisgo.to_pypsa(
+            mode='lv', lv_grid_name='LVGrid_2')
         pf_results = pypsa_network.pf(timesteps)
         # check if pf converged
         if all(pf_results['converged']['0'].tolist()):

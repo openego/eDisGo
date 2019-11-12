@@ -97,11 +97,11 @@ class Topology:
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all generators in MV network and underlying LV grids.
-            Slack generator is excluded.
+            Dataframe with all generators in MV network and underlying LV
+            grids.
 
         """
-        return self._generators_df.drop(labels=['Generator_slack'])
+        return self._generators_df
 
     @generators_df.setter
     def generators_df(self, generators_df):
