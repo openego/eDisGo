@@ -62,22 +62,6 @@ class Grid(ABC):
         self._nominal_voltage = nominal_voltage
 
     @property
-    def transformers_df(self):
-        """
-        Transformers to overlaying network.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all transformers to overlaying network. For more
-            information on the dataframe see
-            :attr:`~.network.topology.Topology.transformers_df`.
-        """
-        return self.edisgo_obj.topology.transformers_df[
-            self.edisgo_obj.topology.transformers_df.bus1.isin(
-                self.buses_df.index)]
-
-    @property
     def generators_df(self):
         """
         Connected generators within the network.
@@ -351,6 +335,21 @@ class MVGrid(Grid):
         return self.edisgo_obj.topology.buses_df.drop(
             self.edisgo_obj.topology.buses_df.lv_grid_id.dropna().index)
 
+    @property
+    def transformers_df(self):
+        """
+        Transformers to overlaying network.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all transformers to overlaying network. For more
+            information on the dataframe see
+            :attr:`~.network.topology.Topology.transformers_df`.
+
+        """
+        return self.edisgo_obj.topology.transformers_hvmv_df
+
     def draw(self):
         """
         Draw MV network.
@@ -383,6 +382,23 @@ class LVGrid(Grid):
         """
         return self.edisgo_obj.topology.buses_df.loc[
             self.edisgo_obj.topology.buses_df.lv_grid_id == self.id]
+
+    @property
+    def transformers_df(self):
+        """
+        Transformers to overlaying network.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all transformers to overlaying network. For more
+            information on the dataframe see
+            :attr:`~.network.topology.Topology.transformers_df`.
+
+        """
+        return self.edisgo_obj.topology.transformers_df[
+            self.edisgo_obj.topology.transformers_df.bus1.isin(
+                self.buses_df.index)]
 
     def draw(self):
         """
