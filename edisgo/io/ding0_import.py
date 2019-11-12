@@ -18,7 +18,7 @@ COLUMNS = {
     'generators_df': ['bus', 'control', 'p_nom', 'type', 'subtype',
                       'weather_cell_id'],
     'loads_df': ['bus', 'peak_load', 'sector', 'annual_consumption'],
-    'transformers_df': ['bus0', 'bus1', 'x_pu', 'r_pu', 's_nom', 'type',
+    'transformers_df': ['bus0', 'bus1', 'x_pu', 'r_pu', 's_nom',
                         'type_info'],
     'lines_df': ['bus0', 'bus1', 'length', 'x', 'r', 's_nom', 'type_info',
                  'num_parallel'],
@@ -71,6 +71,9 @@ def import_ding0_grid(path, edisgo_obj):
     edisgo_obj.topology.transformers_df = sort_transformer_buses(
         grid.transformers.drop(labels=['x_pu','r_pu'], axis=1).rename(
         columns={'r': 'r_pu', 'x': 'x_pu'})[COLUMNS['transformers_df']])
+    edisgo_obj.topology.transformers_hvmv_df = pd.DataFrame.from_csv(
+        os.path.join(path, 'transformers_hvmv.csv')).rename(
+        columns={'r': 'r_pu', 'x': 'x_pu'})
     edisgo_obj.topology.lines_df = grid.lines[COLUMNS['lines_df']]
     edisgo_obj.topology.switches_df = pd.read_csv(os.path.join(path, 'switches.csv'),
                                          index_col=[0])
