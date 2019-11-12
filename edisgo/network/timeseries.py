@@ -537,7 +537,8 @@ class TimeSeriesControl:
 
         """
         # Todo: change back once slack handeling is added
-        gens_df = self.edisgo_obj.topology._generators_df.loc[:, ['bus', 'type', 'p_nom']]
+        gens_df = self.edisgo_obj.topology._generators_df.loc[
+                  :, ['bus', 'type', 'p_nom']]
 
         # check that all generators have bus, type, nominal power
         check_gens = gens_df.isnull().any(axis=1)
@@ -549,7 +550,8 @@ class TimeSeriesControl:
 
         # assign voltage level to generators
         gens_df['voltage_level'] = gens_df.apply(
-            lambda _: 'lv' if self.edisgo_obj.topology.buses_df.at[_.bus, 'v_nom'] < 1
+            lambda _: 'lv'
+            if self.edisgo_obj.topology.buses_df.at[_.bus, 'v_nom'] < 1
             else 'mv', axis=1)
 
         # active power
@@ -588,8 +590,10 @@ class TimeSeriesControl:
         # reactive power
         # write dataframes with sign of reactive power and power factor
         # for each generator
+        # Todo: change back once slack handeling is added
         q_sign = pd.Series(index=self.edisgo_obj.topology._generators_df.index)
-        power_factor = pd.Series(index=self.edisgo_obj.topology._generators_df.index)
+        power_factor = pd.Series(
+            index=self.edisgo_obj.topology._generators_df.index)
         for voltage_level in ['mv', 'lv']:
             cols = gens_df.index[gens_df.voltage_level == voltage_level]
             if len(cols) > 0:
@@ -600,9 +604,10 @@ class TimeSeriesControl:
                     'reactive_power_factor']['{}_gen'.format(voltage_level)]
 
         # calculate reactive power time series for each generator
-        self.edisgo_obj.timeseries.generators_reactive_power = self._fixed_cosphi(
-            self.edisgo_obj.timeseries.generators_active_power,
-            q_sign, power_factor)
+        self.edisgo_obj.timeseries.generators_reactive_power = \
+            self._fixed_cosphi(
+                self.edisgo_obj.timeseries.generators_active_power,
+                q_sign, power_factor)
 
     def _worst_case_load(self, modes):
         """
@@ -628,7 +633,7 @@ class TimeSeriesControl:
         voltage_levels = ['mv', 'lv']
 
         loads_df = self.edisgo_obj.topology.loads_df.loc[
-                   :, ['bus', 'sector', 'annual_consumption']]
+                   :, ['bus', 'sector', 'peak_load']]
 
         # check that all loads have bus, sector, annual consumption
         check_loads = loads_df.isnull().any(axis=1)
@@ -640,42 +645,33 @@ class TimeSeriesControl:
 
         # assign voltage level to loads
         loads_df['voltage_level'] = loads_df.apply(
-            lambda _: 'lv' if self.edisgo_obj.topology.buses_df.at[_.bus, 'v_nom'] < 1
+            lambda _: 'lv' if self.edisgo_obj.topology.buses_df.at[
+                                  _.bus, 'v_nom'] < 1
             else 'mv', axis=1)
 
         # active power
         # get worst case configurations
         worst_case_scale_factors = self.edisgo_obj.config[
             'worst_case_scale_factor']
-        peakload_consumption_ratio = self.edisgo_obj.config[
-            'peakload_consumption_ratio']
 
         # get power scaling factors for different voltage levels and feed-in/
         # load case
         power_scaling = {}
         for voltage_level in voltage_levels:
-            power_scaling[voltage_level] = np.array(
-                [[worst_case_scale_factors['{}_{}_load'.format(
-                    voltage_level, mode)]] for mode in modes])
+            power_scaling[voltage_level] = [
+                worst_case_scale_factors['{}_{}_load'.format(
+                    voltage_level, mode)] for mode in modes]
 
-        # write normalized active power time series for each voltage level
-        # and sector to dataframe
-        load_ts = pd.DataFrame(index=self.edisgo_obj.timeseries.timeindex,
-                               columns=loads_df.index, dtype='float64')
-        for voltage_level in voltage_levels:
-            for sector in sectors:
-                cols = load_ts[loads_df.index[
-                    (loads_df.sector == sector) &
-                    (loads_df.voltage_level == voltage_level)]].columns
-                if len(cols) > 0:
-                    load_ts[cols] = np.concatenate(
-                        [peakload_consumption_ratio[sector] *
-                         power_scaling[voltage_level]] *
-                        len(cols), axis=1)
+        # assign power scaling factor to each load
+        power_scaling_df = pd.DataFrame(data=np.transpose(
+            [power_scaling[loads_df.at[col, 'voltage_level']] for col in
+             loads_df.index]),
+                     index=self.edisgo_obj.timeseries.timeindex,
+                     columns=loads_df.index)
 
-        # multiply normalized time series by annual consumption of load
-        self.edisgo_obj.timeseries.loads_active_power = load_ts.mul(
-            loads_df.annual_consumption)
+        # calculate active power of loads
+        self.edisgo_obj.timeseries.loads_active_power = \
+            power_scaling_df * loads_df.loc[:, 'peak_load']
 
         # reactive power
         # get worst case configurations
@@ -697,7 +693,8 @@ class TimeSeriesControl:
 
         # calculate reactive power time series for each load
         self.edisgo_obj.timeseries.loads_reactive_power = self._fixed_cosphi(
-            self.edisgo_obj.timeseries.loads_active_power, q_sign, power_factor)
+            self.edisgo_obj.timeseries.loads_active_power,
+            q_sign, power_factor)
 
     def _get_q_sign_generator(self, reactive_power_mode):
         """
