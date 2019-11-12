@@ -1,14 +1,12 @@
-from pypsa import Network as PyPSANetwork
-
-from ..network.grids import MVGrid, LVGrid
-
 import pandas as pd
 import os
 import numpy as np
+from pypsa import Network as PyPSANetwork
+
+from edisgo.network.grids import MVGrid, LVGrid
 
 if 'READTHEDOCS' not in os.environ:
     from shapely.wkt import loads as wkt_loads
-
 
 import logging
 logger = logging.getLogger('edisgo')
@@ -45,36 +43,52 @@ def import_ding0_grid(path, edisgo_obj):
 
     """
 
-    def sort_transformer_buses(trafos):
+    def sort_transformer_buses(transformers_df):
         """
         Sort buses of inserted transformers in a way that bus1 always
         represents secondary side of transformer.
         """
+        # ToDo write test
         voltage_bus0 = edisgo_obj.topology.buses_df.loc[
-            trafos.bus0].v_nom.values
+            transformers_df.bus0].v_nom.values
         voltage_bus1 = edisgo_obj.topology.buses_df.loc[
-            trafos.bus1].v_nom.values
-        trafos.loc[voltage_bus1 > voltage_bus0, ['bus0', 'bus1']] = \
-            trafos.loc[voltage_bus1 > voltage_bus0, ['bus1', 'bus0']].values
-        return trafos
+            transformers_df.bus1].v_nom.values
+        transformers_df.loc[voltage_bus1 > voltage_bus0, ['bus0', 'bus1']] = \
+            transformers_df.loc[voltage_bus1 > voltage_bus0, ['bus1', 'bus0']].values
+        return transformers_df
+
+    def sort_hvmv_transformer_buses(transformers_df):
+        """
+        Sort buses of inserted HV/MV transformers in a way that bus1 always
+        represents secondary side of transformer.
+        """
+        #ToDo write test
+        for transformer in transformers_df.index:
+            if not transformers_df.loc[transformer, 'bus1'] in \
+                   edisgo_obj.topology.buses_df.index:
+                transformers_df.loc[transformer, ['bus0', 'bus1']] = \
+                    transformers_df.loc[transformer, ['bus1', 'bus0']].values
+        return transformers_df
 
     grid = PyPSANetwork()
     grid.import_from_csv_folder(path)
 
     # write dataframes to edisgo_obj
     edisgo_obj.topology.buses_df = grid.buses[COLUMNS['buses_df']]
-    # rename slack generator
+    # drop slack generator from generators
     slack = [_ for _ in grid.generators.index if 'slack' in _.lower()][0]
-    grid.generators.rename(index={slack: 'Generator_slack'}, inplace=True)
+    grid.generators.drop(index=[slack], inplace=True)
+
     edisgo_obj.topology.generators_df = grid.generators[
         COLUMNS['generators_df']]
     edisgo_obj.topology.loads_df = grid.loads[COLUMNS['loads_df']]
     edisgo_obj.topology.transformers_df = sort_transformer_buses(
         grid.transformers.drop(labels=['x_pu','r_pu'], axis=1).rename(
         columns={'r': 'r_pu', 'x': 'x_pu'})[COLUMNS['transformers_df']])
-    edisgo_obj.topology.transformers_hvmv_df = pd.read_csv(
-        os.path.join(path, 'transformers_hvmv.csv')).rename(
-        columns={'r': 'r_pu', 'x': 'x_pu'})
+    edisgo_obj.topology.transformers_hvmv_df = sort_hvmv_transformer_buses(
+        pd.read_csv(os.path.join(path, 'transformers_hvmv.csv'),
+                    index_col=[0]).rename(
+            columns={'r': 'r_pu', 'x': 'x_pu'}))
     edisgo_obj.topology.lines_df = grid.lines[COLUMNS['lines_df']]
     edisgo_obj.topology.switches_df = pd.read_csv(
         os.path.join(path, 'switches.csv'), index_col=[0])
