@@ -27,6 +27,7 @@ class TestImportFromDing0:
         assert self.topology.loads_df.shape[0] == 50
         assert self.topology.lines_df.shape[0] == 198
         assert self.topology.transformers_df.shape[0] == 9
+        assert self.topology.transformers_hvmv_df.shape[0] == 1
         assert self.topology.switches_df.shape[0] == 2
         assert self.topology.storages_df.shape[0] == 0
         # check necessary columns
@@ -37,6 +38,8 @@ class TestImportFromDing0:
         assert all([col in self.topology.loads_df.columns for col in
                     ding0_import.COLUMNS['loads_df']])
         assert all([col in self.topology.transformers_df.columns
+                    for col in ding0_import.COLUMNS['transformers_df']])
+        assert all([col in self.topology.transformers_hvmv_df.columns
                     for col in ding0_import.COLUMNS['transformers_df']])
         assert all([col in self.topology.lines_df.columns for col in
                     ding0_import.COLUMNS['lines_df']])

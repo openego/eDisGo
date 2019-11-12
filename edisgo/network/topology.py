@@ -164,6 +164,36 @@ class Topology:
         self._transformers_df = transformers_df
 
     @property
+    def transformers_hvmv_df(self):
+        """
+        Dataframe with all HVMV transformers.
+
+        Parameters
+        ----------
+        transformers_df : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all transformers.
+            Index of the dataframe are transformer names. Columns of the
+            dataframe are:
+            bus0
+            bus1
+            x_pu
+            r_pu
+            s_nom
+            type
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all HVMV transformers.
+
+        """
+        return self._transformers_hvmv_df
+
+    @transformers_hvmv_df.setter
+    def transformers_hvmv_df(self, transformers_hvmv_df):
+        self._transformers_hvmv_df = transformers_hvmv_df
+
+    @property
     def lines_df(self):
         """
         Dataframe with all lines in MV network and underlying LV grids.

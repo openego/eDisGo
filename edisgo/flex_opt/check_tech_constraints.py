@@ -249,13 +249,13 @@ def mv_lv_station_load(edisgo_obj):
     return crit_stations
 
 
-def _station_load(edisgo, grid, crit_stations):
+def _station_load(edisgo_obj, grid, crit_stations):
     """
     Checks for over-loading of stations.
 
     Parameters
     ----------
-    edisgo : :class:`~.network.network.Edisgo`
+    edisgo_obj : :class:`~.network.network.Edisgo`
     grid : :class:`~.network.grids.LVGrid` or :class:`~.network.grids.MVGrid`
     crit_stations : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing over-loaded stations, their apparent power at
@@ -283,36 +283,38 @@ def _station_load(edisgo, grid, crit_stations):
 
     if isinstance(grid, LVGrid):
         grid_level = 'lv'
+        transformers_df = grid.transformers_df
     elif isinstance(grid, MVGrid):
         grid_level = 'mv'
+        transformers_df = edisgo_obj.topology.transformers_hvmv_df
     else:
         raise ValueError('Inserted grid of unknown type.')
 
-    if len(grid.transformers_df) < 1:
-        logger.warning('No station found, cannot check station.')
+    if len(transformers_df) < 1:
+        logger.warning('No transformers found, cannot check station.')
         return crit_stations
 
     # maximum allowed apparent power of station for feed-in and load case
-    s_station = sum(grid.transformers_df.s_nom)
+    s_station = sum(transformers_df.s_nom)
     s_station_allowed_per_case = {}
-    s_station_allowed_per_case['feedin_case'] = s_station * edisgo.config[
+    s_station_allowed_per_case['feedin_case'] = s_station * edisgo_obj.config[
         'grid_expansion_load_factors']['{}_feedin_case_transformer'.format(
         grid_level)]
-    s_station_allowed_per_case['load_case'] = s_station * edisgo.config[
+    s_station_allowed_per_case['load_case'] = s_station * edisgo_obj.config[
         'grid_expansion_load_factors']['{}_load_case_transformer'.format(
         grid_level)]
     # maximum allowed apparent power of station in each time step
     s_station_allowed = \
-        edisgo.timeseries.timesteps_load_feedin_case.apply(
+        edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
             lambda _: s_station_allowed_per_case[_])
 
     try:
         if grid_level == 'lv':
-            s_station_pfa = edisgo.results.s_res(
-                grid.transformers_df).sum(axis=1)
+            s_station_pfa = edisgo_obj.results.s_res(
+                transformers_df).sum(axis=1)
         elif grid_level == 'mv':
-            s_station_pfa = (edisgo.results.hv_mv_exchanges.p ** 2 + \
-                edisgo.results.hv_mv_exchanges.q ** 2) ** 0.5
+            s_station_pfa = (edisgo_obj.results.hv_mv_exchanges.p ** 2 + \
+                             edisgo_obj.results.hv_mv_exchanges.q ** 2) ** 0.5
         else:
             raise ValueError('Unknown grid level. Please check.')
         s_res = s_station_allowed - s_station_pfa
@@ -322,15 +324,15 @@ def _station_load(edisgo, grid, crit_stations):
         if not s_res.empty:
             # find out largest relative deviation
             load_factor = \
-                edisgo.timeseries.timesteps_load_feedin_case.apply(
-                    lambda _: edisgo.config[
+                edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
+                    lambda _: edisgo_obj.config[
                         'grid_expansion_load_factors'][
                         '{}_{}_transformer'.format(grid_level, _)])
             relative_s_res = load_factor * s_res
             crit_stations = crit_stations.append(pd.DataFrame(
                 {'s_pfa': s_station_pfa.loc[relative_s_res.idxmin()],
                  'time_index': relative_s_res.idxmin()},
-                index=grid.transformers_df.bus1.unique()))
+                index=[repr(grid)]))
 
     except KeyError:
         logger.debug('No results for {} station to check overloading.'.format(
