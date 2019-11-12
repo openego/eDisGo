@@ -19,7 +19,8 @@ class TestEDisGo:
     def setup_class(self):
         """Setup default values"""
         parent_dirname = os.path.dirname(os.path.dirname(__file__))
-        test_network_directory = os.path.join(parent_dirname, 'test_network')
+        test_network_directory = os.path.join(
+            parent_dirname, 'ding0_test_network')
         self.edisgo = EDisGo(ding0_grid=test_network_directory,
                              worst_case_analysis='worst-case')
 
@@ -132,7 +133,8 @@ class TestNetwork:
     def setup_class(self):
         """Setup default values"""
         parent_dirname = os.path.dirname(os.path.dirname(__file__))
-        test_network_directory = os.path.join(parent_dirname, 'test_network')
+        test_network_directory = os.path.join(
+            parent_dirname, 'ding0_test_network')
         self.edisgo = EDisGo(ding0_grid=test_network_directory,
                              worst_case_analysis='worst-case')
 
@@ -194,7 +196,8 @@ class TestTimeSeriesControl:
     def setup_class(self):
         """Setup default values"""
         parent_dirname = os.path.dirname(os.path.dirname(__file__))
-        test_network_directory = os.path.join(parent_dirname, 'test_network')
+        test_network_directory = os.path.join(
+            parent_dirname, 'ding0_test_network')
         self.topology = Topology()
         self.timeseries = TimeSeries()
         self.config = Config()
