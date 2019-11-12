@@ -44,11 +44,12 @@ class TestEDisGo:
             self.edisgo.analyze()
         # check results
         overloaded_mv_station = checks.hv_mv_station_load(self.edisgo)
-        assert(len(overloaded_mv_station) == 1)
-        assert overloaded_mv_station.at[
-                   'MVGrid_1', 's_pfa'] == 23.801203550122594
+        assert (len(overloaded_mv_station) == 1)
+        assert (np.isclose(
+            overloaded_mv_station.at['MVGrid_1', 's_pfa'],
+            23.824099, atol=1e-5))
         assert (overloaded_mv_station.at[
-                    'MVGrid_1', 'time_index'] == timesteps[0])
+                   'MVGrid_1', 'time_index'] == timesteps[0])
         overloaded_lv_station = checks.mv_lv_station_load(self.edisgo)
         assert(len(overloaded_lv_station) == 4)
         assert (np.isclose(
