@@ -3,6 +3,7 @@ import math
 import networkx as nx
 from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
     dijkstra_shortest_path_length
+import pandas as pd
 
 from edisgo.network.components import Generator, Load
 from edisgo.network.grids import LVGrid
@@ -175,7 +176,7 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
     return transformers_changes
 
 
-def extend_substation_overloading(network, critical_stations):
+def extend_substation_overloading(edisgo_obj, critical_stations):
     """
     Reinforce HV/MV station due to overloading issues.
 
@@ -185,7 +186,7 @@ def extend_substation_overloading(network, critical_stations):
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
+    edisgo_obj : :class:`~.edisgo.EDisGo`
     critical_stations : pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing over-loaded HV/MV stations, their apparent power
         at maximal over-loading and the corresponding time step.
@@ -202,77 +203,77 @@ def extend_substation_overloading(network, critical_stations):
     Dictionary with lists of added and removed transformers.
 
     """
+    if len(critical_stations) > 1:
+        raise Exception(
+            "More than one MV station to extend was given. "
+            "There should only exist one station, please check.")
 
     # get parameters for standard transformer
     try:
-        standard_transformer = network.equipment_data['mv_trafos'].loc[
-            network.config['grid_expansion_standard_equipment'][
+        standard_transformer = edisgo_obj.equipment_data['mv_trafos'].loc[
+            edisgo_obj.config['grid_expansion_standard_equipment'][
                 'hv_mv_transformer']]
     except KeyError:
         print('Standard HV/MV transformer is not in equipment list.')
 
     transformers_changes = {'added': {}, 'removed': {}}
-    for station in critical_stations.index:
+    # list of maximum power of each transformer in the station
+    trafos = edisgo_obj.topology.transformers_hvmv_df
+    s_max_per_trafo = trafos.s_nom
 
-        # list of maximum power of each transformer in the station
-        s_max_per_trafo = [_.type.S_nom for _ in station.transformers]
+    # maximum station load from power flow analysis
+    s_station_pfa = critical_stations.s_pfa[0]
 
-        # maximum station load from power flow analysis
-        s_station_pfa = critical_stations.s_pfa[station]
+    # determine missing transformer power to solve overloading issue
+    case = edisgo_obj.timeseries.timesteps_load_feedin_case[
+        critical_stations.time_index[0]]
+    load_factor = edisgo_obj.config['grid_expansion_load_factors'][
+        'mv_{}_transformer'.format(case)]
+    s_trafo_missing = s_station_pfa/load_factor - sum(s_max_per_trafo)
 
-        # determine missing transformer power to solve overloading issue
-        case = network.timeseries.timesteps_load_feedin_case.case[
-            critical_stations.time_index[station]]
-        load_factor = network.config['grid_expansion_load_factors'][
-            'mv_{}_transformer'.format(case)]
-        s_trafo_missing = s_station_pfa - (sum(s_max_per_trafo) * load_factor)
+    # check if second transformer of the same kind is sufficient
+    # if true install second transformer, otherwise install as many
+    # standard transformers as needed
+    if max(s_max_per_trafo) >= s_trafo_missing:
+        # if station has more than one transformer install a new
+        # transformer of the same kind as the transformer that best
+        # meets the missing power demand
+        duplicated_transformer = trafos.loc[
+            trafos[s_max_per_trafo > s_trafo_missing]['s_nom'].idxmin()]
+        name = duplicated_transformer.name.split('_')
+        name.insert(-1, 'reinforced')
+        name[-1] = len(trafos) + 1
+        duplicated_transformer.name = '_'.join([str(_) for _ in name])
+        edisgo_obj.topology.transformers_hvmv_df = \
+            edisgo_obj.topology.transformers_hvmv_df.append(
+                duplicated_transformer)
 
-        # check if second transformer of the same kind is sufficient
-        # if true install second transformer, otherwise install as many
-        # standard transformers as needed
-        if max(s_max_per_trafo) >= s_trafo_missing:
-            # if station has more than one transformer install a new
-            # transformer of the same kind as the transformer that best
-            # meets the missing power demand
-            duplicated_transformer = min(
-                [_ for _ in station.transformers
-                 if _.type.S_nom > s_trafo_missing],
-                key=lambda j: j.type.S_nom - s_trafo_missing)
+        transformers_changes['added'][critical_stations.index[0]] = \
+            [duplicated_transformer.name]
 
-            new_transformer = Transformer(
-                id='MVStation_{}_transformer_{}'.format(
-                    str(station.id), str(len(station.transformers) + 1)),
-                geom=duplicated_transformer.geom,
-                grid=duplicated_transformer.grid,
-                voltage_op=duplicated_transformer.voltage_op,
-                type=copy.deepcopy(duplicated_transformer.type))
+    else:
+        # get any transformer to get attributes for new transformer from
+        duplicated_transformer = trafos.iloc[0]
+        name = duplicated_transformer.name.split('_')
+        name.insert(-1, 'reinforced')
+        duplicated_transformer.s_nom = standard_transformer.S_nom
+        duplicated_transformer.type_info = standard_transformer.name
+        # calculate how many parallel standard transformers are needed
+        number_transformers = math.ceil(
+            s_station_pfa / (standard_transformer.S_nom * load_factor))
 
-            # add transformer to station and return value
-            station.add_transformer(new_transformer)
-            transformers_changes['added'][station] = [new_transformer]
-
-        else:
-            # get any transformer to get attributes for new transformer from
-            station_transformer = station.transformers[0]
-
-            # calculate how many parallel standard transformers are needed
-            number_transformers = math.ceil(
-                s_station_pfa / standard_transformer.S_nom)
-
-            # add transformer to station
-            new_transformers = []
-            for i in range(number_transformers):
-                new_transformer = Transformer(
-                    id='MVStation_{}_transformer_{}'.format(
-                        str(station.id), str(i + 1)),
-                    geom=station_transformer.geom,
-                    grid=station_transformer.grid,
-                    voltage_op=station_transformer.voltage_op,
-                    type=copy.deepcopy(standard_transformer))
-                new_transformers.append(new_transformer)
-            transformers_changes['added'][station] = new_transformers
-            transformers_changes['removed'][station] = station.transformers
-            station.transformers = new_transformers
+        new_transformers = pd.DataFrame()
+        # add transformer to station
+        for i in range(number_transformers):
+            name[-1] = i+1
+            duplicated_transformer.name = '_'.join([str(_) for _ in name])
+            new_transformers = new_transformers.append(duplicated_transformer)
+        new_transformers.set_index('name')
+        transformers_changes['added'][
+            critical_stations.index[0]] = new_transformers.index.values
+        transformers_changes['removed'][
+            critical_stations.index[0]] = trafos.index.values
+        edisgo_obj.topology.transformers_hvmv_df = new_transformers
 
     if transformers_changes['added']:
         logger.debug("==> MV station has been reinforced due to overloading "

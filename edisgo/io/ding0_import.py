@@ -74,7 +74,7 @@ def import_ding0_grid(path, edisgo_obj):
         columns={'r': 'r_pu', 'x': 'x_pu'})[COLUMNS['transformers_df']])
     edisgo_obj.topology.transformers_hvmv_df = pd.read_csv(
         os.path.join(path, 'transformers_hvmv.csv')).rename(
-        columns={'r': 'r_pu', 'x': 'x_pu'})
+        columns={'r': 'r_pu', 'x': 'x_pu'}).set_index('name')
     edisgo_obj.topology.lines_df = grid.lines[COLUMNS['lines_df']]
     edisgo_obj.topology.switches_df = pd.read_csv(
         os.path.join(path, 'switches.csv'), index_col=[0])

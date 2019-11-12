@@ -100,8 +100,8 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
 
     def _add_transformer_changes_to_equipment_changes(mode):
         for station, transformer_list in transformer_changes[mode].items():
-            edisgo_reinforce.network.results.equipment_changes = \
-                edisgo_reinforce.network.results.equipment_changes.append(
+            edisgo_reinforce.results.equipment_changes = \
+                edisgo_reinforce.results.equipment_changes.append(
                     pd.DataFrame(
                         {'iteration_step': [iteration_step] * len(
                             transformer_list),
@@ -137,7 +137,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         if (isinstance(timesteps_pfa, str) and
                     timesteps_pfa == 'snapshot_analysis'):
             snapshots = tools.select_worstcase_snapshots(
-                edisgo_reinforce.network)
+                edisgo_reinforce.topology)
             # drop None values in case any of the two snapshots does not exist
             timesteps_pfa = pd.DatetimeIndex(data=[
                 snapshots['load_case'], snapshots['feedin_case']]).dropna()
@@ -165,10 +165,10 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     overloaded_lv_stations = checks.mv_lv_station_load(
         edisgo_reinforce)
     logger.debug('==> Check line load.')
-    crit_lines = checks.mv_line_load(edisgo_reinforce.network)
+    crit_lines = checks.mv_line_load(edisgo_reinforce)
     if not mode:
         crit_lines = crit_lines.append(
-            checks.lv_line_load(edisgo_reinforce.network))
+            checks.lv_line_load(edisgo_reinforce))
 
     while_counter = 0
     while ((not overloaded_mv_station.empty or not overloaded_lv_stations.empty
@@ -179,7 +179,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
             # reinforce substations
             transformer_changes = \
                 reinforce_measures.extend_substation_overloading(
-                    edisgo_reinforce.network, overloaded_mv_station)
+                    edisgo_reinforce, overloaded_mv_station)
             # write added and removed transformers to results.equipment_changes
             _add_transformer_changes_to_equipment_changes('added')
             _add_transformer_changes_to_equipment_changes('removed')
@@ -188,7 +188,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
             # reinforce distribution substations
             transformer_changes = \
                 reinforce_measures.extend_distribution_substation_overloading(
-                    edisgo_reinforce.network, overloaded_lv_stations)
+                    edisgo_reinforce, overloaded_lv_stations)
             # write added and removed transformers to results.equipment_changes
             _add_transformer_changes_to_equipment_changes('added')
             _add_transformer_changes_to_equipment_changes('removed')

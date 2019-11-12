@@ -11,6 +11,7 @@ from edisgo.tools.config import Config
 from edisgo.io import ding0_import
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints as checks
+from edisgo.flex_opt import reinforce_measures as reinforce
 
 
 class TestEDisGo:
@@ -36,6 +37,11 @@ class TestEDisGo:
             checks._line_load(self.edisgo, None, pd.DataFrame)
         with pytest.raises(ValueError, match=msg):
             checks._station_load(self.edisgo, None, pd.DataFrame)
+        msg = "More than one MV station to extend was given. " \
+              "There should only exist one station, please check."
+        with pytest.raises(Exception, match=msg):
+            reinforce.extend_substation_overloading(self.edisgo,
+                                [pd.DataFrame(), pd.DataFrame])
 
     def test_crit_station(self):
         timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
