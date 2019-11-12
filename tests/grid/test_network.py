@@ -46,15 +46,15 @@ class TestEDisGo:
         overloaded_mv_station = checks.hv_mv_station_load(self.edisgo)
         assert overloaded_mv_station.empty
         overloaded_lv_station = checks.mv_lv_station_load(self.edisgo)
-        assert(len(overloaded_lv_station) == 6)
+        assert(len(overloaded_lv_station) == 4)
         assert (np.isclose(
             overloaded_lv_station.at['Bus_secondary_LVStation_1', 's_pfa'],
-            0.41762))
+            0.17942, atol=1e-5))
         assert (overloaded_lv_station.at[
                     'Bus_secondary_LVStation_1', 'time_index'] == timesteps[1])
         assert (np.isclose(
             overloaded_lv_station.at['Bus_secondary_LVStation_4', 's_pfa'],
-            0.084253))
+            0.08426, atol=1e-5))
         assert (overloaded_lv_station.at[
                     'Bus_secondary_LVStation_4', 'time_index'] == timesteps[0])
 
@@ -64,44 +64,57 @@ class TestEDisGo:
             self.edisgo.analyze()
         mv_crit_lines = checks.mv_line_load(self.edisgo)
         lv_crit_lines = checks.lv_line_load(self.edisgo)
-        assert len(lv_crit_lines) == 10
+        assert len(lv_crit_lines) == 4
         assert (lv_crit_lines.time_index == timesteps[1]).all()
-        assert lv_crit_lines.at[
-                   'Line_10000016', 'max_rel_overload'] == 1.1936977825332047
-        assert lv_crit_lines.at[
-                   'Line_50000007', 'max_rel_overload'] == 1.418679228498681
+        assert (np.isclose(
+            lv_crit_lines.at['Line_50000002', 'max_rel_overload'],
+            1.02105, atol=1e-5))
+        assert (np.isclose(
+            lv_crit_lines.at['Line_60000003', 'max_rel_overload'],
+            1.03784, atol=1e-5))
         assert len(mv_crit_lines) == 9
         assert (mv_crit_lines.time_index == timesteps[0]).all()
-        assert mv_crit_lines.at[
-                   'Line_10006', 'max_rel_overload'] == 2.3256986822390515
-        assert mv_crit_lines.at[
-                   'Line_10026', 'max_rel_overload'] == 2.1246019520230495
+        assert (np.isclose(
+            mv_crit_lines.at['Line_10006', 'max_rel_overload'],
+            2.32612, atol=1e-5))
+        assert (np.isclose(
+            mv_crit_lines.at['Line_10026', 'max_rel_overload'],
+            2.12460, atol=1e-5))
 
     def test_analyze(self):
         timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
         if self.edisgo.results.grid_losses is None:
             self.edisgo.analyze()
         # check results
-        assert(np.isclose(self.edisgo.results.grid_losses.loc[timesteps].values,
-               np.array([[0.20826765, 0.20945498], [0.06309538, 0.06346827]])).all())
-        assert(np.isclose(self.edisgo.results.hv_mv_exchanges.loc[timesteps].values,
-                np.array([[-21.26234, 10.69626], [1.29379, 0.52485]])).all())
-        assert(np.isclose(self.edisgo.results.pfa_v_mag_pu.lv.loc[
-                    timesteps, 'GeneratorFluctuating_18'].values,
-                np.array([1.01699, 0.99915])).all())
-        assert(np.isclose(self.edisgo.results.pfa_v_mag_pu.mv.loc[
-                     timesteps, 'virtual_Bus_primary_LVStation_4'].values,
-                 np.array([1.00629, 0.99917])).all())
+        assert(np.isclose(
+            self.edisgo.results.grid_losses.loc[timesteps].values,
+            np.array([[0.20814, 0.20948], [0.01854, 0.01985]]),
+            atol=1e-5).all())
+        assert(np.isclose(
+            self.edisgo.results.hv_mv_exchanges.loc[timesteps].values,
+            np.array([[-21.29377, 10.68470], [0.96392, 0.37883]]),
+            atol=1e-5).all())
+        assert(np.isclose(
+            self.edisgo.results.pfa_v_mag_pu.lv.loc[
+                timesteps, 'GeneratorFluctuating_18'].values,
+            np.array([1.01699, 0.99917]),
+            atol=1e-5).all())
+        assert(np.isclose(
+            self.edisgo.results.pfa_v_mag_pu.mv.loc[
+                timesteps, 'virtual_Bus_primary_LVStation_4'].values,
+            np.array([1.00630, 0.99929]),
+            atol=1e-5).all())
         assert (np.isclose(
             self.edisgo.results.pfa_p.loc[timesteps, 'Line_60000003'].values,
-            np.array([0.00765636, 0.07659877])).all())
+            np.array([0.00799, 0.07996]), atol=1e-5).all())
         assert (np.isclose(
             self.edisgo.results.pfa_q.loc[timesteps, 'Line_60000003'].values,
-            np.array([0.00251644, 0.0251678])).all())
-        assert (np.isclose(self.edisgo.results.i_res.loc[
-                     timesteps, ['Line_10002', 'Line_90000025']].values,
-                 np.array(
-                     [[0.00175807, 0.00015960], [0.01172047, 0.00164367]])).all())
+            np.array([0.00263, 0.026273]), atol=1e-5).all())
+        assert (np.isclose(
+            self.edisgo.results.i_res.loc[
+                timesteps, ['Line_10002', 'Line_90000025']].values,
+            np.array([[0.001491, 0.000186], [0.009943, 0.001879]]),
+            atol=1e-6).all())
 
     def test_reinforce(self):
         print()
@@ -253,7 +266,7 @@ class TestTimeSeriesControl:
 
         load = 'Load_retail_MVGrid_1_Load_aggregated_retail_' \
                'MVGrid_1_1'  # retail, mv
-        exp = pd.Series(data=[0.15 * 1520 * 0.0002404, 1.0 * 1520 * 0.0002404],
+        exp = pd.Series(data=[0.15 * 0.31, 1.0 * 0.31],
                         name=load, index=self.timeseries.timeindex)
         assert_series_equal(
             self.timeseries.loads_active_power.loc[:, load], exp,
@@ -264,7 +277,7 @@ class TestTimeSeriesControl:
             exp * pf, check_exact=False, check_dtype=False)
 
         load = 'Load_agricultural_LVGrid_1_2'  # agricultural, lv
-        exp = pd.Series(data=[0.1 * 514 * 0.00024036, 1.0 * 514 * 0.00024036],
+        exp = pd.Series(data=[0.1 * 0.0523, 1.0 * 0.0523],
                         name=load, index=self.timeseries.timeindex)
         assert_series_equal(
             self.timeseries.loads_active_power.loc[:, load], exp,
@@ -275,29 +288,7 @@ class TestTimeSeriesControl:
             exp * pf, check_exact=False, check_dtype=False)
 
         load = 'Load_residential_LVGrid_3_3'  # residential, lv
-        exp = pd.Series(data=[0.1 * 4.3 * 0.00021372, 1.0 * 4.3 * 0.00021372],
-                        name=load, index=self.timeseries.timeindex)
-        assert_series_equal(
-            self.timeseries.loads_active_power.loc[:, load], exp,
-            check_exact=False, check_dtype=False)
-        pf = tan(acos(0.95))
-        assert_series_equal(
-            self.timeseries.loads_reactive_power.loc[:, load],
-            exp * pf, check_exact=False, check_dtype=False)
-
-        load = 'Load_industrial_LVGrid_6_1'  # industrial, lv
-        exp = pd.Series(data=[0.1 * 580 * 0.000132, 1.0 * 580 * 0.000132],
-                        name=load, index=self.timeseries.timeindex)
-        assert_series_equal(
-            self.timeseries.loads_active_power.loc[:, load], exp,
-            check_exact=False, check_dtype=False)
-        pf = tan(acos(0.95))
-        assert_series_equal(
-            self.timeseries.loads_reactive_power.loc[:, load],
-            exp * pf, check_exact=False, check_dtype=False)
-
-        load = 'Load_retail_LVGrid_9_14'  # industrial, lv
-        exp = pd.Series(data=[0.1 * 143 * 0.0002404, 1.0 * 143 * 0.0002404],
+        exp = pd.Series(data=[0.1 * 0.001209, 1.0 * 0.001209],
                         name=load, index=self.timeseries.timeindex)
         assert_series_equal(
             self.timeseries.loads_active_power.loc[:, load], exp,
@@ -321,7 +312,7 @@ class TestTimeSeriesControl:
             self.timeseries.generators_reactive_power.loc[:, gen],
             exp * pf)
         load = 'Load_retail_LVGrid_9_14'  # industrial, lv
-        exp = pd.Series(data=[0.1 * 143 * 0.0002404],
+        exp = pd.Series(data=[0.1 * 0.001222],
                         name=load, index=self.timeseries.timeindex)
         assert_series_equal(
             self.timeseries.loads_active_power.loc[:, load], exp,
@@ -344,7 +335,7 @@ class TestTimeSeriesControl:
             self.timeseries.generators_reactive_power.loc[:, gen],
             exp * pf)
         load = 'Load_retail_LVGrid_9_14'  # industrial, lv
-        exp = pd.Series(data=[1.0 * 143 * 0.0002404],
+        exp = pd.Series(data=[1.0 * 0.001222],
                         name=load, index=self.timeseries.timeindex)
         assert_series_equal(
             self.timeseries.loads_active_power.loc[:, load], exp,
@@ -366,7 +357,7 @@ class TestTimeSeriesControl:
             ts_control._worst_case_generation(modes=None)
 
         load = 'Load_agricultural_LVGrid_1_1'
-        self.topology._loads_df.at[load, 'annual_consumption'] = None
+        self.topology._loads_df.at[load, 'peak_load'] = None
         with pytest.raises(AttributeError, match=load):
             ts_control._worst_case_load(modes=None)
 
