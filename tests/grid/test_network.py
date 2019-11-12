@@ -44,19 +44,23 @@ class TestEDisGo:
             self.edisgo.analyze()
         # check results
         overloaded_mv_station = checks.hv_mv_station_load(self.edisgo)
-        assert overloaded_mv_station.empty
+        assert(len(overloaded_mv_station) == 1)
+        assert overloaded_mv_station.at[
+                   'MVGrid_1', 's_pfa'] == 23.801203550122594
+        assert (overloaded_mv_station.at[
+                    'MVGrid_1', 'time_index'] == timesteps[0])
         overloaded_lv_station = checks.mv_lv_station_load(self.edisgo)
         assert(len(overloaded_lv_station) == 6)
         assert (np.isclose(
-            overloaded_lv_station.at['Bus_secondary_LVStation_1', 's_pfa'],
+            overloaded_lv_station.at['LVGrid_1', 's_pfa'],
             0.41762))
         assert (overloaded_lv_station.at[
-                    'Bus_secondary_LVStation_1', 'time_index'] == timesteps[1])
+                    'LVGrid_1', 'time_index'] == timesteps[1])
         assert (np.isclose(
-            overloaded_lv_station.at['Bus_secondary_LVStation_4', 's_pfa'],
+            overloaded_lv_station.at['LVGrid_4', 's_pfa'],
             0.084253))
         assert (overloaded_lv_station.at[
-                    'Bus_secondary_LVStation_4', 'time_index'] == timesteps[0])
+                    'LVGrid_4', 'time_index'] == timesteps[0])
 
     def test_crit_lines(self):
         timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
