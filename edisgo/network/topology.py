@@ -40,6 +40,8 @@ class Topology:
         pypsa Netzwerk beachtet werden)
 
     """
+    #ToDo Implement update (and add) functions for component dataframes to
+    # avoid using protected variables in other classes and modules
 
     def __init__(self, **kwargs):
 
