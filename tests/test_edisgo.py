@@ -1,14 +1,8 @@
 import os
 import pandas as pd
 import numpy as np
-from pandas.util.testing import assert_series_equal
-from math import tan, acos
 import pytest
 
-from edisgo.network.topology import Topology
-from edisgo.network.timeseries import TimeSeriesControl, TimeSeries
-from edisgo.tools.config import Config
-from edisgo.io import ding0_import
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints as checks
 
@@ -18,9 +12,8 @@ class TestEDisGo:
     @classmethod
     def setup_class(self):
         """Setup default values"""
-        parent_dirname = os.path.dirname(os.path.dirname(__file__))
-        test_network_directory = os.path.join(
-            parent_dirname, 'ding0_test_network')
+        dirname = os.path.dirname(__file__)
+        test_network_directory = os.path.join(dirname, 'ding0_test_network')
         self.edisgo = EDisGo(ding0_grid=test_network_directory,
                              worst_case_analysis='worst-case')
 
@@ -39,6 +32,8 @@ class TestEDisGo:
             checks._station_load(self.edisgo, None, pd.DataFrame)
 
     def test_crit_station(self):
+        # TODO: have checks of technical constraints not require edisgo
+        # object and then move this test
         timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
         # calculate results if not already existing
         if self.edisgo.results.pfa_p is None:
@@ -65,6 +60,8 @@ class TestEDisGo:
                     'LVGrid_4', 'time_index'] == timesteps[0])
 
     def test_crit_lines(self):
+        # TODO: have checks of technical constraints not require edisgo
+        # object and then move this test
         timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
         if self.edisgo.results.i_res is None:
             self.edisgo.analyze()
@@ -125,18 +122,6 @@ class TestEDisGo:
     def test_reinforce(self):
         print()
         #self.edisgo.reinforce()
-
-
-class TestNetwork:
-
-    @classmethod
-    def setup_class(self):
-        """Setup default values"""
-        parent_dirname = os.path.dirname(os.path.dirname(__file__))
-        test_network_directory = os.path.join(
-            parent_dirname, 'ding0_test_network')
-        self.edisgo = EDisGo(ding0_grid=test_network_directory,
-                             worst_case_analysis='worst-case')
 
     def test_to_pypsa(self):
         # run powerflow and check results
