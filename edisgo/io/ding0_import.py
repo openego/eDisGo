@@ -66,27 +66,30 @@ def import_ding0_grid(path, edisgo_obj):
     # rename slack generator
     slack = [_ for _ in grid.generators.index if 'slack' in _.lower()][0]
     grid.generators.rename(index={slack: 'Generator_slack'}, inplace=True)
-    edisgo_obj.topology.generators_df = grid.generators[COLUMNS['generators_df']]
+    edisgo_obj.topology.generators_df = grid.generators[
+        COLUMNS['generators_df']]
     edisgo_obj.topology.loads_df = grid.loads[COLUMNS['loads_df']]
     edisgo_obj.topology.transformers_df = sort_transformer_buses(
         grid.transformers.drop(labels=['x_pu','r_pu'], axis=1).rename(
         columns={'r': 'r_pu', 'x': 'x_pu'})[COLUMNS['transformers_df']])
-    edisgo_obj.topology.transformers_hvmv_df = pd.DataFrame.from_csv(
+    edisgo_obj.topology.transformers_hvmv_df = pd.read_csv(
         os.path.join(path, 'transformers_hvmv.csv')).rename(
         columns={'r': 'r_pu', 'x': 'x_pu'})
     edisgo_obj.topology.lines_df = grid.lines[COLUMNS['lines_df']]
-    edisgo_obj.topology.switches_df = pd.read_csv(os.path.join(path, 'switches.csv'),
-                                         index_col=[0])
+    edisgo_obj.topology.switches_df = pd.read_csv(
+        os.path.join(path, 'switches.csv'), index_col=[0])
     edisgo_obj.topology.storages_df = grid.storage_units
-    edisgo_obj.topology.grid_district = {'population': grid.mv_grid_district_population,
-                             'geom': wkt_loads(grid.mv_grid_district_geom)}
+    edisgo_obj.topology.grid_district = {
+        'population': grid.mv_grid_district_population,
+        'geom': wkt_loads(grid.mv_grid_district_geom)}
 
     edisgo_obj.topology._grids = {}
 
     # set up medium voltage grid
     mv_grid_id = list(set(grid.buses.mv_grid_id))[0]
     edisgo_obj.topology.mv_grid = MVGrid(id=mv_grid_id, edisgo_obj=edisgo_obj)
-    edisgo_obj.topology._grids[str(edisgo_obj.topology.mv_grid)] = edisgo_obj.topology.mv_grid
+    edisgo_obj.topology._grids[str(edisgo_obj.topology.mv_grid)] = \
+        edisgo_obj.topology.mv_grid
 
     # set up low voltage grids
     lv_grid_ids = set(grid.buses.lv_grid_id.dropna())
