@@ -133,6 +133,11 @@ class TestEDisGo:
             print('network converged')
         else:
             raise ValueError("Power flow analysis did not converge.")
+        # ToDo maybe move slack test somewhere else
+        slack_df = pypsa_network.generators[
+            pypsa_network.generators.control == 'Slack']
+        assert len(slack_df) == 1
+        assert slack_df.bus.values[0] == 'Bus_MVStation_1'
         # test exception
         msg = "The entered mode is not a valid option."
         with pytest.raises(ValueError, match=msg):
@@ -148,6 +153,11 @@ class TestEDisGo:
             print('mv converged')
         else:
             raise ValueError("Power flow analysis did not converge.")
+        # ToDo maybe move slack test somewhere else
+        slack_df = pypsa_network.generators[
+            pypsa_network.generators.control == 'Slack']
+        assert len(slack_df) == 1
+        assert slack_df.bus.values[0] == 'Bus_MVStation_1'
         # test mvlv
         pypsa_network = self.edisgo.to_pypsa(mode='mvlv')
         pf_results = pypsa_network.pf(timesteps)
@@ -156,6 +166,11 @@ class TestEDisGo:
             print('mvlv converged')
         else:
             raise ValueError("Power flow analysis did not converge.")
+        # ToDo maybe move slack test somewhere else
+        slack_df = pypsa_network.generators[
+            pypsa_network.generators.control == 'Slack']
+        assert len(slack_df) == 1
+        assert slack_df.bus.values[0] == 'Bus_MVStation_1'
 
     def test_lv_to_pypsa(self):
         # test lv to pypsa
@@ -168,6 +183,11 @@ class TestEDisGo:
             print('lv converged')
         else:
             raise ValueError("Power flow analysis did not converge.")
+        #ToDo maybe move slack test somewhere else
+        slack_df = pypsa_network.generators[
+            pypsa_network.generators.control == 'Slack']
+        assert len(slack_df) == 1
+        assert slack_df.bus.values[0] == 'Bus_secondary_LVStation_2'
         # test exception
         msg = "For exporting lv grids, name of lv_grid has to be provided."
         with pytest.raises(ValueError, match=msg):
