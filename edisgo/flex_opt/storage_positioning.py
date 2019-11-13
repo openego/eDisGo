@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 from math import sqrt, ceil
 
-from edisgo.grid import tools
+from edisgo.network import tools
 from edisgo.flex_opt import check_tech_constraints, costs
 from edisgo.tools import plots
 
@@ -21,13 +21,13 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
     For each feeder with load or voltage issues it is checked if integrating a
     storage will reduce peaks in the feeder, starting with the feeder with
-    the highest theoretical grid expansion costs. A heuristic approach is used
+    the highest theoretical network expansion costs. A heuristic approach is used
     to estimate storage sizing and siting while storage operation is carried
     over from the given storage operation.
 
     Parameters
     -----------
-    edisgo : :class:`~.grid.network.EDisGo`
+    edisgo : :class:`~.network.network.EDisGo`
     storage_timeseries : :pandas:`pandas.DataFrame<dataframe>`
         Total active and reactive power time series that will be allocated to
         the smaller storages in feeders with load or voltage issues. Columns of
@@ -47,15 +47,15 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         Default: False.
     check_costs_reduction : :obj:`Boolean` or :obj:`str`, optional
         This parameter specifies when and whether it should be checked if a
-        storage reduced grid expansion costs or not. It can be used as a safety
+        storage reduced network expansion costs or not. It can be used as a safety
         check but can be quite time consuming. Possible options are:
 
         * 'each_feeder'
           Costs reduction is checked for each feeder. If the storage did not
-          reduce grid expansion costs it is discarded.
+          reduce network expansion costs it is discarded.
         * 'once'
           Costs reduction is checked after the total storage capacity is
-          allocated to the feeders. If the storages did not reduce grid
+          allocated to the feeders. If the storages did not reduce network
           expansion costs they are all discarded.
         * False
           Costs reduction is never checked.
@@ -66,22 +66,22 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
     def _feeder_ranking(grid_expansion_costs):
         """
-        Get feeder ranking from grid expansion costs DataFrame.
+        Get feeder ranking from network expansion costs DataFrame.
 
-        MV feeders are ranked descending by grid expansion costs that are
+        MV feeders are ranked descending by network expansion costs that are
         attributed to that feeder.
 
         Parameters
         ----------
         grid_expansion_costs : :pandas:`pandas.DataFrame<dataframe>`
-            grid_expansion_costs DataFrame from :class:`~.grid.network.Results`
+            grid_expansion_costs DataFrame from :class:`~.network.network.Results`
             of the copied edisgo object.
 
         Returns
         -------
         :pandas:`pandas.Series<series>`
             Series with ranked MV feeders (in the copied graph) of type
-            :class:`~.grid.components.Line`. Feeders are ranked by total grid
+            :class:`~.network.components.Line`. Feeders are ranked by total network
             expansion costs of all measures conducted in the feeder. The
             feeder with the highest costs is in the first row and the feeder
             with the lowest costs in the last row.
@@ -106,7 +106,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
         Parameters
         -----------
-        edisgo : :class:`~.grid.network.EDisGo`
+        edisgo : :class:`~.network.network.EDisGo`
             The original edisgo object.
         critical_lines_feeder : :pandas:`pandas.DataFrame<dataframe>`
             Dataframe containing over-loaded lines in MV feeder, their maximum
@@ -139,7 +139,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                     if path_length_dict[_] == max(
                     path_length_dict.values())][0]
 
-        # if there are voltage issues in the MV grid the battery storage will
+        # if there are voltage issues in the MV network the battery storage will
         # be installed at the first node in path that exceeds 2/3 of the line
         # length from station to critical node with highest voltage deviation
         if critical_nodes_feeder:
@@ -169,9 +169,9 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
         Parameters
         -----------
-        edisgo : :class:`~.grid.network.EDisGo`
+        edisgo : :class:`~.network.network.EDisGo`
             The original edisgo object.
-        feeder : :class:`~.grid.components.Line`
+        feeder : :class:`~.network.components.Line`
             MV feeder the storage will be connected to. The line object is an
             object from the copied graph.
 
@@ -240,9 +240,9 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
         Parameters
         -----------
-        edisgo : :class:`~.grid.network.EDisGo`
+        edisgo : :class:`~.network.network.EDisGo`
             The original edisgo object.
-        feeder : :class:`~.grid.components.Line`
+        feeder : :class:`~.network.components.Line`
             MV feeder the storage will be connected to. The line object is an
             object from the copied graph.
 
@@ -252,7 +252,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             List with all nodes in MV feeder with voltage issues.
 
         """
-        # get all nodes with voltage issues in MV grid
+        # get all nodes with voltage issues in MV network
         critical_nodes = check_tech_constraints.mv_voltage_deviation(
             edisgo.network, voltage_levels='mv')
         if critical_nodes:
@@ -272,9 +272,9 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
         Parameters
         -----------
-        edisgo : :class:`~.grid.network.EDisGo`
+        edisgo : :class:`~.network.network.EDisGo`
             The original edisgo object.
-        feeder : :class:`~.grid.components.Line`
+        feeder : :class:`~.network.components.Line`
             MV feeder the storage will be connected to. The line object is an
             object from the copied graph.
 
@@ -311,7 +311,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
     check_costs_reduction = kwargs.get('check_costs_reduction', False)
 
     # global variables
-    # minimum and maximum storage power to be connected to the MV grid
+    # minimum and maximum storage power to be connected to the MV network
     p_storage_min = 300
     p_storage_max = 4500
 
@@ -326,17 +326,17 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
         storage_repr = []
         storage_size = []
 
-    # rank MV feeders by grid expansion costs
+    # rank MV feeders by network expansion costs
 
-    # conduct grid reinforcement on copied edisgo object on worst-case time
+    # conduct network reinforcement on copied edisgo object on worst-case time
     # steps
     grid_expansion_results_init = edisgo.reinforce(
         copy_graph=True, timesteps_pfa='snapshot_analysis', mode='mv')
 
-    # only analyse storage integration if there were any grid expansion needs
+    # only analyse storage integration if there were any network expansion needs
     if grid_expansion_results_init.equipment_changes.empty:
         logger.debug('No storage integration necessary since there are no '
-                     'grid expansion needs.')
+                     'network expansion needs.')
         return
     else:
         equipment_changes_reinforcement_init = \
@@ -347,13 +347,13 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
             grid_expansion_results_init.grid_expansion_costs.total_costs.sum()
         if equipment_changes_reinforcement_init.empty:
             logger.debug('No storage integration necessary since there are no '
-                         'grid expansion needs.')
+                         'network expansion needs.')
             return
         else:
             network = equipment_changes_reinforcement_init.index[
                 0].grid.network
 
-    # calculate grid expansion costs without costs for new generators
+    # calculate network expansion costs without costs for new generators
     # to be used in feeder ranking
     grid_expansion_costs_feeder_ranking = costs.grid_expansion_costs(
         network, without_generator_import=True, mode='mv')
@@ -421,12 +421,12 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                             battery_node.grid.graph, battery_node.grid.station,
                             battery_node)))
 
-                # fourth step: check if storage integration reduced grid
+                # fourth step: check if storage integration reduced network
                 # reinforcement costs or number of issues
 
                 if check_costs_reduction == 'each_feeder':
 
-                    # calculate new grid expansion costs
+                    # calculate new network expansion costs
 
                     grid_expansion_results_new = edisgo.reinforce(
                         copy_graph=True, timesteps_pfa='snapshot_analysis')
@@ -440,7 +440,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
                     if costs_diff > 0:
                         logger.debug(
-                            'Storage integration in feeder {} reduced grid '
+                            'Storage integration in feeder {} reduced network '
                             'expansion costs by {} kEuro.'.format(
                                 feeder, costs_diff))
 
@@ -454,7 +454,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                     else:
                         logger.debug(
                             'Storage integration in feeder {} did not reduce '
-                            'grid expansion costs (costs increased by {} '
+                            'network expansion costs (costs increased by {} '
                             'kEuro).'.format(feeder, -costs_diff))
 
                         tools.disconnect_storage(edisgo.network, storage_obj)
@@ -596,13 +596,13 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
 
         if costs_diff > 0:
             logger.info(
-                'Storage integration in grid {} reduced grid '
+                'Storage integration in network {} reduced network '
                 'expansion costs by {} kEuro.'.format(
                     edisgo.network.id, costs_diff))
         else:
             logger.info(
-                'Storage integration in grid {} did not reduce '
-                'grid expansion costs (costs increased by {} '
+                'Storage integration in network {} did not reduce '
+                'network expansion costs (costs increased by {} '
                 'kEuro).'.format(edisgo.network.id, -costs_diff))
 
             for storage in storage_obj_list:
@@ -619,7 +619,7 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                          total_grid_expansion_costs_new
 
         logger.info(
-            'Storage integration in grid {} reduced grid '
+            'Storage integration in network {} reduced network '
             'expansion costs by {} kEuro.'.format(
                 edisgo.network.id, costs_diff))
 

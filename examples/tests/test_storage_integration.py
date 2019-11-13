@@ -1,7 +1,7 @@
 """
 This "test" runs storage for different curtailment requirements and
 methods `voltage-based` and `feedin-proportional`.
-It requires a ding0 grid called ding0_grid_example.pkl in the same directory.
+It requires a ding0 topology called ding0_grid_example.pkl in the same directory.
 
 """
 
@@ -22,4 +22,4 @@ storage_ts = pd.read_csv('storage.csv', index_col=[0], parse_dates=True)
 edisgo.integrate_storage(timeseries=storage_ts.p,
                          position='distribute_storages_mv',
                          timeseries_reactive_power=storage_ts.q)
-storages = edisgo.network.results.storages
+storages = edisgo.topology.results.storages

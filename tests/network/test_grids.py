@@ -1,12 +1,9 @@
 import os
-import numpy as np
-import pandas as pd
 
-from edisgo.grid.network import Network, TimeSeriesControl
-from edisgo.data import import_data
-from edisgo.grid.components import Generator, Load, Switch
-from edisgo.grid.grids import LVGrid
-
+from edisgo.network.topology import Topology
+from edisgo.io import ding0_import
+from edisgo.network.components import Generator, Load, Switch
+from edisgo.network.grids import LVGrid
 
 class TestGrids:
 
@@ -14,14 +11,15 @@ class TestGrids:
     def setup_class(self):
         """Setup default values"""
         parent_dirname = os.path.dirname(os.path.dirname(__file__))
-        test_network_directory = os.path.join(parent_dirname, 'test_network')
-        self.network = Network()
-        import_data.import_ding0_grid(test_network_directory, self.network)
+        test_network_directory = os.path.join(
+            parent_dirname, 'ding0_test_network')
+        self.topology = Topology()
+        ding0_import.import_ding0_grid(test_network_directory, self)
 
     def test_mv_grid(self):
         """Test MVGrid class getter, setter, methods"""
 
-        mv_grid = self.network.mv_grid
+        mv_grid = self.topology.mv_grid
 
         # test getter
         assert mv_grid.id == 1
@@ -46,6 +44,9 @@ class TestGrids:
         assert isinstance(load_list[0], Load)
         assert len(load_list) == 1
 
+        assert len(mv_grid.transformers_df.index) == 1
+        assert 'MVStation_1_transformer_1' in mv_grid.transformers_df.index
+
         assert len(mv_grid.switch_disconnectors_df.index) == 2
         assert 'circuit_breaker_1' in mv_grid.switch_disconnectors_df.index
         switch_list = list(mv_grid.switch_disconnectors)
@@ -58,30 +59,9 @@ class TestGrids:
         assert mv_grid.peak_load == 0.31
         assert mv_grid.peak_load_per_sector['retail'] == 0.31
 
-    def test_mv_grid_to_pypsa(self):
-        TimeSeriesControl(network=self.network, mode='worst-case')
-        # run powerflow and check results
-        timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
-        pypsa_network = self.network.mv_grid.to_pypsa()
-        pf_results = pypsa_network.pf(timesteps)
-
-        if all(pf_results['converged']['0'].tolist()):
-            print('converged mv')
-        else:
-            raise ValueError("Power flow analysis mv did not converge.")
-
-        pypsa_network = self.network.mv_grid.to_pypsa(mode='mvlv')
-        pf_results = pypsa_network.pf(timesteps)
-
-        if all(pf_results['converged']['0'].tolist()):
-            print('converged mvlv')
-        else:
-            raise ValueError("Power flow analysis mvlv did not converge.")
-
-
     def test_lv_grid(self):
         """Test LVGrid class getter, setter, methods"""
-        lv_grid = [_ for _ in self.network.mv_grid.lv_grids if _.id == 3][0]
+        lv_grid = [_ for _ in self.topology.mv_grid.lv_grids if _.id == 3][0]
 
         assert isinstance(lv_grid, LVGrid)
         assert lv_grid.id == 3
@@ -100,6 +80,9 @@ class TestGrids:
         assert isinstance(load_list[0], Load)
         assert len(load_list) == 4
 
+        assert len(lv_grid.transformers_df.index) == 1
+        assert 'LVStation_3_transformer_1' in lv_grid.transformers_df.index
+
         assert len(lv_grid.switch_disconnectors_df.index) == 0
         switch_list = list(lv_grid.switch_disconnectors)
         assert len(switch_list) == 0
@@ -109,18 +92,5 @@ class TestGrids:
         assert lv_grid.peak_generation_capacity_per_technology.empty
         assert lv_grid.peak_load == 0.054627
         assert lv_grid.peak_load_per_sector['agricultural'] == 0.051
-
-
-    def test_lv_grid_to_pypsa(self):
-        TimeSeriesControl(network=self.network, mode='worst-case')
-        # run powerflow and check results
-        timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
-        pypsa_network = self.network.mv_grid._lv_grids[0].to_pypsa()
-        pf_results = pypsa_network.pf(timesteps)
-
-        if all(pf_results['converged']['0'].tolist()):
-            print('converged lv')
-        else:
-            raise ValueError("Power flow analysis lv did not converge.")
 
 

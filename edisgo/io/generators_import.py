@@ -1,204 +1,24 @@
-from pypsa import Network as PyPSANetwork
-
-from ..grid.components import Generator
-from ..grid.grids import MVGrid, LVGrid
-from ..grid.connect import connect_mv_generators, connect_lv_generators
-from ..grid.tools import select_cable
-from ..tools.geo import proj2equidistant
-from edisgo.tools import pypsa_io
-from edisgo.tools import session_scope
-
-from egoio.db_tables import model_draft, supply
-
-from sqlalchemy import func
-from workalendar.europe import Germany
-from demandlib import bdew as bdew, particular_profiles as profiles
-import datetime
-
 import pandas as pd
+from sqlalchemy import func
+import logging
+import os
 from math import isnan
 import random
-import os
-import numpy as np
+
+from egoio.db_tables import model_draft, supply
+from edisgo.tools import session_scope
+
+from ..network.components import Generator
+from ..network.connect import connect_mv_generators, connect_lv_generators
+from ..network.tools import select_cable
+from ..tools.geo import proj2equidistant
+from edisgo.tools import pypsa_io
+
+logger = logging.getLogger('edisgo')
 
 if 'READTHEDOCS' not in os.environ:
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
-
-
-import logging
-logger = logging.getLogger('edisgo')
-
-COLUMNS = {
-    'buses_df': ['v_nom', 'x', 'y', 'mv_grid_id', 'lv_grid_id', 'in_building'],
-    'generators_df': ['bus', 'control', 'p_nom', 'type', 'subtype',
-                      'weather_cell_id'],
-    'loads_df': ['bus', 'peak_load', 'sector', 'annual_consumption'],
-    'transformers_df': ['bus0', 'bus1', 'x_pu', 'r_pu', 's_nom', 'type',
-                        'type_info'],
-    'lines_df': ['bus0', 'bus1', 'length', 'x', 'r', 's_nom', 'type_info',
-                 'num_parallel'],
-    'switches_df': ['bus_open', 'bus_closed', 'branch', 'type_info'],
-    'storages_df': []
-}
-
-
-def import_ding0_grid(path, network):
-    """
-    Import an eDisGo grid topology from
-    `Ding0 data <https://github.com/openego/ding0>`_.
-
-    This import method is specifically designed to load grid topology data in
-    the format as `Ding0 <https://github.com/openego/ding0>`_ provides it via
-    csv files.
-
-    Parameters
-    ----------
-    path: :obj:`str`
-        path to ding0 grid csv files
-    network: :class:`~.grid.network.Network`
-        The eDisGo data container object
-
-    """
-    grid = PyPSANetwork()
-    grid.import_from_csv_folder(path)
-
-    # write dataframes to network
-    network.buses_df = grid.buses[COLUMNS['buses_df']]
-    # rename slack generator
-    slack = [_ for _ in grid.generators.index if 'slack' in _.lower()][0]
-    grid.generators.rename(index={slack: 'Generator_slack'}, inplace=True)
-    network.generators_df = grid.generators[COLUMNS['generators_df']]
-    network.loads_df = grid.loads[COLUMNS['loads_df']]
-    network.transformers_df = grid.transformers.drop(
-        labels=['x_pu','r_pu'], axis=1).rename(
-        columns={'r': 'r_pu', 'x': 'x_pu'})[COLUMNS['transformers_df']]
-    network.lines_df = grid.lines[COLUMNS['lines_df']]
-    network.switches_df = pd.read_csv(os.path.join(path, 'switches.csv'),
-                                      index_col=[0])
-    network.storages_df = grid.storage_units
-    network.grid_district = {'population': grid.mv_grid_district_population,
-                             'geom': wkt_loads(grid.mv_grid_district_geom)}
-
-    network._grids = {}
-
-    # set up medium voltage grid
-    mv_grid_id = list(set(grid.buses.mv_grid_id))[0]
-    network.mv_grid = MVGrid(id=mv_grid_id, network=network)
-    network._grids[str(network.mv_grid)] = network.mv_grid
-
-    # set up low voltage grids
-    lv_grid_ids = set(grid.buses.lv_grid_id.dropna())
-    for lv_grid_id in lv_grid_ids:
-        lv_grid = LVGrid(id=lv_grid_id, network=network)
-        network.mv_grid._lv_grids.append(lv_grid)
-        network._grids[str(lv_grid)] = lv_grid
-
-    # Check data integrity
-    _validate_ding0_grid_import(network)
-
-
-def _set_up_mv_grid(grid, network):
-    # ToDo: @Guido: Was passiert hier?
-    # # Special treatment of LVLoadAreaCenters see ...
-    # # ToDo: add a reference above for explanation of how these are treated
-    # la_centers = [_ for _ in ding0_grid._graph.nodes()
-    #               if isinstance(_, LVLoadAreaCentreDing0)]
-    # if la_centers:
-    #     aggregated, aggr_stations, dingo_import_data = \
-    #         _determine_aggregated_nodes(la_centers)
-    #     network.dingo_import_data = dingo_import_data
-    # else:
-    #     aggregated = {}
-    #     aggr_stations = []
-    #
-    #     # create empty DF for imported agg. generators
-    #     network.dingo_import_data = pd.DataFrame(columns=('id',
-    #                                                       'capacity',
-    #                                                       'agg_geno')
-    #                                              )
-    pass
-
-
-def _validate_ding0_grid_import(network):
-    """
-    Check imported data integrity.
-
-    Parameters
-    ----------
-    network: Network
-        network class containing mv and lv grids
-
-    """
-    # check for duplicate labels (of components)
-    duplicated_labels = []
-    if any(network.buses_df.index.duplicated()):
-        duplicated_labels.append(
-            network.buses_df.index[network.buses_df.index.duplicated()].values)
-    if any(network.generators_df.index.duplicated()):
-        duplicated_labels.append(
-            network.generators_df.index[
-                network.generators_df.index.duplicated()].values)
-    if any(network.loads_df.index.duplicated()):
-        duplicated_labels.append(
-            network.loads_df.index[network.loads_df.index.duplicated()].values)
-    if any(network.transformers_df.index.duplicated()):
-        duplicated_labels.append(
-            network.transformers_df.index[
-                network.transformers_df.index.duplicated()].values)
-    if any(network.lines_df.index.duplicated()):
-        duplicated_labels.append(
-            network.lines_df.index[network.lines_df.index.duplicated()].values)
-    if any(network.switches_df.index.duplicated()):
-        duplicated_labels.append(
-            network.switches_df.index[
-                network.switches_df.index.duplicated()].values)
-    if duplicated_labels:
-        raise ValueError(
-            "{labels} have duplicate entry in one of the components "
-            "dataframes.".format(labels=', '.join(
-                np.concatenate([list.tolist() for list in duplicated_labels])))
-        )
-
-    # check for isolated or not defined buses
-    buses = []
-
-    for nodal_component in ["loads", "generators"]:
-        df = getattr(network, nodal_component + "_df")
-        missing = df.index[~df.bus.isin(network.buses_df.index)]
-        buses.append(df.bus.values)
-        if len(missing) > 0:
-            raise ValueError(
-                "The following {} have buses which are not defined: "
-                "{}.".format(
-                    nodal_component, ', '.join(missing.values)))
-
-    for branch_component in ["lines", "transformers"]:
-        df = getattr(network, branch_component + "_df")
-        for attr in ["bus0", "bus1"]:
-            buses.append(df[attr].values)
-            missing = df.index[~df[attr].isin(network.buses_df.index)]
-            if len(missing) > 0:
-                raise ValueError(
-                    "The following {} have {} which are not defined: "
-                    "{}.".format(
-                        branch_component, attr, ', '.join(missing.values)))
-
-    for attr in ["bus_open", "bus_closed"]:
-        missing = network.switches_df.index[
-            ~network.switches_df[attr].isin(network.buses_df.index)]
-        buses.append(network.switches_df[attr].values)
-        if len(missing) > 0:
-            raise ValueError(
-                "The following switches have {} which are not defined: "
-                "{}.".format(
-                    attr, ', '.join(missing.values)))
-
-    all_buses = np.unique(np.concatenate(buses, axis=None))
-    missing = network.buses_df.index[~network.buses_df.index.isin(all_buses)]
-    if len(missing) > 0:
-        raise ValueError("The following buses are isolated: {}.".format(
-            ', '.join(missing.values)))
 
 
 def import_generators(network, data_source=None, file=None):
@@ -219,7 +39,7 @@ def import_generators(network, data_source=None, file=None):
 
     Parameters
     ----------
-    network: :class:`~.grid.network.Network`
+    network: :class:`~.network.topology.Topology`
         The eDisGo container object
     data_source: :obj:`str`
         Data source. Supported sources:
@@ -259,7 +79,7 @@ def _import_genos_from_oedb(network):
 
     Parameters
     ----------
-    network: :class:`~.grid.network.Network`
+    network: :class:`~.network.topology.Topology`
         The eDisGo container object
 
     Notes
@@ -279,7 +99,7 @@ def _import_genos_from_oedb(network):
         Notes
         -----
         You can find a full list of columns in
-        :func:`edisgo.data.import_data._update_grids`
+        :func:`edisgo.io.import_data._update_grids`
         """
 
         # build query
@@ -318,7 +138,7 @@ def _import_genos_from_oedb(network):
         Notes
         -----
         You can find a full list of columns in
-        :func:`edisgo.data.import_data._update_grids`
+        :func:`edisgo.io.import_data._update_grids`
 
         If subtype is not specified it's set to 'unknown'.
         """
@@ -374,12 +194,12 @@ def _import_genos_from_oedb(network):
         return generators_mv, generators_lv
 
     def _update_grids(network, generators_mv, generators_lv, remove_missing=True):
-        """Update imported status quo DINGO-grid according to new generator dataset
+        """Update imported status quo DINGO-network according to new generator dataset
 
         It
-            * adds new generators to grid if they do not exist
+            * adds new generators to network if they do not exist
             * updates existing generators if parameters have changed
-            * removes existing generators from grid which do not exist in the imported dataset
+            * removes existing generators from network which do not exist in the imported dataset
 
         Steps:
 
@@ -393,7 +213,7 @@ def _import_genos_from_oedb(network):
 
         Parameters
         ----------
-        network: :class:`~.grid.network.Network`
+        network: :class:`~.network.topology.Topology`
             The eDisGo container object
 
         generators_mv: :pandas:`pandas.DataFrame<dataframe>`
@@ -425,7 +245,7 @@ def _import_genos_from_oedb(network):
                   (CRS see config_grid.cfg)
 
         remove_missing: :obj:`bool`
-            If true, remove generators from grid which are not included in the imported dataset.
+            If true, remove generators from network which are not included in the imported dataset.
         """
 
         # set capacity difference threshold
@@ -850,7 +670,7 @@ def _import_genos_from_oedb(network):
 
                             # select cable type
                             line_type, line_count = select_cable(
-                                network=network,
+                                edisgo_obj=edisgo_obj,
                                 level='mv',
                                 apparent_power=gen.nominal_capacity /
                                 pfac_mv_gen)
@@ -896,7 +716,7 @@ def _import_genos_from_oedb(network):
 
             * MV generators: use geom from EnergyMap.
             * LV generators: set geom to None. It is re-set in
-                :func:`edisgo.data.import_data._check_mvlv_subst_id`
+                :func:`edisgo.io.import_data._check_mvlv_subst_id`
                 to MV-LV station's geom. EnergyMap's geom is not used
                 since it is more inaccurate than the station's geom.
 
@@ -936,18 +756,18 @@ def _import_genos_from_oedb(network):
 
         Parameters
         ----------
-        generator : :class:`~.grid.components.Generator`
+        generator : :class:`~.network.components.Generator`
             LV generator
         mvlv_subst_id : :obj:`int`
             MV-LV substation id
         lv_grid_dict : :obj:`dict`
             Dict of existing LV grids
-            Format: {:obj:`int`: :class:`~.grid.grids.LVGrid`}
+            Format: {:obj:`int`: :class:`~.network.grids.LVGrid`}
 
         Returns
         -------
-        :class:`~.grid.grids.LVGrid`
-            LV grid of generator
+        :class:`~.network.grids.LVGrid`
+            LV network of generator
         """
 
         if mvlv_subst_id and not isnan(mvlv_subst_id):
@@ -1124,8 +944,8 @@ def _import_genos_from_oedb(network):
 
     _validate_generation()
 
-    connect_mv_generators(network=network)
-    connect_lv_generators(network=network)
+    connect_mv_generators(edisgo_obj=edisgo_obj)
+    connect_lv_generators(edisgo_obj=edisgo_obj)
 
 
 def _import_genos_from_pypsa(network, file):
@@ -1135,7 +955,7 @@ def _import_genos_from_pypsa(network, file):
 
     Parameters
     ----------
-    network: :class:`~.grid.network.Network`
+    network: :class:`~.network.topology.Topology`
         The eDisGo container object
     file: :obj:`str`
         File including path
@@ -1192,13 +1012,13 @@ def _build_lv_grid_dict(network):
 
     Parameters
     ----------
-    network: :class:`~.grid.network.Network`
+    network: :class:`~.network.topology.Topology`
         The eDisGo container object
 
     Returns
     -------
     :obj:`dict`
-        Format: {:obj:`int`: :class:`~.grid.grids.LVGrid`}
+        Format: {:obj:`int`: :class:`~.network.grids.LVGrid`}
     """
 
     lv_grid_dict = {}
@@ -1206,226 +1026,3 @@ def _build_lv_grid_dict(network):
         lv_grid_dict[lv_grid.id] = lv_grid
     return lv_grid_dict
 
-
-def import_feedin_timeseries(config_data, weather_cell_ids):
-    """
-    Import RES feed-in time series data and process
-
-    Parameters
-    ----------
-    config_data : dict
-        Dictionary containing config data from config files.
-    weather_cell_ids : :obj:`list`
-        List of weather cell id's (integers) to obtain feed-in data for.
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Feedin time series
-
-    """
-
-    def _retrieve_timeseries_from_oedb(session):
-        """Retrieve time series from oedb
-
-        """
-        # ToDo: add option to retrieve subset of time series
-        # ToDo: find the reference power class for mvgrid/w_id and insert instead of 4
-        feedin_sqla = session.query(
-            orm_feedin.w_id,
-            orm_feedin.source,
-            orm_feedin.feedin). \
-            filter(orm_feedin.w_id.in_(weather_cell_ids)). \
-            filter(orm_feedin.power_class.in_([0, 4])). \
-            filter(orm_feedin_version)
-
-        feedin = pd.read_sql_query(feedin_sqla.statement,
-                                   session.bind,
-                                   index_col=['source', 'w_id'])
-        return feedin
-
-    if config_data['data_source']['oedb_data_source'] == 'model_draft':
-        orm_feedin_name = config_data['model_draft']['res_feedin_data']
-        orm_feedin = model_draft.__getattribute__(orm_feedin_name)
-        orm_feedin_version = 1 == 1
-    else:
-        orm_feedin_name = config_data['versioned']['res_feedin_data']
-        orm_feedin = supply.__getattribute__(orm_feedin_name)
-        orm_feedin_version = orm_feedin.version == config_data['versioned'][
-            'version']
-
-    with session_scope() as session:
-        feedin = _retrieve_timeseries_from_oedb(session)
-
-    feedin.sort_index(axis=0, inplace=True)
-
-    timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
-
-    recasted_feedin_dict = {}
-    for type_w_id in feedin.index:
-        recasted_feedin_dict[type_w_id] = feedin.loc[
-                                          type_w_id, :].values[0]
-
-    feedin = pd.DataFrame(recasted_feedin_dict, index=timeindex)
-
-    # rename 'wind_onshore' and 'wind_offshore' to 'wind'
-    new_level = [_ if _ not in ['wind_onshore']
-                 else 'wind' for _ in feedin.columns.levels[0]]
-    feedin.columns.set_levels(new_level, level=0, inplace=True)
-
-    feedin.columns.rename('type', level=0, inplace=True)
-    feedin.columns.rename('weather_cell_id', level=1, inplace=True)
-
-    return feedin
-
-
-def import_load_timeseries(config_data, data_source, mv_grid_id=None,
-                           year=None):
-    """
-    Import load time series
-
-    Parameters
-    ----------
-    config_data : dict
-        Dictionary containing config data from config files.
-    data_source : str
-        Specify type of data source. Available data sources are
-
-         * 'demandlib'
-            Determine a load time series with the use of the demandlib.
-            This calculates standard load profiles for 4 different sectors.
-
-    mv_grid_id : :obj:`str`
-        MV grid ID as used in oedb. Provide this if `data_source` is 'oedb'.
-        Default: None.
-    year : int
-        Year for which to generate load time series. Provide this if
-        `data_source` is 'demandlib'. Default: None.
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Load time series
-
-    """
-
-    def _import_load_timeseries_from_oedb(config_data, mv_grid_id):
-        """
-        Retrieve load time series from oedb
-
-        Parameters
-        ----------
-        config_data : dict
-            Dictionary containing config data from config files.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Load time series
-
-        Notes
-        ------
-        This is currently not a valid option to retrieve load time series
-        since time series in the oedb are not differentiated by sector. An
-        issue concerning this has been created.
-
-        """
-
-        if config_data['versioned']['version'] == 'model_draft':
-            orm_load_name = config_data['model_draft']['load_data']
-            orm_load = model_draft.__getattribute__(orm_load_name)
-            orm_load_areas_name = config_data['model_draft']['load_areas']
-            orm_load_areas = model_draft.__getattribute__(orm_load_areas_name)
-            orm_load_version = 1 == 1
-        else:
-            orm_load_name = config_data['versioned']['load_data']
-            # orm_load = supply.__getattribute__(orm_load_name)
-            # ToDo: remove workaround
-            orm_load = model_draft.__getattribute__(orm_load_name)
-            # orm_load_version = orm_load.version == config.data['versioned']['version']
-
-            orm_load_areas_name = config_data['versioned']['load_areas']
-            # orm_load_areas = supply.__getattribute__(orm_load_areas_name)
-            # ToDo: remove workaround
-            orm_load_areas = model_draft.__getattribute__(orm_load_areas_name)
-            # orm_load_areas_version = orm_load.version == config.data['versioned']['version']
-
-            orm_load_version = 1 == 1
-
-        with session_scope() as session:
-
-            load_sqla = session.query(  # orm_load.id,
-                orm_load.p_set,
-                orm_load.q_set,
-                orm_load_areas.subst_id). \
-                join(orm_load_areas, orm_load.id == orm_load_areas.otg_id). \
-                filter(orm_load_areas.subst_id == mv_grid_id). \
-                filter(orm_load_version). \
-                distinct()
-
-            load = pd.read_sql_query(load_sqla.statement,
-                                     session.bind,
-                                     index_col='subst_id')
-        return load
-
-    def _load_timeseries_demandlib(config_data, year):
-        """
-        Get normalized sectoral load time series
-
-        Time series are normalized to 1 kWh consumption per year
-
-        Parameters
-        ----------
-        config_data : dict
-            Dictionary containing config data from config files.
-        year : int
-            Year for which to generate load time series.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Load time series
-
-        """
-
-        sectoral_consumption = {'h0': 1, 'g0': 1, 'i0': 1, 'l0': 1}
-
-        cal = Germany()
-        holidays = dict(cal.holidays(year))
-
-        e_slp = bdew.ElecSlp(year, holidays=holidays)
-
-        # multiply given annual demand with timeseries
-        elec_demand = e_slp.get_profile(sectoral_consumption)
-
-        # Add the slp for the industrial group
-        ilp = profiles.IndustrialLoadProfile(e_slp.date_time_index,
-                                             holidays=holidays)
-
-        # Beginning and end of workday, weekdays and weekend days, and scaling
-        # factors by default
-        elec_demand['i0'] = ilp.simple_profile(
-            sectoral_consumption['i0'],
-            am=datetime.time(config_data['demandlib']['day_start'].hour,
-                             config_data['demandlib']['day_start'].minute, 0),
-            pm=datetime.time(config_data['demandlib']['day_end'].hour,
-                             config_data['demandlib']['day_end'].minute, 0),
-            profile_factors=
-            {'week': {'day': config_data['demandlib']['week_day'],
-                      'night': config_data['demandlib']['week_night']},
-             'weekend': {'day': config_data['demandlib']['weekend_day'],
-                         'night': config_data['demandlib']['weekend_night']}})
-
-        # Resample 15-minute values to hourly values and sum across sectors
-        elec_demand = elec_demand.resample('H').mean()
-
-        return elec_demand
-
-    if data_source == 'oedb':
-        load = _import_load_timeseries_from_oedb(config_data, mv_grid_id)
-    elif data_source == 'demandlib':
-        load = _load_timeseries_demandlib(config_data, year)
-        load.rename(columns={'g0': 'retail', 'h0': 'residential',
-                             'l0': 'agricultural', 'i0': 'industrial'},
-                    inplace=True)
-    return load

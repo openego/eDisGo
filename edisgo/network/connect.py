@@ -1,4 +1,4 @@
-from ..grid.components import Generator, Load
+from ..network.components import Generator, Load
 from ..tools.geo import calc_geo_dist_vincenty, \
                         calc_geo_lines_in_buffer, \
                         proj2equidistant, \
@@ -17,7 +17,7 @@ import logging
 logger = logging.getLogger('edisgo')
 
 
-def connect_mv_generators(network):
+def connect_mv_generators(edisgo_obj):
     """Connect MV generators to existing grids.
 
     This function searches for unconnected generators in MV grids and connects them.
@@ -35,65 +35,65 @@ def connect_mv_generators(network):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    edisgo_obj : :class:`~.network.edisgo_obj.Network`
         The eDisGo container object
 
     Notes
     -----
     Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
         21a52048f84ec341fe54e0204ac62228a9e8a32a/\
-        ding0/grid/mv_grid/mv_connect.py#L820>`_.
+        ding0/network/mv_grid/mv_connect.py#L820>`_.
     """
 
     # get params from config
-    buffer_radius = int(network.config[
+    buffer_radius = int(edisgo_obj.config[
                             'grid_connection']['conn_buffer_radius'])
-    buffer_radius_inc = int(network.config[
+    buffer_radius_inc = int(edisgo_obj.config[
                                 'grid_connection']['conn_buffer_radius_inc'])
 
     # get standard equipment
-    std_line_type = network.equipment_data['mv_cables'].loc[
-        network.config['grid_expansion_standard_equipment']['mv_line']]
+    std_line_type = edisgo_obj.equipment_data['mv_cables'].loc[
+        edisgo_obj.config['grid_expansion_standard_equipment']['mv_line']]
 
-    for geno in sorted(network.mv_grid.graph.nodes_by_attribute('generator'),
+    for geno in sorted(edisgo_obj.topology.mv_grid.graph.nodes_by_attribute('generator'),
                        key=lambda _: repr(_)):
-        if nx.is_isolate(network.mv_grid.graph, geno):
+        if nx.is_isolate(edisgo_obj.topology.mv_grid.graph, geno):
 
             # ===== voltage level 4: generator has to be connected to MV station =====
             if geno.v_level == 4:
 
-                line_length = calc_geo_dist_vincenty(network=network,
+                line_length = calc_geo_dist_vincenty(network=edisgo_obj,
                                                      node_source=geno,
-                                                     node_target=network.mv_grid.station)
+                                                     node_target=edisgo_obj.topology.mv_grid.station)
 
                 line = Line(id=random.randint(10**8, 10**9),
                             type=std_line_type,
                             kind='cable',
                             quantity=1,
                             length=line_length / 1e3,
-                            grid=network.mv_grid)
+                            grid=edisgo_obj.topology.mv_grid)
 
-                network.mv_grid.graph.add_edge(network.mv_grid.station,
-                                               geno,
-                                               line=line,
-                                               type='line')
+                edisgo_obj.topology.mv_grid.graph.add_edge(edisgo_obj.topology.mv_grid.station,
+                                                  geno,
+                                                  line=line,
+                                                  type='line')
 
                 # add line to equipment changes to track costs
-                _add_cable_to_equipment_changes(network=network,
+                _add_cable_to_equipment_changes(network=edisgo_obj,
                                                 line=line)
 
-            # ===== voltage level 5: generator has to be connected to MV grid (next-neighbor) =====
+            # ===== voltage level 5: generator has to be connected to MV network (next-neighbor) =====
             elif geno.v_level == 5:
 
                 # get branches within a the predefined radius `generator_buffer_radius`
-                branches = calc_geo_lines_in_buffer(network=network,
+                branches = calc_geo_lines_in_buffer(network=edisgo_obj,
                                                     node=geno,
-                                                    grid=network.mv_grid,
+                                                    grid=edisgo_obj.mv_grid,
                                                     radius=buffer_radius,
                                                     radius_inc=buffer_radius_inc)
 
-                # calc distance between generator and grid's lines -> find nearest line
-                conn_objects_min_stack = _find_nearest_conn_objects(network=network,
+                # calc distance between generator and network's lines -> find nearest line
+                conn_objects_min_stack = _find_nearest_conn_objects(network=edisgo_obj,
                                                                     node=geno,
                                                                     branches=branches)
 
@@ -101,7 +101,7 @@ def connect_mv_generators(network):
                 # go through the stack (from nearest to most far connection target object)
                 generator_connected = False
                 for dist_min_obj in conn_objects_min_stack:
-                    target_obj_result = _connect_mv_node(network=network,
+                    target_obj_result = _connect_mv_node(network=edisgo_obj,
                                                          node=geno,
                                                          target_obj=dist_min_obj)
 
@@ -137,7 +137,7 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
     allow_multiple_genos_per_load : :obj:`bool`
         If True, more than one generator can be connected to one load
@@ -337,10 +337,10 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
                     _add_cable_to_equipment_changes(network=network,
                                                     line=line)
 
-        # warn if there're more genos than loads in LV grid
+        # warn if there're more genos than loads in LV network
         if log_geno_count_vlevel7 > len(lv_loads):
             logger.debug('The count of newly connected generators in voltage level 7 ({}) '
-                         'exceeds the count of loads ({}) in LV grid {}.'
+                         'exceeds the count of loads ({}) in LV network {}.'
                          .format(str(log_geno_count_vlevel7),
                                  str(len(lv_loads)),
                                  repr(lv_grid)
@@ -357,13 +357,13 @@ def _add_cable_to_equipment_changes(network, line):
     """Add cable to the equipment changes
 
     All changes of equipment are stored in network.results.equipment_changes
-    which is used later to determine grid expansion costs.
+    which is used later to determine network expansion costs.
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
-    line : class:`~.grid.components.Line`
+    line : class:`~.network.components.Line`
         Line instance which is to be added
     """
     network.results.equipment_changes = \
@@ -388,9 +388,9 @@ def _del_cable_from_equipment_changes(network, line):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
-    line : class:`~.grid.components.Line`
+    line : class:`~.network.components.Line`
         Line instance which is to be deleted
     """
     if line in network.results.equipment_changes.index:
@@ -407,10 +407,10 @@ def _find_nearest_conn_objects(network, node, branches):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
-    node : :class:`~.grid.components.Component`
-        Node to connect (e.g. :class:`~.grid.components.Generator`)
+    node : :class:`~.network.components.Component`
+        Node to connect (e.g. :class:`~.network.components.Generator`)
     branches :
         List of branches (NetworkX branch objects)
 
@@ -424,7 +424,7 @@ def _find_nearest_conn_objects(network, node, branches):
     -----
     Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
         21a52048f84ec341fe54e0204ac62228a9e8a32a/\
-        ding0/grid/mv_grid/mv_connect.py#L38>`_.
+        ding0/network/mv_grid/mv_connect.py#L38>`_.
     """
 
     # threshold which is used to determine if 2 objects are on the same position (see below for details on usage)
@@ -481,7 +481,7 @@ def _find_nearest_conn_objects(network, node, branches):
 
 
 def _connect_mv_node(network, node, target_obj):
-    """Connects MV node to target object in MV grid
+    """Connects MV node to target object in MV network
 
     If the target object is a node, a new line is created to it.
     If the target object is a line, the node is connected to a newly created branch tee
@@ -490,24 +490,24 @@ def _connect_mv_node(network, node, target_obj):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
+    network : :class:`~.network.topology.Topology`
         The eDisGo container object
-    node : :class:`~.grid.components.Component`
-        Node to connect (e.g. :class:`~.grid.components.Generator`)
-        Node must be a member of MV grid's graph (network.mv_grid.graph)
-    target_obj : :class:`~.grid.components.Component`
+    node : :class:`~.network.components.Component`
+        Node to connect (e.g. :class:`~.network.components.Generator`)
+        Node must be a member of MV network's graph (network.mv_grid.graph)
+    target_obj : :class:`~.network.components.Component`
         Object that node shall be connected to
 
     Returns
     -------
-    :class:`~.grid.components.Component` or None
+    :class:`~.network.components.Component` or None
         Node that node was connected to
 
     Notes
     -----
     Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
         21a52048f84ec341fe54e0204ac62228a9e8a32a/\
-        ding0/grid/mv_grid/mv_connect.py#L311>`_.
+        ding0/network/mv_grid/mv_connect.py#L311>`_.
     """
 
     # get standard equipment
@@ -534,7 +534,7 @@ def _connect_mv_node(network, node, target_obj):
         # target MV line does currently not connect a load area of type aggregated
         if not line['type'] == 'line_aggr':
 
-            # create branch tee and add it to grid
+            # create branch tee and add it to network
             branch_tee = BranchTee(geom=conn_point_shp,
                                    grid=network.mv_grid,
                                    in_building=False)

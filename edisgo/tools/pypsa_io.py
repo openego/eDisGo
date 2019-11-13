@@ -1,6 +1,6 @@
 """
-This module provides tools to convert graph based representation of the grid
-topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA grid
+This module provides tools to convert graph based representation of the network
+topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA network
 container.
 """
 
@@ -15,38 +15,40 @@ import collections
 
 def to_pypsa(grid_object, mode, timesteps):
     """
-    Translate graph based grid representation to PyPSA Network
+    #ToDo Adapt docstring
+
+    Translate graph based network representation to PyPSA Network
 
     For details from a user perspective see API documentation of
-    :meth:`~.grid.network.EDisGo.analyze` of the API class
-    :class:`~.grid.network.EDisGo`.
+    :meth:`~.network.network.EDisGo.analyze` of the API class
+    :class:`~.network.network.EDisGo`.
 
-    Translating eDisGo's grid topology to PyPSA representation is structured
+    Translating eDisGo's network topology to PyPSA representation is structured
     into translating the topology and adding time series for components of the
-    grid. In both cases translation of MV grid only (`mode='mv'`), LV grid only
+    network. In both cases translation of MV network only (`mode='mv'`), LV network only
     (`mode='lv'`), MV and LV (`mode=None`) share some code. The
     code is organized as follows:
 
-    * Medium-voltage only (`mode='mv'`): All medium-voltage grid components are
-      exported by :func:`mv_to_pypsa` including the LV station. LV grid load
+    * Medium-voltage only (`mode='mv'`): All medium-voltage network components are
+      exported by :func:`mv_to_pypsa` including the LV station. LV network load
       and generation is considered using :func:`add_aggregated_lv_components`.
       Time series are collected by `_pypsa_load_timeseries` (as example
       for loads, generators and buses) specifying `mode='mv'`). Timeseries
       for aggregated load/generation at substations are determined individually.
-    * Low-voltage only (`mode='lv'`): LV grid topology including the MV-LV
+    * Low-voltage only (`mode='lv'`): LV network topology including the MV-LV
       transformer is exported. The slack is defind at primary side of the MV-LV
       transformer.
-    * Both level MV+LV (`mode=None`): The entire grid topology is translated to
+    * Both level MV+LV (`mode=None`): The entire network topology is translated to
       PyPSA in order to perform a complete power flow analysis in both levels
-      together. First, both grid levels are translated seperately using
+      together. First, both network levels are translated seperately using
       :func:`mv_to_pypsa` and :func:`lv_to_pypsa`. Those are merge by
-      :func:`combine_mv_and_lv`. Time series are obtained at once for both grid
+      :func:`combine_mv_and_lv`. Time series are obtained at once for both network
       levels.
 
     This PyPSA interface is aware of translation errors and performs so checks
-    on integrity of data converted to PyPSA grid representation
+    on integrity of data converted to PyPSA network representation
 
-    * Sub-graphs/ Sub-networks: It is ensured the grid has no islanded parts
+    * Sub-graphs/ Sub-networks: It is ensured the network has no islanded parts
     * Completeness of time series: It is ensured each component has a time
       series
     * Buses available: Each component (load, generator, line, transformer) is
@@ -57,20 +59,22 @@ def to_pypsa(grid_object, mode, timesteps):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
-        eDisGo grid container
+    topology : :class:`~.network.topology.Topology`
+        eDisGo topology container
     mode : str
-        Determines grid levels that are translated to
-        `PyPSA grid representation
+        Determines network levels that are translated to
+        `PyPSA network representation
         <https://www.pypsa.org/doc/components.html#network>`_. Specify
 
-        * None to export MV and LV grid levels. None is the default.
-        * ('mv' to export MV grid level only. This includes cumulative load and
-          generation from underlying LV grid aggregated at respective LV
-          station. This option is implemented, though the rest of edisgo does
-          not handle it yet.)
-        * ('lv' to export LV grid level only. This option is not yet
-           implemented)
+        * None to export MV and LV network levels. None is the default.
+        * 'mv' to export MV network level only. This includes cumulative load
+          and generation from underlying LV network aggregated at respective LV
+          station's primary side.
+        * 'mvlv' to export MV network level only. This includes cumulative load
+          and generation from underlying LV network aggregated at respective LV
+          station's secondary side. #ToDo change name of this mode or use
+          kwarg to define where to aggregate lv loads and generation
+        * 'lv' to export specified LV network only.
     timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
         :pandas:`pandas.Timestamp<timestamp>`
         Timesteps specifies which time steps to export to pypsa representation
@@ -84,6 +88,26 @@ def to_pypsa(grid_object, mode, timesteps):
 
     """
 
+    def _set_slack(grid):
+        """
+        Sets slack at given grid's station secondary side.
+
+        It is assumed that bus of secondary side is always given in
+        transformer's bus1.
+
+        Parameters
+        -----------
+        grid : :class:`~.network.grids.Grid`
+            Low or medium voltage grid to position slack in.
+
+        Returns
+        -------
+        """
+        slack_bus = grid.transformers_df.bus1.iloc[0]
+        return pd.DataFrame(data={'bus': slack_bus,
+                                  'control': 'Slack'},
+                            index=['Generator_slack'])
+
     # check if timesteps is array-like, otherwise convert to list (necessary
     # to obtain a dataframe when using .loc in time series functions)
     if not hasattr(timesteps, "__len__"):
@@ -93,189 +117,168 @@ def to_pypsa(grid_object, mode, timesteps):
     pypsa_network = PyPSANetwork()
     pypsa_network.set_snapshots(timesteps)
 
-    # get topology and time series data
+    # define edisgo_obj, buses_df, slack_df and components for each use case
     if mode is None:
-        network = grid_object
-        buses_df = network.buses_df.loc[:, ['v_nom']]
-        buses = network.buses_df.index
 
-        # loads generators buses storages lines transformers
-        #ToDo change getting generators once slack is separate dataframe
+        edisgo_obj = grid_object
+        buses_df = grid_object.topology.buses_df.loc[:, ['v_nom']]
+        slack_df = _set_slack(edisgo_obj.topology.mv_grid)
+
         components = {
-            'Load': network.loads_df.loc[:, ['bus', 'peak_load']].rename(
-                columns={'peak_load':'p_set'}
-            ),
-            'Generator': network._generators_df.loc[:, ['bus', 'control', 'p_nom']],
-            'StorageUnit': network.storages_df.loc[:, ['bus', 'control']],
-            'Line': network.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
-            'Transformer': network.transformers_df.loc[
-                           :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type', 's_nom']].rename(
+            'Load': grid_object.topology.loads_df.loc[
+                    :, ['bus', 'peak_load']].rename(
+                columns={'peak_load': 'p_set'}),
+            'Generator': grid_object.topology.generators_df.loc[
+                         :, ['bus', 'control', 'p_nom']].append(slack_df),
+            'StorageUnit': grid_object.topology.storages_df.loc[
+                           :, ['bus', 'control']],
+            'Line': grid_object.topology.lines_df.loc[
+                    :, ['bus0', 'bus1', 'x', 'r', 's_nom']],
+            'Transformer': grid_object.topology.transformers_df.loc[
+                           :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type',
+                               's_nom']].rename(
                 columns={'r_pu': 'r', 'x_pu': 'x'})
         }
 
-
     elif 'mv' in mode:
-        grid = grid_object
-        network = grid.network
+
+        edisgo_obj = grid_object.edisgo_obj
+        buses_df = grid_object.buses_df.loc[:, ['v_nom']]
+        slack_df = _set_slack(grid_object)
+
+        # MV components
+        mv_components = {
+            'Load': grid_object.loads_df.loc[
+                    :, ['bus', 'peak_load']].rename(
+                columns={'peak_load': 'p_set'}),
+            'Generator': grid_object.generators_df.loc[
+                         :, ['bus', 'control', 'p_nom']].append(slack_df),
+            'StorageUnit': grid_object.storages_df.loc[
+                           :, ['bus', 'control']],
+            'Line': grid_object.lines_df.loc[
+                    :, ['bus0', 'bus1', 'x', 'r', 's_nom']]
+        }
+        if mode is 'mv':
+            mv_components['Transformer'] = pd.DataFrame()
+        elif mode is 'mvlv':
+            # get all MV/LV transformers
+            mv_components['Transformer'] = \
+                edisgo_obj.topology.transformers_df.loc[
+                :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type','s_nom']].rename(
+                    columns={'r_pu': 'r', 'x_pu': 'x'})
+        else:
+            raise ValueError("Provide proper mode for mv network export.")
+
+        # LV components
+        # Todo: accumulate loads and generation per LV grid
         lv_components_to_aggregate = {'Load': 'loads_df',
                                       'Generator': 'generators_df',
                                       'StorageUnit': 'storages_df'}
         lv_components = {key: {} for key in lv_components_to_aggregate}
-        buses_df = grid.buses_df.loc[:, ['v_nom']]
-        buses = grid.buses_df.index
-    # mv grid with lv loads and generators connected to mv side of station
-        if mode is 'mv':
-            # get mv_components
-            mv_components = {
-                'Load': grid.loads_df.loc[:, ['bus', 'peak_load']].rename(
-                columns={'peak_load': 'p_set'}
-            ),
-                'Generator': grid.generators_df.loc[:, ['bus', 'control', 'p_nom']].append(
-                    grid.network._generators_df.loc['Generator_slack',
-                                                    ['bus', 'control', 'p_nom']]), # Todo: change when slack is dataframe
-                'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
-                'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
-                'Transformer': grid.transformers_df[grid.transformers_df.bus1.isin(
-                    grid.buses_df.index
-                )].loc[
-                               :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type',
-                                   's_nom']].rename(
-                    columns={'r_pu': 'r', 'x_pu': 'x'})
-            }
 
-            # get lv_components
-            for lv_grid in grid.lv_grids:
+        for lv_grid in grid_object.lv_grids:
+            if mode is 'mv':
                 # get primary side of station to append loads and generators to
-                station_bus = grid.buses_df.loc[
+                station_bus = grid_object.buses_df.loc[
                     lv_grid.transformers_df.bus0.unique()]
-                # handle one gate component
-                for comp, df in lv_components_to_aggregate.items():
-                    comps = getattr(lv_grid, df).copy()
-                    comps.bus = station_bus.index.values[0]
-                    append_lv_components(comp, comps, lv_components, lv_grid)
-
-                # Todo: accumulate loads?
-
-        # mv grid with accumulated loads and generators at lv side of station
-        elif mode is 'mvlv':
-
-            mv_components = {
-                'Load': grid.loads_df.loc[:, ['bus', 'peak_load']].rename(
-                columns={'peak_load':'p_set'}),
-                'Generator': grid.generators_df.loc[:, ['bus', 'control', 'p_nom']].append(
-                    grid.network._generators_df.loc['Generator_slack',
-                                                    ['bus', 'control', 'p_nom']]), # Todo: change when slack is dataframe
-                'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
-                'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']],
-                'Transformer': network.transformers_df.loc[
-                               :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type',
-                                   's_nom']].rename(
-                    columns={'r_pu': 'r', 'x_pu': 'x'})
-            }
-
-
-            # get lv_components
-            lv_components_to_aggregate = {'Load': 'loads_df',
-                                          'Generator': 'generators_df',
-                                          'StorageUnit': 'storages_df'}
-            lv_components = {key: {} for key in lv_components_to_aggregate}
-            for lv_grid in grid.lv_grids:
-                # get primary side of station to append loads and generators to
-                station_bus = lv_grid.station
+            elif mode is 'mvlv':
+                # get secondary side of station to append loads and generators
+                # to
+                station_bus = lv_grid.buses_df.loc[
+                    [lv_grid.transformers_df.bus1.unique()[0]]]
                 buses_df = buses_df.append(station_bus.loc[:, ['v_nom']])
-                buses = buses.append(station_bus.index)
-                # handle one gate component
-                for comp, df in lv_components_to_aggregate.items():
-                    comps = getattr(lv_grid, df).copy()
-                    comps.bus = station_bus.index.values[0]
-                    append_lv_components(comp, comps, lv_components, lv_grid)
-                # Todo: accumulate loads?
-
-        else:
-            raise ValueError("Provide proper mode for mv grid export.")
+            # handle one gate component
+            for comp, df in lv_components_to_aggregate.items():
+                comps = getattr(lv_grid, df).copy()
+                comps.bus = station_bus.index.values[0]
+                append_lv_components(comp, comps, lv_components, lv_grid)
 
         for key in lv_components:
             lv_components[key] = pd.concat(lv_components[key].values())
+
         # merge components
         components = collections.defaultdict(pd.DataFrame)
         for comps in (mv_components, lv_components):
             for key, value in comps.items():
                 components[key] = components[key].append(value)
 
-        # import grid topology to PyPSA network
-        # buses are created first to avoid warnings
-        pypsa_network.import_components_from_dataframe(
-            buses_df, 'Bus')
-
     elif mode is 'lv':
-        grid = grid_object
-        network = grid.network
-        buses_df = grid.buses_df.loc[:, ['v_nom']]
-        buses = grid.buses_df.index
 
-        slack = pd.DataFrame({'name': ['Generator_slack'],
-                              'bus': [grid.station.index.values[0]],
-                              'control': ['Slack']}).set_index('name')
+        edisgo_obj = grid_object.edisgo_obj
+        buses_df = grid_object.buses_df.loc[:, ['v_nom']]
+        slack_df = _set_slack(grid_object)
+
         components = {
-            'Load': grid.loads_df.loc[:, ['bus', 'peak_load']].rename(
+            'Load': grid_object.loads_df.loc[
+                    :, ['bus', 'peak_load']].rename(
                 columns={'peak_load': 'p_set'}),
-            'Generator': grid.generators_df.loc[:, ['bus', 'control', 'p_nom']].append(
-                slack),
-            'StorageUnit': grid.storages_df.loc[:, ['bus', 'control']],
-            'Line': grid.lines_df.loc[:, ['bus0', 'bus1', 'x', 'r', 's_nom']]
+            'Generator': grid_object.generators_df.loc[
+                         :, ['bus', 'control', 'p_nom']].append(slack_df),
+            'StorageUnit': grid_object.storages_df.loc[:, ['bus', 'control']],
+            'Line': grid_object.lines_df.loc[
+                    :, ['bus0', 'bus1', 'x', 'r', 's_nom']]
         }
     else:
         raise ValueError("Provide proper mode or leave it empty to export "
-                         "entire grid topology.")
+                         "entire network topology.")
 
-    # import grid topology to PyPSA network
+    # import network topology to PyPSA network
     # buses are created first to avoid warnings
     pypsa_network.import_components_from_dataframe(
         buses_df, 'Bus')
-
     for k, comps in components.items():
         pypsa_network.import_components_from_dataframe(comps, k)
 
-    if len(buses) > 0:
-        import_series_from_dataframe(
-            pypsa_network,
-            _buses_voltage_set_point(network, buses, timesteps),
-            'Bus', 'v_mag_pu_set')
-
     # import time series to PyPSA network
+
+    import_series_from_dataframe(
+        pypsa_network,
+        _buses_voltage_set_point(
+            edisgo_obj, buses_df.index, slack_df.loc['Generator_slack', 'bus'],
+            timesteps),
+        'Bus', 'v_mag_pu_set')
+
     if len(components['Generator'].index) > 0:
         import_series_from_dataframe(
             pypsa_network,
-            network.timeseries.generators_active_power.loc[
+            edisgo_obj.timeseries.generators_active_power.loc[
                 timesteps, components['Generator'].index],
             'Generator', 'p_set')
         import_series_from_dataframe(
             pypsa_network,
-            network.timeseries.generators_reactive_power.loc[
+            edisgo_obj.timeseries.generators_reactive_power.loc[
                 timesteps, components['Generator'].index],
             'Generator', 'q_set')
+        # set slack time series
+        slack_ts = pd.DataFrame(data=[0] * len(timesteps),
+                         columns=[slack_df.index[0]],
+                         index=timesteps)
+        import_series_from_dataframe(
+            pypsa_network, slack_ts, 'Generator', 'p_set')
+        import_series_from_dataframe(
+            pypsa_network, slack_ts, 'Generator', 'q_set')
 
     if len(components['Load'].index) > 0:
         import_series_from_dataframe(
             pypsa_network,
-            network.timeseries.loads_active_power.loc[
+            edisgo_obj.timeseries.loads_active_power.loc[
                 timesteps, components['Load'].index],
             'Load', 'p_set')
         import_series_from_dataframe(
             pypsa_network,
-            network.timeseries.loads_reactive_power.loc[
+            edisgo_obj.timeseries.loads_reactive_power.loc[
                 timesteps, components['Load'].index],
             'Load', 'q_set')
 
     if len(components['StorageUnit'].index) > 0:
         import_series_from_dataframe(
             pypsa_network,
-            network.timeseries.storages_active_power.loc[
+            edisgo_obj.timeseries.storages_active_power.loc[
                 timesteps, components['StorageUnit'].index],
             'StorageUnit', 'p_set')
         import_series_from_dataframe(
             pypsa_network,
-            network.timeseries.storages_reactive_power.loc[
+            edisgo_obj.timeseries.storages_reactive_power.loc[
                 timesteps, components['StorageUnit'].index],
             'StorageUnit', 'q_set')
 
@@ -293,14 +296,15 @@ def append_lv_components(comp, comps, lv_components, lv_grid):
         lv_components[comp][str(lv_grid.id)] = \
             comps.loc[:, ['bus', 'control', 'p_nom']]
     elif comp is 'StorageUnit':
-        lv_components[comp][str(lv_grid.id)] = comps.loc[:,
-                                               ['bus', 'control']]
+        lv_components[comp][str(lv_grid.id)] = \
+            comps.loc[:, ['bus', 'control']]
     else:
-        raise ValueError('Component Type not defined.')
+        raise ValueError('Component type not defined.')
 
 
-def _buses_voltage_set_point(network, buses, timesteps):
+def _buses_voltage_set_point(edisgo_obj, buses, slack_bus, timesteps):
     """
+    ToDo: docstring
     Time series in PyPSA compatible format for bus instances
 
     Set all buses except for the slack bus to voltage of 1 p.u. (it is assumed
@@ -312,14 +316,15 @@ def _buses_voltage_set_point(network, buses, timesteps):
 
     Parameters
     ----------
-    network : Network
-        The eDisGo grid topology model overall container
+    topology : Topology
+        The eDisGo topology topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
         to export to pypsa representation and use in power flow analysis.
     buses : list
         Buses names
+    slack_bus : str
 
     Returns
     -------
@@ -327,28 +332,24 @@ def _buses_voltage_set_point(network, buses, timesteps):
         Time series table in PyPSA format
     """
 
-    # get slack bus label
-    #ToDo change once slack is property in network
-    slack_bus = network._generators_df.at['Generator_slack', 'bus']
-
     # set all buses to nominal voltage
     v_nom = pd.DataFrame(1, columns=buses, index=timesteps)
 
     # set slack bus to operational voltage (includes offset and control
     # deviation)
-    control_deviation = network.config[
+    control_deviation = edisgo_obj.config[
         'grid_expansion_allowed_voltage_deviations'][
         'hv_mv_trafo_control_deviation']
     if control_deviation != 0:
         control_deviation_ts = \
-            network.timeseries.timesteps_load_feedin_case.apply(
+            edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
                 lambda _: control_deviation if _ == 'feedin_case'
                 else -control_deviation).loc[timesteps]
     else:
         control_deviation_ts = pd.Series(0, index=timesteps)
 
     slack_voltage_pu = \
-        control_deviation_ts + 1 + network.config[
+        control_deviation_ts + 1 + edisgo_obj.config[
             'grid_expansion_allowed_voltage_deviations']['hv_mv_trafo_offset']
 
     v_nom.loc[timesteps, slack_bus] = slack_voltage_pu
@@ -366,8 +367,8 @@ def add_aggregated_lv_components(network, components):
 
     Parameters
     ----------
-    network : Network
-        The eDisGo grid topology model overall container
+    network : Topology
+        The eDisGo topology topology model overall container
     components : dict of :pandas:`pandas.DataFrame<dataframe>`
         PyPSA components in tabular format
 
@@ -461,8 +462,8 @@ def _pypsa_bus_timeseries(network, buses, timesteps):
 
     Parameters
     ----------
-    network : Network
-        The eDisGo grid topology model overall container
+    network : Topology
+        The eDisGo topology topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
@@ -511,12 +512,12 @@ def _pypsa_bus_timeseries(network, buses, timesteps):
 
 def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
     """
-    Aggregates generator time series per generator subtype and LV grid.
+    Aggregates generator time series per generator subtype and LV topology.
 
     Parameters
     ----------
-    network : Network
-        The eDisGo grid topology model overall container
+    network : Topology
+        The eDisGo topology topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
@@ -573,12 +574,12 @@ def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
 
 def _pypsa_load_timeseries_aggregated_at_lv_station(network, timesteps):
     """
-    Aggregates load time series per sector and LV grid.
+    Aggregates load time series per sector and LV topology.
 
     Parameters
     ----------
-    network : Network
-        The eDisGo grid topology model overall container
+    network : Topology
+        The eDisGo topology topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
@@ -789,14 +790,14 @@ def _check_integrity_of_pypsa(pypsa_network):
 def process_pfa_results(edisgo, pypsa, timesteps):
     """
     Assing values from PyPSA to
-    :meth:`results <edisgo.grid.network.Network.results>`
+    :meth:`results <edisgo.network.topology.Topology.results>`
 
     Parameters
     ----------
-    edisgo : Network
-        The eDisGo grid topology model overall container
-    pypsa : :pypsa:`pypsa.Network<network>`
-        The PyPSA `Network container
+    edisgo : Topology
+        The eDisGo topology topology model overall container
+    pypsa : :pypsa:`pypsa.Topology<topology>`
+        The PyPSA `Topology container
         <https://www.pypsa.org/doc/components.html#network>`_
     timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
         Time steps for which latest power flow analysis was conducted for and
@@ -814,7 +815,7 @@ def process_pfa_results(edisgo, pypsa, timesteps):
 
     See Also
     --------
-    :class:`~.grid.network.Results`
+    :class:`~.network.network.Results`
         Understand how results of power flow analysis are structured in eDisGo.
 
     """
@@ -838,24 +839,16 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     # in absolute values
     q0 = pd.concat(
         [np.abs(pypsa.lines_t['q0']),
-         np.abs(pypsa.transformers_t['q0']),
-         np.abs(pypsa.generators_t['q']['Generator_slack'].rename(
-             repr(edisgo.network.mv_grid.station)))], axis=1).loc[timesteps, :]
+         np.abs(pypsa.transformers_t['q0'])], axis=1).loc[timesteps, :]
     q1 = pd.concat(
         [np.abs(pypsa.lines_t['q1']),
-         np.abs(pypsa.transformers_t['q1']),
-         np.abs(pypsa.generators_t['q']['Generator_slack'].rename(
-             repr(edisgo.network.mv_grid.station)))], axis=1).loc[timesteps, :]
+         np.abs(pypsa.transformers_t['q1'])], axis=1).loc[timesteps, :]
     p0 = pd.concat(
         [np.abs(pypsa.lines_t['p0']),
-         np.abs(pypsa.transformers_t['p0']),
-         np.abs(pypsa.generators_t['p']['Generator_slack'].rename(
-             repr(edisgo.network.mv_grid.station)))], axis=1).loc[timesteps, :]
+         np.abs(pypsa.transformers_t['p0'])], axis=1).loc[timesteps, :]
     p1 = pd.concat(
         [np.abs(pypsa.lines_t['p1']),
-         np.abs(pypsa.transformers_t['p1']),
-         np.abs(pypsa.generators_t['p']['Generator_slack'].rename(
-             repr(edisgo.network.mv_grid.station)))], axis=1).loc[timesteps, :]
+         np.abs(pypsa.transformers_t['p1'])], axis=1).loc[timesteps, :]
 
     # determine apparent power and line endings/transformers' side
     s0 = np.hypot(p0, q0)
@@ -880,31 +873,31 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     edisgo.results._i_res = np.hypot(
         pypsa.lines_t['p0'], pypsa.lines_t['q0']).truediv(
         pypsa.lines['v_nom'] * bus0_v_mag_pu.T,
-        axis='columns') / sqrt(3) * 1e3
+        axis='columns') / sqrt(3)
 
     #Todo: overthink mapping, should results not be assigned to original nodes?
 
     # process results at nodes
-    generators_names = edisgo.network.mv_grid.generators_df.index.values
+    generators_names = edisgo.topology.mv_grid.generators_df.index.values
     generators_mapping = {v: k for k, v in
                           pypsa.generators.loc[generators_names][
                               'bus'].to_dict().items()}
-    storages_names = edisgo.network.mv_grid.storages_df.index.values
+    storages_names = edisgo.topology.mv_grid.storages_df.index.values
     storages_mapping = {v: k for k, v in
                         pypsa.storage_units.loc[storages_names][
                             'bus'].to_dict().items()}
-    loads_names = edisgo.network.mv_grid.loads_df.index.values
+    loads_names = edisgo.topology.mv_grid.loads_df.index.values
     loads_mapping = {v: k for k, v in
                         pypsa.loads.loc[loads_names][
                             'bus'].to_dict().items()}
-    buses_names = edisgo.network.mv_grid.buses_df.index.values
+    buses_names = edisgo.topology.mv_grid.buses_df.index.values
     buses_mapping = {k: k for k in buses_names}
 
     lv_generators_names = []
     lv_storages_names = []
     lv_loads_names = []
     lv_buses_names = []
-    for lv_grid in edisgo.network.mv_grid.lv_grids:
+    for lv_grid in edisgo.topology.mv_grid.lv_grids:
         lv_generators_names.extend(list(lv_grid.generators_df.index.values))
         lv_storages_names.extend(list(lv_grid.storages_df.index.values))
         lv_loads_names.extend(list(lv_grid.loads_df.index.values))

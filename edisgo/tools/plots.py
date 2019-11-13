@@ -35,7 +35,7 @@ def histogram(data, **kwargs):
     ----------
     data : :pandas:`pandas.DataFrame<dataframe>`
         Data to be plotted, e.g. voltage or current (`v_res` or `i_res` from
-        :class:`edisgo.grid.network.Results`). Index of the dataframe must be
+        :class:`edisgo.network.network.Results`). Index of the dataframe must be
         a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
     timeindex : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
         Specifies time steps histogram is plotted for. If timeindex is None all
@@ -161,7 +161,7 @@ def add_basemap(ax, zoom=12):
 
 def get_grid_district_polygon(config, subst_id=None, projection=4326):
     """
-    Get MV grid district polygon from oedb for plotting.
+    Get MV network district polygon from oedb for plotting.
 
     """
     with session_scope() as session:
@@ -210,7 +210,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
     pypsa_network : :pypsa:`pypsa.Network<network>`
     configs : :obj:`dict`
         Dictionary with used configurations from config files. See
-        :class:`~.grid.network.Config` for more information.
+        :class:`~.network.network.Config` for more information.
     timestep : :pandas:`pandas.Timestamp<timestamp>`
         Time step to plot analysis results for. If `timestep` is None maximum
         line load and if given, maximum voltage deviation, is used. In that
@@ -241,7 +241,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
           (generator, MV station, etc.).
         * 'voltage'
           Node color is set according to voltage deviation from 1 p.u..
-          Voltages of nodes in MV grid must be provided by parameter `voltage`.
+          Voltages of nodes in MV network must be provided by parameter `voltage`.
         * 'storage_integration'
           Only storages are plotted. Size of node corresponds to size of
           storage.
@@ -255,8 +255,8 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
         columns are the line representatives. Only needs to be provided when
         parameter `line_color` is set to 'loading'. Default: None.
     grid_expansion_costs : :pandas:`pandas.DataFrame<dataframe>` or None
-        Dataframe with grid expansion costs in kEUR. See `grid_expansion_costs`
-        in :class:`~.grid.network.Results` for more information. Only needs to
+        Dataframe with network expansion costs in kEUR. See `grid_expansion_costs`
+        in :class:`~.network.network.Results` for more information. Only needs to
         be provided when parameter `line_color` is set to 'expansion_costs'.
         Default: None.
     filename : :obj:`str`
@@ -268,7 +268,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
         is given.
         Default: False.
     grid_district_geom : :obj:`Boolean`
-        If True grid district polygon is plotted in the background. This also
+        If True network district polygon is plotted in the background. This also
         requires the geopandas package to be installed. Default: True.
     background_map : :obj:`Boolean`
         If True map is drawn in the background. This also requires the
@@ -488,7 +488,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
     plt.figure(figsize=(12, 8))
     ax = plt.gca()
 
-    # plot grid district
+    # plot network district
     if grid_district_geom and geopandas:
         try:
             subst = pypsa_network.buses[
@@ -523,7 +523,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
         cb = plt.colorbar(ll[1], boundaries=v, ticks=v[0:101:10])
         cb.set_clim(vmin=limits_cb_lines[0], vmax=limits_cb_lines[1])
         cb.set_label('Line loading in p.u.')
-    # color bar grid expansion costs
+    # color bar network expansion costs
     elif line_color == 'expansion_costs':
         if limits_cb_lines is None:
             limits_cb_lines = (min(min(line_colors), min(bus_colors.values())),
