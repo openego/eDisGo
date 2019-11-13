@@ -74,7 +74,7 @@ def extend_distribution_substation_overloading(edisgo_obj, critical_stations):
             # transformer of the same kind as the transformer that best
             # meets the missing power demand
             duplicated_transformer = grid.transformers_df.loc[
-                grid.transformers_df[s_max_per_trafo > s_trafo_missing][
+                grid.transformers_df[s_max_per_trafo >= s_trafo_missing][
                     's_nom'].idxmin()]
             name = duplicated_transformer.name.split('_')
             name.insert(-1, 'reinforced')
@@ -93,6 +93,8 @@ def extend_distribution_substation_overloading(edisgo_obj, critical_stations):
             name = duplicated_transformer.name.split('_')
             name.insert(-1, 'reinforced')
             duplicated_transformer.s_nom = standard_transformer.S_nom
+            duplicated_transformer.r_pu = standard_transformer.r_pu
+            duplicated_transformer.x_pu = standard_transformer.x_pu
             duplicated_transformer.type_info = standard_transformer.name
             # calculate how many parallel standard transformers are needed
             number_transformers = math.ceil(
@@ -105,15 +107,14 @@ def extend_distribution_substation_overloading(edisgo_obj, critical_stations):
                 duplicated_transformer.name = '_'.join([str(_) for _ in name])
                 new_transformers = new_transformers.append(
                     duplicated_transformer)
-            new_transformers.set_index('name')
-            transformers_changes['added'][
-                critical_stations.index[0]] = new_transformers.index.values
-            transformers_changes['removed'][
-                critical_stations.index[0]] = grid.transformers_df.index.values
-            edisgo_obj.transformers_df = edisgo_obj.transformers_df.drop(
-                grid.transformers_df.index.values)
-            edisgo_obj.transformers_df = edisgo_obj.transformers_df.append(
-                new_transformers)
+            transformers_changes['added'][grid_name] = \
+                new_transformers.index.values
+            transformers_changes['removed'][grid_name] = \
+                grid.transformers_df.index.values
+            edisgo_obj.topology.transformers_df.drop(
+                grid.transformers_df.index.values, inplace=True)
+            edisgo_obj.topology.transformers_df = \
+                edisgo_obj.topology.transformers_df.append(new_transformers)
     return transformers_changes
 
 

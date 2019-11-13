@@ -637,17 +637,16 @@ class EDisGo(EDisGoReimport):
                 # values (so far only for LV transformers, not necessary for
                 # MV as MV impedances are not used)
                 if voltage_level == 'lv' and i == 'trafos':
-                    if voltage_level == 'lv' and i == 'trafos':
-                        data['{}_{}'.format(voltage_level, i)]['r_pu'] = \
-                            data['{}_{}'.format(voltage_level, i)]['P_k'] / \
-                            (data['{}_{}'.format(voltage_level, i)][
-                                 'S_nom'] * 1000)
-                        data['{}_{}'.format(voltage_level, i)][
-                            'x_pu'] = np.sqrt(
-                            (data['{}_{}'.format(voltage_level, i)][
-                                 'u_kr'] / 100) ** 2 \
-                            - data['{}_{}'.format(voltage_level, i)][
-                                'r_pu'] ** 2)
+                    data['{}_{}'.format(voltage_level, i)]['r_pu'] = \
+                        data['{}_{}'.format(voltage_level, i)]['P_k'] / \
+                        (data['{}_{}'.format(voltage_level, i)][
+                             'S_nom'] )
+                    data['{}_{}'.format(voltage_level, i)][
+                        'x_pu'] = np.sqrt(
+                        (data['{}_{}'.format(voltage_level, i)][
+                             'u_kr'] / 100) ** 2 \
+                        - data['{}_{}'.format(voltage_level, i)][
+                            'r_pu'] ** 2)
         return data
 
     def import_ding0_grid(self, path):
