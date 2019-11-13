@@ -533,6 +533,7 @@ def reinforce_branches_overloading(edisgo_obj, crit_lines):
 def reinforce_lines_overloaded_per_grid_level(edisgo_obj, grid_level,
                                               crit_lines, lines_changes):
     def reinforce_standard_lines(relevant_lines):
+        # Todo: make sure, the other parameters are the same as well
         lines_standard = relevant_lines.loc[
             relevant_lines.type_info == standard_line.name]
         number_parallel_lines = np.ceil(crit_lines.max_rel_overload[
@@ -601,7 +602,8 @@ def reinforce_lines_overloaded_per_grid_level(edisgo_obj, grid_level,
                 '{}_line'.format(grid_level)]]
         # Todo: check voltage of standard line to distinguish between 10
         #  and 20 kV. Remove following part afterwards.
-        standard_line.U_n = edisgo_obj.topology.mv_grid.nominal_voltage
+        if grid_level == 'mv':
+            standard_line.U_n = edisgo_obj.topology.mv_grid.nominal_voltage
     except KeyError:
         print('Chosen standard {} line is not in equipment list.'.format(
             grid_level))
