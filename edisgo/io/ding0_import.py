@@ -21,7 +21,7 @@ COLUMNS = {
     'transformers_df': ['bus0', 'bus1', 'x_pu', 'r_pu', 's_nom',
                         'type_info'],
     'lines_df': ['bus0', 'bus1', 'length', 'x', 'r', 's_nom', 'type_info',
-                 'num_parallel'],
+                 'kind', 'num_parallel'],
     'switches_df': ['bus_open', 'bus_closed', 'branch', 'type_info'],
     'storages_df': []
 }

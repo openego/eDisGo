@@ -83,20 +83,15 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     """
 
     def _add_lines_changes_to_equipment_changes():
-        equipment, index, quantity = [], [], []
-        for line, number_of_lines in lines_changes.items():
-            equipment.append(line.type.name)
-            index.append(line)
-            quantity.append(number_of_lines)
-        edisgo_reinforce.network.results.equipment_changes = \
-            edisgo_reinforce.network.results.equipment_changes.append(
+        edisgo_reinforce.results.equipment_changes = \
+            edisgo_reinforce.results.equipment_changes.append(
                 pd.DataFrame(
                     {'iteration_step': [iteration_step] * len(
                         lines_changes),
                      'change': ['changed'] * len(lines_changes),
-                     'equipment': equipment,
-                     'quantity': quantity},
-                    index=index))
+                     'equipment': [_ for _ in lines_changes.keys()],
+                     'quantity': [_ for _ in lines_changes.values()]},
+                    index=lines_changes.keys()))
 
     def _add_transformer_changes_to_equipment_changes(mode):
         for station, transformer_list in transformer_changes[mode].items():
@@ -196,29 +191,24 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         if not crit_lines.empty:
             # reinforce lines
             lines_changes = reinforce_measures.reinforce_branches_overloading(
-                edisgo_reinforce.network, crit_lines)
+                edisgo_reinforce, crit_lines)
             # write changed lines to results.equipment_changes
             _add_lines_changes_to_equipment_changes()
 
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-loading problems were solved
         logger.debug('==> Run power flow analysis.')
-        pypsa_io.update_pypsa_grid_reinforcement(
-            edisgo_reinforce.network,
-            edisgo_reinforce.network.results.equipment_changes[
-                edisgo_reinforce.network.results.equipment_changes.
-                    iteration_step==iteration_step])
         edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
         logger.debug('==> Recheck station load.')
         overloaded_mv_station = checks.hv_mv_station_load(
-            edisgo_reinforce.network)
+            edisgo_reinforce)
         overloaded_lv_stations = checks.mv_lv_station_load(
-            edisgo_reinforce.network)
+            edisgo_reinforce)
         logger.debug('==> Recheck line load.')
-        crit_lines = checks.mv_line_load(edisgo_reinforce.network)
+        crit_lines = checks.mv_line_load(edisgo_reinforce)
         if not mode:
             crit_lines = crit_lines.append(
-                checks.lv_line_load(edisgo_reinforce.network))
+                checks.lv_line_load(edisgo_reinforce))
 
         iteration_step += 1
         while_counter += 1
@@ -228,10 +218,10 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     if (while_counter == max_while_iterations and
             (not crit_lines.empty or not overloaded_mv_station.empty or
                  not overloaded_lv_stations.empty)):
-        edisgo_reinforce.network.results.unresolved_issues.update(crit_lines)
-        edisgo_reinforce.network.results.unresolved_issues.update(
+        edisgo_reinforce.results.unresolved_issues.update(crit_lines)
+        edisgo_reinforce.results.unresolved_issues.update(
             overloaded_lv_stations)
-        edisgo_reinforce.network.results.unresolved_issues.update(
+        edisgo_reinforce.results.unresolved_issues.update(
             overloaded_mv_station)
         raise exceptions.MaximumIterationError(
             "Overloading issues for the following lines could not be solved:"

@@ -144,12 +144,15 @@ def _line_load(edisgo_obj, grid, crit_lines):
         relative_i_res = i_lines_pfa/i_lines_allowed
         crit_lines_relative_load = relative_i_res[
             relative_i_res > 1].max().dropna()
-        crit_lines = crit_lines.append(pd.concat([crit_lines_relative_load,
-                                                  relative_i_res.idxmax()[
-                                                      crit_lines_relative_load.index]],
-                                                 axis=1,
-                                                 keys=['max_rel_overload',
-                                                       'time_index']))
+        if len(crit_lines_relative_load) > 0:
+            tmp_lines = pd.concat([crit_lines_relative_load,
+                                   relative_i_res.idxmax()[
+                                       crit_lines_relative_load.index]],
+                                  axis=1,
+                                  keys=['max_rel_overload',
+                                        'time_index'])
+            tmp_lines.loc[:, 'grid_level'] = grid_level
+            crit_lines = crit_lines.append(tmp_lines)
     except KeyError:
         logger.debug('No results for line to check overloading. Checking lines '
                      'one by one')
@@ -162,6 +165,7 @@ def _line_load(edisgo_obj, grid, crit_lines):
                     relative_i_res = i_line_pfa / i_line_allowed
                     crit_lines = crit_lines.append(pd.DataFrame(
                         {'max_rel_overload': relative_i_res.max(),
+                         'grid_level': grid_level,
                          'time_index': relative_i_res.idxmax()},
                         index=[line_name]))
             except KeyError:
