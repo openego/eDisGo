@@ -233,9 +233,14 @@ def extend_substation_overloading(edisgo_obj, critical_stations):
         'mv_{}_transformer'.format(case)]
     s_trafo_missing = s_station_pfa/load_factor - sum(s_max_per_trafo)
 
+    if s_trafo_missing < 0:
+        raise ValueError('Missing load is negative. Something went wrong. '
+                         'Please report.')
+
     # check if second transformer of the same kind is sufficient
     # if true install second transformer, otherwise install as many
     # standard transformers as needed
+    # Todo: check standard transformer in the same way as for lines
     if max(s_max_per_trafo) >= s_trafo_missing:
         # if station has more than one transformer install a new
         # transformer of the same kind as the transformer that best
@@ -270,7 +275,6 @@ def extend_substation_overloading(edisgo_obj, critical_stations):
             name[-1] = i+1
             duplicated_transformer.name = '_'.join([str(_) for _ in name])
             new_transformers = new_transformers.append(duplicated_transformer)
-        new_transformers.set_index('name')
         transformers_changes['added'][
             critical_stations.index[0]] = new_transformers.index.values
         transformers_changes['removed'][
