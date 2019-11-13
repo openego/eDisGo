@@ -40,7 +40,7 @@ class TestTimeSeriesControl:
 
         # check shape
         number_of_timesteps = len(self.timeseries.timeindex)
-        number_of_cols = len(self.topology._generators_df.index)
+        number_of_cols = len(self.topology.generators_df.index)
         assert self.timeseries.generators_active_power.shape == (
             number_of_timesteps, number_of_cols)
         assert self.timeseries.generators_reactive_power.shape == (

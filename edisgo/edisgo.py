@@ -650,7 +650,6 @@ class EDisGo(EDisGoReimport):
                                 'r_pu'] ** 2)
         return data
 
-
     def import_ding0_grid(self, path):
         """
         Import ding0 network data from csv files.
@@ -666,7 +665,7 @@ class EDisGo(EDisGoReimport):
         if path is not None:
             import_ding0_grid(path, self)
 
-    def to_pypsa(self, mode=None, timesteps=None, lv_grid_name = None):
+    def to_pypsa(self, mode=None, timesteps=None, lv_grid_name=None):
         """
         PyPSA network representation
 
@@ -711,7 +710,6 @@ class EDisGo(EDisGoReimport):
                                      mode=mode, timesteps=timesteps)
         else:
             raise ValueError("The entered mode is not a valid option.")
-
 
     def curtail(self, methodology, curtailment_timeseries, **kwargs):
         """

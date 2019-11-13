@@ -44,6 +44,9 @@ class TestGrids:
         assert isinstance(load_list[0], Load)
         assert len(load_list) == 1
 
+        assert len(mv_grid.transformers_df.index) == 1
+        assert 'MVStation_1_transformer_1' in mv_grid.transformers_df.index
+
         assert len(mv_grid.switch_disconnectors_df.index) == 2
         assert 'circuit_breaker_1' in mv_grid.switch_disconnectors_df.index
         switch_list = list(mv_grid.switch_disconnectors)
@@ -76,6 +79,9 @@ class TestGrids:
         load_list = list(lv_grid.loads)
         assert isinstance(load_list[0], Load)
         assert len(load_list) == 4
+
+        assert len(lv_grid.transformers_df.index) == 1
+        assert 'LVStation_3_transformer_1' in lv_grid.transformers_df.index
 
         assert len(lv_grid.switch_disconnectors_df.index) == 0
         switch_list = list(lv_grid.switch_disconnectors)
