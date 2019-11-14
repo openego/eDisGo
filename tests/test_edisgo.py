@@ -104,7 +104,7 @@ class TestEDisGo:
             atol=1e-5).all())
         assert(np.isclose(
             self.edisgo.results.pfa_v_mag_pu.lv.loc[
-                self.timesteps, 'GeneratorFluctuating_18'].values,
+                self.timesteps, 'Bus_GeneratorFluctuating_18'].values,
             np.array([1.01699, 0.99917]),
             atol=1e-5).all())
         assert(np.isclose(
