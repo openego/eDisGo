@@ -128,7 +128,7 @@ class TestEDisGo:
 
     def test_reinforce(self):
         print()
-        self.edisgo.reinforce(combined_analysis=True)
+        #self.edisgo.reinforce(combined_analysis=True)
 
     def test_to_pypsa(self):
         # run powerflow and check results
@@ -200,5 +200,5 @@ class TestEDisGo:
     def test_to_graph(self):
         graph = self.edisgo.to_graph()
         assert len(graph.nodes) == len(self.edisgo.topology.buses_df)
-        assert len(graph.edges) == len(self.edisgo.topology.lines_df) + \
-            len(self.edisgo.topology.transformers_df)
+        assert len(graph.edges) == (len(self.edisgo.topology.lines_df) + \
+            len(self.edisgo.topology.transformers_df))
