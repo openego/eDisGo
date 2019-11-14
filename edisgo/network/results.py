@@ -627,7 +627,7 @@ class Results:
         if nodes is None:
             return self.pfa_v_mag_pu.loc[:, (level, slice(None))]
         else:
-            labels = list(map(repr, list(nodes).copy()))
+            labels = nodes.index
             not_included = [_ for _ in labels
                             if _ not in list(self.pfa_v_mag_pu[level].columns)]
             labels_included = [_ for _ in labels if _ not in not_included]

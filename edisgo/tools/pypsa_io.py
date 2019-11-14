@@ -878,65 +878,15 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     #Todo: overthink mapping, should results not be assigned to original nodes?
 
     # process results at nodes
-    generators_names = edisgo.topology.mv_grid.generators_df.index.values
-    generators_mapping = {v: k for k, v in
-                          pypsa.generators.loc[generators_names][
-                              'bus'].to_dict().items()}
-    storages_names = edisgo.topology.mv_grid.storages_df.index.values
-    storages_mapping = {v: k for k, v in
-                        pypsa.storage_units.loc[storages_names][
-                            'bus'].to_dict().items()}
-    loads_names = edisgo.topology.mv_grid.loads_df.index.values
-    loads_mapping = {v: k for k, v in
-                        pypsa.loads.loc[loads_names][
-                            'bus'].to_dict().items()}
-    buses_names = edisgo.topology.mv_grid.buses_df.index.values
-    buses_mapping = {k: k for k in buses_names}
+    buses_mv = edisgo.topology.mv_grid.buses_df
 
-    lv_generators_names = []
-    lv_storages_names = []
-    lv_loads_names = []
-    lv_buses_names = []
+    buses_lv = pd.DataFrame()
     for lv_grid in edisgo.topology.mv_grid.lv_grids:
-        lv_generators_names.extend(list(lv_grid.generators_df.index.values))
-        lv_storages_names.extend(list(lv_grid.storages_df.index.values))
-        lv_loads_names.extend(list(lv_grid.loads_df.index.values))
-        lv_buses_names.extend(list(lv_grid.buses_df.index.values))
-
-    lv_generators_mapping = {v: k for k, v in
-                             pypsa.generators.loc[lv_generators_names][
-                                 'bus'].to_dict().items()}
-    lv_storages_mapping = {v: k for k, v in
-                           pypsa.storage_units.loc[lv_storages_names][
-                               'bus'].to_dict().items()}
-    lv_loads_mapping = {v: k for k, v in pypsa.loads.loc[lv_loads_names][
-        'bus'].to_dict().items()}
-    lv_buses_mapping = {k: k for k in buses_names}
-
-    names_mapping = {
-        **generators_mapping,
-        **storages_mapping,
-        **loads_mapping,
-        **buses_mapping,
-        **lv_generators_mapping,
-        **lv_storages_mapping,
-        **lv_loads_mapping,
-        **lv_buses_mapping
-    }
+        buses_lv = buses_lv.append(lv_grid.buses_df)
 
     # write voltage levels obtained from power flow to results object
-    pfa_v_mag_pu_mv = (pypsa.buses_t['v_mag_pu'][
-        list(generators_mapping) +
-        list(storages_mapping) +
-        list(loads_mapping) +
-        list(buses_mapping)]).rename(columns=names_mapping)
-    pfa_v_mag_pu_lv = (pypsa.buses_t['v_mag_pu'][
-        list(lv_generators_mapping) +
-        list(lv_storages_mapping) +
-        list(lv_loads_mapping)+
-        list(lv_buses_mapping)]).rename(columns=names_mapping)
+    pfa_v_mag_pu_mv = (pypsa.buses_t['v_mag_pu'][buses_mv.index])
+    pfa_v_mag_pu_lv = (pypsa.buses_t['v_mag_pu'][buses_lv.index])
     edisgo.results.pfa_v_mag_pu = pd.concat(
         {'mv': pfa_v_mag_pu_mv.loc[timesteps, :],
          'lv': pfa_v_mag_pu_lv.loc[timesteps, :]}, axis=1)
-
-
