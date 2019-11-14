@@ -128,7 +128,7 @@ class TestEDisGo:
 
     def test_reinforce(self):
         print()
-        #self.edisgo.reinforce()
+        self.edisgo.reinforce(combined_analysis=True)
 
     def test_to_pypsa(self):
         # run powerflow and check results
@@ -196,3 +196,9 @@ class TestEDisGo:
         msg = "For exporting lv grids, name of lv_grid has to be provided."
         with pytest.raises(ValueError, match=msg):
             self.edisgo.to_pypsa(mode='lv')
+
+    def test_to_graph(self):
+        graph = self.edisgo.to_graph()
+        assert len(graph.nodes) == len(self.edisgo.topology.buses_df)
+        assert len(graph.edges) == len(self.edisgo.topology.lines_df) + \
+            len(self.edisgo.topology.transformers_df)
