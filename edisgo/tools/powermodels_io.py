@@ -9,7 +9,7 @@ import pypsa
 
 def to_powermodels(pypsa_net):
     """
-    Convert pypsa network to network dictionary format, using the pypower structure as an intermediated steps
+    Convert pypsa network to network dictionary format, using the pypower structure as an intermediate steps
     :param pypsa_net:
     :return:
     """
@@ -40,6 +40,9 @@ def pypsa2ppc(psa_net):
     _build_transformers(psa_net,ppc)
 
     _build_load(psa_net, ppc)
+
+    # TODO STORAGE UNITS
+    _build_storage_units(psa_net,ppc)
 
     # built dictionaries if timeseries is used
     time_horizon = len(psa_net.loads_t["p_set"])
@@ -153,6 +156,11 @@ def ppc2pm(ppc): #pragma: no cover
                 print(costs)
                 raise ValueError("Maximum quadratic cost function allowed")
             gen["cost"][-len(costs):] = costs
+
+    # TODO BRANCHCOST!
+
+    # TODO STORAGE UNITS!
+
     return pm
 
 
@@ -211,24 +219,16 @@ def _build_gen(psa_net,ppc):
     # set setpoint of pg and qg
     ppc["gen"][:,PG] = psa_net.generators["p_set"].values
     ppc["gen"][:,QG] = psa_net.generators["q_set"].values
-    # TODO SET QMAX AND QMIN! e.g.: cos(phi) value from config
-    # ppc["gen"][:,QMAX] = 0
-    # ppc["gen"][:, QMIN] = 0
+
 
     ppc["gen"][:, MBASE] = 1.0
     ppc["gen"][:, GEN_STATUS] = 1.0
 
     ppc["gen"][:,PMAX] = psa_net.generators["p_nom"].values
     ppc["gen"][:,PMIN] = 0
-    # find slack bus and unbounded P and Q values
-    # slack_idx = np.where(psa_net.generators["control"].values == "Slack")[0][0]
-    # slack_bus = bus_indices[slack_idx]
-    #  print(slack_idx)
-    #  ppc["gen"][slack_idx,QMAX] = np.inf
-    #  ppc["gen"][slack_idx, QMIN] = -np.inf
-    #  ppc["gen"][slack_idx, PMAX] = np.inf
-    #  ppc["gen"][slack_idx, PMIN] = -np.inf
-
+    # TODO SET QMAX AND QMIN! e.g.: cos(phi) value from config
+    # ppc["gen"][:,QMAX] = 0
+    # ppc["gen"][:, QMIN] = 0
 
     # build field for generator costs
     # 2	startup	shutdown	n	c(n-1)	...	c0
@@ -269,6 +269,8 @@ def _build_branch(psa_net,ppc):
     ppc["branch"][:,BR_STATUS] = 1.0
     ppc["branch"][:,ANGMIN] = -360
     ppc["branch"][:,ANGMAX] = 360
+    # TODO BRANCHCOSTS!
+
     return
 
 
@@ -327,6 +329,10 @@ def _build_load(psa_net,ppc):
     return
 
 
+def _build_storage_units(psa_net,ppc):
+    print("storage units are not implemented")
+
+
 def _build_load_dict(psa_net,ppc):
     """
     build load dict containing timeseries from psa_net.loads_t
@@ -363,6 +369,8 @@ def _build_generator_dict(psa_net,ppc):
         for (gen_idx, bus_idx) in enumerate(gen_buses):
             pg = psa_net.generators_t["p_set"].values[t, gen_idx]
             qg = psa_net.generators_t["q_set"].values[t, gen_idx]
+            # if no value is set, set pg and qg to large value, e.g. representing slack
+            # TODO verify or find another solution not using "large" value
             if np.isnan(pg):
                 pg = 99999
             if np.isnan(qg):
