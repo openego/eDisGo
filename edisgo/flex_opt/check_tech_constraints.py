@@ -1,6 +1,7 @@
 import pandas as pd
 import logging
 from math import sqrt
+import numpy as np
 
 from edisgo.network.grids import LVGrid, MVGrid
 
@@ -345,13 +346,13 @@ def _station_load(edisgo_obj, grid, crit_stations):
     return crit_stations
 
 
-def mv_voltage_deviation(network, voltage_levels='mv_lv'):
+def mv_voltage_deviation(edisgo_obj, voltage_levels='mv_lv'):
     """
     Checks for voltage stability issues in MV topology.
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
+    edisgo_obj : :class:`~.edisgo.EDisGo`
     voltage_levels : :obj:`str`
         Specifies which allowed voltage deviations to use. Possible options
         are:
@@ -388,29 +389,30 @@ def mv_voltage_deviation(network, voltage_levels='mv_lv'):
     crit_nodes = {}
 
     v_dev_allowed_per_case = {}
+    #Todo: move to config
     v_dev_allowed_per_case['feedin_case_lower'] = 0.9
     v_dev_allowed_per_case['load_case_upper'] = 1.1
-    offset = network.config[
+    offset = edisgo_obj.config[
         'grid_expansion_allowed_voltage_deviations']['hv_mv_trafo_offset']
-    control_deviation = network.config[
+    control_deviation = edisgo_obj.config[
         'grid_expansion_allowed_voltage_deviations'][
         'hv_mv_trafo_control_deviation']
     if voltage_levels == 'mv_lv':
         v_dev_allowed_per_case['feedin_case_upper'] = \
-            1 + offset + control_deviation + network.config[
+            1 + offset + control_deviation + edisgo_obj.config[
                 'grid_expansion_allowed_voltage_deviations'][
                 'mv_lv_feedin_case_max_v_deviation']
         v_dev_allowed_per_case['load_case_lower'] = \
-            1 + offset - control_deviation - network.config[
+            1 + offset - control_deviation - edisgo_obj.config[
                 'grid_expansion_allowed_voltage_deviations'][
                 'mv_lv_load_case_max_v_deviation']
     elif voltage_levels == 'mv':
         v_dev_allowed_per_case['feedin_case_upper'] = \
-            1 + offset + control_deviation + network.config[
+            1 + offset + control_deviation + edisgo_obj.config[
                 'grid_expansion_allowed_voltage_deviations'][
                 'mv_feedin_case_max_v_deviation']
         v_dev_allowed_per_case['load_case_lower'] = \
-            1 + offset - control_deviation - network.config[
+            1 + offset - control_deviation - edisgo_obj.config[
                 'grid_expansion_allowed_voltage_deviations'][
                 'mv_load_case_max_v_deviation']
     else:
@@ -418,24 +420,24 @@ def mv_voltage_deviation(network, voltage_levels='mv_lv'):
             'Specified mode {} is not a valid option.'.format(voltage_levels))
     # maximum allowed apparent power of station in each time step
     v_dev_allowed_upper = \
-        network.timeseries.timesteps_load_feedin_case.case.apply(
+        edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
             lambda _: v_dev_allowed_per_case['{}_upper'.format(_)])
     v_dev_allowed_lower = \
-        network.timeseries.timesteps_load_feedin_case.case.apply(
+        edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
             lambda _: v_dev_allowed_per_case['{}_lower'.format(_)])
 
-    nodes = list(network.mv_grid.graph.nodes())
+    nodes = edisgo_obj.topology.mv_grid.buses_df
 
     crit_nodes_grid = _voltage_deviation(
-        network, nodes, v_dev_allowed_upper, v_dev_allowed_lower,
+        edisgo_obj, nodes, v_dev_allowed_upper, v_dev_allowed_lower,
         voltage_level='mv')
 
     if not crit_nodes_grid.empty:
-        crit_nodes[network.mv_grid] = crit_nodes_grid.sort_values(
-            by=['v_mag_pu'], ascending=False)
+        crit_nodes[repr(edisgo_obj.topology.mv_grid)] = \
+            crit_nodes_grid.sort_values(by=['v_mag_pu'], ascending=False)
         logger.debug(
             '==> {} node(s) in MV topology has/have voltage issues.'.format(
-                crit_nodes[network.mv_grid].shape[0]))
+                crit_nodes[repr(edisgo_obj.topology.mv_grid)].shape[0]))
     else:
         logger.debug('==> No voltage issues in MV topology.')
 
@@ -608,13 +610,13 @@ def lv_voltage_deviation(network, mode=None, voltage_levels='mv_lv'):
     return crit_nodes
 
 
-def _voltage_deviation(network, nodes, v_dev_allowed_upper,
+def _voltage_deviation(edisgo_obj, nodes, v_dev_allowed_upper,
                        v_dev_allowed_lower, voltage_level):
     """
     Checks for voltage stability issues in LV grids.
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
+    edisgo_obj : :class:`~.edisgo.EDisGo`
     nodes : :obj:`list`
         List of nodes (of type :class:`~.network.components.Generator`,
         :class:`~.network.components.Load`, etc.) to check voltage deviation for.
@@ -639,49 +641,54 @@ def _voltage_deviation(network, nodes, v_dev_allowed_upper,
         etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
         maximum voltage deviation as float and 'time_index' containing the
         corresponding time step the over-voltage occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        :pandas:`pandas.Timestamp<timestamp>`. # Todo: update
 
     """
 
-    def _append_crit_node(series):
-        return pd.DataFrame({'v_mag_pu': series.max(),
-                             'time_index': series.idxmax()},
-                            index=[node])
+    def _append_crit_nodes(dataframe):
+        return pd.DataFrame({'v_mag_pu': dataframe.max(axis=1).values,
+                             'time_index': dataframe.idxmax(axis=1).values},
+                            index=dataframe.index)
 
     crit_nodes_grid = pd.DataFrame()
 
-    v_mag_pu_pfa = network.results.v_res(nodes=nodes, level=voltage_level)
+    v_mag_pu_pfa = edisgo_obj.results.v_res(nodes=nodes, level=voltage_level)
 
-    for node in nodes:
-        # check for over- and under-voltage
-        overvoltage = v_mag_pu_pfa[repr(node)][
-            (v_mag_pu_pfa[repr(node)] > (v_dev_allowed_upper.loc[
-                v_mag_pu_pfa.index]))]
-        undervoltage = v_mag_pu_pfa[repr(node)][
-            (v_mag_pu_pfa[repr(node)] < (v_dev_allowed_lower.loc[
-                v_mag_pu_pfa.index]))]
-
-        # write greatest voltage deviation to dataframe
-        if not overvoltage.empty:
-            overvoltage_diff = overvoltage - v_dev_allowed_upper.loc[
-                overvoltage.index]
-            if not undervoltage.empty:
-                undervoltage_diff = v_dev_allowed_lower.loc[
-                    undervoltage.index] - undervoltage
-                if overvoltage_diff.max() > undervoltage_diff.max():
-                    crit_nodes_grid = crit_nodes_grid.append(
-                        _append_crit_node(overvoltage_diff))
-                else:
-                    crit_nodes_grid = crit_nodes_grid.append(
-                        _append_crit_node(undervoltage_diff))
-            else:
-                crit_nodes_grid = crit_nodes_grid.append(
-                    _append_crit_node(overvoltage_diff))
-        elif not undervoltage.empty:
-            undervoltage_diff = v_dev_allowed_lower.loc[
-                                    undervoltage.index] - undervoltage
-            crit_nodes_grid = crit_nodes_grid.append(
-                _append_crit_node(undervoltage_diff))
+    v_dev_allowed_upper_format = np.tile((v_dev_allowed_upper.loc[
+            v_mag_pu_pfa.index]).values, (v_mag_pu_pfa.shape[1],1))
+    v_dev_allowed_lower_format = np.tile((v_dev_allowed_lower.loc[
+            v_mag_pu_pfa.index]).values, (v_mag_pu_pfa.shape[1],1))
+    overvoltage = v_mag_pu_pfa.T[
+        v_mag_pu_pfa.T > v_dev_allowed_upper_format].dropna(how='all')
+    undervoltage = v_mag_pu_pfa.T[
+        v_mag_pu_pfa.T < v_dev_allowed_lower_format].dropna(how='all')
+    # sort nodes with under- and overvoltage issues in a way that
+    # worst case is saved
+    nodes_both = v_mag_pu_pfa[
+        overvoltage[overvoltage.index.isin(undervoltage.index)].index]
+    voltage_diff_ov = nodes_both.T-v_dev_allowed_upper.loc[
+            v_mag_pu_pfa.index].values
+    voltage_diff_uv = -nodes_both.T + v_dev_allowed_lower.loc[
+        v_mag_pu_pfa.index].values
+    voltage_diff_ov = voltage_diff_ov.loc[voltage_diff_ov.max(axis=1) >
+                                          voltage_diff_uv.max(axis=1)]
+    voltage_diff_uv = voltage_diff_uv.loc[
+        ~voltage_diff_uv.index.isin(voltage_diff_ov.index)]
+    # handle nodes with overvoltage issues and append to voltage_diff_ov
+    nodes_ov = v_mag_pu_pfa[
+        overvoltage[~overvoltage.index.isin(nodes_both.columns)].index]
+    voltage_diff_ov = voltage_diff_ov.append(
+        nodes_ov.T-v_dev_allowed_upper.loc[v_mag_pu_pfa.index].values)
+    # handle nodes with undervoltage issues and append to voltage_diff_uv
+    nodes_uv = v_mag_pu_pfa[
+        undervoltage[~undervoltage.index.isin(nodes_both.columns)].index]
+    voltage_diff_uv = voltage_diff_uv.append(
+        -nodes_uv.T + v_dev_allowed_lower.loc[v_mag_pu_pfa.index].values)
+    # append to crit nodes dataframe
+    crit_nodes_grid = \
+        crit_nodes_grid.append(_append_crit_nodes(voltage_diff_ov))
+    crit_nodes_grid = \
+        crit_nodes_grid.append(_append_crit_nodes(voltage_diff_uv))
 
     return crit_nodes_grid
 

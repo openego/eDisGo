@@ -239,7 +239,8 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         voltage_levels = 'mv_lv'
     else:
         voltage_levels = 'mv'
-    crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce.network,
+    # Todo: Hier weitermachen
+    crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce,
                                              voltage_levels=voltage_levels)
 
     while_counter = 0
@@ -247,24 +248,18 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
 
         # reinforce lines
         lines_changes = reinforce_measures.reinforce_branches_overvoltage(
-            edisgo_reinforce.network, edisgo_reinforce.network.mv_grid,
-            crit_nodes[edisgo_reinforce.network.mv_grid])
+            edisgo_reinforce, edisgo_reinforce.mv_grid,
+            crit_nodes[edisgo_reinforce.mv_grid])
         # write changed lines to results.equipment_changes
         _add_lines_changes_to_equipment_changes()
 
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-voltage problems were solved
         logger.debug('==> Run power flow analysis.')
-        pypsa_io.update_pypsa_grid_reinforcement(
-            edisgo_reinforce.network,
-            edisgo_reinforce.network.results.equipment_changes[
-                edisgo_reinforce.network.results.equipment_changes.
-                    iteration_step == iteration_step])
         edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
         logger.debug('==> Recheck voltage in MV topology.')
-        crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce.network,
+        crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce,
                                                  voltage_levels=voltage_levels)
-
         iteration_step += 1
         while_counter += 1
 
@@ -273,7 +268,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     if while_counter == max_while_iterations and crit_nodes:
         for k, v in crit_nodes.items():
             for node in v.index:
-                edisgo_reinforce.network.results.unresolved_issues.update(
+                edisgo_reinforce.results.unresolved_issues.update(
                     {repr(node): v.loc[node, 'v_mag_pu']})
         raise exceptions.MaximumIterationError(
             "Over-voltage issues for the following nodes in MV topology could "

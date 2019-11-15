@@ -2,6 +2,7 @@ import os
 import logging
 import pandas as pd
 import numpy as np
+from networkx import OrderedGraph
 
 import edisgo
 from edisgo.network.topology import NetworkReimport, \
@@ -709,6 +710,25 @@ class EDisGo(EDisGoReimport):
                                      mode=mode, timesteps=timesteps)
         else:
             raise ValueError("The entered mode is not a valid option.")
+
+    def to_graph(self):
+
+        graph = OrderedGraph()
+
+        buses = self.topology.buses_df.index
+        # add nodes
+        graph.add_nodes_from(buses)
+        # add branches
+        branches = []
+        for line_name, line in self.topology.lines_df.iterrows():
+            branches.append((line.bus0, line.bus1,
+                             {'branch_name': line_name, 'length': line.length}))
+        for trafo_name, trafo in self.topology.transformers_df.iterrows():
+            branches.append((trafo.bus0, trafo.bus1,
+                             {'branch_name': trafo_name, 'length': 0}))
+        graph.add_edges_from(branches)
+
+        return graph
 
     def curtail(self, methodology, curtailment_timeseries, **kwargs):
         """

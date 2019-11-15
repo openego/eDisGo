@@ -17,6 +17,7 @@ class TestEDisGo:
         test_network_directory = os.path.join(dirname, 'ding0_test_network')
         self.edisgo = EDisGo(ding0_grid=test_network_directory,
                              worst_case_analysis='worst-case')
+        self.timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
 
     def test_exceptions(self):
         msg = "No results pfa_p to check. Please analyze grid first."
@@ -41,7 +42,6 @@ class TestEDisGo:
     def test_crit_station(self):
         # TODO: have checks of technical constraints not require edisgo
         # object and then move this test
-        timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
         # calculate results if not already existing
         if self.edisgo.results.pfa_p is None:
             self.edisgo.analyze()
@@ -52,30 +52,29 @@ class TestEDisGo:
             overloaded_mv_station.at['MVGrid_1', 's_pfa'],
             23.824099, atol=1e-5))
         assert (overloaded_mv_station.at[
-                   'MVGrid_1', 'time_index'] == timesteps[0])
+                   'MVGrid_1', 'time_index'] == self.timesteps[0])
         overloaded_lv_station = checks.mv_lv_station_load(self.edisgo)
         assert(len(overloaded_lv_station) == 4)
         assert (np.isclose(
             overloaded_lv_station.at['LVGrid_1', 's_pfa'],
             0.17942, atol=1e-5))
         assert (overloaded_lv_station.at[
-                    'LVGrid_1', 'time_index'] == timesteps[1])
+                    'LVGrid_1', 'time_index'] == self.timesteps[1])
         assert (np.isclose(
             overloaded_lv_station.at['LVGrid_4', 's_pfa'],
             0.08426, atol=1e-5))
         assert (overloaded_lv_station.at[
-                    'LVGrid_4', 'time_index'] == timesteps[0])
+                    'LVGrid_4', 'time_index'] == self.timesteps[0])
 
     def test_crit_lines(self):
         # TODO: have checks of technical constraints not require edisgo
         # object and then move this test
-        timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
         if self.edisgo.results.i_res is None:
             self.edisgo.analyze()
         mv_crit_lines = checks.mv_line_load(self.edisgo)
         lv_crit_lines = checks.lv_line_load(self.edisgo)
         assert len(lv_crit_lines) == 4
-        assert (lv_crit_lines.time_index == timesteps[1]).all()
+        assert (lv_crit_lines.time_index == self.timesteps[1]).all()
         assert (np.isclose(
             lv_crit_lines.at['Line_50000002', 'max_rel_overload'],
             1.02105, atol=1e-5))
@@ -83,7 +82,7 @@ class TestEDisGo:
             lv_crit_lines.at['Line_60000003', 'max_rel_overload'],
             1.03784, atol=1e-5))
         assert len(mv_crit_lines) == 9
-        assert (mv_crit_lines.time_index == timesteps[0]).all()
+        assert (mv_crit_lines.time_index == self.timesteps[0]).all()
         assert (np.isclose(
             mv_crit_lines.at['Line_10006', 'max_rel_overload'],
             2.32612, atol=1e-5))
@@ -92,49 +91,49 @@ class TestEDisGo:
             2.12460, atol=1e-5))
 
     def test_analyze(self):
-        timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
         if self.edisgo.results.grid_losses is None:
             self.edisgo.analyze()
         # check results
         assert(np.isclose(
-            self.edisgo.results.grid_losses.loc[timesteps].values,
+            self.edisgo.results.grid_losses.loc[self.timesteps].values,
             np.array([[0.20814, 0.20948], [0.01854, 0.01985]]),
             atol=1e-5).all())
         assert(np.isclose(
-            self.edisgo.results.hv_mv_exchanges.loc[timesteps].values,
+            self.edisgo.results.hv_mv_exchanges.loc[self.timesteps].values,
             np.array([[-21.29377, 10.68470], [0.96392, 0.37883]]),
             atol=1e-5).all())
         assert(np.isclose(
             self.edisgo.results.pfa_v_mag_pu.lv.loc[
-                timesteps, 'GeneratorFluctuating_18'].values,
+                self.timesteps, 'Bus_GeneratorFluctuating_18'].values,
             np.array([1.01699, 0.99917]),
             atol=1e-5).all())
         assert(np.isclose(
             self.edisgo.results.pfa_v_mag_pu.mv.loc[
-                timesteps, 'virtual_Bus_primary_LVStation_4'].values,
+                self.timesteps, 'virtual_Bus_primary_LVStation_4'].values,
             np.array([1.00630, 0.99929]),
             atol=1e-5).all())
         assert (np.isclose(
-            self.edisgo.results.pfa_p.loc[timesteps, 'Line_60000003'].values,
+            self.edisgo.results.pfa_p.loc[
+                self.timesteps, 'Line_60000003'].values,
             np.array([0.00799, 0.07996]), atol=1e-5).all())
         assert (np.isclose(
-            self.edisgo.results.pfa_q.loc[timesteps, 'Line_60000003'].values,
+            self.edisgo.results.pfa_q.loc[
+                self.timesteps, 'Line_60000003'].values,
             np.array([0.00263, 0.026273]), atol=1e-5).all())
         assert (np.isclose(
             self.edisgo.results.i_res.loc[
-                timesteps, ['Line_10002', 'Line_90000025']].values,
+                self.timesteps, ['Line_10002', 'Line_90000025']].values,
             np.array([[0.001491, 0.000186], [0.009943, 0.001879]]),
             atol=1e-6).all())
 
     def test_reinforce(self):
         print()
-        #self.edisgo.reinforce()
+        #self.edisgo.reinforce(combined_analysis=True)
 
     def test_to_pypsa(self):
         # run powerflow and check results
-        timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
         pypsa_network = self.edisgo.to_pypsa()
-        pf_results = pypsa_network.pf(timesteps)
+        pf_results = pypsa_network.pf(self.timesteps[0])
 
         if all(pf_results['converged']['0'].tolist()):
             print('network converged')
@@ -152,9 +151,8 @@ class TestEDisGo:
 
     def test_mv_to_pypsa(self):
         # test only mv
-        timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
         pypsa_network = self.edisgo.to_pypsa(mode='mv')
-        pf_results = pypsa_network.pf(timesteps)
+        pf_results = pypsa_network.pf(self.timesteps[0])
         # check if pf converged
         if all(pf_results['converged']['0'].tolist()):
             print('mv converged')
@@ -167,7 +165,7 @@ class TestEDisGo:
         assert slack_df.bus.values[0] == 'Bus_MVStation_1'
         # test mvlv
         pypsa_network = self.edisgo.to_pypsa(mode='mvlv')
-        pf_results = pypsa_network.pf(timesteps)
+        pf_results = pypsa_network.pf(self.timesteps[0])
         # check if pf converged
         if all(pf_results['converged']['0'].tolist()):
             print('mvlv converged')
@@ -181,10 +179,9 @@ class TestEDisGo:
 
     def test_lv_to_pypsa(self):
         # test lv to pypsa
-        timesteps = pd.date_range('1/1/1970', periods=1, freq='H')
         pypsa_network = self.edisgo.to_pypsa(
             mode='lv', lv_grid_name='LVGrid_2')
-        pf_results = pypsa_network.pf(timesteps)
+        pf_results = pypsa_network.pf(self.timesteps[0])
         # check if pf converged
         if all(pf_results['converged']['0'].tolist()):
             print('lv converged')
@@ -199,3 +196,9 @@ class TestEDisGo:
         msg = "For exporting lv grids, name of lv_grid has to be provided."
         with pytest.raises(ValueError, match=msg):
             self.edisgo.to_pypsa(mode='lv')
+
+    def test_to_graph(self):
+        graph = self.edisgo.to_graph()
+        assert len(graph.nodes) == len(self.edisgo.topology.buses_df)
+        assert len(graph.edges) == (len(self.edisgo.topology.lines_df) + \
+            len(self.edisgo.topology.transformers_df))

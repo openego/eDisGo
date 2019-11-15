@@ -233,9 +233,14 @@ def extend_substation_overloading(edisgo_obj, critical_stations):
         'mv_{}_transformer'.format(case)]
     s_trafo_missing = s_station_pfa/load_factor - sum(s_max_per_trafo)
 
+    if s_trafo_missing < 0:
+        raise ValueError('Missing load is negative. Something went wrong. '
+                         'Please report.')
+
     # check if second transformer of the same kind is sufficient
     # if true install second transformer, otherwise install as many
     # standard transformers as needed
+    # Todo: check standard transformer in the same way as for lines
     if max(s_max_per_trafo) >= s_trafo_missing:
         # if station has more than one transformer install a new
         # transformer of the same kind as the transformer that best
@@ -270,7 +275,6 @@ def extend_substation_overloading(edisgo_obj, critical_stations):
             name[-1] = i+1
             duplicated_transformer.name = '_'.join([str(_) for _ in name])
             new_transformers = new_transformers.append(duplicated_transformer)
-        new_transformers.set_index('name')
         transformers_changes['added'][
             critical_stations.index[0]] = new_transformers.index.values
         transformers_changes['removed'][
@@ -529,6 +533,7 @@ def reinforce_branches_overloading(edisgo_obj, crit_lines):
 def reinforce_lines_overloaded_per_grid_level(edisgo_obj, grid_level,
                                               crit_lines, lines_changes):
     def reinforce_standard_lines(relevant_lines):
+        # Todo: make sure, the other parameters are the same as well
         lines_standard = relevant_lines.loc[
             relevant_lines.type_info == standard_line.name]
         number_parallel_lines = np.ceil(crit_lines.max_rel_overload[
@@ -597,7 +602,8 @@ def reinforce_lines_overloaded_per_grid_level(edisgo_obj, grid_level,
                 '{}_line'.format(grid_level)]]
         # Todo: check voltage of standard line to distinguish between 10
         #  and 20 kV. Remove following part afterwards.
-        standard_line.U_n = edisgo_obj.topology.mv_grid.nominal_voltage
+        if grid_level == 'mv':
+            standard_line.U_n = edisgo_obj.topology.mv_grid.nominal_voltage
     except KeyError:
         print('Chosen standard {} line is not in equipment list.'.format(
             grid_level))
