@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
+from networkx import OrderedGraph
 
 from edisgo.network.components import Generator, Load, Switch
+from edisgo.tools.tools import translate_df_to_graph
 
 
 class Grid(ABC):
@@ -60,6 +62,11 @@ class Grid(ABC):
     @nominal_voltage.setter
     def nominal_voltage(self, nominal_voltage):
         self._nominal_voltage = nominal_voltage
+
+    @property
+    def graph(self):
+        return translate_df_to_graph(self.buses_df, self.lines_df)
+
 
     @property
     def generators_df(self):
