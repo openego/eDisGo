@@ -67,6 +67,11 @@ class Grid(ABC):
     def graph(self):
         return translate_df_to_graph(self.buses_df, self.lines_df)
 
+    @property
+    def station(self):
+        return self.buses_df.loc[
+            self.transformers_df.iloc[0].bus1].to_frame().T
+
 
     @property
     def generators_df(self):

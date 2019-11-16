@@ -239,7 +239,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         voltage_levels = 'mv_lv'
     else:
         voltage_levels = 'mv'
-    # Todo: Hier weitermachen
+
     crit_nodes = checks.mv_voltage_deviation(edisgo_reinforce,
                                              voltage_levels=voltage_levels)
 
@@ -269,7 +269,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         for k, v in crit_nodes.items():
             for node in v.index:
                 edisgo_reinforce.results.unresolved_issues.update(
-                    {repr(node): v.loc[node, 'v_mag_pu']})
+                    {node: v.loc[node, 'v_mag_pu']})
         raise exceptions.MaximumIterationError(
             "Over-voltage issues for the following nodes in MV topology could "
             "not be solved: {}".format(crit_nodes))
@@ -283,7 +283,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         voltage_levels = 'mv_lv'
     else:
         voltage_levels = 'lv'
-    crit_stations = checks.lv_voltage_deviation(edisgo_reinforce.network,
+    crit_stations = checks.lv_voltage_deviation(edisgo_reinforce,
                                                 mode='stations',
                                                 voltage_levels=voltage_levels)
 
