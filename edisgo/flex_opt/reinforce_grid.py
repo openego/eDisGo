@@ -292,7 +292,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         # reinforce distribution substations
         transformer_changes = \
             reinforce_measures.extend_distribution_substation_overvoltage(
-                edisgo_reinforce.network, crit_stations)
+                edisgo_reinforce, crit_stations)
         # write added transformers to results.equipment_changes
         _add_transformer_changes_to_equipment_changes('added')
 
@@ -300,14 +300,14 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         # if all over-voltage problems were solved
         logger.debug('==> Run power flow analysis.')
         pypsa_io.update_pypsa_grid_reinforcement(
-            edisgo_reinforce.network,
-            edisgo_reinforce.network.results.equipment_changes[
-                edisgo_reinforce.network.results.equipment_changes.
+            edisgo_reinforce,
+            edisgo_reinforce.results.equipment_changes[
+                edisgo_reinforce.results.equipment_changes.
                     iteration_step == iteration_step])
         edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
         logger.debug('==> Recheck voltage at secondary side of LV stations.')
         crit_stations = checks.lv_voltage_deviation(
-            edisgo_reinforce.network, mode='stations',
+            edisgo_reinforce, mode='stations',
             voltage_levels=voltage_levels)
 
         iteration_step += 1
