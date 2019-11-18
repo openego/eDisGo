@@ -94,15 +94,15 @@ class TestCheckTechConstraints:
         assert len(voltage_issues['LVGrid_1']) == 4
         assert len(voltage_issues['LVGrid_9']) == 1
         assert np.isclose(voltage_issues['LVGrid_9'].loc[
-                              'Bus_secondary_LVStation_9', 'v_mag_pu'], 0.04)
+            'Bus_secondary_LVStation_9', 'v_mag_pu'], 0.04)
         assert np.isclose(voltage_issues['LVGrid_1'].loc[
-                              'Bus_BranchTee_LVGrid_1_4', 'v_mag_pu'], 0.05)
+            'Bus_BranchTee_LVGrid_1_4', 'v_mag_pu'], 0.05)
         assert np.isclose(voltage_issues['LVGrid_1'].loc[
-                              'Bus_BranchTee_LVGrid_1_5', 'v_mag_pu'], 0.01)
+            'Bus_BranchTee_LVGrid_1_5', 'v_mag_pu'], 0.01)
         assert np.isclose(voltage_issues['LVGrid_1'].loc[
-                              'Bus_Load_residential_LVGrid_1_7', 'v_mag_pu'], 0.06)
+            'Bus_Load_residential_LVGrid_1_7', 'v_mag_pu'], 0.06)
         assert np.isclose(voltage_issues['LVGrid_1'].loc[
-                              'Bus_GeneratorFluctuating_13', 'v_mag_pu'], 0.08)
+            'Bus_GeneratorFluctuating_13', 'v_mag_pu'], 0.08)
         assert voltage_issues['LVGrid_9'].loc[
                    'Bus_secondary_LVStation_9', 'time_index'] == \
                self.timesteps[0]

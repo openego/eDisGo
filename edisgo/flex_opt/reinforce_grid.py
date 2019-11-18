@@ -68,6 +68,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
           neglecting LV network topology. LV load and generation is aggregated per
           LV network and directly connected to the secondary side of the
           respective MV/LV station.
+          #Todo: check if this mode is implemented correctly, if not adjust
 
     Returns
     -------
@@ -89,7 +90,8 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                     {'iteration_step': [iteration_step] * len(
                         lines_changes),
                      'change': ['changed'] * len(lines_changes),
-                     'equipment': [_ for _ in lines_changes.keys()],
+                     'equipment': edisgo_reinforce.topology.lines_df.loc[
+                         lines_changes.keys(), 'type_info'].values,
                      'quantity': [_ for _ in lines_changes.values()]},
                     index=lines_changes.keys()))
 

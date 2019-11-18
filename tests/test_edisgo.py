@@ -127,8 +127,11 @@ class TestEDisGo:
             atol=1e-6).all())
 
     def test_reinforce(self):
-        print()
-        #self.edisgo.reinforce(combined_analysis=True)
+        results = self.edisgo.reinforce(combined_analysis=True)
+        assert not results.unresolved_issues
+        assert len(results.grid_expansion_costs) == 18
+        assert len(results.equipment_changes) == 18
+        #Todo: test other relevant values
 
     def test_to_pypsa(self):
         # run powerflow and check results
