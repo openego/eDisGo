@@ -117,28 +117,6 @@ def import_ding0_grid(path, edisgo_obj):
     _validate_ding0_grid_import(edisgo_obj.topology)
 
 
-def _set_up_mv_grid(grid, network):
-    # ToDo: @Guido: Was passiert hier?
-    # # Special treatment of LVLoadAreaCenters see ...
-    # # ToDo: add a reference above for explanation of how these are treated
-    # la_centers = [_ for _ in ding0_grid._graph.nodes()
-    #               if isinstance(_, LVLoadAreaCentreDing0)]
-    # if la_centers:
-    #     aggregated, aggr_stations, dingo_import_data = \
-    #         _determine_aggregated_nodes(la_centers)
-    #     network.dingo_import_data = dingo_import_data
-    # else:
-    #     aggregated = {}
-    #     aggr_stations = []
-    #
-    #     # create empty DF for imported agg. generators
-    #     network.dingo_import_data = pd.DataFrame(columns=('id',
-    #                                                       'capacity',
-    #                                                       'agg_geno')
-    #                                              )
-    pass
-
-
 def _validate_ding0_grid_import(network):
     """
     Check imported data integrity.
