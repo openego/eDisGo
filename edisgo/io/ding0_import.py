@@ -95,7 +95,8 @@ def import_ding0_grid(path, edisgo_obj):
     edisgo_obj.topology.storages_df = grid.storage_units
     edisgo_obj.topology.grid_district = {
         'population': grid.mv_grid_district_population,
-        'geom': wkt_loads(grid.mv_grid_district_geom)}
+        'geom': wkt_loads(grid.mv_grid_district_geom),
+        'srid': grid.srid}
 
     edisgo_obj.topology._grids = {}
 

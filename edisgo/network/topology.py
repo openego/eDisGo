@@ -374,17 +374,25 @@ class Topology:
     @property
     def grid_district(self):
         """
-        Medium voltage (MV) network
+        Dictionary with MV grid district information.
+
+        The dictionary contains the following information:
+        * 'population'
+          Number of inhabitants in grid district as integer.
+        * 'geom'
+          Geometry of MV grid district as (Multi)Polygon.
+        * 'srid'
+          SRID of grid district geometry.
 
         Parameters
         ----------
-        mv_grid : :class:`~.network.grids.MVGrid`
-            Medium voltage (MV) network
+        grid_district : dict
+            Dictionary with MV grid district information.
 
         Returns
         --------
-        :class:`~.network.grids.MVGrid`
-            Medium voltage (MV) network
+        dict
+            Dictionary with MV grid district information.
 
         """
         return self._grid_district
