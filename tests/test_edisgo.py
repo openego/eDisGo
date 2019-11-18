@@ -204,4 +204,4 @@ class TestEDisGo:
         graph = self.edisgo.to_graph()
         assert len(graph.nodes) == len(self.edisgo.topology.buses_df)
         assert len(graph.edges) == (len(self.edisgo.topology.lines_df) + \
-            len(self.edisgo.topology.transformers_df))
+            len(self.edisgo.topology.transformers_df.bus0.unique()))
