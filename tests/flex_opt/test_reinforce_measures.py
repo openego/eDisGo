@@ -6,7 +6,8 @@ import pytest
 from edisgo import EDisGo
 from edisgo.flex_opt.reinforce_measures import \
     extend_distribution_substation_overloading, extend_substation_overloading, \
-    reinforce_branches_overloading, reinforce_branches_overvoltage
+    reinforce_branches_overloading, reinforce_branches_overvoltage, \
+    extend_distribution_substation_overvoltage
 
 
 def change_line_to_standard_line(test_class, line_name, std_line):
@@ -198,3 +199,30 @@ class TestReinforceMeasures:
         assert len(lines_changes) == 4
         #Todo: erweitern (values and LV)
         print()
+
+    def test_extend_distribution_substation_overvoltage(self):
+        crit_stations = {}
+        station_9 = pd.DataFrame({'v_mag_pu': [0.03], 'time_index':
+            [self.timesteps[0]]}, index=['Bus_secondary_LVStation_9'])
+        crit_stations['LVGrid_9'] = station_9
+        trafos_pre = self.edisgo.topology.transformers_df
+
+        trafo_changes = \
+            extend_distribution_substation_overvoltage(self.edisgo,
+                                                       crit_stations)
+        assert len(trafo_changes) == 1
+        assert len(trafo_changes['added']['LVGrid_9']) == 1
+        assert trafo_changes['added']['LVGrid_9'][0] == \
+            'LVStation_9_transformer_reinforced_2'
+        # check changes in transformers_df
+        assert len(self.edisgo.topology.transformers_df) == \
+            (len(trafos_pre) + 1)
+        assert self.edisgo.topology.transformers_df.iloc[-1].name == \
+            'LVStation_9_transformer_reinforced_2'
+        assert self.edisgo.topology.transformers_df.iloc[-1].s_nom == 0.63
+        assert self.edisgo.topology.transformers_df.iloc[-1].r_pu == \
+            0.010317460317460317
+        assert self.edisgo.topology.transformers_df.iloc[-1].x_pu == \
+            0.03864647477581405
+        assert self.edisgo.topology.transformers_df.iloc[-1].type_info == \
+            '630 kVA'

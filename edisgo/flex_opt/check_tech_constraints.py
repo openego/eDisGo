@@ -695,17 +695,17 @@ def _voltage_deviation(edisgo_obj, nodes, v_dev_allowed_upper,
     return crit_nodes_grid
 
 
-def check_ten_percent_voltage_deviation(network):
+def check_ten_percent_voltage_deviation(edisgo_obj):
     """
     Checks if 10% criteria is exceeded.
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
+    edisgo_obj : :class:`~.edisgo.EDisGo`
 
     """
 
-    v_mag_pu_pfa = network.results.v_res()
+    v_mag_pu_pfa = edisgo_obj.results.v_res()
     if (v_mag_pu_pfa > 1.1).any().any() or (v_mag_pu_pfa < 0.9).any().any():
         message = "Maximum allowed voltage deviation of 10% exceeded."
         raise ValueError(message)

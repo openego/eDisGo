@@ -118,7 +118,7 @@ def extend_distribution_substation_overloading(edisgo_obj, critical_stations):
     return transformers_changes
 
 
-def extend_distribution_substation_overvoltage(network, critical_stations):
+def extend_distribution_substation_overvoltage(edisgo_obj, critical_stations):
     """
     Reinforce MV/LV substations due to voltage issues.
 
@@ -126,7 +126,7 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
+    edisgo_obj : :class:`~.edisgo.EDisGo`
     critical_stations : :obj:`dict`
         Dictionary with :class:`~.network.grids.LVGrid` as key and a
         :pandas:`pandas.DataFrame<dataframe>` with its critical station and
@@ -145,30 +145,31 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
 
     # get parameters for standard transformer
     try:
-        standard_transformer = network.equipment_data['lv_trafos'].loc[
-            network.config['grid_expansion_standard_equipment'][
+        standard_transformer = edisgo_obj.equipment_data['lv_trafos'].loc[
+            edisgo_obj.config['grid_expansion_standard_equipment'][
                 'mv_lv_transformer']]
     except KeyError:
         print('Standard MV/LV transformer is not in equipment list.')
 
     transformers_changes = {'added': {}}
-    for grid in critical_stations.keys():
-
+    for grid_name in critical_stations.keys():
+        grid = edisgo_obj.topology._grids[grid_name]
         # get any transformer to get attributes for new transformer from
-        station_transformer = grid.station.transformers[0]
+        duplicated_transformer = grid.transformers_df.iloc[0]
+        # change transformer parameters
+        name = duplicated_transformer.name.split('_')
+        name.insert(-1, 'reinforced')
+        name[-1] = len(grid.transformers_df) + 1
+        duplicated_transformer.name = '_'.join([str(_) for _ in name])
+        duplicated_transformer.s_nom = standard_transformer.S_nom
+        duplicated_transformer.r_pu = standard_transformer.r_pu
+        duplicated_transformer.x_pu = standard_transformer.x_pu
+        duplicated_transformer.type_info = standard_transformer.name
+        # add new transformer to topology
+        edisgo_obj.topology.transformers_df = \
+            edisgo_obj.topology.transformers_df.append(duplicated_transformer)
+        transformers_changes['added'][grid_name] = [duplicated_transformer.name]
 
-        new_transformer = Transformer(
-            id='LVStation_{}_transformer_{}'.format(
-                str(grid.station.id), str(len(grid.station.transformers) + 1)),
-            geom=station_transformer.geom,
-            mv_grid=station_transformer.mv_grid,
-            grid=station_transformer.grid,
-            voltage_op=station_transformer.voltage_op,
-            type=copy.deepcopy(standard_transformer))
-
-        # add standard transformer to station and return value
-        grid.station.add_transformer(new_transformer)
-        transformers_changes['added'][grid.station] = [new_transformer]
 
     if transformers_changes['added']:
         logger.debug("==> {} LV station(s) has/have been reinforced ".format(

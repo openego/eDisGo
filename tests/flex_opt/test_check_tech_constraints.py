@@ -1,9 +1,11 @@
 import os
 import pandas as pd
 import numpy as np
+import pytest
+
 from edisgo import EDisGo
 from edisgo.flex_opt.check_tech_constraints import mv_voltage_deviation, \
-    lv_voltage_deviation
+    lv_voltage_deviation, check_ten_percent_voltage_deviation
 
 
 class TestCheckTechConstraints:
@@ -116,3 +118,15 @@ class TestCheckTechConstraints:
         assert voltage_issues['LVGrid_1'].loc[
                    'Bus_GeneratorFluctuating_13', 'time_index'] == \
                self.timesteps[1]
+
+    def test_check_ten_percent_voltage_deviation(self):
+        # reset values
+        if self.edisgo.results.pfa_v_mag_pu['mv'].at[
+                self.timesteps[0], 'Bus_primary_LVStation_9'] == 1.14:
+            self.edisgo.analyze()
+        check_ten_percent_voltage_deviation(self.edisgo)
+        self.edisgo.results.pfa_v_mag_pu['mv'].at[
+                self.timesteps[0], 'Bus_primary_LVStation_9'] = 1.14
+        msg = "Maximum allowed voltage deviation of 10% exceeded."
+        with pytest.raises(ValueError, match=msg):
+            check_ten_percent_voltage_deviation(self.edisgo)
