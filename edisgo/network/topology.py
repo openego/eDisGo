@@ -392,25 +392,6 @@ class Topology:
     @grid_district.setter
     def grid_district(self, grid_district):
         self._grid_district = grid_district
-    #
-    # @timeseries.setter
-    # def timeseries(self, timeseries):
-    #     self._timeseries = timeseries
-
-    #ToDo still needed?
-    # @property
-    # def dingo_import_data(self):
-    #     """
-    #     Temporary data from ding0 import needed for OEP generator update
-    #
-    #     """
-    #     return self._dingo_import_data
-    #
-    # @dingo_import_data.setter
-    # def dingo_import_data(self, dingo_data):
-    #     self._dingo_import_data = dingo_data
-
-
 
     def __repr__(self):
         return 'Network ' + str(self.id)
