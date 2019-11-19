@@ -374,17 +374,25 @@ class Topology:
     @property
     def grid_district(self):
         """
-        Medium voltage (MV) network
+        Dictionary with MV grid district information.
+
+        The dictionary contains the following information:
+        * 'population'
+          Number of inhabitants in grid district as integer.
+        * 'geom'
+          Geometry of MV grid district as (Multi)Polygon.
+        * 'srid'
+          SRID of grid district geometry.
 
         Parameters
         ----------
-        mv_grid : :class:`~.network.grids.MVGrid`
-            Medium voltage (MV) network
+        grid_district : dict
+            Dictionary with MV grid district information.
 
         Returns
         --------
-        :class:`~.network.grids.MVGrid`
-            Medium voltage (MV) network
+        dict
+            Dictionary with MV grid district information.
 
         """
         return self._grid_district
@@ -392,25 +400,6 @@ class Topology:
     @grid_district.setter
     def grid_district(self, grid_district):
         self._grid_district = grid_district
-    #
-    # @timeseries.setter
-    # def timeseries(self, timeseries):
-    #     self._timeseries = timeseries
-
-    #ToDo still needed?
-    # @property
-    # def dingo_import_data(self):
-    #     """
-    #     Temporary data from ding0 import needed for OEP generator update
-    #
-    #     """
-    #     return self._dingo_import_data
-    #
-    # @dingo_import_data.setter
-    # def dingo_import_data(self, dingo_data):
-    #     self._dingo_import_data = dingo_data
-
-
 
     def __repr__(self):
         return 'Network ' + str(self.id)

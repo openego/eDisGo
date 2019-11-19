@@ -11,25 +11,24 @@ import logging
 logger = logging.getLogger('edisgo')
 
 
-def proj2equidistant(network):
-    """Defines conformal (e.g. WGS84) to ETRS (equidistant) projection
-    Source CRS is loaded from Network's config.
+def proj2equidistant(srid):
+    """
+    Transforms to equidistant projection (epsg:3035).
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
-        The eDisGo container object
+    srid : int
+        Spatial reference identifier of geometry to transform.
 
     Returns
     -------
     :py:func:`functools.partial`
+
     """
-    srid = int(network.config['geo']['srid'])
 
     return partial(pyproj.transform,
-                   pyproj.Proj(init='epsg:{}'
-                               .format(str(srid))),  # source coordinate system
-                   pyproj.Proj(init='epsg:3035')  # destination coordinate system
+                   pyproj.Proj(init='epsg:{}'.format(srid)),  # source CRS
+                   pyproj.Proj(init='epsg:3035')  # destination CRS
                    )
 
 

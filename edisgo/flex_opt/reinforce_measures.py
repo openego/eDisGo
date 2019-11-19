@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 
 from edisgo.network.components import Generator, Load
-from edisgo.network.grids import LVGrid
+from edisgo.network.grids import LVGrid, MVGrid
 
 import logging
 logger = logging.getLogger('edisgo')
@@ -118,7 +118,7 @@ def extend_distribution_substation_overloading(edisgo_obj, critical_stations):
     return transformers_changes
 
 
-def extend_distribution_substation_overvoltage(network, critical_stations):
+def extend_distribution_substation_overvoltage(edisgo_obj, critical_stations):
     """
     Reinforce MV/LV substations due to voltage issues.
 
@@ -126,7 +126,7 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
+    edisgo_obj : :class:`~.edisgo.EDisGo`
     critical_stations : :obj:`dict`
         Dictionary with :class:`~.network.grids.LVGrid` as key and a
         :pandas:`pandas.DataFrame<dataframe>` with its critical station and
@@ -145,30 +145,31 @@ def extend_distribution_substation_overvoltage(network, critical_stations):
 
     # get parameters for standard transformer
     try:
-        standard_transformer = network.equipment_data['lv_trafos'].loc[
-            network.config['grid_expansion_standard_equipment'][
+        standard_transformer = edisgo_obj.equipment_data['lv_trafos'].loc[
+            edisgo_obj.config['grid_expansion_standard_equipment'][
                 'mv_lv_transformer']]
     except KeyError:
         print('Standard MV/LV transformer is not in equipment list.')
 
     transformers_changes = {'added': {}}
-    for grid in critical_stations.keys():
-
+    for grid_name in critical_stations.keys():
+        grid = edisgo_obj.topology._grids[grid_name]
         # get any transformer to get attributes for new transformer from
-        station_transformer = grid.station.transformers[0]
+        duplicated_transformer = grid.transformers_df.iloc[0]
+        # change transformer parameters
+        name = duplicated_transformer.name.split('_')
+        name.insert(-1, 'reinforced')
+        name[-1] = len(grid.transformers_df) + 1
+        duplicated_transformer.name = '_'.join([str(_) for _ in name])
+        duplicated_transformer.s_nom = standard_transformer.S_nom
+        duplicated_transformer.r_pu = standard_transformer.r_pu
+        duplicated_transformer.x_pu = standard_transformer.x_pu
+        duplicated_transformer.type_info = standard_transformer.name
+        # add new transformer to topology
+        edisgo_obj.topology.transformers_df = \
+            edisgo_obj.topology.transformers_df.append(duplicated_transformer)
+        transformers_changes['added'][grid_name] = [duplicated_transformer.name]
 
-        new_transformer = Transformer(
-            id='LVStation_{}_transformer_{}'.format(
-                str(grid.station.id), str(len(grid.station.transformers) + 1)),
-            geom=station_transformer.geom,
-            mv_grid=station_transformer.mv_grid,
-            grid=station_transformer.grid,
-            voltage_op=station_transformer.voltage_op,
-            type=copy.deepcopy(standard_transformer))
-
-        # add standard transformer to station and return value
-        grid.station.add_transformer(new_transformer)
-        transformers_changes['added'][grid.station] = [new_transformer]
 
     if transformers_changes['added']:
         logger.debug("==> {} LV station(s) has/have been reinforced ".format(
@@ -288,13 +289,13 @@ def extend_substation_overloading(edisgo_obj, critical_stations):
     return transformers_changes
 
 
-def reinforce_branches_overvoltage(network, grid, crit_nodes):
+def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
     """
     Reinforce MV and LV topology due to voltage issues.
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
+    edisgo_obj : :class:`~.edisgo.EDisGo`
     grid : :class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
     crit_nodes : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with critical nodes, sorted descending by voltage deviation.
@@ -330,31 +331,56 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     don't need to be n-1 safe.
 
     """
+    def change_line_to_standard_line(line_name):
+        grid.lines_df.at[line_name, 'type_info'] = \
+            standard_line.name
+        grid.lines_df.at[line_name, 'num_parallel'] = 1
+        grid.lines_df.at[line_name, 'kind'] = 'cable'
+        grid.lines_df.at[line_name, 'r'] = \
+            standard_line.R_per_km * \
+            grid.lines_df.at[line_name, 'length']
+        grid.lines_df.at[line_name, 'x'] = \
+            standard_line.L_per_km * omega / 1e3 * \
+            grid.lines_df.at[line_name, 'length']
+        grid.lines_df.at[line_name, 's_nom'] = \
+            np.sqrt(3) * standard_line.U_n * \
+            standard_line.I_max_th
+        lines_changes[line_name] = 1
 
     # load standard line data
     if isinstance(grid, LVGrid):
         try:
-            standard_line = network.equipment_data['lv_cables'].loc[
-                network.config['grid_expansion_standard_equipment']['lv_line']]
+            standard_line = edisgo_obj.equipment_data['lv_cables'].loc[
+                edisgo_obj.config['grid_expansion_standard_equipment']
+                ['lv_line']]
         except KeyError:
             print('Chosen standard LV line is not in equipment list.')
-    else:
+    elif isinstance(grid, MVGrid):
         try:
-            standard_line = network.equipment_data['mv_cables'].loc[
-                network.config['grid_expansion_standard_equipment']['mv_line']]
+            standard_line = edisgo_obj.equipment_data['mv_cables'].loc[
+                edisgo_obj.config['grid_expansion_standard_equipment']
+                ['mv_line']]
+            standard_line.U_n = grid.nominal_voltage
         except KeyError:
             print('Chosen standard MV line is not in equipment list.')
+    else:
+        raise ValueError('Unknown type of inserted grid.')
 
+    station_node = grid.transformers_df.bus1.iloc[0]
     # find first nodes of every main line as representatives
     rep_main_line = list(
-        nx.predecessor(grid.graph, grid.station, cutoff=1).keys())
+        nx.predecessor(grid.graph, station_node,
+                       cutoff=1).keys())
     # list containing all representatives of main lines that have already been
     # reinforced
     main_line_reinforced = []
+    graph = grid.graph
+    omega = 2 * np.pi * 50
 
     lines_changes = {}
     for node in crit_nodes.index:
-        path = nx.shortest_path(grid.graph, grid.station, node)
+        path = nx.shortest_path(graph, station_node,
+                                node)
         # raise exception if voltage issue occurs at station's secondary side
         # because voltage issues should have been solved during extension of
         # distribution substations due to overvoltage issues.
@@ -370,9 +396,10 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
 
                 main_line_reinforced.append(path[1])
                 # get path length from station to critical node
-                get_weight = lambda u, v, data: data['line'].length
+                get_weight = lambda u, v, data: data['length']
                 path_length = dijkstra_shortest_path_length(
-                    grid.graph, grid.station, get_weight, target=node)
+                    graph, station_node, get_weight,
+                    target=node)
                 # find first node in path that exceeds 2/3 of the line length
                 # from station to critical node farthest away from the station
                 node_2_3 = next(j for j in path if
@@ -381,56 +408,50 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                 # if LVGrid: check if node_2_3 is outside of a house
                 # and if not find next BranchTee outside the house
                 if isinstance(grid, LVGrid):
-                    if isinstance(node_2_3, BranchTee):
-                        if node_2_3.in_building:
-                            # ToDo more generic (new function)
-                            try:
-                                node_2_3 = path[path.index(node_2_3) - 1]
-                            except IndexError:
-                                print('BranchTee outside of building is not ' +
-                                      'in path.')
-                    elif (isinstance(node_2_3, Generator) or
-                              isinstance(node_2_3, Load)):
-                        pred_node = path[path.index(node_2_3) - 1]
-                        if isinstance(pred_node, BranchTee):
-                            if pred_node.in_building:
-                                # ToDo more generic (new function)
-                                try:
-                                    node_2_3 = path[path.index(node_2_3) - 2]
-                                except IndexError:
-                                    print('BranchTee outside of building is ' +
-                                          'not in path.')
-                    else:
-                        logging.error("Not implemented for {}.".format(
-                            str(type(node_2_3))))
+                    while (~np.isnan(grid.buses_df.loc[node_2_3].in_building)
+                           and grid.buses_df.loc[node_2_3].in_building):
+                        node_2_3 = path[path.index(node_2_3) - 1]
+                        # break if node is station
+                        if node_2_3 is path[0]:
+                            logger.error('Could not reinforce voltage issue.')
+                            break
+
                 # if MVGrid: check if node_2_3 is LV station and if not find
                 # next LV station
                 else:
-                    if not isinstance(node_2_3, LVStation):
-                        next_index = path.index(node_2_3) + 1
+                    while node_2_3 not in \
+                            edisgo_obj.topology.transformers_df.bus0:
                         try:
                             # try to find LVStation behind node_2_3
-                            while not isinstance(node_2_3, LVStation):
-                                node_2_3 = path[next_index]
-                                next_index += 1
+                            node_2_3 = path[path.index(node_2_3) + 1]
                         except IndexError:
                             # if no LVStation between node_2_3 and node with
                             # voltage problem, connect node directly to
                             # MVStation
                             node_2_3 = node
+                            break
 
                 # if node_2_3 is a representative (meaning it is already
                 # directly connected to the station), line cannot be
                 # disconnected and must therefore be reinforced
                 if node_2_3 in rep_main_line:
-                    crit_line = grid.graph.get_edge_data(
-                        grid.station, node_2_3)['line']
+                    crit_line_name = graph.get_edge_data(
+                        station_node, node_2_3)['branch_name']
+                    crit_line = grid.lines_df.loc[crit_line_name]
 
                     # if critical line is already a standard line install one
                     # more parallel line
-                    if crit_line.type.name == standard_line.name:
-                        crit_line.quantity += 1
-                        lines_changes[crit_line] = 1
+                    if crit_line.type_info == standard_line.name:
+                        num_parallel_pre = grid.lines_df.at[crit_line_name,
+                                                            'num_parallel']
+                        grid.lines_df.at[crit_line_name, 'num_parallel'] += 1
+                        grid.lines_df.at[crit_line_name, 'r'] = \
+                            grid.lines_df.at[crit_line_name, 'r'] * \
+                            num_parallel_pre / (num_parallel_pre + 1)
+                        grid.lines_df.at[crit_line_name, 'x'] = \
+                            grid.lines_df.at[crit_line_name, 'x'] * \
+                            num_parallel_pre / (num_parallel_pre + 1)
+                        lines_changes[crit_line_name] = 1
 
                     # if critical line is not yet a standard line replace old
                     # line by a standard line
@@ -438,32 +459,30 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
                         # number of parallel standard lines could be calculated
                         # following [2] p.103; for now number of parallel
                         # standard lines is iterated
-                        crit_line.type = standard_line.copy()
-                        crit_line.quantity = 1
-                        crit_line.kind = 'cable'
-                        lines_changes[crit_line] = 1
+                        change_line_to_standard_line(crit_line_name)
 
                 # if node_2_3 is not a representative, disconnect line
                 else:
                     # get line between node_2_3 and predecessor node (that is
                     # closer to the station)
                     pred_node = path[path.index(node_2_3) - 1]
-                    crit_line = grid.graph.get_edge_data(
-                        node_2_3, pred_node)['line']
-                    # add new edge between node_2_3 and station
-                    new_line_data = {'line': crit_line,
-                                     'type': 'line'}
-                    grid.graph.add_edge(grid.station,node_2_3, **new_line_data)
-                    # remove old edge
-                    grid.graph.remove_edge(pred_node, node_2_3)
+                    crit_line_name = graph.get_edge_data(
+                        node_2_3, pred_node)['branch_name']
+                    if grid.lines_df.at[crit_line_name, 'bus0'] == pred_node:
+                        grid.lines_df.at[crit_line_name, 'bus0'] = station_node
+                    elif grid.lines_df.at[crit_line_name, 'bus1'] == pred_node:
+                        grid.lines_df.at[crit_line_name, 'bus1'] = station_node
+                    else:
+                        raise ValueError('Bus not in line buses. '
+                                         'Please check.')
                     # change line length and type
-                    crit_line.length = path_length[node_2_3]
-                    crit_line.type = standard_line.copy()
-                    crit_line.kind = 'cable'
-                    crit_line.quantity = 1
-                    lines_changes[crit_line] = 1
+                    grid.lines_df.at[crit_line_name, 'length'] = \
+                        path_length[node_2_3]
+                    change_line_to_standard_line(crit_line_name)
+
                     # add node_2_3 to representatives list to not further
-                    # reinforce this part off the topology in this iteration step
+                    # reinforce this part off the topology in this iteration
+                    # step
                     rep_main_line.append(node_2_3)
                     main_line_reinforced.append(node_2_3)
 
