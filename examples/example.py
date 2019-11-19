@@ -23,12 +23,10 @@ grids.
 """
 
 import os
-import sys
 import pandas as pd
 
 from edisgo import EDisGo
-from edisgo.network.topology import Results
-from edisgo.flex_opt.exceptions import MaximumIterationError
+from edisgo.network.results import Results
 
 import logging
 logging.basicConfig(filename='example.log',
@@ -41,92 +39,63 @@ logger.setLevel(logging.DEBUG)
 
 if __name__ == '__main__':
 
-    # get filenames of all pickled ding0 grids in current working directory
-    grids = []
-    for file in os.listdir(sys.path[0]):
-        if file.endswith(".pkl"):
-            grids.append(file)
+    # specify path to directory containing ding0 grid csv files
+    dingo_grid_path = os.path.join(os.path.dirname(__file__), '460')
 
     # set scenario to define future power plant capacities
-    scenario = 'nep2035'
+    scenario = None  # 'nep2035'
 
     # initialize containers that will hold any error messages
     faulty_grids_before_geno_import = {'topology': [], 'msg': []}
     faulty_grids = {'topology': [], 'msg': []}
 
-    for dingo_grid in grids:
+    # set up worst-case scenario
+    edisgo = EDisGo(ding0_grid=dingo_grid_path,
+                    worst_case_analysis='worst-case')
 
-        logging.info('Grid expansion for {}'.format(dingo_grid))
 
-        # set up worst-case scenario
-        edisgo = EDisGo(ding0_grid=dingo_grid,
-                        worst_case_analysis='worst-case')
+    # Calculate topology expansion costs before generator import
+    logging.info('Grid expansion before generator import.')
+    before_geno_import = True
 
-        try:
-            # Calculate topology expansion costs before generator import
-            logging.info('Grid expansion before generator import.')
-            before_geno_import = True
+    # overwrite config parameters for allowed voltage deviations in
+    # initial topology reinforcement (status quo)
+    edisgo.config[
+        'grid_expansion_allowed_voltage_deviations'] = {
+        'hv_mv_trafo_offset': 0.04,
+        'hv_mv_trafo_control_deviation': 0.0,
+        'mv_load_case_max_v_deviation': 0.055,
+        'mv_feedin_case_max_v_deviation': 0.02,
+        'lv_load_case_max_v_deviation': 0.065,
+        'lv_feedin_case_max_v_deviation': 0.03,
+        'mv_lv_station_load_case_max_v_deviation': 0.02,
+        'mv_lv_station_feedin_case_max_v_deviation': 0.01
+    }
+    # Do topology reinforcement
+    edisgo.reinforce()
+    # Save results
+    edisgo.results.save(
+        'results_grid_{}_before_generator_import'.format(
+            edisgo.topology.id))
 
-            # overwrite config parameters for allowed voltage deviations in
-            # initial topology reinforcement (status quo)
-            edisgo.topology.config[
-                'grid_expansion_allowed_voltage_deviations'] = {
-                'hv_mv_trafo_offset': 0.04,
-                'hv_mv_trafo_control_deviation': 0.0,
-                'mv_load_case_max_v_deviation': 0.055,
-                'mv_feedin_case_max_v_deviation': 0.02,
-                'lv_load_case_max_v_deviation': 0.065,
-                'lv_feedin_case_max_v_deviation': 0.03,
-                'mv_lv_station_load_case_max_v_deviation': 0.02,
-                'mv_lv_station_feedin_case_max_v_deviation': 0.01
-            }
-            # Do topology reinforcement
-            edisgo.reinforce()
-            # Save results
-            edisgo.topology.results.save(
-                'results_grid_{}_before_generator_import'.format(
-                    edisgo.topology.id))
+    # Clear results and reset configs
+    edisgo.results = Results(edisgo.topology)
+    edisgo.config = None
 
-            # Clear results and reset configs
-            edisgo.topology.results = Results(edisgo.topology)
-            edisgo.topology.config = None
+    # Calculate topology expansion costs after generator import
+    logging.info('Grid expansion after generator import.')
+    before_geno_import = False
 
-            # Calculate topology expansion costs after generator import
-            logging.info('Grid expansion after generator import.')
-            before_geno_import = False
+    # Import generators
+    #edisgo.import_generators(generator_scenario=scenario)
 
-            # Import generators
-            edisgo.import_generators(generator_scenario=scenario)
+    # Do topology reinforcement
+    edisgo.reinforce()
+    # Save results
+    edisgo.results.save('results_grid_{}'.format(
+        edisgo.topology.id))
 
-            # Do topology reinforcement
-            edisgo.reinforce()
-            # Save results
-            edisgo.topology.results.save('results_grid_{}'.format(
-                edisgo.topology.id))
-
-            logging.info('SUCCESS!')
-
-        except MaximumIterationError:
-            if before_geno_import:
-                faulty_grids_before_geno_import['topology'].append(
-                    edisgo.topology.id)
-                faulty_grids_before_geno_import['msg'].append(
-                    str(edisgo.topology.results.unresolved_issues))
-            else:
-                faulty_grids['topology'].append(edisgo.topology.id)
-                faulty_grids['msg'].append(
-                    str(edisgo.topology.results.unresolved_issues))
-            logging.info('Unresolved issues left after topology expansion.')
-
-        except Exception as e:
-            if before_geno_import:
-                faulty_grids_before_geno_import['topology'].append(
-                    edisgo.topology.id)
-                faulty_grids_before_geno_import['msg'].append(repr(e))
-            else:
-                faulty_grids['topology'].append(edisgo.topology.id)
-                faulty_grids['msg'].append(repr(e))
-            logging.info('Something went wrong.')
+    logging.info('SUCCESS!')
 
     # write error messages to csv files
     pd.DataFrame(faulty_grids_before_geno_import).to_csv(
