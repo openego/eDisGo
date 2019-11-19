@@ -138,7 +138,8 @@ class Component(BasicComponent):
         if math.isnan(grid.lv_grid_id):
             return self.edisgo_obj.topology.mv_grid
         else:
-            return self.edisgo_obj.topology._grids['LVGrid_{}'.format(int(grid.lv_grid_id))]
+            return self.edisgo_obj.topology._grids['LVGrid_{}'.format(
+                int(grid.lv_grid_id))]
 
     @property
     def geom(self):

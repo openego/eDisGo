@@ -362,7 +362,8 @@ class Results:
             is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         """
-
+        #ToDo: Instead of hv_mv_exchanges just use slack (is more general in
+        # case only LV grid was analyzed)
         return self._hv_mv_exchanges
 
     @hv_mv_exchanges.setter

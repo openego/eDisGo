@@ -69,9 +69,13 @@ class Grid(ABC):
 
     @property
     def station(self):
+        """
+        DataFrame with form of buses_df with only grid's station's secondary
+        side bus information.
+
+        """
         return self.buses_df.loc[
             self.transformers_df.iloc[0].bus1].to_frame().T
-
 
     @property
     def generators_df(self):
