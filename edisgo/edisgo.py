@@ -26,7 +26,7 @@ class EDisGoReimport:
 
         if os.path.isdir(results_path):
             # create topology
-            self.topology = NetworkReimport(results_path, **kwargs)
+            self.topology = None#NetworkReimport(results_path, **kwargs)
         else:
             logging.error('Results cannot be imported as the specified '
                           'directory {} does not exist.'.format(results_path))

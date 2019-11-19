@@ -6,7 +6,8 @@ import pytest
 
 from edisgo.network.topology import Topology
 from edisgo.tools.config import Config
-from edisgo.network.timeseries import TimeSeriesControl, TimeSeries
+from edisgo.network.timeseries import TimeSeriesControl, TimeSeries, \
+    import_load_timeseries
 from edisgo.io import ding0_import
 
 
@@ -22,6 +23,44 @@ class TestTimeSeriesControl:
         self.timeseries = TimeSeries()
         self.config = Config()
         ding0_import.import_ding0_grid(test_network_directory, self)
+
+    def test_timeseries_imported(self):
+        timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
+        ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775]*8760},
+                                           index=timeindex)
+        # test error raising in case of missing ts for dispatchable gens
+        msg = \
+            'Your input for "timeseries_generation_dispatchable" is not valid.'
+        with pytest.raises(ValueError, match=msg):
+            TimeSeriesControl(edisgo_obj=self,
+                              timeseries_generation_fluctuating='oedb')
+        # test error raising in case of missing ts for loads
+        msg = 'Your input for "timeseries_load" is not valid.'
+        with pytest.raises(ValueError, match=msg):
+            TimeSeriesControl(edisgo_obj=self,
+                  timeseries_generation_fluctuating='oedb',
+                  timeseries_generation_dispatchable=ts_gen_dispatchable)
+
+        TimeSeriesControl(edisgo_obj=self,
+                          timeseries_generation_fluctuating='oedb',
+                          timeseries_generation_dispatchable=ts_gen_dispatchable,
+                          timeseries_load='demandlib')
+
+        #Todo: test with inserted reactive generation and/or reactive load
+        print()
+
+    def test_import_load_timeseries(self):
+        with pytest.raises(NotImplementedError):
+            import_load_timeseries(self.config, '')
+        timeindex = pd.date_range('1/1/2018', periods=8760, freq='H')
+        load = import_load_timeseries(self.config, 'demandlib')
+        assert (load.columns == ['retail', 'residential',
+                                 'agricultural', 'industrial']).all()
+        assert load.loc[timeindex[453], 'retail'] == 8.335076810751597e-05
+        assert load.loc[timeindex[13], 'residential'] == 0.00017315167492271323
+        assert load.loc[timeindex[6328], 'agricultural'] == \
+               0.00010134645909959844
+        assert load.loc[timeindex[4325], 'industrial'] == 9.91768322919766e-05
 
     def test_worst_case(self):
         """Test creation of worst case time series"""
