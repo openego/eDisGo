@@ -119,7 +119,7 @@ class Config:
         """
 
         config_files = ['config_db_tables', 'config_grid',
-                        'config_grid_expansion', 'config_timeseries']
+                        'config_grid_expansion', 'config_timeseries','config_opf_julia']
 
         # load configs
         if isinstance(config_path, dict):
