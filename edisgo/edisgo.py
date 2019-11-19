@@ -4,8 +4,7 @@ import pandas as pd
 import numpy as np
 
 import edisgo
-from edisgo.network.topology import NetworkReimport, \
-     Topology
+from edisgo.network.topology import Topology
 from edisgo.network.results import Results, ResultsReimport
 from edisgo.network.timeseries import TimeSeries, TimeSeriesControl
 from edisgo.tools import pypsa_io, plots, tools
