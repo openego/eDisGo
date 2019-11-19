@@ -1,10 +1,7 @@
 import logging
-import csv
+import random
+import pandas as pd
 
-
-
-from edisgo.flex_opt import storage_integration, storage_operation, \
-    curtailment, storage_positioning
 from edisgo.network.components import Generator, Load
 
 
@@ -92,7 +89,8 @@ class Topology:
             control
             p_nom
             type
-            weather_cell_id	subtype
+            weather_cell_id
+            subtype
 
         Returns
         --------
@@ -151,7 +149,7 @@ class Topology:
             x_pu
             r_pu
             s_nom
-            type
+            type_info
 
         Returns
         --------
@@ -213,7 +211,8 @@ class Topology:
             r
             s_nom
             num_parallel
-            type
+            type_info
+            kind
 
         Returns
         --------
@@ -401,21 +400,154 @@ class Topology:
     def grid_district(self, grid_district):
         self._grid_district = grid_district
 
+    def remove_generator(self, generator_name):
+        """
+        Removes generator with given name from topology.
+
+        Parameters
+        ----------
+        generator_name : str
+            Name of generator as specified in index of `generators_df`.
+
+        """
+        # ToDo add test
+        self._generators_df.drop(generator_name)
+
+    def add_generator(self, generator_id, bus, p_nom, generator_type,
+                      weather_cell_id=None, subtype=None, control=None):
+        """
+        Adds generator to topology.
+
+        Generator name is generated automatically.
+
+        Parameters
+        ----------
+        generator_id : str
+            Unique identifier of generator.
+        bus
+        control
+        p_nom
+        generator_type
+        weather_cell_id
+        subtype
+
+        """
+        #ToDo add test
+        # check if bus exists
+        if bus not in self.buses_df.index:
+            raise ValueError(
+                "Specified bus {} is not valid as it is not defined in "
+                "buses_df.".format(bus))
+
+        # generate generator name and check uniqueness
+        generator_name = 'Generator_{}_{}'.format(generator_type, generator_id)
+        while generator_name in self.generators_df.index:
+            generator_name = 'Generator_{}_{}'.format(
+                generator_type, random.randint(10**8, 10**9), generator_id)
+
+        new_gen_df = pd.DataFrame(
+            data={'bus': bus,
+                  'p_nom': p_nom,
+                  'control': control if not None else 'PQ',
+                  'type': generator_type,
+                  'weather_cell_id': weather_cell_id,
+                  'subtype': subtype},
+            index=[generator_name])
+        self.generators_df = self._generators_df.append(new_gen_df)
+        return generator_name
+
+    def add_bus(self, bus_name, v_nom, x=None, y=None, lv_grid_id=None,
+                in_building=False):
+        """
+        Adds new bus to topology.
+
+        Parameters
+        ----------
+        bus_name : str
+        v_nom
+        x
+        y
+        lv_grid_id
+        in_building
+
+        """
+        #ToDo add test
+        # check lv_grid_id
+        if v_nom < 1 and lv_grid_id is None:
+            raise ValueError(
+                "You need to specify an lv_grid_id for low-voltage buses.")
+        new_bus_df = pd.DataFrame(
+            data={'v_nom': v_nom,
+                  'x': x,
+                  'y': y,
+                  'mv_grid_id': self.mv_grid.id,
+                  'lv_grid_id': lv_grid_id,
+                  'in_building': in_building},
+            index=[bus_name])
+        self._buses_df = self._buses_df.append(new_bus_df)
+
+    def add_line(self, bus0, bus1, length, x=None, r=None,
+                 s_nom=None, num_parallel=1, type_info=None, kind=None):
+        """
+        Adds new line to topology.
+
+        Line name is generated automatically.
+
+        Parameters
+        ----------
+        bus0
+        bus1
+        length
+        x
+        r
+        s_nom
+        num_parallel
+        type_info
+        kind
+
+        """
+        #ToDo add test
+        # check if buses exist
+        if bus0 not in self.buses_df.index:
+            raise ValueError(
+                "Specified bus {} is not valid as it is not defined in "
+                "buses_df.".format(bus0))
+        if bus1 not in self.buses_df.index:
+            raise ValueError(
+                "Specified bus {} is not valid as it is not defined in "
+                "buses_df.".format(bus1))
+
+        # check if line between given buses already exists
+        bus0_bus1 = self.lines_df[
+            (self.lines_df.bus0 == bus0) & (self.lines_df.bus1 == bus1)]
+        bus1_bus0 = self.lines_df[
+            (self.lines_df.bus1 == bus0) & (self.lines_df.bus0 == bus1)]
+        if not bus0_bus1.empty and bus1_bus0.empty:
+            logging.debug("Line between bus0 {} and bus1 {} already exists.")
+            return bus1_bus0.append(bus0_bus1).index[0]
+
+        # generate line name and check uniqueness
+        line_name = 'Line_{}_{}'.format(bus0, bus1)
+        while line_name in self.lines_df.index:
+            line_name = 'Line_{}_{}_{}'.format(
+                bus0, bus1, random.randint(10**8, 10**9))
+
+        #ToDo
+        # # calculate r if not provided
+        # if x is None and type_info:
+        new_line_df = pd.DataFrame(
+            data={'bus0': bus0,
+                  'bus1': bus1,
+                  'x': x,
+                  'r': r,
+                  'length': length,
+                  'type_info': type_info,
+                  'num_parallel': num_parallel,
+                  'kind': kind,
+                  's_nom': s_nom},
+            index=[line_name])
+        self._lines_df = self._lines_df.append(new_line_df)
+        return line_name
+
     def __repr__(self):
-        return 'Network ' + str(self.id)
-
-
-class NetworkReimport:
-    """
-    Network class created from saved results.
-
-    """
-    def __init__(self, results_path, **kwargs):
-
-        # import configs
-        self.config = {}
-        with open('{}/configs.csv'.format(results_path), 'r') as f:
-            reader = csv.reader(f)
-            for row in reader:
-                a = iter(row[1:])
-                self.config[row[0]] = dict(zip(a, a))
+        return 'Network topology ' + str(self.id)
