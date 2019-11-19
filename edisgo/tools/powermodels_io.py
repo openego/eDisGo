@@ -21,7 +21,7 @@ def to_powermodels(pypsa_net):
     ppc,loads_t,gens_t = pypsa2ppc(pypsa_net)
 
     # conver pypower datastructure to powermodels network dictionary
-    pm = ppc2pm(ppc)
+    pm = ppc2pm(ppc,pypsa_net)
 
     return pm,loads_t,gens_t
 
@@ -64,7 +64,7 @@ def pypsa2ppc(psa_net):
     return ppc,load_dict,gen_dict
 
 
-def ppc2pm(ppc): #pragma: no cover
+def ppc2pm(ppc,psa_net): #pragma: no cover
     """
     converter from pypower datastructure to powermodels dictionary, adapted from pandapower to powermodels converter
 
@@ -139,6 +139,11 @@ def ppc2pm(ppc): #pragma: no cover
         gen["pmax"] = row[PMAX]
         gen["index"] = idx
         pm["gen"][str(idx)] = gen
+
+    # TODO add attribute "fluctuating" to generators from psa_net, maybe move to ppc first
+    is_fluctuating = [int("Fluctuating" in index) for index in psa_net.generators.index]
+    for idx, row in enumerate(is_fluctuating, start=1):
+        pm["gen"][str(idx)]["fluctuating"] = row
 
     if len(ppc["gencost"]) > len(ppc["gen"]):
         ppc["gencost"] = ppc["gencost"][:ppc["gen"].shape[0], :]
