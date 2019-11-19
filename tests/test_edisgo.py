@@ -205,3 +205,23 @@ class TestEDisGo:
         assert len(graph.nodes) == len(self.edisgo.topology.buses_df)
         assert len(graph.edges) == (len(self.edisgo.topology.lines_df) + \
             len(self.edisgo.topology.transformers_df.bus0.unique()))
+
+    def test_edisgo_timeseries_analysis(self):
+        dirname = os.path.dirname(__file__)
+        test_network_directory = os.path.join(dirname, 'ding0_test_network')
+        timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
+        ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775] * 8760},
+                                           index=timeindex)
+        edisgo = EDisGo(ding0_grid=test_network_directory,
+                        timeseries_generation_fluctuating='oedb',
+                        timeseries_generation_dispatchable=ts_gen_dispatchable,
+                        timeseries_load='demandlib')
+        # check if export to pypsa is possible to make sure all values are set
+        pypsa_network = edisgo.to_pypsa()
+        assert len(pypsa_network.generators_t['p_set']) == 8760
+        assert len(pypsa_network.generators_t['q_set']) == 8760
+        assert len(pypsa_network.loads_t['p_set']) == 8760
+        assert len(pypsa_network.loads_t['q_set']) == 8760
+        # Todo: relocate? Check other values
+        edisgo.analyze(timesteps=timeindex[range(10)])
+        print()

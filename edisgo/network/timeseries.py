@@ -10,6 +10,7 @@ from edisgo.io.timeseries_import import import_feedin_timeseries
 
 logger = logging.getLogger('edisgo')
 
+
 class TimeSeries:
     """
     Defines time series for all loads and generators in network (if set).
@@ -484,42 +485,91 @@ class TimeSeriesControl:
             else:
                 # check if there are any dispatchable generators, and
                 # throw error if there are
-                gens = edisgo_obj.mv_grid.generators + [
-                    gen for lv_grid in edisgo_obj.mv_grid.lv_grids
-                    for gen in lv_grid.generators]
-                if False in [True if isinstance(g, GeneratorFluctuating)
-                             else False for g in gens]:
+                gens = edisgo_obj.topology.generators_df
+                if not (gens.type.isin(['solar', 'wind'])).all():
                     raise ValueError(
                         'Your input for "timeseries_generation_dispatchable" '
                         'is not valid.'.format(mode))
             # reactive power time series for all generators
             ts = kwargs.get('timeseries_generation_reactive_power', None)
             if isinstance(ts, pd.DataFrame):
-                self.timeseries.generation_reactive_power = ts
+                self.edisgo_obj.timeseries.generation_reactive_power = ts
             # set time index
             if kwargs.get('timeindex', None) is not None:
-                self.timeseries._timeindex = kwargs.get('timeindex')
+                self.edisgo_obj.timeseries._timeindex = kwargs.get('timeindex')
             else:
-                self.timeseries._timeindex = \
-                    self.timeseries._generation_fluctuating.index
+                self.edisgo_obj.timeseries._timeindex = \
+                    self.edisgo_obj.timeseries.generation_fluctuating.index
 
             # load time series
             ts = kwargs.get('timeseries_load', None)
             if isinstance(ts, pd.DataFrame):
-                self.timeseries.load = ts
+                self.edisgo_obj.timeseries.load = ts
             elif ts == 'demandlib':
-                self.timeseries.load = import_load_timeseries(
-                    config_data, ts, year=self.timeseries.timeindex[0].year)
+                self.edisgo_obj.timeseries.load = import_load_timeseries(
+                    config_data, ts,
+                    year=self.edisgo_obj.timeseries.timeindex[0].year)
             else:
                 raise ValueError('Your input for "timeseries_load" is not '
                                  'valid.'.format(mode))
             # reactive power timeseries for loads
             ts = kwargs.get('timeseries_load_reactive_power', None)
             if isinstance(ts, pd.DataFrame):
-                self.timeseries.load_reactive_power = ts
+                self.edisgo_obj.timeseries.load_reactive_power = ts
+
+            # create generator active and reactive power timeseries
+            self._generation_from_timeseries()
+
+            # create load active and reactive power timeseries
+            self._load_from_timeseries()
 
             # check if time series for the set time index can be obtained
             self._check_timeindex()
+
+    def _load_from_timeseries(self):
+        # get all loads and set active power
+        loads = self.edisgo_obj.topology.loads_df
+        self.edisgo_obj.timeseries.loads_active_power = \
+            loads.apply(lambda x: self.edisgo_obj.timeseries.load[x.sector] *
+                                  x.annual_consumption, axis=1).T
+        # if reactive power is given as attribute set with inserted timeseries
+        if hasattr(self.edisgo_obj.timeseries, 'load_reactive_power'):
+            self.edisgo_obj.timeseries.loads_reactive_power = \
+                loads.apply(
+                    lambda x: self.edisgo_obj.timeseries.load_reactive_power
+                              [x.sector] * x.annual_consumption, axis=1).T
+        # set default reactive load
+        else:
+            # assign voltage level to loads
+            loads['voltage_level'] = loads.apply(
+                lambda _: 'lv' if self.edisgo_obj.topology.buses_df.at[
+                                      _.bus, 'v_nom'] < 1
+                else 'mv', axis=1)
+            self._reactive_power_load_by_cos_phi(loads)
+
+    def _generation_from_timeseries(self):
+        # get all generators
+        gens = self.edisgo_obj.topology.generators_df
+        # handling of fluctuating generators
+        gens_fluctuating = gens[gens.type.isin(['solar', 'wind'])]
+        self.edisgo_obj.timeseries.generators_active_power = pd.concat(
+            [gens_fluctuating.apply(lambda x:
+                self.edisgo_obj.timeseries.generation_fluctuating[x.type]
+                [x.weather_cell_id].T*x.p_nom, axis=1).T,
+            self.edisgo_obj.timeseries.generation_dispatchable], axis=1)
+        # set reactive power if given as attribute
+        if hasattr(self.edisgo_obj.timeseries, 'generation_reactive_power'):
+            gens_dispatchable = gens[~gens.index.isin(gens_fluctuating.index)]
+            self.edisgo_obj.timeseries.generators_reactive_power = pd.concat([
+                gens_fluctuating.apply(lambda x:
+                self.edisgo_obj.timeseries.generation_reactive_power[x.type]
+                [x.weather_cell_id]*x.p_nom, axis=1),
+                gens_dispatchable.apply(lambda x:
+                self.edisgo_obj.timeseries.generation_reactive_power[x.type]
+                                         * x.p_nom, axis=1)], axis=1)
+        # set default reactive power by cos_phi
+        else:
+            self._reactive_power_gen_by_cos_phi(gens)
 
     def _worst_case_generation(self, modes):
         """
@@ -546,12 +596,6 @@ class TimeSeriesControl:
                 "The following generators have either missing bus, type or "
                 "nominal power: {}.".format(
                     check_gens[check_gens].index.values))
-
-        # assign voltage level to generators
-        gens_df['voltage_level'] = gens_df.apply(
-            lambda _: 'lv'
-            if self.edisgo_obj.topology.buses_df.at[_.bus, 'v_nom'] < 1
-            else 'mv', axis=1)
 
         # active power
         # get worst case configurations
@@ -585,7 +629,16 @@ class TimeSeriesControl:
         self.edisgo_obj.timeseries.generators_active_power = gen_ts.mul(
             gens_df.p_nom)
 
+        # calculate reactive power
+        self._reactive_power_gen_by_cos_phi(gens_df)
+
+    def _reactive_power_gen_by_cos_phi(self, gens_df):
         # reactive power
+        # assign voltage level to generators
+        gens_df['voltage_level'] = gens_df.apply(
+            lambda _: 'lv'
+            if self.edisgo_obj.topology.buses_df.at[_.bus, 'v_nom'] < 1
+            else 'mv', axis=1)
         # write dataframes with sign of reactive power and power factor
         # for each generator
         q_sign = pd.Series(index=gens_df.index)
@@ -669,12 +722,15 @@ class TimeSeriesControl:
         self.edisgo_obj.timeseries.loads_active_power = \
             power_scaling_df * loads_df.loc[:, 'peak_load']
 
+        self._reactive_power_load_by_cos_phi(loads_df)
+
+    def _reactive_power_load_by_cos_phi(self, loads_df):
         # reactive power
-        # get worst case configurations
+        # get default configurations
         reactive_power_mode = self.edisgo_obj.config['reactive_power_mode']
         reactive_power_factor = self.edisgo_obj.config[
-                    'reactive_power_factor']
-
+            'reactive_power_factor']
+        voltage_levels = loads_df.voltage_level.unique()
         # write dataframes with sign of reactive power and power factor
         # for each load
         q_sign = pd.Series(index=self.edisgo_obj.topology.loads_df.index)
@@ -1057,19 +1113,17 @@ class TimeSeriesControl:
 
         """
         try:
-            self.timeseries.generation_fluctuating
-            self.timeseries.generation_dispatchable
-            self.timeseries.load
-            self.timeseries.generation_reactive_power
-            self.timeseries.load_reactive_power
+            self.edisgo_obj.timeseries.generators_reactive_power
+            self.edisgo_obj.timeseries.generators_active_power
+            self.edisgo_obj.timeseries.loads_active_power
+            self.edisgo_obj.timeseries.loads_reactive_power
         except:
             message = 'Time index of feed-in and load time series does ' \
                       'not match.'
             logging.error(message)
             raise KeyError(message)
 
-def import_load_timeseries(config_data, data_source, mv_grid_id=None,
-                           year=None):
+def import_load_timeseries(config_data, data_source, year=2018):
     """
     Import load time series
 
@@ -1152,8 +1206,17 @@ def import_load_timeseries(config_data, data_source, mv_grid_id=None,
         return elec_demand
 
     if data_source == 'demandlib':
+        try:
+            float(year)
+            if year > datetime.date.today().year:
+                raise TypeError
+        except TypeError:
+            year = datetime.date.today().year - 1
+            logger.warning('No valid year inserted. Year set to previous year.')
         load = _load_timeseries_demandlib(config_data, year)
         load.rename(columns={'g0': 'retail', 'h0': 'residential',
                              'l0': 'agricultural', 'i0': 'industrial'},
                     inplace=True)
+    else:
+        raise NotImplementedError
     return load
