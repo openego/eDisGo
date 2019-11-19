@@ -8,6 +8,7 @@ from edisgo.network.grids import MVGrid
 
 logger = logging.getLogger('edisgo')
 
+
 class Results:
     """
     Power flow analysis results management

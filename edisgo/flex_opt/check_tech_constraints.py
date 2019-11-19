@@ -538,8 +538,8 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels='mv_lv'):
                 # get voltage at primary side to calculate upper bound for
                 # feed-in case and lower bound for load case
                 v_lv_station_primary = edisgo_obj.results.v_res(
-                    nodes=lv_grid.buses_df.loc[
-                        lv_grid.transformers_df.iloc[0].bus0],
+                    nodes=edisgo_obj.topology.buses_df.loc[
+                          [lv_grid.transformers_df.iloc[0].bus0], :],
                     level='mv').iloc[:, 0]
                 timeindex = v_lv_station_primary.index
                 v_dev_allowed_per_case['feedin_case_upper'] = \
@@ -554,7 +554,7 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels='mv_lv'):
                 # get voltage at secondary side to calculate upper bound for
                 # feed-in case and lower bound for load case
                 v_lv_station_secondary = edisgo_obj.results.v_res(
-                    nodes=[lv_grid.station], level='lv').iloc[:, 0]
+                    nodes=lv_grid.station, level='lv').iloc[:, 0]
                 timeindex = v_lv_station_secondary.index
                 v_dev_allowed_per_case['feedin_case_upper'] = \
                     v_lv_station_secondary + edisgo_obj.config[
@@ -573,8 +573,7 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels='mv_lv'):
             v_dev_allowed_lower = []
             for t in timeindex:
                 case = \
-                    edisgo_obj.timeseries.timesteps_load_feedin_case.loc[
-                        t, 'case']
+                    edisgo_obj.timeseries.timesteps_load_feedin_case.loc[t]
                 v_dev_allowed_upper.append(
                     v_dev_allowed_per_case[
                         '{}_upper'.format(case)].loc[t])
