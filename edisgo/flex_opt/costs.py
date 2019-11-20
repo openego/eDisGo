@@ -79,7 +79,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False, mode=None):
         return costs_trafos.loc[trafos.index, 'costs_transformers'].values
 
     def _get_line_costs(lines_added):
-        costs_lines = line_expansion_costs(edisgo_obj, lines_added)
+        costs_lines = line_expansion_costs(edisgo_obj, lines_added.index)
         costs_lines['costs'] = costs_lines.apply(
             lambda x: x.costs_earthworks +
                       x.costs_cable * lines_added.loc[x.name,'quantity'],
@@ -173,18 +173,25 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False, mode=None):
     return costs
 
 
-def line_expansion_costs(edisgo_obj, lines_df):
+def line_expansion_costs(edisgo_obj, lines_names):
     """
+    Returns costs for earthworks and per added cable as well as voltage level
+    for chosen lines in edisgo_obj.
 
     Attributes
     ----------
     edisgo_obj : :class:`~.self.edisgo.EDisGo`
-    lines_df:
+        eDisGo object of which lines of lines_df are part
+    lines_df: list of str
+        List of names of evaluated lines
 
     Returns
     -------
-    costs
+    costs: :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe with names of lines as index and entries for
+        'costs_earthworks', 'costs_cable', 'voltage_level' for each line
     """
+    lines_df = edisgo_obj.topology.lines_df.loc[lines_names, ['length']]
     mv_lines = lines_df[lines_df.index.isin(
         edisgo_obj.topology.mv_grid.lines_df.index)].index
     lv_lines = lines_df[~lines_df.index.isin(mv_lines)].index

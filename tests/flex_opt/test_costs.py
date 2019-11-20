@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 from edisgo import EDisGo
-from edisgo.flex_opt.costs import grid_expansion_costs
+from edisgo.flex_opt.costs import grid_expansion_costs, line_expansion_costs
 
 
 class TestCosts:
@@ -84,3 +84,35 @@ class TestCosts:
         assert costs.loc['Line_50000004', 'quantity'] == 3
         assert costs.loc['Line_50000004', 'type'] == 'NAYY 4x1x35'
         assert costs.loc['Line_50000004', 'voltage_level'] == 'lv'
+
+    def test_line_expansion_costs(self):
+        costs = line_expansion_costs(self.edisgo,
+                                     self.edisgo.topology.lines_df.index)
+        assert len(costs) == len(self.edisgo.topology.lines_df)
+        assert (costs.index == self.edisgo.topology.lines_df.index).all()
+        assert len(costs[costs.voltage_level == 'mv']) == \
+               len(self.edisgo.topology.mv_grid.lines_df)
+        assert np.isclose(costs.at['Line_10001', 'costs_earthworks'], 0.06)
+        assert np.isclose(costs.at['Line_10001', 'costs_cable'], 0.02)
+        assert costs.at['Line_10001', 'voltage_level'] == 'mv'
+        assert np.isclose(costs.at['Line_10000001', 'costs_earthworks'], 0.051)
+        assert np.isclose(costs.at['Line_10000001', 'costs_cable'], 0.009)
+        assert costs.at['Line_10000001', 'voltage_level'] == 'lv'
+        assert np.isclose(costs.at['Line_10000015', 'costs_earthworks'], 1.53)
+        assert np.isclose(costs.at['Line_10000015', 'costs_cable'], 0.27)
+        assert costs.at['Line_10000015', 'voltage_level'] == 'lv'
+
+        costs = line_expansion_costs(self.edisgo,
+                            ['Line_10001', 'Line_10000001', 'Line_10000015'])
+        assert len(costs) == 3
+        assert (costs.index.values == ['Line_10001', 'Line_10000001',
+                                       'Line_10000015']).all()
+        assert np.isclose(costs.at['Line_10001', 'costs_earthworks'], 0.06)
+        assert np.isclose(costs.at['Line_10001', 'costs_cable'], 0.02)
+        assert costs.at['Line_10001', 'voltage_level'] == 'mv'
+        assert np.isclose(costs.at['Line_10000001', 'costs_earthworks'], 0.051)
+        assert np.isclose(costs.at['Line_10000001', 'costs_cable'], 0.009)
+        assert costs.at['Line_10000001', 'voltage_level'] == 'lv'
+        assert np.isclose(costs.at['Line_10000015', 'costs_earthworks'], 1.53)
+        assert np.isclose(costs.at['Line_10000015', 'costs_cable'], 0.27)
+        assert costs.at['Line_10000015', 'voltage_level'] == 'lv'
