@@ -36,10 +36,10 @@ setup(
     long_description_content_type='text/x-rst',
     install_requires=[
 	    'demandlib',
-        'networkx >= 2.0 ',
+        'networkx >= 2.0',
         'shapely >= 1.5.12, <= 1.6.3',
-        'pandas < 0.25.0',
-        'pypsa', #with bug fix snapshots.csv...
+        'pandas',
+        'pypsa >= 0.15.0',
         'pyproj >= 1.9.5.1, <= 1.9.5.1',
         'geopy >= 1.11.0, <= 1.11.0',
         'pyomo >= 5.5.0',
