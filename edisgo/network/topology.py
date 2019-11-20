@@ -23,12 +23,9 @@ class Topology:
 
     Attributes
     -----------
-    _grid_district : :obj:`dict`
-        Contains the following information about the supplied
-        region (network district) of the network:
-        'geom': Shape of network district as MultiPolygon.
-        'population': Number of inhabitants.
     _grids : dict
+        Dictionary containing all grids (keys are grid representatives and
+        values the grid objects)
 
     """
     #ToDo Implement update (and add) functions for component dataframes to

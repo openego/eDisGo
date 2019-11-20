@@ -1,7 +1,5 @@
 import os
 import logging
-import pandas as pd
-import numpy as np
 
 import edisgo
 from edisgo.network.topology import Topology
@@ -16,6 +14,7 @@ from edisgo.flex_opt.curtailment import CurtailmentControl
 from edisgo.flex_opt.storage_integration import StorageControl
 
 logger = logging.getLogger('edisgo')
+
 
 class EDisGoReimport:
     """
@@ -485,7 +484,8 @@ class EDisGo(EDisGoReimport):
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
         self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
-        # set up results container
+
+        # set up results and time series container
         self.results = Results(self)
         self._timeseries = TimeSeries()
 
@@ -521,7 +521,7 @@ class EDisGo(EDisGoReimport):
 
         Returns
         -------
-        :class:`~.network.network.Config`
+        :class:`~.tools.config.Config`
             Config object with configuration data from config files.
 
         """
