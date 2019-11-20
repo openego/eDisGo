@@ -481,11 +481,9 @@ class EDisGo(EDisGoReimport):
 
         # load configuration and equipment data
         self._config = Config(config_path=kwargs.get('config_path', None))
-        self._equipment_data = self._load_equipment_data()
-        # create network (loads network data, configurations, equipment data)
-        self.topology = Topology(
-            generator_scenario=kwargs.get('generator_scenario', None))
-        # load network data
+
+        # instantiate topology object and load grid data
+        self.topology = Topology(config=self.config)
         self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
         # set up results container
         self.results = Results(self)
@@ -513,7 +511,7 @@ class EDisGo(EDisGoReimport):
                 timeindex=kwargs.get('timeindex', None))
 
         # import new generators
-        if self.topology.generator_scenario is not None:
+        if kwargs.get('generator_scenario', None) is not None:
             self.import_generators()
 
     @property
@@ -534,19 +532,6 @@ class EDisGo(EDisGoReimport):
         self._config = Config(config_path=config_path)
 
     @property
-    def equipment_data(self):
-        """
-        Technical data of electrical equipment such as lines and transformers
-
-        Returns
-        --------
-        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
-            Data of electrical equipment
-
-        """
-        return self._equipment_data
-
-    @property
     def timeseries(self):
         """
         Object containing load and feed-in time series.
@@ -564,89 +549,6 @@ class EDisGo(EDisGoReimport):
         """
         return self._timeseries
 
-    def _load_equipment_data(self):
-        """
-        Load equipment data for transformers, cables etc.
-
-        Returns
-        -------
-        :obj:`dict`
-            Dictionary with :pandas:`pandas.DataFrame<dataframe>` containing
-            equipment data. Keys of the dictionary are 'mv_trafos', 'mv_lines',
-            'mv_cables', 'lv_trafos', and 'lv_cables'.
-
-        Notes
-        ------
-        This function calculates electrical values of transformer from standard
-        values (so far only for LV transformers, not necessary for MV as MV
-        impedances are not used).
-
-        $z_{pu}$ is calculated as follows:
-
-        .. math:: z_{pu} = \frac{u_{kr}}{100}
-
-        using the following simplification:
-
-        .. math:: z_{pu} = \frac{Z}{Z_{nom}}
-
-        with
-
-        .. math:: Z = \frac{u_{kr}}{100} \cdot \frac{U_n^2}{S_{nom}}
-
-        and
-
-        .. math:: Z_{nom} = \frac{U_n^2}{S_{nom}}
-
-        $r_{pu}$ is calculated as follows:
-
-        .. math:: r_{pu} = \frac{P_k}{S_{nom}}
-
-        using the simplification of
-
-        .. math:: r_{pu} = \frac{R}{Z_{nom}}
-
-        with
-
-        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \cdot \frac{U_{nom}^2}{S_{nom}^2}
-
-        $x_{pu}$ is calculated as follows:
-
-        .. math::  x_{pu} = \sqrt(z_{pu}^2-r_{pu}^2)
-
-
-        """
-
-        package_path = edisgo.__path__[0]
-        equipment_dir = self.config['system_dirs']['equipment_dir']
-
-        data = {}
-        equipment = {'mv': ['trafos', 'lines', 'cables'],
-                     'lv': ['trafos', 'cables']}
-
-        for voltage_level, eq_list in equipment.items():
-            for i in eq_list:
-                equipment_parameters = self.config['equipment'][
-                    'equipment_{}_parameters_{}'.format(voltage_level, i)]
-                data['{}_{}'.format(voltage_level, i)] = pd.read_csv(
-                    os.path.join(package_path, equipment_dir,
-                                 equipment_parameters),
-                    comment='#', index_col='name',
-                    delimiter=',', decimal='.')
-                # calculate electrical values of transformer from standard
-                # values (so far only for LV transformers, not necessary for
-                # MV as MV impedances are not used)
-                if voltage_level == 'lv' and i == 'trafos':
-                    data['{}_{}'.format(voltage_level, i)]['r_pu'] = \
-                        data['{}_{}'.format(voltage_level, i)]['P_k'] / \
-                        (data['{}_{}'.format(voltage_level, i)][
-                             'S_nom'] )
-                    data['{}_{}'.format(voltage_level, i)][
-                        'x_pu'] = np.sqrt(
-                        (data['{}_{}'.format(voltage_level, i)][
-                             'u_kr'] / 100) ** 2 \
-                        - data['{}_{}'.format(voltage_level, i)][
-                            'r_pu'] ** 2)
-        return data
 
     def import_ding0_grid(self, path):
         """
