@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from networkx import OrderedGraph
+from math import pi, sqrt
 
 
 def select_worstcase_snapshots(network):
@@ -141,6 +142,66 @@ def calculate_relative_line_load(network, configs, line_load, line_voltages,
             'i_nom').T)
 
     return i_res.divide(i_allowed)
+
+
+def calculate_line_reactance(line_inductance_per_km, line_length):
+    """
+    Calculates line reactance in Ohm from given line data and length.
+
+    Parameters
+    ----------
+    line_inductance_per_km : float or array-like
+        Line inductance in mH/km.
+    line_length : float
+        Length of line in km.
+
+    Returns
+    -------
+    float
+        Reactance in Ohm
+
+    """
+    return line_inductance_per_km / 1e3 * line_length * 2 * pi * 50
+
+
+def calculate_line_resistance(line_resistance_per_km, line_length):
+    """
+    Calculates line resistance in Ohm from given line data and length.
+
+    Parameters
+    ----------
+    line_resistance_per_km : float or array-like
+        Line resistance in Ohm/km.
+    line_length : float
+        Length of line in km.
+
+    Returns
+    -------
+    float
+        Resistance in Ohm
+
+    """
+    return line_resistance_per_km * line_length
+
+
+def calculate_apparent_power(nominal_voltage, current):
+    """
+    Calculates line resistance in Ohm from given line data and length.
+
+    Parameters
+    ----------
+    nominal_voltage : float or array-like
+        Nominal voltage in kV.
+    current : float or array-like
+        Current in kA.
+
+    Returns
+    -------
+    float
+        Apparent power in MVA.
+
+    """
+    return sqrt(3) * nominal_voltage * current / 1e3
 
 
 def translate_df_to_graph(buses_df, lines_df, transformers_df=None):
