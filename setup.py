@@ -45,7 +45,8 @@ setup(
         'pyomo >= 5.5.0',
         'multiprocess',
         'workalendar',
-        'oedialect'
+        'egoio >= 0.4.7',
+        'matplotlib'
     ],
     extras_require={
         'geoplot': ['geopandas', 'contextily'],
