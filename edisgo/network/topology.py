@@ -3,10 +3,12 @@ import random
 import pandas as pd
 import numpy as np
 import os
+import warnings
 
 import edisgo
 from edisgo.network.components import Generator, Load
-
+from edisgo.tools.tools import calculate_line_resistance, \
+    calculate_line_reactance, calculate_apparent_power
 
 logger = logging.getLogger('edisgo')
 
@@ -601,6 +603,7 @@ class Topology:
         Adds new line to topology.
 
         Line name is generated automatically.
+        If type_info is provided, x, r and s_nom are calculated.
 
         Parameters
         ----------
@@ -611,10 +614,42 @@ class Topology:
         r
         s_nom
         num_parallel
-        type_info
+        type_info : str
+            Type of line as specified in `equipment_data`.
         kind
 
         """
+        def _get_line_data():
+            """
+            Gets line data for line type specified in `line_type` from
+            equipment data.
+
+            Returns
+            --------
+            pd.Series
+                Line data from equipment_data
+
+            """
+            if self.buses_df.loc[bus0, 'v_nom'] < 1:
+                voltage_level = 'lv'
+            else:
+                voltage_level = 'mv'
+
+            # try to get cable data
+            try:
+                line_data = self.equipment_data[
+                           '{}_cables'.format(voltage_level)].loc[type_info, :]
+            except KeyError:
+                try:
+                    line_data = self.equipment_data[
+                                    '{}_cables'.format(voltage_level)].loc[
+                           type_info, :]
+                except KeyError:
+                    raise ValueError("Specified line type is not valid.")
+            except:
+                raise
+            return line_data
+
         #ToDo add test
         # check if buses exist
         if bus0 not in self.buses_df.index:
@@ -634,6 +669,18 @@ class Topology:
         if not bus0_bus1.empty and bus1_bus0.empty:
             logging.debug("Line between bus0 {} and bus1 {} already exists.")
             return bus1_bus0.append(bus0_bus1).index[0]
+
+        # if type of line is specified calculate x, r and s_nom
+        if type_info is not None:
+            if x is not None or r is not None or s_nom is not None:
+                warnings.warn(
+                    "When line 'type_info' is provided when creating a new "
+                    "line, x, r and s_nom are calculated and provided "
+                    "parameters are overwritten.")
+            line_data = _get_line_data()
+            x = calculate_line_resistance(line_data.L_per_km, length)
+            r = calculate_line_reactance(line_data.R_per_km, length)
+            s_nom = calculate_apparent_power(line_data.U_n, line_data.I_max_th)
 
         # generate line name and check uniqueness
         line_name = 'Line_{}_{}'.format(bus0, bus1)
