@@ -488,7 +488,7 @@ class EDisGo(EDisGoReimport):
         # load network data
         self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
         # set up results container
-        self.results = Results(self.topology)
+        self.results = Results(self)
         self._timeseries = TimeSeries()
 
         # set up time series for feed-in and load

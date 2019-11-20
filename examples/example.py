@@ -79,7 +79,7 @@ if __name__ == '__main__':
             edisgo.topology.id))
 
     # Clear results and reset configs
-    edisgo.results = Results(edisgo.topology)
+    edisgo.results = Results(edisgo)
     edisgo.config = None
 
     # Calculate topology expansion costs after generator import

@@ -18,13 +18,12 @@ class Results:
 
     Attributes
     ----------
-    network : :class:`~.network.topology.Topology`
-        The topology is a container object holding all data.
+    edisgo_object : :class:`~.EDisGo`
 
     """
 
-    def __init__(self, network):
-        self.network = network
+    def __init__(self, edisgo_object):
+        self.edisgo_object = edisgo_object
         self._measures = ['original']
         self._pfa_p = None
         self._pfa_q = None
@@ -424,7 +423,8 @@ class Results:
                 or 'lv'.
 
         """
-        grids = [self.network.mv_grid] + list(self.network.mv_grid.lv_grids)
+        grids = [self.edisgo_object.topology.mv_grid] + list(
+            self.edisgo_object.topology.mv_grid.lv_grids)
         storage_results = {}
         storage_results['storage_id'] = []
         storage_results['nominal_power'] = []
@@ -457,7 +457,8 @@ class Results:
         """
         storages_p = pd.DataFrame()
         storages_q = pd.DataFrame()
-        grids = [self.network.mv_grid] + list(self.network.mv_grid.lv_grids)
+        grids = [self.edisgo_object.topology.mv_grid] + list(
+            self.edisgo_object.topology.mv_grid.lv_grids)
         for grid in grids:
             for storage in grid.graph.nodes_by_attribute('storage'):
                 ts = storage.timeseries
@@ -566,11 +567,11 @@ class Results:
 
         if components_df is not None:
             labels_included = components_df.index[components_df.index.isin(
-                self.pfa_p.columns) * components_df.index.isin(
+                self.pfa_p.columns) & components_df.index.isin(
                 self.pfa_q.columns)]
             labels_not_included = components_df.index[
                 ~(components_df.index.isin(
-                    self.pfa_p.columns) * ~components_df.index.isin(
+                    self.pfa_p.columns) & components_df.index.isin(
                     self.pfa_q.columns))]
             if len(labels_not_included) > 0:
                 logging.warning(
@@ -791,25 +792,26 @@ class Results:
                     curtailment_df.to_csv(filename, index_label=type_prefix)
 
         def _save_storage_integration_results(target_dir):
-            storages = self.storages
-            if not storages.empty:
-                # create directory
-                os.makedirs(target_dir, exist_ok=True)
-
-                # general storage information
-                storages.to_csv(os.path.join(target_dir, 'storages.csv'))
-
-                # storages time series
-                ts_p, ts_q = self.storages_timeseries()
-                ts_p.to_csv(os.path.join(
-                    target_dir, 'storages_active_power.csv'))
-                ts_q.to_csv(os.path.join(
-                    target_dir, 'storages_reactive_power.csv'))
-
-                if not self.storages_costs_reduction is None:
-                    self.storages_costs_reduction.to_csv(
-                        os.path.join(target_dir,
-                                     'storages_costs_reduction.csv'))
+            pass
+            # storages = self.storages
+            # if not storages.empty:
+            #     # create directory
+            #     os.makedirs(target_dir, exist_ok=True)
+            #
+            #     # general storage information
+            #     storages.to_csv(os.path.join(target_dir, 'storages.csv'))
+            #
+            #     # storages time series
+            #     ts_p, ts_q = self.storages_timeseries()
+            #     ts_p.to_csv(os.path.join(
+            #         target_dir, 'storages_active_power.csv'))
+            #     ts_q.to_csv(os.path.join(
+            #         target_dir, 'storages_reactive_power.csv'))
+            #
+            #     if not self.storages_costs_reduction is None:
+            #         self.storages_costs_reduction.to_csv(
+            #             os.path.join(target_dir,
+            #                          'storages_costs_reduction.csv'))
 
         # dictionary with function to call to save each parameter
         func_dict = {
@@ -852,7 +854,8 @@ class Results:
             rows = [
                 ['{}'.format(key)] + [value for item in values.items()
                                       for value in item]
-                for key, values in self.network.config._data.items()]
+                for key, values in
+                self.edisgo_object.config._data.items()]
             writer.writerows(rows)
 
 
