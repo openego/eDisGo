@@ -80,42 +80,45 @@ class TestCheckTechConstraints:
         self.edisgo.results.pfa_v_mag_pu['lv'].at[self.timesteps[1],
             'Bus_GeneratorFluctuating_13'] = 0.82
 
+        lvgrid_1 = self.edisgo.topology._grids['LVGrid_1']
+        lvgrid_9 = self.edisgo.topology._grids['LVGrid_9']
+
         voltage_issues = lv_voltage_deviation(self.edisgo, mode='stations')
         assert len(voltage_issues) == 1
-        assert len(voltage_issues['LVGrid_9']) == 1
-        assert np.isclose(voltage_issues['LVGrid_9'].loc[
+        assert len(voltage_issues[lvgrid_9]) == 1
+        assert np.isclose(voltage_issues[lvgrid_9].loc[
                               'Bus_secondary_LVStation_9', 'v_mag_pu'], 0.04)
-        assert voltage_issues['LVGrid_9'].loc[
+        assert voltage_issues[lvgrid_9].loc[
                    'Bus_secondary_LVStation_9', 'time_index'] == \
                self.timesteps[0]
 
         voltage_issues = lv_voltage_deviation(self.edisgo)
 
-        assert len(voltage_issues['LVGrid_1']) == 4
-        assert len(voltage_issues['LVGrid_9']) == 1
-        assert np.isclose(voltage_issues['LVGrid_9'].loc[
+        assert len(voltage_issues[lvgrid_1]) == 4
+        assert len(voltage_issues[lvgrid_9]) == 1
+        assert np.isclose(voltage_issues[lvgrid_9].loc[
             'Bus_secondary_LVStation_9', 'v_mag_pu'], 0.04)
-        assert np.isclose(voltage_issues['LVGrid_1'].loc[
+        assert np.isclose(voltage_issues[lvgrid_1].loc[
             'Bus_BranchTee_LVGrid_1_4', 'v_mag_pu'], 0.05)
-        assert np.isclose(voltage_issues['LVGrid_1'].loc[
+        assert np.isclose(voltage_issues[lvgrid_1].loc[
             'Bus_BranchTee_LVGrid_1_5', 'v_mag_pu'], 0.01)
-        assert np.isclose(voltage_issues['LVGrid_1'].loc[
+        assert np.isclose(voltage_issues[lvgrid_1].loc[
             'Bus_Load_residential_LVGrid_1_7', 'v_mag_pu'], 0.06)
-        assert np.isclose(voltage_issues['LVGrid_1'].loc[
+        assert np.isclose(voltage_issues[lvgrid_1].loc[
             'Bus_GeneratorFluctuating_13', 'v_mag_pu'], 0.08)
-        assert voltage_issues['LVGrid_9'].loc[
+        assert voltage_issues[lvgrid_9].loc[
                    'Bus_secondary_LVStation_9', 'time_index'] == \
                self.timesteps[0]
-        assert voltage_issues['LVGrid_1'].loc[
+        assert voltage_issues[lvgrid_1].loc[
                    'Bus_BranchTee_LVGrid_1_4', 'time_index'] == \
                self.timesteps[0]
-        assert voltage_issues['LVGrid_1'].loc[
+        assert voltage_issues[lvgrid_1].loc[
                    'Bus_BranchTee_LVGrid_1_5', 'time_index'] == \
                self.timesteps[1]
-        assert voltage_issues['LVGrid_1'].loc[
+        assert voltage_issues[lvgrid_1].loc[
                    'Bus_Load_residential_LVGrid_1_7', 'time_index'] == \
                self.timesteps[0]
-        assert voltage_issues['LVGrid_1'].loc[
+        assert voltage_issues[lvgrid_1].loc[
                    'Bus_GeneratorFluctuating_13', 'time_index'] == \
                self.timesteps[1]
 
