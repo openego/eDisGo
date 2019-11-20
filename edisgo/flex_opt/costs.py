@@ -1,13 +1,9 @@
 import pandas as pd
-import pyproj
-from functools import partial
 import os
 import numpy as np
 if not 'READTHEDOCS' in os.environ:
     from shapely.ops import transform
 
-from edisgo.network.grids import LVGrid, MVGrid
-from edisgo.network.tools import get_mv_feeder_from_line
 from edisgo.tools.geo import proj2equidistant
 
 
@@ -77,7 +73,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False, mode=None):
                       [float(edisgo_obj.config['costs_transformers']['mv'])]
         }, index=hvmv_trafos)
         costs_trafos = costs_trafos.append(pd.DataFrame({
-            'costs_transformers': len(hvmv_trafos) *
+            'costs_transformers': len(mvlv_trafos) *
                       [float(edisgo_obj.config['costs_transformers']['lv'])]
         }, index=mvlv_trafos))
         return costs_trafos.loc[trafos.index, 'costs_transformers'].values

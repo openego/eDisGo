@@ -590,7 +590,7 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels='mv_lv'):
             voltage_level='lv')
 
         if not crit_nodes_grid.empty:
-            crit_nodes[repr(lv_grid)] = crit_nodes_grid.sort_values(
+            crit_nodes[lv_grid] = crit_nodes_grid.sort_values(
                 by=['v_mag_pu'], ascending=False)
 
     if crit_nodes:

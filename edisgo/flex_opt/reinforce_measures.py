@@ -168,8 +168,8 @@ def extend_distribution_substation_overvoltage(edisgo_obj, critical_stations):
         # add new transformer to topology
         edisgo_obj.topology.transformers_df = \
             edisgo_obj.topology.transformers_df.append(duplicated_transformer)
-        transformers_changes['added'][grid_name] = [duplicated_transformer.name]
-
+        transformers_changes['added'][grid_name] = [
+            duplicated_transformer.name]
 
     if transformers_changes['added']:
         logger.debug("==> {} LV station(s) has/have been reinforced ".format(
@@ -332,17 +332,17 @@ def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
 
     """
     def change_line_to_standard_line(line_name):
-        grid.lines_df.at[line_name, 'type_info'] = \
+        edisgo_obj.topology._lines_df.at[line_name, 'type_info'] = \
             standard_line.name
-        grid.lines_df.at[line_name, 'num_parallel'] = 1
-        grid.lines_df.at[line_name, 'kind'] = 'cable'
-        grid.lines_df.at[line_name, 'r'] = \
+        edisgo_obj.topology._lines_df.at[line_name, 'num_parallel'] = 1
+        edisgo_obj.topology._lines_df.at[line_name, 'kind'] = 'cable'
+        edisgo_obj.topology._lines_df.at[line_name, 'r'] = \
             standard_line.R_per_km * \
             grid.lines_df.at[line_name, 'length']
-        grid.lines_df.at[line_name, 'x'] = \
+        edisgo_obj.topology._lines_df.at[line_name, 'x'] = \
             standard_line.L_per_km * omega / 1e3 * \
             grid.lines_df.at[line_name, 'length']
-        grid.lines_df.at[line_name, 's_nom'] = \
+        edisgo_obj.topology._lines_df.at[line_name, 's_nom'] = \
             np.sqrt(3) * standard_line.U_n * \
             standard_line.I_max_th
         lines_changes[line_name] = 1
@@ -444,11 +444,14 @@ def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
                     if crit_line.type_info == standard_line.name:
                         num_parallel_pre = grid.lines_df.at[crit_line_name,
                                                             'num_parallel']
-                        grid.lines_df.at[crit_line_name, 'num_parallel'] += 1
-                        grid.lines_df.at[crit_line_name, 'r'] = \
+                        edisgo_obj.topology._lines_df.at[
+                            crit_line_name, 'num_parallel'] += 1
+                        edisgo_obj.topology._lines_df.at[
+                            crit_line_name, 'r'] = \
                             grid.lines_df.at[crit_line_name, 'r'] * \
                             num_parallel_pre / (num_parallel_pre + 1)
-                        grid.lines_df.at[crit_line_name, 'x'] = \
+                        edisgo_obj.topology._lines_df.at[
+                            crit_line_name, 'x'] = \
                             grid.lines_df.at[crit_line_name, 'x'] * \
                             num_parallel_pre / (num_parallel_pre + 1)
                         lines_changes[crit_line_name] = 1
@@ -469,15 +472,17 @@ def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
                     crit_line_name = graph.get_edge_data(
                         node_2_3, pred_node)['branch_name']
                     if grid.lines_df.at[crit_line_name, 'bus0'] == pred_node:
-                        grid.lines_df.at[crit_line_name, 'bus0'] = station_node
+                        edisgo_obj.topology._lines_df.at[
+                            crit_line_name, 'bus0'] = station_node
                     elif grid.lines_df.at[crit_line_name, 'bus1'] == pred_node:
-                        grid.lines_df.at[crit_line_name, 'bus1'] = station_node
+                        edisgo_obj.topology._lines_df.at[
+                            crit_line_name, 'bus1'] = station_node
                     else:
                         raise ValueError('Bus not in line buses. '
                                          'Please check.')
                     # change line length and type
-                    grid.lines_df.at[crit_line_name, 'length'] = \
-                        path_length[node_2_3]
+                    edisgo_obj.topology._lines_df.at[
+                        crit_line_name, 'length'] = path_length[node_2_3]
                     change_line_to_standard_line(crit_line_name)
 
                     # add node_2_3 to representatives list to not further
