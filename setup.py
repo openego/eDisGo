@@ -35,7 +35,7 @@ setup(
     long_description=read('README.md'),
     long_description_content_type='text/x-rst',
     install_requires=[
-	    'demandlib',
+        'demandlib',
         'networkx >= 2.0',
         'shapely >= 1.5.12, <= 1.6.3',
         'pandas',
@@ -45,10 +45,15 @@ setup(
         'pyomo >= 5.5.0',
         'multiprocess',
         'workalendar',
-        'oedialect',
-        'geopandas',
-        'descartes'
+        'oedialect'
     ],
+    extras_require={
+        'geoplot': ['geopandas', 'contextily'],
+        'examples': ['jupyter'],
+        'dev': ['pytest', 'sphinx_rtd_theme'],
+        'full': ['geopandas', 'contextily', 'jupyter', 'pytest',
+                 'sphinx_rtd_theme']
+    },
     package_data={
         'edisgo': [
             os.path.join('config', 'config_system'),
