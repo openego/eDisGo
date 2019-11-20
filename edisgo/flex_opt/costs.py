@@ -184,7 +184,11 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False, mode=None):
             lines.iloc[(lines.equipment ==
                 edisgo_obj.topology.lines_df.loc[
                     lines.index, 'type_info']).values]['quantity'].to_frame()
-        lines_added['length'] = edisgo_obj.topology.lines_df.loc[lines_added.index, 'length']
+        lines_added_unique = lines_added.index.unique()
+        lines_added = lines_added.groupby(axis=0, level=0).sum().loc[
+            lines_added_unique, ['quantity']]
+        lines_added['length'] = edisgo_obj.topology.lines_df.loc[
+            lines_added.index, 'length']
         line_costs = _get_line_costs(lines_added)
         costs = costs.append(pd.DataFrame(
             {'type': edisgo_obj.topology.lines_df.loc[lines_added.index, 'type_info'].values,
