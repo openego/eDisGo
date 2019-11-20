@@ -392,6 +392,7 @@ def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
             # main_line_reinforced; if it is, the main line the critical node
             # is connected to has already been reinforced in this iteration
             # step
+
             if not path[1] in main_line_reinforced:
 
                 main_line_reinforced.append(path[1])

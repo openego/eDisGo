@@ -79,53 +79,13 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False, mode=None):
         return costs_trafos.loc[trafos.index, 'costs_transformers'].values
 
     def _get_line_costs(lines_added):
-        mv_lines = lines_added[lines_added.index.isin(
-            edisgo_obj.topology.mv_grid.lines_df.index)].index
-        lv_lines = lines_added[~lines_added.index.isin(mv_lines)].index
+        costs_lines = line_expansion_costs(edisgo_obj, lines_added)
+        costs_lines['costs'] = costs_lines.apply(
+            lambda x: x.costs_earthworks +
+                      x.costs_cable * lines_added.loc[x.name,'quantity'],
+            axis=1)
 
-        # get population density in people/km^2
-        # transform area to calculate area in km^2
-        projection = proj2equidistant(int(edisgo_obj.config['geo']['srid']))
-        sqm2sqkm = 1e6
-        population_density = (edisgo_obj.topology.grid_district['population'] /
-                              (transform(projection,
-                                         edisgo_obj.topology.grid_district[
-                                             'geom']).area /
-                               sqm2sqkm))
-        if population_density <= 500:
-            population_density = 'rural'
-        else:
-            population_density = 'urban'
-
-        costs_cable_mv = float(edisgo_obj.config['costs_cables']['mv_cable'])
-        costs_cable_lv = float(edisgo_obj.config['costs_cables']['lv_cable'])
-        costs_cable_earthwork_mv = float(edisgo_obj.config['costs_cables'][
-                                          'mv_cable_incl_earthwork_{}'.format(
-                                              population_density)])
-        costs_cable_earthwork_lv = float(edisgo_obj.config['costs_cables'][
-                                             'lv_cable_incl_earthwork_{}'.format(
-                                                 population_density)])
-
-        costs_lines_mv = \
-            costs_cable_earthwork_mv * lines_added.loc[mv_lines].length + \
-            costs_cable_mv * lines_added.loc[mv_lines].length * \
-            (lines_added.loc[mv_lines].quantity - 1)
-        costs_lines = pd.DataFrame(
-            {'costs': costs_lines_mv,
-             'voltage_level': ['mv'] * len(costs_lines_mv)},
-            index=costs_lines_mv.index)
-
-        costs_lines_lv = \
-            costs_cable_earthwork_lv * lines_added.loc[lv_lines].length + \
-            costs_cable_lv * lines_added.loc[lv_lines].length *\
-            (lines_added.loc[lv_lines].quantity - 1)
-        costs_lines = costs_lines.append(
-            pd.DataFrame(
-                {'costs': costs_lines_lv,
-                 'voltage_level': ['lv'] * len(costs_lines_lv)},
-                index=costs_lines_lv.index)
-        )
-        return costs_lines.loc[lines_added.index]
+        return costs_lines[['costs', 'voltage_level']]
 
     costs = pd.DataFrame()
 
@@ -172,8 +132,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False, mode=None):
             {'type': trafos.type_info.values,
              'total_costs': _get_transformer_costs(trafos),
              'quantity': len(trafos)*[1],
-             'voltage_level': len(trafos)*['mv/lv'],
-             'mv_feeder': len(trafos)*[None]}, #Todo: implement if needed
+             'voltage_level': len(trafos)*['mv/lv']},
             index=trafos.index))
 
         # costs for lines
@@ -195,8 +154,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False, mode=None):
              'total_costs': line_costs.costs.values,
              'length': (lines_added.quantity * lines_added.length).values,
              'quantity': lines_added.quantity.values,
-             'voltage_level': line_costs.voltage_level.values,
-             'mv_feeder': len(lines_added)*[None]}, # Todo: get_mv_feeder_from_line(l), refactor if needed
+             'voltage_level': line_costs.voltage_level.values},
         index=lines_added.index
         ))
 
@@ -213,3 +171,59 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False, mode=None):
             index=['No reinforced equipment.']))
 
     return costs
+
+
+def line_expansion_costs(edisgo_obj, lines_df):
+    """
+
+    Attributes
+    ----------
+    edisgo_obj : :class:`~.self.edisgo.EDisGo`
+    lines_df:
+
+    Returns
+    -------
+    costs
+    """
+    mv_lines = lines_df[lines_df.index.isin(
+        edisgo_obj.topology.mv_grid.lines_df.index)].index
+    lv_lines = lines_df[~lines_df.index.isin(mv_lines)].index
+
+    # get population density in people/km^2
+    # transform area to calculate area in km^2
+    projection = proj2equidistant(int(edisgo_obj.config['geo']['srid']))
+    sqm2sqkm = 1e6
+    population_density = (edisgo_obj.topology.grid_district['population'] /
+                          (transform(projection,
+                                     edisgo_obj.topology.grid_district[
+                                         'geom']).area /
+                           sqm2sqkm))
+    if population_density <= 500:
+        population_density = 'rural'
+    else:
+        population_density = 'urban'
+
+    costs_cable_mv = float(edisgo_obj.config['costs_cables']['mv_cable'])
+    costs_cable_lv = float(edisgo_obj.config['costs_cables']['lv_cable'])
+    costs_cable_earthwork_mv = float(edisgo_obj.config['costs_cables'][
+                                         'mv_cable_incl_earthwork_{}'.format(
+                                             population_density)])
+    costs_cable_earthwork_lv = float(edisgo_obj.config['costs_cables'][
+                                         'lv_cable_incl_earthwork_{}'.format(
+                                             population_density)])
+
+    costs_lines = pd.DataFrame(
+        {'costs_earthworks': (costs_cable_earthwork_mv-costs_cable_mv) *
+                              lines_df.loc[mv_lines].length,
+         'costs_cable': costs_cable_mv * lines_df.loc[mv_lines].length,
+         'voltage_level': ['mv'] * len(mv_lines)},
+        index=mv_lines)
+
+    costs_lines = costs_lines.append(pd.DataFrame(
+        {'costs_earthworks': (costs_cable_earthwork_lv-costs_cable_lv) *
+                              lines_df.loc[lv_lines].length,
+         'costs_cable': costs_cable_lv * lines_df.loc[lv_lines].length,
+         'voltage_level': ['lv'] * len(lv_lines)},
+        index=lv_lines)
+    )
+    return costs_lines.loc[lines_df.index]
