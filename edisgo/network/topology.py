@@ -25,16 +25,12 @@ class Topology:
 
     Attributes
     -----------
-
-
     _grid_district : :obj:`dict`
         Contains the following information about the supplied
         region (network district) of the network:
         'geom': Shape of network district as MultiPolygon.
         'population': Number of inhabitants.
     _grids : dict
-    generators_t : enthält auch curtailment dataframe (muss bei Erstellung von
-        pypsa Netzwerk beachtet werden)
 
     """
     #ToDo Implement update (and add) functions for component dataframes to
