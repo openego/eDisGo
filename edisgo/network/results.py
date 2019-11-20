@@ -672,10 +672,6 @@ class Results:
 
             See :py:attr:`~hv_mv_exchanges` for more information.
 
-        * `pypsa_network` directory
-
-          See :py:func:`pypsa.Network.export_to_csv_folder`
-
         * `grid_expansion_results` directory
 
           * `grid_expansion_costs.csv`
@@ -709,7 +705,6 @@ class Results:
             saved. To only save certain results set `parameters` to one of the
             following options or choose several options by providing a list:
 
-            * 'pypsa_network'
             * 'powerflow_results'
             * 'grid_expansion_results'
             * 'curtailment_results'
@@ -748,12 +743,6 @@ class Results:
                 # network exchanges
                 self.hv_mv_exchanges.to_csv(os.path.join(
                     target_dir, 'hv_mv_exchanges.csv'))
-
-        def _save_pypsa_network(target_dir):
-            if self.network.pypsa:
-                # create directory
-                os.makedirs(target_dir, exist_ok=True)
-                self.network.pypsa.export_to_csv_folder(target_dir)
 
         def _save_grid_expansion_results(target_dir):
             if self.grid_expansion_costs is not None:
@@ -816,7 +805,6 @@ class Results:
         # dictionary with function to call to save each parameter
         func_dict = {
             'powerflow_results': _save_power_flow_results,
-            'pypsa_network': _save_pypsa_network,
             'grid_expansion_results': _save_grid_expansion_results,
             'curtailment_results': _save_curtailment_results,
             'storage_integration_results': _save_storage_integration_results
@@ -825,7 +813,7 @@ class Results:
         # if string is given convert to list
         if isinstance(parameters, str):
             if parameters == 'all':
-                parameters = ['powerflow_results', 'pypsa_network',
+                parameters = ['powerflow_results',
                               'grid_expansion_results', 'curtailment_results',
                               'storage_integration_results']
             else:
@@ -838,7 +826,7 @@ class Results:
             except KeyError:
                 message = "Invalid input {} for `parameters` when saving " \
                           "results. Must be any or a list of the following: " \
-                          "'pypsa_network', 'powerflow_results', " \
+                          "'powerflow_results', " \
                           "'grid_expansion_results', 'curtailment_results', " \
                           "'storage_integration_results'.".format(parameter)
                 logger.error(message)
