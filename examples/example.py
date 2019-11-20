@@ -29,10 +29,6 @@ from edisgo import EDisGo
 from edisgo.network.results import Results
 
 import logging
-logging.basicConfig(filename='example.log',
-                    format='%(asctime)s %(message)s',
-                    datefmt='%m/%d/%Y %I:%M:%S %p',
-                    level=logging.DEBUG)
 logger = logging.getLogger('edisgo')
 logger.setLevel(logging.DEBUG)
 
@@ -52,7 +48,6 @@ if __name__ == '__main__':
     # set up worst-case scenario
     edisgo = EDisGo(ding0_grid=dingo_grid_path,
                     worst_case_analysis='worst-case')
-
 
     # Calculate topology expansion costs before generator import
     logging.info('Grid expansion before generator import.')

@@ -82,9 +82,9 @@ def to_pypsa(grid_object, mode, timesteps):
 
     Returns
     -------
-        :pypsa:`pypsa.Network<network>`
-            The `PyPSA network
-            <https://www.pypsa.org/doc/components.html#network>`_ container.
+    :pypsa:`pypsa.Network<network>`
+        The `PyPSA network
+        <https://www.pypsa.org/doc/components.html#network>`_ container.
 
     """
 

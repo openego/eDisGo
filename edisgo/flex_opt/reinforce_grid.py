@@ -4,8 +4,7 @@ import datetime
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import reinforce_measures, exceptions
 from edisgo.flex_opt.costs import grid_expansion_costs
-from edisgo.tools import tools, pypsa_io
-from edisgo.network.tools import assign_mv_feeder_to_nodes
+from edisgo.tools import tools
 import logging
 
 logger = logging.getLogger('edisgo')

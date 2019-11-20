@@ -811,9 +811,7 @@ class EDisGo(EDisGoReimport):
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
 
-
-        pypsa_network = pypsa_io.to_pypsa(
-                    self, mode, timesteps)
+        pypsa_network = pypsa_io.to_pypsa(self, mode, timesteps)
 
         # Todo: check if still needed, if so update to new structure, at this point not needed, maybe later
         # check if all timesteps are in pypsa.snapshots, if not update time
