@@ -115,12 +115,6 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # Todo: Necessary? If so change
     #assign_mv_feeder_to_nodes(edisgo.topology.mv_grid)
 
-    # analyze for all time steps (advantage is that load and feed-in case can
-    # be obtained more performant in case `timesteps_pfa` = 'snapshot_analysis'
-    # plus edisgo and edisgo_reinforce will have pypsa representation in case
-    # reinforcement needs to be conducted on a copied graph)
-    edisgo.analyze(mode=mode)
-
     # in case reinforcement needs to be conducted on a copied graph the
     # edisgo object is deep copied
     if copy_graph is True:
