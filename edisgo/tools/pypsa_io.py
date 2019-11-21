@@ -13,7 +13,7 @@ from networkx import connected_components
 import collections
 
 
-def to_pypsa(grid_object, mode, timesteps):
+def to_pypsa(grid_object, timesteps, **kwargs):
     """
     #ToDo Adapt docstring
 
@@ -108,6 +108,11 @@ def to_pypsa(grid_object, mode, timesteps):
                                   'control': 'Slack'},
                             index=['Generator_slack'])
 
+    mode = kwargs.get('mode', None)
+    aggregate_loads = kwargs.get('aggregate_loads', None)
+    aggregate_generators = kwargs.get('aggregate_generators', None)
+    aggregate_storages = kwargs.get('aggregate_storages', None)
+
     # check if timesteps is array-like, otherwise convert to list (necessary
     # to obtain a dataframe when using .loc in time series functions)
     if not hasattr(timesteps, "__len__"):
@@ -170,11 +175,11 @@ def to_pypsa(grid_object, mode, timesteps):
             raise ValueError("Provide proper mode for mv network export.")
 
         # LV components
-        # Todo: accumulate loads and generation per LV grid
         lv_components_to_aggregate = {'Load': 'loads_df',
                                       'Generator': 'generators_df',
                                       'StorageUnit': 'storages_df'}
-        lv_components = {key: {} for key in lv_components_to_aggregate}
+        lv_components = {key: pd.DataFrame() for key in
+                         lv_components_to_aggregate}
 
         for lv_grid in grid_object.lv_grids:
             if mode is 'mv':
@@ -191,10 +196,10 @@ def to_pypsa(grid_object, mode, timesteps):
             for comp, df in lv_components_to_aggregate.items():
                 comps = getattr(lv_grid, df).copy()
                 comps.bus = station_bus.index.values[0]
-                append_lv_components(comp, comps, lv_components, lv_grid)
-
-        for key in lv_components:
-            lv_components[key] = pd.concat(lv_components[key].values())
+                append_lv_components(comp, comps, lv_components, repr(lv_grid),
+                                     aggregate_loads=aggregate_loads,
+                                     aggregate_generators=aggregate_generators,
+                                     aggregate_storages=aggregate_storages)
 
         # merge components
         components = collections.defaultdict(pd.DataFrame)
@@ -287,17 +292,68 @@ def to_pypsa(grid_object, mode, timesteps):
     return pypsa_network
 
 
-def append_lv_components(comp, comps, lv_components, lv_grid):
+def append_lv_components(comp, comps, lv_components, lv_grid_name,
+                         aggregate_loads=None, aggregate_generators=None,
+                         aggregate_storages=None):
+    if len(comps) > 0:
+        bus = comps.bus.unique()[0]
+    else:
+        return
     if comp is 'Load':
-        lv_components[comp][str(lv_grid.id)] = \
-            comps.loc[:, ['bus', 'peak_load']].rename(
-                columns={'peak_load': 'p_set'})
+        if aggregate_loads is None:
+            comps = comps.loc[:, ['bus', 'peak_load']].rename(
+                    columns={'peak_load': 'p_set'})
+        elif aggregate_loads == 'sectoral':
+            comps = comps.groupby('sector').sum().rename(
+                columns={'peak_load': 'p_set'}).loc[:,['p_set']]
+            comps.index = lv_grid_name + '_' + comps.index
+            comps['bus'] = bus
+        elif aggregate_loads == 'all':
+            comps = pd.DataFrame({'bus': [bus],
+                                  'p_set': [sum(comps.peak_load)]},
+                                 index=[lv_grid_name+'_loads'])
+        else:
+            raise ValueError('Aggregation type for loads invalid.')
+        lv_components[comp] = lv_components[comp].append(comps)
     elif comp is 'Generator':
-        lv_components[comp][str(lv_grid.id)] = \
-            comps.loc[:, ['bus', 'control', 'p_nom']]
+        if aggregate_generators is None:
+            comps = comps.loc[:, ['bus', 'control', 'p_nom']]
+        elif aggregate_generators == 'type':
+            comps = comps.groupby('type').sum().loc[:, ['bus', 'control',
+                    'p_nom']]
+            comps.bus = bus
+            comps.control = 'PQ'
+            comps.index = lv_grid_name + '_' + comps.index
+        elif aggregate_generators == 'curtailable':
+            comps_fluct = comps[comps.type.isin(['wind', 'solar'])]
+            comps_disp = comps[~comps.index.isin(comps_fluct.index)]
+            comps = pd.DataFrame(columns=['bus', 'control', 'p_nom'])
+            if len(comps_fluct) > 0:
+                comps = comps.append(pd.DataFrame({
+                    'bus': [bus], 'control': ['PQ'],
+                    'p_nom':[sum(comps_fluct.p_nom)]
+                }, index=[lv_grid_name+'_fluctuating']))
+            if len(comps_disp) > 0 :
+                comps = comps.append(pd.DataFrame({
+                    'bus': [bus], 'control': ['PQ'],
+                    'p_nom': [sum(comps_disp.p_nom)]
+                }, index=[lv_grid_name + '_dispatchable']))
+        elif aggregate_generators == 'all':
+            comps = pd.DataFrame({'bus': [bus], 'control': ['PQ'],
+                                  'p_nom': [sum(comps.p_nom)]},
+                                 index=[lv_grid_name+'_generators'])
+        else:
+            raise ValueError('Aggregation type for generators invalid.')
+        lv_components[comp] = lv_components[comp].append(comps)
     elif comp is 'StorageUnit':
-        lv_components[comp][str(lv_grid.id)] = \
-            comps.loc[:, ['bus', 'control']]
+        if aggregate_storages == None:
+            comps = comps.loc[:, ['bus', 'control']]
+        elif aggregate_storages == 'all':
+            comps = pd.DataFrame({'bus': [bus], 'control': ['PQ']},
+                                 index=[lv_grid_name+'_storages'])
+        else:
+            raise ValueError('Aggregation type for storages invalid.')
+        lv_components[comp] = lv_components[comp].append(comps)
     else:
         raise ValueError('Component type not defined.')
 
@@ -355,89 +411,6 @@ def _buses_voltage_set_point(edisgo_obj, buses, slack_bus, timesteps):
     v_nom.loc[timesteps, slack_bus] = slack_voltage_pu
 
     return v_nom
-
-
-def add_aggregated_lv_components(network, components):
-    """
-    Aggregates LV load and generation at LV stations
-
-    Use this function if you aim for MV calculation only. The according
-    DataFrames of `components` are extended by load and generators representing
-    these aggregated respecting the technology type.
-
-    Parameters
-    ----------
-    network : Topology
-        The eDisGo topology topology model overall container
-    components : dict of :pandas:`pandas.DataFrame<dataframe>`
-        PyPSA components in tabular format
-
-    Returns
-    -------
-    :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
-        The dictionary components passed to the function is returned altered.
-    """
-    generators = {}
-
-    loads = {}
-
-    # collect aggregated generation capacity by type and subtype
-    # collect aggregated load grouped by sector
-    for lv_grid in network.mv_grid.lv_grids:
-        generators.setdefault(lv_grid, {})
-        for gen in lv_grid.generators:
-            generators[lv_grid].setdefault(gen.type, {})
-            generators[lv_grid][gen.type].setdefault(gen.subtype, {})
-            generators[lv_grid][gen.type][gen.subtype].setdefault(
-                'capacity', 0)
-            generators[lv_grid][gen.type][gen.subtype][
-                'capacity'] += gen.nominal_capacity
-            generators[lv_grid][gen.type][gen.subtype].setdefault(
-                'name',
-                '_'.join([gen.type,
-                          gen.subtype,
-                          'aggregated',
-                          'LV_grid',
-                          str(lv_grid.id)]))
-        loads.setdefault(lv_grid, {})
-        for lo in lv_grid.graph.nodes_by_attribute('load'):
-            for sector, val in lo.consumption.items():
-                loads[lv_grid].setdefault(sector, 0)
-                loads[lv_grid][sector] += val
-
-    # define dict for DataFrame creation of aggr. generation and load
-    generator = {'name': [],
-                 'bus': [],
-                 'control': [],
-                 'p_nom': [],
-                 'type': []}
-
-    load = {'name': [], 'bus': []}
-
-    # fill generators dictionary for DataFrame creation
-    for lv_grid_obj, lv_grid in generators.items():
-        for _, gen_type in lv_grid.items():
-            for _, gen_subtype in gen_type.items():
-                generator['name'].append(gen_subtype['name'])
-                generator['bus'].append(
-                    '_'.join(['Bus', lv_grid_obj.station.__repr__('lv')]))
-                generator['control'].append('PQ')
-                generator['p_nom'].append(gen_subtype['capacity'])
-                generator['type'].append("")
-
-    # fill loads dictionary for DataFrame creation
-    for lv_grid_obj, lv_grid in loads.items():
-        for sector, val in lv_grid.items():
-            load['name'].append('_'.join(['Load', sector, repr(lv_grid_obj)]))
-            load['bus'].append(
-                '_'.join(['Bus', lv_grid_obj.station.__repr__('lv')]))
-
-    components['Generator'] = pd.concat(
-        [components['Generator'], pd.DataFrame(generator).set_index('name')])
-    components['Load'] = pd.concat(
-        [components['Load'], pd.DataFrame(load).set_index('name')])
-
-    return components
 
 
 def _pypsa_bus_timeseries(network, buses, timesteps):
