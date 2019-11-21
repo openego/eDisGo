@@ -54,7 +54,8 @@ def import_ding0_grid(path, edisgo_obj):
         voltage_bus1 = edisgo_obj.topology.buses_df.loc[
             transformers_df.bus1].v_nom.values
         transformers_df.loc[voltage_bus1 > voltage_bus0, ['bus0', 'bus1']] = \
-            transformers_df.loc[voltage_bus1 > voltage_bus0, ['bus1', 'bus0']].values
+            transformers_df.loc[voltage_bus1 > voltage_bus0,
+                                ['bus1', 'bus0']].values
         return transformers_df
 
     def sort_hvmv_transformer_buses(transformers_df):
