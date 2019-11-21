@@ -847,241 +847,241 @@ class Results:
             writer.writerows(rows)
 
 
-class ResultsReimport:
-    """
-    Results class created from saved results.
-
-    """
-    def __init__(self, results_path, parameters='all'):
-
-        # measures
-        measures_df = pd.read_csv(os.path.join(results_path, 'measures.csv'),
-                                  index_col=0)
-        self.measures = list(measures_df.measure.values)
-
-        # if string is given convert to list
-        if isinstance(parameters, str):
-            if parameters == 'all':
-                parameters = ['powerflow_results', 'grid_expansion_results',
-                              'curtailment_results',
-                              'storage_integration_results']
-            else:
-                parameters = [parameters]
-
-        # import power flow results
-        if 'powerflow_results' in parameters and os.path.isdir(os.path.join(
-                results_path, 'powerflow_results')):
-            # line loading
-            self.i_res = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'currents.csv'),
-                index_col=0, parse_dates=True)
-            # voltage
-            self.pfa_v_mag_pu = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'voltages_pu.csv'),
-                index_col=0, parse_dates=True, header=[0, 1])
-            # active power
-            self.pfa_p = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'active_powers.csv'),
-                index_col=0, parse_dates=True)
-            # reactive power
-            self.pfa_q = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'reactive_powers.csv'),
-                index_col=0, parse_dates=True)
-            # apparent power
-            self.apparent_power = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'apparent_powers.csv'),
-                index_col=0, parse_dates=True)
-            # network losses
-            self.grid_losses = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'grid_losses.csv'),
-                index_col=0, parse_dates=True)
-            # network exchanges
-            self.hv_mv_exchanges = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'hv_mv_exchanges.csv'),
-                index_col=0, parse_dates=True)
-        else:
-            self.i_res = None
-            self.pfa_v_mag_pu = None
-            self.pfa_p = None
-            self.pfa_q = None
-            self.apparent_power = None
-            self.grid_losses = None
-            self.hv_mv_exchanges = None
-
-        # import network expansion results
-        if 'grid_expansion_results' in parameters and os.path.isdir(
-                os.path.join(results_path, 'grid_expansion_results')):
-            # network expansion costs
-            self.grid_expansion_costs = pd.read_csv(
-                os.path.join(
-                    results_path, 'grid_expansion_results',
-                    'grid_expansion_costs.csv'),
-                index_col=0)
-            # equipment changes
-            self.equipment_changes = pd.read_csv(
-                os.path.join(
-                    results_path, 'grid_expansion_results',
-                    'equipment_changes.csv'),
-                index_col=0)
-        else:
-            self.grid_expansion_costs = None
-            self.equipment_changes = None
-
-        # import curtailment results
-        if 'curtailment_results' in parameters and os.path.isdir(
-                os.path.join(results_path, 'curtailment_results')):
-            self.curtailment = {}
-            for file in os.listdir(os.path.join(
-                    results_path, 'curtailment_results')):
-                if file.endswith(".csv"):
-                    try:
-                        key = file[0:-4]
-                        if '-' in key:
-                            # make tuple if curtailment was given for generator
-                            # type and weather cell id
-                            tmp = key.split('-')
-                            key = (tmp[0], float(tmp[1]))
-                        self.curtailment[key] = pd.read_csv(
-                            os.path.join(
-                                results_path, 'curtailment_results', file),
-                            index_col=0, parse_dates=True)
-                    except Exception as e:
-                        logging.warning(
-                            'The following error occured when trying to '
-                            'import curtailment results: {}'.format(e))
-        else:
-            self.curtailment = None
-
-        # import storage results
-        if 'storage_integration_results' in parameters and os.path.isdir(
-                os.path.join(results_path, 'storage_integration_results')):
-            # storages
-            self.storages = pd.read_csv(
-                os.path.join(results_path, 'storage_integration_results',
-                             'storages.csv'),
-                index_col=0)
-            # storages costs reduction
-            try:
-                self.storages_costs_reduction = pd.read_csv(
-                    os.path.join(
-                        results_path, 'storage_integration_results',
-                        'storages_costs_reduction.csv'),
-                    index_col=0)
-            except:
-                pass
-            # storages time series
-            self.storages_p = pd.read_csv(
-                os.path.join(
-                    results_path, 'storage_integration_results',
-                    'storages_active_power.csv'),
-                index_col=0, parse_dates=True)
-            # storages time series
-            self.storages_q = pd.read_csv(
-                os.path.join(
-                    results_path, 'storage_integration_results',
-                    'storages_reactive_power.csv'),
-                index_col=0, parse_dates=True)
-
-        else:
-            self.storages = None
-            self.storages_costs_reduction = None
-            self.storages_p = None
-            self.storages_q = None
-
-    def v_res(self, nodes=None, level=None):
-        """
-        Get resulting voltage level at node.
-
-        Parameters
-        ----------
-        nodes : :obj:`list`
-            List of string representatives of network topology components, e.g.
-            :class:`~.network.components.Generator`. If not provided defaults to
-            all nodes available in network level `level`.
-        level : :obj:`str`
-            Either 'mv' or 'lv' or None (default). Depending on which network
-            level results you are interested in. It is required to provide this
-            argument in order to distinguish voltage levels at primary and
-            secondary side of the transformer/LV station.
-            If not provided (respectively None) defaults to ['mv', 'lv'].
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Resulting voltage levels obtained from power flow analysis
-
-        """
-        # check if voltages are available:
-        if hasattr(self, 'pfa_v_mag_pu'):
-            self.pfa_v_mag_pu.sort_index(axis=1, inplace=True)
-        else:
-            message = "No voltage results available."
-            raise AttributeError(message)
-
-        if level is None:
-            level = ['mv', 'lv']
-
-        if nodes is None:
-            return self.pfa_v_mag_pu.loc[:, (level, slice(None))]
-        else:
-            not_included = [_ for _ in nodes
-                            if _ not in list(self.pfa_v_mag_pu[level].columns)]
-            labels_included = [_ for _ in nodes if _ not in not_included]
-
-            if not_included:
-                logging.warning("Voltage levels for {nodes} are not returned "
-                                "from PFA".format(nodes=not_included))
-            return self.pfa_v_mag_pu[level][labels_included]
-
-    def s_res(self, components=None):
-        """
-        Get apparent power in kVA at line(s) and transformer(s).
-
-        Parameters
-        ----------
-        components : :obj:`list`
-            List of string representatives of :class:`~.network.components.Line`
-            or :class:`~.network.components.Transformer`. If not provided defaults
-            to return apparent power of all lines and transformers in the network.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Apparent power in kVA for lines and/or transformers.
-
-        """
-        if components is None:
-            return self.apparent_power
-        else:
-            not_included = [_ for _ in components
-                            if _ not in self.apparent_power.index]
-            labels_included = [_ for _ in components if _ not in not_included]
-
-            if not_included:
-                logging.warning(
-                    "No apparent power results available for: {}".format(
-                        not_included))
-            return self.apparent_power.loc[:, labels_included]
-
-    def storages_timeseries(self):
-        """
-        Returns a dataframe with storage time series.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-
-            Dataframe containing time series of all storages installed in the
-            MV network and LV grids. Index of the dataframe is a
-            :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
-            storage representatives.
-
-        """
-        return self.storages_p, self.storages_q
+# class ResultsReimport:
+#     """
+#     Results class created from saved results.
+#
+#     """
+#     def __init__(self, results_path, parameters='all'):
+#
+#         # measures
+#         measures_df = pd.read_csv(os.path.join(results_path, 'measures.csv'),
+#                                   index_col=0)
+#         self.measures = list(measures_df.measure.values)
+#
+#         # if string is given convert to list
+#         if isinstance(parameters, str):
+#             if parameters == 'all':
+#                 parameters = ['powerflow_results', 'grid_expansion_results',
+#                               'curtailment_results',
+#                               'storage_integration_results']
+#             else:
+#                 parameters = [parameters]
+#
+#         # import power flow results
+#         if 'powerflow_results' in parameters and os.path.isdir(os.path.join(
+#                 results_path, 'powerflow_results')):
+#             # line loading
+#             self.i_res = pd.read_csv(
+#                 os.path.join(
+#                     results_path, 'powerflow_results', 'currents.csv'),
+#                 index_col=0, parse_dates=True)
+#             # voltage
+#             self.pfa_v_mag_pu = pd.read_csv(
+#                 os.path.join(
+#                     results_path, 'powerflow_results', 'voltages_pu.csv'),
+#                 index_col=0, parse_dates=True, header=[0, 1])
+#             # active power
+#             self.pfa_p = pd.read_csv(
+#                 os.path.join(
+#                     results_path, 'powerflow_results', 'active_powers.csv'),
+#                 index_col=0, parse_dates=True)
+#             # reactive power
+#             self.pfa_q = pd.read_csv(
+#                 os.path.join(
+#                     results_path, 'powerflow_results', 'reactive_powers.csv'),
+#                 index_col=0, parse_dates=True)
+#             # apparent power
+#             self.apparent_power = pd.read_csv(
+#                 os.path.join(
+#                     results_path, 'powerflow_results', 'apparent_powers.csv'),
+#                 index_col=0, parse_dates=True)
+#             # network losses
+#             self.grid_losses = pd.read_csv(
+#                 os.path.join(
+#                     results_path, 'powerflow_results', 'grid_losses.csv'),
+#                 index_col=0, parse_dates=True)
+#             # network exchanges
+#             self.hv_mv_exchanges = pd.read_csv(
+#                 os.path.join(
+#                     results_path, 'powerflow_results', 'hv_mv_exchanges.csv'),
+#                 index_col=0, parse_dates=True)
+#         else:
+#             self.i_res = None
+#             self.pfa_v_mag_pu = None
+#             self.pfa_p = None
+#             self.pfa_q = None
+#             self.apparent_power = None
+#             self.grid_losses = None
+#             self.hv_mv_exchanges = None
+#
+#         # import network expansion results
+#         if 'grid_expansion_results' in parameters and os.path.isdir(
+#                 os.path.join(results_path, 'grid_expansion_results')):
+#             # network expansion costs
+#             self.grid_expansion_costs = pd.read_csv(
+#                 os.path.join(
+#                     results_path, 'grid_expansion_results',
+#                     'grid_expansion_costs.csv'),
+#                 index_col=0)
+#             # equipment changes
+#             self.equipment_changes = pd.read_csv(
+#                 os.path.join(
+#                     results_path, 'grid_expansion_results',
+#                     'equipment_changes.csv'),
+#                 index_col=0)
+#         else:
+#             self.grid_expansion_costs = None
+#             self.equipment_changes = None
+#
+#         # import curtailment results
+#         if 'curtailment_results' in parameters and os.path.isdir(
+#                 os.path.join(results_path, 'curtailment_results')):
+#             self.curtailment = {}
+#             for file in os.listdir(os.path.join(
+#                     results_path, 'curtailment_results')):
+#                 if file.endswith(".csv"):
+#                     try:
+#                         key = file[0:-4]
+#                         if '-' in key:
+#                             # make tuple if curtailment was given for generator
+#                             # type and weather cell id
+#                             tmp = key.split('-')
+#                             key = (tmp[0], float(tmp[1]))
+#                         self.curtailment[key] = pd.read_csv(
+#                             os.path.join(
+#                                 results_path, 'curtailment_results', file),
+#                             index_col=0, parse_dates=True)
+#                     except Exception as e:
+#                         logging.warning(
+#                             'The following error occured when trying to '
+#                             'import curtailment results: {}'.format(e))
+#         else:
+#             self.curtailment = None
+#
+#         # import storage results
+#         if 'storage_integration_results' in parameters and os.path.isdir(
+#                 os.path.join(results_path, 'storage_integration_results')):
+#             # storages
+#             self.storages = pd.read_csv(
+#                 os.path.join(results_path, 'storage_integration_results',
+#                              'storages.csv'),
+#                 index_col=0)
+#             # storages costs reduction
+#             try:
+#                 self.storages_costs_reduction = pd.read_csv(
+#                     os.path.join(
+#                         results_path, 'storage_integration_results',
+#                         'storages_costs_reduction.csv'),
+#                     index_col=0)
+#             except:
+#                 pass
+#             # storages time series
+#             self.storages_p = pd.read_csv(
+#                 os.path.join(
+#                     results_path, 'storage_integration_results',
+#                     'storages_active_power.csv'),
+#                 index_col=0, parse_dates=True)
+#             # storages time series
+#             self.storages_q = pd.read_csv(
+#                 os.path.join(
+#                     results_path, 'storage_integration_results',
+#                     'storages_reactive_power.csv'),
+#                 index_col=0, parse_dates=True)
+#
+#         else:
+#             self.storages = None
+#             self.storages_costs_reduction = None
+#             self.storages_p = None
+#             self.storages_q = None
+#
+#     def v_res(self, nodes=None, level=None):
+#         """
+#         Get resulting voltage level at node.
+#
+#         Parameters
+#         ----------
+#         nodes : :obj:`list`
+#             List of string representatives of network topology components, e.g.
+#             :class:`~.network.components.Generator`. If not provided defaults to
+#             all nodes available in network level `level`.
+#         level : :obj:`str`
+#             Either 'mv' or 'lv' or None (default). Depending on which network
+#             level results you are interested in. It is required to provide this
+#             argument in order to distinguish voltage levels at primary and
+#             secondary side of the transformer/LV station.
+#             If not provided (respectively None) defaults to ['mv', 'lv'].
+#
+#         Returns
+#         -------
+#         :pandas:`pandas.DataFrame<dataframe>`
+#             Resulting voltage levels obtained from power flow analysis
+#
+#         """
+#         # check if voltages are available:
+#         if hasattr(self, 'pfa_v_mag_pu'):
+#             self.pfa_v_mag_pu.sort_index(axis=1, inplace=True)
+#         else:
+#             message = "No voltage results available."
+#             raise AttributeError(message)
+#
+#         if level is None:
+#             level = ['mv', 'lv']
+#
+#         if nodes is None:
+#             return self.pfa_v_mag_pu.loc[:, (level, slice(None))]
+#         else:
+#             not_included = [_ for _ in nodes
+#                             if _ not in list(self.pfa_v_mag_pu[level].columns)]
+#             labels_included = [_ for _ in nodes if _ not in not_included]
+#
+#             if not_included:
+#                 logging.warning("Voltage levels for {nodes} are not returned "
+#                                 "from PFA".format(nodes=not_included))
+#             return self.pfa_v_mag_pu[level][labels_included]
+#
+#     def s_res(self, components=None):
+#         """
+#         Get apparent power in kVA at line(s) and transformer(s).
+#
+#         Parameters
+#         ----------
+#         components : :obj:`list`
+#             List of string representatives of :class:`~.network.components.Line`
+#             or :class:`~.network.components.Transformer`. If not provided defaults
+#             to return apparent power of all lines and transformers in the network.
+#
+#         Returns
+#         -------
+#         :pandas:`pandas.DataFrame<dataframe>`
+#             Apparent power in kVA for lines and/or transformers.
+#
+#         """
+#         if components is None:
+#             return self.apparent_power
+#         else:
+#             not_included = [_ for _ in components
+#                             if _ not in self.apparent_power.index]
+#             labels_included = [_ for _ in components if _ not in not_included]
+#
+#             if not_included:
+#                 logging.warning(
+#                     "No apparent power results available for: {}".format(
+#                         not_included))
+#             return self.apparent_power.loc[:, labels_included]
+#
+#     def storages_timeseries(self):
+#         """
+#         Returns a dataframe with storage time series.
+#
+#         Returns
+#         -------
+#         :pandas:`pandas.DataFrame<dataframe>`
+#
+#             Dataframe containing time series of all storages installed in the
+#             MV network and LV grids. Index of the dataframe is a
+#             :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
+#             storage representatives.
+#
+#         """
+#         return self.storages_p, self.storages_q

@@ -3,7 +3,7 @@ import logging
 
 import edisgo
 from edisgo.network.topology import Topology
-from edisgo.network.results import Results, ResultsReimport
+from edisgo.network.results import Results
 from edisgo.network.timeseries import TimeSeries, TimeSeriesControl
 from edisgo.tools import pypsa_io, plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
