@@ -8,7 +8,7 @@ from edisgo.network.timeseries import TimeSeries, TimeSeriesControl
 from edisgo.tools import pypsa_io, plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io.ding0_import import import_ding0_grid
-from edisgo.io.generators_import import import_generators
+from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.tools.config import Config
 from edisgo.flex_opt.curtailment import CurtailmentControl
 from edisgo.flex_opt.storage_integration import StorageControl
@@ -642,8 +642,7 @@ class EDisGo(EDisGoReimport):
         """
         if generator_scenario:
             self.topology.generator_scenario = generator_scenario
-        data_source = 'oedb'
-        import_generators(network=self.topology, data_source=data_source)
+        import_generators_oedb(edisgo_object=self)
 
     def analyze(self, mode=None, timesteps=None):
         """Analyzes the network by power flow analysis
