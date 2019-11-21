@@ -4,7 +4,7 @@ from geopy.distance import vincenty
 
 import os
 if not 'READTHEDOCS' in os.environ:
-    from shapely.geometry import LineString
+    from shapely.geometry import LineString, Point
     from shapely.ops import transform
 
 import logging
@@ -32,46 +32,40 @@ def proj2equidistant(srid):
                    )
 
 
-def proj2conformal(network):
-    """Defines ETRS (equidistant) to conformal (e.g. WGS84) projection.
-    Target CRS is loaded from Network's config.
+def proj2conformal(srid):
+    """
+    Transforms to conformal projection (epsg:4326).
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
-        The eDisGo container object
+    srid : int
+        Spatial reference identifier of geometry to transform.
 
     Returns
     -------
     :py:func:`functools.partial`
+
     """
-    srid = int(network.config['geo']['srid'])
 
     return partial(pyproj.transform,
-                   pyproj.Proj(init='epsg:3035'),  # source coordinate system
-                   pyproj.Proj(init='epsg:{}'
-                               .format(str(srid)))  # destination coordinate system
+                   pyproj.Proj(init='epsg:3035'),  # source CRS
+                   pyproj.Proj(init='epsg:{}'.format(srid))  # destination CRS
                    )
 
 
-def calc_geo_lines_in_buffer(network, node, grid, radius, radius_inc):
+def calc_geo_lines_in_buffer(edisgo_object, bus, grid):
     """Determines lines in nodes' associated graph that are at least partly
     within buffer of radius from node. If there are no lines, the buffer is
     successively extended by radius_inc until lines are found.
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
-        The eDisGo container object
-    node : :class:`~.network.components.Component`
-        Origin node the buffer is created around (e.g. :class:`~.network.components.Generator`).
-        Node must be a member of network's graph (network.graph)
+    edisgo_object : :class:`~.EDisGo`
+    bus : pandas Series
+        Data of origin bus the buffer is created around.
+        Series has same rows as columns of topology.buses_df.
     grid : :class:`~.network.grids.Grid`
         Grid whose lines are searched
-    radius : :obj:`float`
-        Buffer radius in m
-    radius_inc : :obj:`float`
-        Buffer radius increment in m
 
     Returns
     -------
@@ -83,58 +77,75 @@ def calc_geo_lines_in_buffer(network, node, grid, radius, radius_inc):
     Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
         21a52048f84ec341fe54e0204ac62228a9e8a32a/\
         ding0/tools/geo.py#L53>`_.
+
     """
 
+    buffer_radius = int(
+        edisgo_object.config['grid_connection']['conn_buffer_radius'])
+    buffer_radius_inc = int(
+        edisgo_object.config['grid_connection']['conn_buffer_radius_inc'])
+
     lines = []
+    srid = edisgo_object.topology.grid_district['srid']
+    bus_shp = transform(proj2equidistant(srid), Point(bus.x, bus.y))
 
     while not lines:
-        node_shp = transform(proj2equidistant(network), node.geom)
-        buffer_zone_shp = node_shp.buffer(radius)
-        for line in grid.graph.lines():
-            nodes = line['adj_nodes']
-            branch_shp = transform(proj2equidistant(network), LineString([nodes[0].geom, nodes[1].geom]))
-            if buffer_zone_shp.intersects(branch_shp):
+        buffer_zone_shp = bus_shp.buffer(buffer_radius)
+        for line in grid.lines_df.index:
+            line_bus0 = edisgo_object.topology.lines_df.loc[line, 'bus0']
+            bus0 = edisgo_object.topology.buses_df.loc[line_bus0, :]
+            line_bus1 = edisgo_object.topology.lines_df.loc[line, 'bus1']
+            bus1 = edisgo_object.topology.buses_df.loc[line_bus1, :]
+            line_shp = transform(
+                proj2equidistant(srid),
+                LineString([Point(bus0.x, bus0.y), Point(bus1.x, bus1.y)]))
+            if buffer_zone_shp.intersects(line_shp):
                 lines.append(line)
-        radius += radius_inc
+        buffer_radius += buffer_radius_inc
 
-    return sorted(lines, key=lambda _: repr(_))
+    return sorted(lines)
 
 
-def calc_geo_dist_vincenty(network, node_source, node_target):
-    """Calculates the geodesic distance between node_source and node_target
-    incorporating the detour factor in config.
+def calc_geo_dist_vincenty(edisgo_object, bus_source, bus_target):
+    """
+    Calculates the geodesic distance between node_source and node_target in km.
+
+    The detour factor in config is incorporated in the geodesic distance.
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
-        The eDisGo container object
-    node_source : :class:`~.network.components.Component`
-        Node to connect (e.g. :class:`~.network.components.Generator`)
-    node_target : :class:`~.network.components.Component`
-        Target node (e.g. :class:`~.network.components.BranchTee`)
+    edisgo_object : :class:`~.EDisGo`
+    bus_source : pandas Series
+        Data of bus to connect. Series has same rows as columns of
+        topology.buses_df.
+    bus_target : pandas Series
+        Data of target bus. Series has same rows as columns of
+        topology.buses_df.
 
     Returns
     -------
     :obj:`float`
-        Distance in m
+        Distance in km.
 
     """
 
-    branch_detour_factor = network.config['grid_connection'][
+    branch_detour_factor = edisgo_object.config['grid_connection'][
         'branch_detour_factor']
 
     # notice: vincenty takes (lat,lon)
-    branch_length = branch_detour_factor * vincenty((node_source.geom.y, node_source.geom.x),
-                                                    (node_target.geom.y, node_target.geom.x)).m
+    branch_length = branch_detour_factor * \
+                    vincenty((bus_source.y, bus_source.x),
+                             (bus_target.y, bus_target.x)).m
 
     # ========= BUG: LINE LENGTH=0 WHEN CONNECTING GENERATORS ===========
-    # When importing generators, the geom_new field is used as position. If it is empty, EnergyMap's geom
-    # is used and so there are a couple of generators at the same position => length of interconnecting
+    # When importing generators, the geom_new field is used as position. If it
+    # is empty, EnergyMap's geom is used and so there are a couple of
+    # generators at the same position => length of interconnecting
     # line is 0. See issue #76
     if branch_length == 0:
         branch_length = 1
         logger.debug('Geo distance is zero, check objects\' positions. '
-                     'Distance is set to 1m')
+                     'Distance is set to 1m.')
     # ===================================================================
 
-    return branch_length
+    return branch_length / 1e3
