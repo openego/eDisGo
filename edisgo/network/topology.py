@@ -366,14 +366,15 @@ class Topology:
         self._switches_df = switches_df
 
     @property
-    def storages_df(self):
+    def storage_units_df(self):
         """
-        Dataframe with all storages in MV network and underlying LV grids.
+        Dataframe with all storage units in MV grid and underlying LV grids.
 
         Parameters
         ----------
-        storages_df : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all storages in MV network and underlying LV grids.
+        storage_units_df : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all storage units in MV grid and underlying LV
+            grids.
             Index of the dataframe are storage names. Columns of the
             dataframe are:
             bus
@@ -386,14 +387,15 @@ class Topology:
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all storages in MV network and underlying LV grids.
+            Dataframe with all storage units in MV network and underlying LV
+            grids.
 
         """
-        return self._storages_df
+        return self._storage_units_df
 
-    @storages_df.setter
-    def storages_df(self, storages_df):
-        self._storages_df = storages_df
+    @storage_units_df.setter
+    def storage_units_df(self, storage_units_df):
+        self._storage_units_df = storage_units_df
 
     @property
     def generators(self):

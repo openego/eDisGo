@@ -21,7 +21,7 @@ COLUMNS = {
     'lines_df': ['bus0', 'bus1', 'length', 'x', 'r', 's_nom', 'type_info',
                  'kind', 'num_parallel'],
     'switches_df': ['bus_open', 'bus_closed', 'branch', 'type_info'],
-    'storages_df': []
+    'storage_units_df': []
 }
 
 
@@ -92,7 +92,7 @@ def import_ding0_grid(path, edisgo_obj):
     edisgo_obj.topology.lines_df = grid.lines[COLUMNS['lines_df']]
     edisgo_obj.topology.switches_df = pd.read_csv(
         os.path.join(path, 'switches.csv'), index_col=[0])
-    edisgo_obj.topology.storages_df = grid.storage_units
+    edisgo_obj.topology.storage_units_df = grid.storage_units
     edisgo_obj.topology.grid_district = {
         'population': grid.mv_grid_district_population,
         'geom': wkt_loads(grid.mv_grid_district_geom),
@@ -160,7 +160,7 @@ def _validate_ding0_grid_import(network):
     # check for isolated or not defined buses
     buses = []
 
-    for nodal_component in ["loads", "generators"]:
+    for nodal_component in ["loads", "generators", "storage_units"]:
         df = getattr(network, nodal_component + "_df")
         missing = df.index[~df.bus.isin(network.buses_df.index)]
         buses.append(df.bus.values)

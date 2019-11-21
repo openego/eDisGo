@@ -179,7 +179,7 @@ class EDisGoReimport:
 
     def plot_mv_storage_integration(self, **kwargs):
         """
-        Plots storage position in MV topology of integrated storages.
+        Plots storage position in MV topology of integrated storage units.
 
         For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
 

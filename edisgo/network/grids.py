@@ -138,19 +138,21 @@ class Grid(ABC):
             yield Load(id=l)
 
     @property
-    def storages_df(self):
+    def storage_units_df(self):
         """
         Connected storage units within the network.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all storages in topology. For more information on
-            the dataframe see :attr:`~.network.topology.Topology.storages_df`.
+            Dataframe with all storage units in topology. For more information
+            on the dataframe see
+            :attr:`~.network.topology.Topology.storage_units_df`.
 
         """
-        return self.edisgo_obj.topology.storages_df[
-            self.edisgo_obj.topology.storages_df.bus.isin(self.buses_df.index)]
+        return self.edisgo_obj.topology.storage_units_df[
+            self.edisgo_obj.topology.storage_units_df.bus.isin(
+                self.buses_df.index)]
 
     @property
     def switch_disconnectors_df(self):

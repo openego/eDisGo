@@ -36,7 +36,7 @@ class Results:
         self._curtailment = None
         self._storage_integration = None
         self._unresolved_issues = {}
-        self._storages_costs_reduction = None
+        self._storage_units_costs_reduction = None
 
     @property
     def measures(self):
@@ -204,7 +204,7 @@ class Results:
         equipment : detailing what was changed (line, station, storage,
         curtailment). For ease of referencing we take the component itself.
         For lines we take the line-dict, for stations the transformers, for
-        storages the storage-object itself and for curtailment
+        storage units the storage-object itself and for curtailment
         either a dict providing the details of curtailment or a curtailment
         object if this makes more sense (has to be defined).
 
@@ -403,7 +403,7 @@ class Results:
             return None
 
     @property
-    def storages(self):
+    def storage_units(self):
         """
         Gathers relevant storage results.
 
@@ -411,7 +411,7 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
 
-            Dataframe containing all storages installed in the MV network and
+            Dataframe containing all storage units installed in the MV and
             LV grids. Index of the dataframe are the storage representatives,
             columns are the following:
 
@@ -441,7 +441,7 @@ class Results:
 
         return pd.DataFrame(storage_results).set_index('storage_id')
 
-    def storages_timeseries(self):
+    def storage_units_timeseries(self):
         """
         Returns a dataframe with storage time series.
 
@@ -449,26 +449,26 @@ class Results:
         -------
         :pandas:`pandas.DataFrame<dataframe>`
 
-            Dataframe containing time series of all storages installed in the
-            MV network and LV grids. Index of the dataframe is a
+            Dataframe containing time series of all storage units installed in
+            the MV network and LV grids. Index of the dataframe is a
             :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
             storage representatives.
 
         """
-        storages_p = pd.DataFrame()
-        storages_q = pd.DataFrame()
+        storage_units_p = pd.DataFrame()
+        storage_units_q = pd.DataFrame()
         grids = [self.edisgo_object.topology.mv_grid] + list(
             self.edisgo_object.topology.mv_grid.lv_grids)
         for grid in grids:
             for storage in grid.graph.nodes_by_attribute('storage'):
                 ts = storage.timeseries
-                storages_p[repr(storage)] = ts.p
-                storages_q[repr(storage)] = ts.q
+                storage_units_p[repr(storage)] = ts.p
+                storage_units_q[repr(storage)] = ts.q
 
-        return storages_p, storages_q
+        return storage_units_p, storage_units_q
 
     @property
-    def storages_costs_reduction(self):
+    def storage_units_costs_reduction(self):
         """
         Contains costs reduction due to storage integration.
 
@@ -477,8 +477,8 @@ class Results:
         costs_df : :pandas:`pandas.DataFrame<dataframe>`
             Dataframe containing network expansion costs in kEUR before and after
             storage integration in columns 'grid_expansion_costs_initial' and
-            'grid_expansion_costs_with_storages', respectively. Index of the
-            dataframe is the MV network id.
+            'grid_expansion_costs_with_storage_units', respectively. Index of
+            the dataframe is the MV network id.
 
         Returns
         -------
@@ -486,15 +486,15 @@ class Results:
 
             Dataframe containing network expansion costs in kEUR before and after
             storage integration in columns 'grid_expansion_costs_initial' and
-            'grid_expansion_costs_with_storages', respectively. Index of the
-            dataframe is the MV network id.
+            'grid_expansion_costs_with_storage_units', respectively. Index of
+            the dataframe is the MV network id.
 
         """
-        return self._storages_costs_reduction
+        return self._storage_units_costs_reduction
 
-    @storages_costs_reduction.setter
-    def storages_costs_reduction(self, costs_df):
-        self._storages_costs_reduction = costs_df
+    @storage_units_costs_reduction.setter
+    def storage_units_costs_reduction(self, costs_df):
+        self._storage_units_costs_reduction = costs_df
 
     @property
     def unresolved_issues(self):
@@ -692,9 +692,9 @@ class Results:
 
         * `storage_integration_results` directory
 
-          * `storages.csv`
+          * `storage_units.csv`
 
-            See :func:`~storages` for more information.
+            See :func:`~storage_units` for more information.
 
         Parameters
         ----------
