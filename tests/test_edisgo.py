@@ -179,6 +179,26 @@ class TestEDisGo:
             pypsa_network.generators.control == 'Slack']
         assert len(slack_df) == 1
         assert slack_df.bus.values[0] == 'Bus_MVStation_1'
+        # test only mv aggregating loads by sector and generators by
+        # curtailability
+        pypsa_network = self.edisgo.to_pypsa(mode='mv',
+                                             aggregate_generators='curtailable',
+                                             aggregate_loads='sectoral')
+        pf_results = pypsa_network.pf(self.timesteps[0])
+        # check if pf converged
+        if all(pf_results['converged']['0'].tolist()):
+            print('mv converged')
+        else:
+            raise ValueError("Power flow analysis did not converge.")
+        # ToDo maybe move slack test somewhere else
+        slack_df = pypsa_network.generators[
+            pypsa_network.generators.control == 'Slack']
+        assert len(slack_df) == 1
+        assert slack_df.bus.values[0] == 'Bus_MVStation_1'
+        assert np.isclose(pypsa_network.generators_t['p_set'].loc[
+            self.timesteps, 'LVGrid_1_fluctuating'], [0.04845, 0]).all()
+        assert np.isclose(pypsa_network.loads_t['p_set'].loc[
+            self.timesteps, 'LVGrid_1_agricultural'], [0.01569, 0.1569]).all()
 
     def test_lv_to_pypsa(self):
         # test lv to pypsa
