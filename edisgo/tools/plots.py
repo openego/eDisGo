@@ -226,7 +226,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
           Line color is set according to investment costs of the line. This
           option also effects node colors and sizes by plotting investment in
           stations and setting `node_color` to 'storage_integration' in order
-          to plot storage size of integrated storages. Grid expansion costs
+          to plot storage size of integrated storage units. Grid expansion costs
           must be provided by parameter `grid_expansion_costs`.
         * None (default)
           Lines are plotted in black. Is also the fallback option in case of
@@ -243,7 +243,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
           Node color is set according to voltage deviation from 1 p.u..
           Voltages of nodes in MV network must be provided by parameter `voltage`.
         * 'storage_integration'
-          Only storages are plotted. Size of node corresponds to size of
+          Only storage units are plotted. Size of node corresponds to size of
           storage.
         * None (default)
           Nodes are not plotted. Is also the fallback option in case of wrong
@@ -545,7 +545,7 @@ def mv_grid_topology(pypsa_network, configs, timestep=None,
                             vmax=limits_cb_nodes[1])
         cb_voltage.set_label('Voltage deviation in %')
 
-    # storages
+    # storage_units
     if node_color == 'expansion_costs':
         ax.scatter(
             pypsa_plot.buses.loc[

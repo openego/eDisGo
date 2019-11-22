@@ -44,9 +44,9 @@ def extend_distribution_substation_overloading(edisgo_obj, critical_stations):
 
     # get parameters for standard transformer
     try:
-        standard_transformer = edisgo_obj.equipment_data['lv_trafos'].loc[
-            edisgo_obj.config['grid_expansion_standard_equipment'][
-                'mv_lv_transformer']]
+        standard_transformer = edisgo_obj.topology.equipment_data[
+            'lv_transformers'].loc[edisgo_obj.config[
+                'grid_expansion_standard_equipment']['mv_lv_transformer']]
     except KeyError:
         print('Standard MV/LV transformer is not in equipment list.')
 
@@ -145,9 +145,9 @@ def extend_distribution_substation_overvoltage(edisgo_obj, critical_stations):
 
     # get parameters for standard transformer
     try:
-        standard_transformer = edisgo_obj.equipment_data['lv_trafos'].loc[
-            edisgo_obj.config['grid_expansion_standard_equipment'][
-                'mv_lv_transformer']]
+        standard_transformer = edisgo_obj.topology.equipment_data[
+            'lv_transformers'].loc[edisgo_obj.config[
+                'grid_expansion_standard_equipment']['mv_lv_transformer']]
     except KeyError:
         print('Standard MV/LV transformer is not in equipment list.')
 
@@ -213,9 +213,9 @@ def extend_substation_overloading(edisgo_obj, critical_stations):
 
     # get parameters for standard transformer
     try:
-        standard_transformer = edisgo_obj.equipment_data['mv_trafos'].loc[
-            edisgo_obj.config['grid_expansion_standard_equipment'][
-                'hv_mv_transformer']]
+        standard_transformer = edisgo_obj.topology.equipment_data[
+            'mv_transformers'].loc[edisgo_obj.config[
+                'grid_expansion_standard_equipment']['hv_mv_transformer']]
     except KeyError:
         print('Standard HV/MV transformer is not in equipment list.')
 
@@ -350,16 +350,16 @@ def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
     # load standard line data
     if isinstance(grid, LVGrid):
         try:
-            standard_line = edisgo_obj.equipment_data['lv_cables'].loc[
-                edisgo_obj.config['grid_expansion_standard_equipment']
-                ['lv_line']]
+            standard_line = edisgo_obj.topology.equipment_data[
+                'lv_cables'].loc[edisgo_obj.config[
+                    'grid_expansion_standard_equipment']['lv_line']]
         except KeyError:
             print('Chosen standard LV line is not in equipment list.')
     elif isinstance(grid, MVGrid):
         try:
-            standard_line = edisgo_obj.equipment_data['mv_cables'].loc[
-                edisgo_obj.config['grid_expansion_standard_equipment']
-                ['mv_line']]
+            standard_line = edisgo_obj.topology.equipment_data[
+                'mv_cables'].loc[edisgo_obj.config[
+                    'grid_expansion_standard_equipment']['mv_line']]
             standard_line.U_n = grid.nominal_voltage
         except KeyError:
             print('Chosen standard MV line is not in equipment list.')
@@ -622,7 +622,7 @@ def reinforce_lines_overloaded_per_grid_level(edisgo_obj, grid_level,
     # load standard line data
     try:
         standard_line = \
-        edisgo_obj.equipment_data['{}_cables'.format(grid_level)].loc[
+        edisgo_obj.topology.equipment_data['{}_cables'.format(grid_level)].loc[
             edisgo_obj.config['grid_expansion_standard_equipment'][
                 '{}_line'.format(grid_level)]]
         # Todo: check voltage of standard line to distinguish between 10

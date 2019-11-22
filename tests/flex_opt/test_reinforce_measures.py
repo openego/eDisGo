@@ -110,12 +110,12 @@ class TestReinforceMeasures:
         print('Extend substation by replacing trafos successful.')
 
     def test_reinforce_branches_overloading(self):
-        std_line_mv = self.edisgo.equipment_data['mv_cables'].loc[
+        std_line_mv = self.edisgo.topology.equipment_data['mv_cables'].loc[
             self.edisgo.config['grid_expansion_standard_equipment'][
                 'mv_line']]
         std_line_mv.U_n = self.edisgo.topology.mv_grid.nominal_voltage
 
-        std_line_lv = self.edisgo.equipment_data['lv_cables'].loc[
+        std_line_lv = self.edisgo.topology.equipment_data['lv_cables'].loc[
             self.edisgo.config['grid_expansion_standard_equipment'][
                 'lv_line']]
         # manipulate lines to sdt_line_type

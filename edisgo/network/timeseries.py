@@ -111,10 +111,10 @@ class TimeSeries:
             'loads_active_power', None)
         self._loads_reactive_power = kwargs.get(
             'loads_reacitve_power', None)
-        self._storages_active_power = kwargs.get(
-            'storages_active_power', None)
-        self._storages_reactive_power = kwargs.get(
-            'storages_reacitve_power', None)
+        self._storage_units_active_power = kwargs.get(
+            'storage_units_active_power', None)
+        self._storage_units_reactive_power = kwargs.get(
+            'storage_units_reacitve_power', None)
         self._curtailment = kwargs.get('curtailment', None)
 
     @property
@@ -205,7 +205,7 @@ class TimeSeries:
         self._loads_reactive_power = loads_reactive_power_ts
 
     @property
-    def storages_active_power(self):
+    def storage_units_active_power(self):
         """
         #ToDo docstring
         Get load time series (only active power)
@@ -217,16 +217,16 @@ class TimeSeries:
 
         """
         try:
-            return self._storages_active_power.loc[[self.timeindex], :]
+            return self._storage_units_active_power.loc[[self.timeindex], :]
         except:
-            return self._storages_active_power.loc[self.timeindex, :]
+            return self._storage_units_active_power.loc[self.timeindex, :]
 
-    @storages_active_power.setter
-    def storages_active_power(self, storages_active_power_ts):
-        self._storages_active_power = storages_active_power_ts
+    @storage_units_active_power.setter
+    def storage_units_active_power(self, storage_units_active_power_ts):
+        self._storage_units_active_power = storage_units_active_power_ts
 
     @property
-    def storages_reactive_power(self):
+    def storage_units_reactive_power(self):
         """
         #ToDo docstring
         Get reactive power time series for load normalized by annual
@@ -239,13 +239,13 @@ class TimeSeries:
 
         """
         try:
-            return self._storages_reactive_power.loc[[self.timeindex], :]
+            return self._storage_units_reactive_power.loc[[self.timeindex], :]
         except:
-            return self._storages_reactive_power.loc[self.timeindex, :]
+            return self._storage_units_reactive_power.loc[self.timeindex, :]
 
-    @storages_reactive_power.setter
-    def storages_reactive_power(self, storages_reactive_power_ts):
-        self._storages_reactive_power = storages_reactive_power_ts
+    @storage_units_reactive_power.setter
+    def storage_units_reactive_power(self, storage_units_reactive_power_ts):
+        self._storage_units_reactive_power = storage_units_reactive_power_ts
 
     @property
     def timeindex(self):

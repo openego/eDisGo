@@ -1,21 +1,20 @@
 import os
 import logging
-import pandas as pd
-import numpy as np
 
 import edisgo
 from edisgo.network.topology import Topology
-from edisgo.network.results import Results, ResultsReimport
+from edisgo.network.results import Results
 from edisgo.network.timeseries import TimeSeries, TimeSeriesControl
 from edisgo.tools import pypsa_io, plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io.ding0_import import import_ding0_grid
-from edisgo.io.generators_import import import_generators
+from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.tools.config import Config
 from edisgo.flex_opt.curtailment import CurtailmentControl
 from edisgo.flex_opt.storage_integration import StorageControl
 
 logger = logging.getLogger('edisgo')
+
 
 class EDisGoReimport:
     """
@@ -180,7 +179,7 @@ class EDisGoReimport:
 
     def plot_mv_storage_integration(self, **kwargs):
         """
-        Plots storage position in MV topology of integrated storages.
+        Plots storage position in MV topology of integrated storage units.
 
         For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
 
@@ -481,13 +480,12 @@ class EDisGo(EDisGoReimport):
 
         # load configuration and equipment data
         self._config = Config(config_path=kwargs.get('config_path', None))
-        self._equipment_data = self._load_equipment_data()
-        # create network (loads network data, configurations, equipment data)
-        self.topology = Topology(
-            generator_scenario=kwargs.get('generator_scenario', None))
-        # load network data
+
+        # instantiate topology object and load grid data
+        self.topology = Topology(config=self.config)
         self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
-        # set up results container
+
+        # set up results and time series container
         self.results = Results(self)
         self._timeseries = TimeSeries()
 
@@ -513,7 +511,7 @@ class EDisGo(EDisGoReimport):
                 timeindex=kwargs.get('timeindex', None))
 
         # import new generators
-        if self.topology.generator_scenario is not None:
+        if kwargs.get('generator_scenario', None) is not None:
             self.import_generators()
 
     @property
@@ -523,7 +521,7 @@ class EDisGo(EDisGoReimport):
 
         Returns
         -------
-        :class:`~.network.network.Config`
+        :class:`~.tools.config.Config`
             Config object with configuration data from config files.
 
         """
@@ -532,19 +530,6 @@ class EDisGo(EDisGoReimport):
     @config.setter
     def config(self, config_path):
         self._config = Config(config_path=config_path)
-
-    @property
-    def equipment_data(self):
-        """
-        Technical data of electrical equipment such as lines and transformers
-
-        Returns
-        --------
-        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
-            Data of electrical equipment
-
-        """
-        return self._equipment_data
 
     @property
     def timeseries(self):
@@ -564,89 +549,6 @@ class EDisGo(EDisGoReimport):
         """
         return self._timeseries
 
-    def _load_equipment_data(self):
-        """
-        Load equipment data for transformers, cables etc.
-
-        Returns
-        -------
-        :obj:`dict`
-            Dictionary with :pandas:`pandas.DataFrame<dataframe>` containing
-            equipment data. Keys of the dictionary are 'mv_trafos', 'mv_lines',
-            'mv_cables', 'lv_trafos', and 'lv_cables'.
-
-        Notes
-        ------
-        This function calculates electrical values of transformer from standard
-        values (so far only for LV transformers, not necessary for MV as MV
-        impedances are not used).
-
-        $z_{pu}$ is calculated as follows:
-
-        .. math:: z_{pu} = \frac{u_{kr}}{100}
-
-        using the following simplification:
-
-        .. math:: z_{pu} = \frac{Z}{Z_{nom}}
-
-        with
-
-        .. math:: Z = \frac{u_{kr}}{100} \cdot \frac{U_n^2}{S_{nom}}
-
-        and
-
-        .. math:: Z_{nom} = \frac{U_n^2}{S_{nom}}
-
-        $r_{pu}$ is calculated as follows:
-
-        .. math:: r_{pu} = \frac{P_k}{S_{nom}}
-
-        using the simplification of
-
-        .. math:: r_{pu} = \frac{R}{Z_{nom}}
-
-        with
-
-        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \cdot \frac{U_{nom}^2}{S_{nom}^2}
-
-        $x_{pu}$ is calculated as follows:
-
-        .. math::  x_{pu} = \sqrt(z_{pu}^2-r_{pu}^2)
-
-
-        """
-
-        package_path = edisgo.__path__[0]
-        equipment_dir = self.config['system_dirs']['equipment_dir']
-
-        data = {}
-        equipment = {'mv': ['trafos', 'lines', 'cables'],
-                     'lv': ['trafos', 'cables']}
-
-        for voltage_level, eq_list in equipment.items():
-            for i in eq_list:
-                equipment_parameters = self.config['equipment'][
-                    'equipment_{}_parameters_{}'.format(voltage_level, i)]
-                data['{}_{}'.format(voltage_level, i)] = pd.read_csv(
-                    os.path.join(package_path, equipment_dir,
-                                 equipment_parameters),
-                    comment='#', index_col='name',
-                    delimiter=',', decimal='.')
-                # calculate electrical values of transformer from standard
-                # values (so far only for LV transformers, not necessary for
-                # MV as MV impedances are not used)
-                if voltage_level == 'lv' and i == 'trafos':
-                    data['{}_{}'.format(voltage_level, i)]['r_pu'] = \
-                        data['{}_{}'.format(voltage_level, i)]['P_k'] / \
-                        (data['{}_{}'.format(voltage_level, i)][
-                             'S_nom'] )
-                    data['{}_{}'.format(voltage_level, i)][
-                        'x_pu'] = np.sqrt(
-                        (data['{}_{}'.format(voltage_level, i)][
-                             'u_kr'] / 100) ** 2 \
-                        - data['{}_{}'.format(voltage_level, i)][
-                            'r_pu'] ** 2)
-        return data
 
     def import_ding0_grid(self, path):
         """
@@ -744,8 +646,7 @@ class EDisGo(EDisGoReimport):
         """
         if generator_scenario:
             self.topology.generator_scenario = generator_scenario
-        data_source = 'oedb'
-        import_generators(network=self.topology, data_source=data_source)
+        import_generators_oedb(edisgo_object=self)
 
     def analyze(self, mode=None, timesteps=None):
         """Analyzes the network by power flow analysis

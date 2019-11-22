@@ -136,7 +136,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
                 columns={'peak_load': 'p_set'}),
             'Generator': grid_object.topology.generators_df.loc[
                          :, ['bus', 'control', 'p_nom']].append(slack_df),
-            'StorageUnit': grid_object.topology.storages_df.loc[
+            'StorageUnit': grid_object.topology.storage_units_df.loc[
                            :, ['bus', 'control']],
             'Line': grid_object.topology.lines_df.loc[
                     :, ['bus0', 'bus1', 'x', 'r', 's_nom']],
@@ -159,7 +159,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
                 columns={'peak_load': 'p_set'}),
             'Generator': grid_object.generators_df.loc[
                          :, ['bus', 'control', 'p_nom']].append(slack_df),
-            'StorageUnit': grid_object.storages_df.loc[
+            'StorageUnit': grid_object.storage_units_df.loc[
                            :, ['bus', 'control']],
             'Line': grid_object.lines_df.loc[
                     :, ['bus0', 'bus1', 'x', 'r', 's_nom']]
@@ -178,7 +178,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         # LV components
         lv_components_to_aggregate = {'Load': 'loads_df',
                                       'Generator': 'generators_df',
-                                      'StorageUnit': 'storages_df'}
+                                      'StorageUnit': 'storage_units_df'}
         lv_components = {key: pd.DataFrame() for key in
                          lv_components_to_aggregate}
 
@@ -221,7 +221,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
                 columns={'peak_load': 'p_set'}),
             'Generator': grid_object.generators_df.loc[
                          :, ['bus', 'control', 'p_nom']].append(slack_df),
-            'StorageUnit': grid_object.storages_df.loc[:, ['bus', 'control']],
+            'StorageUnit': grid_object.storage_units_df.loc[
+                           :, ['bus', 'control']],
             'Line': grid_object.lines_df.loc[
                     :, ['bus0', 'bus1', 'x', 'r', 's_nom']]
         }
@@ -300,16 +301,16 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         if len(aggregated_lv_components['StorageUnit']) > 0:
             storages_timeseries_active, storages_timeseries_reactive = \
                 get_timeseries_with_aggregated_elements(
-                    edisgo_obj, timesteps, 'storages',
+                    edisgo_obj, timesteps, 'storage_units',
                     components['StorageUnit'].index,
                     aggregated_lv_components['StorageUnit']
                 )
         else:
             storages_timeseries_active = \
-                edisgo_obj.timeseries.storages_active_power.loc[
+                edisgo_obj.timeseries.storage_units_active_power.loc[
                     timesteps, components['StorageUnit'].index]
             storages_timeseries_reactive = \
-                edisgo_obj.timeseries.storages_reactive_power.loc[
+                edisgo_obj.timeseries.storage_units_reactive_power.loc[
                     timesteps, components['StorageUnit'].index]
         import_series_from_dataframe(pypsa_network, storages_timeseries_active,
                                      'StorageUnit', 'p_set')

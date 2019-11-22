@@ -1,9 +1,14 @@
 import logging
 import random
 import pandas as pd
+import numpy as np
+import os
+import warnings
 
+import edisgo
 from edisgo.network.components import Generator, Load
-
+from edisgo.tools.tools import calculate_line_resistance, \
+    calculate_line_reactance, calculate_apparent_power
 
 logger = logging.getLogger('edisgo')
 
@@ -14,23 +19,15 @@ class Topology:
     :class:`~.network.grids.MVGrid`.
 
     Parameters
-    ----------
-    ding0_grid : :obj:`str`
-        Path to directory containing csv files of network to be loaded.
-    config_path : None or :obj:`str` or :obj:`dict`, optional
-        See :class:`~.network.network.Config` for further information.
-        Default: None.
-    generator_scenario : :obj:`str`
-        Defines which scenario of future generator park to use.
+    -----------
+    config_data : :class:`~.tools.config.Config`
+        Config object with configuration data from config files.
 
     Attributes
     -----------
-    _grid_district : :obj:`dict`
-        Contains the following information about the supplied
-        region (network district) of the network:
-        'geom': Shape of network district as MultiPolygon.
-        'population': Number of inhabitants.
     _grids : dict
+        Dictionary containing all grids (keys are grid representatives and
+        values the grid objects)
 
     """
     #ToDo Implement update (and add) functions for component dataframes to
@@ -38,8 +35,126 @@ class Topology:
 
     def __init__(self, **kwargs):
 
-        self._generator_scenario = kwargs.get('generator_scenario', None)
+        # load configuration and equipment data
+        self._equipment_data = self._load_equipment_data(
+            kwargs.get('config', None))
 
+
+    def _load_equipment_data(self, config=None):
+        """
+        Load equipment data for transformers, cables etc.
+
+        Parameters
+        -----------
+        config : :class:`~.tools.config.Config`
+            Config object with configuration data from config files.
+
+        Returns
+        -------
+        :obj:`dict`
+            Dictionary with :pandas:`pandas.DataFrame<dataframe>` containing
+            equipment data. Keys of the dictionary are 'mv_transformers',
+            'mv_overhead_lines', 'mv_cables', 'lv_transformers', and
+            'lv_cables'.
+
+        Notes
+        ------
+        This function calculates electrical values of transformer from standard
+        values (so far only for LV transformers, not necessary for MV as MV
+        impedances are not used).
+
+        $z_{pu}$ is calculated as follows:
+
+        .. math:: z_{pu} = \frac{u_{kr}}{100}
+
+        using the following simplification:
+
+        .. math:: z_{pu} = \frac{Z}{Z_{nom}}
+
+        with
+
+        .. math:: Z = \frac{u_{kr}}{100} \cdot \frac{U_n^2}{S_{nom}}
+
+        and
+
+        .. math:: Z_{nom} = \frac{U_n^2}{S_{nom}}
+
+        $r_{pu}$ is calculated as follows:
+
+        .. math:: r_{pu} = \frac{P_k}{S_{nom}}
+
+        using the simplification of
+
+        .. math:: r_{pu} = \frac{R}{Z_{nom}}
+
+        with
+
+        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \cdot \frac{U_{nom}^2}{S_{nom}^2}
+
+        $x_{pu}$ is calculated as follows:
+
+        .. math::  x_{pu} = \sqrt(z_{pu}^2-r_{pu}^2)
+
+
+        """
+
+        equipment = {'mv': ['transformers', 'overhead_lines', 'cables'],
+                     'lv': ['transformers', 'cables']}
+
+        # if config is not provided set default path and filenames
+        if config is None:
+            equipment_dir = 'equipment'
+            config = {}
+            for voltage_level, eq_list in equipment.items():
+                for i in eq_list:
+                    config['equipment_{}_parameters_{}'.format(
+                        voltage_level, i)] = \
+                        'equipment-parameters_{}_{}.csv'.format(
+                            voltage_level.upper(), i)
+        else:
+            equipment_dir = config['system_dirs']['equipment_dir']
+            config = config['equipment']
+
+        package_path = edisgo.__path__[0]
+        data = {}
+
+        for voltage_level, eq_list in equipment.items():
+            for i in eq_list:
+                equipment_parameters = config[
+                    'equipment_{}_parameters_{}'.format(voltage_level, i)]
+                data['{}_{}'.format(voltage_level, i)] = pd.read_csv(
+                    os.path.join(package_path, equipment_dir,
+                                 equipment_parameters),
+                    comment='#', index_col='name',
+                    delimiter=',', decimal='.')
+                # calculate electrical values of transformer from standard
+                # values (so far only for LV transformers, not necessary for
+                # MV as MV impedances are not used)
+                if voltage_level == 'lv' and i == 'transformers':
+                    data['{}_{}'.format(voltage_level, i)]['r_pu'] = \
+                        data['{}_{}'.format(voltage_level, i)]['P_k'] / \
+                        (data['{}_{}'.format(voltage_level, i)][
+                             'S_nom'] )
+                    data['{}_{}'.format(voltage_level, i)][
+                        'x_pu'] = np.sqrt(
+                        (data['{}_{}'.format(voltage_level, i)][
+                             'u_kr'] / 100) ** 2 \
+                        - data['{}_{}'.format(voltage_level, i)][
+                            'r_pu'] ** 2)
+        return data
+
+    @property
+    def equipment_data(self):
+        """
+        Technical data of electrical equipment such as lines and transformers.
+
+        Returns
+        --------
+        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+            Data of electrical equipment.
+
+        """
+        return self._equipment_data
 
     @property
     def buses_df(self):
@@ -251,14 +366,15 @@ class Topology:
         self._switches_df = switches_df
 
     @property
-    def storages_df(self):
+    def storage_units_df(self):
         """
-        Dataframe with all storages in MV network and underlying LV grids.
+        Dataframe with all storage units in MV grid and underlying LV grids.
 
         Parameters
         ----------
-        storages_df : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all storages in MV network and underlying LV grids.
+        storage_units_df : :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe with all storage units in MV grid and underlying LV
+            grids.
             Index of the dataframe are storage names. Columns of the
             dataframe are:
             bus
@@ -271,14 +387,15 @@ class Topology:
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with all storages in MV network and underlying LV grids.
+            Dataframe with all storage units in MV network and underlying LV
+            grids.
 
         """
-        return self._storages_df
+        return self._storage_units_df
 
-    @storages_df.setter
-    def storages_df(self, storages_df):
-        self._storages_df = storages_df
+    @storage_units_df.setter
+    def storage_units_df(self, storage_units_df):
+        self._storage_units_df = storage_units_df
 
     @property
     def generators(self):
@@ -488,6 +605,7 @@ class Topology:
         Adds new line to topology.
 
         Line name is generated automatically.
+        If type_info is provided, x, r and s_nom are calculated.
 
         Parameters
         ----------
@@ -498,10 +616,42 @@ class Topology:
         r
         s_nom
         num_parallel
-        type_info
+        type_info : str
+            Type of line as specified in `equipment_data`.
         kind
 
         """
+        def _get_line_data():
+            """
+            Gets line data for line type specified in `line_type` from
+            equipment data.
+
+            Returns
+            --------
+            pd.Series
+                Line data from equipment_data
+
+            """
+            if self.buses_df.loc[bus0, 'v_nom'] < 1:
+                voltage_level = 'lv'
+            else:
+                voltage_level = 'mv'
+
+            # try to get cable data
+            try:
+                line_data = self.equipment_data[
+                           '{}_cables'.format(voltage_level)].loc[type_info, :]
+            except KeyError:
+                try:
+                    line_data = self.equipment_data[
+                                    '{}_cables'.format(voltage_level)].loc[
+                           type_info, :]
+                except KeyError:
+                    raise ValueError("Specified line type is not valid.")
+            except:
+                raise
+            return line_data
+
         #ToDo add test
         # check if buses exist
         if bus0 not in self.buses_df.index:
@@ -521,6 +671,18 @@ class Topology:
         if not bus0_bus1.empty and bus1_bus0.empty:
             logging.debug("Line between bus0 {} and bus1 {} already exists.")
             return bus1_bus0.append(bus0_bus1).index[0]
+
+        # if type of line is specified calculate x, r and s_nom
+        if type_info is not None:
+            if x is not None or r is not None or s_nom is not None:
+                warnings.warn(
+                    "When line 'type_info' is provided when creating a new "
+                    "line, x, r and s_nom are calculated and provided "
+                    "parameters are overwritten.")
+            line_data = _get_line_data()
+            x = calculate_line_resistance(line_data.L_per_km, length)
+            r = calculate_line_reactance(line_data.R_per_km, length)
+            s_nom = calculate_apparent_power(line_data.U_n, line_data.I_max_th)
 
         # generate line name and check uniqueness
         line_name = 'Line_{}_{}'.format(bus0, bus1)

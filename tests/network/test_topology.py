@@ -1,4 +1,6 @@
 import os
+import pytest
+import warnings
 
 from edisgo.network.topology import Topology
 from edisgo.io import ding0_import
@@ -29,14 +31,30 @@ class TestTopology:
             x=1,
             r=1,
             s_nom=1,
-            kind='cable',
-            type_info='dummy_name'
+            kind='cable'
         )
 
         assert len_df_before + 1 == len(self.topology.lines_df)
         assert name == \
                'Line_Bus_BranchTee_MVGrid_1_8_Bus_GeneratorFluctuating_7'
         assert self.topology.lines_df.loc[name, 'bus0'] == bus0
+
+        bus0 = 'Bus_BranchTee_MVGrid_1_8'
+        bus1 = 'Bus_GeneratorFluctuating_7'
+        name = self.topology.add_line(
+            bus0=bus0,
+            bus1=bus1,
+            length=1,
+            kind='cable',
+            type_info='NA2XS2Y 3x1x185 RM/25',
+            x=2
+        )
+        with pytest.warns(Warning):
+            warnings.warn(
+                "When line 'type_info' is provided when creating a new "
+                "line, x, r and s_nom are calculated and provided "
+                "parameters are overwritten.", Warning)
+        assert self.topology.lines_df.loc[name, 'x'] == 1
 
     def test_add_generator(self):
         """Test add_generator method"""
