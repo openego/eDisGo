@@ -565,7 +565,7 @@ class EDisGo(EDisGoReimport):
         if path is not None:
             import_ding0_grid(path, self)
 
-    def to_pypsa(self, mode=None, timesteps=None, lv_grid_name=None):
+    def to_pypsa(self, **kwargs):
         """
         PyPSA network representation
 
@@ -590,6 +590,9 @@ class EDisGo(EDisGoReimport):
             :meth:`~.network.network.EDisGo.analyze` for more information.
 
         """
+        timesteps = kwargs.get('timesteps', None)
+        mode = kwargs.get('mode', None)
+
         if timesteps is None:
             timesteps = self.timeseries.timeindex
         # check if timesteps is array-like, otherwise convert to list
@@ -597,11 +600,12 @@ class EDisGo(EDisGoReimport):
             timesteps = [timesteps]
         # export grid
         if not mode:
-            return pypsa_io.to_pypsa(self, mode=mode, timesteps=timesteps)
+            return pypsa_io.to_pypsa(self, timesteps, **kwargs)
         elif 'mv' in mode:
-            return pypsa_io.to_pypsa(self.topology.mv_grid, mode=mode,
-                                     timesteps=timesteps)
+            return pypsa_io.to_pypsa(self.topology.mv_grid, timesteps,
+                                     **kwargs)
         elif mode == 'lv':
+            lv_grid_name = kwargs.get('lv_grid_name', None)
             if not lv_grid_name:
                 raise ValueError("For exporting lv grids, name of lv_grid has "
                                  "to be provided.")
@@ -712,7 +716,7 @@ class EDisGo(EDisGoReimport):
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
 
-        pypsa_network = pypsa_io.to_pypsa(self, mode, timesteps)
+        pypsa_network = pypsa_io.to_pypsa(self, mode=mode, timesteps=timesteps)
 
         # Todo: check if still needed, if so update to new structure, at this point not needed, maybe later
         # check if all timesteps are in pypsa.snapshots, if not update time
