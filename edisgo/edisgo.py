@@ -512,7 +512,7 @@ class EDisGo(EDisGoReimport):
 
         # import new generators
         if kwargs.get('generator_scenario', None) is not None:
-            self.import_generators()
+            self.import_generators(kwargs.get('generator_scenario'))
 
     @property
     def config(self):

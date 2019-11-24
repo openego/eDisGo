@@ -115,12 +115,10 @@ def calc_geo_dist_vincenty(edisgo_object, bus_source, bus_target):
     Parameters
     ----------
     edisgo_object : :class:`~.EDisGo`
-    bus_source : pandas Series
-        Data of bus to connect. Series has same rows as columns of
-        topology.buses_df.
+    bus_source : str
+        Name of bus to connect as in topology.buses_df.
     bus_target : pandas Series
-        Data of target bus. Series has same rows as columns of
-        topology.buses_df.
+        Name of target bus as in topology.buses_df.
 
     Returns
     -------
@@ -131,6 +129,9 @@ def calc_geo_dist_vincenty(edisgo_object, bus_source, bus_target):
 
     branch_detour_factor = edisgo_object.config['grid_connection'][
         'branch_detour_factor']
+
+    bus_source = edisgo_object.topology.buses_df.loc[bus_source, :]
+    bus_target = edisgo_object.topology.buses_df.loc[bus_target, :]
 
     # notice: vincenty takes (lat,lon)
     branch_length = branch_detour_factor * \

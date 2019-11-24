@@ -513,18 +513,50 @@ class Topology:
     def grid_district(self, grid_district):
         self._grid_district = grid_district
 
-    def remove_generator(self, generator_name):
+    def remove_generator(self, name):
         """
         Removes generator with given name from topology.
 
         Parameters
         ----------
-        generator_name : str
+        name : str
             Name of generator as specified in index of `generators_df`.
 
         """
         # ToDo add test
-        self._generators_df.drop(generator_name)
+        self._generators_df.drop(name, inplace=True)
+        # ToDo check if other components are connected to the same bus
+        # and if not delete bus and line
+
+    def remove_line(self, name):
+        """
+        Removes line with given name from topology.
+
+        Parameters
+        ----------
+        name : str
+            Name of line as specified in index of `lines_df`.
+
+        """
+        # ToDo add test
+
+        # backup buses of line
+        bus0 = self.lines_df.at[name, 'bus0']
+        bus1 = self.lines_df.at[name, 'bus1']
+
+        # drop line
+        self._lines_df.drop(name, inplace=True)
+
+        # ToDo: check if any of the buses can be deleted as well
+        # # check if buses exist
+        # if bus0 not in self.buses_df.index:
+        #     raise ValueError(
+        #         "Specified bus {} is not valid as it is not defined in "
+        #         "buses_df.".format(bus0))
+        # if bus1 not in self.buses_df.index:
+        #     raise ValueError(
+        #         "Specified bus {} is not valid as it is not defined in "
+        #         "buses_df.".format(bus1))
 
     def add_generator(self, generator_id, bus, p_nom, generator_type,
                       weather_cell_id=None, subtype=None, control=None):

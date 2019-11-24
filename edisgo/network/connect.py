@@ -8,7 +8,7 @@ if not 'READTHEDOCS' in os.environ:
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
 
-from edisgo.network.components import Generator, Load
+from edisgo.network.components import Generator
 from edisgo.tools.geo import \
     calc_geo_dist_vincenty, calc_geo_lines_in_buffer, \
     proj2equidistant, proj2conformal
@@ -62,7 +62,7 @@ def add_and_connect_mv_generator(edisgo_object, generator):
     edisgo_object.topology.add_generator(
         generator_id=generator.name,
         bus=gen_bus,
-        p_nom=generator.electrical_capacity / 1e3,
+        p_nom=generator.electrical_capacity,
         generator_type=generator.generation_type,
         subtype=generator.generation_subtype,
         weather_cell_id=generator.w_id)
@@ -74,8 +74,8 @@ def add_and_connect_mv_generator(edisgo_object, generator):
 
         line_length = calc_geo_dist_vincenty(
             edisgo_object=edisgo_object,
-            bus_source=edisgo_object.topology.buses_df.loc[gen_bus, :],
-            bus_target=edisgo_object.topology.mv_grid.station.iloc[0, :])
+            bus_source=gen_bus,
+            bus_target=edisgo_object.topology.mv_grid.station.index[0])
 
         line_name = edisgo_object.topology.add_line(
             bus0=edisgo_object.topology.mv_grid.station.index[0],
@@ -545,12 +545,11 @@ def _connect_mv_node(edisgo_object, bus, target_obj):
         edisgo_object.config['grid_expansion_standard_equipment']['mv_line']]
     std_line_kind = 'cable'
 
-    target_obj_result = None
-
     srid = edisgo_object.topology.grid_district['srid']
     bus_shp = transform(proj2equidistant(srid), Point(bus.x, bus.y))
 
-    # MV line is nearest connection point
+    # MV line is nearest connection point => split old line into 2 segments
+    # (delete old line and create 2 new ones)
     if isinstance(target_obj['shp'], LineString):
 
         line_data = edisgo_object.topology.lines_df.loc[target_obj['repr'], :]
@@ -568,19 +567,7 @@ def _connect_mv_node(edisgo_object, bus, target_obj):
             x=conn_point_shp.x,
             y=conn_point_shp.y)
 
-        # split old branch into 2 segments
-        # (delete old branch and create 2 new ones along cable_dist)
-        # ==========================================================
-
-        # remove line from graph and equipment changes
-        edisgo_object.topology.remove_line(line_data.name)
-
-        _del_line_from_equipment_changes(
-            edisgo_object=edisgo_object,
-            line_repr=line_data.name)
-
         # add new line between newly created branch tee and line's bus0
-
         line_length = calc_geo_dist_vincenty(
             edisgo_object=edisgo_object,
             bus_source=line_data.bus0,
@@ -593,13 +580,13 @@ def _connect_mv_node(edisgo_object, bus, target_obj):
             kind=line_data.kind,
             type_info=line_data.type_info)
 
-        # add line to equipment changes to track costs
+        # add line to equipment changes
+        #ToDo @Anya?
         _add_line_to_equipment_changes(
             edisgo_object=edisgo_object,
             line=edisgo_object.topology.lines_df.loc[line_name_bus0, :])
 
         # add new line between newly created branch tee and line's bus0
-
         line_length = calc_geo_dist_vincenty(
             edisgo_object=edisgo_object,
             bus_source=line_data.bus1,
@@ -612,79 +599,57 @@ def _connect_mv_node(edisgo_object, bus, target_obj):
             kind=line_data.kind,
             type_info=line_data.type_info)
 
-        # add line to equipment changes to track costs
+        # add line to equipment changes
         _add_line_to_equipment_changes(
             edisgo_object=edisgo_object,
             line=edisgo_object.topology.lines_df.loc[line_name_bus1, :])
 
-        # add new branch for new node (node to branch tee)
-        # ================================================
-        line_length = calc_geo_dist_vincenty(network=network,
-                                             node_source=node,
-                                             node_target=branch_tee)
-        line = Line(id=random.randint(10 ** 8, 10 ** 9),
-                    length=line_length,
-                    quantity=1,
-                    kind=std_line_kind,
-                    type=std_line_type,
-                    grid=network.mv_grid)
+        # add new line for new bus
+        line_length = calc_geo_dist_vincenty(
+            edisgo_object=edisgo_object,
+            bus_source=bus.name,
+            bus_target=branch_tee_repr)
 
-        network.mv_grid.graph.add_edge(node,
-                                       branch_tee,
-                                       line=line,
-                                       type='line')
+        new_line_name = edisgo_object.topology.add_line(
+            bus0=branch_tee_repr,
+            bus1=bus.name,
+            length=line_length,
+            kind=std_line_kind,
+            type_info=std_line_type.name)
 
-        # add line to equipment changes to track costs
-        _add_cable_to_equipment_changes(network=network,
-                                        line=line)
+        # add line to equipment changes
+        _add_line_to_equipment_changes(
+            edisgo_object=edisgo_object,
+            line=edisgo_object.topology.lines_df.loc[new_line_name, :])
 
-        target_obj_result = branch_tee
+        # remove old line from topology and equipment changes
+        edisgo_object.topology.remove_line(line_data.name)
+
+        _del_line_from_equipment_changes(
+            edisgo_object=edisgo_object,
+            line_repr=line_data.name)
+
+        return branch_tee_repr
 
     # node ist nearest connection point
     else:
 
-        # what kind of node is to be connected? (which type is node of?)
-        #   LVStation: Connect to LVStation or BranchTee
-        #   Generator: Connect to LVStation, BranchTee or Generator
-        if isinstance(bus, LVStation):
-            valid_conn_objects = (LVStation, BranchTee)
-        elif isinstance(node, Generator):
-            valid_conn_objects = (LVStation, BranchTee, Generator)
-        else:
-            raise ValueError('Oops, the node you are trying to connect is not a valid connection object')
+        # add new branch for satellite (station to station)
+        line_length = calc_geo_dist_vincenty(
+            edisgo_object=edisgo_object,
+            bus_source=bus.name,
+            bus_target=target_obj['repr'])
 
-        # if target is generator or Load, check if it is aggregated (=> connection not allowed)
-        if isinstance(target_obj['obj'], (Generator, Load)):
-            target_is_aggregated = any([_ for _ in network.mv_grid.graph.adj[target_obj['obj']].values()
-                                        if _['type'] == 'line_aggr'])
-        else:
-            target_is_aggregated = False
+        new_line_name = edisgo_object.topology.add_line(
+            bus0=target_obj['repr'],
+            bus1=bus.name,
+            length=line_length,
+            kind=std_line_kind,
+            type_info=std_line_type.name)
 
-        # target node is not a load area of type aggregated
-        if isinstance(target_obj['obj'], valid_conn_objects) and not target_is_aggregated:
+        # add line to equipment changes
+        _add_line_to_equipment_changes(
+            edisgo_object=edisgo_object,
+            line=edisgo_object.topology.lines_df.loc[new_line_name, :])
 
-            # add new branch for satellite (station to station)
-            line_length = calc_geo_dist_vincenty(
-                edisgo_object=edisgo_object,
-                bus_source=bus,
-                bus_target=target_obj['obj'])
-
-            line = Line(id=random.randint(10 ** 8, 10 ** 9),
-                        type=std_line_type,
-                        kind=std_line_kind,
-                        quantity=1,
-                        length=line_length,
-                        grid=network.mv_grid)
-
-            network.mv_grid.graph.add_edge(node,
-                                           target_obj['obj'],
-                                           line=line,
-                                           type='line')
-
-            # add line to equipment changes to track costs
-            _add_cable_to_equipment_changes(network=network,
-                                            line=line)
-
-            target_obj_result = target_obj['obj']
-
-    return target_obj_result
+        return target_obj['repr']

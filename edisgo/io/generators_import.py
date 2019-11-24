@@ -136,6 +136,10 @@ def oedb(edisgo_object):
                               'generation_subtype'].isnull(),
                           'generation_subtype'] = 'unknown'
 
+        # convert capacity from kW to MW
+        generators_mv.electrical_capacity = \
+            generators_mv.electrical_capacity / 1e3
+
         # extend basic query for LV generators and read data from db
         generators_lv_sqla = generators_sqla. \
             filter(orm_re_generators.columns.voltage_level.in_([6, 7]))
@@ -147,6 +151,10 @@ def oedb(edisgo_object):
         generators_lv.loc[generators_lv[
                               'generation_subtype'].isnull(),
                           'generation_subtype'] = 'unknown'
+
+        # convert capacity from kW to MW
+        generators_lv.electrical_capacity = \
+            generators_lv.electrical_capacity / 1e3
 
         return generators_mv, generators_lv
 
@@ -239,16 +247,16 @@ def oedb(edisgo_object):
             map(lambda _: int(_.split('_')[-1]), existing_gens_mv.index))
         # filter for MV generators that only need to be updated (i.e. that
         # appear in the imported and existing generators dataframes)
-        existing_gens_mv = existing_gens_mv[existing_gens_mv.id.isin(
+        gens_to_update = existing_gens_mv[existing_gens_mv.id.isin(
             imported_generators_mv.index.values)]
 
         # check if new capacity of any of the imported generators is <= 0
         # (this may happen if dp is buggy)
-        gens_to_remove = imported_generators_mv.loc[existing_gens_mv.id, :][
+        gens_to_remove = imported_generators_mv.loc[gens_to_update.id, :][
             imported_generators_mv.loc[
-            existing_gens_mv.id, :].electrical_capacity <= 0]
+            gens_to_update.id, :].electrical_capacity <= 0]
         for id in gens_to_remove.index:
-            gen_name = existing_gens_mv[existing_gens_mv.id == id].index[0]
+            gen_name = gens_to_update[gens_to_update.id == id].index[0]
             edisgo_object.topology.remove_generator(gen_name)
             logger.warning(
                 'Capacity of generator {} is <= 0, it is therefore removed. '
@@ -256,25 +264,25 @@ def oedb(edisgo_object):
 
         # calculate capacity difference between existing and imported
         # generators
-        existing_gens_mv['cap_diff'] = \
+        gens_to_update['cap_diff'] = \
             imported_generators_mv.loc[
-                existing_gens_mv.id, 'electrical_capacity'].values / 1e3 - \
-            existing_gens_mv.p_nom
+                gens_to_update.id, 'electrical_capacity'].values - \
+            gens_to_update.p_nom
         # in case there are generators whose capacity does not match, update
         # their capacity
-        gens_to_update = existing_gens_mv[
-            abs(existing_gens_mv.cap_diff) > cap_diff_threshold]
+        gens_to_update_cap = gens_to_update[
+            abs(gens_to_update.cap_diff) > cap_diff_threshold]
 
-        for id, row in gens_to_update.iterrows():
+        for id, row in gens_to_update_cap.iterrows():
                 edisgo_object.topology._generators_df.loc[id, 'p_nom'] = \
                     imported_generators_mv.loc[
-                        row['id'], 'electrical_capacity'] / 1e3
+                        row['id'], 'electrical_capacity']
 
-        log_geno_count = len(gens_to_update)
-        log_geno_cap = existing_gens_mv['cap_diff'].sum()
+        log_geno_count = len(gens_to_update_cap)
+        log_geno_cap = gens_to_update_cap['cap_diff'].sum()
         logger.debug(
             'Capacities of {} of {} existing generators updated ({} MW).'
-                .format(log_geno_count, len(existing_gens_mv),
+                .format(log_geno_count, len(gens_to_update),
                         round(log_geno_cap, 1)))
 
         # ======================================
@@ -298,7 +306,7 @@ def oedb(edisgo_object):
             add_and_connect_mv_generator(edisgo_object, new_gens_mv.loc[id, :])
 
         log_geno_count = len(new_gens_mv)
-        log_geno_cap = new_gens_mv['electrical_capacity'].sum() / 1e3
+        log_geno_cap = new_gens_mv['electrical_capacity'].sum()
         logger.debug('{} of {} new generators added ({} MW).'
                      .format(log_geno_count,
                              number_new_gens,
@@ -757,44 +765,39 @@ def oedb(edisgo_object):
             return lv_grid
 
     def _validate_generation():
-        """Validate generators in updated grids
+        """
+        Validate generators in updated grids.
 
         The validation uses the cumulative capacity of all generators.
+
         """
         # ToDo: Valdate conv. genos too!
 
         # set capacity difference threshold
-        cap_diff_threshold = 10 ** -4
+        cap_diff_threshold = 10 ** -1
 
-        capacity_imported = generators_res_mv['electrical_capacity'].sum() + \
-                            generators_res_lv['electrical_capacity'].sum() #+ \
+        capacity_imported = generators_res_mv['electrical_capacity'].sum()# + \
+                            #generators_res_lv['electrical_capacity'].sum() #+ \
                             #generators_conv_mv['capacity'].sum()
 
-        capacity_grid = 0
-        # MV genos
-        for geno in network.mv_grid.generators:
-            capacity_grid += geno.nominal_capacity
+        # ToDo: change to all generators once lv import works
+        capacity_grid = \
+            edisgo_object.topology.mv_grid.generators_df.p_nom.sum()
 
-        # LV genos
-        for lv_grid in network.mv_grid.lv_grids:
-            for geno in lv_grid.generators:
-                capacity_grid += geno.nominal_capacity
-
-        logger.debug('Cumulative generator capacity (updated): {} kW'
-                     .format(str(round(capacity_imported, 1)))
-                     )
+        logger.debug('Cumulative generator capacity (updated): {} MW'
+                     .format(round(capacity_imported, 1)))
 
         if abs(capacity_imported - capacity_grid) > cap_diff_threshold:
-            raise ValueError('Cumulative capacity of imported generators ({} kW) '
-                             'differ from cumulative capacity of generators '
-                             'in updated grid ({} kW) by {} kW.'
-                             .format(str(round(capacity_imported, 1)),
-                                     str(round(capacity_grid, 1)),
-                                     str(round(capacity_imported - capacity_grid, 1))
-                                     )
-                             )
+            raise ValueError(
+                'Cumulative capacity of imported generators ({} MW) '
+                'differ from cumulative capacity of generators '
+                'in updated grid ({} MW) by {} MW.'
+                    .format(round(capacity_imported, 1),
+                            round(capacity_grid, 1),
+                            round(capacity_imported - capacity_grid, 1)))
         else:
-            logger.debug('Cumulative capacity of imported generators validated.')
+            logger.debug(
+                'Cumulative capacity of imported generators validated.')
 
     def _validate_sample_geno_location():
         """
