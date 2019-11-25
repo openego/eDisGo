@@ -513,6 +513,37 @@ class Topology:
     def grid_district(self, grid_district):
         self._grid_district = grid_district
 
+    def remove_bus(self, name):
+        """
+        Removes bus with given name from topology.
+
+        Parameters
+        ----------
+        name : str
+            Name of bus as specified in index of `buses_df`.
+
+        Notes
+        -------
+        Only isolated buses can be deleted from topology. Use respective
+        functions first to delete all connected lines, transformers,
+        loads, generators and storage_units.
+        """
+
+        # check if bus is isolated
+        if name in self.lines_df.bus0.values or \
+            name in self.lines_df.bus1.values or \
+            name in self.storage_units_df.bus.values or \
+            name in self.generators_df.bus.values or \
+            name in self.loads_df.bus.values or \
+            name in self.transformers_hvmv_df.bus0.values or \
+            name in self.transformers_hvmv_df.bus1.values or \
+            name in self.transformers_df.bus0.values or \
+            name in self.transformers_df.bus1.values:
+            raise AssertionError("Bus {} is not isolated. Remove all connected "
+                                 "elements first to remove bus.".format(name))
+        else:
+            self._buses_df.drop(name, inplace=True)
+
     def remove_generator(self, name):
         """
         Removes generator with given name from topology.

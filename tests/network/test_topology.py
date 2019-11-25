@@ -185,3 +185,51 @@ class TestTopology:
         assert len(name) == 30
         assert self.topology.storage_units_df.loc[name, 'p_nom'] == 5
         assert self.topology.storage_units_df.loc[name, 'control'] == 'PQ'
+
+    def test_add_bus(self):
+        """Test add_bus method"""
+        len_df_pre = len(self.topology.buses_df)
+
+        # check adding MV bus
+        self.topology.add_bus(bus_name='Test_bus', v_nom=20)
+        assert len_df_pre+1 == len(self.topology.buses_df)
+        assert self.topology.buses_df.at['Test_bus', 'v_nom'] == 20
+        assert self.topology.buses_df.at['Test_bus', 'mv_grid_id'] == 1
+
+        # check LV assertion
+        msg = "You need to specify an lv_grid_id for low-voltage buses."
+        with pytest.raises(ValueError, match=msg):
+            self.topology.add_bus('Test_bus_LV', v_nom=0.4)
+
+        # check adding LV bus
+        self.topology.add_bus('Test_bus_LV', v_nom=0.4, lv_grid_id=1)
+        assert len_df_pre+2 == len(self.topology.buses_df)
+        assert self.topology.buses_df.at['Test_bus_LV', 'v_nom']
+        assert self.topology.buses_df.at['Test_bus_LV', 'lv_grid_id'] == 1
+        assert self.topology.buses_df.at['Test_bus_LV', 'mv_grid_id'] == 1
+
+    def test_remove_bus(self):
+        """Test remove_bus method"""
+        # create isolated bus to check
+        self.topology.add_bus(bus_name='Test_bus_to_remove', v_nom=20)
+        assert self.topology.buses_df.at['Test_bus_to_remove', 'v_nom'] == 20
+        # check removing bus
+        self.topology.remove_bus('Test_bus_to_remove')
+        with pytest.raises(KeyError):
+            self.topology.buses_df.loc['Test_bus_to_remove']
+        # check assertion when bus is connected to element
+        # check connected Generator
+        msg = "Bus Bus_Generator_1 is not isolated. Remove all connected " \
+              "elements first to remove bus."
+        with pytest.raises(AssertionError, match=msg):
+            self.topology.remove_bus('Bus_Generator_1')
+        # check connected Load
+        msg = "Bus Bus_Load_agricultural_LVGrid_1_1 is not isolated. " \
+              "Remove all connected elements first to remove bus."
+        with pytest.raises(AssertionError, match=msg):
+            self.topology.remove_bus('Bus_Load_agricultural_LVGrid_1_1')
+        # check connected line
+        msg = "Bus Bus_BranchTee_MVGrid_1_1 is not isolated. " \
+              "Remove all connected elements first to remove bus."
+        with pytest.raises(AssertionError, match=msg):
+            self.topology.remove_bus('Bus_BranchTee_MVGrid_1_1')
