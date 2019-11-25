@@ -601,6 +601,52 @@ class Topology:
         self.generators_df = self._generators_df.append(new_gen_df)
         return generator_name
 
+    def add_load(self, load_id, bus, peak_load, annual_consumption, sector):
+        """
+        Adds load to topology.
+
+        Load name is generated automatically.
+
+        Parameters
+        ----------
+        load_id : str
+            Unique identifier of generator.
+        bus
+        peak_load
+        annual_consumption
+        sector
+        """
+        # Todo: overthink load_id as input parameter, only allow auto created
+        #  names?
+        try:
+            bus_df = self.buses_df.loc[bus]
+        except KeyError:
+            raise ValueError(
+                "Specified bus {} is not valid as it is not defined in "
+                "buses_df.".format(bus))
+
+        # generate generator name and check uniqueness
+        if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
+            grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
+        else:
+            grid_name = "MVGrid_" + bus_df.mv_grid_id
+        load_name = 'Load_{}_{}_{}'.format(sector, grid_name, load_id)
+        if load_name in self.loads_df.index:
+            nr_loads = len(self._grids[grid_name].loads_df)
+            load_name = 'Load_{}_{}_{}'.format(sector, grid_name, nr_loads+1)
+            while load_name in self.loads_df.index:
+                load_name = 'Load_{}_{}_{}'.format(
+                    sector, grid_name, random.randint(10 ** 8, 10 ** 9))
+
+        new_load_df = pd.DataFrame(
+            data={'bus': bus,
+                  'peak_load': peak_load,
+                  'annual_consumption': annual_consumption,
+                  'sector': sector},
+            index=[load_name])
+        self.loads_df = self._loads_df.append(new_load_df)
+        return load_name
+
     def add_bus(self, bus_name, v_nom, x=None, y=None, lv_grid_id=None,
                 in_building=False):
         """

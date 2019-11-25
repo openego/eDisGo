@@ -72,3 +72,63 @@ class TestTopology:
         assert len_df_before + 1 == len(self.topology.generators_df)
         assert name == 'Generator_solar_2'
         assert self.topology.generators_df.loc[name, 'p_nom'] == 1
+
+    def test_add_load(self):
+        """Test add_load method"""
+
+        msg = "Specified bus Unknown_bus is not valid as it is not defined in " \
+              "buses_df."
+        with pytest.raises(ValueError, match=msg):
+            self.topology.add_load(
+                load_id=8,
+                bus="Unknown_bus",
+                peak_load=1,
+                annual_consumption=1,
+                sector='retail'
+            )
+
+        len_df_before = len(self.topology.loads_df)
+
+        # check if name of load does not exist yet
+        name = self.topology.add_load(
+                load_id=10,
+                bus="Bus_BranchTee_LVGrid_1_4",
+                peak_load=1,
+                annual_consumption=2,
+                sector='residential'
+            )
+        assert len_df_before+1 == len(self.topology.loads_df)
+        assert name == "Load_residential_LVGrid_1_10"
+        assert self.topology.loads_df.loc[name, 'peak_load'] == 1
+        assert self.topology.loads_df.loc[name, 'annual_consumption'] == 2
+        assert self.topology.loads_df.loc[name, 'sector'] == "residential"
+
+        # check auto creation of name when load name with load_id already
+        # exists
+        name = self.topology.add_load(
+            load_id=1,
+            bus="Bus_BranchTee_LVGrid_1_4",
+            peak_load=2,
+            annual_consumption=1,
+            sector='agricultural'
+        )
+        assert len_df_before + 2 == len(self.topology.loads_df)
+        assert name == "Load_agricultural_LVGrid_1_9"
+        assert self.topology.loads_df.loc[name, 'peak_load'] == 2
+        assert self.topology.loads_df.loc[name, 'annual_consumption'] == 1
+        assert self.topology.loads_df.loc[name, 'sector'] == "agricultural"
+
+        # check auto creation of name if auto created name already exists
+        name = self.topology.add_load(
+            load_id=4,
+            bus="Bus_BranchTee_LVGrid_1_4",
+            peak_load=5,
+            annual_consumption=4,
+            sector='residential'
+        )
+
+        assert len_df_before + 3 == len(self.topology.loads_df)
+        assert name != "Load_residential_LVGrid_1_10"
+        assert self.topology.loads_df.loc[name, 'peak_load'] == 5
+        assert self.topology.loads_df.loc[name, 'annual_consumption'] == 4
+        assert self.topology.loads_df.loc[name, 'sector'] == "residential"
