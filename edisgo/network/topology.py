@@ -572,10 +572,14 @@ class Topology:
             Name of generator as specified in index of `generators_df`.
 
         """
-        # ToDo add test
+
+        # get bus to check if other elements are connected to bus
+        bus = self.generators_df.at[name, 'bus']
+        # remove generator
         self._generators_df.drop(name, inplace=True)
-        # ToDo check if other components are connected to the same bus
-        # and if not delete bus and line
+        # if no other elements are connected to same bus, remove line and bus
+        if check_bus_for_removal(self, bus_name=bus):
+            self.remove_line(self.get_connected_lines_from_bus(bus).index[0])
 
     def remove_load(self, name):
         """
@@ -595,7 +599,25 @@ class Topology:
         # if no other elements are connected, remove line and bus as well
         if check_bus_for_removal(self, bus_name=bus):
             self.remove_line(self.get_connected_lines_from_bus(bus).index[0])
-            self.remove_bus(bus)
+
+    def remove_storage(self, name):
+        """
+        Removes storage with given name from topology.
+
+        Parameters
+        ----------
+        name : str
+            Name of storage as specified in index of `storage_units_df`.
+
+        """
+        # Todo: add test
+        # get bus to check if other elements are connected to bus
+        bus = self.storage_units_df.at[name, 'bus']
+        # remove load
+        self._storage_units_df.drop(name, inplace=True)
+        # if no other elements are connected, remove line and bus as well
+        if check_bus_for_removal(self, bus_name=bus):
+            self.remove_line(self.get_connected_lines_from_bus(bus).index[0])
 
     def remove_line(self, name):
         """
@@ -607,25 +629,21 @@ class Topology:
             Name of line as specified in index of `lines_df`.
 
         """
-        # ToDo add test
 
-        # backup buses of line
+        # backup buses of line and check if buses can be removed as well
         bus0 = self.lines_df.at[name, 'bus0']
+        remove_bus0 = check_bus_for_removal(self, bus0)
         bus1 = self.lines_df.at[name, 'bus1']
+        remove_bus1 = check_bus_for_removal(self, bus1)
 
         # drop line
         self._lines_df.drop(name, inplace=True)
 
-        # ToDo: check if any of the buses can be deleted as well
-        # # check if buses exist
-        # if bus0 not in self.buses_df.index:
-        #     raise ValueError(
-        #         "Specified bus {} is not valid as it is not defined in "
-        #         "buses_df.".format(bus0))
-        # if bus1 not in self.buses_df.index:
-        #     raise ValueError(
-        #         "Specified bus {} is not valid as it is not defined in "
-        #         "buses_df.".format(bus1))
+        # drop buses if no other elements are connected
+        if remove_bus0:
+            self.remove_bus(bus0)
+        if remove_bus1:
+            self.remove_bus(bus1)
 
     def add_generator(self, generator_id, bus, p_nom, generator_type,
                       weather_cell_id=None, subtype=None, control=None):
@@ -698,7 +716,7 @@ class Topology:
         if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
             grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
         else:
-            grid_name = "MVGrid_" + bus_df.mv_grid_id
+            grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
         load_name = 'Load_{}_{}_{}'.format(sector, grid_name, load_id)
         if load_name in self.loads_df.index:
             nr_loads = len(self._grids[grid_name].loads_df)

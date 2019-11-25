@@ -242,7 +242,7 @@ def check_bus_for_removal(topology, bus_name):
     Removable: bool
         Indicator if bus of name bus_name can be removed from topology
     """
-
+    # Todo: move to topology?
     # check if bus is party of topology
     if bus_name not in topology.buses_df.index:
         raise ValueError("Bus of name {} not in Topology. Cannot be checked "

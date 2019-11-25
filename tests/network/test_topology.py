@@ -234,6 +234,44 @@ class TestTopology:
         with pytest.raises(AssertionError, match=msg):
             self.topology.remove_bus('Bus_BranchTee_MVGrid_1_1')
 
+    def test_remove_generator(self):
+        """Test remove_load method"""
+        name_generator = 'GeneratorFluctuating_5'
+        # get connected line
+        connected_lines = self.topology.get_connected_lines_from_bus(
+            'Bus_' + name_generator)
+        # check if elements are part of topology:
+        assert name_generator in self.topology.generators_df.index
+        assert 'Bus_' + name_generator in self.topology.buses_df.index
+        assert (connected_lines.index.isin(
+                self.topology.lines_df.index)).all()
+        # check case where only load is connected to line,
+        # line and bus are therefore removed as well
+        self.topology.remove_generator(name_generator)
+        assert name_generator not in self.topology.generators_df.index
+        assert 'Bus_' + name_generator not in self.topology.buses_df.index
+        assert ~(connected_lines.index.isin(
+            self.topology.lines_df.index)).any()
+
+        # check case where load is not the only connected element
+        name_generator = 'GeneratorFluctuating_7'
+        self.topology.add_load(100, 'Bus_' + name_generator, 2, 3, 'agricultural')
+        # get connected line
+        connected_lines = self.topology.get_connected_lines_from_bus(
+            'Bus_' + name_generator)
+        # check if elements are part of topology:
+        assert name_generator in self.topology.generators_df.index
+        assert 'Bus_' + name_generator in self.topology.buses_df.index
+        assert (connected_lines.index.isin(
+            self.topology.lines_df.index)).all()
+        # check case where other elements are connected to line as well,
+        # line and bus are therefore not removed
+        self.topology.remove_generator(name_generator)
+        assert name_generator not in self.topology.generators_df.index
+        assert 'Bus_' + name_generator in self.topology.buses_df.index
+        assert (connected_lines.index.isin(
+            self.topology.lines_df.index)).all()
+
     def test_remove_load(self):
         """Test remove_load method"""
         name_load = 'Load_residential_LVGrid_1_4'
@@ -271,3 +309,27 @@ class TestTopology:
         assert 'Bus_' + name_load in self.topology.buses_df.index
         assert (connected_lines.index.isin(
             self.topology.lines_df.index)).all()
+
+    def test_remove_line(self):
+        """Test remove_line method"""
+
+        # test only remove a line
+        line_name = "Line_10012"
+        bus0 = self.topology.lines_df.at[line_name, 'bus0']
+        bus1 = self.topology.lines_df.at[line_name, 'bus1']
+        self.topology.remove_line(line_name)
+        assert line_name not in self.topology.lines_df.index
+        assert bus0 in self.topology.buses_df.index
+        assert bus1 in self.topology.buses_df.index
+
+        # test remove line and bordering node
+        self.topology.add_bus('Test_bus', 20)
+        self.topology.add_line(bus0, 'Test_bus', 2)
+        assert 'Test_bus' in self.topology.buses_df.index
+        assert 'Line_Bus_BranchTee_MVGrid_1_3_Test_bus' in \
+               self.topology.lines_df.index
+        self.topology.remove_line('Line_Bus_BranchTee_MVGrid_1_3_Test_bus')
+        assert bus0 in self.topology.buses_df.index
+        assert 'Test_bus' not in self.topology.buses_df.index
+        assert 'Line_Bus_BranchTee_MVGrid_1_3_Test_bus' not in \
+            self.topology.lines_df.index
