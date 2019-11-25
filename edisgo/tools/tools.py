@@ -221,3 +221,44 @@ def translate_df_to_graph(buses_df, lines_df, transformers_df=None):
                              {'branch_name': trafo_name, 'length': 0}))
     graph.add_edges_from(branches)
     return graph
+
+
+def check_bus_for_removal(topology, bus_name):
+    """
+    Checks whether bus is connected to elements other than one line. Returns
+    True if bus of inserted name is only connected to one line. Returns False
+    if bus is connected to other element or additional line.
+
+
+    Parameters
+    ----------
+    topology: :class:`~.self.edisgo.network.topology.Topology`
+        Topology object containing bus of name bus_name
+    bus_name: str
+        Name of bus which has to be checked
+
+    Returns
+    -------
+    Removable: bool
+        Indicator if bus of name bus_name can be removed from topology
+    """
+
+    # check if bus is party of topology
+    if bus_name not in topology.buses_df.index:
+        raise ValueError("Bus of name {} not in Topology. Cannot be checked "
+                         "to be removed.".format(bus_name))
+    connected_lines = topology.lines_df.loc[
+        topology.lines_df.bus0 == bus_name].append(
+        topology.lines_df.loc[topology.lines_df.bus1 == bus_name])
+    # if more than one line is connected to node, it cannot be removed
+    if len(connected_lines) > 1:
+        return False
+    # if another element is connected to node, it cannot be removed
+    elif bus_name in topology.loads_df.bus.values or \
+        bus_name in topology.generators_df.bus.values or \
+        bus_name in topology.storage_units_df.bus.values or \
+        bus_name in topology.transformers_df.bus0.values or \
+        bus_name in topology.transformers_df.bus1.values:
+        return False
+    else:
+        return True
