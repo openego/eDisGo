@@ -8,7 +8,7 @@ import warnings
 import edisgo
 from edisgo.network.components import Generator, Load
 from edisgo.tools.tools import calculate_line_resistance, \
-    calculate_line_reactance, calculate_apparent_power
+    calculate_line_reactance, calculate_apparent_power, check_bus_for_removal
 
 logger = logging.getLogger('edisgo')
 
@@ -513,6 +513,24 @@ class Topology:
     def grid_district(self, grid_district):
         self._grid_district = grid_district
 
+    def get_connected_lines_from_bus(self, bus_name):
+        """
+        Returns all lines connected to bus of name bus_name
+
+        Parameters
+        ----------
+        bus_name : str
+            name of bus
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe of connected lines
+        """
+        return self.lines_df.loc[
+        self.lines_df.bus0 == bus_name].append(
+        self.lines_df.loc[self.lines_df.bus1 == bus_name])
+
     def remove_bus(self, name):
         """
         Removes bus with given name from topology.
@@ -558,6 +576,26 @@ class Topology:
         self._generators_df.drop(name, inplace=True)
         # ToDo check if other components are connected to the same bus
         # and if not delete bus and line
+
+    def remove_load(self, name):
+        """
+        Removes load with given name from topology.
+
+        Parameters
+        ----------
+        name : str
+            Name of load as specified in index of `loads_df`.
+
+        """
+
+        # get bus to check if other elements are connected to bus
+        bus = self.loads_df.at[name, 'bus']
+        # remove load
+        self._loads_df.drop(name, inplace=True)
+        # if no other elements are connected, remove line and bus as well
+        if check_bus_for_removal(self, bus_name=bus):
+            self.remove_line(self.get_connected_lines_from_bus(bus).index[0])
+            self.remove_bus(bus)
 
     def remove_line(self, name):
         """

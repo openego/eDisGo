@@ -233,3 +233,41 @@ class TestTopology:
               "Remove all connected elements first to remove bus."
         with pytest.raises(AssertionError, match=msg):
             self.topology.remove_bus('Bus_BranchTee_MVGrid_1_1')
+
+    def test_remove_load(self):
+        """Test remove_load method"""
+        name_load = 'Load_residential_LVGrid_1_4'
+        # get connected line
+        connected_lines = self.topology.get_connected_lines_from_bus(
+            'Bus_' + name_load)
+        # check if elements are part of topology:
+        assert name_load in self.topology.loads_df.index
+        assert 'Bus_' + name_load in self.topology.buses_df.index
+        assert (connected_lines.index.isin(
+                self.topology.lines_df.index)).all()
+        # check case where only load is connected to line,
+        # line and bus are therefore removed as well
+        self.topology.remove_load(name_load)
+        assert name_load not in self.topology.loads_df.index
+        assert 'Bus_' + name_load not in self.topology.buses_df.index
+        assert ~(connected_lines.index.isin(
+            self.topology.lines_df.index)).any()
+
+        # check case where load is not the only connected element
+        name_load = 'Load_residential_LVGrid_1_6'
+        self.topology.add_load(100, 'Bus_' + name_load, 2, 3, 'agricultural')
+        # get connected line
+        connected_lines = self.topology.get_connected_lines_from_bus(
+            'Bus_' + name_load)
+        # check if elements are part of topology:
+        assert name_load in self.topology.loads_df.index
+        assert 'Bus_' + name_load in self.topology.buses_df.index
+        assert (connected_lines.index.isin(
+            self.topology.lines_df.index)).all()
+        # check case where other elements are connected to line as well,
+        # line and bus are therefore not removed
+        self.topology.remove_load(name_load)
+        assert name_load not in self.topology.loads_df.index
+        assert 'Bus_' + name_load in self.topology.buses_df.index
+        assert (connected_lines.index.isin(
+            self.topology.lines_df.index)).all()

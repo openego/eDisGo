@@ -247,9 +247,7 @@ def check_bus_for_removal(topology, bus_name):
     if bus_name not in topology.buses_df.index:
         raise ValueError("Bus of name {} not in Topology. Cannot be checked "
                          "to be removed.".format(bus_name))
-    connected_lines = topology.lines_df.loc[
-        topology.lines_df.bus0 == bus_name].append(
-        topology.lines_df.loc[topology.lines_df.bus1 == bus_name])
+    connected_lines = topology.get_connected_lines_from_bus(bus_name)
     # if more than one line is connected to node, it cannot be removed
     if len(connected_lines) > 1:
         return False
