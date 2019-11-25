@@ -593,7 +593,7 @@ class Topology:
         new_gen_df = pd.DataFrame(
             data={'bus': bus,
                   'p_nom': p_nom,
-                  'control': control if not None else 'PQ',
+                  'control': control if control is not None else 'PQ',
                   'type': generator_type,
                   'weather_cell_id': weather_cell_id,
                   'subtype': subtype},
@@ -625,7 +625,7 @@ class Topology:
                 "Specified bus {} is not valid as it is not defined in "
                 "buses_df.".format(bus))
 
-        # generate generator name and check uniqueness
+        # generate load name and check uniqueness
         if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
             grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
         else:
@@ -646,6 +646,50 @@ class Topology:
             index=[load_name])
         self.loads_df = self._loads_df.append(new_load_df)
         return load_name
+
+    def add_storage_unit(self, storage_id, bus, p_nom, control=None):
+        """
+        Adds storage unit to topology.
+
+        Storage unit name is generated automatically.
+
+        Parameters
+        ----------
+        storage_id : str
+            Unique identifier of generator.
+        bus
+        p_nom
+        control
+        """
+        # Todo: overthink storage_id as input parameter, only allow auto
+        #  created names?
+        try:
+            bus_df = self.buses_df.loc[bus]
+        except KeyError:
+            raise ValueError(
+                "Specified bus {} is not valid as it is not defined in "
+                "buses_df.".format(bus))
+
+        # generate storage name and check uniqueness
+        if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
+            grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
+        else:
+            grid_name = "MVGrid_" + bus_df.mv_grid_id
+        storage_name = 'StorageUnit_{}_{}'.format(grid_name, storage_id)
+        if storage_name in self.storage_units_df.index:
+            nr_storages = len(self._grids[grid_name].storage_units_df)
+            storage_name = 'StorageUnit_{}_{}'.format(grid_name, nr_storages+1)
+            while storage_name in self.storage_units_df.index:
+                storage_name = 'StorageUnit_{}_{}'.format(
+                    grid_name, random.randint(10 ** 8, 10 ** 9))
+
+        new_storage_df = pd.DataFrame(
+            data={'bus': bus,
+                  'p_nom': p_nom,
+                  'control': control if control is not None else 'PQ'},
+            index=[storage_name])
+        self.storage_units_df = self._storage_units_df.append(new_storage_df)
+        return storage_name
 
     def add_bus(self, bus_name, v_nom, x=None, y=None, lv_grid_id=None,
                 in_building=False):
