@@ -164,6 +164,9 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             'Line': grid_object.lines_df.loc[
                     :, ['bus0', 'bus1', 'x', 'r', 's_nom']]
         }
+        mv_components['Generator']['fluctuating'] = \
+            grid_object.generators_df.type.isin(['PV', 'wind'])
+
         if mode is 'mv':
             mv_components['Transformer'] = pd.DataFrame()
         elif mode is 'mvlv':
@@ -352,38 +355,46 @@ def append_lv_components(comp, comps, lv_components, lv_grid_name,
             raise ValueError('Aggregation type for loads invalid.')
         lv_components[comp] = lv_components[comp].append(comps_aggr)
     elif comp is 'Generator':
+        flucts = ['wind', 'solar']
         if aggregate_generators is None:
             comps_aggr = comps.loc[:, ['bus', 'control', 'p_nom']]
+            comps_aggr['fluctuating'] = comps.type.isin(flucts)
         elif aggregate_generators == 'type':
             comps_aggr = comps.groupby('type').sum().loc[:, ['bus', 'control',
                     'p_nom']]
             comps_aggr.bus = bus
             comps_aggr.control = 'PQ'
+            comps_aggr['fluctuating'] = comps_aggr.index.isin(flucts)
             for gen_type in comps_aggr.index.values:
                 aggregated_elements[lv_grid_name + '_' + gen_type] = \
                     comps[comps.type == gen_type].index.values
             comps_aggr.index = lv_grid_name + '_' + comps_aggr.index
         elif aggregate_generators == 'curtailable':
-            comps_fluct = comps[comps.type.isin(['wind', 'solar'])]
+            comps_fluct = comps[comps.type.isin(flucts)]
             comps_disp = comps[~comps.index.isin(comps_fluct.index)]
             comps_aggr = pd.DataFrame(columns=['bus', 'control', 'p_nom'])
             if len(comps_fluct) > 0:
                 comps_aggr = comps_aggr.append(pd.DataFrame({
                     'bus': [bus], 'control': ['PQ'],
-                    'p_nom':[sum(comps_fluct.p_nom)]
+                    'p_nom': [sum(comps_fluct.p_nom)],
+                    'fluctuating': [True]
                 }, index=[lv_grid_name+'_fluctuating']))
                 aggregated_elements[lv_grid_name+'_fluctuating'] = \
                     comps_fluct.index.values
             if len(comps_disp) > 0:
                 comps_aggr = comps_aggr.append(pd.DataFrame({
                     'bus': [bus], 'control': ['PQ'],
-                    'p_nom': [sum(comps_disp.p_nom)]
+                    'p_nom': [sum(comps_disp.p_nom)],
+                    'fluctuating': [False]
                 }, index=[lv_grid_name + '_dispatchable']))
                 aggregated_elements[lv_grid_name + '_dispatchable'] = \
                     comps_disp.index.values
         elif aggregate_generators == 'all':
-            comps_aggr = pd.DataFrame({'bus': [bus], 'control': ['PQ'],
-                                  'p_nom': [sum(comps.p_nom)]},
+            comps_aggr = pd.DataFrame(
+                {'bus': [bus], 'control': ['PQ'], 'p_nom': [sum(comps.p_nom)],
+                 'fluctuating': [True if (comps.type.isin(flucts)).all() else
+                                 False if ~comps.type.isin(flucts).any() else
+                                 'Mixed']},
                                  index=[lv_grid_name+'_generators'])
             aggregated_elements[lv_grid_name + '_generators'] = \
                 comps.index.values

@@ -8,7 +8,7 @@ import warnings
 import edisgo
 from edisgo.network.components import Generator, Load
 from edisgo.tools.tools import calculate_line_resistance, \
-    calculate_line_reactance, calculate_apparent_power
+    calculate_line_reactance, calculate_apparent_power, check_bus_for_removal
 
 logger = logging.getLogger('edisgo')
 
@@ -513,6 +513,55 @@ class Topology:
     def grid_district(self, grid_district):
         self._grid_district = grid_district
 
+    def get_connected_lines_from_bus(self, bus_name):
+        """
+        Returns all lines connected to bus of name bus_name
+
+        Parameters
+        ----------
+        bus_name : str
+            name of bus
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Dataframe of connected lines
+        """
+        return self.lines_df.loc[
+        self.lines_df.bus0 == bus_name].append(
+        self.lines_df.loc[self.lines_df.bus1 == bus_name])
+
+    def remove_bus(self, name):
+        """
+        Removes bus with given name from topology.
+
+        Parameters
+        ----------
+        name : str
+            Name of bus as specified in index of `buses_df`.
+
+        Notes
+        -------
+        Only isolated buses can be deleted from topology. Use respective
+        functions first to delete all connected lines, transformers,
+        loads, generators and storage_units.
+        """
+
+        # check if bus is isolated
+        if name in self.lines_df.bus0.values or \
+            name in self.lines_df.bus1.values or \
+            name in self.storage_units_df.bus.values or \
+            name in self.generators_df.bus.values or \
+            name in self.loads_df.bus.values or \
+            name in self.transformers_hvmv_df.bus0.values or \
+            name in self.transformers_hvmv_df.bus1.values or \
+            name in self.transformers_df.bus0.values or \
+            name in self.transformers_df.bus1.values:
+            raise AssertionError("Bus {} is not isolated. Remove all connected "
+                                 "elements first to remove bus.".format(name))
+        else:
+            self._buses_df.drop(name, inplace=True)
+
     def remove_generator(self, name):
         """
         Removes generator with given name from topology.
@@ -523,10 +572,52 @@ class Topology:
             Name of generator as specified in index of `generators_df`.
 
         """
-        # ToDo add test
+
+        # get bus to check if other elements are connected to bus
+        bus = self.generators_df.at[name, 'bus']
+        # remove generator
         self._generators_df.drop(name, inplace=True)
-        # ToDo check if other components are connected to the same bus
-        # and if not delete bus and line
+        # if no other elements are connected to same bus, remove line and bus
+        if check_bus_for_removal(self, bus_name=bus):
+            self.remove_line(self.get_connected_lines_from_bus(bus).index[0])
+
+    def remove_load(self, name):
+        """
+        Removes load with given name from topology.
+
+        Parameters
+        ----------
+        name : str
+            Name of load as specified in index of `loads_df`.
+
+        """
+
+        # get bus to check if other elements are connected to bus
+        bus = self.loads_df.at[name, 'bus']
+        # remove load
+        self._loads_df.drop(name, inplace=True)
+        # if no other elements are connected, remove line and bus as well
+        if check_bus_for_removal(self, bus_name=bus):
+            self.remove_line(self.get_connected_lines_from_bus(bus).index[0])
+
+    def remove_storage(self, name):
+        """
+        Removes storage with given name from topology.
+
+        Parameters
+        ----------
+        name : str
+            Name of storage as specified in index of `storage_units_df`.
+
+        """
+        # Todo: add test
+        # get bus to check if other elements are connected to bus
+        bus = self.storage_units_df.at[name, 'bus']
+        # remove load
+        self._storage_units_df.drop(name, inplace=True)
+        # if no other elements are connected, remove line and bus as well
+        if check_bus_for_removal(self, bus_name=bus):
+            self.remove_line(self.get_connected_lines_from_bus(bus).index[0])
 
     def remove_line(self, name):
         """
@@ -538,25 +629,21 @@ class Topology:
             Name of line as specified in index of `lines_df`.
 
         """
-        # ToDo add test
 
-        # backup buses of line
+        # backup buses of line and check if buses can be removed as well
         bus0 = self.lines_df.at[name, 'bus0']
+        remove_bus0 = check_bus_for_removal(self, bus0)
         bus1 = self.lines_df.at[name, 'bus1']
+        remove_bus1 = check_bus_for_removal(self, bus1)
 
         # drop line
         self._lines_df.drop(name, inplace=True)
 
-        # ToDo: check if any of the buses can be deleted as well
-        # # check if buses exist
-        # if bus0 not in self.buses_df.index:
-        #     raise ValueError(
-        #         "Specified bus {} is not valid as it is not defined in "
-        #         "buses_df.".format(bus0))
-        # if bus1 not in self.buses_df.index:
-        #     raise ValueError(
-        #         "Specified bus {} is not valid as it is not defined in "
-        #         "buses_df.".format(bus1))
+        # drop buses if no other elements are connected
+        if remove_bus0:
+            self.remove_bus(bus0)
+        if remove_bus1:
+            self.remove_bus(bus1)
 
     def add_generator(self, generator_id, bus, p_nom, generator_type,
                       weather_cell_id=None, subtype=None, control=None):
@@ -593,13 +680,103 @@ class Topology:
         new_gen_df = pd.DataFrame(
             data={'bus': bus,
                   'p_nom': p_nom,
-                  'control': control if not None else 'PQ',
+                  'control': control if control is not None else 'PQ',
                   'type': generator_type,
                   'weather_cell_id': weather_cell_id,
                   'subtype': subtype},
             index=[generator_name])
         self.generators_df = self._generators_df.append(new_gen_df)
         return generator_name
+
+    def add_load(self, load_id, bus, peak_load, annual_consumption, sector):
+        """
+        Adds load to topology.
+
+        Load name is generated automatically.
+
+        Parameters
+        ----------
+        load_id : str
+            Unique identifier of generator.
+        bus
+        peak_load
+        annual_consumption
+        sector
+        """
+        # Todo: overthink load_id as input parameter, only allow auto created
+        #  names?
+        try:
+            bus_df = self.buses_df.loc[bus]
+        except KeyError:
+            raise ValueError(
+                "Specified bus {} is not valid as it is not defined in "
+                "buses_df.".format(bus))
+
+        # generate load name and check uniqueness
+        if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
+            grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
+        else:
+            grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
+        load_name = 'Load_{}_{}_{}'.format(sector, grid_name, load_id)
+        if load_name in self.loads_df.index:
+            nr_loads = len(self._grids[grid_name].loads_df)
+            load_name = 'Load_{}_{}_{}'.format(sector, grid_name, nr_loads+1)
+            while load_name in self.loads_df.index:
+                load_name = 'Load_{}_{}_{}'.format(
+                    sector, grid_name, random.randint(10 ** 8, 10 ** 9))
+
+        new_load_df = pd.DataFrame(
+            data={'bus': bus,
+                  'peak_load': peak_load,
+                  'annual_consumption': annual_consumption,
+                  'sector': sector},
+            index=[load_name])
+        self.loads_df = self._loads_df.append(new_load_df)
+        return load_name
+
+    def add_storage_unit(self, storage_id, bus, p_nom, control=None):
+        """
+        Adds storage unit to topology.
+
+        Storage unit name is generated automatically.
+
+        Parameters
+        ----------
+        storage_id : str
+            Unique identifier of generator.
+        bus
+        p_nom
+        control
+        """
+        # Todo: overthink storage_id as input parameter, only allow auto
+        #  created names?
+        try:
+            bus_df = self.buses_df.loc[bus]
+        except KeyError:
+            raise ValueError(
+                "Specified bus {} is not valid as it is not defined in "
+                "buses_df.".format(bus))
+
+        # generate storage name and check uniqueness
+        if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
+            grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
+        else:
+            grid_name = "MVGrid_" + bus_df.mv_grid_id
+        storage_name = 'StorageUnit_{}_{}'.format(grid_name, storage_id)
+        if storage_name in self.storage_units_df.index:
+            nr_storages = len(self._grids[grid_name].storage_units_df)
+            storage_name = 'StorageUnit_{}_{}'.format(grid_name, nr_storages+1)
+            while storage_name in self.storage_units_df.index:
+                storage_name = 'StorageUnit_{}_{}'.format(
+                    grid_name, random.randint(10 ** 8, 10 ** 9))
+
+        new_storage_df = pd.DataFrame(
+            data={'bus': bus,
+                  'p_nom': p_nom,
+                  'control': control if control is not None else 'PQ'},
+            index=[storage_name])
+        self.storage_units_df = self._storage_units_df.append(new_storage_df)
+        return storage_name
 
     def add_bus(self, bus_name, v_nom, x=None, y=None, lv_grid_id=None,
                 in_building=False):

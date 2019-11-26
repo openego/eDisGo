@@ -50,7 +50,10 @@ class TestPypsaIO:
         assert len(aggr_dict) == 0
         assert len(lv_components['Generator']) == 6
         assert_frame_equal(gens.loc[:, ['bus', 'control', 'p_nom']],
-                           lv_components['Generator'])
+                           lv_components['Generator'].loc[:,
+                           ['bus', 'control', 'p_nom']])
+        assert (lv_components['Generator'].fluctuating == \
+               [True, True, True, True, False, True]).all()
         # check aggregation of generators by type
         lv_components['Generator'] = pd.DataFrame()
         aggr_dict = append_lv_components('Generator', gens, lv_components,
@@ -69,6 +72,8 @@ class TestPypsaIO:
                 ['TestGrid_gas', 'TestGrid_solar', 'TestGrid_wind']).all()
         assert np.isclose(lv_components['Generator'].p_nom,
                           [0.1, 0.29, 0.63]).all()
+        assert (lv_components['Generator'].fluctuating ==
+                [False, True, True]).all()
         # check if only one type is existing
         lv_components['Generator'] = pd.DataFrame()
         aggr_dict = append_lv_components('Generator',
@@ -81,6 +86,7 @@ class TestPypsaIO:
         assert len(lv_components['Generator']) == 1
         assert lv_components['Generator'].index.values == ['TestGrid_solar']
         assert np.isclose(lv_components['Generator'].p_nom, 0.29)
+        assert (lv_components['Generator'].fluctuating == [True]).all()
         # check aggregation of generators by fluctuating or dispatchable
         lv_components['Generator'] = pd.DataFrame()
         aggr_dict = append_lv_components('Generator', gens, lv_components,
@@ -97,6 +103,7 @@ class TestPypsaIO:
                 ['TestGrid_fluctuating', 'TestGrid_dispatchable']).all()
         assert np.isclose(lv_components['Generator'].p_nom,
                           [0.92, 0.1]).all()
+        assert (lv_components['Generator'].fluctuating == [True, False]).all()
         # check if only dispatchable gens are given
         lv_components['Generator'] = pd.DataFrame()
         aggr_dict = append_lv_components('Generator',
@@ -109,6 +116,7 @@ class TestPypsaIO:
         assert lv_components['Generator'].index.values == \
                ['TestGrid_dispatchable']
         assert np.isclose(lv_components['Generator'].p_nom, 0.1)
+        assert (lv_components['Generator'].fluctuating == [False]).all()
         # check if only fluctuating gens are given
         lv_components['Generator'] = pd.DataFrame()
         aggr_dict = \
@@ -123,6 +131,7 @@ class TestPypsaIO:
         assert lv_components['Generator'].index.values == \
                ['TestGrid_fluctuating']
         assert np.isclose(lv_components['Generator'].p_nom, 0.92)
+        assert (lv_components['Generator'].fluctuating == [True]).all()
         # check aggregation of all generators
         lv_components['Generator'] = pd.DataFrame()
         aggr_dict = append_lv_components('Generator', gens, lv_components,
@@ -137,6 +146,41 @@ class TestPypsaIO:
         assert (lv_components['Generator'].index.values ==
                 ['TestGrid_generators']).all()
         assert np.isclose(lv_components['Generator'].p_nom, 1.02)
+        assert (lv_components['Generator'].fluctuating == ['Mixed']).all()
+        # check only fluctuating
+        lv_components['Generator'] = pd.DataFrame()
+        aggr_dict = append_lv_components('Generator',
+                                         gens.drop(gens.loc[gens.type ==
+                                                            'gas'].index),
+                                         lv_components, 'TestGrid',
+                                         aggregate_generators='all')
+        assert len(aggr_dict) == 1
+        assert (aggr_dict['TestGrid_generators']
+                == ['Solar_1', 'Wind_1', 'Solar_2', 'Solar_3',
+                    'Wind_2']).all()
+        assert len(lv_components['Generator']) == 1
+        assert (lv_components['Generator'].control == 'PQ').all()
+        assert (lv_components['Generator'].bus == 'LVStation').all()
+        assert (lv_components['Generator'].index.values ==
+                ['TestGrid_generators']).all()
+        assert np.isclose(lv_components['Generator'].p_nom, 0.92)
+        assert (lv_components['Generator'].fluctuating == [True]).all()
+        # check only dispatchable
+        lv_components['Generator'] = pd.DataFrame()
+        aggr_dict = append_lv_components('Generator',
+                                         gens.loc[gens.type == 'gas'],
+                                         lv_components, 'TestGrid',
+                                         aggregate_generators='all')
+        assert len(aggr_dict) == 1
+        assert (aggr_dict['TestGrid_generators']
+                == ['Gas_1']).all()
+        assert len(lv_components['Generator']) == 1
+        assert (lv_components['Generator'].control == 'PQ').all()
+        assert (lv_components['Generator'].bus == 'LVStation').all()
+        assert (lv_components['Generator'].index.values ==
+                ['TestGrid_generators']).all()
+        assert np.isclose(lv_components['Generator'].p_nom, 0.1)
+        assert (lv_components['Generator'].fluctuating == [False]).all()
         lv_components['Generator'] = pd.DataFrame()
         # CHECK LOADS
         loads = pd.DataFrame({'bus': ['LVStation'] * 6,
