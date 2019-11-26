@@ -163,7 +163,15 @@ def ppc2pm(ppc,psa_net): #pragma: no cover
             gen["cost"][-len(costs):] = costs
 
     # TODO BRANCHCOST!
-
+    if len(ppc["branchcost"]) > len(ppc["branch"]):
+        ppc["branchcost"] = ppc["branchcost"][:ppc["branch"].shape[0], :]
+    for idx, row in enumerate(ppc["branchcost"], start=1):
+        ncost = int(row[0])
+        branch = pm["branch"][str(idx)]
+        branch["ncost"] = ncost
+        branch["cost"] = [0] * ncost
+        costs = row[1:]
+        branch["cost"][-len(costs):] = costs
     # TODO STORAGE UNITS!
 
     return pm
@@ -178,6 +186,7 @@ def _init_ppc():
            "branch": np.array([], dtype=np.complex128),
            "gen": np.array([], dtype=float),
            "gencost": np.array([],dtype=float),
+           "branchcost": np.array([],dtype=float),
            "internal": {
             "Ybus": np.array([], dtype=np.complex128),
                "Yf": np.array([], dtype=np.complex128),
@@ -224,7 +233,6 @@ def _build_gen(psa_net,ppc):
     # set setpoint of pg and qg
     ppc["gen"][:,PG] = psa_net.generators["p_set"].values
     ppc["gen"][:,QG] = psa_net.generators["q_set"].values
-
 
     ppc["gen"][:, MBASE] = 1.0
     ppc["gen"][:, GEN_STATUS] = 1.0
@@ -275,6 +283,22 @@ def _build_branch(psa_net,ppc):
     ppc["branch"][:,ANGMIN] = -360
     ppc["branch"][:,ANGMAX] = 360
     # TODO BRANCHCOSTS!
+    # check which branch costs are given in psa_net,
+    ncost = sum([(colName in psa_net.lines.columns)*1 for colName in ["costs_earthworks","costs_cable"]])
+    if ncost==0:
+        print("no branch costs are given in pypsa network")
+    elif ncost==1:
+        if not "costs_cable" in psa_net.lines.columns:
+            print("costs for cables not in pypsa network, not possible to define cost function for network expansion")
+        else:
+            ppc["branchcost"] = np.zeros(shape=(n_branch, 2), dtype=float)
+            ppc["branchcost"][:,0] = ncost
+            ppc["branchcost"][:,1] = psa_net.lines["costs_cable"].values
+    elif ncost==2:
+        ppc["branchcost"] = np.zeros(shape=(n_branch, 3), dtype=float)
+        ppc["branchcost"][:, 0] = ncost
+        ppc["branchcost"][:, 1] = psa_net.lines["costs_cable"].values
+        ppc["branchcost"][:, 2] = psa_net.lines["costs_earthworks"].values
 
     return
 
@@ -335,7 +359,7 @@ def _build_load(psa_net,ppc):
 
 
 def _build_storage_units(psa_net,ppc):
-    print("storage units are not implemented")
+    print("storage units are not implemented yet")
 
 
 def _build_load_dict(psa_net,ppc):
