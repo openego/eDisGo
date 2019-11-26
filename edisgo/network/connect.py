@@ -11,7 +11,7 @@ if not 'READTHEDOCS' in os.environ:
 from edisgo.network.components import Generator
 from edisgo.tools.geo import \
     calc_geo_dist_vincenty, calc_geo_lines_in_buffer, \
-    proj2equidistant, proj2conformal
+    proj2equidistant, proj2equidistant_reverse
 
 import logging
 logger = logging.getLogger('edisgo')
@@ -557,7 +557,8 @@ def _connect_mv_node(edisgo_object, bus, target_obj):
         # find nearest point on MV line
         conn_point_shp = target_obj['shp'].interpolate(
             target_obj['shp'].project(bus_shp))
-        conn_point_shp = transform(proj2conformal(srid), conn_point_shp)
+        conn_point_shp = transform(proj2equidistant_reverse(srid),
+                                   conn_point_shp)
 
         # create new branch tee bus
         branch_tee_repr = 'BranchTee_{}'.format(target_obj['repr'])

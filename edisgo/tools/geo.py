@@ -32,9 +32,9 @@ def proj2equidistant(srid):
                    )
 
 
-def proj2conformal(srid):
+def proj2equidistant_reverse(srid):
     """
-    Transforms to conformal projection (epsg:4326).
+    Transforms back from equidistant projection to given projection.
 
     Parameters
     ----------
