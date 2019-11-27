@@ -526,10 +526,32 @@ class Topology:
         --------
         :pandas:`pandas.DataFrame<dataframe>`
             Dataframe of connected lines
+
         """
         return self.lines_df.loc[
         self.lines_df.bus0 == bus_name].append(
         self.lines_df.loc[self.lines_df.bus1 == bus_name])
+
+    def get_neighbours(self, bus_name):
+        """
+        Returns all neighbour buses of bus with bus_name.
+
+        Parameters
+        ----------
+        bus_name : str
+            name of bus
+
+        Returns
+        --------
+        list(str)
+
+        """
+        lines = self.get_connected_lines_from_bus(bus_name)
+        buses = list(lines.bus0)
+        buses.extend(list(lines.bus1))
+        neighbours = set(buses)
+        neighbours.remove(bus_name)
+        return neighbours
 
     def remove_bus(self, name):
         """
