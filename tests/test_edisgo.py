@@ -6,6 +6,7 @@ import pytest
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import reinforce_measures as reinforce
+from matplotlib import pyplot as plt
 
 
 class TestEDisGo:
@@ -247,10 +248,14 @@ class TestEDisGo:
         print()
 
     def test_plot_mv_grid_topology(self):
+        plt.ion()
         self.edisgo.plot_mv_grid_topology(technologies=True)
+        plt.close('all')
         self.edisgo.plot_mv_grid_topology()
+        plt.close('all')
 
     def test_plot_mv_voltages(self):
+        plt.ion()
         # if not already done so, analyse grid
         try:
             if self.results.pfa_v_mag_pu is None:
@@ -261,9 +266,11 @@ class TestEDisGo:
             pass
         # plot mv voltages
         self.edisgo.plot_mv_voltages()
+        plt.close('all')
 
     def test_plot_mv_line_loading(self):
         # if not already done so, analyse grid
+        plt.ion()
         try:
             if self.edisgo.results.i_res is None:
                 self.edisgo.analyze()
@@ -271,8 +278,10 @@ class TestEDisGo:
             self.edisgo.analyze()
         # plot mv line loading
         self.edisgo.plot_mv_line_loading()
+        plt.close('all')
 
     def test_plot_mv_grid_expansion_costs(self):
+        plt.ion()
         try:
             if self.edisgo.results.grid_expansion_costs is None:
                 self.edisgo.reinforce()
@@ -280,8 +289,10 @@ class TestEDisGo:
             self.edisgo.reinforce()
         # plot grid expansion costs
         self.edisgo.plot_mv_grid_expansion_costs()
+        plt.close('all')
 
     def test_plot_mv_storage_integration(self):
+        plt.ion()
         self.edisgo.topology.add_storage_unit(1, 'Bus_BranchTee_MVGrid_1_8',
                                               0.3)
         self.edisgo.topology.add_storage_unit(1, 'Bus_BranchTee_MVGrid_1_8',
@@ -289,3 +300,4 @@ class TestEDisGo:
         self.edisgo.topology.add_storage_unit(1, 'Bus_BranchTee_MVGrid_1_10',
                                               0.3)
         self.edisgo.plot_mv_storage_integration()
+        plt.close('all')
