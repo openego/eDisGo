@@ -130,10 +130,13 @@ class TimeSeries:
             See class definition for details.
 
         """
-        try:
-            return self._generators_active_power.loc[[self.timeindex], :]
-        except:
-            return self._generators_active_power.loc[self.timeindex, :]
+        if self._generators_active_power is None:
+            return None
+        else:
+            try:
+                return self._generators_active_power.loc[[self.timeindex], :]
+            except:
+                return self._generators_active_power.loc[self.timeindex, :]
 
     @generators_active_power.setter
     def generators_active_power(self, generators_active_power_ts):
@@ -152,10 +155,13 @@ class TimeSeries:
             See class definition for details.
 
         """
-        try:
-            return self._generators_reactive_power.loc[[self.timeindex], :]
-        except:
-            return self._generators_reactive_power.loc[self.timeindex, :]
+        if self._generators_reactive_power is None:
+            return None
+        else:
+            try:
+                return self._generators_reactive_power.loc[[self.timeindex], :]
+            except:
+                return self._generators_reactive_power.loc[self.timeindex, :]
 
     @generators_reactive_power.setter
     def generators_reactive_power(self, generators_reactive_power_ts):
@@ -173,10 +179,13 @@ class TimeSeries:
             See class definition for details.
 
         """
-        try:
-            return self._loads_active_power.loc[[self.timeindex], :]
-        except:
-            return self._loads_active_power.loc[self.timeindex, :]
+        if self._loads_active_power is None:
+            return None
+        else:
+            try:
+                return self._loads_active_power.loc[[self.timeindex], :]
+            except:
+                return self._loads_active_power.loc[self.timeindex, :]
 
     @loads_active_power.setter
     def loads_active_power(self, loads_active_power_ts):
@@ -195,10 +204,13 @@ class TimeSeries:
             See class definition for details.
 
         """
-        try:
-            return self._loads_reactive_power.loc[[self.timeindex], :]
-        except:
-            return self._loads_reactive_power.loc[self.timeindex, :]
+        if self._loads_reactive_power is None:
+            return None
+        else:
+            try:
+                return self._loads_reactive_power.loc[[self.timeindex], :]
+            except:
+                return self._loads_reactive_power.loc[self.timeindex, :]
 
     @loads_reactive_power.setter
     def loads_reactive_power(self, loads_reactive_power_ts):
@@ -216,10 +228,14 @@ class TimeSeries:
             See class definition for details.
 
         """
-        try:
-            return self._storage_units_active_power.loc[[self.timeindex], :]
-        except:
-            return self._storage_units_active_power.loc[self.timeindex, :]
+        if self._storage_units_active_power is None:
+            return None
+        else:
+            try:
+                return self._storage_units_active_power.loc[[self.timeindex],
+                       :]
+            except:
+                return self._storage_units_active_power.loc[self.timeindex, :]
 
     @storage_units_active_power.setter
     def storage_units_active_power(self, storage_units_active_power_ts):
@@ -238,10 +254,14 @@ class TimeSeries:
             See class definition for details.
 
         """
-        try:
-            return self._storage_units_reactive_power.loc[[self.timeindex], :]
-        except:
-            return self._storage_units_reactive_power.loc[self.timeindex, :]
+        if self._storage_units_reactive_power is None:
+            return None
+        else:
+            try:
+                return self._storage_units_reactive_power.loc[[self.timeindex],
+                ]
+            except:
+                return self._storage_units_reactive_power.loc[self.timeindex, :]
 
     @storage_units_reactive_power.setter
     def storage_units_reactive_power(self, storage_units_reactive_power_ts):

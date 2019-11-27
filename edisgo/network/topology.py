@@ -532,6 +532,27 @@ class Topology:
         self.lines_df.bus0 == bus_name].append(
         self.lines_df.loc[self.lines_df.bus1 == bus_name])
 
+    def get_connected_components_from_bus(self, bus_name):
+        #Todo: Docstring
+        components = {}
+        components['Generator'] = self.generators_df.loc[
+            self.generators_df.bus == bus_name]
+        components['Line'] = self.get_connected_lines_from_bus(bus_name)
+        components['Load'] = self.loads_df.loc[
+            self.loads_df.bus == bus_name]
+        components['Transformer'] = self.transformers_df.loc[
+            self.transformers_df.bus0 == bus_name].append(
+            self.transformers_df.loc[self.transformers_df.bus1 == bus_name])
+        components['Transformer_HVMV'] = self.transformers_hvmv_df.loc[
+            self.transformers_hvmv_df.bus0 == bus_name].append(
+            self.transformers_hvmv_df.loc[
+                self.transformers_hvmv_df.bus1 == bus_name])
+        components['StorageUnit'] = self.storage_units_df.loc[
+            self.storage_units_df.bus == bus_name]
+        components['Switch'] = self.switches_df.loc[
+            self.switches_df.bus_open == bus_name]
+        return components
+
     def get_neighbours(self, bus_name):
         """
         Returns all neighbour buses of bus with bus_name.
@@ -784,7 +805,7 @@ class Topology:
         if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
             grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
         else:
-            grid_name = "MVGrid_" + bus_df.mv_grid_id
+            grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
         storage_name = 'StorageUnit_{}_{}'.format(grid_name, storage_id)
         if storage_name in self.storage_units_df.index:
             nr_storages = len(self._grids[grid_name].storage_units_df)

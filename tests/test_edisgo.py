@@ -245,3 +245,47 @@ class TestEDisGo:
         # Todo: relocate? Check other values
         edisgo.analyze(timesteps=timeindex[range(10)])
         print()
+
+    def test_plot_mv_grid_topology(self):
+        self.edisgo.plot_mv_grid_topology(technologies=True)
+        self.edisgo.plot_mv_grid_topology()
+
+    def test_plot_mv_voltages(self):
+        # if not already done so, analyse grid
+        try:
+            if self.results.pfa_v_mag_pu is None:
+                self.edisgo.analyze()
+        except AttributeError:
+            self.edisgo.analyze()
+        except ValueError:
+            pass
+        # plot mv voltages
+        self.edisgo.plot_mv_voltages()
+
+    def test_plot_mv_line_loading(self):
+        # if not already done so, analyse grid
+        try:
+            if self.edisgo.results.i_res is None:
+                self.edisgo.analyze()
+        except AttributeError:
+            self.edisgo.analyze()
+        # plot mv line loading
+        self.edisgo.plot_mv_line_loading()
+
+    def test_plot_mv_grid_expansion_costs(self):
+        try:
+            if self.edisgo.results.grid_expansion_costs is None:
+                self.edisgo.reinforce()
+        except AttributeError:
+            self.edisgo.reinforce()
+        # plot grid expansion costs
+        self.edisgo.plot_mv_grid_expansion_costs()
+
+    def test_plot_mv_storage_integration(self):
+        self.edisgo.topology.add_storage_unit(1, 'Bus_BranchTee_MVGrid_1_8',
+                                              0.3)
+        self.edisgo.topology.add_storage_unit(1, 'Bus_BranchTee_MVGrid_1_8',
+                                              0.6)
+        self.edisgo.topology.add_storage_unit(1, 'Bus_BranchTee_MVGrid_1_10',
+                                              0.3)
+        self.edisgo.plot_mv_storage_integration()

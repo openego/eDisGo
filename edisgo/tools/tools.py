@@ -43,16 +43,13 @@ def select_worstcase_snapshots(network):
     return timestamp
 
 
-def get_residual_load_from_pypsa_network(pypsa_network):
+def get_residual_load_from_pypsa_network(edisgo_obj):
     """
     Calculates residual load in MW in MV network and underlying LV grids.
 
     Parameters
     ----------
-    pypsa_network : :pypsa:`pypsa.Network<network>`
-        The `PyPSA network
-        <https://www.pypsa.org/doc/components.html#network>`_ container,
-        containing load flow results.
+    edisgo_obj :class:`~edisgo.EDisGo`
 
     Returns
     -------
@@ -62,16 +59,30 @@ def get_residual_load_from_pypsa_network(pypsa_network):
         series is a :pandas:`pandas.DatetimeIndex<datetimeindex>`
 
     """
-    residual_load = \
-        pypsa_network.loads_t.p_set.sum(axis=1) - (
-                pypsa_network.generators_t.p_set.loc[
-                :, pypsa_network.generators_t.p_set.columns !=
-                   'Generator_slack'].sum(axis=1) +
-                pypsa_network.storage_units_t.p_set.sum(axis=1))
+    # Todo: write test
+    if edisgo_obj.timeseries.loads_active_power is None:
+        loads_active_power = 0
+    else:
+        loads_active_power = edisgo_obj.timeseries.loads_active_power.sum(
+            axis=1)
+    if edisgo_obj.timeseries.generators_active_power is None:
+        generators_active_power = 0
+    else:
+        generators_active_power = \
+            edisgo_obj.timeseries.generators_active_power.loc[
+                :, edisgo_obj.timeseries.generators_active_power.columns !=
+                'Generator_slack'].sum(axis=1)
+    if edisgo_obj.timeseries.storage_units_active_power is None:
+        storage_units_active_power = 0
+    else:
+        storage_units_active_power = \
+            edisgo_obj.timeseries.storage_units_active_power.sum(axis=1)
+    residual_load = loads_active_power - \
+                    (generators_active_power + storage_units_active_power)
     return residual_load
 
 
-def calculate_relative_line_load(network, configs, line_load, line_voltages,
+def calculate_relative_line_load(edisgo_obj, line_load,
                                  lines=None, timesteps=None):
     """
     Calculates relative line loading.
@@ -82,18 +93,12 @@ def calculate_relative_line_load(network, configs, line_load, line_voltages,
 
     Parameters
     ----------
-    network : :pypsa:`pypsa.Network<network>`
+    edisgo_obj : :class:`~.edisgo.EDisGo`
         Pypsa network with lines to calculate line loading for.
-    configs : :obj:`dict`
-        Dictionary with used configurations from config files. See
-        :class:`~.network.network.Config` for more information.
     line_load : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with current results from power flow analysis in A. Index of
         the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
         columns are the line representatives.
-    line_voltages : :pandas:`pandas.Series<series>`
-        Series with nominal voltages of lines in kV. Index of the dataframe are
-        the line representatives.
     lines : list(str) or None, optional
         Line names/representatives of lines to calculate line loading for. If
         None line loading of all lines in `line_load` dataframe are used.
@@ -110,7 +115,7 @@ def calculate_relative_line_load(network, configs, line_load, line_voltages,
         columns are the line representatives.
 
     """
-
+    # Todo: write test
     if timesteps is None:
         timesteps = line_load.index
     # check if timesteps is array-like, otherwise convert to list
@@ -122,12 +127,12 @@ def calculate_relative_line_load(network, configs, line_load, line_voltages,
     else:
         line_indices = line_load.columns
 
-    residual_load = get_residual_load_from_pypsa_network(network)
+    residual_load = get_residual_load_from_pypsa_network(edisgo_obj)
     case = residual_load.apply(
         lambda _: 'feedin_case' if _ < 0 else 'load_case')
 
     load_factor = pd.DataFrame(
-        data={'i_nom': [float(configs[
+        data={'i_nom': [float(edisgo_obj.config[
                                   'grid_expansion_load_factors'][
                                   'mv_{}_line'.format(case.loc[_])])
                         for _ in timesteps]},
@@ -136,10 +141,11 @@ def calculate_relative_line_load(network, configs, line_load, line_voltages,
     # current from power flow
     i_res = line_load.loc[timesteps, line_indices]
     # allowed current
+    lines = edisgo_obj.topology.lines_df.loc[line_indices]
+    lines = lines.join(edisgo_obj.topology.buses_df.loc[lines.bus0, 'v_nom'],
+                       on='bus0', how='left').drop_duplicates()
     i_allowed = load_factor.dot(
-        (network.lines.s_nom.T.loc[line_indices].divide(
-            line_voltages.T.loc[line_indices]) * 1e3 / np.sqrt(3)).to_frame(
-            'i_nom').T)
+        (lines.s_nom / (sqrt(3) * lines.v_nom)).to_frame('i_nom').T)
 
     return i_res.divide(i_allowed)
 

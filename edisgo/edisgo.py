@@ -36,167 +36,7 @@ class EDisGoReimport:
         self.results = ResultsReimport(
             results_path, parameters=parameters)
 
-    def plot_mv_grid_topology(self, technologies=False, **kwargs):
-        """
-        Plots plain MV network topology and optionally nodes by technology type
-        (e.g. station or generator).
 
-        Parameters
-        ----------
-        technologies : :obj:`Boolean`
-            If True plots stations, generators, etc. in the topology in different
-            colors. If False does not plot any nodes. Default: False.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.topology.pypsa is None:
-            try:
-                timesteps = self.topology.timeseries.timeindex
-                self.topology.pypsa = pypsa_io.to_pypsa(
-                    self.topology, mode=None, timesteps=timesteps)
-            except:
-                logging.warning(
-                    "pypsa representation of MV topology needed to plot MV "
-                    "topology topology.")
-
-        if self.topology.pypsa is not None:
-            plots.mv_grid_topology(
-                self.topology.pypsa, self.topology.config,
-                node_color='technology' if technologies is True else None,
-                filename=kwargs.get('filename', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-                title=kwargs.get('title', ''))
-
-    def plot_mv_voltages(self, **kwargs):
-        """
-        Plots voltages in MV network on network topology plot.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.topology.pypsa is not None:
-            try:
-                v_res = self.topology.results.v_res()
-            except:
-                logging.warning("Voltages `pfa_v_mag_pu` from power flow "
-                                "analysis must be available to plot them.")
-                return
-            plots.mv_grid_topology(
-                self.topology.pypsa, self.topology.config,
-                timestep=kwargs.get('timestep', None),
-                node_color='voltage',
-                filename=kwargs.get('filename', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                voltage=v_res,
-                limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-                title=kwargs.get('title', ''))
-        else:
-            logging.warning("pypsa representation of MV network needed to "
-                            "plot voltages.")
-
-    def plot_mv_line_loading(self, **kwargs):
-        """
-        Plots relative line loading (current from power flow analysis to
-        allowed current) of MV lines.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.topology.pypsa is not None and \
-                self.topology.results.i_res is not None:
-            plots.mv_grid_topology(
-                self.topology.pypsa, self.topology.config,
-                timestep=kwargs.get('timestep', None),
-                line_color='loading',
-                node_color=kwargs.get('node_color', None),
-                line_load=self.topology.results.i_res,
-                filename=kwargs.get('filename', None),
-                arrows=kwargs.get('arrows', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                voltage=self.topology.results.v_res(),
-                limits_cb_lines=kwargs.get('limits_cb_lines', None),
-                limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-                lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
-                title=kwargs.get('title', ''),
-                scaling_factor_line_width=kwargs.get(
-                    'scaling_factor_line_width', None))
-        else:
-            if self.topology.pypsa is None:
-                logging.warning("pypsa representation of MV topology needed to "
-                                "plot line loading.")
-            if self.topology.results.i_res is None:
-                logging.warning("Currents `i_res` from power flow analysis "
-                                "must be available to plot line loading.")
-
-    def plot_mv_grid_expansion_costs(self, **kwargs):
-        """
-        Plots costs per MV line.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.topology.pypsa is not None and \
-                self.topology.results.grid_expansion_costs is not None:
-            if isinstance(self, EDisGo):
-                # convert index of topology expansion costs to str
-                grid_expansion_costs = \
-                    self.topology.results.grid_expansion_costs.reset_index()
-                grid_expansion_costs['index'] = \
-                    grid_expansion_costs['index'].apply(lambda _: repr(_))
-                grid_expansion_costs.set_index('index', inplace=True)
-            else:
-                grid_expansion_costs = \
-                    self.topology.results.grid_expansion_costs
-
-            plots.mv_grid_topology(
-                self.topology.pypsa, self.topology.config,
-                line_color='expansion_costs',
-                grid_expansion_costs=grid_expansion_costs,
-                filename=kwargs.get('filename', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                limits_cb_lines=kwargs.get('limits_cb_lines', None),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-                lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
-                title=kwargs.get('title', ''),
-                scaling_factor_line_width=kwargs.get(
-                    'scaling_factor_line_width', None)
-            )
-        else:
-            if self.topology.pypsa is None:
-                logging.warning("pypsa representation of MV topology needed to "
-                                "plot topology expansion costs.")
-            if self.topology.results.grid_expansion_costs is None:
-                logging.warning("Grid expansion cost results needed to plot "
-                                "them.")
-
-    def plot_mv_storage_integration(self, **kwargs):
-        """
-        Plots storage position in MV topology of integrated storage units.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.topology.pypsa is not None:
-            plots.mv_grid_topology(
-                self.topology.pypsa, self.topology.config,
-                node_color='storage_integration',
-                filename=kwargs.get('filename', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-                title=kwargs.get('title', ''))
-        else:
-            if self.topology.pypsa is None:
-                logging.warning("pypsa representation of MV topology needed to "
-                                "plot storage integration in MV topology.")
 
     def histogram_voltage(self, timestep=None, title=True, **kwargs):
         """
@@ -270,8 +110,7 @@ class EDisGoReimport:
 
         rel_line_loading = tools.calculate_relative_line_load(
             self.topology.pypsa, self.topology.config,
-            self.topology.results.i_res, self.topology.pypsa.lines.v_nom,
-            lines.index, timestep)
+            self.topology.results.i_res, lines.index, timestep)
 
         if timestep is None:
             timestep = rel_line_loading.index
@@ -763,3 +602,143 @@ class EDisGo(EDisGoReimport):
         """
         StorageControl(edisgo=self, timeseries=timeseries,
                        position=position, **kwargs)
+
+    def plot_mv_grid_topology(self, technologies=False, **kwargs):
+        """
+        Plots plain MV network topology and optionally nodes by technology type
+        (e.g. station or generator).
+
+        Parameters
+        ----------
+        technologies : :obj:`Boolean`
+            If True plots stations, generators, etc. in the topology in different
+            colors. If False does not plot any nodes. Default: False.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+
+        plots.mv_grid_topology(
+            self,
+            node_color='technology' if technologies is True else None,
+            filename=kwargs.get('filename', None),
+            grid_district_geom=kwargs.get('grid_district_geom', True),
+            background_map=kwargs.get('background_map', True),
+            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+            title=kwargs.get('title', ''))
+
+    def plot_mv_voltages(self, **kwargs):
+        """
+        Plots voltages in MV network on network topology plot.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        try:
+            if self.results.pfa_v_mag_pu is None:
+                logging.warning("Voltages `pfa_v_mag_pu` from power flow "
+                                "analysis must be available to plot them.")
+            return
+        except AttributeError:
+            logging.warning("Results must be available to plot voltages. "
+                            "Please analyze grid first.")
+            return
+        except ValueError:
+            pass
+
+        plots.mv_grid_topology(
+            self,
+            timestep=kwargs.get('timestep', None),
+            node_color='voltage',
+            filename=kwargs.get('filename', None),
+            grid_district_geom=kwargs.get('grid_district_geom', True),
+            background_map=kwargs.get('background_map', True),
+            voltage=self.results.pfa_v_mag_pu,
+            limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
+            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+            title=kwargs.get('title', ''))
+
+    def plot_mv_line_loading(self, **kwargs):
+        """
+        Plots relative line loading (current from power flow analysis to
+        allowed current) of MV lines.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        try:
+            if self.results.i_res is None:
+                logging.warning("Currents `i_res` from power flow analysis "
+                                "must be available to plot line loading.")
+                return
+        except AttributeError:
+            logging.warning("Results must be available to plot line loading. "
+                            "Please analyze grid first.")
+            return
+
+        plots.mv_grid_topology(
+            self,
+            timestep=kwargs.get('timestep', None),
+            line_color='loading',
+            node_color=kwargs.get('node_color', None),
+            line_load=self.results.i_res,
+            filename=kwargs.get('filename', None),
+            arrows=kwargs.get('arrows', None),
+            grid_district_geom=kwargs.get('grid_district_geom', True),
+            background_map=kwargs.get('background_map', True),
+            voltage=self.results.pfa_v_mag_pu,
+            limits_cb_lines=kwargs.get('limits_cb_lines', None),
+            limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
+            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+            lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
+            title=kwargs.get('title', ''),
+            scaling_factor_line_width=kwargs.get(
+                'scaling_factor_line_width', None))
+
+    def plot_mv_grid_expansion_costs(self, **kwargs):
+        """
+        Plots costs per MV line.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        try:
+            if self.results.grid_expansion_costs is None:
+                logging.warning("Grid expansion cost results needed to plot "
+                                "them. Please do grid reinforcement.")
+                return
+        except AttributeError:
+            logging.warning("Results of MV topology needed to  plot topology "
+                            "expansion costs. Please reinforce first.")
+            return
+
+        plots.mv_grid_topology(
+            self,
+            line_color='expansion_costs',
+            grid_expansion_costs=self.results.grid_expansion_costs,
+            filename=kwargs.get('filename', None),
+            grid_district_geom=kwargs.get('grid_district_geom', True),
+            background_map=kwargs.get('background_map', True),
+            limits_cb_lines=kwargs.get('limits_cb_lines', None),
+            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+            lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
+            title=kwargs.get('title', ''),
+            scaling_factor_line_width=kwargs.get(
+                'scaling_factor_line_width', None)
+        )
+
+    def plot_mv_storage_integration(self, **kwargs):
+        """
+        Plots storage position in MV topology of integrated storage units.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        plots.mv_grid_topology(
+            self,
+            node_color='storage_integration',
+            filename=kwargs.get('filename', None),
+            grid_district_geom=kwargs.get('grid_district_geom', True),
+            background_map=kwargs.get('background_map', True),
+            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+            title=kwargs.get('title', ''))
