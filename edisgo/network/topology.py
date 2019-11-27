@@ -515,7 +515,7 @@ class Topology:
 
     def get_connected_lines_from_bus(self, bus_name):
         """
-        Returns all lines connected to bus of name bus_name
+        Returns all lines connected to bus of name bus_name.
 
         Parameters
         ----------
@@ -696,6 +696,7 @@ class Topology:
         # generate generator name and check uniqueness
         generator_name = 'Generator_{}_{}'.format(generator_type, generator_id)
         while generator_name in self.generators_df.index:
+            random.seed(a=generator_name)
             generator_name = 'Generator_{}_{}'.format(
                 generator_type, random.randint(10**8, 10**9), generator_id)
 
