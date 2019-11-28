@@ -2,6 +2,7 @@ import logging
 import pandas as pd
 import numpy as np
 import datetime
+import os
 
 from workalendar.europe import Germany
 from demandlib import bdew as bdew, particular_profiles as profiles
@@ -373,6 +374,32 @@ class TimeSeries:
         return residual_load.apply(
             lambda _: 'feedin_case' if _ < 0 else 'load_case')
 
+    def to_csv(self, directory):
+        #Todo: Docstring
+        os.makedirs(directory, exist_ok=True)
+        ts_dir = os.path.join(directory, 'timeseries')
+        os.makedirs(ts_dir, exist_ok=True)
+        if self.loads_active_power is not None:
+            self.loads_active_power.to_csv(
+                os.path.join(ts_dir, 'loads_active_power.csv'))
+        if self.loads_reactive_power is not None:
+            self.loads_reactive_power.to_csv(
+                os.path.join(ts_dir, 'loads_reactive_power.csv'))
+        if self.generators_active_power is not None:
+            self.generators_active_power.to_csv(
+                os.path.join(ts_dir, 'generators_active_power.csv'))
+        if self.generators_reactive_power is not None:
+            self.generators_reactive_power.to_csv(
+                os.path.join(ts_dir, 'generators_reactive_power.csv'))
+        if self.storage_units_active_power is not None:
+            self.storage_units_active_power.to_csv(
+                os.path.join(ts_dir, 'storage_units_active_power.csv'))
+        if self.storage_units_reactive_power is not None:
+            self.storage_units_reactive_power.to_csv(
+                os.path.join(ts_dir, 'storage_units_reactive_power.csv'))
+        logger.debug("Timeseries exported.")
+
+
 
 class TimeSeriesControl:
     """
@@ -469,7 +496,7 @@ class TimeSeriesControl:
         self.edisgo_obj = edisgo_obj
         mode = kwargs.get('mode', None)
 
-        if mode:
+        if 'worst-case' in mode:
             if mode == 'worst-case':
                 modes = ['feedin_case', 'load_case']
             elif mode == 'worst-case-feedin' or mode == 'worst-case-load':
@@ -483,6 +510,22 @@ class TimeSeriesControl:
             self._worst_case_generation(modes)
             self._worst_case_load(modes)
             self._worst_case_storage(modes)
+
+        elif mode == 'manual':
+            self.edisgo_obj.timeseries._timeindex = kwargs.get('timeindex',
+                                                               None)
+            self.edisgo_obj.timeseries.loads_active_power = \
+                kwargs.get('loads_active_power', None)
+            self.edisgo_obj.timeseries.loads_reactive_power = \
+                kwargs.get('loads_reactive_power', None)
+            self.edisgo_obj.timeseries.generators_active_power = \
+                kwargs.get('generators_active_power', None)
+            self.edisgo_obj.timeseries.generators_reactive_power = \
+                kwargs.get('generators_reactive_power', None)
+            self.edisgo_obj.timeseries.storage_units_active_power = \
+                kwargs.get('storage_units_active_power', None)
+            self.edisgo_obj.timeseries.storage_units_reactive_power = \
+                kwargs.get('storage_units_reactive_power', None)
 
         else:
             config_data = edisgo_obj.config
