@@ -60,23 +60,15 @@ def get_residual_load_from_pypsa_network(edisgo_obj):
 
     """
     # Todo: write test
-    if edisgo_obj.timeseries.loads_active_power is None:
-        loads_active_power = 0
-    else:
-        loads_active_power = edisgo_obj.timeseries.loads_active_power.sum(
-            axis=1)
-    if edisgo_obj.timeseries.generators_active_power is None:
-        generators_active_power = 0
-    else:
-        generators_active_power = \
-            edisgo_obj.timeseries.generators_active_power.loc[
-                :, edisgo_obj.timeseries.generators_active_power.columns !=
-                'Generator_slack'].sum(axis=1)
-    if edisgo_obj.timeseries.storage_units_active_power is None:
-        storage_units_active_power = 0
-    else:
-        storage_units_active_power = \
-            edisgo_obj.timeseries.storage_units_active_power.sum(axis=1)
+    loads_active_power = edisgo_obj.timeseries.loads_active_power.sum(
+        axis=1)
+    generators_active_power = \
+        edisgo_obj.timeseries.generators_active_power.loc[
+            :, edisgo_obj.timeseries.generators_active_power.columns !=
+            'Generator_slack'].sum(axis=1)
+    storage_units_active_power = \
+        edisgo_obj.timeseries.storage_units_active_power.sum(axis=1)
+
     residual_load = loads_active_power - \
                     (generators_active_power + storage_units_active_power)
     return residual_load

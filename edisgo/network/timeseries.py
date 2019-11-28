@@ -482,6 +482,7 @@ class TimeSeriesControl:
                 '1/1/1970', periods=len(modes), freq='H')
             self._worst_case_generation(modes)
             self._worst_case_load(modes)
+            self._worst_case_storage(modes)
 
         else:
             config_data = edisgo_obj.config
@@ -543,6 +544,9 @@ class TimeSeriesControl:
             # create load active and reactive power timeseries
             self._load_from_timeseries()
 
+            # create storage active and reactive power timeseries
+            self._storage_from_timeseries()
+
             # check if time series for the set time index can be obtained
             self._check_timeindex()
 
@@ -590,6 +594,16 @@ class TimeSeriesControl:
         # set default reactive power by cos_phi
         else:
             self._reactive_power_gen_by_cos_phi(gens)
+
+    def _storage_from_timeseries(self):
+        # Todo: implement properly
+        if len(self.edisgo_obj.topology.storage_units_df) == 0:
+            self.edisgo_obj.timeseries.storage_units_active_power = \
+                pd.DataFrame({}, index=self.edisgo_obj.timeseries.timeindex)
+            self.edisgo_obj.timeseries.storage_units_reactive_power = \
+                pd.DataFrame({}, index=self.edisgo_obj.timeseries.timeindex)
+        else:
+            raise NotImplementedError
 
     def _worst_case_generation(self, modes):
         """
@@ -847,284 +861,15 @@ class TimeSeriesControl:
         """
         return active_power * q_sign * np.tan(np.arccos(power_factor))
 
-    # Generator
-    # @property
-    # def timeseries(self):
-    #     """
-    #     Feed-in time series of generator
-    #
-    #     It returns the actual dispatch time series used in power flow analysis.
-    #     If :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
-    #     :meth:`timeseries` looks for time series of the according type of
-    #     technology in :class:`~.network.network.TimeSeries`. If the reactive
-    #     power time series is provided through :attr:`_timeseries_reactive`,
-    #     this is added to :attr:`_timeseries`. When :attr:`_timeseries_reactive`
-    #     is not set, the reactive power is also calculated in
-    #     :attr:`_timeseries` using :attr:`power_factor` and
-    #     :attr:`reactive_power_mode`. The :attr:`power_factor` determines the
-    #     magnitude of the reactive power based on the power factor and active
-    #     power provided and the :attr:`reactive_power_mode` determines if the
-    #     reactive power is either consumed (inductive behaviour) or provided
-    #     (capacitive behaviour).
-    #
-    #     Returns
-    #     -------
-    #     :pandas:`pandas.DataFrame<dataframe>`
-    #         DataFrame containing active power in kW in column 'p' and
-    #         reactive power in kvar in column 'q'.
-    #
-    #     """
-    #     if self._timeseries is None:
-    #         # calculate time series for active and reactive power
-    #         try:
-    #             timeseries = \
-    #                 self.network.network.timeseries.generation_dispatchable[
-    #                     self.type].to_frame('p')
-    #         except KeyError:
-    #             try:
-    #                 timeseries = \
-    #                     self.network.network.timeseries.generation_dispatchable[
-    #                         'other'].to_frame('p')
-    #             except KeyError:
-    #                 logger.exception("No time series for type {} "
-    #                                  "given.".format(self.type))
-    #                 raise
-    #
-    #         timeseries = timeseries * self.nominal_capacity
-    #         if self.timeseries_reactive is not None:
-    #             timeseries['q'] = self.timeseries_reactive
-    #         else:
-    #             timeseries['q'] = timeseries['p'] * self.q_sign * tan(acos(
-    #                 self.power_factor))
-    #
-    #         return timeseries
-    #     else:
-    #         return self._timeseries.loc[
-    #                self.network.network.timeseries.timeindex, :]
-
-    # @property
-    # def timeseries_reactive(self):
-    #     """
-    #     Reactive power time series in kvar.
-    #
-    #     Parameters
-    #     -----------
-    #     timeseries_reactive : :pandas:`pandas.Seriese<series>`
-    #         Series containing reactive power in kvar.
-    #
-    #     Returns
-    #     -------
-    #     :pandas:`pandas.Series<series>` or None
-    #         Series containing reactive power time series in kvar. If it is not
-    #         set it is tried to be retrieved from `generation_reactive_power`
-    #         attribute of global TimeSeries object. If that is not possible
-    #         None is returned.
-    #
-    #     """
-    #     if self._timeseries_reactive is None:
-    #         if self.network.network.timeseries.generation_reactive_power \
-    #                 is not None:
-    #             try:
-    #                 timeseries = \
-    #                     self.network.network.timeseries.generation_reactive_power[
-    #                         self.type].to_frame('q')
-    #             except (KeyError, TypeError):
-    #                 try:
-    #                     timeseries = \
-    #                         self.network.network.timeseries.generation_reactive_power[
-    #                             'other'].to_frame('q')
-    #                 except:
-    #                     logger.warning(
-    #                         "No reactive power time series for type {} given. "
-    #                         "Reactive power time series will be calculated from "
-    #                         "assumptions in config files and active power "
-    #                         "timeseries.".format(self.type))
-    #                     return None
-    #             self.power_factor = 'not_applicable'
-    #             self.reactive_power_mode = 'not_applicable'
-    #             return timeseries * self.nominal_capacity
-    #         else:
-    #             return None
-    #     else:
-    #         return self._timeseries_reactive.loc[
-    #                self.network.network.timeseries.timeindex, :]
-
-
-    # @property
-    # def power_factor(self):
-    #     """
-    #     Power factor of generator
-    #
-    #     Parameters
-    #     -----------
-    #     power_factor : :obj:`float`
-    #         Ratio of real power to apparent power.
-    #
-    #     Returns
-    #     --------
-    #     :obj:`float`
-    #         Ratio of real power to apparent power. If power factor is not set
-    #         it is retrieved from the network config object depending on the
-    #         network level the generator is in.
-    #
-    #     """
-    #     if self._power_factor is None:
-    #         if isinstance(self.topology, MVGrid):
-    #             self._power_factor = self.topology.topology.config[
-    #                 'reactive_power_factor']['mv_gen']
-    #         elif isinstance(self.topology, LVGrid):
-    #             self._power_factor = self.topology.topology.config[
-    #                 'reactive_power_factor']['lv_gen']
-    #     return self._power_factor
-
-    # Load
-    # @property
-    # def timeseries(self):
-    #     """
-    #     Load time series
-    #
-    #     It returns the actual time series used in power flow analysis. If
-    #     :attr:`_timeseries` is not :obj:`None`, it is returned. Otherwise,
-    #     :meth:`timeseries()` looks for time series of the according sector in
-    #     :class:`~.network.network.TimeSeries` object.
-    #
-    #     Returns
-    #     -------
-    #     :pandas:`pandas.DataFrame<dataframe>`
-    #         DataFrame containing active power in kW in column 'p' and
-    #         reactive power in kVA in column 'q'.
-    #
-    #     """
-    #     if self._timeseries is None:
-    #
-    #         if isinstance(self.topology, MVGrid):
-    #             voltage_level = 'mv'
-    #         elif isinstance(self.topology, LVGrid):
-    #             voltage_level = 'lv'
-    #
-    #         ts_total = None
-    #         for sector in self.consumption.keys():
-    #             consumption = self.consumption[sector]
-    #
-    #             # check if load time series for MV and LV are differentiated
-    #             try:
-    #                 ts = self.network.network.timeseries.load[
-    #                     sector, voltage_level].to_frame('p')
-    #             except KeyError:
-    #                 try:
-    #                     ts = self.network.network.timeseries.load[
-    #                         sector].to_frame('p')
-    #                 except KeyError:
-    #                     logger.exception(
-    #                         "No timeseries for load of type {} "
-    #                         "given.".format(sector))
-    #                     raise
-    #             ts = ts * consumption
-    #             ts_q = self.timeseries_reactive
-    #             if ts_q is not None:
-    #                 ts['q'] = ts_q.q
-    #             else:
-    #                 ts['q'] = ts['p'] * self.q_sign * tan(
-    #                     acos(self.power_factor))
-    #
-    #             if ts_total is None:
-    #                 ts_total = ts
-    #             else:
-    #                 ts_total.p += ts.p
-    #                 ts_total.q += ts.q
-    #
-    #         return ts_total
-    #     else:
-    #         return self._timeseries
-    #
-    # @property
-    # def timeseries_reactive(self):
-    #     """
-    #     Reactive power time series in kvar.
-    #
-    #     Parameters
-    #     -----------
-    #     timeseries_reactive : :pandas:`pandas.Seriese<series>`
-    #         Series containing reactive power in kvar.
-    #
-    #     Returns
-    #     -------
-    #     :pandas:`pandas.Series<series>` or None
-    #         Series containing reactive power time series in kvar. If it is not
-    #         set it is tried to be retrieved from `load_reactive_power`
-    #         attribute of global TimeSeries object. If that is not possible
-    #         None is returned.
-    #
-    #     """
-    #     if self._timeseries_reactive is None:
-    #         # if normalized reactive power time series are given, they are
-    #         # scaled by the annual consumption; if none are given reactive
-    #         # power time series are calculated timeseries getter using a given
-    #         # power factor
-    #         if self.network.network.timeseries.load_reactive_power is not None:
-    #             self.power_factor = 'not_applicable'
-    #             self.reactive_power_mode = 'not_applicable'
-    #             ts_total = None
-    #             for sector in self.consumption.keys():
-    #                 consumption = self.consumption[sector]
-    #
-    #                 try:
-    #                     ts = self.network.network.timeseries.load_reactive_power[
-    #                         sector].to_frame('q')
-    #                 except KeyError:
-    #                     logger.exception(
-    #                         "No timeseries for load of type {} "
-    #                         "given.".format(sector))
-    #                     raise
-    #                 ts = ts * consumption
-    #                 if ts_total is None:
-    #                     ts_total = ts
-    #                 else:
-    #                     ts_total.q += ts.q
-    #             return ts_total
-    #         else:
-    #             return None
-    #
-    #     else:
-    #         return self._timeseries_reactive
-    #
-    # @timeseries_reactive.setter
-    # def timeseries_reactive(self, timeseries_reactive):
-    #     if isinstance(timeseries_reactive, pd.Series):
-    #         self._timeseries_reactive = timeseries_reactive
-    #         self._power_factor = 'not_applicable'
-    #         self._reactive_power_mode = 'not_applicable'
-    #     else:
-    #         raise ValueError(
-    #             "Reactive power time series of load {} needs to be a pandas "
-    #             "Series.".format(repr(self)))
-
-    # @property
-    # def power_factor(self):
-    #     """
-    #     Power factor of load
-    #
-    #     Parameters
-    #     -----------
-    #     power_factor : :obj:`float`
-    #         Ratio of real power to apparent power.
-    #
-    #     Returns
-    #     --------
-    #     :obj:`float`
-    #         Ratio of real power to apparent power. If power factor is not set
-    #         it is retrieved from the network config object depending on the
-    #         network level the load is in.
-    #
-    #     """
-    #     if self._power_factor is None:
-    #         if isinstance(self.topology, MVGrid):
-    #             self._power_factor = self.topology.topology.config[
-    #                 'reactive_power_factor']['mv_load']
-    #         elif isinstance(self.topology, LVGrid):
-    #             self._power_factor = self.topology.topology.config[
-    #                 'reactive_power_factor']['lv_load']
-    #     return self._power_factor
+    def _worst_case_storage(self, modes):
+        # Todo: implement properly
+        if len(self.edisgo_obj.topology.storage_units_df) == 0:
+            self.edisgo_obj.timeseries.storage_units_active_power = \
+                pd.DataFrame({}, index=self.edisgo_obj.timeseries.timeindex)
+            self.edisgo_obj.timeseries.storage_units_reactive_power = \
+                pd.DataFrame({}, index=self.edisgo_obj.timeseries.timeindex)
+        else:
+            raise NotImplementedError
 
     def _check_timeindex(self):
         """
@@ -1133,15 +878,24 @@ class TimeSeriesControl:
 
         """
         try:
-            self.edisgo_obj.timeseries.generators_reactive_power
-            self.edisgo_obj.timeseries.generators_active_power
-            self.edisgo_obj.timeseries.loads_active_power
-            self.edisgo_obj.timeseries.loads_reactive_power
+            self.edisgo_obj.timeseries.generators_reactive_power.loc[
+                self.edisgo_obj.timeseries.timeindex]
+            self.edisgo_obj.timeseries.generators_active_power.loc[
+                self.edisgo_obj.timeseries.timeindex]
+            self.edisgo_obj.timeseries.loads_active_power.loc[
+                self.edisgo_obj.timeseries.timeindex]
+            self.edisgo_obj.timeseries.loads_reactive_power.loc[
+                self.edisgo_obj.timeseries.timeindex]
+            self.edisgo_obj.timeseries.storage_units_active_power.loc[
+                self.edisgo_obj.timeseries.timeindex]
+            self.edisgo_obj.timeseries.storage_units_reactive_power.loc[
+                self.edisgo_obj.timeseries.timeindex]
         except:
             message = 'Time index of feed-in and load time series does ' \
                       'not match.'
             logging.error(message)
             raise KeyError(message)
+
 
 def import_load_timeseries(config_data, data_source, year=2018):
     """
