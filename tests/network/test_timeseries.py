@@ -25,6 +25,61 @@ class TestTimeSeriesControl:
         self.config = Config()
         ding0_import.import_ding0_grid(test_network_directory, self)
 
+    def test_to_csv(self):
+        cur_dir = os.getcwd()
+        TimeSeriesControl(edisgo_obj=self, mode='worst-case')
+        self.timeseries.to_csv(cur_dir)
+        #create edisgo obj to compare
+        parent_dirname = os.path.dirname(os.path.dirname(__file__))
+        test_network_directory = os.path.join(
+            parent_dirname, 'ding0_test_network')
+        edisgo = pd.DataFrame()
+        edisgo.topology = Topology()
+        edisgo.timeseries = TimeSeries()
+        edisgo.config = Config()
+        ding0_import.import_ding0_grid(test_network_directory, edisgo)
+        TimeSeriesControl(
+            edisgo, mode='manual',
+            timeindex=self.timeseries.loads_active_power.index,
+            loads_active_power=pd.DataFrame.from_csv(
+                os.path.join(cur_dir, 'timeseries', 'loads_active_power.csv')),
+            loads_reactive_power=pd.DataFrame.from_csv(
+                os.path.join(cur_dir, 'timeseries', 'loads_reactive_power.csv')),
+            generators_active_power=pd.DataFrame.from_csv(
+                os.path.join(cur_dir, 'timeseries', 'generators_active_power.csv')),
+            generators_reactive_power=pd.DataFrame.from_csv(
+                os.path.join(cur_dir,
+                        'timeseries', 'generators_reactive_power.csv')),
+            storage_units_active_power=pd.DataFrame.from_csv(
+                os.path.join(cur_dir,
+                        'timeseries', 'storage_units_active_power.csv')),
+            storage_units_reactive_power=pd.DataFrame.from_csv(
+                os.path.join(cur_dir,
+                             'timeseries', 'storage_units_reactive_power.csv'))
+        )
+        # check if timeseries are the same
+        assert_frame_equal(self.timeseries.loads_active_power,
+                           edisgo.timeseries.loads_active_power,
+                           check_names=False)
+        assert_frame_equal(self.timeseries.loads_reactive_power,
+                           edisgo.timeseries.loads_reactive_power,
+                           check_names=False)
+        assert_frame_equal(self.timeseries.generators_active_power,
+                           edisgo.timeseries.generators_active_power,
+                           check_names=False)
+        assert_frame_equal(self.timeseries.generators_reactive_power,
+                           edisgo.timeseries.generators_reactive_power,
+                           check_names=False)
+        assert_frame_equal(self.timeseries.storage_units_active_power,
+                           edisgo.timeseries.storage_units_active_power,
+                           check_names=False)
+        assert_frame_equal(self.timeseries.storage_units_reactive_power,
+                           edisgo.timeseries.storage_units_reactive_power,
+                           check_names=False)
+        # delete folder
+        shutil.rmtree(os.path.join(cur_dir, 'timeseries'), ignore_errors=True)
+        self.timeseries = TimeSeries()
+
     def test_timeseries_imported(self):
         timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
         ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775]*8760},
@@ -216,71 +271,22 @@ class TestTimeSeriesControl:
         # test error raising in case of missing load/generator parameter
 
         gen = 'GeneratorFluctuating_14'
+        val_pre = self.topology._generators_df.at[gen, 'bus']
         self.topology._generators_df.at[gen, 'bus'] = None
         with pytest.raises(AttributeError, match=gen):
             ts_control._worst_case_generation(modes=None)
+        self.topology._generators_df.at[gen, 'bus'] = val_pre
         gen = 'GeneratorFluctuating_24'
+        val_pre = self.topology._generators_df.at[gen, 'p_nom']
         self.topology._generators_df.at[gen, 'p_nom'] = None
         with pytest.raises(AttributeError, match=gen):
             ts_control._worst_case_generation(modes=None)
-
+        self.topology._generators_df.at[gen, 'p_nom'] = val_pre
         load = 'Load_agricultural_LVGrid_1_1'
+        val_pre = self.topology._loads_df.at[load, 'peak_load']
         self.topology._loads_df.at[load, 'peak_load'] = None
         with pytest.raises(AttributeError, match=load):
             ts_control._worst_case_load(modes=None)
+        self.topology._loads_df.at[load, 'peak_load'] = val_pre
 
         # test no other generators
-
-    def test_to_csv(self):
-        cur_dir = os.getcwd()
-        TimeSeriesControl(edisgo_obj=self, mode='worst-case')
-        self.timeseries.to_csv(cur_dir)
-        #create edisgo obj to compare
-        parent_dirname = os.path.dirname(os.path.dirname(__file__))
-        test_network_directory = os.path.join(
-            parent_dirname, 'ding0_test_network')
-        edisgo = pd.DataFrame()
-        edisgo.topology = Topology()
-        edisgo.timeseries = TimeSeries()
-        edisgo.config = Config()
-        ding0_import.import_ding0_grid(test_network_directory, edisgo)
-        TimeSeriesControl(
-            edisgo, mode='manual',
-            timeindex=self.timeseries.loads_active_power.index,
-            loads_active_power=pd.DataFrame.from_csv(
-                os.path.join(cur_dir, 'timeseries', 'loads_active_power.csv')),
-            loads_reactive_power=pd.DataFrame.from_csv(
-                os.path.join(cur_dir, 'timeseries', 'loads_reactive_power.csv')),
-            generators_active_power=pd.DataFrame.from_csv(
-                os.path.join(cur_dir, 'timeseries', 'generators_active_power.csv')),
-            generators_reactive_power=pd.DataFrame.from_csv(
-                os.path.join(cur_dir,
-                        'timeseries', 'generators_reactive_power.csv')),
-            storage_units_active_power=pd.DataFrame.from_csv(
-                os.path.join(cur_dir,
-                        'timeseries', 'storage_units_active_power.csv')),
-            storage_units_reactive_power=pd.DataFrame.from_csv(
-                os.path.join(cur_dir,
-                             'timeseries', 'storage_units_reactive_power.csv'))
-        )
-        # check if timeseries are the same
-        assert_frame_equal(self.timeseries.loads_active_power,
-                           edisgo.timeseries.loads_active_power,
-                           check_names=False)
-        assert_frame_equal(self.timeseries.loads_reactive_power,
-                           edisgo.timeseries.loads_reactive_power,
-                           check_names=False)
-        assert_frame_equal(self.timeseries.generators_active_power,
-                           edisgo.timeseries.generators_active_power,
-                           check_names=False)
-        assert_frame_equal(self.timeseries.generators_reactive_power,
-                           edisgo.timeseries.generators_reactive_power,
-                           check_names=False)
-        assert_frame_equal(self.timeseries.storage_units_active_power,
-                           edisgo.timeseries.storage_units_active_power,
-                           check_names=False)
-        assert_frame_equal(self.timeseries.storage_units_reactive_power,
-                           edisgo.timeseries.storage_units_reactive_power,
-                           check_names=False)
-        # delete folder
-        shutil.rmtree(os.path.join(cur_dir, 'timeseries'), ignore_errors=True)

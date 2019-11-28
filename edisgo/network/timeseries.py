@@ -495,38 +495,39 @@ class TimeSeriesControl:
 
         self.edisgo_obj = edisgo_obj
         mode = kwargs.get('mode', None)
+        if mode:
+            if 'worst-case' in mode:
+                if mode == 'worst-case':
+                    modes = ['feedin_case', 'load_case']
+                elif mode == 'worst-case-feedin' or mode == 'worst-case-load':
+                    modes = ['{}_case'.format(mode.split('-')[-1])]
+                else:
+                    raise ValueError('{} is not a valid mode.'.format(mode))
 
-        if 'worst-case' in mode:
-            if mode == 'worst-case':
-                modes = ['feedin_case', 'load_case']
-            elif mode == 'worst-case-feedin' or mode == 'worst-case-load':
-                modes = ['{}_case'.format(mode.split('-')[-1])]
+                # set random timeindex
+                self.edisgo_obj.timeseries._timeindex = pd.date_range(
+                    '1/1/1970', periods=len(modes), freq='H')
+                self._worst_case_generation(modes)
+                self._worst_case_load(modes)
+                self._worst_case_storage(modes)
+
+            elif mode == 'manual':
+                self.edisgo_obj.timeseries._timeindex = kwargs.get('timeindex',
+                                                                   None)
+                self.edisgo_obj.timeseries.loads_active_power = \
+                    kwargs.get('loads_active_power', None)
+                self.edisgo_obj.timeseries.loads_reactive_power = \
+                    kwargs.get('loads_reactive_power', None)
+                self.edisgo_obj.timeseries.generators_active_power = \
+                    kwargs.get('generators_active_power', None)
+                self.edisgo_obj.timeseries.generators_reactive_power = \
+                    kwargs.get('generators_reactive_power', None)
+                self.edisgo_obj.timeseries.storage_units_active_power = \
+                    kwargs.get('storage_units_active_power', None)
+                self.edisgo_obj.timeseries.storage_units_reactive_power = \
+                    kwargs.get('storage_units_reactive_power', None)
             else:
                 raise ValueError('{} is not a valid mode.'.format(mode))
-
-            # set random timeindex
-            self.edisgo_obj.timeseries._timeindex = pd.date_range(
-                '1/1/1970', periods=len(modes), freq='H')
-            self._worst_case_generation(modes)
-            self._worst_case_load(modes)
-            self._worst_case_storage(modes)
-
-        elif mode == 'manual':
-            self.edisgo_obj.timeseries._timeindex = kwargs.get('timeindex',
-                                                               None)
-            self.edisgo_obj.timeseries.loads_active_power = \
-                kwargs.get('loads_active_power', None)
-            self.edisgo_obj.timeseries.loads_reactive_power = \
-                kwargs.get('loads_reactive_power', None)
-            self.edisgo_obj.timeseries.generators_active_power = \
-                kwargs.get('generators_active_power', None)
-            self.edisgo_obj.timeseries.generators_reactive_power = \
-                kwargs.get('generators_reactive_power', None)
-            self.edisgo_obj.timeseries.storage_units_active_power = \
-                kwargs.get('storage_units_active_power', None)
-            self.edisgo_obj.timeseries.storage_units_reactive_power = \
-                kwargs.get('storage_units_reactive_power', None)
-
         else:
             config_data = edisgo_obj.config
             weather_cell_ids = edisgo_obj.topology.mv_grid.weather_cells
