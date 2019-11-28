@@ -16,121 +16,7 @@ from edisgo.flex_opt.storage_integration import StorageControl
 logger = logging.getLogger('edisgo')
 
 
-class EDisGoReimport:
-    """
-    EDisGo class created from saved results.
-
-    """
-    def __init__(self, results_path, **kwargs):
-
-        if os.path.isdir(results_path):
-            # create topology
-            self.topology = None#NetworkReimport(results_path, **kwargs)
-        else:
-            logging.error('Results cannot be imported as the specified '
-                          'directory {} does not exist.'.format(results_path))
-
-        parameters = kwargs.get('parameters', 'all')
-
-        # create ResultsReimport class
-        self.results = ResultsReimport(
-            results_path, parameters=parameters)
-
-
-
-    def histogram_voltage(self, timestep=None, title=True, **kwargs):
-        """
-        Plots histogram of voltages.
-
-        For more information on the histogram plot and possible configurations
-        see :func:`edisgo.tools.plots.histogram`.
-
-        Parameters
-        ----------
-        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
-            Specifies time steps histogram is plotted for. If timestep is None
-            all time steps voltages are calculated for are used. Default: None.
-        title : :obj:`str` or :obj:`bool`, optional
-            Title for plot. If True title is auto generated. If False plot has
-            no title. If :obj:`str`, the provided title is used. Default: True.
-
-        """
-        data = self.topology.results.v_res()
-
-        if timestep is None:
-            timestep = data.index
-        # check if timesteps is array-like, otherwise convert to list
-        if not hasattr(timestep, "__len__"):
-            timestep = [timestep]
-
-        if title is True:
-            if len(timestep) == 1:
-                title = "Voltage histogram for time step {}".format(
-                    timestep[0])
-            else:
-                title = "Voltage histogram \nfor time steps {} to {}".format(
-                    timestep[0], timestep[-1])
-        elif title is False:
-            title = None
-        plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
-
-    def histogram_relative_line_load(self, timestep=None, title=True,
-                                     voltage_level='mv_lv', **kwargs):
-        """
-        Plots histogram of relative line loads.
-
-        For more information on how the relative line load is calculated see
-        :func:`edisgo.tools.tools.get_line_loading_from_network`.
-        For more information on the histogram plot and possible configurations
-        see :func:`edisgo.tools.plots.histogram`.
-
-        Parameters
-        ----------
-        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
-            Specifies time step(s) histogram is plotted for. If `timestep` is
-            None all time steps currents are calculated for are used.
-            Default: None.
-        title : :obj:`str` or :obj:`bool`, optional
-            Title for plot. If True title is auto generated. If False plot has
-            no title. If :obj:`str`, the provided title is used. Default: True.
-        voltage_level : :obj:`str`
-            Specifies which voltage level to plot voltage histogram for.
-            Possible options are 'mv', 'lv' and 'mv_lv'. 'mv_lv' is also the
-            fallback option in case of wrong input. Default: 'mv_lv'
-
-        """
-        if voltage_level == 'mv':
-            lines = self.topology.pypsa.lines.loc[
-                self.topology.pypsa.lines.v_nom > 1]
-        elif voltage_level == 'lv':
-            lines = self.topology.pypsa.lines.loc[
-                self.topology.pypsa.lines.v_nom < 1]
-        else:
-            lines = self.topology.pypsa.lines
-
-        rel_line_loading = tools.calculate_relative_line_load(
-            self.topology.pypsa, self.topology.config,
-            self.topology.results.i_res, lines.index, timestep)
-
-        if timestep is None:
-            timestep = rel_line_loading.index
-        # check if timesteps is array-like, otherwise convert to list
-        if not hasattr(timestep, "__len__"):
-            timestep = [timestep]
-
-        if title is True:
-            if len(timestep) == 1:
-                title = "Relative line load histogram for time step {}".format(
-                    timestep[0])
-            else:
-                title = "Relative line load histogram \nfor time steps " \
-                        "{} to {}".format(timestep[0], timestep[-1])
-        elif title is False:
-            title = None
-        plots.histogram(data=rel_line_loading, title=title, **kwargs)
-
-
-class EDisGo(EDisGoReimport):
+class EDisGo:
     """
     Provides the top-level API for invocation of data import, analysis of
     hosting capacity, network reinforcement and flexibility measures.
@@ -742,3 +628,113 @@ class EDisGo(EDisGoReimport):
             background_map=kwargs.get('background_map', True),
             xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
             title=kwargs.get('title', ''))
+
+    def histogram_voltage(self, timestep=None, title=True, **kwargs):
+        """
+        Plots histogram of voltages.
+
+        For more information on the histogram plot and possible configurations
+        see :func:`edisgo.tools.plots.histogram`.
+
+        Parameters
+        ----------
+        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+            Specifies time steps histogram is plotted for. If timestep is None
+            all time steps voltages are calculated for are used. Default: None.
+        title : :obj:`str` or :obj:`bool`, optional
+            Title for plot. If True title is auto generated. If False plot has
+            no title. If :obj:`str`, the provided title is used. Default: True.
+
+        """
+        try:
+            data = self.results.pfa_v_mag_pu
+            if data is None:
+                logger.warning("Results for pfa_v_mag_pu are required for "
+                               "voltage histogramm. Please analyze first.")
+                return
+        except AttributeError:
+            logger.warning("Results are required for "
+                           "voltage histogramm. Please analyze first.")
+            return
+
+        if timestep is None:
+            timestep = data.index
+        # check if timesteps is array-like, otherwise convert to list
+        if not hasattr(timestep, "__len__"):
+            timestep = [timestep]
+
+        if title is True:
+            if len(timestep) == 1:
+                title = "Voltage histogram for time step {}".format(
+                    timestep[0])
+            else:
+                title = "Voltage histogram \nfor time steps {} to {}".format(
+                    timestep[0], timestep[-1])
+        elif title is False:
+            title = None
+        plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
+
+    def histogram_relative_line_load(self, timestep=None, title=True,
+                                     voltage_level='mv_lv', **kwargs):
+        """
+        Plots histogram of relative line loads.
+
+        For more information on how the relative line load is calculated see
+        :func:`edisgo.tools.tools.get_line_loading_from_network`.
+        For more information on the histogram plot and possible configurations
+        see :func:`edisgo.tools.plots.histogram`.
+
+        Parameters
+        ----------
+        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+            Specifies time step(s) histogram is plotted for. If `timestep` is
+            None all time steps currents are calculated for are used.
+            Default: None.
+        title : :obj:`str` or :obj:`bool`, optional
+            Title for plot. If True title is auto generated. If False plot has
+            no title. If :obj:`str`, the provided title is used. Default: True.
+        voltage_level : :obj:`str`
+            Specifies which voltage level to plot voltage histogram for.
+            Possible options are 'mv', 'lv' and 'mv_lv'. 'mv_lv' is also the
+            fallback option in case of wrong input. Default: 'mv_lv'
+
+        """
+        try:
+            if self.results.i_res is None:
+                logger.warning("Currents `i_res` from power flow analysis "
+                               "must be available to plot histogram line "
+                               "loading.")
+                return
+        except AttributeError:
+            logger.warning("Results must be available to plot histogram line "
+                           "loading. Please analyze grid first.")
+            return
+
+        if voltage_level == 'mv':
+            lines = self.topology.lines_df.loc[
+                self.topology.lines_df.v_nom > 1]
+        elif voltage_level == 'lv':
+            lines = self.topology.lines_df.loc[
+                self.topology.lines_df.v_nom < 1]
+        else:
+            lines = self.topology.lines_df
+
+        rel_line_loading = tools.calculate_relative_line_load(
+            self, self.results.i_res, lines.index, timestep)
+
+        if timestep is None:
+            timestep = rel_line_loading.index
+        # check if timesteps is array-like, otherwise convert to list
+        if not hasattr(timestep, "__len__"):
+            timestep = [timestep]
+
+        if title is True:
+            if len(timestep) == 1:
+                title = "Relative line load histogram for time step {}".format(
+                    timestep[0])
+            else:
+                title = "Relative line load histogram \nfor time steps " \
+                        "{} to {}".format(timestep[0], timestep[-1])
+        elif title is False:
+            title = None
+        plots.histogram(data=rel_line_loading, title=title, **kwargs)

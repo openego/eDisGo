@@ -301,3 +301,29 @@ class TestEDisGo:
                                               0.3)
         self.edisgo.plot_mv_storage_integration()
         plt.close('all')
+        self.edisgo.topology.remove_storage('StorageUnit_MVGrid_1_1')
+        self.edisgo.topology.remove_storage('StorageUnit_MVGrid_1_2')
+        self.edisgo.topology.remove_storage('StorageUnit_MVGrid_1_3')
+
+    def test_histogramm_voltage(self):
+        plt.ion()
+        # if not already done so, analyse grid
+        try:
+            if self.results.pfa_v_mag_pu is None:
+                self.edisgo.analyze()
+        except AttributeError:
+            self.edisgo.analyze()
+
+        self.edisgo.histogram_voltage()
+        plt.close('all')
+
+    def test_histogramm_relative_line_load(self):
+        plt.ion()
+        try:
+            if self.edisgo.results.i_res is None:
+                self.edisgo.analyze()
+        except AttributeError:
+            self.edisgo.analyze()
+
+        self.edisgo.histogram_relative_line_load()
+        plt.close('all')
