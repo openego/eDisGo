@@ -1,6 +1,9 @@
 import os
 import pytest
 import warnings
+import shutil
+import pandas as pd
+from pandas.util.testing import assert_frame_equal
 
 from edisgo.network.topology import Topology
 from edisgo.io import ding0_import
@@ -333,3 +336,27 @@ class TestTopology:
         assert 'Test_bus' not in self.topology.buses_df.index
         assert 'Line_Bus_BranchTee_MVGrid_1_3_Test_bus' not in \
             self.topology.lines_df.index
+
+    def test_to_csv(self):
+        """Test for method to_csv"""
+        dir = os.getcwd()
+        self.topology.to_csv(dir)
+        edisgo = pd.DataFrame()
+        edisgo.topology = Topology()
+        ding0_import.import_ding0_grid(os.path.join(dir,'topology'), edisgo)
+        assert_frame_equal(self.topology.buses_df, edisgo.topology.buses_df)
+        assert_frame_equal(self.topology.generators_df,
+                           edisgo.topology.generators_df)
+        assert_frame_equal(self.topology.lines_df, edisgo.topology.lines_df)
+        assert_frame_equal(self.topology.loads_df, edisgo.topology.loads_df)
+        assert_frame_equal(self.topology.slack_df, edisgo.topology.slack_df)
+        assert edisgo.topology.storage_units_df.empty
+        assert_frame_equal(self.topology.switches_df,
+                           edisgo.topology.switches_df)
+        assert_frame_equal(self.topology.transformers_df,
+                           edisgo.topology.transformers_df)
+        assert_frame_equal(self.topology.transformers_hvmv_df,
+                           edisgo.topology.transformers_hvmv_df)
+        assert_frame_equal(pd.DataFrame([self.topology.grid_district]),
+                           pd.DataFrame([edisgo.topology.grid_district]))
+        shutil.rmtree(os.path.join(dir,'topology'), ignore_errors=True)

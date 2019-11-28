@@ -186,6 +186,14 @@ class Topology:
         self._buses_df = buses_df
 
     @property
+    def slack_df(self):
+        slack_bus = self.transformers_hvmv_df.bus1.iloc[0]
+        return pd.DataFrame({'bus': [slack_bus],
+                             'control': ['Slack'],
+                             'p_nom': [0],
+                             'name':['Generator_slack']}).set_index('name')
+
+    @property
     def generators_df(self):
         """
         Dataframe with all generators in MV network and underlying LV grids.
@@ -959,6 +967,30 @@ class Topology:
             index=[line_name])
         self._lines_df = self._lines_df.append(new_line_df)
         return line_name
+
+    def to_csv(self, directory):
+        #Todo: Docstring
+        dir = os.path.join(directory, 'topology')
+        os.makedirs(directory, exist_ok=True)
+        os.makedirs(dir, exist_ok=True)
+        self._buses_df.to_csv(os.path.join(dir, 'buses.csv'))
+        self._generators_df.append(self.slack_df).to_csv(
+            os.path.join(dir, 'generators.csv'))
+        self._lines_df.to_csv(os.path.join(dir, 'lines.csv'))
+        self._loads_df.to_csv(os.path.join(dir, 'loads.csv'))
+        self._storage_units_df.to_csv(os.path.join(dir, 'storage_units.csv'))
+        self._switches_df.to_csv(os.path.join(dir, 'switches.csv'))
+        self._transformers_df.rename({'x_pu':'x', 'r_pu':'r'}, axis=1).to_csv(
+            os.path.join(dir, 'transformers.csv'))
+        self._transformers_hvmv_df.rename({'x_pu':'x', 'r_pu':'r'}, axis=1).\
+            to_csv(os.path.join(dir, 'transformers_hvmv.csv'))
+        network = {'name': self.mv_grid.id}
+        network.update(self._grid_district)
+        pd.DataFrame([network]).set_index('name').rename(
+            {'geom': 'mv_grid_district_geom',
+             'population': 'mv_grid_district_population'}, axis=1).to_csv(
+            os.path.join(dir, 'network.csv'))
+        logger.debug("Topology exported.")
 
     def __repr__(self):
         return 'Network topology ' + str(self.id)
