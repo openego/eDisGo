@@ -738,3 +738,15 @@ class EDisGo:
         elif title is False:
             title = None
         plots.histogram(data=rel_line_loading, title=title, **kwargs)
+
+    def save(self, directory,
+             save_results=True, save_topology=True, save_timeseries=True):
+        #Todo: Docstring
+        os.makedirs(directory, exist_ok=True)
+        os.makedirs(os.path.join(directory, 'results'), exist_ok=True)
+        if save_results:
+            self.results.save(os.path.join(directory, 'results'))
+        if save_topology:
+            self.topology.to_csv(directory)
+        if save_timeseries:
+            self.timeseries.to_csv(directory)

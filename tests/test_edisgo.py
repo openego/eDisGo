@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import pytest
+import shutil
 
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints as checks
@@ -39,6 +40,15 @@ class TestEDisGo:
             reinforce.extend_substation_overloading(self.edisgo,
                                                     [pd.DataFrame(),
                                                      pd.DataFrame])
+
+    def test_save(self):
+        cur_dir = os.getcwd()
+        self.edisgo.save(cur_dir)
+        # Todo: check values?
+        # Todo: check files before rmtree?
+        shutil.rmtree(os.path.join(cur_dir, 'results'))
+        shutil.rmtree(os.path.join(cur_dir, 'topology'))
+        shutil.rmtree(os.path.join(cur_dir, 'timeseries'))
 
     def test_crit_station(self):
         # TODO: have checks of technical constraints not require edisgo

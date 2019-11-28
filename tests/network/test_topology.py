@@ -42,6 +42,7 @@ class TestTopology:
                            edisgo.topology.transformers_hvmv_df)
         assert_frame_equal(pd.DataFrame([self.topology.grid_district]),
                            pd.DataFrame([edisgo.topology.grid_district]))
+        # Todo: check files before rmtree?
         shutil.rmtree(os.path.join(dir,'topology'), ignore_errors=True)
 
     def test_add_line(self):

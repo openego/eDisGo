@@ -77,6 +77,7 @@ class TestTimeSeriesControl:
                            edisgo.timeseries.storage_units_reactive_power,
                            check_names=False)
         # delete folder
+        # Todo: check files before rmtree?
         shutil.rmtree(os.path.join(cur_dir, 'timeseries'), ignore_errors=True)
         self.timeseries = TimeSeries()
 
