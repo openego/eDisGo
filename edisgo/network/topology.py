@@ -697,7 +697,7 @@ class Topology:
             self.remove_bus(bus1)
 
     def add_generator(self, generator_id, bus, p_nom, generator_type,
-                      weather_cell_id=None, subtype=None, control=None):
+                      **kwargs):
         """
         Adds generator to topology.
 
@@ -729,6 +729,12 @@ class Topology:
             generator_name = 'Generator_{}_{}'.format(
                 generator_type, random.randint(10**8, 10**9), generator_id)
 
+        # unpack optional parameters
+        weather_cell_id = kwargs.get('weather_cell_id', None)
+        subtype = kwargs.get('subtype', None)
+        control = kwargs.get('control', None)
+
+        # create new generator dataframe
         new_gen_df = pd.DataFrame(
             data={'bus': bus,
                   'p_nom': p_nom,
@@ -830,8 +836,7 @@ class Topology:
         self.storage_units_df = self._storage_units_df.append(new_storage_df)
         return storage_name
 
-    def add_bus(self, bus_name, v_nom, x=None, y=None, lv_grid_id=None,
-                in_building=False):
+    def add_bus(self, bus_name, v_nom, **kwargs):
         """
         Adds new bus to topology.
 
@@ -845,6 +850,10 @@ class Topology:
         in_building
 
         """
+        x = kwargs.get('x', None)
+        y = kwargs.get('y', None)
+        lv_grid_id = kwargs.get('lv_grid_id', None)
+        in_building = kwargs.get('in_building', False)
         #ToDo add test
         # check lv_grid_id
         if v_nom < 1 and lv_grid_id is None:
@@ -860,8 +869,7 @@ class Topology:
             index=[bus_name])
         self._buses_df = self._buses_df.append(new_bus_df)
 
-    def add_line(self, bus0, bus1, length, x=None, r=None,
-                 s_nom=None, num_parallel=1, type_info=None, kind=None):
+    def add_line(self, bus0, bus1, length, **kwargs):
         """
         Adds new line to topology.
 
@@ -932,6 +940,14 @@ class Topology:
         if not bus0_bus1.empty and bus1_bus0.empty:
             logging.debug("Line between bus0 {} and bus1 {} already exists.")
             return bus1_bus0.append(bus0_bus1).index[0]
+
+        # unpack optional parameters
+        x = kwargs.get('x', None)
+        r = kwargs.get('r', None)
+        s_nom = kwargs.get('s_nom', None)
+        num_parallel = kwargs.get('num_parallel', 1)
+        type_info = kwargs.get('type_info',None)
+        kind = kwargs.get('kind', None)
 
         # if type of line is specified calculate x, r and s_nom
         if type_info is not None:

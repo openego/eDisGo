@@ -752,3 +752,54 @@ class EDisGo:
             self.topology.to_csv(directory)
         if save_timeseries:
             self.timeseries.to_csv(directory)
+
+    def add_component(self, comp_type, **kwargs):
+        """
+        Adds single component to topology and respective timeseries if add_ts
+        is set to True.
+
+        Parameters
+        ----------
+        comp_type: str
+            Type of added component. Can be 'Bus', 'Line', 'Load', 'Generator',
+            'StorageUnit', 'Transformer'
+        **kwargs: dict
+            Attributes of added component. See respective functions for required
+            entries. For 'Load', 'Generator' and 'StorageUnit' the boolean
+            add_ts determines weather a timeseries is created for the new
+            component or not.
+        """
+        if comp_type == 'Bus':
+            self.topology.add_bus(bus_name=kwargs.get('name'),
+                                  v_nom=kwargs.get('v_nom'),
+                                  **kwargs)
+        elif comp_type == 'Line':
+            self.topology.add_line(bus0=kwargs.get('bus0'),
+                                   bus1=kwargs.get('bus1'),
+                                   lengt=kwargs.get('length'),
+                                   **kwargs)
+        elif comp_type == 'Load':
+            self.topology.add_load(load_id=kwargs.get('name'),
+                                   bus=kwargs.get('bus'),
+                                   peak_load=kwargs.get('peak_load'),
+                                   annual_consumption=kwargs.get(
+                                       'annual_consumption'),
+                                   sector=kwargs.get('sector'))
+        elif comp_type == 'Generator':
+            self.topology.add_generator(generator_id=kwargs.get('name'),
+                                        bus=kwargs.get('bus'),
+                                        p_nom=kwargs.get('p_nom'),
+                                        generator_type=
+                                        kwargs.get('generator_type'),
+                                        **kwargs)
+        elif comp_type == 'StorageUnit':
+            self.topology.add_storage_unit(storage_id=kwargs.get('name'),
+                                           bus=kwargs.get('bus'),
+                                           p_nom=kwargs.get('p_nom'),
+                                           control=kwargs.get('control', None))
+        else:
+            raise ValueError("Component type is not correct.")
+        # Todo: add timeseries handling
+
+    def add_components(self, component_dict, **kwargs):
+        raise NotImplementedError

@@ -353,8 +353,8 @@ class TestTopology:
         assert bus1 in self.topology.buses_df.index
 
         # test remove line and bordering node
-        self.topology.add_bus('Test_bus', 20)
-        self.topology.add_line(bus0, 'Test_bus', 2)
+        self.topology.add_bus(bus_name='Test_bus', v_nom=20)
+        self.topology.add_line(bus0=bus0, bus1='Test_bus', length=2)
         assert 'Test_bus' in self.topology.buses_df.index
         assert 'Line_Bus_BranchTee_MVGrid_1_3_Test_bus' in \
                self.topology.lines_df.index
