@@ -214,6 +214,10 @@ class EDisGo:
         self.results = Results(self)
         self._timeseries = TimeSeries()
 
+        # import new generators
+        if kwargs.get('generator_scenario', None) is not None:
+            self.import_generators(kwargs.get('generator_scenario'))
+            
         # set up time series for feed-in and load
         # worst-case time series
         if kwargs.get('worst_case_analysis', None):
@@ -235,9 +239,7 @@ class EDisGo:
                     'timeseries_load_reactive_power', None),
                 timeindex=kwargs.get('timeindex', None))
 
-        # import new generators
-        if kwargs.get('generator_scenario', None) is not None:
-            self.import_generators(kwargs.get('generator_scenario'))
+
 
     @property
     def config(self):
