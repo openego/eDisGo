@@ -905,9 +905,9 @@ class Topology:
             except KeyError:
                 try:
                     line_data = self.equipment_data[
-                                    '{}_cables'.format(voltage_level)].loc[
-                           type_info, :]
-                except KeyError:
+                                    '{}_overhead_lines'.format(
+                                        voltage_level)].loc[type_info, :]
+                except:
                     raise ValueError("Specified line type is not valid.")
             except:
                 raise
@@ -941,6 +941,9 @@ class Topology:
                     "line, x, r and s_nom are calculated and provided "
                     "parameters are overwritten.")
             line_data = _get_line_data()
+            if isinstance(line_data, pd.DataFrame) and len(line_data) > 1:
+                line_data = (line_data[line_data.U_n == self.buses_df.loc[
+                    bus0, 'v_nom']]).iloc[0, :]
             x = calculate_line_resistance(line_data.L_per_km, length)
             r = calculate_line_reactance(line_data.R_per_km, length)
             s_nom = calculate_apparent_power(line_data.U_n, line_data.I_max_th)

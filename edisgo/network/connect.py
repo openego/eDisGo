@@ -1,6 +1,7 @@
 import random
 import pandas as pd
 import os
+import numpy as np
 
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString, Point
@@ -302,16 +303,14 @@ def add_and_connect_lv_generator(edisgo_object, generator,
 
             # determine number of generators of LV load
             load_bus = target_loads.at[lv_load, 'bus']
-            if edisgo_object.topology.buses_df.at[
-                load_bus, 'in_building'] is not True:
+            if np.logical_not(edisgo_object.topology.buses_df.at[
+                                  load_bus, 'in_building']):
                 neighbours = \
                     list(edisgo_object.topology.get_neighbours(load_bus))
                 branch_tee_in_building = neighbours[0]
-                #ToDo handle boolean true/false
                 if len(neighbours) > 1 or \
-                        edisgo_object.topology.buses_df.at[
-                            branch_tee_in_building, 'in_building'] is not \
-                        True:
+                        np.logical_not(edisgo_object.topology.buses_df.at[
+                            branch_tee_in_building, 'in_building']):
                     raise ValueError(
                         "Expected neighbour to be branch tee in building.")
             else:
