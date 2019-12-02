@@ -368,7 +368,8 @@ class TimeSeries:
             load and 'feedin_case' for negative residual load.
 
         """
-        residual_load = self.generators_active_power.sum(axis=1) - \
+        residual_load = self.generators_active_power.sum(axis=1) + \
+                        self.storage_units_active_power.sum(axis=1) - \
                         self.loads_active_power.sum(axis=1)
 
         return residual_load.apply(
@@ -589,7 +590,9 @@ class TimeSeriesControl:
             self._load_from_timeseries()
 
             # create storage active and reactive power timeseries
-            self._storage_from_timeseries()
+            self._storage_from_timeseries(
+                kwargs.get('timeseries_storage_units', None),
+                kwargs.get('timeseries_storage_units_reactive_power', None))
 
             # check if time series for the set time index can be obtained
             self._check_timeindex()
@@ -639,15 +642,40 @@ class TimeSeriesControl:
         else:
             self._reactive_power_gen_by_cos_phi(gens)
 
-    def _storage_from_timeseries(self):
-        # Todo: implement properly
+    def _storage_from_timeseries(self, ts_active_power, ts_reactive_power):
+        # Todo: docstring
         if len(self.edisgo_obj.topology.storage_units_df) == 0:
             self.edisgo_obj.timeseries.storage_units_active_power = \
                 pd.DataFrame({}, index=self.edisgo_obj.timeseries.timeindex)
             self.edisgo_obj.timeseries.storage_units_reactive_power = \
                 pd.DataFrame({}, index=self.edisgo_obj.timeseries.timeindex)
+        elif ts_active_power is None:
+            # Todo: move up to check at the start
+            raise ValueError("No timeseries for storage units provided.")
         else:
-            raise NotImplementedError
+            try:
+                # check if indices and columns are correct
+                if (ts_active_power.index == \
+                        self.edisgo_obj.timeseries.timeindex).all() \
+                    and (ts_active_power.columns == \
+                        self.edisgo_obj.topology.storage_units_df.index).all():
+                    self.edisgo_obj.timeseries.storage_units_active_power = \
+                        ts_active_power
+                    # check if reactive power is given
+                    if ts_reactive_power and \
+                        (ts_active_power.index == \
+                            self.edisgo_obj.timeseries.timeindex).all() \
+                        and (ts_active_power.columns == \
+                            self.edisgo_obj.topology.storage_units_df.index).all():
+                        self.edisgo_obj.timeseries.storage_units_reactive_power = \
+                            ts_reactive_power
+                    else:
+                        self._reactive_power_storage_by_cos_phi(
+                            self.edisgo_obj.topology.storage_units_df)
+            except ValueError:
+                raise ValueError("Columns or indices of inserted storage "
+                                 "timeseries do not match topology and "
+                                 "timeindex.")
 
     def _worst_case_generation(self, modes):
         """
@@ -906,14 +934,71 @@ class TimeSeriesControl:
         return active_power * q_sign * np.tan(np.arccos(power_factor))
 
     def _worst_case_storage(self, modes):
-        # Todo: implement properly
+        # Todo: Docstrings
         if len(self.edisgo_obj.topology.storage_units_df) == 0:
             self.edisgo_obj.timeseries.storage_units_active_power = \
                 pd.DataFrame({}, index=self.edisgo_obj.timeseries.timeindex)
             self.edisgo_obj.timeseries.storage_units_reactive_power = \
                 pd.DataFrame({}, index=self.edisgo_obj.timeseries.timeindex)
         else:
-            raise NotImplementedError
+            storage_df = \
+                self.edisgo_obj.topology.storage_units_df.loc[:,
+                ['bus', 'p_nom']]
+
+            # check that all storage units have bus, nominal power
+            check_storage = storage_df.isnull().any(axis=1)
+            if check_storage.any():
+                raise AttributeError(
+                    "The following storage units have either missing bus or "
+                    "nominal power: {}.".format(
+                        check_storage[check_storage].index.values))
+
+            # active power
+            # get worst case configurations
+            worst_case_scale_factors = self.edisgo_obj.config[
+                'worst_case_scale_factor']
+
+            # get worst case scaling factors for feed-in/load case
+            worst_case_ts = pd.DataFrame(
+                np.transpose([[worst_case_scale_factors[
+                                   '{}_storage'.format(mode)] for mode
+                               in modes]] * len(storage_df)),
+                index=self.edisgo_obj.timeseries.timeindex,
+                columns=storage_df.index)
+
+            self.edisgo_obj.timeseries.storage_units_active_power = \
+                worst_case_ts*self.edisgo_obj.topology.storage_units_df.p_nom
+
+            self._reactive_power_storage_by_cos_phi(storage_df)
+
+    def _reactive_power_storage_by_cos_phi(self, storage_units_df):
+        # reactive power
+        # assign voltage level to storage units
+        storage_units_df['voltage_level'] = storage_units_df.apply(
+            lambda _: 'lv'
+            if self.edisgo_obj.topology.buses_df.at[_.bus, 'v_nom'] < 1
+            else 'mv', axis=1)
+        # write dataframes with sign of reactive power and power factor
+        # for each storage unit
+        q_sign = pd.Series(index=storage_units_df.index)
+        power_factor = pd.Series(index=storage_units_df.index)
+        for voltage_level in ['mv', 'lv']:
+            cols = storage_units_df.index[storage_units_df.voltage_level
+                                          == voltage_level]
+            if len(cols) > 0:
+                # storage units are handled like generators in pypsa, therefore
+                # use same sign convention as for generators
+                q_sign[cols] = self._get_q_sign_generator(
+                    self.edisgo_obj.config['reactive_power_mode'][
+                        '{}_storage'.format(voltage_level)])
+                power_factor[cols] = self.edisgo_obj.config[
+                    'reactive_power_factor']['{}_storage'.format(voltage_level)]
+
+        # calculate reactive power time series for each storage unit
+        self.edisgo_obj.timeseries.storage_units_reactive_power = \
+            self._fixed_cosphi(
+                self.edisgo_obj.timeseries.storage_units_active_power,
+                q_sign, power_factor)
 
     def _check_timeindex(self):
         """
@@ -922,18 +1007,24 @@ class TimeSeriesControl:
 
         """
         try:
-            self.edisgo_obj.timeseries.generators_reactive_power.loc[
-                self.edisgo_obj.timeseries.timeindex]
-            self.edisgo_obj.timeseries.generators_active_power.loc[
-                self.edisgo_obj.timeseries.timeindex]
-            self.edisgo_obj.timeseries.loads_active_power.loc[
-                self.edisgo_obj.timeseries.timeindex]
-            self.edisgo_obj.timeseries.loads_reactive_power.loc[
-                self.edisgo_obj.timeseries.timeindex]
-            self.edisgo_obj.timeseries.storage_units_active_power.loc[
-                self.edisgo_obj.timeseries.timeindex]
-            self.edisgo_obj.timeseries.storage_units_reactive_power.loc[
-                self.edisgo_obj.timeseries.timeindex]
+            assert (
+                self.edisgo_obj.timeseries.generators_reactive_power.index ==
+                self.edisgo_obj.timeseries.timeindex).all()
+            assert (
+                    self.edisgo_obj.timeseries.generators_active_power.index ==
+                    self.edisgo_obj.timeseries.timeindex).all()
+            assert (
+                    self.edisgo_obj.timeseries.loads_reactive_power.index ==
+                    self.edisgo_obj.timeseries.timeindex).all()
+            assert (
+                    self.edisgo_obj.timeseries.loads_active_power.index ==
+                    self.edisgo_obj.timeseries.timeindex).all()
+            assert (
+                self.edisgo_obj.timeseries.storage_units_reactive_power.index \
+                == self.edisgo_obj.timeseries.timeindex).all()
+            assert (
+                    self.edisgo_obj.timeseries.storage_units_active_power.index \
+                    == self.edisgo_obj.timeseries.timeindex).all()
         except:
             message = 'Time index of feed-in and load time series does ' \
                       'not match.'

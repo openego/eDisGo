@@ -82,6 +82,14 @@ class TestTimeSeriesControl:
         self.timeseries = TimeSeries()
 
     def test_timeseries_imported(self):
+        # test storage ts
+        self.topology.add_storage_unit('Test_storage_1', 'Bus_MVStation_1',
+                                       0.3)
+        self.topology.add_storage_unit('Test_storage_2',
+                                       'Bus_GeneratorFluctuating_2', 0.45)
+        self.topology.add_storage_unit('Test_storage_3',
+                                       'Bus_BranchTee_LVGrid_1_10', 0.05)
+
         timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
         ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775]*8760},
                                            index=timeindex)
@@ -98,13 +106,36 @@ class TestTimeSeriesControl:
                   timeseries_generation_fluctuating='oedb',
                   timeseries_generation_dispatchable=ts_gen_dispatchable)
 
+        msg = "No timeseries for storage units provided."
+        with pytest.raises(ValueError, match=msg):
+            TimeSeriesControl(edisgo_obj=self,
+                              timeseries_generation_fluctuating='oedb',
+                              timeseries_generation_dispatchable=ts_gen_dispatchable,
+                              timeseries_load='demandlib')
+
+        msg = "Columns or indices of inserted storage timeseries do not match " \
+              "topology and timeindex."
+        with pytest.raises(ValueError, match=msg):
+            TimeSeriesControl(edisgo_obj=self,
+                              timeseries_generation_fluctuating='oedb',
+                              timeseries_generation_dispatchable=ts_gen_dispatchable,
+                              timeseries_load='demandlib',
+                              timeseries_storage_units=pd.DataFrame())
+
+        storage_ts = pd.concat([self.topology.storage_units_df.p_nom]*8760,
+                               axis=1, keys=timeindex).T
         TimeSeriesControl(edisgo_obj=self,
                           timeseries_generation_fluctuating='oedb',
                           timeseries_generation_dispatchable=ts_gen_dispatchable,
-                          timeseries_load='demandlib')
+                          timeseries_load='demandlib',
+                          timeseries_storage_units=storage_ts)
 
         #Todo: test with inserted reactive generation and/or reactive load
-        print()
+
+        # remove storages
+        self.topology.remove_storage('StorageUnit_MVGrid_1_Test_storage_1')
+        self.topology.remove_storage('StorageUnit_MVGrid_1_Test_storage_2')
+        self.topology.remove_storage('StorageUnit_LVGrid_1_Test_storage_3')
 
     def test_import_load_timeseries(self):
         with pytest.raises(NotImplementedError):
@@ -121,6 +152,13 @@ class TestTimeSeriesControl:
 
     def test_worst_case(self):
         """Test creation of worst case time series"""
+        # test storage ts
+        self.topology.add_storage_unit('Test_storage_1', 'Bus_MVStation_1',
+                                       0.3)
+        self.topology.add_storage_unit('Test_storage_2',
+                                       'Bus_GeneratorFluctuating_2', 0.45)
+        self.topology.add_storage_unit('Test_storage_3',
+                                       'Bus_BranchTee_LVGrid_1_10', 0.05)
 
         ts_control = TimeSeriesControl(edisgo_obj=self, mode='worst-case')
 
@@ -133,6 +171,10 @@ class TestTimeSeriesControl:
             self.timeseries.loads_active_power, pd.DataFrame)
         assert isinstance(
             self.timeseries.loads_reactive_power, pd.DataFrame)
+        assert isinstance(
+            self.timeseries.storage_units_active_power, pd.DataFrame)
+        assert isinstance(
+            self.timeseries.storage_units_reactive_power, pd.DataFrame)
 
         # check shape
         number_of_timesteps = len(self.timeseries.timeindex)
@@ -145,6 +187,11 @@ class TestTimeSeriesControl:
         assert self.timeseries.loads_active_power.shape == (
             number_of_timesteps, number_of_cols)
         assert self.timeseries.loads_reactive_power.shape == (
+            number_of_timesteps, number_of_cols)
+        number_of_cols = len(self.topology.storage_units_df.index)
+        assert self.timeseries.storage_units_active_power.shape == (
+            number_of_timesteps, number_of_cols)
+        assert self.timeseries.storage_units_reactive_power.shape == (
             number_of_timesteps, number_of_cols)
 
         # value
@@ -221,6 +268,35 @@ class TestTimeSeriesControl:
         assert_series_equal(
             self.timeseries.loads_reactive_power.loc[:, load],
             exp * pf, check_exact=False, check_dtype=False)
+
+        storage = 'StorageUnit_MVGrid_1_Test_storage_1' # storage, mv
+        exp = pd.Series(data=[1 * 0.3, -1 * 0.3],
+                        name=storage, index=self.timeseries.timeindex)
+
+        assert_series_equal(
+            self.timeseries.storage_units_active_power.loc[:, storage], exp,
+            check_exact=False, check_dtype=False)
+        pf = -tan(acos(0.9))
+        assert_series_equal(
+            self.timeseries.storage_units_reactive_power.loc[:, storage],
+            exp * pf, check_exact=False, check_dtype=False)
+
+        storage = 'StorageUnit_LVGrid_1_Test_storage_3' # storage, lv
+        exp = pd.Series(data=[1 * 0.05, -1 * 0.05],
+                        name=storage, index=self.timeseries.timeindex)
+
+        assert_series_equal(
+            self.timeseries.storage_units_active_power.loc[:, storage], exp,
+            check_exact=False, check_dtype=False)
+        pf = -tan(acos(0.95))
+        assert_series_equal(
+            self.timeseries.storage_units_reactive_power.loc[:, storage],
+            exp * pf, check_exact=False, check_dtype=False)
+
+        # remove storages
+        self.topology.remove_storage('StorageUnit_MVGrid_1_Test_storage_1')
+        self.topology.remove_storage('StorageUnit_MVGrid_1_Test_storage_2')
+        self.topology.remove_storage('StorageUnit_LVGrid_1_Test_storage_3')
 
         # test for only feed-in case
         TimeSeriesControl(edisgo_obj=self, mode='worst-case-feedin')
