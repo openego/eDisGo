@@ -989,26 +989,26 @@ class Topology:
 
     def to_csv(self, directory):
         #Todo: Docstring
-        dir = os.path.join(directory, 'topology')
+        topology_dir = os.path.join(directory, 'topology')
         os.makedirs(directory, exist_ok=True)
-        os.makedirs(dir, exist_ok=True)
-        self._buses_df.to_csv(os.path.join(dir, 'buses.csv'))
+        os.makedirs(topology_dir, exist_ok=True)
+        self._buses_df.to_csv(os.path.join(topology_dir, 'buses.csv'))
         self._generators_df.append(self.slack_df).to_csv(
-            os.path.join(dir, 'generators.csv'))
-        self._lines_df.to_csv(os.path.join(dir, 'lines.csv'))
-        self._loads_df.to_csv(os.path.join(dir, 'loads.csv'))
-        self._storage_units_df.to_csv(os.path.join(dir, 'storage_units.csv'))
-        self._switches_df.to_csv(os.path.join(dir, 'switches.csv'))
+            os.path.join(topology_dir, 'generators.csv'))
+        self._lines_df.to_csv(os.path.join(topology_dir, 'lines.csv'))
+        self._loads_df.to_csv(os.path.join(topology_dir, 'loads.csv'))
+        self._storage_units_df.to_csv(os.path.join(topology_dir, 'storage_units.csv'))
+        self._switches_df.to_csv(os.path.join(topology_dir, 'switches.csv'))
         self._transformers_df.rename({'x_pu':'x', 'r_pu':'r'}, axis=1).to_csv(
-            os.path.join(dir, 'transformers.csv'))
+            os.path.join(topology_dir, 'transformers.csv'))
         self._transformers_hvmv_df.rename({'x_pu':'x', 'r_pu':'r'}, axis=1).\
-            to_csv(os.path.join(dir, 'transformers_hvmv.csv'))
+            to_csv(os.path.join(topology_dir, 'transformers_hvmv.csv'))
         network = {'name': self.mv_grid.id}
         network.update(self._grid_district)
         pd.DataFrame([network]).set_index('name').rename(
             {'geom': 'mv_grid_district_geom',
              'population': 'mv_grid_district_population'}, axis=1).to_csv(
-            os.path.join(dir, 'network.csv'))
+            os.path.join(topology_dir, 'network.csv'))
         logger.debug("Topology exported.")
 
     def __repr__(self):

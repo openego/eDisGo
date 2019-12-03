@@ -745,8 +745,8 @@ class EDisGo:
              save_results=True, save_topology=True, save_timeseries=True):
         #Todo: Docstring
         os.makedirs(directory, exist_ok=True)
-        os.makedirs(os.path.join(directory, 'results'), exist_ok=True)
         if save_results:
+            os.makedirs(os.path.join(directory, 'results'), exist_ok=True)
             self.results.save(os.path.join(directory, 'results'))
         if save_topology:
             self.topology.to_csv(directory)

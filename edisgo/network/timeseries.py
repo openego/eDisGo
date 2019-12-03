@@ -739,6 +739,8 @@ class TimeSeriesControl:
         self._reactive_power_gen_by_cos_phi(gens_df)
 
     def _reactive_power_gen_by_cos_phi(self, gens_df):
+        if gens_df.empty:
+            return
         # reactive power
         # assign voltage level to generators
         gens_df['voltage_level'] = gens_df.apply(
@@ -799,6 +801,8 @@ class TimeSeriesControl:
                     check_loads[check_loads].index.values))
 
         # assign voltage level to loads
+        if loads_df.empty:
+            return
         loads_df['voltage_level'] = loads_df.apply(
             lambda _: 'lv' if self.edisgo_obj.topology.buses_df.at[
                                   _.bus, 'v_nom'] < 1
@@ -974,6 +978,8 @@ class TimeSeriesControl:
     def _reactive_power_storage_by_cos_phi(self, storage_units_df):
         # reactive power
         # assign voltage level to storage units
+        if storage_units_df.empty:
+            return
         storage_units_df['voltage_level'] = storage_units_df.apply(
             lambda _: 'lv'
             if self.edisgo_obj.topology.buses_df.at[_.bus, 'v_nom'] < 1
