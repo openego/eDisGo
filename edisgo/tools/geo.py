@@ -32,9 +32,9 @@ def proj2equidistant(srid):
                    )
 
 
-def proj2conformal(srid):
+def proj2equidistant_reverse(srid):
     """
-    Transforms to conformal projection (epsg:4326).
+    Transforms back from equidistant projection to given projection.
 
     Parameters
     ----------
@@ -50,6 +50,34 @@ def proj2conformal(srid):
     return partial(pyproj.transform,
                    pyproj.Proj(init='epsg:3035'),  # source CRS
                    pyproj.Proj(init='epsg:{}'.format(srid))  # destination CRS
+                   )
+
+
+def proj_by_srids(srid1, srid2):
+    """
+    Transforms from specified projection to other specified projection.
+
+    Parameters
+    ----------
+    srid1 : int
+        Spatial reference identifier of geometry to transform.
+    srid2 : int
+        Spatial reference identifier of destination CRS.
+
+    Returns
+    -------
+    :py:func:`functools.partial`
+
+    Notes
+    -----
+    Projections often used are conformal projection (epsg:4326), equidistant
+    projection (epsg:3035) and spherical mercator projection (epsg:3857).
+
+    """
+
+    return partial(pyproj.transform,
+                   pyproj.Proj(init='epsg:{}'.format(srid1)),  # source CRS
+                   pyproj.Proj(init='epsg:{}'.format(srid2))  # destination CRS
                    )
 
 

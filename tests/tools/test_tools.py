@@ -57,8 +57,10 @@ class TestTools:
                                         'Bus_BranchTee_MVGrid_1_3')
 
         # add bus and line that could be removed
-        self.topology.add_bus('Test_bus_to_remove', v_nom=20)
-        self.topology.add_line('Bus_MVStation_1', 'Test_bus_to_remove', 1.0)
+        self.topology.add_bus(bus_name='Test_bus_to_remove', v_nom=20)
+        self.topology.add_line(bus0='Bus_MVStation_1',
+                               bus1='Test_bus_to_remove',
+                               length=1.0)
         assert self.topology.lines_df.at[
                    'Line_Bus_MVStation_1_Test_bus_to_remove', 'length'] == 1
         assert tools.check_bus_for_removal(self.topology, 'Test_bus_to_remove')

@@ -2,10 +2,12 @@ import os
 import pandas as pd
 import numpy as np
 import pytest
+import shutil
 
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import reinforce_measures as reinforce
+from matplotlib import pyplot as plt
 
 
 class TestEDisGo:
@@ -38,6 +40,15 @@ class TestEDisGo:
             reinforce.extend_substation_overloading(self.edisgo,
                                                     [pd.DataFrame(),
                                                      pd.DataFrame])
+
+    def test_save(self):
+        cur_dir = os.getcwd()
+        self.edisgo.save(cur_dir)
+        # Todo: check values?
+        # Todo: check files before rmtree?
+        shutil.rmtree(os.path.join(cur_dir, 'results'))
+        shutil.rmtree(os.path.join(cur_dir, 'topology'))
+        shutil.rmtree(os.path.join(cur_dir, 'timeseries'))
 
     def test_crit_station(self):
         # TODO: have checks of technical constraints not require edisgo
@@ -245,3 +256,84 @@ class TestEDisGo:
         # Todo: relocate? Check other values
         edisgo.analyze(timesteps=timeindex[range(10)])
         print()
+
+    def test_plot_mv_grid_topology(self):
+        plt.ion()
+        self.edisgo.plot_mv_grid_topology(technologies=True)
+        plt.close('all')
+        self.edisgo.plot_mv_grid_topology()
+        plt.close('all')
+
+    def test_plot_mv_voltages(self):
+        plt.ion()
+        # if not already done so, analyse grid
+        try:
+            if self.results.pfa_v_mag_pu is None:
+                self.edisgo.analyze()
+        except AttributeError:
+            self.edisgo.analyze()
+        except ValueError:
+            pass
+        # plot mv voltages
+        self.edisgo.plot_mv_voltages()
+        plt.close('all')
+
+    def test_plot_mv_line_loading(self):
+        # if not already done so, analyse grid
+        plt.ion()
+        try:
+            if self.edisgo.results.i_res is None:
+                self.edisgo.analyze()
+        except AttributeError:
+            self.edisgo.analyze()
+        # plot mv line loading
+        self.edisgo.plot_mv_line_loading()
+        plt.close('all')
+
+    def test_plot_mv_grid_expansion_costs(self):
+        plt.ion()
+        try:
+            if self.edisgo.results.grid_expansion_costs is None:
+                self.edisgo.reinforce()
+        except AttributeError:
+            self.edisgo.reinforce()
+        # plot grid expansion costs
+        self.edisgo.plot_mv_grid_expansion_costs()
+        plt.close('all')
+
+    def test_plot_mv_storage_integration(self):
+        plt.ion()
+        self.edisgo.topology.add_storage_unit(1, 'Bus_BranchTee_MVGrid_1_8',
+                                              0.3)
+        self.edisgo.topology.add_storage_unit(1, 'Bus_BranchTee_MVGrid_1_8',
+                                              0.6)
+        self.edisgo.topology.add_storage_unit(1, 'Bus_BranchTee_MVGrid_1_10',
+                                              0.3)
+        self.edisgo.plot_mv_storage_integration()
+        plt.close('all')
+        self.edisgo.topology.remove_storage('StorageUnit_MVGrid_1_1')
+        self.edisgo.topology.remove_storage('StorageUnit_MVGrid_1_2')
+        self.edisgo.topology.remove_storage('StorageUnit_MVGrid_1_3')
+
+    def test_histogramm_voltage(self):
+        plt.ion()
+        # if not already done so, analyse grid
+        try:
+            if self.results.pfa_v_mag_pu is None:
+                self.edisgo.analyze()
+        except AttributeError:
+            self.edisgo.analyze()
+
+        self.edisgo.histogram_voltage()
+        plt.close('all')
+
+    def test_histogramm_relative_line_load(self):
+        plt.ion()
+        try:
+            if self.edisgo.results.i_res is None:
+                self.edisgo.analyze()
+        except AttributeError:
+            self.edisgo.analyze()
+
+        self.edisgo.histogram_relative_line_load()
+        plt.close('all')

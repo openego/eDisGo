@@ -16,282 +16,7 @@ from edisgo.flex_opt.storage_integration import StorageControl
 logger = logging.getLogger('edisgo')
 
 
-class EDisGoReimport:
-    """
-    EDisGo class created from saved results.
-
-    """
-    def __init__(self, results_path, **kwargs):
-
-        if os.path.isdir(results_path):
-            # create topology
-            self.topology = None#NetworkReimport(results_path, **kwargs)
-        else:
-            logging.error('Results cannot be imported as the specified '
-                          'directory {} does not exist.'.format(results_path))
-
-        parameters = kwargs.get('parameters', 'all')
-
-        # create ResultsReimport class
-        self.results = ResultsReimport(
-            results_path, parameters=parameters)
-
-    def plot_mv_grid_topology(self, technologies=False, **kwargs):
-        """
-        Plots plain MV network topology and optionally nodes by technology type
-        (e.g. station or generator).
-
-        Parameters
-        ----------
-        technologies : :obj:`Boolean`
-            If True plots stations, generators, etc. in the topology in different
-            colors. If False does not plot any nodes. Default: False.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.topology.pypsa is None:
-            try:
-                timesteps = self.topology.timeseries.timeindex
-                self.topology.pypsa = pypsa_io.to_pypsa(
-                    self.topology, mode=None, timesteps=timesteps)
-            except:
-                logging.warning(
-                    "pypsa representation of MV topology needed to plot MV "
-                    "topology topology.")
-
-        if self.topology.pypsa is not None:
-            plots.mv_grid_topology(
-                self.topology.pypsa, self.topology.config,
-                node_color='technology' if technologies is True else None,
-                filename=kwargs.get('filename', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-                title=kwargs.get('title', ''))
-
-    def plot_mv_voltages(self, **kwargs):
-        """
-        Plots voltages in MV network on network topology plot.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.topology.pypsa is not None:
-            try:
-                v_res = self.topology.results.v_res()
-            except:
-                logging.warning("Voltages `pfa_v_mag_pu` from power flow "
-                                "analysis must be available to plot them.")
-                return
-            plots.mv_grid_topology(
-                self.topology.pypsa, self.topology.config,
-                timestep=kwargs.get('timestep', None),
-                node_color='voltage',
-                filename=kwargs.get('filename', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                voltage=v_res,
-                limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-                title=kwargs.get('title', ''))
-        else:
-            logging.warning("pypsa representation of MV network needed to "
-                            "plot voltages.")
-
-    def plot_mv_line_loading(self, **kwargs):
-        """
-        Plots relative line loading (current from power flow analysis to
-        allowed current) of MV lines.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.topology.pypsa is not None and \
-                self.topology.results.i_res is not None:
-            plots.mv_grid_topology(
-                self.topology.pypsa, self.topology.config,
-                timestep=kwargs.get('timestep', None),
-                line_color='loading',
-                node_color=kwargs.get('node_color', None),
-                line_load=self.topology.results.i_res,
-                filename=kwargs.get('filename', None),
-                arrows=kwargs.get('arrows', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                voltage=self.topology.results.v_res(),
-                limits_cb_lines=kwargs.get('limits_cb_lines', None),
-                limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-                lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
-                title=kwargs.get('title', ''),
-                scaling_factor_line_width=kwargs.get(
-                    'scaling_factor_line_width', None))
-        else:
-            if self.topology.pypsa is None:
-                logging.warning("pypsa representation of MV topology needed to "
-                                "plot line loading.")
-            if self.topology.results.i_res is None:
-                logging.warning("Currents `i_res` from power flow analysis "
-                                "must be available to plot line loading.")
-
-    def plot_mv_grid_expansion_costs(self, **kwargs):
-        """
-        Plots costs per MV line.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.topology.pypsa is not None and \
-                self.topology.results.grid_expansion_costs is not None:
-            if isinstance(self, EDisGo):
-                # convert index of topology expansion costs to str
-                grid_expansion_costs = \
-                    self.topology.results.grid_expansion_costs.reset_index()
-                grid_expansion_costs['index'] = \
-                    grid_expansion_costs['index'].apply(lambda _: repr(_))
-                grid_expansion_costs.set_index('index', inplace=True)
-            else:
-                grid_expansion_costs = \
-                    self.topology.results.grid_expansion_costs
-
-            plots.mv_grid_topology(
-                self.topology.pypsa, self.topology.config,
-                line_color='expansion_costs',
-                grid_expansion_costs=grid_expansion_costs,
-                filename=kwargs.get('filename', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                limits_cb_lines=kwargs.get('limits_cb_lines', None),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-                lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
-                title=kwargs.get('title', ''),
-                scaling_factor_line_width=kwargs.get(
-                    'scaling_factor_line_width', None)
-            )
-        else:
-            if self.topology.pypsa is None:
-                logging.warning("pypsa representation of MV topology needed to "
-                                "plot topology expansion costs.")
-            if self.topology.results.grid_expansion_costs is None:
-                logging.warning("Grid expansion cost results needed to plot "
-                                "them.")
-
-    def plot_mv_storage_integration(self, **kwargs):
-        """
-        Plots storage position in MV topology of integrated storage units.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
-
-        """
-        if self.topology.pypsa is not None:
-            plots.mv_grid_topology(
-                self.topology.pypsa, self.topology.config,
-                node_color='storage_integration',
-                filename=kwargs.get('filename', None),
-                grid_district_geom=kwargs.get('grid_district_geom', True),
-                background_map=kwargs.get('background_map', True),
-                xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-                title=kwargs.get('title', ''))
-        else:
-            if self.topology.pypsa is None:
-                logging.warning("pypsa representation of MV topology needed to "
-                                "plot storage integration in MV topology.")
-
-    def histogram_voltage(self, timestep=None, title=True, **kwargs):
-        """
-        Plots histogram of voltages.
-
-        For more information on the histogram plot and possible configurations
-        see :func:`edisgo.tools.plots.histogram`.
-
-        Parameters
-        ----------
-        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
-            Specifies time steps histogram is plotted for. If timestep is None
-            all time steps voltages are calculated for are used. Default: None.
-        title : :obj:`str` or :obj:`bool`, optional
-            Title for plot. If True title is auto generated. If False plot has
-            no title. If :obj:`str`, the provided title is used. Default: True.
-
-        """
-        data = self.topology.results.v_res()
-
-        if timestep is None:
-            timestep = data.index
-        # check if timesteps is array-like, otherwise convert to list
-        if not hasattr(timestep, "__len__"):
-            timestep = [timestep]
-
-        if title is True:
-            if len(timestep) == 1:
-                title = "Voltage histogram for time step {}".format(
-                    timestep[0])
-            else:
-                title = "Voltage histogram \nfor time steps {} to {}".format(
-                    timestep[0], timestep[-1])
-        elif title is False:
-            title = None
-        plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
-
-    def histogram_relative_line_load(self, timestep=None, title=True,
-                                     voltage_level='mv_lv', **kwargs):
-        """
-        Plots histogram of relative line loads.
-
-        For more information on how the relative line load is calculated see
-        :func:`edisgo.tools.tools.get_line_loading_from_network`.
-        For more information on the histogram plot and possible configurations
-        see :func:`edisgo.tools.plots.histogram`.
-
-        Parameters
-        ----------
-        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
-            Specifies time step(s) histogram is plotted for. If `timestep` is
-            None all time steps currents are calculated for are used.
-            Default: None.
-        title : :obj:`str` or :obj:`bool`, optional
-            Title for plot. If True title is auto generated. If False plot has
-            no title. If :obj:`str`, the provided title is used. Default: True.
-        voltage_level : :obj:`str`
-            Specifies which voltage level to plot voltage histogram for.
-            Possible options are 'mv', 'lv' and 'mv_lv'. 'mv_lv' is also the
-            fallback option in case of wrong input. Default: 'mv_lv'
-
-        """
-        if voltage_level == 'mv':
-            lines = self.topology.pypsa.lines.loc[
-                self.topology.pypsa.lines.v_nom > 1]
-        elif voltage_level == 'lv':
-            lines = self.topology.pypsa.lines.loc[
-                self.topology.pypsa.lines.v_nom < 1]
-        else:
-            lines = self.topology.pypsa.lines
-
-        rel_line_loading = tools.calculate_relative_line_load(
-            self.topology.pypsa, self.topology.config,
-            self.topology.results.i_res, self.topology.pypsa.lines.v_nom,
-            lines.index, timestep)
-
-        if timestep is None:
-            timestep = rel_line_loading.index
-        # check if timesteps is array-like, otherwise convert to list
-        if not hasattr(timestep, "__len__"):
-            timestep = [timestep]
-
-        if title is True:
-            if len(timestep) == 1:
-                title = "Relative line load histogram for time step {}".format(
-                    timestep[0])
-            else:
-                title = "Relative line load histogram \nfor time steps " \
-                        "{} to {}".format(timestep[0], timestep[-1])
-        elif title is False:
-            title = None
-        plots.histogram(data=rel_line_loading, title=title, **kwargs)
-
-
-class EDisGo(EDisGoReimport):
+class EDisGo:
     """
     Provides the top-level API for invocation of data import, analysis of
     hosting capacity, network reinforcement and flexibility measures.
@@ -489,6 +214,10 @@ class EDisGo(EDisGoReimport):
         self.results = Results(self)
         self._timeseries = TimeSeries()
 
+        # import new generators
+        if kwargs.get('generator_scenario', None) is not None:
+            self.import_generators(kwargs.get('generator_scenario'))
+            
         # set up time series for feed-in and load
         # worst-case time series
         if kwargs.get('worst_case_analysis', None):
@@ -510,9 +239,7 @@ class EDisGo(EDisGoReimport):
                     'timeseries_load_reactive_power', None),
                 timeindex=kwargs.get('timeindex', None))
 
-        # import new generators
-        if kwargs.get('generator_scenario', None) is not None:
-            self.import_generators(kwargs.get('generator_scenario'))
+
 
     @property
     def config(self):
@@ -763,3 +490,316 @@ class EDisGo(EDisGoReimport):
         """
         StorageControl(edisgo=self, timeseries=timeseries,
                        position=position, **kwargs)
+
+    def plot_mv_grid_topology(self, technologies=False, **kwargs):
+        """
+        Plots plain MV network topology and optionally nodes by technology type
+        (e.g. station or generator).
+
+        Parameters
+        ----------
+        technologies : :obj:`Boolean`
+            If True plots stations, generators, etc. in the topology in different
+            colors. If False does not plot any nodes. Default: False.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+
+        plots.mv_grid_topology(
+            self,
+            node_color='technology' if technologies is True else None,
+            filename=kwargs.get('filename', None),
+            grid_district_geom=kwargs.get('grid_district_geom', True),
+            background_map=kwargs.get('background_map', True),
+            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+            title=kwargs.get('title', ''))
+
+    def plot_mv_voltages(self, **kwargs):
+        """
+        Plots voltages in MV network on network topology plot.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        try:
+            if self.results.pfa_v_mag_pu is None:
+                logging.warning("Voltages `pfa_v_mag_pu` from power flow "
+                                "analysis must be available to plot them.")
+            return
+        except AttributeError:
+            logging.warning("Results must be available to plot voltages. "
+                            "Please analyze grid first.")
+            return
+        except ValueError:
+            pass
+
+        plots.mv_grid_topology(
+            self,
+            timestep=kwargs.get('timestep', None),
+            node_color='voltage',
+            filename=kwargs.get('filename', None),
+            grid_district_geom=kwargs.get('grid_district_geom', True),
+            background_map=kwargs.get('background_map', True),
+            voltage=self.results.pfa_v_mag_pu,
+            limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
+            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+            title=kwargs.get('title', ''))
+
+    def plot_mv_line_loading(self, **kwargs):
+        """
+        Plots relative line loading (current from power flow analysis to
+        allowed current) of MV lines.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        try:
+            if self.results.i_res is None:
+                logging.warning("Currents `i_res` from power flow analysis "
+                                "must be available to plot line loading.")
+                return
+        except AttributeError:
+            logging.warning("Results must be available to plot line loading. "
+                            "Please analyze grid first.")
+            return
+
+        plots.mv_grid_topology(
+            self,
+            timestep=kwargs.get('timestep', None),
+            line_color='loading',
+            node_color=kwargs.get('node_color', None),
+            line_load=self.results.i_res,
+            filename=kwargs.get('filename', None),
+            arrows=kwargs.get('arrows', None),
+            grid_district_geom=kwargs.get('grid_district_geom', True),
+            background_map=kwargs.get('background_map', True),
+            voltage=self.results.pfa_v_mag_pu,
+            limits_cb_lines=kwargs.get('limits_cb_lines', None),
+            limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
+            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+            lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
+            title=kwargs.get('title', ''),
+            scaling_factor_line_width=kwargs.get(
+                'scaling_factor_line_width', None))
+
+    def plot_mv_grid_expansion_costs(self, **kwargs):
+        """
+        Plots costs per MV line.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        try:
+            if self.results.grid_expansion_costs is None:
+                logging.warning("Grid expansion cost results needed to plot "
+                                "them. Please do grid reinforcement.")
+                return
+        except AttributeError:
+            logging.warning("Results of MV topology needed to  plot topology "
+                            "expansion costs. Please reinforce first.")
+            return
+
+        plots.mv_grid_topology(
+            self,
+            line_color='expansion_costs',
+            grid_expansion_costs=self.results.grid_expansion_costs,
+            filename=kwargs.get('filename', None),
+            grid_district_geom=kwargs.get('grid_district_geom', True),
+            background_map=kwargs.get('background_map', True),
+            limits_cb_lines=kwargs.get('limits_cb_lines', None),
+            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+            lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
+            title=kwargs.get('title', ''),
+            scaling_factor_line_width=kwargs.get(
+                'scaling_factor_line_width', None)
+        )
+
+    def plot_mv_storage_integration(self, **kwargs):
+        """
+        Plots storage position in MV topology of integrated storage units.
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        plots.mv_grid_topology(
+            self,
+            node_color='storage_integration',
+            filename=kwargs.get('filename', None),
+            grid_district_geom=kwargs.get('grid_district_geom', True),
+            background_map=kwargs.get('background_map', True),
+            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+            title=kwargs.get('title', ''))
+
+    def histogram_voltage(self, timestep=None, title=True, **kwargs):
+        """
+        Plots histogram of voltages.
+
+        For more information on the histogram plot and possible configurations
+        see :func:`edisgo.tools.plots.histogram`.
+
+        Parameters
+        ----------
+        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+            Specifies time steps histogram is plotted for. If timestep is None
+            all time steps voltages are calculated for are used. Default: None.
+        title : :obj:`str` or :obj:`bool`, optional
+            Title for plot. If True title is auto generated. If False plot has
+            no title. If :obj:`str`, the provided title is used. Default: True.
+
+        """
+        try:
+            data = self.results.pfa_v_mag_pu
+            if data is None:
+                logger.warning("Results for pfa_v_mag_pu are required for "
+                               "voltage histogramm. Please analyze first.")
+                return
+        except AttributeError:
+            logger.warning("Results are required for "
+                           "voltage histogramm. Please analyze first.")
+            return
+
+        if timestep is None:
+            timestep = data.index
+        # check if timesteps is array-like, otherwise convert to list
+        if not hasattr(timestep, "__len__"):
+            timestep = [timestep]
+
+        if title is True:
+            if len(timestep) == 1:
+                title = "Voltage histogram for time step {}".format(
+                    timestep[0])
+            else:
+                title = "Voltage histogram \nfor time steps {} to {}".format(
+                    timestep[0], timestep[-1])
+        elif title is False:
+            title = None
+        plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
+
+    def histogram_relative_line_load(self, timestep=None, title=True,
+                                     voltage_level='mv_lv', **kwargs):
+        """
+        Plots histogram of relative line loads.
+
+        For more information on how the relative line load is calculated see
+        :func:`edisgo.tools.tools.get_line_loading_from_network`.
+        For more information on the histogram plot and possible configurations
+        see :func:`edisgo.tools.plots.histogram`.
+
+        Parameters
+        ----------
+        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+            Specifies time step(s) histogram is plotted for. If `timestep` is
+            None all time steps currents are calculated for are used.
+            Default: None.
+        title : :obj:`str` or :obj:`bool`, optional
+            Title for plot. If True title is auto generated. If False plot has
+            no title. If :obj:`str`, the provided title is used. Default: True.
+        voltage_level : :obj:`str`
+            Specifies which voltage level to plot voltage histogram for.
+            Possible options are 'mv', 'lv' and 'mv_lv'. 'mv_lv' is also the
+            fallback option in case of wrong input. Default: 'mv_lv'
+
+        """
+        try:
+            if self.results.i_res is None:
+                logger.warning("Currents `i_res` from power flow analysis "
+                               "must be available to plot histogram line "
+                               "loading.")
+                return
+        except AttributeError:
+            logger.warning("Results must be available to plot histogram line "
+                           "loading. Please analyze grid first.")
+            return
+
+        if voltage_level == 'mv':
+            lines = self.topology.lines_df.loc[
+                self.topology.lines_df.v_nom > 1]
+        elif voltage_level == 'lv':
+            lines = self.topology.lines_df.loc[
+                self.topology.lines_df.v_nom < 1]
+        else:
+            lines = self.topology.lines_df
+
+        rel_line_loading = tools.calculate_relative_line_load(
+            self, self.results.i_res, lines.index, timestep)
+
+        if timestep is None:
+            timestep = rel_line_loading.index
+        # check if timesteps is array-like, otherwise convert to list
+        if not hasattr(timestep, "__len__"):
+            timestep = [timestep]
+
+        if title is True:
+            if len(timestep) == 1:
+                title = "Relative line load histogram for time step {}".format(
+                    timestep[0])
+            else:
+                title = "Relative line load histogram \nfor time steps " \
+                        "{} to {}".format(timestep[0], timestep[-1])
+        elif title is False:
+            title = None
+        plots.histogram(data=rel_line_loading, title=title, **kwargs)
+
+    def save(self, directory,
+             save_results=True, save_topology=True, save_timeseries=True):
+        #Todo: Docstring
+        os.makedirs(directory, exist_ok=True)
+        if save_results:
+            os.makedirs(os.path.join(directory, 'results'), exist_ok=True)
+            self.results.save(os.path.join(directory, 'results'))
+        if save_topology:
+            self.topology.to_csv(directory)
+        if save_timeseries:
+            self.timeseries.to_csv(directory)
+
+    def add_component(self, comp_type, **kwargs):
+        """
+        Adds single component to topology and respective timeseries if add_ts
+        is set to True.
+
+        Parameters
+        ----------
+        comp_type: str
+            Type of added component. Can be 'Bus', 'Line', 'Load', 'Generator',
+            'StorageUnit', 'Transformer'
+        **kwargs: dict
+            Attributes of added component. See respective functions for required
+            entries. For 'Load', 'Generator' and 'StorageUnit' the boolean
+            add_ts determines weather a timeseries is created for the new
+            component or not.
+        """
+        if comp_type == 'Bus':
+            self.topology.add_bus(bus_name=kwargs.get('name'),
+                                  v_nom=kwargs.get('v_nom'),
+                                  **kwargs)
+        elif comp_type == 'Line':
+            self.topology.add_line(bus0=kwargs.get('bus0'),
+                                   bus1=kwargs.get('bus1'),
+                                   lengt=kwargs.get('length'),
+                                   **kwargs)
+        elif comp_type == 'Load':
+            self.topology.add_load(load_id=kwargs.get('name'),
+                                   bus=kwargs.get('bus'),
+                                   peak_load=kwargs.get('peak_load'),
+                                   annual_consumption=kwargs.get(
+                                       'annual_consumption'),
+                                   sector=kwargs.get('sector'))
+        elif comp_type == 'Generator':
+            self.topology.add_generator(generator_id=kwargs.get('name'),
+                                        bus=kwargs.get('bus'),
+                                        p_nom=kwargs.get('p_nom'),
+                                        generator_type=
+                                        kwargs.get('generator_type'),
+                                        **kwargs)
+        elif comp_type == 'StorageUnit':
+            self.topology.add_storage_unit(storage_id=kwargs.get('name'),
+                                           bus=kwargs.get('bus'),
+                                           p_nom=kwargs.get('p_nom'),
+                                           control=kwargs.get('control', None))
+        else:
+            raise ValueError("Component type is not correct.")
+        # Todo: add timeseries handling
+
+    def add_components(self, component_dict, **kwargs):
+        raise NotImplementedError

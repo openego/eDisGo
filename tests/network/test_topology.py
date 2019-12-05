@@ -1,6 +1,9 @@
 import os
 import pytest
 import warnings
+import shutil
+import pandas as pd
+from pandas.util.testing import assert_frame_equal
 
 from edisgo.network.topology import Topology
 from edisgo.io import ding0_import
@@ -16,6 +19,31 @@ class TestTopology:
             parent_dirname, 'ding0_test_network')
         self.topology = Topology()
         ding0_import.import_ding0_grid(test_network_directory, self)
+
+    def test_to_csv(self):
+        """Test for method to_csv"""
+        dir = os.getcwd()
+        self.topology.to_csv(dir)
+        edisgo = pd.DataFrame()
+        edisgo.topology = Topology()
+        ding0_import.import_ding0_grid(os.path.join(dir,'topology'), edisgo)
+        assert_frame_equal(self.topology.buses_df, edisgo.topology.buses_df)
+        assert_frame_equal(self.topology.generators_df,
+                           edisgo.topology.generators_df)
+        assert_frame_equal(self.topology.lines_df, edisgo.topology.lines_df)
+        assert_frame_equal(self.topology.loads_df, edisgo.topology.loads_df)
+        assert_frame_equal(self.topology.slack_df, edisgo.topology.slack_df)
+        assert edisgo.topology.storage_units_df.empty
+        assert_frame_equal(self.topology.switches_df,
+                           edisgo.topology.switches_df)
+        assert_frame_equal(self.topology.transformers_df,
+                           edisgo.topology.transformers_df)
+        assert_frame_equal(self.topology.transformers_hvmv_df,
+                           edisgo.topology.transformers_hvmv_df)
+        assert_frame_equal(pd.DataFrame([self.topology.grid_district]),
+                           pd.DataFrame([edisgo.topology.grid_district]))
+        # Todo: check files before rmtree?
+        shutil.rmtree(os.path.join(dir,'topology'), ignore_errors=True)
 
     def test_add_line(self):
         """Test add_line method"""
@@ -195,6 +223,7 @@ class TestTopology:
         assert len_df_pre+1 == len(self.topology.buses_df)
         assert self.topology.buses_df.at['Test_bus', 'v_nom'] == 20
         assert self.topology.buses_df.at['Test_bus', 'mv_grid_id'] == 1
+        self.topology.remove_bus('Test_bus')
 
         # check LV assertion
         msg = "You need to specify an lv_grid_id for low-voltage buses."
@@ -203,10 +232,11 @@ class TestTopology:
 
         # check adding LV bus
         self.topology.add_bus('Test_bus_LV', v_nom=0.4, lv_grid_id=1)
-        assert len_df_pre+2 == len(self.topology.buses_df)
+        assert len_df_pre+1 == len(self.topology.buses_df)
         assert self.topology.buses_df.at['Test_bus_LV', 'v_nom']
         assert self.topology.buses_df.at['Test_bus_LV', 'lv_grid_id'] == 1
         assert self.topology.buses_df.at['Test_bus_LV', 'mv_grid_id'] == 1
+        self.topology.remove_bus('Test_bus_LV')
 
     def test_remove_bus(self):
         """Test remove_bus method"""
@@ -323,8 +353,8 @@ class TestTopology:
         assert bus1 in self.topology.buses_df.index
 
         # test remove line and bordering node
-        self.topology.add_bus('Test_bus', 20)
-        self.topology.add_line(bus0, 'Test_bus', 2)
+        self.topology.add_bus(bus_name='Test_bus', v_nom=20)
+        self.topology.add_line(bus0=bus0, bus1='Test_bus', length=2)
         assert 'Test_bus' in self.topology.buses_df.index
         assert 'Line_Bus_BranchTee_MVGrid_1_3_Test_bus' in \
                self.topology.lines_df.index

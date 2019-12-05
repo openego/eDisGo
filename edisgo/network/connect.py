@@ -1,49 +1,46 @@
-import networkx as nx
 import random
 import pandas as pd
 import os
+import numpy as np
 
 if not 'READTHEDOCS' in os.environ:
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
 
-from edisgo.network.components import Generator
 from edisgo.tools.geo import \
     calc_geo_dist_vincenty, calc_geo_lines_in_buffer, \
-    proj2equidistant, proj2conformal
+    proj2equidistant, proj2equidistant_reverse
 
 import logging
+
 logger = logging.getLogger('edisgo')
 
 
 def add_and_connect_mv_generator(edisgo_object, generator):
-    """Connect MV generators to existing grids.
+    """
+    Add and connect new MV generator to existing grid.
 
-    This function searches for unconnected generators in MV grids and connects them.
-
-    It connects
+    This function connects
 
         * generators of voltage level 4
             * to HV-MV station
 
         * generators of voltage level 5
-            * with a nom. capacity of <=30 kW to LV loads of type residential
-            * with a nom. capacity of >30 kW and <=100 kW to LV loads of type
-                retail, industrial or agricultural
-            * to the MV-LV station if no appropriate load is available (fallback)
+            * to nearest MV bus or line
+            * in case generator is connected to a line, the line is split and
+              a new branch tee is added to connect new generator to
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
-        The eDisGo container object
+    edisgo_object : :class:`~.EDisGo`
+    generator : pd.Series
+        Pandas series with generator information such as electrical_capacity
+        in MW and generation_type.
 
-    Notes
-    -----
-    Adapted from `Ding0 <https://github.com/openego/ding0/blob/\
-        21a52048f84ec341fe54e0204ac62228a9e8a32a/\
-        ding0/grid/mv_grid/mv_connect.py#L820>`_.
     """
+
+    # ToDo use select_cable instead of standard line?
 
     # get standard equipment
     std_line_type = edisgo_object.topology.equipment_data['mv_cables'].loc[
@@ -82,8 +79,7 @@ def add_and_connect_mv_generator(edisgo_object, generator):
             bus1=gen_bus,
             length=line_length,
             kind='cable',
-            type_info=std_line_type.name
-        )
+            type_info=std_line_type.name)
 
         # add line to equipment changes to track costs
         _add_line_to_equipment_changes(
@@ -128,13 +124,16 @@ def add_and_connect_mv_generator(edisgo_object, generator):
                 'connection points.'.format(generator.name))
 
 
-def connect_lv_generators(network, allow_multiple_genos_per_load=True):
-    """Connect LV generators to existing grids.
-
-    This function searches for unconnected generators in all LV grids and
-    connects them.
+def add_and_connect_lv_generator(edisgo_object, generator,
+                                 allow_multiple_genos_per_load=True):
+    """
+    Add and connect new LV generator to existing grids.
 
     It connects
+
+        * generators with an MV-LV station ID that does not exist (i.e.
+          generators in an aggregated load area)
+            * to MV-LV station
 
         * generators of voltage level 6
             * to MV-LV station
@@ -148,10 +147,12 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
-        The eDisGo container object
+    edisgo_object : :class:`~.EDisGo`
+    generator : pd.Series
+        Pandas series with generator information such as electrical_capacity
+        in MW and generation_type.
     allow_multiple_genos_per_load : :obj:`bool`
-        If True, more than one generator can be connected to one load
+        If True, more than one generator can be connected to one load.
 
     Notes
     -----
@@ -160,203 +161,211 @@ def connect_lv_generators(network, allow_multiple_genos_per_load=True):
 
     """
 
-    # get predefined random seed and initialize random generator
-    seed = int(network.config['grid_connection']['random_seed'])
-    #random.seed(a=seed)
-    random.seed(a=1234)
-    # ToDo: Switch back to 'seed' as soon as line ids are finished, #58
+    # get list of LV grid IDs
+    lv_grid_ids = [_.id for _ in edisgo_object.topology.mv_grid.lv_grids]
 
-    # get standard equipment
-    std_line_type = edisgo_object.topology.equipment_data['lv_cables'].loc[
-        network.config['grid_expansion_standard_equipment']['lv_line']]
-    std_line_kind = 'cable'
+    add_generator_data = {
+        'generator_id': generator.name,
+        'p_nom': generator.electrical_capacity,
+        'generator_type': generator.generation_type,
+        'subtype': generator.generation_subtype,
+        'weather_cell_id': generator.w_id}
 
-    # # TEMP: DEBUG STUFF
-    # lv_grid_stats = pd.DataFrame(columns=('lv_grid',
-    #                                       'load_count',
-    #                                       'geno_count',
-    #                                       'more_genos_than_loads')
-    #                             )
+    # determine LV grid the generator should be connected in
 
-    # iterate over all LV grids
-    for lv_grid in network.mv_grid.lv_grids:
+    # if substation ID (= LV grid ID) is given but it does not match an
+    # existing LV grid ID (i.e. it is an aggregated LV grid), connect
+    # generator to HV-MV substation
+    if (generator.mvlv_subst_id and
+            generator.mvlv_subst_id not in lv_grid_ids):
+        # add generator
+        edisgo_object.topology.add_generator(
+            bus=edisgo_object.topology.mv_grid.station.index[0],
+            **add_generator_data)
+        return
 
-        lv_loads = lv_grid.graph.nodes_by_attribute('load')
+    # if substation ID (= LV grid ID) is given and it matches an existing LV
+    # grid ID (i.e. it is not an aggregated LV grid), set grid to connect
+    # generator to to specified grid (in case the generator has no geometry
+    # it is connected to the grid's station)
+    elif generator.mvlv_subst_id and generator.mvlv_subst_id in lv_grid_ids:
 
-        # counter for genos in v_level 7
-        log_geno_count_vlevel7 = 0
+        # get LV grid
+        lv_grid = edisgo_object.topology._grids[
+            'LVGrid_{}'.format(generator.mvlv_subst_id)]
 
-        # generate random list (without replacement => unique elements)
-        # of loads (residential) to connect genos (P <= 30kW) to.
-        lv_loads_res = sorted([lv_load for lv_load in lv_loads
-                               if 'residential' in list(lv_load.consumption.keys())],
-                              key=lambda _: repr(_))
+        # if no geom is given, connect to LV grid's station
+        if not generator.geom:
+            # add generator
+            edisgo_object.topology.add_generator(
+                bus=lv_grid.station.index[0],
+                **add_generator_data)
+            logger.debug(
+                "Generator {} has no geom entry and will be connected to "
+                "grid's LV stations.".format(generator.id))
+            return
 
-        if len(lv_loads_res) > 0:
-            lv_loads_res_rnd = set(random.sample(lv_loads_res,
-                                                 len(lv_loads_res)))
+    # if no MV-LV substation ID is given, choose random LV grid and connect
+    # to station
+    else:
+        random.seed(a=generator.name)
+        lv_grid = random.choice(lv_grid_ids)
+        edisgo_object.topology.add_generator(
+            bus=lv_grid.station.index[0],
+            **add_generator_data)
+        logger.warning(
+            'Generator {} has no mvlv_subst_id. It is therefore allocated to '
+            'a random LV Grid ({}); geom was set to stations\' geom.'.format(
+                generator.id, lv_grid.id))
+        return
+
+    # generator is of v_level 6 -> connect to grid's LV station
+    if generator.voltage_level == 6:
+
+        gen_bus = 'Bus_Generator_{}'.format(generator.name)
+        geom = wkt_loads(generator.geom)
+        edisgo_object.topology.add_bus(
+            bus_name=gen_bus,
+            v_nom=lv_grid.nominal_voltage,
+            x=geom.x,
+            y=geom.y,
+            lv_grid_id=lv_grid.id)
+
+        line_length = calc_geo_dist_vincenty(
+            edisgo_object=edisgo_object,
+            bus_source=gen_bus,
+            bus_target=lv_grid.station.index[0])
+
+        # get standard equipment
+        std_line_type = edisgo_object.topology.equipment_data['lv_cables'].loc[
+            edisgo_object.config[
+                'grid_expansion_standard_equipment']['lv_line']]
+        line_name = edisgo_object.topology.add_line(
+            bus0=lv_grid.station.index[0],
+            bus1=gen_bus,
+            length=line_length,
+            kind='cable',
+            type_info=std_line_type.name)
+
+        # add line to equipment changes to track costs
+        _add_line_to_equipment_changes(
+            edisgo_object=edisgo_object,
+            line=edisgo_object.topology.lines_df.loc[line_name])
+
+        # add generator
+        edisgo_object.topology.add_generator(
+            bus=gen_bus,
+            **add_generator_data)
+
+    # generator is of v_level 7 -> assign generator to load
+    # generators with P <= 30kW are connected to residential loads, if
+    # available; generators with 30kW <= P <= 100kW are connected to
+    # retail, industrial, or agricultural load, if available
+    # in case no load is available the generator is connected to random
+    # bus in LV grid
+    # if load to connect to is available the generator is connected to
+    # load with less than two generators
+    # if every load has two or more generators choose the first load
+    # from random sample
+    elif generator.voltage_level == 7:
+
+        lv_loads = lv_grid.loads_df
+        if generator.electrical_capacity <= 30:
+            target_loads = lv_loads[lv_loads.sector == 'residential']
         else:
-            lv_loads_res_rnd = None
+            target_loads = lv_loads[lv_loads.sector.isin(
+                ['industrial', 'agricultural', 'retail'])]
 
-        # generate random list (without replacement => unique elements)
-        # of loads (retail, industrial, agricultural) to connect genos
-        # (30kW < P <= 100kW) to.
-        lv_loads_ria = sorted([lv_load for lv_load in lv_loads
-                               if any([_ in list(lv_load.consumption.keys())
-                                       for _ in ['retail', 'industrial', 'agricultural']])],
-                              key=lambda _: repr(_))
-
-        if len(lv_loads_ria) > 0:
-            lv_loads_ria_rnd = set(random.sample(lv_loads_ria,
-                                                 len(lv_loads_ria)))
+        # generate random list (unique elements) of possible target loads
+        # to connect generators to
+        random.seed(a=generator.name)
+        if len(target_loads) > 0:
+            lv_loads_rnd = set(random.sample(
+                list(target_loads.index), len(target_loads)))
         else:
-            lv_loads_ria_rnd = None
+            logger.debug(
+                'No load to connect LV generator to. The '
+                'generator is therefore connected to random LV bus.')
+            gen_bus = random.choice(
+                lv_grid.buses_df[lv_grid.buses_df.in_building].index)
+            # add generator
+            edisgo_object.topology.add_generator(
+                bus=gen_bus,
+                **add_generator_data)
+            return
 
-        for geno in sorted(lv_grid.graph.nodes_by_attribute('generator'), key=lambda x: repr(x)):
-            if nx.is_isolate(lv_grid.graph, geno):
+        # search through list of loads for load with less
+        # than two generators
+        lv_conn_target = None
+        while len(lv_loads_rnd) > 0 and lv_conn_target is None:
 
-                lv_station = lv_grid.station
+            lv_load = lv_loads_rnd.pop()
 
-                # generator is of v_level 6 -> connect to LV station
-                if geno.v_level == 6:
+            # determine number of generators of LV load
+            load_bus = target_loads.at[lv_load, 'bus']
+            if np.logical_not(edisgo_object.topology.buses_df.at[
+                                  load_bus, 'in_building']):
+                neighbours = \
+                    list(edisgo_object.topology.get_neighbours(load_bus))
+                branch_tee_in_building = neighbours[0]
+                if len(neighbours) > 1 or \
+                        np.logical_not(edisgo_object.topology.buses_df.at[
+                            branch_tee_in_building, 'in_building']):
+                    raise ValueError(
+                        "Expected neighbour to be branch tee in building.")
+            else:
+                branch_tee_in_building = load_bus
+            generators_at_load = edisgo_object.topology.generators_df[
+                edisgo_object.topology.generators_df.bus.isin(
+                    [load_bus, branch_tee_in_building])]
+            if len(generators_at_load) < 2:
+                lv_conn_target = branch_tee_in_building
 
-                    line_length = calc_geo_dist_vincenty(network=network,
-                                                         node_source=geno,
-                                                         node_target=lv_station)
+        if lv_conn_target is None:
+            logger.debug(
+                'No valid connection target found for generator {}. '
+                'Connected to LV station.'.format(
+                    generator.name))
 
-                    line = Line(id=random.randint(10 ** 8, 10 ** 9),
-                                length=line_length,
-                                quantity=1,
-                                kind=std_line_kind,
-                                type=std_line_type,
-                                grid=lv_grid)
+            station_bus = lv_grid.station.index[0]
 
-                    lv_grid.graph.add_edge(geno,
-                                           lv_station,
-                                           line=line,
-                                           type='line')
+            gen_bus = 'Bus_Generator_{}'.format(generator.name)
+            lv_conn_target = gen_bus
+            geom = wkt_loads(generator.geom)
+            edisgo_object.topology.add_bus(
+                bus_name=gen_bus,
+                v_nom=lv_grid.nominal_voltage,
+                x=geom.x,
+                y=geom.y,
+                lv_grid_id=lv_grid.id)
 
-                    # add line to equipment changes to track costs
-                    _add_cable_to_equipment_changes(network=network,
-                                                    line=line)
+            line_length = calc_geo_dist_vincenty(
+                edisgo_object=edisgo_object,
+                bus_source=gen_bus,
+                bus_target=station_bus)
 
-                # generator is of v_level 7 -> assign geno to load
-                elif geno.v_level == 7:
-                    # counter for genos in v_level 7
-                    log_geno_count_vlevel7 += 1
+            # get standard equipment
+            std_line_type = \
+            edisgo_object.topology.equipment_data['lv_cables'].loc[
+                edisgo_object.config[
+                    'grid_expansion_standard_equipment']['lv_line']]
+            line_name = edisgo_object.topology.add_line(
+                bus0=station_bus,
+                bus1=gen_bus,
+                length=line_length,
+                kind='cable',
+                type_info=std_line_type.name)
 
-                    # connect genos with P <= 30kW to residential loads, if available
-                    if (geno.nominal_capacity <= 30) and (lv_loads_res_rnd is not None):
-                        if len(lv_loads_res_rnd) > 0:
-                            lv_load = lv_loads_res_rnd.pop()
-                        # if random load list is empty, create new one
-                        else:
-                            lv_loads_res_rnd = set(random.sample(lv_loads_res,
-                                                                 len(lv_loads_res))
-                                                   )
-                            lv_load = lv_loads_res_rnd.pop()
+            # add line to equipment changes to track costs
+            _add_line_to_equipment_changes(
+                edisgo_object=edisgo_object,
+                line=edisgo_object.topology.lines_df.loc[line_name])
 
-                        # get cable distributor of building
-                        lv_conn_target = list(lv_grid.graph.neighbors(lv_load))[0]
-
-                        if not allow_multiple_genos_per_load:
-                            # check if there's an existing generator connected to the load
-                            # if so, select next load. If no load is available, connect to station.
-                            while any([isinstance(_, Generator)
-                                       for _ in lv_grid.graph.neighbors(
-                                    list(lv_grid.graph.neighbors(lv_load))[0])]):
-                                if len(lv_loads_res_rnd) > 0:
-                                    lv_load = lv_loads_res_rnd.pop()
-
-                                    # get cable distributor of building
-                                    lv_conn_target = list(lv_grid.graph.neighbors(lv_load))[0]
-                                else:
-                                    lv_conn_target = lv_grid.station
-
-                                    logger.debug(
-                                        'No valid conn. target found for {}. '
-                                        'Connected to {}.'.format(
-                                            repr(geno),
-                                            repr(lv_conn_target)
-                                        )
-                                    )
-                                    break
-
-                    # connect genos with 30kW <= P <= 100kW to residential loads
-                    # to retail, industrial, agricultural loads, if available
-                    elif (geno.nominal_capacity > 30) and (lv_loads_ria_rnd is not None):
-                        if len(lv_loads_ria_rnd) > 0:
-                            lv_load = lv_loads_ria_rnd.pop()
-                        # if random load list is empty, create new one
-                        else:
-                            lv_loads_ria_rnd = set(random.sample(lv_loads_ria,
-                                                                 len(lv_loads_ria))
-                                                   )
-                            lv_load = lv_loads_ria_rnd.pop()
-
-                        # get cable distributor of building
-                        lv_conn_target = list(lv_grid.graph.neighbors(lv_load))[0]
-
-                        if not allow_multiple_genos_per_load:
-                            # check if there's an existing generator connected to the load
-                            # if so, select next load. If no load is available, connect to station.
-                            while any([isinstance(_, Generator)
-                                       for _ in lv_grid.graph.neighbors(
-                                    list(lv_grid.graph.neighbors(lv_load))[0])]):
-                                if len(lv_loads_ria_rnd) > 0:
-                                    lv_load = lv_loads_ria_rnd.pop()
-
-                                    # get cable distributor of building
-                                    lv_conn_target = list(lv_grid.graph.neighbors(lv_load))[0]
-                                else:
-                                    lv_conn_target = lv_grid.station
-
-                                    logger.debug(
-                                        'No valid conn. target found for {}. '
-                                        'Connected to {}.'.format(
-                                            repr(geno),
-                                            repr(lv_conn_target)
-                                        )
-                                    )
-                                    break
-
-                    # fallback: connect to station
-                    else:
-                        lv_conn_target = lv_grid.station
-
-                        logger.debug(
-                            'No valid conn. target found for {}. '
-                            'Connected to {}.'.format(
-                                repr(geno),
-                                repr(lv_conn_target)
-                            )
-                        )
-
-                    line = Line(id=random.randint(10 ** 8, 10 ** 9),
-                                length=1e-3,
-                                quantity=1,
-                                kind=std_line_kind,
-                                type=std_line_type,
-                                grid=lv_grid)
-
-                    lv_grid.graph.add_edge(geno,
-                                           lv_station,
-                                           line=line,
-                                           type='line')
-
-                    # add line to equipment changes to track costs
-                    _add_cable_to_equipment_changes(network=network,
-                                                    line=line)
-
-        # warn if there're more genos than loads in LV network
-        if log_geno_count_vlevel7 > len(lv_loads):
-            logger.debug('The count of newly connected generators in voltage level 7 ({}) '
-                         'exceeds the count of loads ({}) in LV network {}.'
-                         .format(str(log_geno_count_vlevel7),
-                                 str(len(lv_loads)),
-                                 repr(lv_grid)
-                                 )
-                         )
+        # add generator
+        edisgo_object.topology.add_generator(
+            bus=lv_conn_target,
+            **add_generator_data)
+        return
 
 
 def _add_line_to_equipment_changes(edisgo_object, line):
@@ -461,9 +470,9 @@ def _find_nearest_conn_objects(edisgo_object, bus, lines):
         # create shapely objects for 2 buses and line between them,
         # transform to equidistant CRS
         line_bus0_shp = transform(proj2equidistant(srid),
-                                 Point(line_bus0.x, line_bus0.y))
+                                  Point(line_bus0.x, line_bus0.y))
         line_bus1_shp = transform(proj2equidistant(srid),
-                                 Point(line_bus1.x, line_bus1.y))
+                                  Point(line_bus1.x, line_bus1.y))
         line_shp = LineString([line_bus0_shp, line_bus1_shp])
 
         # create dict with line & 2 adjacent buses and their shapely objects
@@ -557,7 +566,8 @@ def _connect_mv_node(edisgo_object, bus, target_obj):
         # find nearest point on MV line
         conn_point_shp = target_obj['shp'].interpolate(
             target_obj['shp'].project(bus_shp))
-        conn_point_shp = transform(proj2conformal(srid), conn_point_shp)
+        conn_point_shp = transform(proj2equidistant_reverse(srid),
+                                   conn_point_shp)
 
         # create new branch tee bus
         branch_tee_repr = 'BranchTee_{}'.format(target_obj['repr'])
@@ -581,7 +591,7 @@ def _connect_mv_node(edisgo_object, bus, target_obj):
             type_info=line_data.type_info)
 
         # add line to equipment changes
-        #ToDo @Anya?
+        # ToDo @Anya?
         _add_line_to_equipment_changes(
             edisgo_object=edisgo_object,
             line=edisgo_object.topology.lines_df.loc[line_name_bus0, :])
@@ -653,3 +663,68 @@ def _connect_mv_node(edisgo_object, bus, target_obj):
             line=edisgo_object.topology.lines_df.loc[new_line_name, :])
 
         return target_obj['repr']
+
+
+def _check_mvlv_subst_id(generator, mvlv_subst_id, lv_grid_dict):
+    """
+    Checks if MV/LV substation id of single LV generator is valid.
+
+    In case it is not valid or missing, a random one from existing stations
+    in LV grids will be assigned.
+
+    Parameters
+    ----------
+    generator : :class:`~.network.components.Generator`
+        LV generator
+    mvlv_subst_id : :obj:`int`
+        MV-LV substation id
+    lv_grid_dict : :obj:`dict`
+        Dict of existing LV grids
+        Format: {:obj:`int`: :class:`~.network.grids.LVGrid`}
+
+    Returns
+    -------
+    :class:`~.network.grids.LVGrid`
+        LV network of generator
+
+    """
+
+    if mvlv_subst_id and not isnan(mvlv_subst_id):
+        # assume that given LA exists
+        try:
+            # get LV grid
+            lv_grid = lv_grid_dict[mvlv_subst_id]
+
+            # if no geom, use geom of station
+            if not generator.geom:
+                generator.geom = lv_grid.station.geom
+                logger.debug(
+                    "Generator {} has no geom entry, stations' geom will "
+                    "be used.".format(generator.id))
+            return lv_grid
+
+        # if LA/LVGD does not exist, choose random LVGD and move generator
+        # to station of LVGD
+        # this occurs due to exclusion of LA with peak load < 1kW
+        except:
+            lv_grid = random.choice(list(lv_grid_dict.values()))
+            generator.geom = lv_grid.station.geom
+
+            logger.warning('Generator {} cannot be assigned to '
+                           'non-existent LV Grid and was '
+                           'allocated to a random LV Grid ({}); '
+                           'geom was set to stations\' geom.'
+                           .format(repr(generator),
+                                   repr(lv_grid)))
+            return lv_grid
+
+    else:
+        lv_grid = random.choice(list(lv_grid_dict.values()))
+        generator.geom = lv_grid.station.geom
+
+        logger.warning('Generator {} has no mvlv_subst_id and was '
+                       'allocated to a random LV Grid ({}); '
+                       'geom was set to stations\' geom.'
+                       .format(repr(generator),
+                               repr(lv_grid)))
+        return lv_grid

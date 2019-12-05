@@ -39,8 +39,8 @@ Bus_primary_LVStation_8,20,8.01965714512685,48.0548283526783,1,,
 Bus_secondary_LVStation_8,0.4,,,1,8,
 Bus_primary_LVStation_9,20,7.94428254596581,48.0616038160476,1,,
 Bus_secondary_LVStation_9,0.4,,,1,9,
-virtual_Bus_primary_LVStation_4,20,7.94428254596581,48.0604011027559,1,,
-virtual_Bus_primary_LVStation_9,20,8.02326571451269,48.0791153215746,1,,
+virtual_Bus_primary_LVStation_9,20,7.94428254596581,48.0604011027559,1,,
+virtual_Bus_primary_LVStation_4,20,8.02326571451269,48.0791153215746,1,,
 Bus_BranchTee_LVGrid_1_1,0.4,,,1,1,FALSE
 Bus_BranchTee_LVGrid_1_2,0.4,,,1,1,TRUE
 Bus_BranchTee_LVGrid_1_3,0.4,,,1,1,FALSE

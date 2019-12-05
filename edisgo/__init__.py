@@ -1,1 +1,1 @@
-from edisgo.edisgo import EDisGo, EDisGoReimport
+from edisgo.edisgo import EDisGo
