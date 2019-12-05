@@ -141,9 +141,13 @@ def ppc2pm(ppc,psa_net): #pragma: no cover
         pm["gen"][str(idx)] = gen
 
     # TODO add attribute "fluctuating" to generators from psa_net, maybe move to ppc first
-    is_fluctuating = [int("Fluctuating" in index) for index in psa_net.generators.index]
-    for idx, row in enumerate(is_fluctuating, start=1):
-        pm["gen"][str(idx)]["fluctuating"] = row
+    # is_fluctuating = [int("fluctuating" in index.lower()) for index in psa_net.generators.index]
+    # for idx, row in enumerate(is_fluctuating, start=1):
+    #     pm["gen"][str(idx)]["fluctuating"] = row
+
+    for idx, row in enumerate(psa_net.generators["fluctuating"], start=1):
+        # convert boolean to 0 and 1, check if row is nan, e.g. slack bus
+        pm["gen"][str(idx)]["fluctuating"] = (not(math.isnan(row)) and row)*1
 
     if len(ppc["gencost"]) > len(ppc["gen"]):
         ppc["gencost"] = ppc["gencost"][:ppc["gen"].shape[0], :]
@@ -162,7 +166,6 @@ def ppc2pm(ppc,psa_net): #pragma: no cover
                 raise ValueError("Maximum quadratic cost function allowed")
             gen["cost"][-len(costs):] = costs
 
-    # TODO BRANCHCOST!
     if len(ppc["branchcost"]) > len(ppc["branch"]):
         ppc["branchcost"] = ppc["branchcost"][:ppc["branch"].shape[0], :]
     for idx, row in enumerate(ppc["branchcost"], start=1):
