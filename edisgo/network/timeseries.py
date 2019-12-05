@@ -531,7 +531,8 @@ class TimeSeriesControl:
                 raise ValueError('{} is not a valid mode.'.format(mode))
         else:
             config_data = edisgo_obj.config
-            weather_cell_ids = edisgo_obj.topology.mv_grid.weather_cells
+            weather_cell_ids = \
+                edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique()
             # feed-in time series of fluctuating renewables
             ts = kwargs.get('timeseries_generation_fluctuating', None)
             if isinstance(ts, pd.DataFrame):
