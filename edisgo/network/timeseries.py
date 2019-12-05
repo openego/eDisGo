@@ -624,12 +624,19 @@ class TimeSeriesControl:
         gens = self.edisgo_obj.topology.generators_df
         # handling of fluctuating generators
         gens_fluctuating = gens[gens.type.isin(['solar', 'wind'])]
-        self.edisgo_obj.timeseries.generators_active_power = pd.concat(
-            [gens_fluctuating.apply(lambda x:
-                self.edisgo_obj.timeseries.generation_fluctuating[x.type]
-                [x.weather_cell_id].T*x.p_nom, axis=1).T,
-            self.edisgo_obj.timeseries.generation_dispatchable], axis=1)
-        # set reactive power if given as attribute
+        # TODO Check
+        if hasattr(self.edisgo_obj.timeseries,"generation_dispatchable"):
+            self.edisgo_obj.timeseries.generators_active_power = pd.concat(
+                [gens_fluctuating.apply(lambda x:
+                    self.edisgo_obj.timeseries.generation_fluctuating[x.type]
+                    [x.weather_cell_id].T*x.p_nom, axis=1).T,
+                self.edisgo_obj.timeseries.generation_dispatchable], axis=1)
+        else:
+            self.edisgo_obj.timeseries.generators_active_power =gens_fluctuating.apply(lambda x:
+                   self.edisgo_obj.timeseries.generation_fluctuating[x.type][x.weather_cell_id].T*x.p_nom, axis=1).T
+
+
+            # set reactive power if given as attribute
         if hasattr(self.edisgo_obj.timeseries, 'generation_reactive_power'):
             gens_dispatchable = gens[~gens.index.isin(gens_fluctuating.index)]
             self.edisgo_obj.timeseries.generators_reactive_power = pd.concat([
