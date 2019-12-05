@@ -4,6 +4,7 @@ from pandas.util.testing import assert_series_equal, assert_frame_equal
 from math import tan, acos
 import pytest
 import shutil
+import numpy as np
 
 from edisgo.network.topology import Topology
 from edisgo.tools.config import Config
@@ -367,3 +368,141 @@ class TestTimeSeriesControl:
         self.topology._loads_df.at[load, 'peak_load'] = val_pre
 
         # test no other generators
+
+    def test_add_load(self):
+        """Test method add_load"""
+        peak_load = 2.3
+        annual_consumption = 3.4
+        num_loads = len(self.topology.loads_df)
+        # add single load for which timeseries is added
+        # test worst-case
+        tsc = TimeSeriesControl(edisgo_obj=self, mode='worst-case')
+        load_name = self.topology.add_load(load_id=4, bus='Bus_MVStation_1',
+                               peak_load=peak_load,
+                               annual_consumption=annual_consumption,
+                               sector='retail')
+        tsc.add_loads_timeseries(load_name)
+        active_power_new_load = \
+            self.timeseries.loads_active_power.loc[:,
+                ['Load_retail_MVGrid_1_4']]
+        timeindex = pd.date_range('1/1/1970', periods=2, freq='H')
+        assert (self.timeseries.loads_active_power.shape == (2, num_loads+1))
+        assert (self.timeseries.loads_reactive_power.shape ==
+                (2, num_loads+1))
+        assert (active_power_new_load.index == timeindex).all()
+        assert np.isclose(
+            active_power_new_load.loc[timeindex[0], load_name],
+            (0.15*peak_load))
+        assert np.isclose(
+            active_power_new_load.loc[timeindex[1], load_name],
+            peak_load)
+        self.topology.remove_load(load_name)
+        # test manual
+        timeindex = pd.date_range('1/1/2018', periods=24, freq='H')
+        # create random timeseries
+        load_names = self.topology.loads_df.index
+        loads_active_power = \
+            pd.DataFrame(index=timeindex, columns=load_names,
+                         data=np.multiply(np.random.rand(len(timeindex),
+                                                         len(load_names)),
+                                          ([self.topology.loads_df.peak_load] *
+                                           len(timeindex))))
+        loads_reactive_power = \
+            pd.DataFrame(index=timeindex, columns=load_names,
+                         data=np.multiply(np.random.rand(len(timeindex),
+                                                         len(load_names)),
+                                          ([self.topology.loads_df.peak_load] *
+                                           len(timeindex))))
+        generator_names = self.topology.generators_df.index
+        generators_active_power = \
+            pd.DataFrame(index=timeindex, columns=generator_names,
+                         data=np.multiply(
+                             np.random.rand(len(timeindex),
+                                            len(generator_names)),
+                             ([self.topology.generators_df.p_nom] *
+                              len(timeindex))))
+        generators_reactive_power = \
+            pd.DataFrame(index=timeindex, columns=generator_names,
+                         data=np.multiply(
+                             np.random.rand(len(timeindex),
+                                            len(generator_names)),
+                             ([self.topology.generators_df.p_nom] *
+                              len(timeindex))))
+        storage_names = self.topology.storage_units_df.index
+        storage_units_active_power = \
+            pd.DataFrame(index=timeindex, columns=storage_names,
+                         data=np.multiply(
+                             np.random.rand(len(timeindex),
+                                            len(storage_names)),
+                             ([self.topology.storage_units_df.p_nom] *
+                              len(timeindex))))
+        storage_units_reactive_power = \
+            pd.DataFrame(index=timeindex, columns=storage_names,
+                         data=np.multiply(
+                             np.random.rand(len(timeindex),
+                                            len(storage_names)),
+                             ([self.topology.storage_units_df.p_nom] *
+                              len(timeindex))))
+
+        tsc = TimeSeriesControl(
+            edisgo_obj=self, mode='manual', timeindex=timeindex,
+            loads_active_power=loads_active_power,
+            loads_reactive_power=loads_reactive_power,
+            generators_active_power=generators_active_power,
+            generators_reactive_power=generators_reactive_power,
+            storage_units_active_power=storage_units_active_power,
+            storage_units_reactive_power=storage_units_reactive_power)
+
+        load_name = self.topology.add_load(load_id=4, bus='Bus_MVStation_1',
+                               peak_load=peak_load,
+                               annual_consumption=annual_consumption,
+                               sector='retail')
+        new_load_active_power = pd.DataFrame(
+            index=timeindex, columns=[load_name],
+            data=([peak_load] * len(timeindex)))
+        new_load_reactive_power = pd.DataFrame(
+            index=timeindex, columns=[load_name],
+            data=([peak_load*0.5] * len(timeindex)))
+        tsc.add_loads_timeseries(load_name,
+                                 loads_active_power=new_load_active_power,
+                                 loads_reactive_power=new_load_reactive_power)
+        active_power = \
+            self.timeseries.loads_active_power[load_name]
+        reactive_power = \
+            self.timeseries.loads_reactive_power[load_name]
+        assert (active_power.values == peak_load).all()
+        assert (reactive_power.values == peak_load * 0.5).all()
+        assert (self.timeseries.loads_active_power.shape == (24, num_loads+1))
+        assert (self.timeseries.loads_reactive_power.shape ==
+                (24, num_loads + 1))
+
+        self.topology.remove_load(load_name)
+        # test import timeseries from dbs
+        ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775] * 24},
+                                           index=timeindex)
+        tsc = TimeSeriesControl(timeindex=timeindex,
+            edisgo_obj=self, timeseries_generation_fluctuating='oedb',
+            timeseries_generation_dispatchable=ts_gen_dispatchable,
+            timeseries_load='demandlib',
+            timeseries_storage_units=storage_units_active_power)
+
+        load_name = self.topology.add_load(load_id=4, bus='Bus_MVStation_1',
+                               peak_load=peak_load,
+                               annual_consumption=annual_consumption,
+                               sector='retail')
+        tsc.add_loads_timeseries(load_name)
+        active_power = \
+            self.timeseries.loads_active_power[load_name]
+        reactive_power = \
+            self.timeseries.loads_reactive_power[load_name]
+        assert np.isclose(active_power.iloc[4],
+                          (4.164057583416888e-05*annual_consumption))
+        assert np.isclose(reactive_power.iloc[13],
+                          (7.964120641987684e-05 * annual_consumption *
+                           tan(acos(0.9))))
+
+        assert (self.timeseries.loads_active_power.shape == (24, num_loads+1))
+        assert (self.timeseries.loads_reactive_power.shape ==
+                (24, num_loads+1))
+        self.topology.remove_load(load_name)
+        # Todo: add more than one load
