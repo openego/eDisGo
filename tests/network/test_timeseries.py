@@ -41,42 +41,41 @@ class TestTimeSeriesControl:
         ding0_import.import_ding0_grid(test_network_directory, edisgo)
         TimeSeriesControl(
             edisgo, mode='manual',
-            timeindex=self.timeseries.loads_active_power.index,
-            loads_active_power=pd.DataFrame.from_csv(
-                os.path.join(cur_dir, 'timeseries', 'loads_active_power.csv')),
-            loads_reactive_power=pd.DataFrame.from_csv(
-                os.path.join(cur_dir, 'timeseries', 'loads_reactive_power.csv')),
-            generators_active_power=pd.DataFrame.from_csv(
-                os.path.join(cur_dir, 'timeseries', 'generators_active_power.csv')),
-            generators_reactive_power=pd.DataFrame.from_csv(
-                os.path.join(cur_dir,
-                        'timeseries', 'generators_reactive_power.csv')),
-            storage_units_active_power=pd.DataFrame.from_csv(
-                os.path.join(cur_dir,
-                        'timeseries', 'storage_units_active_power.csv')),
-            storage_units_reactive_power=pd.DataFrame.from_csv(
-                os.path.join(cur_dir,
-                             'timeseries', 'storage_units_reactive_power.csv'))
+            timeindex=pd.read_csv(
+                os.path.join(cur_dir, 'timeseries', 'loads_active_power.csv'),
+                index_col=0).index,
+            loads_active_power=pd.read_csv(
+                os.path.join(cur_dir, 'timeseries', 'loads_active_power.csv'),
+                index_col=0),
+            loads_reactive_power=pd.read_csv(
+                os.path.join(cur_dir, 'timeseries',
+                             'loads_reactive_power.csv'), index_col=0),
+            generators_active_power=pd.read_csv(
+                os.path.join(cur_dir, 'timeseries',
+                             'generators_active_power.csv'), index_col=0),
+            generators_reactive_power=pd.read_csv(
+                os.path.join(cur_dir, 'timeseries',
+                             'generators_reactive_power.csv'), index_col=0),
+            storage_units_active_power=pd.read_csv(
+                os.path.join(cur_dir, 'timeseries',
+                             'storage_units_active_power.csv'), index_col=0),
+            storage_units_reactive_power=pd.read_csv(
+                os.path.join(cur_dir, 'timeseries',
+                             'storage_units_reactive_power.csv'), index_col=0)
         )
         # check if timeseries are the same
-        assert_frame_equal(self.timeseries.loads_active_power,
-                           edisgo.timeseries.loads_active_power,
-                           check_names=False)
-        assert_frame_equal(self.timeseries.loads_reactive_power,
-                           edisgo.timeseries.loads_reactive_power,
-                           check_names=False)
-        assert_frame_equal(self.timeseries.generators_active_power,
-                           edisgo.timeseries.generators_active_power,
-                           check_names=False)
-        assert_frame_equal(self.timeseries.generators_reactive_power,
-                           edisgo.timeseries.generators_reactive_power,
-                           check_names=False)
-        assert_frame_equal(self.timeseries.storage_units_active_power,
-                           edisgo.timeseries.storage_units_active_power,
-                           check_names=False)
-        assert_frame_equal(self.timeseries.storage_units_reactive_power,
-                           edisgo.timeseries.storage_units_reactive_power,
-                           check_names=False)
+        assert np.isclose(self.timeseries.loads_active_power,
+                          edisgo.timeseries.loads_active_power).all()
+        assert np.isclose(self.timeseries.loads_reactive_power,
+                          edisgo.timeseries.loads_reactive_power).all()
+        assert np.isclose(self.timeseries.generators_active_power,
+                          edisgo.timeseries.generators_active_power).all()
+        assert np.isclose(self.timeseries.generators_reactive_power,
+                          edisgo.timeseries.generators_reactive_power).all()
+        assert np.isclose(self.timeseries.storage_units_active_power,
+                          edisgo.timeseries.storage_units_active_power).all()
+        assert np.isclose(self.timeseries.storage_units_reactive_power,
+                          edisgo.timeseries.storage_units_reactive_power).all()
         # delete folder
         # Todo: check files before rmtree?
         shutil.rmtree(os.path.join(cur_dir, 'timeseries'), ignore_errors=True)
