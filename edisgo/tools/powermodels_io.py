@@ -10,6 +10,13 @@ import pypsa
 def to_powermodels(pypsa_net):
     """
     Convert pypsa network to network dictionary format, using the pypower structure as an intermediate steps
+
+    powermodels network dictionary:
+    https://lanl-ansi.github.io/PowerModels.jl/stable/network-data/
+
+    pypower caseformat:
+    https://github.com/rwl/PYPOWER/blob/master/pypower/caseformat.py
+
     :param pypsa_net:
     :return:
     """
@@ -27,7 +34,13 @@ def to_powermodels(pypsa_net):
 
 
 def pypsa2ppc(psa_net):
-    """Converter from pypsa data structure to pypower data structure"""
+    """Converter from pypsa data structure to pypower data structure
+
+        adapted from pandapower's pd2ppc converter
+
+        https://github.com/e2nIEE/pandapower/blob/911f300a96ee0ac062d82f7684083168ff052586/pandapower/pd2ppc.py
+
+    """
 
     # build static pypower structure
     ppc = _init_ppc()
@@ -66,7 +79,10 @@ def pypsa2ppc(psa_net):
 
 def ppc2pm(ppc,psa_net): #pragma: no cover
     """
-    converter from pypower datastructure to powermodels dictionary, adapted from pandapower to powermodels converter
+    converter from pypower datastructure to powermodels dictionary,
+
+    adapted from pandapower to powermodels converter:
+    https://github.com/e2nIEE/pandapower/blob/develop/pandapower/converter/powermodels/to_pm.py
 
     :param ppc:
     :return:
@@ -222,12 +238,12 @@ def _build_bus(psa_net,ppc):
 
 def _build_gen(psa_net,ppc):
     n_gen = psa_net.generators.shape[0]
-    print("build {} generators".format(n_gen))
     gen_cols = 21
     # "bus, p_set, q_set, q_max, q_min, v_set_pu, mva_base, status, p_nom, p_min, Pc1, Pc2, Qc1min, Qc1max, Qc2min, Qc2max, ramp_agc, ramp_10, ramp_30, ramp_q, apf
     ppc["gen"] = np.zeros(shape=(n_gen, gen_cols), dtype=float)
     # get bus indices for generators
     bus_indices = np.array([psa_net.buses.index.get_loc(bus_name) for bus_name in psa_net.generators["bus"]])
+    print("build {} generators, distributed on {} buses".format(n_gen, len(np.unique(bus_indices))))
     ppc["gen"][:,GEN_BUS] = bus_indices
     # adjust bus types
     bus_types = ["PQ", "PV", "Slack", "None"]
