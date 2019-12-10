@@ -52,6 +52,9 @@ def import_feedin_timeseries(config_data, weather_cell_ids, timeindex):
         orm_feedin_version = orm_feedin.version == config_data['versioned'][
             'version']
 
+    if timeindex is None:
+        timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
+
     with session_scope() as session:
         feedin = _retrieve_timeseries_from_oedb(session, timeindex)
 
@@ -67,6 +70,7 @@ def import_feedin_timeseries(config_data, weather_cell_ids, timeindex):
         recasted_feedin_dict[type_w_id] = feedin.loc[
                                           type_w_id, :].values[0]
 
+    # Todo: change when possibility for other years is given
     conversion_timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
     feedin = pd.DataFrame(recasted_feedin_dict, index=conversion_timeindex)
 

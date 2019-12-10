@@ -1068,24 +1068,21 @@ class TimeSeriesControl:
 
         """
         try:
-            assert (
-                self.edisgo_obj.timeseries.generators_reactive_power.index ==
-                self.edisgo_obj.timeseries.timeindex).all()
-            assert (
-                    self.edisgo_obj.timeseries.generators_active_power.index ==
-                    self.edisgo_obj.timeseries.timeindex).all()
-            assert (
-                    self.edisgo_obj.timeseries.loads_reactive_power.index ==
-                    self.edisgo_obj.timeseries.timeindex).all()
-            assert (
-                    self.edisgo_obj.timeseries.loads_active_power.index ==
-                    self.edisgo_obj.timeseries.timeindex).all()
-            assert (
-                self.edisgo_obj.timeseries.storage_units_reactive_power.index \
-                == self.edisgo_obj.timeseries.timeindex).all()
-            assert (
-                    self.edisgo_obj.timeseries.storage_units_active_power.index \
-                    == self.edisgo_obj.timeseries.timeindex).all()
+            assert self.edisgo_obj.timeseries.timeindex.isin(
+                self.edisgo_obj.timeseries.generators_reactive_power.index).\
+                all()
+            assert self.edisgo_obj.timeseries.timeindex.isin(
+                self.edisgo_obj.timeseries.generators_active_power.index).all()
+            assert self.edisgo_obj.timeseries.timeindex.isin(
+                self.edisgo_obj.timeseries.loads_reactive_power.index).all()
+            assert self.edisgo_obj.timeseries.timeindex.isin(
+                self.edisgo_obj.timeseries.loads_active_power.index).all()
+            assert self.edisgo_obj.timeseries.timeindex.isin(
+                self.edisgo_obj.timeseries.storage_units_reactive_power.
+                index).all()
+            assert self.edisgo_obj.timeseries.timeindex.isin(
+                self.edisgo_obj.timeseries.storage_units_active_power.index).\
+                all()
         except:
             message = 'Time index of feed-in and load time series does ' \
                       'not match.'
