@@ -8,6 +8,7 @@ from workalendar.europe import Germany
 from demandlib import bdew as bdew, particular_profiles as profiles
 
 from edisgo.io.timeseries_import import import_feedin_timeseries
+from edisgo.tools.tools import drop_duplicated_indices
 
 logger = logging.getLogger('edisgo')
 
@@ -402,7 +403,6 @@ class TimeSeries:
         logger.debug("Timeseries exported.")
 
 
-
 class TimeSeriesControl:
     """
     Sets up TimeSeries Object.
@@ -537,7 +537,9 @@ class TimeSeriesControl:
             elif isinstance(ts, str) and ts == 'oedb':
                 self.edisgo_obj.timeseries.generation_fluctuating = \
                     import_feedin_timeseries(config_data,
-                                             weather_cell_ids)
+                                             weather_cell_ids,
+                                             kwargs.get('timeindex',
+                                                        None))
             else:
                 raise ValueError('Your input for '
                                  '"timeseries_generation_fluctuating" is not '
@@ -596,10 +598,12 @@ class TimeSeriesControl:
             self._check_timeindex()
 
     def _load_from_timeseries(self, load_names=None):
-        # get all requested loads and set active power
+        # get all requested loads and drop existing timeseries
         if load_names is None:
             load_names = self.edisgo_obj.topology.loads_df.index
         loads = self.edisgo_obj.topology.loads_df.loc[load_names]
+        self.drop_existing_load_timeseries(load_names)
+        # set active power
         self.edisgo_obj.timeseries.loads_active_power = \
             self.edisgo_obj.timeseries.loads_active_power.T.append(
                 loads.apply(
@@ -621,35 +625,57 @@ class TimeSeriesControl:
                 else 'mv', axis=1)
             self._reactive_power_load_by_cos_phi(loads)
 
-    def _generation_from_timeseries(self):
+    def _generation_from_timeseries(self, generator_names=None):
+        if generator_names is None:
+            generator_names = self.edisgo_obj.topology.generators_df.index
         # get all generators
-        gens = self.edisgo_obj.topology.generators_df
+        gens = self.edisgo_obj.topology.generators_df.loc[generator_names]
+        # drop existing timeseries
+        self.drop_existing_generator_timeseries(generator_names)
         # handling of fluctuating generators
         gens_fluctuating = gens[gens.type.isin(['solar', 'wind'])]
-        # TODO Check
-        if hasattr(self.edisgo_obj.timeseries,"generation_dispatchable"):
-            self.edisgo_obj.timeseries.generators_active_power = pd.concat(
-                [gens_fluctuating.apply(lambda x:
-                    self.edisgo_obj.timeseries.generation_fluctuating[x.type]
-                    [x.weather_cell_id].T*x.p_nom, axis=1).T,
-                self.edisgo_obj.timeseries.generation_dispatchable], axis=1)
+        gens_dispatchable = gens[~gens.index.isin(gens_fluctuating.index)]
+        if gens_dispatchable.empty and gens_fluctuating.empty:
+            logger.debug("No generators provided to add timeseries for.")
+            return
+        elif gens_dispatchable.empty:
+            self.edisgo_obj.timeseries.generators_active_power = \
+                self.edisgo_obj.timeseries.generators_active_power.T.append(
+                    gens_fluctuating.apply(
+                        lambda x:
+                        self.edisgo_obj.timeseries.generation_fluctuating[
+                            x.type][x.weather_cell_id].T * x.p_nom, axis=1)).T
+        elif gens_fluctuating.empty:
+            self.edisgo_obj.timeseries.generators_active_power = \
+                self.edisgo_obj.timeseries.generators_active_power.T.append(
+                    self.edisgo_obj.timeseries.generation_dispatchable.
+                    loc[:, gens_dispatchable.index].T).T
         else:
-            self.edisgo_obj.timeseries.generators_active_power =gens_fluctuating.apply(lambda x:
-                   self.edisgo_obj.timeseries.generation_fluctuating[x.type][x.weather_cell_id].T*x.p_nom, axis=1).T
+            self.edisgo_obj.timeseries.generators_active_power = \
+                self.edisgo_obj.timeseries.generators_active_power.T.append(
+                    pd.concat(
+                        [gens_fluctuating.apply(
+                            lambda x:
+                            self.edisgo_obj.timeseries.generation_fluctuating[
+                                x.type][x.weather_cell_id].T * x.p_nom,
+                            axis=1),
+                            self.edisgo_obj.timeseries.generation_dispatchable.
+                            loc[:, gens_dispatchable.index].T],
+                        axis=0)).T
 
+        # set reactive power if given as attribute
+        if hasattr(self.edisgo_obj.timeseries, 'generation_reactive_power')\
+            and gens.index.isin(
+                self.edisgo_obj.timeseries.generation_reactive_power.columns)\
+                .all():
 
-            # set reactive power if given as attribute
-        if hasattr(self.edisgo_obj.timeseries, 'generation_reactive_power'):
-            gens_dispatchable = gens[~gens.index.isin(gens_fluctuating.index)]
-            self.edisgo_obj.timeseries.generators_reactive_power = pd.concat([
-                gens_fluctuating.apply(lambda x:
-                self.edisgo_obj.timeseries.generation_reactive_power[x.type]
-                [x.weather_cell_id]*x.p_nom, axis=1),
-                gens_dispatchable.apply(lambda x:
-                self.edisgo_obj.timeseries.generation_reactive_power[x.type]
-                                         * x.p_nom, axis=1)], axis=1)
+            self.edisgo_obj.timeseries.generators_reactive_power = \
+                self.edisgo_obj.timeseries.generators_reactive_power.T.append(
+                    self.edisgo_obj.timeseries.generation_reactive_power.loc[
+                        :, gens.index].T).T
         # set default reactive power by cos_phi
         else:
+            logger.debug("Reactive power calculated by cos(phi).")
             self._reactive_power_gen_by_cos_phi(gens)
 
     def _storage_from_timeseries(self, ts_active_power, ts_reactive_power):
@@ -702,8 +728,11 @@ class TimeSeriesControl:
             'feedin_case', 'load_case' or both.
 
         """
+        if generator_names is None:
+            generator_names = self.edisgo_obj.topology.generators_df.index
+
         gens_df = self.edisgo_obj.topology.generators_df.loc[
-                  :, ['bus', 'type', 'p_nom']]
+                  generator_names, ['bus', 'type', 'p_nom']]
 
         # check that all generators have bus, type, nominal power
         check_gens = gens_df.isnull().any(axis=1)
@@ -741,9 +770,13 @@ class TimeSeriesControl:
             gen_ts[cols] = pd.concat(
                 [worst_case_ts.loc[:, ['other']]] * len(cols), axis=1)
 
+        # drop existing timeseries
+        self.drop_existing_generator_timeseries(generator_names)
+
         # multiply normalized time series by nominal power of generator
-        self.edisgo_obj.timeseries.generators_active_power = gen_ts.mul(
-            gens_df.p_nom)
+        self.edisgo_obj.timeseries.generators_active_power = \
+            self.edisgo_obj.timeseries.generators_active_power.T.append(
+                gen_ts.mul(gens_df.p_nom).T).T
 
         # calculate reactive power
         self._reactive_power_gen_by_cos_phi(gens_df)
@@ -772,9 +805,10 @@ class TimeSeriesControl:
 
         # calculate reactive power time series for each generator
         self.edisgo_obj.timeseries.generators_reactive_power = \
-            self._fixed_cosphi(
-                self.edisgo_obj.timeseries.generators_active_power,
-                q_sign, power_factor)
+            self.edisgo_obj.timeseries.generators_reactive_power.T.append(
+                self._fixed_cosphi(
+                    self.edisgo_obj.timeseries.generators_active_power.loc[
+                        :, gens_df.index], q_sign, power_factor).T).T
 
     def _worst_case_load(self, modes, load_names=None):
         """
@@ -838,6 +872,9 @@ class TimeSeriesControl:
              loads_df.index]),
                      index=self.edisgo_obj.timeseries.timeindex,
                      columns=loads_df.index)
+
+        # drop existing timeseries
+        self.drop_existing_load_timeseries(load_names)
 
         # calculate active power of loads
         self.edisgo_obj.timeseries.loads_active_power = \
@@ -1056,6 +1093,7 @@ class TimeSeriesControl:
             raise KeyError(message)
 
     def add_loads_timeseries(self, load_names, **kwargs):
+        # Todo: Docstrings
         # if TimeSeriesControl hasn't been called on timeseries, it is not
         # necessary to add timeseries
         if not hasattr(self.edisgo_obj.timeseries, 'mode'):
@@ -1073,12 +1111,22 @@ class TimeSeriesControl:
                 # set random timeindex
                 self._worst_case_load(modes, load_names)
             elif self.edisgo_obj.timeseries.mode == 'manual':
+                loads_active_power = kwargs.get('loads_active_power', None)
+                if loads_active_power is not None:
+                    self.check_timeseries_for_index_and_cols(
+                        loads_active_power, load_names)
+                loads_reactive_power = kwargs.get('loads_reactive_power', None)
+                if loads_reactive_power is not None:
+                    self.check_timeseries_for_index_and_cols(
+                        loads_reactive_power, load_names)
+                self.drop_existing_load_timeseries(load_names)
+                # add new load timeseries
                 self.edisgo_obj.timeseries.loads_active_power = \
                     self.edisgo_obj.timeseries.loads_active_power.T.append(
-                        kwargs.get('loads_active_power', None).T).T
+                        loads_active_power.T.loc[load_names]).T
                 self.edisgo_obj.timeseries.loads_reactive_power = \
                     self.edisgo_obj.timeseries.loads_reactive_power.T.append(
-                        kwargs.get('loads_reactive_power', None).T).T
+                        loads_reactive_power.T.loc[load_names]).T
             else:
                 raise ValueError('{} is not a valid mode.'.format(
                     self.edisgo_obj.timeseries.mode))
@@ -1086,6 +1134,127 @@ class TimeSeriesControl:
             # create load active and reactive power timeseries
             self._load_from_timeseries(load_names)
 
+    def drop_existing_load_timeseries(self, load_names):
+        # drop existing timeseries of loads
+        self.edisgo_obj.timeseries.loads_active_power = \
+            self.edisgo_obj.timeseries.loads_active_power.drop(
+                self.edisgo_obj.timeseries.loads_active_power.columns[
+                    self.edisgo_obj.timeseries.loads_active_power.
+                        columns.isin(load_names)], axis=1)
+        self.edisgo_obj.timeseries.loads_reactive_power = \
+            self.edisgo_obj.timeseries.loads_reactive_power.drop(
+                self.edisgo_obj.timeseries.loads_reactive_power.
+                    columns[self.edisgo_obj.timeseries.
+                    loads_reactive_power.columns.isin(
+                    load_names)], axis=1)
+
+    def add_generators_timeseries(self, generator_names, **kwargs):
+        # Todo: Docstrings
+        # if TimeSeriesControl hasn't been called on timeseries, it is not
+        # necessary to add timeseries
+        if not hasattr(self.edisgo_obj.timeseries, 'mode'):
+            logger.debug('Timeseries have not been set yet. Please call'
+                         'TimeSeriesControl on EDisGo object to create '
+                         'timeseries.')
+            return
+        # turn single name to list
+        if isinstance(generator_names, str):
+            generator_names = [generator_names]
+        # append timeseries of respective mode
+        if self.edisgo_obj.timeseries.mode:
+            if 'worst-case' in self.edisgo_obj.timeseries.mode:
+                modes = get_worst_case_modes(self.edisgo_obj.timeseries.mode)
+                # set random timeindex
+                self._worst_case_generation(modes, generator_names)
+            elif self.edisgo_obj.timeseries.mode == 'manual':
+                # check inserted timeseries and drop existing generators
+                gens_active_power = kwargs.get('generators_active_power', None)
+                if gens_active_power is not None:
+                    self.check_timeseries_for_index_and_cols(gens_active_power,
+                                                             generator_names)
+                gens_reactive_power = kwargs.get('generators_reactive_power',
+                                                 None)
+                if gens_reactive_power is not None:
+                    self.check_timeseries_for_index_and_cols(
+                        gens_reactive_power, generator_names)
+                self.drop_existing_generator_timeseries(generator_names)
+                # add new timeseries
+                self.edisgo_obj.timeseries.generators_active_power = \
+                    self.edisgo_obj.timeseries.generators_active_power.T.\
+                    append(gens_active_power.T.loc[generator_names]).T
+                self.edisgo_obj.timeseries.generators_reactive_power = \
+                    self.edisgo_obj.timeseries.generators_reactive_power.T.\
+                    append(gens_reactive_power.T.loc[generator_names]).T
+            else:
+                raise ValueError('{} is not a valid mode.'.format(
+                    self.edisgo_obj.timeseries.mode))
+        else:
+            ts_dispatchable = kwargs.get('timeseries_generation_dispatchable',
+                                         None)
+            if ts_dispatchable is not None:
+                if hasattr(self.edisgo_obj.timeseries,
+                           'generation_dispatchable'):
+                    self.edisgo_obj.timeseries.generation_dispatchable = \
+                        drop_duplicated_indices(self.edisgo_obj.timeseries.
+                            generation_dispatchable.T.append(
+                            ts_dispatchable.T), keep='last').T
+                else:
+                    self.edisgo_obj.timeseries.generation_dispatchable = \
+                        ts_dispatchable
+
+            ts_reactive_power = kwargs.get('generation_reactive_power', None)
+            if ts_reactive_power is not None:
+                if hasattr(self.edisgo_obj.timeseries,
+                           'generation_reactive_power'):
+                    self.edisgo_obj.timeseries.generation_reactive_power = \
+                        drop_duplicated_indices(self.edisgo_obj.timeseries.
+                                                generation_reactive_power.T.
+                                                append(ts_reactive_power.T),
+                                                keep='last').T
+                else:
+                    self.edisgo_obj.timeseries.generation_reactive_power = \
+                        ts_reactive_power
+            # create load active and reactive power timeseries
+            self._generation_from_timeseries(generator_names)
+
+    def drop_existing_generator_timeseries(self, generator_names):
+        # drop existing timeseries of generator
+        self.edisgo_obj.timeseries.generators_active_power =\
+            self.edisgo_obj.timeseries.generators_active_power.drop(
+                self.edisgo_obj.timeseries.generators_active_power.columns[
+                    self.edisgo_obj.timeseries.generators_active_power.
+                    columns.isin(generator_names)], axis=1)
+        self.edisgo_obj.timeseries.generators_reactive_power =\
+            self.edisgo_obj.timeseries.generators_reactive_power.drop(
+                self.edisgo_obj.timeseries.generators_reactive_power.
+                columns[self.edisgo_obj.timeseries.
+                generators_reactive_power.columns.isin(generator_names)],
+                axis=1)
+
+    def add_storage_units_timeseries(self, storage_units_df):
+        raise NotImplementedError
+
+    def check_timeseries_for_index_and_cols(self, timeseries, component_names):
+        """
+        Checks index and column names of inserted timeseries to make sure, they
+        have the right format.
+
+        Parameters
+        ----------
+        timeseries:  :pandas:`pandas.DataFrame<dataframe>`
+            inserted timeseries
+        component_names: list of str
+            names of components of which timeseries are to be added
+        """
+        if (~self.edisgo_obj.timeseries.timeindex.isin(timeseries.index)).any():
+            raise ValueError("Inserted timeseries for the following "
+                             "components have the a wrong time index: "
+                             "{}. Values are missing.".format(component_names))
+        if any(comp not in timeseries.columns for comp in component_names):
+            raise ValueError("Columns of inserted timeseries are not the same "
+                             "as names of components to be added. Timeseries "
+                             "for the following components were tried to be "
+                             "added: {}".format(component_names))
 
 
 def import_load_timeseries(config_data, data_source, year=2018):

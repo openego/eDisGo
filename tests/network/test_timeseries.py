@@ -368,8 +368,8 @@ class TestTimeSeriesControl:
 
         # test no other generators
 
-    def test_add_load(self):
-        """Test method add_load"""
+    def test_add_loads_timeseries(self):
+        """Test method add_loads_timeseries"""
         peak_load = 2.3
         annual_consumption = 3.4
         num_loads = len(self.topology.loads_df)
@@ -398,50 +398,10 @@ class TestTimeSeriesControl:
         self.topology.remove_load(load_name)
         # test manual
         timeindex = pd.date_range('1/1/2018', periods=24, freq='H')
-        # create random timeseries
-        load_names = self.topology.loads_df.index
-        loads_active_power = \
-            pd.DataFrame(index=timeindex, columns=load_names,
-                         data=np.multiply(np.random.rand(len(timeindex),
-                                                         len(load_names)),
-                                          ([self.topology.loads_df.peak_load] *
-                                           len(timeindex))))
-        loads_reactive_power = \
-            pd.DataFrame(index=timeindex, columns=load_names,
-                         data=np.multiply(np.random.rand(len(timeindex),
-                                                         len(load_names)),
-                                          ([self.topology.loads_df.peak_load] *
-                                           len(timeindex))))
-        generator_names = self.topology.generators_df.index
-        generators_active_power = \
-            pd.DataFrame(index=timeindex, columns=generator_names,
-                         data=np.multiply(
-                             np.random.rand(len(timeindex),
-                                            len(generator_names)),
-                             ([self.topology.generators_df.p_nom] *
-                              len(timeindex))))
-        generators_reactive_power = \
-            pd.DataFrame(index=timeindex, columns=generator_names,
-                         data=np.multiply(
-                             np.random.rand(len(timeindex),
-                                            len(generator_names)),
-                             ([self.topology.generators_df.p_nom] *
-                              len(timeindex))))
-        storage_names = self.topology.storage_units_df.index
-        storage_units_active_power = \
-            pd.DataFrame(index=timeindex, columns=storage_names,
-                         data=np.multiply(
-                             np.random.rand(len(timeindex),
-                                            len(storage_names)),
-                             ([self.topology.storage_units_df.p_nom] *
-                              len(timeindex))))
-        storage_units_reactive_power = \
-            pd.DataFrame(index=timeindex, columns=storage_names,
-                         data=np.multiply(
-                             np.random.rand(len(timeindex),
-                                            len(storage_names)),
-                             ([self.topology.storage_units_df.p_nom] *
-                              len(timeindex))))
+        generators_active_power, generators_reactive_power, \
+            loads_active_power, loads_reactive_power, \
+            storage_units_active_power, storage_units_reactive_power = \
+            self.create_random_timeseries_for_topology(timeindex)
 
         tsc = TimeSeriesControl(
             edisgo_obj=self, mode='manual', timeindex=timeindex,
@@ -505,3 +465,278 @@ class TestTimeSeriesControl:
                 (24, num_loads+1))
         self.topology.remove_load(load_name)
         # Todo: add more than one load
+
+    def test_add_generators_timeseries(self):
+        """Method add_generators_timeseries"""
+        # TEST WORST-CASE
+        tsc = TimeSeriesControl(edisgo_obj=self, mode='worst-case')
+        num_gens = len(self.topology.generators_df)
+        timeindex = pd.date_range('1/1/1970', periods=2, freq='H')
+        # add single generator
+        p_nom = 1.7
+        gen_name = self.topology.add_generator(generator_id=5, p_nom=p_nom,
+                                    bus="Bus_BranchTee_LVGrid_1_7",
+                                    generator_type='solar')
+        tsc.add_generators_timeseries(gen_name)
+        assert self.timeseries.generators_active_power.shape == (2, num_gens+1)
+        assert self.timeseries.generators_reactive_power.shape == \
+            (2, num_gens+1)
+        assert \
+            (self.timeseries.generators_active_power.index == timeindex).all()
+        assert (self.timeseries.generators_active_power.loc[
+            timeindex, gen_name].values == [0.85*p_nom, 0]).all()
+        assert np.isclose(self.timeseries.generators_reactive_power.loc[
+            timeindex, gen_name], [-tan(acos(0.95))*0.85*p_nom, 0]).all()
+        # add multiple generators and check
+        p_nom2 = 1.3
+        gen_name2 = self.topology.add_generator(generator_id=2, p_nom=p_nom2,
+                                                bus="Bus_Generator_1",
+                                                generator_type='gas')
+        p_nom3 = 2.4
+        gen_name3 = self.topology.add_generator(generator_id=6, p_nom=p_nom3,
+                                                bus="Bus_BranchTee_LVGrid_1_14",
+                                                generator_type='hydro')
+        tsc.add_generators_timeseries([gen_name2, gen_name3])
+        # check expected values
+        assert self.timeseries.generators_active_power.shape == (2, num_gens+3)
+        assert self.timeseries.generators_reactive_power.shape == (
+            2, num_gens + 3)
+        assert np.isclose(
+            self.timeseries.generators_active_power.loc[
+                timeindex, [gen_name2, gen_name3]].values,
+            [[p_nom2, p_nom3], [0, 0]]).all()
+        assert np.isclose(
+            self.timeseries.generators_reactive_power.loc[
+                timeindex, [gen_name2, gen_name3]].values,
+            [[-p_nom2*tan(acos(0.9)), -p_nom3*tan(acos(0.95))], [0, 0]]).all()
+        # remove added generators
+        self.topology.remove_generator(gen_name)
+        self.topology.remove_generator(gen_name2)
+        self.topology.remove_generator(gen_name3)
+        # TEST MANUAL
+        timeindex = pd.date_range('1/1/2018', periods=24, freq='H')
+        generators_active_power, generators_reactive_power, \
+            loads_active_power, loads_reactive_power, \
+            storage_units_active_power, storage_units_reactive_power = \
+            self.create_random_timeseries_for_topology(timeindex)
+
+        tsc = TimeSeriesControl(
+            edisgo_obj=self, mode='manual', timeindex=timeindex,
+            loads_active_power=loads_active_power,
+            loads_reactive_power=loads_reactive_power,
+            generators_active_power=generators_active_power,
+            generators_reactive_power=generators_reactive_power,
+            storage_units_active_power=storage_units_active_power,
+            storage_units_reactive_power=storage_units_reactive_power)
+        # add single mv solar generator
+        gen_name = self.topology.add_generator(generator_id=5, p_nom=p_nom,
+                                               bus="Bus_BranchTee_LVGrid_1_7",
+                                               generator_type='solar')
+        new_gen_active_power = pd.DataFrame(
+            index=timeindex, columns=[gen_name],
+            data=([p_nom * 0.97] * len(timeindex)))
+        new_gen_reactive_power = pd.DataFrame(
+            index=timeindex, columns=[gen_name],
+            data=([p_nom * 0.5] * len(timeindex)))
+        tsc.add_generators_timeseries(
+            gen_name, generators_active_power=new_gen_active_power,
+            generators_reactive_power=new_gen_reactive_power)
+        # check expected values
+        assert self.timeseries.generators_active_power.shape == (
+            24, num_gens + 1)
+        assert self.timeseries.generators_reactive_power.shape == \
+            (24, num_gens + 1)
+        assert \
+            (self.timeseries.generators_active_power.index == timeindex).all()
+        assert (self.timeseries.generators_active_power.loc[
+                    timeindex, gen_name].values == 0.97 * p_nom).all()
+        assert np.isclose(self.timeseries.generators_reactive_power.loc[
+                              timeindex, gen_name], p_nom*0.5).all()
+        # add multiple generators and check
+        p_nom2 = 1.3
+        gen_name2 = self.topology.add_generator(generator_id=2, p_nom=p_nom2,
+                                                bus="Bus_Generator_1",
+                                                generator_type='gas')
+        p_nom3 = 2.4
+        gen_name3 = self.topology.add_generator(generator_id=6, p_nom=p_nom3,
+                                                bus="Bus_BranchTee_LVGrid_1_14",
+                                                generator_type='hydro')
+        new_gens_active_power = pd.DataFrame(
+            index=timeindex, columns=[gen_name2, gen_name3],
+            data=(np.array([[p_nom2 * 0.97], [p_nom3 * 0.98]])
+                  .repeat(len(timeindex), axis=1).T))
+        new_gens_reactive_power = pd.DataFrame(
+            index=timeindex, columns=[gen_name2, gen_name3],
+            data=(np.array([[p_nom2 * 0.5], [p_nom3 * 0.4]])
+                  .repeat(len(timeindex), axis=1).T))
+        tsc.add_generators_timeseries(
+            [gen_name2, gen_name3],
+            generators_active_power=new_gens_active_power,
+            generators_reactive_power=new_gens_reactive_power)
+        # check expected values
+        assert self.timeseries.generators_active_power.shape == (
+            24, num_gens + 3)
+        assert self.timeseries.generators_reactive_power.shape == (
+            24, num_gens + 3)
+        assert np.isclose(
+            self.timeseries.generators_active_power.loc[
+                timeindex, [gen_name2, gen_name3]].values,
+            [p_nom2*0.97, p_nom3*0.98]).all()
+        assert np.isclose(
+            self.timeseries.generators_reactive_power.loc[
+                timeindex, [gen_name2, gen_name3]].values,
+            [p_nom2*0.5, p_nom3*0.4]).all()
+        # remove added generators
+        self.topology.remove_generator(gen_name)
+        self.topology.remove_generator(gen_name2)
+        self.topology.remove_generator(gen_name3)
+        # TEST TIMESERIES IMPORT
+        # test import timeseries from dbs
+        timeindex = pd.date_range('1/1/2011', periods=24, freq='H')
+        ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775] * 24},
+                                           index=timeindex)
+        tsc = TimeSeriesControl(timeindex=timeindex,
+                                edisgo_obj=self,
+                                timeseries_generation_fluctuating='oedb',
+                                timeseries_generation_dispatchable=ts_gen_dispatchable,
+                                timeseries_load='demandlib',
+                                timeseries_storage_units=storage_units_active_power)
+
+        # add single mv solar generator
+        gen_name = self.topology.add_generator(generator_id=5, p_nom=p_nom,
+                                               bus="Bus_BranchTee_LVGrid_1_7",
+                                               generator_type='solar',
+                                               weather_cell_id=1122075)
+        tsc.add_generators_timeseries(gen_name)
+        assert (self.timeseries.generators_active_power.shape == (
+                24, num_gens + 1))
+        assert (self.timeseries.generators_reactive_power.shape ==
+                (24, num_gens + 1))
+        #Todo: check values
+
+        # add multiple generators and check
+        p_nom2 = 1.3
+        gen_name2 = self.topology.add_generator(generator_id=2, p_nom=p_nom2,
+                                                bus="Bus_Generator_1",
+                                                generator_type='gas')
+        p_nom3 = 2.4
+        gen_name3 = self.topology.add_generator(generator_id=6, p_nom=p_nom3,
+                                                bus="Bus_BranchTee_LVGrid_1_14",
+                                                generator_type='hydro')
+        new_gens_active_power = pd.DataFrame(
+            index=timeindex, columns=[gen_name2, gen_name3],
+            data=(np.array([[p_nom2 * 0.97], [p_nom3 * 0.98]])
+                  .repeat(len(timeindex), axis=1).T))
+        tsc.add_generators_timeseries(
+            [gen_name2, gen_name3],
+            timeseries_generation_dispatchable=new_gens_active_power)
+        assert (self.timeseries.generators_active_power.shape == (
+            24, num_gens + 3))
+        assert (self.timeseries.generators_reactive_power.shape ==
+                (24, num_gens + 3))
+        assert np.isclose(
+            self.timeseries.generators_active_power.loc[
+                timeindex, [gen_name2, gen_name3]].values,
+            [p_nom2*0.97, p_nom3*0.98]).all()
+        assert np.isclose(
+            self.timeseries.generators_reactive_power.loc[
+                timeindex, [gen_name2, gen_name3]].values,
+            [-tan(acos(0.9))*p_nom2*0.97, -tan(acos(0.95))*p_nom3*0.98]).all()
+        # check values when reactive power is inserted as timeseries
+        new_gens_reactive_power = pd.DataFrame(
+            index=timeindex, columns=[gen_name2, gen_name3],
+            data=(np.array([[p_nom2 * 0.54], [p_nom3 * 0.45]])
+                  .repeat(len(timeindex), axis=1).T))
+        tsc.add_generators_timeseries([gen_name2, gen_name3],
+            timeseries_generation_dispatchable=new_gens_active_power,
+            generation_reactive_power=new_gens_reactive_power)
+        assert (self.timeseries.generators_active_power.shape == (
+            24, num_gens + 3))
+        assert (self.timeseries.generators_reactive_power.shape ==
+                (24, num_gens + 3))
+        assert np.isclose(
+            self.timeseries.generators_active_power.loc[
+                timeindex, [gen_name2, gen_name3]].values,
+            [p_nom2 * 0.97, p_nom3 * 0.98]).all()
+        assert np.isclose(
+            self.timeseries.generators_reactive_power.loc[
+                timeindex, [gen_name2, gen_name3]].values,
+            [p_nom2 * 0.54, p_nom3 * 0.45]).all()
+
+    def test_check_timeseries_for_index_and_cols(self):
+        """Test check_timeseries_for_index_and_cols method"""
+        timeindex = pd.date_range('1/1/2017', periods=13, freq='H')
+        tsc = TimeSeriesControl(
+            edisgo_obj=self, mode='manual', timeindex=timeindex)
+        added_comps = ['Comp_1', 'Comp_2']
+        timeseries_with_wrong_timeindex = pd.DataFrame(
+            index=timeindex[0:12], columns=added_comps,
+            data=np.random.rand(12, len(added_comps)))
+        #Todo: check what happens with assertion. Why are strings not the same?
+        msg = "Inserted timeseries for the following components have the a " \
+              "wrong time index:"
+        with pytest.raises(ValueError, match=msg):
+            tsc.check_timeseries_for_index_and_cols(
+                timeseries_with_wrong_timeindex, added_comps)
+        timeseries_with_wrong_comp_names = pd.DataFrame(
+            index=timeindex, columns=['Comp_1'],
+            data=np.random.rand(13, 1))
+        msg = "Columns of inserted timeseries are not the same " \
+              "as names of components to be added. Timeseries " \
+              "for the following components were tried to be " \
+              "added:"
+        with pytest.raises(ValueError, match=msg):
+            tsc.check_timeseries_for_index_and_cols(
+                timeseries_with_wrong_comp_names, added_comps)
+
+    def create_random_timeseries_for_topology(self, timeindex):
+        # create random timeseries
+        load_names = self.topology.loads_df.index
+        loads_active_power = \
+            pd.DataFrame(index=timeindex, columns=load_names,
+                         data=np.multiply(np.random.rand(len(timeindex),
+                                                         len(load_names)),
+                                      ([self.topology.loads_df.peak_load] *
+                                       len(timeindex))))
+        loads_reactive_power = \
+            pd.DataFrame(index=timeindex, columns=load_names,
+                         data=np.multiply(np.random.rand(len(timeindex),
+                                                         len(load_names)),
+                                      ([self.topology.loads_df.peak_load] *
+                                       len(timeindex))))
+        generator_names = self.topology.generators_df.index
+        generators_active_power = \
+            pd.DataFrame(index=timeindex, columns=generator_names,
+                         data=np.multiply(
+                             np.random.rand(len(timeindex),
+                                            len(generator_names)),
+                             ([self.topology.generators_df.p_nom] *
+                              len(timeindex))))
+        generators_reactive_power = \
+            pd.DataFrame(index=timeindex, columns=generator_names,
+                         data=np.multiply(
+                             np.random.rand(len(timeindex),
+                                            len(generator_names)),
+                             ([self.topology.generators_df.p_nom] *
+                              len(timeindex))))
+        storage_names = self.topology.storage_units_df.index
+        storage_units_active_power = \
+            pd.DataFrame(index=timeindex, columns=storage_names,
+                         data=np.multiply(
+                             np.random.rand(len(timeindex),
+                                            len(storage_names)),
+                             ([self.topology.storage_units_df.p_nom] *
+                              len(timeindex))))
+        storage_units_reactive_power = \
+            pd.DataFrame(index=timeindex, columns=storage_names,
+                         data=np.multiply(
+                             np.random.rand(len(timeindex),
+                                            len(storage_names)),
+                             ([self.topology.storage_units_df.p_nom] *
+                              len(timeindex))))
+        return generators_active_power, generators_reactive_power, \
+               loads_active_power, loads_reactive_power, \
+               storage_units_active_power, storage_units_reactive_power
+
+    #Todo: implement test for methods drop_existing_load_timeseries and
+    # drop_existing_generator_timeseries
