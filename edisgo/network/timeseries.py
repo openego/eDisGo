@@ -591,7 +591,8 @@ class TimeSeriesControl:
 
             # create storage active and reactive power timeseries
             self._storage_from_timeseries(
-                kwargs.get('timeseries_storage_units', None),
+                ts_active_power=kwargs.get('timeseries_storage_units', None),
+                ts_reactive_power=
                 kwargs.get('timeseries_storage_units_reactive_power', None))
 
             # check if time series for the set time index can be obtained
@@ -678,9 +679,16 @@ class TimeSeriesControl:
             logger.debug("Reactive power calculated by cos(phi).")
             self._reactive_power_gen_by_cos_phi(gens)
 
-    def _storage_from_timeseries(self, ts_active_power, ts_reactive_power):
+    def _storage_from_timeseries(self,  ts_active_power, ts_reactive_power,
+                                 name_storage_units=None):
+        if name_storage_units is None:
+            name_storage_units = \
+                self.edisgo_obj.topology.storage_units_df.index
+        storage_units_df = \
+            self.edisgo_obj.topology.storage_units_df.loc[name_storage_units]
+        self.drop_existing_storage_unit_timeseries(name_storage_units)
         # Todo: docstring
-        if len(self.edisgo_obj.topology.storage_units_df) == 0:
+        if len(storage_units_df) == 0:
             self.edisgo_obj.timeseries.storage_units_active_power = \
                 pd.DataFrame({}, index=self.edisgo_obj.timeseries.timeindex)
             self.edisgo_obj.timeseries.storage_units_reactive_power = \
@@ -694,20 +702,30 @@ class TimeSeriesControl:
                 if (ts_active_power.index == \
                         self.edisgo_obj.timeseries.timeindex).all() \
                     and (ts_active_power.columns == \
-                        self.edisgo_obj.topology.storage_units_df.index).all():
+                        storage_units_df.index).all():
                     self.edisgo_obj.timeseries.storage_units_active_power = \
-                        ts_active_power
+                        drop_duplicated_indices(
+                            self.edisgo_obj.timeseries.
+                            storage_units_active_power.T.append(
+                                ts_active_power.T)).T
                     # check if reactive power is given
-                    if ts_reactive_power and \
+                    if ts_reactive_power is not None and \
                         (ts_active_power.index == \
                             self.edisgo_obj.timeseries.timeindex).all() \
                         and (ts_active_power.columns == \
-                            self.edisgo_obj.topology.storage_units_df.index).all():
+                            storage_units_df.index).all():
                         self.edisgo_obj.timeseries.storage_units_reactive_power = \
-                            ts_reactive_power
+                            drop_duplicated_indices(
+                                self.edisgo_obj.timeseries.
+                                storage_units_reactive_power.T.append(
+                                    ts_reactive_power.T)).T
                     else:
                         self._reactive_power_storage_by_cos_phi(
-                            self.edisgo_obj.topology.storage_units_df)
+                            storage_units_df)
+                else:
+                    raise ValueError("Index of provided storage active power "
+                                     "timeseries does not match timeindex of"
+                                     "TimeSeriesControl class.")
             except ValueError:
                 raise ValueError("Columns or indices of inserted storage "
                                  "timeseries do not match topology and "
@@ -1026,7 +1044,10 @@ class TimeSeriesControl:
                 columns=storage_df.index)
 
             self.edisgo_obj.timeseries.storage_units_active_power = \
-                worst_case_ts*self.edisgo_obj.topology.storage_units_df.p_nom
+                drop_duplicated_indices(
+                    self.edisgo_obj.timeseries.storage_units_active_power.T.
+                    append((worst_case_ts*self.edisgo_obj.topology.
+                            storage_units_df.p_nom).T), keep='last').T
 
             self._reactive_power_storage_by_cos_phi(storage_df)
 
@@ -1057,9 +1078,12 @@ class TimeSeriesControl:
 
         # calculate reactive power time series for each storage unit
         self.edisgo_obj.timeseries.storage_units_reactive_power = \
-            self._fixed_cosphi(
-                self.edisgo_obj.timeseries.storage_units_active_power,
-                q_sign, power_factor)
+            drop_duplicated_indices(
+                self.edisgo_obj.timeseries.storage_units_reactive_power.T.
+                append(self._fixed_cosphi(
+                    self.edisgo_obj.timeseries.storage_units_active_power.loc[
+                        :, storage_units_df.index], q_sign, power_factor).T)).T
+
 
     def _check_timeindex(self):
         """
@@ -1228,8 +1252,69 @@ class TimeSeriesControl:
                 generators_reactive_power.columns.isin(generator_names)],
                 axis=1)
 
-    def add_storage_units_timeseries(self, storage_units_df):
-        raise NotImplementedError
+    def add_storage_units_timeseries(self, storage_unit_names, **kwargs):
+        # Todo: Docstrings
+        # if TimeSeriesControl hasn't been called on timeseries, it is not
+        # necessary to add timeseries
+        if not hasattr(self.edisgo_obj.timeseries, 'mode'):
+            logger.debug('Timeseries have not been set yet. Please call'
+                         'TimeSeriesControl on EDisGo object to create '
+                         'timeseries.')
+            return
+        # turn single name to list
+        if isinstance(storage_unit_names, str):
+            storage_unit_names = [storage_unit_names]
+        # append timeseries of respective mode
+        if self.edisgo_obj.timeseries.mode:
+            if 'worst-case' in self.edisgo_obj.timeseries.mode:
+                modes = get_worst_case_modes(self.edisgo_obj.timeseries.mode)
+                # set random timeindex
+                self._worst_case_storage(modes, storage_unit_names)
+            elif self.edisgo_obj.timeseries.mode == 'manual':
+                storage_units_active_power = kwargs.get(
+                    'storage_units_active_power', None)
+                if storage_units_active_power is not None:
+                    self.check_timeseries_for_index_and_cols(
+                        storage_units_active_power, storage_unit_names)
+                storage_units_reactive_power = \
+                    kwargs.get('storage_units_reactive_power', None)
+                if storage_units_reactive_power is not None:
+                    self.check_timeseries_for_index_and_cols(
+                        storage_units_reactive_power, storage_unit_names)
+                self.drop_existing_storage_unit_timeseries(storage_unit_names)
+                # add new storage timeseries
+                self.edisgo_obj.timeseries.storage_units_active_power = \
+                    self.edisgo_obj.timeseries.storage_units_active_power.T.\
+                    append(storage_units_active_power.T.loc[
+                                                   storage_unit_names]).T
+                self.edisgo_obj.timeseries.storage_units_reactive_power = \
+                    self.edisgo_obj.timeseries.storage_units_reactive_power.T.\
+                    append(storage_units_reactive_power.T.loc[
+                                                   storage_unit_names]).T
+            else:
+                raise ValueError('{} is not a valid mode.'.format(
+                    self.edisgo_obj.timeseries.mode))
+        else:
+            # create load active and reactive power timeseries
+            self._storage_from_timeseries(
+                name_storage_units=storage_unit_names,
+                ts_active_power=kwargs.get('timeseries_storage_units', None),
+                ts_reactive_power=
+                kwargs.get('timeseries_storage_units_reactive_power', None))
+
+    def drop_existing_storage_unit_timeseries(self, storage_unit_names):
+        # drop existing timeseries of loads
+        self.edisgo_obj.timeseries.storage_units_active_power = \
+            self.edisgo_obj.timeseries.storage_units_active_power.drop(
+                self.edisgo_obj.timeseries.storage_units_active_power.columns[
+                    self.edisgo_obj.timeseries.storage_units_active_power.
+                        columns.isin(storage_unit_names)], axis=1)
+        self.edisgo_obj.timeseries.storage_units_reactive_power = \
+            self.edisgo_obj.timeseries.storage_units_reactive_power.drop(
+                self.edisgo_obj.timeseries.storage_units_reactive_power.
+                    columns[self.edisgo_obj.timeseries.
+                    storage_units_reactive_power.columns.isin(
+                    storage_unit_names)], axis=1)
 
     def check_timeseries_for_index_and_cols(self, timeseries, component_names):
         """

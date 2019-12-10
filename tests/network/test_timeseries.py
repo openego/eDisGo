@@ -469,7 +469,7 @@ class TestTimeSeriesControl:
         # Todo: add more than one load
 
     def test_add_generators_timeseries(self):
-        """Method add_generators_timeseries"""
+        """Test add_generators_timeseries method"""
         # TEST WORST-CASE
         tsc = TimeSeriesControl(edisgo_obj=self, mode='worst-case')
         num_gens = len(self.topology.generators_df)
@@ -664,6 +664,221 @@ class TestTimeSeriesControl:
             self.timeseries.generators_reactive_power.loc[
                 timeindex, [gen_name2, gen_name3]].values,
             [p_nom2 * 0.54, p_nom3 * 0.45]).all()
+        # remove added generators
+        self.topology.remove_generator(gen_name)
+        self.topology.remove_generator(gen_name2)
+        self.topology.remove_generator(gen_name3)
+
+    def test_add_storage_unit_timeseries(self):
+        """Test add_storage_unit_timeseries method"""
+        # TEST WORST-CASE
+        # add single storage unit
+        num_storage_units = len(self.topology.storage_units_df)
+        tsc = TimeSeriesControl(edisgo_obj=self, mode='worst-case')
+        p_nom = 2.1
+        timeindex = pd.date_range('1/1/1970', periods=2, freq='H')
+        storage_name = self.topology.add_storage_unit(
+            storage_id=1, bus='Bus_MVStation_1', p_nom=p_nom)
+        tsc.add_storage_units_timeseries(storage_name)
+        assert (self.timeseries.storage_units_active_power.index ==
+                timeindex).all()
+        assert (self.timeseries.storage_units_reactive_power.index ==
+                timeindex).all()
+        assert (self.timeseries.storage_units_active_power.shape ==
+                (len(timeindex), num_storage_units+1))
+        assert (self.timeseries.storage_units_reactive_power.shape ==
+                (len(timeindex), num_storage_units + 1))
+        assert (self.timeseries.storage_units_active_power.loc[
+                    timeindex, storage_name].values == [p_nom, -p_nom]).all()
+        assert (np.isclose(self.timeseries.storage_units_reactive_power.loc[
+                    timeindex, storage_name].values,
+                    [-p_nom*tan(acos(0.9)), p_nom*tan(acos(0.9))])).all()
+        # add two storage units
+        p_nom2 = 1.3
+        storage_name2 = self.topology.add_storage_unit(
+            storage_id=1, bus='Bus_BranchTee_LVGrid_1_13', p_nom=p_nom2)
+        p_nom3 = 3.12
+        storage_name3 = self.topology.add_storage_unit(
+            storage_id=2, bus='Bus_primary_LVStation_6', p_nom=p_nom3)
+        tsc.add_storage_units_timeseries([storage_name2, storage_name3])
+        assert (self.timeseries.storage_units_active_power.shape ==
+                (len(timeindex), num_storage_units + 3))
+        assert (self.timeseries.storage_units_reactive_power.shape ==
+                (len(timeindex), num_storage_units + 3))
+        assert np.isclose(
+            self.timeseries.storage_units_active_power.loc[
+                timeindex, [storage_name2, storage_name3]].values,
+            [[p_nom2, p_nom3], [-p_nom2, -p_nom3]]).all()
+        assert np.isclose(
+            self.timeseries.storage_units_reactive_power.loc[
+                timeindex, [storage_name2, storage_name3]].values,
+            [[-tan(acos(0.95))*p_nom2, -tan(acos(0.9))*p_nom3],
+             [tan(acos(0.95))*p_nom2, tan(acos(0.9))*p_nom3]]).all()
+        # remove storages
+        self.topology.remove_storage(storage_name)
+        self.topology.remove_storage(storage_name2)
+        self.topology.remove_storage(storage_name3)
+        # TEST MANUAL
+        timeindex = pd.date_range('1/1/2018', periods=24, freq='H')
+        generators_active_power, generators_reactive_power, \
+        loads_active_power, loads_reactive_power, \
+        storage_units_active_power, storage_units_reactive_power = \
+            self.create_random_timeseries_for_topology(timeindex)
+
+        tsc = TimeSeriesControl(
+            edisgo_obj=self, mode='manual', timeindex=timeindex,
+            loads_active_power=loads_active_power,
+            loads_reactive_power=loads_reactive_power,
+            generators_active_power=generators_active_power,
+            generators_reactive_power=generators_reactive_power,
+            storage_units_active_power=storage_units_active_power,
+            storage_units_reactive_power=storage_units_reactive_power)
+        # add single mv solar generator
+        storage_name = self.topology.add_storage_unit(
+            storage_id=1, bus='Bus_MVStation_1', p_nom=p_nom)
+        new_storage_active_power = pd.DataFrame(
+            index=timeindex, columns=[storage_name],
+            data=([p_nom * 0.97] * len(timeindex)))
+        new_storage_reactive_power = pd.DataFrame(
+            index=timeindex, columns=[storage_name],
+            data=([p_nom * 0.5] * len(timeindex)))
+        tsc.add_storage_units_timeseries(
+            storage_name, storage_units_active_power=new_storage_active_power,
+            storage_units_reactive_power=new_storage_reactive_power)
+        # check expected values
+        assert self.timeseries.storage_units_active_power.shape == (
+            24, num_storage_units + 1)
+        assert self.timeseries.storage_units_reactive_power.shape == \
+               (24, num_storage_units + 1)
+        assert \
+            (self.timeseries.storage_units_active_power.index == timeindex).all()
+        assert (self.timeseries.storage_units_active_power.loc[
+                    timeindex, storage_name].values == 0.97 * p_nom).all()
+        assert np.isclose(self.timeseries.storage_units_reactive_power.loc[
+                              timeindex, storage_name], p_nom * 0.5).all()
+        # add multiple generators and check
+        p_nom2 = 1.3
+        storage_name2 = self.topology.add_storage_unit(
+            storage_id=1, bus='Bus_BranchTee_LVGrid_1_13', p_nom=p_nom2)
+        p_nom3 = 3.12
+        storage_name3 = self.topology.add_storage_unit(
+            storage_id=2, bus='Bus_primary_LVStation_6', p_nom=p_nom3)
+
+        new_storages_active_power = pd.DataFrame(
+            index=timeindex, columns=[storage_name2, storage_name3],
+            data=(np.array([[p_nom2 * 0.97], [p_nom3 * 0.98]])
+                  .repeat(len(timeindex), axis=1).T))
+        new_storages_reactive_power = pd.DataFrame(
+            index=timeindex, columns=[storage_name2, storage_name3],
+            data=(np.array([[p_nom2 * 0.5], [p_nom3 * 0.4]])
+                  .repeat(len(timeindex), axis=1).T))
+        tsc.add_storage_units_timeseries(
+            [storage_name2, storage_name3],
+            storage_units_active_power=new_storages_active_power,
+            storage_units_reactive_power=new_storages_reactive_power)
+        # check expected values
+        assert self.timeseries.storage_units_active_power.shape == (
+            24, num_storage_units + 3)
+        assert self.timeseries.storage_units_reactive_power.shape == (
+            24, num_storage_units + 3)
+        assert np.isclose(
+            self.timeseries.storage_units_active_power.loc[
+                timeindex, [storage_name2, storage_name3]].values,
+            [p_nom2 * 0.97, p_nom3 * 0.98]).all()
+        assert np.isclose(
+            self.timeseries.storage_units_reactive_power.loc[
+                timeindex, [storage_name2, storage_name3]].values,
+            [p_nom2 * 0.5, p_nom3 * 0.4]).all()
+        # remove added generators
+        self.topology.remove_storage(storage_name)
+        self.topology.remove_storage(storage_name2)
+        self.topology.remove_storage(storage_name3)
+        # TEST TIMESERIES IMPORT
+        # test import timeseries from dbs
+        timeindex = pd.date_range('1/1/2011', periods=24, freq='H')
+        ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775] * 24},
+                                           index=timeindex)
+        # reindex timeseries
+        storage_units_active_power = \
+            storage_units_active_power.set_index(timeindex)
+        new_storage_active_power = \
+            new_storage_active_power.set_index(timeindex)
+        new_storage_reactive_power = \
+            new_storage_reactive_power.set_index(timeindex)
+        new_storages_active_power = \
+            new_storages_active_power.set_index(timeindex)
+        new_storages_reactive_power = \
+            new_storages_reactive_power.set_index(timeindex)
+        tsc = TimeSeriesControl(timeindex=timeindex,
+                                edisgo_obj=self,
+                                timeseries_generation_fluctuating='oedb',
+                                timeseries_generation_dispatchable=ts_gen_dispatchable,
+                                timeseries_load='demandlib',
+                                timeseries_storage_units=storage_units_active_power)
+
+        # add single mv solar generator
+        storage_name = self.topology.add_storage_unit(
+            storage_id=1, bus='Bus_MVStation_1', p_nom=p_nom)
+
+        tsc.add_storage_units_timeseries(
+            storage_name, timeseries_storage_units=new_storage_active_power,
+            timeseries_storage_units_reactive_power=new_storage_reactive_power)
+        assert (self.timeseries.storage_units_active_power.shape == (
+            24, num_storage_units + 1))
+        assert (self.timeseries.storage_units_reactive_power.shape ==
+                (24, num_storage_units + 1))
+        assert_frame_equal(self.timeseries.storage_units_active_power.loc[
+                timeindex, [storage_name]], new_storage_active_power)
+        assert_frame_equal(self.timeseries.storage_units_reactive_power.loc[
+                timeindex, [storage_name]], new_storage_reactive_power)
+
+        # add multiple generators and check
+        p_nom2 = 1.3
+        storage_name2 = self.topology.add_storage_unit(
+            storage_id=1, bus='Bus_BranchTee_LVGrid_1_13', p_nom=p_nom2)
+        p_nom3 = 3.12
+        storage_name3 = self.topology.add_storage_unit(
+            storage_id=2, bus='Bus_primary_LVStation_6', p_nom=p_nom3)
+
+        tsc.add_storage_units_timeseries(
+            [storage_name2, storage_name3],
+            timeseries_storage_units=new_storages_active_power)
+
+        assert (self.timeseries.storage_units_active_power.shape == (
+            24, num_storage_units + 3))
+        assert (self.timeseries.storage_units_reactive_power.shape ==
+                (24, num_storage_units + 3))
+        assert np.isclose(
+            self.timeseries.storage_units_active_power.loc[
+                timeindex, [storage_name2, storage_name3]].values,
+            [p_nom2 * 0.97, p_nom3 * 0.98]).all()
+        assert np.isclose(
+            self.timeseries.storage_units_reactive_power.loc[
+                timeindex, [storage_name2, storage_name3]].values,
+            [-tan(acos(0.95)) * p_nom2 * 0.97,
+             -tan(acos(0.9)) * p_nom3 * 0.98]).all()
+        # check values when reactive power is inserted as timeseries
+        tsc.add_storage_units_timeseries([storage_name2, storage_name3],
+                                      timeseries_storage_units=
+                                      new_storages_active_power,
+                                      timeseries_storage_units_reactive_power=
+                                      new_storages_reactive_power)
+        assert (self.timeseries.storage_units_active_power.shape == (
+            24, num_storage_units + 3))
+        assert (self.timeseries.storage_units_reactive_power.shape ==
+                (24, num_storage_units + 3))
+        assert np.isclose(
+            self.timeseries.storage_units_active_power.loc[
+                timeindex, [storage_name2, storage_name3]].values,
+            [p_nom2 * 0.97, p_nom3 * 0.98]).all()
+        assert np.isclose(
+            self.timeseries.storage_units_reactive_power.loc[
+                timeindex, [storage_name2, storage_name3]].values,
+            [p_nom2 * 0.5, p_nom3 * 0.4]).all()
+        # remove added generators
+        self.topology.remove_storage(storage_name)
+        self.topology.remove_storage(storage_name2)
+        self.topology.remove_storage(storage_name3)
 
     def test_check_timeseries_for_index_and_cols(self):
         """Test check_timeseries_for_index_and_cols method"""
