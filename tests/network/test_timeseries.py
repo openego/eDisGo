@@ -141,7 +141,8 @@ class TestTimeSeriesControl:
         with pytest.raises(NotImplementedError):
             import_load_timeseries(self.config, '')
         timeindex = pd.date_range('1/1/2018', periods=8760, freq='H')
-        load = import_load_timeseries(self.config, 'demandlib')
+        load = import_load_timeseries(self.config, 'demandlib',
+                                      timeindex[0].year)
         assert (load.columns == ['retail', 'residential',
                                  'agricultural', 'industrial']).all()
         assert load.loc[timeindex[453], 'retail'] == 8.335076810751597e-05
@@ -437,6 +438,7 @@ class TestTimeSeriesControl:
 
         self.topology.remove_load(load_name)
         # test import timeseries from dbs
+        timeindex = pd.date_range('1/1/2011', periods=24, freq='H')
         ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775] * 24},
                                            index=timeindex)
         tsc = TimeSeriesControl(timeindex=timeindex,
@@ -455,9 +457,9 @@ class TestTimeSeriesControl:
         reactive_power = \
             self.timeseries.loads_reactive_power[load_name]
         assert np.isclose(active_power.iloc[4],
-                          (4.164057583416888e-05*annual_consumption))
+                          (4.150392788534633e-05*annual_consumption))
         assert np.isclose(reactive_power.iloc[13],
-                          (7.964120641987684e-05 * annual_consumption *
+                          (7.937985538711569e-05 * annual_consumption *
                            tan(acos(0.9))))
 
         assert (self.timeseries.loads_active_power.shape == (24, num_loads+1))
