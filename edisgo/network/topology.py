@@ -717,17 +717,25 @@ class Topology:
         """
         #ToDo add test
         # check if bus exists
-        if bus not in self.buses_df.index:
+        try:
+            bus_df = self.buses_df.loc[bus]
+        except KeyError:
             raise ValueError(
                 "Specified bus {} is not valid as it is not defined in "
                 "buses_df.".format(bus))
 
+        if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
+            grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
+        else:
+            grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
+
         # generate generator name and check uniqueness
-        generator_name = 'Generator_{}_{}'.format(generator_type, generator_id)
+        generator_name = 'Generator_{}_{}_{}'.format(generator_type, grid_name,
+                                                     generator_id)
         while generator_name in self.generators_df.index:
             random.seed(a=generator_name)
             generator_name = 'Generator_{}_{}'.format(
-                generator_type, random.randint(10**8, 10**9), generator_id)
+                generator_type, random.randint(10**8, 10**9))
 
         # unpack optional parameters
         weather_cell_id = kwargs.get('weather_cell_id', None)
