@@ -378,7 +378,17 @@ class TimeSeries:
             lambda _: 'feedin_case' if _ < 0 else 'load_case')
 
     def to_csv(self, directory):
-        #Todo: Docstring
+        """
+        Exports topology to csv files with names loads_active_power,
+        loads_reactive_power, generators_active_power, generators_reactive_power
+        storage_units_active_power, storage_units_reactive_power. A sub-
+        folder named "timeseries" is added to the provided directory.
+
+        Parameters
+        ----------
+        directory: str
+            path to save timeseries to
+        """
         os.makedirs(directory, exist_ok=True)
         ts_dir = os.path.join(directory, 'timeseries')
         os.makedirs(ts_dir, exist_ok=True)
@@ -405,101 +415,100 @@ class TimeSeries:
 
 def get_component_timeseries(edisgo_obj, **kwargs):
     """
-    #Todo: update
-        Sets up TimeSeries Object.
+    Sets up TimeSeries Object.
 
-        Parameters
-        ----------
-        network : :class:`~.network.topology.Topology`
-            The eDisGo data container
-        mode : :obj:`str`, optional
-            Mode must be set in case of worst-case analyses and can either be
-            'worst-case' (both feed-in and load case), 'worst-case-feedin' (only
-            feed-in case) or 'worst-case-load' (only load case). All other
-            parameters except of `config-data` will be ignored. Default: None.
-        timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
-            Parameter used to obtain time series for active power feed-in of
-            fluctuating renewables wind and solar.
-            Possible options are:
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.edisgo.EDisGo`
+        The eDisGo data container
+    mode : :obj:`str`, optional
+        Mode must be set in case of worst-case analyses and can either be
+        'worst-case' (both feed-in and load case), 'worst-case-feedin' (only
+        feed-in case) or 'worst-case-load' (only load case). All other
+        parameters except of `config-data` will be ignored. Default: None.
+    timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
+        Parameter used to obtain time series for active power feed-in of
+        fluctuating renewables wind and solar.
+        Possible options are:
 
-            * 'oedb'
-              Time series for 2011 are obtained from the OpenEnergy DataBase.
-            * :pandas:`pandas.DataFrame<dataframe>`
-              DataFrame with time series, normalized with corresponding capacity.
-              Time series can either be aggregated by technology type or by type
-              and weather cell ID. In the first case columns of the DataFrame are
-              'solar' and 'wind'; in the second case columns need to be a
-              :pandas:`pandas.MultiIndex<multiindex>` with the first level
-              containing the type and the second level the weather cell ID.
+        * 'oedb'
+          Time series for 2011 are obtained from the OpenEnergy DataBase.
+        * :pandas:`pandas.DataFrame<dataframe>`
+          DataFrame with time series, normalized with corresponding capacity.
+          Time series can either be aggregated by technology type or by type
+          and weather cell ID. In the first case columns of the DataFrame are
+          'solar' and 'wind'; in the second case columns need to be a
+          :pandas:`pandas.MultiIndex<multiindex>` with the first level
+          containing the type and the second level the weather cell ID.
 
-            Default: None.
-        timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`, optional
-            DataFrame with time series for active power of each (aggregated)
-            type of dispatchable generator normalized with corresponding capacity.
-            Columns represent generator type:
+        Default: None.
+    timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series for active power of each (aggregated)
+        type of dispatchable generator normalized with corresponding capacity.
+        Columns represent generator type:
 
-            * 'gas'
-            * 'coal'
-            * 'biomass'
-            * 'other'
-            * ...
+        * 'gas'
+        * 'coal'
+        * 'biomass'
+        * 'other'
+        * ...
 
-            Use 'other' if you don't want to explicitly provide every possible
-            type. Default: None.
-        timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
-            DataFrame with time series of normalized reactive power (normalized by
-            the rated nominal active power) per technology and weather cell. Index
-            needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-            Columns represent generator type and can be a MultiIndex column
-            containing the weather cell ID in the second level. If the technology
-            doesn't contain weather cell information i.e. if it is other than solar
-            and wind generation, this second level can be left as an empty string ''.
+        Use 'other' if you don't want to explicitly provide every possible
+        type. Default: None.
+    timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        DataFrame with time series of normalized reactive power (normalized by
+        the rated nominal active power) per technology and weather cell. Index
+        needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent generator type and can be a MultiIndex column
+        containing the weather cell ID in the second level. If the technology
+        doesn't contain weather cell information i.e. if it is other than solar
+        and wind generation, this second level can be left as an empty string ''.
 
-            Default: None.
-        timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
-            Parameter used to obtain time series of active power of (cumulative)
-            loads.
-            Possible options are:
+        Default: None.
+    timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
+        Parameter used to obtain time series of active power of (cumulative)
+        loads.
+        Possible options are:
 
-            * 'demandlib'
-              Time series are generated using the oemof demandlib.
-            * :pandas:`pandas.DataFrame<dataframe>`
-              DataFrame with load time series of each (cumulative) type of load
-              normalized with corresponding annual energy demand.
-              Columns represent load type:
+        * 'demandlib'
+          Time series are generated using the oemof demandlib.
+        * :pandas:`pandas.DataFrame<dataframe>`
+          DataFrame with load time series of each (cumulative) type of load
+          normalized with corresponding annual energy demand.
+          Columns represent load type:
 
-              * 'residential'
-              * 'retail'
-              * 'industrial'
-              * 'agricultural'
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
 
-            Default: None.
-        timeseries_load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
-            Parameter to get the time series of the reactive power of loads. It should be a
-            DataFrame with time series of normalized reactive power (normalized by
-            annual energy demand) per load sector. Index needs to be a
-            :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-            Columns represent load type:
+        Default: None.
+    timeseries_load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+        Parameter to get the time series of the reactive power of loads. It should be a
+        DataFrame with time series of normalized reactive power (normalized by
+        annual energy demand) per load sector. Index needs to be a
+        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Columns represent load type:
 
-              * 'residential'
-              * 'retail'
-              * 'industrial'
-              * 'agricultural'
+          * 'residential'
+          * 'retail'
+          * 'industrial'
+          * 'agricultural'
 
-            Default: None.
-        timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
-            Can be used to define a time range for which to obtain load time series
-            and feed-in time series of fluctuating renewables or to define time
-            ranges of the given time series that will be used in the analysis.
+        Default: None.
+    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+        Can be used to define a time range for which to obtain load time series
+        and feed-in time series of fluctuating renewables or to define time
+        ranges of the given time series that will be used in the analysis.
 
-        """
+    """
 
     mode = kwargs.get('mode', None)
     edisgo_obj.timeseries.mode = mode
-    reset_timeseries(edisgo_obj.timeseries)
+    _reset_timeseries(edisgo_obj.timeseries)
     if mode:
         if 'worst-case' in mode:
-            modes = get_worst_case_modes(mode)
+            modes = _get_worst_case_modes(mode)
             # set random timeindex
             edisgo_obj.timeseries._timeindex = pd.date_range(
                 '1/1/1970', periods=len(modes), freq='H')
@@ -602,7 +611,7 @@ def _load_from_timeseries(edisgo_obj, load_names=None):
     if load_names is None:
         load_names = edisgo_obj.topology.loads_df.index
     loads = edisgo_obj.topology.loads_df.loc[load_names]
-    drop_existing_load_timeseries(edisgo_obj=edisgo_obj, load_names=load_names)
+    _drop_existing_load_timeseries(edisgo_obj=edisgo_obj, load_names=load_names)
     # set active power
     edisgo_obj.timeseries.loads_active_power = \
         edisgo_obj.timeseries.loads_active_power.T.append(
@@ -632,7 +641,7 @@ def _generation_from_timeseries(edisgo_obj, generator_names=None):
     # get all generators
     gens = edisgo_obj.topology.generators_df.loc[generator_names]
     # drop existing timeseries
-    drop_existing_generator_timeseries(edisgo_obj, generator_names)
+    _drop_existing_generator_timeseries(edisgo_obj, generator_names)
     # handling of fluctuating generators
     gens_fluctuating = gens[gens.type.isin(['solar', 'wind'])]
     gens_dispatchable = gens[~gens.index.isin(gens_fluctuating.index)]
@@ -682,13 +691,34 @@ def _generation_from_timeseries(edisgo_obj, generator_names=None):
 
 def _storage_from_timeseries(edisgo_obj,  ts_active_power, ts_reactive_power,
                              name_storage_units=None):
+    """
+    Sets up storage timeseries for mode=None in get_component_timeseries.
+    Timeseries with the right timeindex and columns with storage unit names
+    have to be provided.
+
+    Overwrites active and reactive power time series of storage units
+
+    Parameters
+    ----------
+    edisgo_obj: :class:`~.self.edisgo.EDisGo`
+        The eDisGo model overall container
+    ts_active_power: :pandas:`pandas.DataFrame<dataframe>`
+        Timeseries of active power with index=timeindex,
+        columns=name_storage_units
+    ts_reactive_power: :pandas:`pandas.DataFrame<dataframe>`
+        Timeseries of active power with index=timeindex,
+        columns=name_storage_units
+    name_storage_units: str or list of str
+        Names of storage units to add timeseries for. Default None, timeseries
+        for all storage units of edisgo_obj are set then.
+    """
     if name_storage_units is None:
         name_storage_units = \
             edisgo_obj.topology.storage_units_df.index
     storage_units_df = \
         edisgo_obj.topology.storage_units_df.loc[name_storage_units]
-    drop_existing_storage_unit_timeseries(edisgo_obj, name_storage_units)
-    # Todo: docstring
+    _drop_existing_storage_unit_timeseries(edisgo_obj, name_storage_units)
+
     if len(storage_units_df) == 0:
         edisgo_obj.timeseries.storage_units_active_power = \
             pd.DataFrame({}, index=edisgo_obj.timeseries.timeindex)
@@ -735,7 +765,6 @@ def _storage_from_timeseries(edisgo_obj,  ts_active_power, ts_reactive_power,
 
 def _worst_case_generation(edisgo_obj, modes, generator_names=None):
     """
-    #ToDo: docstring
     Define worst case generation time series for fluctuating and
     dispatchable generators.
 
@@ -743,10 +772,14 @@ def _worst_case_generation(edisgo_obj, modes, generator_names=None):
 
     Parameters
     ----------
+    edisgo_obj: :class:`~.self.edisgo.EDisGo`
+        The eDisGo model overall container
     modes : list
         List with worst-cases to generate time series for. Can be
         'feedin_case', 'load_case' or both.
-
+    generator_names: str or list of str
+        Names of generators to add timeseries for. Default None, timeseries
+        for all generators of edisgo_obj are set then.
     """
     if generator_names is None:
         generator_names = edisgo_obj.topology.generators_df.index
@@ -791,7 +824,7 @@ def _worst_case_generation(edisgo_obj, modes, generator_names=None):
             [worst_case_ts.loc[:, ['other']]] * len(cols), axis=1)
 
     # drop existing timeseries
-    drop_existing_generator_timeseries(edisgo_obj, generator_names)
+    _drop_existing_generator_timeseries(edisgo_obj, generator_names)
 
     # multiply normalized time series by nominal power of generator
     edisgo_obj.timeseries.generators_active_power = \
@@ -834,21 +867,18 @@ def _reactive_power_gen_by_cos_phi(edisgo_obj, gens_df):
 
 def _worst_case_load(edisgo_obj, modes, load_names=None):
     """
-    #ToDo: docstring
     Define worst case load time series for each sector.
 
     Parameters
     ----------
-    worst_case_scale_factors : dict
-        Scale factors defined in config file 'config_timeseries.cfg'.
-        Scale factors describe actual power to nominal power ratio of in
-        worst-case scenarios.
-    peakload_consumption_ratio : dict
-        Ratios of peak load to annual consumption per sector, defined in
-        config file 'config_timeseries.cfg'
+    edisgo_obj: :class:`~.self.edisgo.EDisGo`
+        The eDisGo model overall container
     modes : list
         List with worst-cases to generate time series for. Can be
         'feedin_case', 'load_case' or both.
+    load_names: str or list of str
+        Names of loads to add timeseries for. Default None, timeseries
+        for all loads of edisgo_obj are set then.
 
     """
 
@@ -896,7 +926,7 @@ def _worst_case_load(edisgo_obj, modes, load_names=None):
                  columns=loads_df.index)
 
     # drop existing timeseries
-    drop_existing_load_timeseries(edisgo_obj=edisgo_obj, load_names=load_names)
+    _drop_existing_load_timeseries(edisgo_obj=edisgo_obj, load_names=load_names)
 
     # calculate active power of loads
     edisgo_obj.timeseries.loads_active_power = \
@@ -1018,7 +1048,21 @@ def _fixed_cosphi(active_power, q_sign, power_factor):
 
 
 def _worst_case_storage(edisgo_obj, modes, storage_names=None):
-    # Todo: Docstrings
+    """
+        Define worst case storage unit time series.
+
+        Parameters
+        ----------
+        edisgo_obj: :class:`~.self.edisgo.EDisGo`
+            The eDisGo model overall container
+        modes : list
+            List with worst-cases to generate time series for. Can be
+            'feedin_case', 'load_case' or both.
+        storage_namess: str or list of str
+            Names of storage units to add timeseries for. Default None,
+            timeseries for all storage units of edisgo_obj are set then.
+
+        """
     if len(edisgo_obj.topology.storage_units_df) == 0:
         edisgo_obj.timeseries.storage_units_active_power = \
             pd.DataFrame({}, index=edisgo_obj.timeseries.timeindex)
@@ -1126,7 +1170,20 @@ def _check_timeindex(edisgo_obj):
 
 
 def add_loads_timeseries(edisgo_obj, load_names, **kwargs):
-    # Todo: Docstrings
+    """
+    Define load time series for active and reactive power. For more information
+    on required and optional parameters see description of
+    :func:`get_component_timeseries`.
+
+    Parameters
+    ----------
+    edisgo_obj: :class:`~.self.edisgo.EDisGo`
+        The eDisGo model overall container
+    load_names: str or list of str
+        Names of loads to add timeseries for. Default None, timeseries
+        for all loads of edisgo_obj are set then.
+
+    """
     # If timeseries haven not yet been filled, it is not
     # necessary to add timeseries
     if not hasattr(edisgo_obj.timeseries, 'mode'):
@@ -1140,7 +1197,7 @@ def add_loads_timeseries(edisgo_obj, load_names, **kwargs):
     # append timeseries of respective mode
     if edisgo_obj.timeseries.mode:
         if 'worst-case' in edisgo_obj.timeseries.mode:
-            modes = get_worst_case_modes(edisgo_obj.timeseries.mode)
+            modes = _get_worst_case_modes(edisgo_obj.timeseries.mode)
             # set random timeindex
             _worst_case_load(edisgo_obj=edisgo_obj, modes=modes,
                              load_names=load_names)
@@ -1153,8 +1210,8 @@ def add_loads_timeseries(edisgo_obj, load_names, **kwargs):
             if loads_reactive_power is not None:
                 check_timeseries_for_index_and_cols(edisgo_obj,
                     loads_reactive_power, load_names)
-            drop_existing_load_timeseries(edisgo_obj=edisgo_obj,
-                                          load_names=load_names)
+            _drop_existing_load_timeseries(edisgo_obj=edisgo_obj,
+                                           load_names=load_names)
             # add new load timeseries
             edisgo_obj.timeseries.loads_active_power = \
                 edisgo_obj.timeseries.loads_active_power.T.append(
@@ -1170,7 +1227,7 @@ def add_loads_timeseries(edisgo_obj, load_names, **kwargs):
         _load_from_timeseries(edisgo_obj=edisgo_obj, load_names=load_names)
 
 
-def drop_existing_load_timeseries(edisgo_obj, load_names):
+def _drop_existing_load_timeseries(edisgo_obj, load_names):
     # drop existing timeseries of loads
     edisgo_obj.timeseries.loads_active_power = \
         edisgo_obj.timeseries.loads_active_power.drop(
@@ -1186,7 +1243,20 @@ def drop_existing_load_timeseries(edisgo_obj, load_names):
 
 
 def add_generators_timeseries(edisgo_obj, generator_names, **kwargs):
-    # Todo: Docstrings
+    """
+    Define generator time series for active and reactive power. For more
+    information on required and optional parameters see description of
+    :func:`get_component_timeseries`.
+
+    Parameters
+    ----------
+    edisgo_obj: :class:`~.self.edisgo.EDisGo`
+        The eDisGo model overall container
+    generator_names: str or list of str
+        Names of generators to add timeseries for. Default None, timeseries
+        for all generators of edisgo_obj are set then.
+
+    """
     # If timeseries have not been set yet, it is not
     # necessary to add timeseries
     if not hasattr(edisgo_obj.timeseries, 'mode'):
@@ -1200,7 +1270,7 @@ def add_generators_timeseries(edisgo_obj, generator_names, **kwargs):
     # append timeseries of respective mode
     if edisgo_obj.timeseries.mode:
         if 'worst-case' in edisgo_obj.timeseries.mode:
-            modes = get_worst_case_modes(edisgo_obj.timeseries.mode)
+            modes = _get_worst_case_modes(edisgo_obj.timeseries.mode)
             # set random timeindex
             _worst_case_generation(edisgo_obj=edisgo_obj,
                                    modes=modes,
@@ -1217,7 +1287,7 @@ def add_generators_timeseries(edisgo_obj, generator_names, **kwargs):
             if gens_reactive_power is not None:
                 check_timeseries_for_index_and_cols(edisgo_obj,
                     gens_reactive_power, generator_names)
-            drop_existing_generator_timeseries(edisgo_obj, generator_names)
+            _drop_existing_generator_timeseries(edisgo_obj, generator_names)
             # add new timeseries
             edisgo_obj.timeseries.generators_active_power = \
                 edisgo_obj.timeseries.generators_active_power.T.\
@@ -1259,7 +1329,7 @@ def add_generators_timeseries(edisgo_obj, generator_names, **kwargs):
                                     generator_names=generator_names)
 
 
-def drop_existing_generator_timeseries(edisgo_obj, generator_names):
+def _drop_existing_generator_timeseries(edisgo_obj, generator_names):
     # drop existing timeseries of generator
     edisgo_obj.timeseries.generators_active_power =\
         edisgo_obj.timeseries.generators_active_power.drop(
@@ -1275,7 +1345,20 @@ def drop_existing_generator_timeseries(edisgo_obj, generator_names):
 
 
 def add_storage_units_timeseries(edisgo_obj, storage_unit_names, **kwargs):
-    # Todo: Docstrings
+    """
+    Define storage unit time series for active and reactive power. For more
+    information on required and optional parameters see description of
+    :func:`get_component_timeseries`.
+
+    Parameters
+    ----------
+    edisgo_obj: :class:`~.self.edisgo.EDisGo`
+        The eDisGo model overall container
+    storage_unit_names: str or list of str
+        Names of storage units to add timeseries for. Default None, timeseries
+        for all storage units of edisgo_obj are set then.
+
+    """
     # if timeseries have not been set yet, it is not
     # necessary to add timeseries
     if not hasattr(edisgo_obj.timeseries, 'mode'):
@@ -1289,7 +1372,7 @@ def add_storage_units_timeseries(edisgo_obj, storage_unit_names, **kwargs):
     # append timeseries of respective mode
     if edisgo_obj.timeseries.mode:
         if 'worst-case' in edisgo_obj.timeseries.mode:
-            modes = get_worst_case_modes(edisgo_obj.timeseries.mode)
+            modes = _get_worst_case_modes(edisgo_obj.timeseries.mode)
             # set random timeindex
             _worst_case_storage(edisgo_obj=edisgo_obj, modes=modes,
                                 storage_names=storage_unit_names)
@@ -1304,8 +1387,8 @@ def add_storage_units_timeseries(edisgo_obj, storage_unit_names, **kwargs):
             if storage_units_reactive_power is not None:
                 check_timeseries_for_index_and_cols(edisgo_obj,
                     storage_units_reactive_power, storage_unit_names)
-            drop_existing_storage_unit_timeseries(edisgo_obj,
-                                                  storage_unit_names)
+            _drop_existing_storage_unit_timeseries(edisgo_obj,
+                                                   storage_unit_names)
             # add new storage timeseries
             edisgo_obj.timeseries.storage_units_active_power = \
                 edisgo_obj.timeseries.storage_units_active_power.T.\
@@ -1327,7 +1410,7 @@ def add_storage_units_timeseries(edisgo_obj, storage_unit_names, **kwargs):
             kwargs.get('timeseries_storage_units_reactive_power', None))
 
 
-def drop_existing_storage_unit_timeseries(edisgo_obj, storage_unit_names):
+def _drop_existing_storage_unit_timeseries(edisgo_obj, storage_unit_names):
     # drop existing timeseries of loads
     edisgo_obj.timeseries.storage_units_active_power = \
         edisgo_obj.timeseries.storage_units_active_power.drop(
@@ -1464,7 +1547,7 @@ def import_load_timeseries(config_data, data_source, year=2018):
     return load
 
 
-def get_worst_case_modes(mode):
+def _get_worst_case_modes(mode):
     """
     Returns list of modes to be handled in worst case analysis.
 
@@ -1487,7 +1570,7 @@ def get_worst_case_modes(mode):
     return modes
 
 
-def reset_timeseries(timeseries):
+def _reset_timeseries(timeseries):
     """
     Resets all relevant timeseries to empty DataFrames
 

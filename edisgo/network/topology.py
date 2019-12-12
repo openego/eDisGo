@@ -541,7 +541,20 @@ class Topology:
         self.lines_df.loc[self.lines_df.bus1 == bus_name])
 
     def get_connected_components_from_bus(self, bus_name):
-        #Todo: Docstring
+        """
+        Returns dict of connected elements to bus of provided bus_name.
+
+        Parameters
+        ----------
+        bus_name: str
+            representative of bus
+
+        Returns
+        -------
+         dict of :pandas:`pandas.DataFrame<dataframe>`
+            dictionary of connected elements with keys 'Generator', 'Line',
+            'Load', 'Transformer', 'Transformer_HVMV', 'StorageUnit', 'Switch'
+        """
         components = {}
         components['Generator'] = self.generators_df.loc[
             self.generators_df.bus == bus_name]
@@ -996,7 +1009,17 @@ class Topology:
         return line_name
 
     def to_csv(self, directory):
-        #Todo: Docstring
+        """
+        Exports topology to csv files with names buses, generators, lines,
+        loads, switches, transformers, transformers_hvmv, network. Files are
+        designed in a way that they can be directly imported to pypsa. A sub-
+        folder named "topology" is added to the provided directory.
+
+        Parameters
+        ----------
+        directory: str
+            path to save topology to
+        """
         topology_dir = os.path.join(directory, 'topology')
         os.makedirs(directory, exist_ok=True)
         os.makedirs(topology_dir, exist_ok=True)

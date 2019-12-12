@@ -739,7 +739,23 @@ class EDisGo:
 
     def save(self, directory,
              save_results=True, save_topology=True, save_timeseries=True):
-        #Todo: Docstring
+        """
+        Saves edisgo_obj parameters to csv. It can be chosen if results,
+        topology and timeseries should be save respectively. For each one a
+        seperate folder is created.
+
+        Parameters
+        ----------
+        directory: str
+            directory to save edisgo_obj to. Subfolders for respective
+            parameters will be created.
+        save_results: bool
+            indicates whether to save self.results
+        save_topology: bool
+            indicates whether to save self.topology
+        save_timeseries: bool
+            indicates whether to save self.timeseries
+        """
         os.makedirs(directory, exist_ok=True)
         if save_results:
             os.makedirs(os.path.join(directory, 'results'), exist_ok=True)
