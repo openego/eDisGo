@@ -725,7 +725,7 @@ def _storage_from_timeseries(edisgo_obj,  ts_active_power, ts_reactive_power,
                         storage_units_df=storage_units_df)
             else:
                 raise ValueError("Index of provided storage active power "
-                                 "timeseries does not match timeindex of"
+                                 "timeseries does not match timeindex of "
                                  "TimeSeries class.")
         except ValueError:
             raise ValueError("Columns or indices of inserted storage "

@@ -98,7 +98,7 @@ class TestTopology:
             weather_cell_id=1000)
 
         assert len_df_before + 1 == len(self.topology.generators_df)
-        assert name == 'Generator_solar_2'
+        assert name == 'Generator_solar_MVGrid_1_2'
         assert self.topology.generators_df.loc[name, 'p_nom'] == 1
 
     def test_add_load(self):
