@@ -4,7 +4,7 @@ import logging
 import edisgo
 from edisgo.network.topology import Topology
 from edisgo.network.results import Results
-from edisgo.network.timeseries import TimeSeries, TimeSeriesControl
+from edisgo.network.timeseries import TimeSeries, get_component_timeseries
 from edisgo.tools import pypsa_io, plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io.ding0_import import import_ding0_grid
@@ -221,23 +221,21 @@ class EDisGo:
         # set up time series for feed-in and load
         # worst-case time series
         if kwargs.get('worst_case_analysis', None):
-            TimeSeriesControl(
-                edisgo_obj=self,
-                mode=kwargs.get('worst_case_analysis', None))
+            get_component_timeseries(edisgo_obj=self,
+                                     mode=kwargs.get('worst_case_analysis', None))
         else:
-            TimeSeriesControl(
-                edisgo_obj=self,
-                timeseries_generation_fluctuating=kwargs.get(
-                    'timeseries_generation_fluctuating', None),
-                timeseries_generation_dispatchable=kwargs.get(
-                    'timeseries_generation_dispatchable', None),
-                timeseries_generation_reactive_power=kwargs.get(
-                    'timeseries_generation_reactive_power', None),
-                timeseries_load=kwargs.get(
-                    'timeseries_load', None),
-                timeseries_load_reactive_power = kwargs.get(
-                    'timeseries_load_reactive_power', None),
-                timeindex=kwargs.get('timeindex', None))
+            get_component_timeseries(edisgo_obj=self,
+                                     timeseries_generation_fluctuating=kwargs.get(
+                                'timeseries_generation_fluctuating', None),
+                                     timeseries_generation_dispatchable=kwargs.get(
+                                'timeseries_generation_dispatchable', None),
+                                     timeseries_generation_reactive_power=kwargs.get(
+                                'timeseries_generation_reactive_power', None),
+                                     timeseries_load=kwargs.get(
+                                'timeseries_load', None),
+                                     timeseries_load_reactive_power = kwargs.get(
+                                'timeseries_load_reactive_power', None),
+                                     timeindex=kwargs.get('timeindex', None))
 
 
 
@@ -753,7 +751,7 @@ class EDisGo:
         if save_timeseries:
             self.timeseries.to_csv(directory)
 
-    def add_component(self, comp_type, **kwargs):
+    def add_component(self, comp_type, add_ts=True, **kwargs):
         """
         Adds single component to topology and respective timeseries if add_ts
         is set to True.
@@ -785,6 +783,7 @@ class EDisGo:
                                    annual_consumption=kwargs.get(
                                        'annual_consumption'),
                                    sector=kwargs.get('sector'))
+
         elif comp_type == 'Generator':
             self.topology.add_generator(generator_id=kwargs.get('name'),
                                         bus=kwargs.get('bus'),

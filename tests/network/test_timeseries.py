@@ -8,12 +8,11 @@ import numpy as np
 
 from edisgo.network.topology import Topology
 from edisgo.tools.config import Config
-from edisgo.network.timeseries import TimeSeriesControl, TimeSeries, \
-    import_load_timeseries
+from edisgo.network import timeseries
 from edisgo.io import ding0_import
 
 
-class TestTimeSeriesControl:
+class Testget_component_timeseries:
 
     @classmethod
     def setup_class(self):
@@ -22,13 +21,13 @@ class TestTimeSeriesControl:
         test_network_directory = os.path.join(
             parent_dirname, 'ding0_test_network')
         self.topology = Topology()
-        self.timeseries = TimeSeries()
+        self.timeseries = timeseries.TimeSeries()
         self.config = Config()
         ding0_import.import_ding0_grid(test_network_directory, self)
 
     def test_to_csv(self):
         cur_dir = os.getcwd()
-        TimeSeriesControl(edisgo_obj=self, mode='worst-case')
+        timeseries.get_component_timeseries(edisgo_obj=self, mode='worst-case')
         self.timeseries.to_csv(cur_dir)
         #create edisgo obj to compare
         parent_dirname = os.path.dirname(os.path.dirname(__file__))
@@ -36,10 +35,10 @@ class TestTimeSeriesControl:
             parent_dirname, 'ding0_test_network')
         edisgo = pd.DataFrame()
         edisgo.topology = Topology()
-        edisgo.timeseries = TimeSeries()
+        edisgo.timeseries = timeseries.TimeSeries()
         edisgo.config = Config()
         ding0_import.import_ding0_grid(test_network_directory, edisgo)
-        TimeSeriesControl(
+        timeseries.get_component_timeseries(
             edisgo, mode='manual',
             timeindex=pd.read_csv(
                 os.path.join(cur_dir, 'timeseries', 'loads_active_power.csv'),
@@ -79,7 +78,7 @@ class TestTimeSeriesControl:
         # delete folder
         # Todo: check files before rmtree?
         shutil.rmtree(os.path.join(cur_dir, 'timeseries'), ignore_errors=True)
-        self.timeseries = TimeSeries()
+        self.timeseries = timeseries.TimeSeries()
 
     def test_timeseries_imported(self):
         # test storage ts
@@ -97,18 +96,18 @@ class TestTimeSeriesControl:
         msg = \
             'Your input for "timeseries_generation_dispatchable" is not valid.'
         with pytest.raises(ValueError, match=msg):
-            TimeSeriesControl(edisgo_obj=self,
+            timeseries.get_component_timeseries(edisgo_obj=self,
                               timeseries_generation_fluctuating='oedb')
         # test error raising in case of missing ts for loads
         msg = 'Your input for "timeseries_load" is not valid.'
         with pytest.raises(ValueError, match=msg):
-            TimeSeriesControl(edisgo_obj=self,
+            timeseries.get_component_timeseries(edisgo_obj=self,
                   timeseries_generation_fluctuating='oedb',
                   timeseries_generation_dispatchable=ts_gen_dispatchable)
 
         msg = "No timeseries for storage units provided."
         with pytest.raises(ValueError, match=msg):
-            TimeSeriesControl(edisgo_obj=self,
+            timeseries.get_component_timeseries(edisgo_obj=self,
                               timeseries_generation_fluctuating='oedb',
                               timeseries_generation_dispatchable=ts_gen_dispatchable,
                               timeseries_load='demandlib')
@@ -116,7 +115,7 @@ class TestTimeSeriesControl:
         msg = "Columns or indices of inserted storage timeseries do not match " \
               "topology and timeindex."
         with pytest.raises(ValueError, match=msg):
-            TimeSeriesControl(edisgo_obj=self,
+            timeseries.get_component_timeseries(edisgo_obj=self,
                               timeseries_generation_fluctuating='oedb',
                               timeseries_generation_dispatchable=ts_gen_dispatchable,
                               timeseries_load='demandlib',
@@ -124,7 +123,7 @@ class TestTimeSeriesControl:
 
         storage_ts = pd.concat([self.topology.storage_units_df.p_nom]*8760,
                                axis=1, keys=timeindex).T
-        TimeSeriesControl(edisgo_obj=self,
+        timeseries.get_component_timeseries(edisgo_obj=self,
                           timeseries_generation_fluctuating='oedb',
                           timeseries_generation_dispatchable=ts_gen_dispatchable,
                           timeseries_load='demandlib',
@@ -139,9 +138,9 @@ class TestTimeSeriesControl:
 
     def test_import_load_timeseries(self):
         with pytest.raises(NotImplementedError):
-            import_load_timeseries(self.config, '')
+            timeseries.import_load_timeseries(self.config, '')
         timeindex = pd.date_range('1/1/2018', periods=8760, freq='H')
-        load = import_load_timeseries(self.config, 'demandlib',
+        load = timeseries.import_load_timeseries(self.config, 'demandlib',
                                       timeindex[0].year)
         assert (load.columns == ['retail', 'residential',
                                  'agricultural', 'industrial']).all()
@@ -161,7 +160,8 @@ class TestTimeSeriesControl:
         self.topology.add_storage_unit('Test_storage_3',
                                        'Bus_BranchTee_LVGrid_1_10', 0.05)
 
-        ts_control = TimeSeriesControl(edisgo_obj=self, mode='worst-case')
+        timeseries.get_component_timeseries(edisgo_obj=self,
+                                                         mode='worst-case')
 
         # check type
         assert isinstance(
@@ -300,7 +300,8 @@ class TestTimeSeriesControl:
         self.topology.remove_storage('StorageUnit_LVGrid_1_Test_storage_3')
 
         # test for only feed-in case
-        TimeSeriesControl(edisgo_obj=self, mode='worst-case-feedin')
+        timeseries.get_component_timeseries(edisgo_obj=self,
+                                            mode='worst-case-feedin')
 
         # value
         gen = 'Generator_1'  # gas, mv
@@ -324,7 +325,8 @@ class TestTimeSeriesControl:
             exp * pf, check_exact=False, check_dtype=False)
 
         # test for only load case
-        TimeSeriesControl(edisgo_obj=self, mode='worst-case-load')
+        timeseries.get_component_timeseries(edisgo_obj=self,
+                                            mode='worst-case-load')
 
         gen = 'Generator_1'  # gas, mv
         exp = pd.Series(data=[0 * 0.775], name=gen,
@@ -352,19 +354,19 @@ class TestTimeSeriesControl:
         val_pre = self.topology._generators_df.at[gen, 'bus']
         self.topology._generators_df.at[gen, 'bus'] = None
         with pytest.raises(AttributeError, match=gen):
-            ts_control._worst_case_generation(modes=None)
+            timeseries._worst_case_generation(self, modes=None)
         self.topology._generators_df.at[gen, 'bus'] = val_pre
         gen = 'GeneratorFluctuating_24'
         val_pre = self.topology._generators_df.at[gen, 'p_nom']
         self.topology._generators_df.at[gen, 'p_nom'] = None
         with pytest.raises(AttributeError, match=gen):
-            ts_control._worst_case_generation(modes=None)
+            timeseries._worst_case_generation(self, modes=None)
         self.topology._generators_df.at[gen, 'p_nom'] = val_pre
         load = 'Load_agricultural_LVGrid_1_1'
         val_pre = self.topology._loads_df.at[load, 'peak_load']
         self.topology._loads_df.at[load, 'peak_load'] = None
         with pytest.raises(AttributeError, match=load):
-            ts_control._worst_case_load(modes=None)
+            timeseries._worst_case_load(self, modes=None)
         self.topology._loads_df.at[load, 'peak_load'] = val_pre
 
         # test no other generators
@@ -376,12 +378,12 @@ class TestTimeSeriesControl:
         num_loads = len(self.topology.loads_df)
         # add single load for which timeseries is added
         # test worst-case
-        tsc = TimeSeriesControl(edisgo_obj=self, mode='worst-case')
+        timeseries.get_component_timeseries(edisgo_obj=self, mode='worst-case')
         load_name = self.topology.add_load(load_id=4, bus='Bus_MVStation_1',
                                peak_load=peak_load,
                                annual_consumption=annual_consumption,
                                sector='retail')
-        tsc.add_loads_timeseries(load_name)
+        timeseries.add_loads_timeseries(self, load_name)
         active_power_new_load = \
             self.timeseries.loads_active_power.loc[:,
                 ['Load_retail_MVGrid_1_4']]
@@ -404,7 +406,7 @@ class TestTimeSeriesControl:
             storage_units_active_power, storage_units_reactive_power = \
             self.create_random_timeseries_for_topology(timeindex)
 
-        tsc = TimeSeriesControl(
+        timeseries.get_component_timeseries(
             edisgo_obj=self, mode='manual', timeindex=timeindex,
             loads_active_power=loads_active_power,
             loads_reactive_power=loads_reactive_power,
@@ -423,7 +425,7 @@ class TestTimeSeriesControl:
         new_load_reactive_power = pd.DataFrame(
             index=timeindex, columns=[load_name],
             data=([peak_load*0.5] * len(timeindex)))
-        tsc.add_loads_timeseries(load_name,
+        timeseries.add_loads_timeseries(self, load_name,
                                  loads_active_power=new_load_active_power,
                                  loads_reactive_power=new_load_reactive_power)
         active_power = \
@@ -441,7 +443,7 @@ class TestTimeSeriesControl:
         timeindex = pd.date_range('1/1/2011', periods=24, freq='H')
         ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775] * 24},
                                            index=timeindex)
-        tsc = TimeSeriesControl(timeindex=timeindex,
+        timeseries.get_component_timeseries(timeindex=timeindex,
             edisgo_obj=self, timeseries_generation_fluctuating='oedb',
             timeseries_generation_dispatchable=ts_gen_dispatchable,
             timeseries_load='demandlib',
@@ -451,7 +453,7 @@ class TestTimeSeriesControl:
                                peak_load=peak_load,
                                annual_consumption=annual_consumption,
                                sector='retail')
-        tsc.add_loads_timeseries(load_name)
+        timeseries.add_loads_timeseries(self, load_name)
         active_power = \
             self.timeseries.loads_active_power[load_name]
         reactive_power = \
@@ -471,7 +473,7 @@ class TestTimeSeriesControl:
     def test_add_generators_timeseries(self):
         """Test add_generators_timeseries method"""
         # TEST WORST-CASE
-        tsc = TimeSeriesControl(edisgo_obj=self, mode='worst-case')
+        timeseries.get_component_timeseries(edisgo_obj=self, mode='worst-case')
         num_gens = len(self.topology.generators_df)
         timeindex = pd.date_range('1/1/1970', periods=2, freq='H')
         # add single generator
@@ -479,7 +481,7 @@ class TestTimeSeriesControl:
         gen_name = self.topology.add_generator(generator_id=5, p_nom=p_nom,
                                     bus="Bus_BranchTee_LVGrid_1_7",
                                     generator_type='solar')
-        tsc.add_generators_timeseries(gen_name)
+        timeseries.add_generators_timeseries(self, gen_name)
         assert self.timeseries.generators_active_power.shape == (2, num_gens+1)
         assert self.timeseries.generators_reactive_power.shape == \
             (2, num_gens+1)
@@ -498,7 +500,7 @@ class TestTimeSeriesControl:
         gen_name3 = self.topology.add_generator(generator_id=6, p_nom=p_nom3,
                                                 bus="Bus_BranchTee_LVGrid_1_14",
                                                 generator_type='hydro')
-        tsc.add_generators_timeseries([gen_name2, gen_name3])
+        timeseries.add_generators_timeseries(self, [gen_name2, gen_name3])
         # check expected values
         assert self.timeseries.generators_active_power.shape == (2, num_gens+3)
         assert self.timeseries.generators_reactive_power.shape == (
@@ -522,7 +524,7 @@ class TestTimeSeriesControl:
             storage_units_active_power, storage_units_reactive_power = \
             self.create_random_timeseries_for_topology(timeindex)
 
-        tsc = TimeSeriesControl(
+        timeseries.get_component_timeseries(
             edisgo_obj=self, mode='manual', timeindex=timeindex,
             loads_active_power=loads_active_power,
             loads_reactive_power=loads_reactive_power,
@@ -540,7 +542,7 @@ class TestTimeSeriesControl:
         new_gen_reactive_power = pd.DataFrame(
             index=timeindex, columns=[gen_name],
             data=([p_nom * 0.5] * len(timeindex)))
-        tsc.add_generators_timeseries(
+        timeseries.add_generators_timeseries(self,
             gen_name, generators_active_power=new_gen_active_power,
             generators_reactive_power=new_gen_reactive_power)
         # check expected values
@@ -571,7 +573,7 @@ class TestTimeSeriesControl:
             index=timeindex, columns=[gen_name2, gen_name3],
             data=(np.array([[p_nom2 * 0.5], [p_nom3 * 0.4]])
                   .repeat(len(timeindex), axis=1).T))
-        tsc.add_generators_timeseries(
+        timeseries.add_generators_timeseries(self,
             [gen_name2, gen_name3],
             generators_active_power=new_gens_active_power,
             generators_reactive_power=new_gens_reactive_power)
@@ -597,7 +599,7 @@ class TestTimeSeriesControl:
         timeindex = pd.date_range('1/1/2011', periods=24, freq='H')
         ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775] * 24},
                                            index=timeindex)
-        tsc = TimeSeriesControl(timeindex=timeindex,
+        timeseries.get_component_timeseries(timeindex=timeindex,
                                 edisgo_obj=self,
                                 timeseries_generation_fluctuating='oedb',
                                 timeseries_generation_dispatchable=ts_gen_dispatchable,
@@ -609,7 +611,7 @@ class TestTimeSeriesControl:
                                                bus="Bus_BranchTee_LVGrid_1_7",
                                                generator_type='solar',
                                                weather_cell_id=1122075)
-        tsc.add_generators_timeseries(gen_name)
+        timeseries.add_generators_timeseries(self, gen_name)
         assert (self.timeseries.generators_active_power.shape == (
                 24, num_gens + 1))
         assert (self.timeseries.generators_reactive_power.shape ==
@@ -629,7 +631,7 @@ class TestTimeSeriesControl:
             index=timeindex, columns=[gen_name2, gen_name3],
             data=(np.array([[p_nom2 * 0.97], [p_nom3 * 0.98]])
                   .repeat(len(timeindex), axis=1).T))
-        tsc.add_generators_timeseries(
+        timeseries.add_generators_timeseries(self,
             [gen_name2, gen_name3],
             timeseries_generation_dispatchable=new_gens_active_power)
         assert (self.timeseries.generators_active_power.shape == (
@@ -649,7 +651,7 @@ class TestTimeSeriesControl:
             index=timeindex, columns=[gen_name2, gen_name3],
             data=(np.array([[p_nom2 * 0.54], [p_nom3 * 0.45]])
                   .repeat(len(timeindex), axis=1).T))
-        tsc.add_generators_timeseries([gen_name2, gen_name3],
+        timeseries.add_generators_timeseries(self, [gen_name2, gen_name3],
             timeseries_generation_dispatchable=new_gens_active_power,
             generation_reactive_power=new_gens_reactive_power)
         assert (self.timeseries.generators_active_power.shape == (
@@ -674,12 +676,12 @@ class TestTimeSeriesControl:
         # TEST WORST-CASE
         # add single storage unit
         num_storage_units = len(self.topology.storage_units_df)
-        tsc = TimeSeriesControl(edisgo_obj=self, mode='worst-case')
+        timeseries.get_component_timeseries(edisgo_obj=self, mode='worst-case')
         p_nom = 2.1
         timeindex = pd.date_range('1/1/1970', periods=2, freq='H')
         storage_name = self.topology.add_storage_unit(
             storage_id=1, bus='Bus_MVStation_1', p_nom=p_nom)
-        tsc.add_storage_units_timeseries(storage_name)
+        timeseries.add_storage_units_timeseries(self, storage_name)
         assert (self.timeseries.storage_units_active_power.index ==
                 timeindex).all()
         assert (self.timeseries.storage_units_reactive_power.index ==
@@ -700,7 +702,8 @@ class TestTimeSeriesControl:
         p_nom3 = 3.12
         storage_name3 = self.topology.add_storage_unit(
             storage_id=2, bus='Bus_primary_LVStation_6', p_nom=p_nom3)
-        tsc.add_storage_units_timeseries([storage_name2, storage_name3])
+        timeseries.add_storage_units_timeseries(self,
+                                                [storage_name2, storage_name3])
         assert (self.timeseries.storage_units_active_power.shape ==
                 (len(timeindex), num_storage_units + 3))
         assert (self.timeseries.storage_units_reactive_power.shape ==
@@ -725,7 +728,7 @@ class TestTimeSeriesControl:
         storage_units_active_power, storage_units_reactive_power = \
             self.create_random_timeseries_for_topology(timeindex)
 
-        tsc = TimeSeriesControl(
+        timeseries.get_component_timeseries(
             edisgo_obj=self, mode='manual', timeindex=timeindex,
             loads_active_power=loads_active_power,
             loads_reactive_power=loads_reactive_power,
@@ -742,7 +745,7 @@ class TestTimeSeriesControl:
         new_storage_reactive_power = pd.DataFrame(
             index=timeindex, columns=[storage_name],
             data=([p_nom * 0.5] * len(timeindex)))
-        tsc.add_storage_units_timeseries(
+        timeseries.add_storage_units_timeseries(self,
             storage_name, storage_units_active_power=new_storage_active_power,
             storage_units_reactive_power=new_storage_reactive_power)
         # check expected values
@@ -772,7 +775,7 @@ class TestTimeSeriesControl:
             index=timeindex, columns=[storage_name2, storage_name3],
             data=(np.array([[p_nom2 * 0.5], [p_nom3 * 0.4]])
                   .repeat(len(timeindex), axis=1).T))
-        tsc.add_storage_units_timeseries(
+        timeseries.add_storage_units_timeseries(self,
             [storage_name2, storage_name3],
             storage_units_active_power=new_storages_active_power,
             storage_units_reactive_power=new_storages_reactive_power)
@@ -809,18 +812,19 @@ class TestTimeSeriesControl:
             new_storages_active_power.set_index(timeindex)
         new_storages_reactive_power = \
             new_storages_reactive_power.set_index(timeindex)
-        tsc = TimeSeriesControl(timeindex=timeindex,
-                                edisgo_obj=self,
-                                timeseries_generation_fluctuating='oedb',
-                                timeseries_generation_dispatchable=ts_gen_dispatchable,
-                                timeseries_load='demandlib',
-                                timeseries_storage_units=storage_units_active_power)
+        timeseries.get_component_timeseries(
+            timeindex=timeindex,
+            edisgo_obj=self,
+            timeseries_generation_fluctuating='oedb',
+            timeseries_generation_dispatchable=ts_gen_dispatchable,
+            timeseries_load='demandlib',
+            timeseries_storage_units=storage_units_active_power)
 
         # add single mv solar generator
         storage_name = self.topology.add_storage_unit(
             storage_id=1, bus='Bus_MVStation_1', p_nom=p_nom)
 
-        tsc.add_storage_units_timeseries(
+        timeseries.add_storage_units_timeseries(self,
             storage_name, timeseries_storage_units=new_storage_active_power,
             timeseries_storage_units_reactive_power=new_storage_reactive_power)
         assert (self.timeseries.storage_units_active_power.shape == (
@@ -840,7 +844,7 @@ class TestTimeSeriesControl:
         storage_name3 = self.topology.add_storage_unit(
             storage_id=2, bus='Bus_primary_LVStation_6', p_nom=p_nom3)
 
-        tsc.add_storage_units_timeseries(
+        timeseries.add_storage_units_timeseries(self,
             [storage_name2, storage_name3],
             timeseries_storage_units=new_storages_active_power)
 
@@ -858,7 +862,8 @@ class TestTimeSeriesControl:
             [-tan(acos(0.95)) * p_nom2 * 0.97,
              -tan(acos(0.9)) * p_nom3 * 0.98]).all()
         # check values when reactive power is inserted as timeseries
-        tsc.add_storage_units_timeseries([storage_name2, storage_name3],
+        timeseries.add_storage_units_timeseries(self,
+                                                [storage_name2, storage_name3],
                                       timeseries_storage_units=
                                       new_storages_active_power,
                                       timeseries_storage_units_reactive_power=
@@ -883,7 +888,7 @@ class TestTimeSeriesControl:
     def test_check_timeseries_for_index_and_cols(self):
         """Test check_timeseries_for_index_and_cols method"""
         timeindex = pd.date_range('1/1/2017', periods=13, freq='H')
-        tsc = TimeSeriesControl(
+        timeseries.get_component_timeseries(
             edisgo_obj=self, mode='manual', timeindex=timeindex)
         added_comps = ['Comp_1', 'Comp_2']
         timeseries_with_wrong_timeindex = pd.DataFrame(
@@ -893,7 +898,7 @@ class TestTimeSeriesControl:
         msg = "Inserted timeseries for the following components have the a " \
               "wrong time index:"
         with pytest.raises(ValueError, match=msg):
-            tsc.check_timeseries_for_index_and_cols(
+            timeseries.check_timeseries_for_index_and_cols(self,
                 timeseries_with_wrong_timeindex, added_comps)
         timeseries_with_wrong_comp_names = pd.DataFrame(
             index=timeindex, columns=['Comp_1'],
@@ -903,7 +908,7 @@ class TestTimeSeriesControl:
               "for the following components were tried to be " \
               "added:"
         with pytest.raises(ValueError, match=msg):
-            tsc.check_timeseries_for_index_and_cols(
+            timeseries.check_timeseries_for_index_and_cols(self,
                 timeseries_with_wrong_comp_names, added_comps)
 
     def create_random_timeseries_for_topology(self, timeindex):
