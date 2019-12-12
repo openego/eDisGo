@@ -347,6 +347,15 @@ def _build_transformers(psa_net,ppc):
 
     ppc["branch"] = np.append(ppc["branch"],transformers, axis=0)
 
+    # add trafo costs to branch cost with same shape
+    ncost = ppc["branchcost"].shape[1]-1
+    trafo_costs =  np.zeros(shape=(n_transformers,ncost+1), dtype=float)
+
+    if hasattr(psa_net.transformers,"trafo_costs"):
+        trafo_costs[:, 0] = ncost
+        trafo_costs[:, 1] = psa_net.transformers["trafo_costs"].values
+
+    ppc["branchcost"] = np.append(ppc["branchcost"], trafo_costs, axis=0)
     return
 
 

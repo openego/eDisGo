@@ -165,7 +165,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
                     :, ['bus0', 'bus1', 'x', 'r', 's_nom']]
         }
         mv_components['Generator']['fluctuating'] = \
-            grid_object.generators_df.type.isin(['PV', 'wind'])
+            grid_object.generators_df.type.isin(['solar', 'wind'])
 
         if mode is 'mv':
             mv_components['Transformer'] = pd.DataFrame()
