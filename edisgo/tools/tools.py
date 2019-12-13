@@ -230,7 +230,7 @@ def check_bus_for_removal(topology, bus_name):
 
     Parameters
     ----------
-    topology: :class:`~.self.edisgo.network.topology.Topology`
+    topology: :class:`~.network.topology.Topology`
         Topology object containing bus of name bus_name
     bus_name: str
         Name of bus which has to be checked

@@ -585,14 +585,13 @@ class Results:
 
         return s_res
 
-    def v_res(self, nodes=None, level=None):
+    def v_res(self, nodes_df=None, level=None):
         """
         Get voltage results (in p.u.) from power flow analysis.
 
         Parameters
         ----------
-        nodes : :class:`~.network.components.Load`, \
-            :class:`~.network.components.Generator`, etc. or :obj:`list`
+        nodes_df : :pandas:`pandas.DataFrame<dataframe>`
             Grid topology component or list of network topology components.
             If not provided defaults to column names available in network level
             `level`.
@@ -627,10 +626,10 @@ class Results:
         if level is None:
             level = ['mv', 'lv']
 
-        if nodes is None:
+        if nodes_df is None:
             return self.pfa_v_mag_pu.loc[:, (level, slice(None))]
         else:
-            labels = nodes.index
+            labels = nodes_df.index
             not_included = [_ for _ in labels
                             if _ not in list(self.pfa_v_mag_pu[level].columns)]
             labels_included = [_ for _ in labels if _ not in not_included]

@@ -15,35 +15,33 @@ import collections
 
 def to_pypsa(grid_object, timesteps, **kwargs):
     """
-    #ToDo Adapt docstring
-
-    Translate graph based network representation to PyPSA Network
+    Export edisgo object to PyPSA Network
 
     For details from a user perspective see API documentation of
-    :meth:`~.network.network.EDisGo.analyze` of the API class
-    :class:`~.network.network.EDisGo`.
+    :meth:`~edisgo.EDisGo.analyze` of the API class
+    :class:`~.edisgo.EDisGo`.
 
     Translating eDisGo's network topology to PyPSA representation is structured
     into translating the topology and adding time series for components of the
-    network. In both cases translation of MV network only (`mode='mv'`), LV network only
-    (`mode='lv'`), MV and LV (`mode=None`) share some code. The
-    code is organized as follows:
+    network. In both cases translation of MV network only (`mode='mv'`,
+    `mode='mvlv'`), LV network only(`mode='lv'`), MV and LV (`mode=None`)
+    share some code. The code is organized as follows:
 
-    * Medium-voltage only (`mode='mv'`): All medium-voltage network components are
-      exported by :func:`mv_to_pypsa` including the LV station. LV network load
-      and generation is considered using :func:`add_aggregated_lv_components`.
-      Time series are collected by `_pypsa_load_timeseries` (as example
-      for loads, generators and buses) specifying `mode='mv'`). Timeseries
-      for aggregated load/generation at substations are determined individually.
+    * Medium-voltage only (`mode='mv'`): All medium-voltage network components
+      are exported including the medium voltage side of LV station.
+      Transformers are not exported in this mode. LV network load
+      and generation is considered using :func:`append_lv_components`.
+      Time series are collected and imported to PyPSA network.
+    * Medium-voltage including transformers (`mode='mvlv'`). Works similar as
+      the first mode, only attaching LV components to the LV side of the
+      LVStation and therefore also adding the transformers to the PyPSA network.
     * Low-voltage only (`mode='lv'`): LV network topology including the MV-LV
       transformer is exported. The slack is defind at primary side of the MV-LV
       transformer.
     * Both level MV+LV (`mode=None`): The entire network topology is translated to
       PyPSA in order to perform a complete power flow analysis in both levels
-      together. First, both network levels are translated seperately using
-      :func:`mv_to_pypsa` and :func:`lv_to_pypsa`. Those are merge by
-      :func:`combine_mv_and_lv`. Time series are obtained at once for both network
-      levels.
+      together. First, both network levels are translated seperately and then
+      merged. Time series are obtained at once for both network levels.
 
     This PyPSA interface is aware of translation errors and performs so checks
     on integrity of data converted to PyPSA network representation
@@ -59,7 +57,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
 
     Parameters
     ----------
-    topology : :class:`~.network.topology.Topology`
+    grid_object: :class:`~.network.topology.Topology`
         eDisGo topology container
     mode : str
         Determines network levels that are translated to
@@ -72,8 +70,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
           station's primary side.
         * 'mvlv' to export MV network level only. This includes cumulative load
           and generation from underlying LV network aggregated at respective LV
-          station's secondary side. #ToDo change name of this mode or use
-          kwarg to define where to aggregate lv loads and generation
+          station's secondary side.
+          #ToDo change name of this mode or use kwarg to define where to aggregate lv loads and generation
         * 'lv' to export specified LV network only.
     timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
         :pandas:`pandas.Timestamp<timestamp>`
@@ -200,7 +198,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             for comp, df in lv_components_to_aggregate.items():
                 comps = getattr(lv_grid, df).copy()
                 comps.bus = station_bus.index.values[0]
-                aggregated_lv_components[comp].update(append_lv_components(
+                aggregated_lv_components[comp].update(_append_lv_components(
                     comp, comps, lv_components, repr(lv_grid),
                     aggregate_loads=aggregate_loads,
                     aggregate_generators=aggregate_generators,
@@ -252,7 +250,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
     if len(components['Generator'].index) > 0:
         if len(aggregated_lv_components['Generator']) > 0:
             generators_timeseries_active, generators_timeseries_reactive = \
-                get_timeseries_with_aggregated_elements(
+                _get_timeseries_with_aggregated_elements(
                     edisgo_obj, timesteps, 'generators',
                     components['Generator'].index,
                     aggregated_lv_components['Generator']
@@ -283,7 +281,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
     if len(components['Load'].index) > 0:
         if len(aggregated_lv_components['Load']) > 0:
             loads_timeseries_active, loads_timeseries_reactive = \
-                get_timeseries_with_aggregated_elements(
+                _get_timeseries_with_aggregated_elements(
                     edisgo_obj, timesteps, 'loads',
                     components['Load'].index,
                     aggregated_lv_components['Load']
@@ -303,7 +301,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
     if len(components['StorageUnit'].index) > 0:
         if len(aggregated_lv_components['StorageUnit']) > 0:
             storages_timeseries_active, storages_timeseries_reactive = \
-                get_timeseries_with_aggregated_elements(
+                _get_timeseries_with_aggregated_elements(
                     edisgo_obj, timesteps, 'storage_units',
                     components['StorageUnit'].index,
                     aggregated_lv_components['StorageUnit']
@@ -326,9 +324,55 @@ def to_pypsa(grid_object, timesteps, **kwargs):
     return pypsa_network
 
 
-def append_lv_components(comp, comps, lv_components, lv_grid_name,
-                         aggregate_loads=None, aggregate_generators=None,
-                         aggregate_storages=None):
+def _append_lv_components(comp, comps, lv_components, lv_grid_name,
+                          aggregate_loads=None, aggregate_generators=None,
+                          aggregate_storages=None):
+    """
+    Method to append lv components to component dictionary. Used when only
+    exporting mv grid topology. All underlaying LV components of an LVGrid are
+    then connected to one side of the LVStation. If required, the LV components
+    can be aggregated in different modes. As an example, loads can be
+    aggregated sector-wise or all loads can be aggregated into one
+    representative load. The sum of p_nom or peak_load of all cumulated
+    components is calculated.
+
+    Parameters
+    ----------
+    comp: str
+        indicator for component type, can be 'Load', 'Generator' or
+        'StorageUnit'
+    comps: `pandas.DataFrame<dataframe>`
+        component dataframe of elements to be aggregated
+    lv_components: dict
+        dictionary of LV grid components, keys are the 'Load', 'Generator' and
+        'StorageUnit'
+    lv_grid_name: str
+        representative of LV grid of which components are aggregated
+    aggregate_loads: str
+        mode for load aggregation, can be 'sectoral' aggregating the loads
+        sector-wise or 'all' aggregating all loads into one. Defaults to None,
+        not aggregating loads but appending them to the station one by one.
+    aggregate_generators: str
+        mode for generator aggregation, can be 'type' resulting in
+        aggregated generator for each generator type, 'curtailable' aggregating
+        'solar' and 'wind' generators into one and all other generators into
+        another generator. Defaults to None, when no aggregation is undertaken
+        and generators are addded one by one.
+    aggregate_storages: str
+        mode for storage unit aggregation. Can be 'all' where all storage units
+        in the grid are replaced by one storage. Defaults to None, where no
+        aggregation is conducted and storage units are added one by one.
+
+    Returns
+    -------
+    dict
+        dict of aggregated elements for timeseries creation. Keys are names
+        of aggregated elements and entries is a list of the names of all
+        components aggregated in that respective key component.
+        An example could look the following way:
+        {'LVGrid_1_loads':
+            ['Load_agricultural_LVGrid_1_1', 'Load_retail_LVGrid_1_2']}
+    """
     aggregated_elements = {}
     if len(comps) > 0:
         bus = comps.bus.unique()[0]
@@ -418,8 +462,34 @@ def append_lv_components(comp, comps, lv_components, lv_grid_name,
     return aggregated_elements
 
 
-def get_timeseries_with_aggregated_elements(edisgo_obj, timesteps, element_type,
-                                            elements, aggr_dict):
+def _get_timeseries_with_aggregated_elements(edisgo_obj, timesteps, element_type,
+                                             elements, aggr_dict):
+    """
+    Creates timeseries for aggregated LV components by summing up the single
+    timeseries and adding the respective entry to edisgo_obj.timeseries.
+
+    Parameters
+    ----------
+    edisgo_obj: :class:`~.self.edisgo.EDisGo`
+        the eDisGo network container
+    timesteps: timesteps of format :pandas:`pandas.Timestamp<timestamp>`
+        index timesteps for component's load or generation timeseries
+    element_type: str
+        type of element which was aggregated. Can be 'loads', 'generators' or
+        'storage_units'
+    elements: `pandas.DataFrame<dataframe>`
+        component dataframe of all elements for which timeseries are added
+    aggr_dict: dict
+        dictionary containing aggregated elements as values and the
+        representing new component as key. See :meth:`_append_lv_components`
+        for structure of dictionary.
+
+    Returns
+    -------
+    tuple of `pandas.DataFrame<dataframe>`
+        active and reactive power timeseries for chosen elements. Dataframes
+        with timesteps as index and name of elements as columns.
+    """
     non_aggregated_elements = elements[~elements.isin(aggr_dict.keys())]
     # get timeseries for non aggregated generators
     elements_timeseries_active = \
@@ -715,9 +785,14 @@ def _check_topology(components):
 
 def _check_integrity_of_pypsa(pypsa_network):
     """
-    #ToDo docstring
-    :param pypsa_network:
-    :return:
+    Checks whether the provided pypsa network is calculable. Isolated nodes,
+    duplicate labels and completeness of buses and branch elements are checked.
+
+    Parameters
+    ----------
+    pypsa_network: :pypsa:`pypsa.Network<network>`
+        The `PyPSA network
+        <https://www.pypsa.org/doc/components.html#network>`_ container.
     """
 
     # check for sub-networks
@@ -843,14 +918,14 @@ def _check_integrity_of_pypsa(pypsa_network):
 def process_pfa_results(edisgo, pypsa, timesteps):
     """
     Assing values from PyPSA to
-    :meth:`results <edisgo.network.topology.Topology.results>`
+    :meth:`results <~.edisgo.EDisGo.results>`
 
     Parameters
     ----------
-    edisgo : Topology
-        The eDisGo topology topology model overall container
-    pypsa : :pypsa:`pypsa.Topology<topology>`
-        The PyPSA `Topology container
+    edisgo : :class:`~.edisgo.EDisGo`
+        The eDisGo network model overall container
+    pypsa : :pypsa:`pypsa.Network<network>`
+        The PyPSA `Network container
         <https://www.pypsa.org/doc/components.html#network>`_
     timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
         Time steps for which latest power flow analysis was conducted for and
@@ -868,7 +943,7 @@ def process_pfa_results(edisgo, pypsa, timesteps):
 
     See Also
     --------
-    :class:`~.network.network.Results`
+    :class:`~.network.results.Results`
         Understand how results of power flow analysis are structured in eDisGo.
 
     """
@@ -927,8 +1002,6 @@ def process_pfa_results(edisgo, pypsa, timesteps):
         pypsa.lines_t['p0'], pypsa.lines_t['q0']).truediv(
         pypsa.lines['v_nom'] * bus0_v_mag_pu.T,
         axis='columns') / sqrt(3)
-
-    #Todo: overthink mapping, should results not be assigned to original nodes?
 
     # process results at nodes
     buses_mv = edisgo.topology.mv_grid.buses_df

@@ -173,10 +173,13 @@ class EDisGo:
 
     Attributes
     ----------
-    network : :class:`~.network.topology.Topology`
-        The topology is a container object holding all data concerning the topology,
-        configurations, equipment data, etc.
-    results : :class:`~.network.network.Results`
+    config: :class:`~.config.Config`
+        Container for all configuration parameters.
+    topology : :class:`~.network.topology.Topology`
+        The topology is a container object holding the topology of the grids.
+    timeseries: :class:`~.network.timeseries.TimeSeries`
+        Container for component timeseries.
+    results : :class:`~.network.results.Results`
         This is a container holding alls calculation results from power flow
         analyses, curtailment, storage integration, etc.
 
@@ -299,9 +302,20 @@ class EDisGo:
 
         Parameters
         ----------
-        pypsa : :pypsa:`pypsa.Network<network>`
-            The `PyPSA network
-            <https://www.pypsa.org/doc/components.html#network>`_ container.
+        **kwargs: dict
+            dict of optional parameters. These can be:
+            mode: can be 'mv', 'mvlv' to export only MV grid, 'lv' to export
+                only LV grid, None to export the whole topology. Defaults
+                to None.
+            timesteps: timesteps of format :pandas:`pandas.Timestamp<timestamp>`
+                for which time dependant values should be exported to pypsa.
+                Defaults to None, then all timesteps defined in
+                :meth:`~.edisgo.timeseries.timeindex` are chosen.
+            aggregation specifications: only relevant when only exporting
+                MV grid, specifies the aggregation method for undelaying LV
+                grid components. See :meth:`~.io.pypsa_io.append_lv_components`
+                for the available specifications.
+
 
         Returns
         -------
@@ -310,7 +324,7 @@ class EDisGo:
             to specify if pypsa representation of the edisgo network
             was created for the whole network topology (MV + LV), only MV or only
             LV. See parameter `mode` in
-            :meth:`~.network.network.EDisGo.analyze` for more information.
+            :meth:`~.edisgo.EDisGo.analyze` for more information.
 
         """
         timesteps = kwargs.get('timesteps', None)
@@ -375,12 +389,8 @@ class EDisGo:
         """Analyzes the network by power flow analysis
 
         Analyze the network for violations of hosting capacity. Means, perform a
-        power flow analysis and obtain voltages at nodes (load, generator,
-        stations/transformers and branch tees) and active/reactive power at
-        lines.
-
-        The power flow analysis can currently only be performed for both network
-        levels MV and LV. See ToDos section for more information.
+        power flow analysis and obtain voltages at buses and active/reactive
+        power on lines.
 
         A static `non-linear power flow analysis is performed using PyPSA
         <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
@@ -393,10 +403,9 @@ class EDisGo:
         ----------
         mode : str
             Allows to toggle between power flow analysis (PFA) on the whole
-            network topology (MV + LV), only MV or only LV. Defaults to None which
-            equals power flow analysis for MV + LV which is the only
-            implemented option at the moment. See ToDos section for
-            more information.
+            network topology (default: None), only MV ('mv' or 'mvlv') or only
+            LV ('lv'). Defaults to None which equals power flow analysis for
+            MV + LV.
         timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
             :pandas:`pandas.Timestamp<timestamp>`
             Timesteps specifies for which time steps to conduct the power flow
@@ -412,17 +421,6 @@ class EDisGo:
 
         ToDos
         ------
-        The option to export only the edisgo MV network (mode = 'mv') to conduct
-        a power flow analysis is implemented in
-        :func:`~.tools.pypsa_io.to_pypsa` but NotImplementedError is raised
-        since the rest of edisgo does not handle this option yet. The analyze
-        function will throw an error since
-        :func:`~.tools.pypsa_io.process_pfa_results`
-        does not handle aggregated loads and generators in the LV grids. Also,
-        network reinforcement, pypsa update of time series, and probably other
-        functionalities do not work when only the MV network is analysed.
-
-        Further ToDos are:
         * explain how power plants are modeled, if possible use a link
         * explain where to find and adjust power flow analysis defining
         parameters
