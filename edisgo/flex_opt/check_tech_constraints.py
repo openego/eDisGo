@@ -368,15 +368,13 @@ def mv_voltage_deviation(edisgo_obj, voltage_levels='mv_lv'):
     Returns
     -------
     :obj:`dict`
-        Dictionary with :class:`~.network.grids.MVGrid` as key and a
-        :pandas:`pandas.DataFrame<dataframe>` with its critical nodes, sorted
-        descending by voltage deviation, as value.
-        Index of the dataframe are all nodes (of type
-        :class:`~.network.components.Generator`, :class:`~.network.components.Load`,
-        etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
-        maximum voltage deviation as float and 'time_index' containing the
-        corresponding time step the over-voltage occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        Dictionary with representative of :class:`~.network.grids.MVGrid` as
+        key and a :pandas:`pandas.DataFrame<dataframe>` with its critical
+        nodes, sorted descending by voltage deviation, as value.
+        Index of the dataframe are all buses with over-voltage issues.
+        Columns are 'v_mag_pu' containing the maximum voltage deviation as
+        float and 'time_index' containing the corresponding time step the
+        over-voltage occured in as :pandas:`pandas.Timestamp<timestamp>`.
 
     Notes
     -----
@@ -389,9 +387,10 @@ def mv_voltage_deviation(edisgo_obj, voltage_levels='mv_lv'):
     crit_nodes = {}
 
     v_dev_allowed_per_case = {}
-    #Todo: move to config
-    v_dev_allowed_per_case['feedin_case_lower'] = 0.9
-    v_dev_allowed_per_case['load_case_upper'] = 1.1
+    v_dev_allowed_per_case['feedin_case_lower'] = edisgo_obj.config[
+        'grid_expansion_allowed_voltage_deviations']['feedin_case_lower']
+    v_dev_allowed_per_case['load_case_upper'] = edisgo_obj.config[
+        'grid_expansion_allowed_voltage_deviations']['load_case_upper']
     offset = edisgo_obj.config[
         'grid_expansion_allowed_voltage_deviations']['hv_mv_trafo_offset']
     control_deviation = edisgo_obj.config[
@@ -469,15 +468,13 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels='mv_lv'):
     Returns
     -------
     :obj:`dict`
-        Dictionary with :class:`~.network.grids.LVGrid` as key and a
-        :pandas:`pandas.DataFrame<dataframe>` with its critical nodes, sorted
-        descending by voltage deviation, as value.
-        Index of the dataframe are all nodes (of type
-        :class:`~.network.components.Generator`, :class:`~.network.components.Load`,
-        etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
-        maximum voltage deviation as float and 'time_index' containing the
-        corresponding time step the over-voltage occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        Dictionary with representative of :class:`~.network.grids.LVGrid` as
+        key and a :pandas:`pandas.DataFrame<dataframe>` with its critical
+        nodes, sorted descending by voltage deviation, as value.
+        Index of the dataframe are all nodes with over-voltage issues.
+        Columns are 'v_mag_pu' containing the maximum voltage deviation as
+        float and 'time_index' containing the corresponding time step the
+        over-voltage occured in as :pandas:`pandas.Timestamp<timestamp>`.
 
     Notes
     -----
@@ -505,8 +502,10 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels='mv_lv'):
                 'grid_expansion_allowed_voltage_deviations'][
                 'mv_lv_load_case_max_v_deviation']
 
-        v_dev_allowed_per_case['feedin_case_lower'] = 0.9
-        v_dev_allowed_per_case['load_case_upper'] = 1.1
+        v_dev_allowed_per_case['feedin_case_lower'] = edisgo_obj.config[
+            'grid_expansion_allowed_voltage_deviations']['feedin_case_lower']
+        v_dev_allowed_per_case['load_case_upper'] = edisgo_obj.config[
+            'grid_expansion_allowed_voltage_deviations']['load_case_upper']
 
         v_dev_allowed_upper = \
                 edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
@@ -619,8 +618,7 @@ def _voltage_deviation(edisgo_obj, nodes, v_dev_allowed_upper,
     ----------
     edisgo_obj : :class:`~.edisgo.EDisGo`
     nodes : :obj:`list`
-        List of nodes (of type :class:`~.network.components.Generator`,
-        :class:`~.network.components.Load`, etc.) to check voltage deviation for.
+        List of buses to check voltage deviation for.
     v_dev_allowed_upper : :pandas:`pandas.Series<series>`
         Series with time steps (of type :pandas:`pandas.Timestamp<timestamp>`)
         power flow analysis was conducted for and the allowed upper limit of
