@@ -161,6 +161,9 @@ def ppc2pm(ppc,psa_net): #pragma: no cover
     # for idx, row in enumerate(is_fluctuating, start=1):
     #     pm["gen"][str(idx)]["fluctuating"] = row
 
+    for idx,row in enumerate(psa_net.generators["control"],start=1):
+        pm["gen"][str(idx)]["gen_slack"] = (row=="Slack")*1
+
     for idx, row in enumerate(psa_net.generators["fluctuating"], start=1):
         # convert boolean to 0 and 1, check if row is nan, e.g. slack bus
         pm["gen"][str(idx)]["fluctuating"] = (not(math.isnan(row)) and row)*1
@@ -346,16 +349,18 @@ def _build_transformers(psa_net,ppc):
     transformers[:, ANGMAX] = 360
 
     ppc["branch"] = np.append(ppc["branch"],transformers, axis=0)
-
     # add trafo costs to branch cost with same shape
-    ncost = ppc["branchcost"].shape[1]-1
-    trafo_costs =  np.zeros(shape=(n_transformers,ncost+1), dtype=float)
+    if len(ppc["branchcost"])>0:
+        print("append transformer costs")
+        ncost = ppc["branchcost"].shape[1]-1
 
-    if hasattr(psa_net.transformers,"trafo_costs"):
-        trafo_costs[:, 0] = ncost
-        trafo_costs[:, 1] = psa_net.transformers["trafo_costs"].values
+        trafo_costs =  np.zeros(shape=(n_transformers,ncost+1), dtype=float)
 
-    ppc["branchcost"] = np.append(ppc["branchcost"], trafo_costs, axis=0)
+        if hasattr(psa_net.transformers,"trafo_costs"):
+            trafo_costs[:, 0] = ncost
+            trafo_costs[:, 1] = psa_net.transformers["trafo_costs"].values
+        print(trafo_costs)
+        ppc["branchcost"] = np.append(ppc["branchcost"], trafo_costs, axis=0)
     return
 
 

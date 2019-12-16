@@ -3,7 +3,7 @@ import pandas as pd
 from edisgo.flex_opt.costs import line_expansion_costs
 
 
-def preprocess_pypsa_opf_structure(edisgo_grid, psa_network):
+def preprocess_pypsa_opf_structure(edisgo_grid, psa_network,hvmv_trafo=False):
     """
     Prepare PyPsa Network for OPF Problem
     - add line costs
@@ -17,7 +17,7 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network):
     mv_grid = edisgo_grid.topology.mv_grid
 
     # add line expansion costs for all lines
-    if not hasattr(psa_network.lines, "costs_earthworks") or psa_network.lines.costs_earthworks.dropna().empty:
+    if not hasattr(psa_network.lines, "costs_cable") or psa_network.lines.costs_earthworks.dropna().empty:
         line_names = psa_network.lines.index
         linecosts_df = line_expansion_costs(edisgo_grid, line_names)
         psa_network.lines = psa_network.lines.join(linecosts_df)
@@ -32,6 +32,9 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network):
         print("value of fluctuating for slack generator is {}, it is changed to zero".format(is_fluct))
         psa_network.generators.fluctuating.loc[gen_slack_loc] = 0
 
+    if not hvmv_trafo:
+        print("no hvmv trafo is added")
+        return
     # add HVMV Trafo to pypsa network and move slack from MV to HV side
 
     # get dataframe containing hvmv trafos
@@ -50,7 +53,6 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network):
     trafo_type = hvmv_trafos.type.iloc[0]
     trafo = psa_network.transformer_types.T[trafo_type]
 
-
     slack_bus_hv = pd.DataFrame(slack_bus_mv.copy()).transpose()
     slack_bus_hv.index = [slack_bus_hv_name]
     slack_bus_hv.v_nom = trafo["v_nom_0"]
@@ -64,7 +66,7 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network):
 
     # Add Transformer to network
     psa_network.add("Transformer", "Transformer_hvmv_{}".format(psa_network.name), type=trafo_type,
-                    bus0=slack_bus_hv_name, bus1=slack_bus_mv.index)
+                    bus0=hvmv_trafos.iloc[0].bus0, bus1=hvmv_trafos.iloc[0].bus1)
 
     t = psa_network.transformers.iloc[0]
 
@@ -76,10 +78,12 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network):
     t["s_nom"] = sum(mv_grid.transformers_df.s_nom)
     for attr in ["r","x"]:
         t[attr] /= len(mv_grid.transformers_df)
-    t["trafo_costs"] = edisgo_grid.config["costs_transformers"][mode]
 
-    psa_network.transformers.iloc[0] = t
+    psa_network.transformers.iloc[0]= t.transpose() #pd.DataFrame(t).transpose()
 
+    psa_network.transformers["trafo_costs"] = edisgo_grid.config["costs_transformers"][mode]
+    # print(psa_network.transformers)
+    print(hasattr(psa_network.transformers,"trafo_costs"))
     # add new slack bus to dict buses_t
     for key, val in psa_network.buses_t.items():
         if len(val.columns) != 0:
