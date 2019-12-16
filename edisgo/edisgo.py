@@ -843,7 +843,7 @@ class EDisGo:
         elif comp_type == 'Line':
              self.topology.remove_line(comp_name)
         elif comp_type == 'Load':
-            self.topology.remove_line(comp_name)
+            self.topology.remove_load(comp_name)
             if drop_ts:
                 timeseries._drop_existing_component_timeseries(
                     edisgo_obj=self, comp_type='loads', comp_names=comp_name)

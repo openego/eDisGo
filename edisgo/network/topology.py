@@ -8,7 +8,8 @@ import warnings
 import edisgo
 from edisgo.network.components import Generator, Load
 from edisgo.tools.tools import calculate_line_resistance, \
-    calculate_line_reactance, calculate_apparent_power, check_bus_for_removal
+    calculate_line_reactance, calculate_apparent_power, check_bus_for_removal, \
+    check_line_for_removal
 
 logger = logging.getLogger('edisgo')
 
@@ -643,7 +644,10 @@ class Topology:
         self._generators_df.drop(name, inplace=True)
         # if no other elements are connected to same bus, remove line and bus
         if check_bus_for_removal(self, bus_name=bus):
-            self.remove_line(self.get_connected_lines_from_bus(bus).index[0])
+            line_name = self.get_connected_lines_from_bus(bus).index[0]
+            self.remove_line(line_name)
+            logger.debug("Line {} removed together with generator {}.".format(
+                line_name, name))
 
     def remove_load(self, name):
         """
@@ -662,7 +666,10 @@ class Topology:
         self._loads_df.drop(name, inplace=True)
         # if no other elements are connected, remove line and bus as well
         if check_bus_for_removal(self, bus_name=bus):
-            self.remove_line(self.get_connected_lines_from_bus(bus).index[0])
+            line_name = self.get_connected_lines_from_bus(bus).index[0]
+            self.remove_line(line_name)
+            logger.debug("Line {} removed together with load {}.".format(
+                line_name, name))
 
     def remove_storage(self, name):
         """
@@ -674,14 +681,16 @@ class Topology:
             Name of storage as specified in index of `storage_units_df`.
 
         """
-        # Todo: add test
         # get bus to check if other elements are connected to bus
         bus = self.storage_units_df.at[name, 'bus']
         # remove load
         self._storage_units_df.drop(name, inplace=True)
         # if no other elements are connected, remove line and bus as well
         if check_bus_for_removal(self, bus_name=bus):
-            self.remove_line(self.get_connected_lines_from_bus(bus).index[0])
+            line_name = self.get_connected_lines_from_bus(bus).index[0]
+            self.remove_line(line_name)
+            logger.debug("Line {} removed together with storage unit {}.".
+                format(line_name, name))
 
     def remove_line(self, name):
         """
@@ -693,6 +702,9 @@ class Topology:
             Name of line as specified in index of `lines_df`.
 
         """
+        if not check_line_for_removal(self, line_name=name):
+            raise AssertionError("Removal of line {} would create isolated "
+                                 "node.".format(name))
 
         # backup buses of line and check if buses can be removed as well
         bus0 = self.lines_df.at[name, 'bus0']
@@ -706,8 +718,12 @@ class Topology:
         # drop buses if no other elements are connected
         if remove_bus0:
             self.remove_bus(bus0)
+            logger.debug("Bus {} removed together with line {}".format(bus0,
+                                                                       name))
         if remove_bus1:
             self.remove_bus(bus1)
+            logger.debug("Bus {} removed together with line {}".format(bus1,
+                                                                       name))
 
     def add_generator(self, generator_id, bus, p_nom, generator_type,
                       **kwargs):

@@ -260,6 +260,49 @@ def check_bus_for_removal(topology, bus_name):
         return True
 
 
+def check_line_for_removal(topology, line_name):
+    """
+    Checks whether line can be removed without leaving isolated nodes. Returns
+    True if line can be removed safely.
+
+
+    Parameters
+    ----------
+    topology: :class:`~.network.topology.Topology`
+        Topology object containing bus of name bus_name
+    line_name: str
+        Name of line which has to be checked
+
+    Returns
+    -------
+    Removable: bool
+        Indicator if line of name line_name can be removed from topology
+        without leaving isolated node
+
+    """
+    # Todo: move to topology?
+    # check if line is part of topology
+    if line_name not in topology.lines_df.index:
+        raise ValueError("Line of name {} not in Topology. Cannot be checked "
+                         "to be removed.".format(line_name))
+
+    bus0 = topology.lines_df.loc[line_name, 'bus0']
+    bus1 = topology.lines_df.loc[line_name, 'bus1']
+    # if either of the buses can be removed as well, line can be removed safely
+    if check_bus_for_removal(topology, bus0) or \
+            check_bus_for_removal(topology, bus1):
+        return True
+    # otherwise both buses have to be connected to at least two lines
+    if len(topology.get_connected_lines_from_bus(bus0)) > 1 and \
+        len(topology.get_connected_lines_from_bus(bus1)) > 1:
+        return True
+    else:
+        return False
+    # Todo: add check for creation of subnetworks, so far it is only checked,
+    #  if isolated node would be created. It could still happen that two sub-
+    #  networks are created by removing the line.
+
+
 def drop_duplicated_indices(dataframe, keep='first'):
     """
     Drop rows of duplicate indices in dataframe.
