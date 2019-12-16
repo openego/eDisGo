@@ -441,7 +441,6 @@ def get_timeseries_with_aggregated_elements(edisgo_obj, timesteps, element_type,
 
 def _buses_voltage_set_point(edisgo_obj, buses, slack_bus, timesteps):
     """
-    ToDo: docstring
     Time series in PyPSA compatible format for bus instances
 
     Set all buses except for the slack bus to voltage of 1 p.u. (it is assumed
@@ -453,8 +452,8 @@ def _buses_voltage_set_point(edisgo_obj, buses, slack_bus, timesteps):
 
     Parameters
     ----------
-    topology : Topology
-        The eDisGo topology topology model overall container
+    edisgo_obj: :class:`~.self.edisgo.EDisGo`
+        The eDisGo model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
         :pandas:`pandas.Timestamp<timestamp>` specifying which time steps

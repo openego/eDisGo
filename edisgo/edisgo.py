@@ -4,7 +4,7 @@ import logging
 import edisgo
 from edisgo.network.topology import Topology
 from edisgo.network.results import Results
-from edisgo.network.timeseries import TimeSeries, TimeSeriesControl
+from edisgo.network import timeseries
 from edisgo.tools import pypsa_io, plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io.ding0_import import import_ding0_grid
@@ -212,7 +212,7 @@ class EDisGo:
 
         # set up results and time series container
         self.results = Results(self)
-        self._timeseries = TimeSeries()
+        self._timeseries = timeseries.TimeSeries()
 
         # import new generators
         if kwargs.get('generator_scenario', None) is not None:
@@ -221,11 +221,10 @@ class EDisGo:
         # set up time series for feed-in and load
         # worst-case time series
         if kwargs.get('worst_case_analysis', None):
-            TimeSeriesControl(
-                edisgo_obj=self,
-                mode=kwargs.get('worst_case_analysis', None))
+            timeseries.get_component_timeseries(
+                edisgo_obj=self, mode=kwargs.get('worst_case_analysis', None))
         else:
-            TimeSeriesControl(
+            timeseries.get_component_timeseries(
                 edisgo_obj=self,
                 timeseries_generation_fluctuating=kwargs.get(
                     'timeseries_generation_fluctuating', None),
@@ -233,13 +232,10 @@ class EDisGo:
                     'timeseries_generation_dispatchable', None),
                 timeseries_generation_reactive_power=kwargs.get(
                     'timeseries_generation_reactive_power', None),
-                timeseries_load=kwargs.get(
-                    'timeseries_load', None),
-                timeseries_load_reactive_power = kwargs.get(
+                timeseries_load=kwargs.get('timeseries_load', None),
+                timeseries_load_reactive_power=kwargs.get(
                     'timeseries_load_reactive_power', None),
                 timeindex=kwargs.get('timeindex', None))
-
-
 
     @property
     def config(self):
@@ -743,7 +739,23 @@ class EDisGo:
 
     def save(self, directory,
              save_results=True, save_topology=True, save_timeseries=True):
-        #Todo: Docstring
+        """
+        Saves edisgo_obj parameters to csv. It can be chosen if results,
+        topology and timeseries should be save respectively. For each one a
+        seperate folder is created.
+
+        Parameters
+        ----------
+        directory: str
+            directory to save edisgo_obj to. Subfolders for respective
+            parameters will be created.
+        save_results: bool
+            indicates whether to save self.results
+        save_topology: bool
+            indicates whether to save self.topology
+        save_timeseries: bool
+            indicates whether to save self.timeseries
+        """
         os.makedirs(directory, exist_ok=True)
         if save_results:
             os.makedirs(os.path.join(directory, 'results'), exist_ok=True)
@@ -753,7 +765,7 @@ class EDisGo:
         if save_timeseries:
             self.timeseries.to_csv(directory)
 
-    def add_component(self, comp_type, **kwargs):
+    def add_component(self, comp_type, add_ts=True, **kwargs):
         """
         Adds single component to topology and respective timeseries if add_ts
         is set to True.
@@ -771,35 +783,38 @@ class EDisGo:
         """
         if comp_type == 'Bus':
             self.topology.add_bus(bus_name=kwargs.get('name'),
-                                  v_nom=kwargs.get('v_nom'),
                                   **kwargs)
+            comp_name = kwargs.get('name')
         elif comp_type == 'Line':
-            self.topology.add_line(bus0=kwargs.get('bus0'),
-                                   bus1=kwargs.get('bus1'),
-                                   lengt=kwargs.get('length'),
-                                   **kwargs)
+            comp_name = self.topology.add_line(**kwargs)
         elif comp_type == 'Load':
-            self.topology.add_load(load_id=kwargs.get('name'),
-                                   bus=kwargs.get('bus'),
-                                   peak_load=kwargs.get('peak_load'),
-                                   annual_consumption=kwargs.get(
-                                       'annual_consumption'),
-                                   sector=kwargs.get('sector'))
+            comp_name = self.topology.add_load(
+                load_id=kwargs.get('load_id'), bus=kwargs.get('bus'),
+                peak_load=kwargs.get('peak_load'),
+                annual_consumption=kwargs.get('annual_consumption'),
+                sector=kwargs.get('sector'))
+            if add_ts:
+                timeseries.add_loads_timeseries(edisgo_obj=self,
+                                                load_names=comp_name, **kwargs)
+
         elif comp_type == 'Generator':
-            self.topology.add_generator(generator_id=kwargs.get('name'),
-                                        bus=kwargs.get('bus'),
-                                        p_nom=kwargs.get('p_nom'),
-                                        generator_type=
-                                        kwargs.get('generator_type'),
-                                        **kwargs)
+            comp_name = self.topology.add_generator(**kwargs)
+            if add_ts:
+                timeseries.add_generators_timeseries(edisgo_obj=self,
+                                                     generator_names=comp_name,
+                                                     **kwargs)
         elif comp_type == 'StorageUnit':
-            self.topology.add_storage_unit(storage_id=kwargs.get('name'),
-                                           bus=kwargs.get('bus'),
-                                           p_nom=kwargs.get('p_nom'),
-                                           control=kwargs.get('control', None))
+            comp_name = self.topology.add_storage_unit(
+                storage_id=kwargs.get('storage_id'), bus=kwargs.get('bus'),
+                p_nom=kwargs.get('p_nom'), control=kwargs.get('control', None))
+            if add_ts:
+                timeseries.add_storage_units_timeseries(
+                    edisgo_obj=self, storage_unit_names=comp_name, **kwargs)
         else:
             raise ValueError("Component type is not correct.")
-        # Todo: add timeseries handling
+        return comp_name
 
     def add_components(self, component_dict, **kwargs):
+        #Todo: implement, change topology.add_load etc. to add_loads, where
+        # lists of parameters can be inserted. Delete add_component afterwards
         raise NotImplementedError

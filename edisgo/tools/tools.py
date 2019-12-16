@@ -258,3 +258,18 @@ def check_bus_for_removal(topology, bus_name):
         return False
     else:
         return True
+
+
+def drop_duplicated_indices(dataframe, keep='first'):
+    """
+    Drop rows of duplicate indices.
+
+    Parameters
+    ----------
+    dataframe::pandas:`pandas.DataFrame<dataframe>`
+        handled dataframe
+    keep: str
+        indicator of row to be kept, 'first', 'last' or False,
+        see pandas.DataFrame.drop_duplicates() method
+    """
+    return dataframe[~dataframe.index.duplicated(keep=keep)]

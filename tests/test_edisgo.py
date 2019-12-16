@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import pytest
 import shutil
+from math import tan, acos
 
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints as checks
@@ -337,3 +338,92 @@ class TestEDisGo:
 
         self.edisgo.histogram_relative_line_load()
         plt.close('all')
+
+    def test_component(self):
+        """Test add_component method"""
+        # Test add bus
+        num_buses = len(self.edisgo.topology.buses_df)
+        bus_name = self.edisgo.add_component('Bus', name="Testbus", v_nom=20)
+        assert bus_name == "Testbus"
+        assert len(self.edisgo.topology.buses_df) == num_buses+1
+        assert self.edisgo.topology.buses_df.loc["Testbus", 'v_nom'] == 20
+        # Test add line
+        num_lines = len(self.edisgo.topology.lines_df)
+        line_name = self.edisgo.add_component('Line', bus0="Bus_MVStation_1",
+                                  bus1="Testbus", length=0.001)
+        assert line_name == "Line_Bus_MVStation_1_Testbus"
+        assert len(self.edisgo.topology.lines_df) == num_lines+1
+        assert self.edisgo.topology.lines_df.loc[line_name, 'bus0'] == \
+               "Bus_MVStation_1"
+        assert self.edisgo.topology.lines_df.loc[line_name, 'bus1'] == \
+               "Testbus"
+        assert self.edisgo.topology.lines_df.loc[line_name, 'length'] == 0.001
+        # Test add load
+        num_loads = len(self.edisgo.topology.loads_df)
+        load_name = self.edisgo.add_component('Load', load_id=4, bus="Testbus",
+                                              peak_load=0.2,
+                                              annual_consumption=3.2,
+                                              sector='residential')
+        assert load_name == "Load_residential_MVGrid_1_4"
+        assert len(self.edisgo.topology.loads_df) == num_loads+1
+        assert self.edisgo.topology.loads_df.loc[load_name, 'bus'] == "Testbus"
+        assert self.edisgo.topology.loads_df.loc[load_name, 'peak_load'] == 0.2
+        assert self.edisgo.topology.loads_df.loc[
+                   load_name, 'annual_consumption'] == 3.2
+        assert self.edisgo.topology.loads_df.loc[load_name, 'sector'] == \
+               'residential'
+        index = self.edisgo.timeseries.timeindex
+        assert np.isclose(self.edisgo.timeseries.loads_active_power.loc[
+            index[0], load_name], 0.15*0.2)
+        assert np.isclose(self.edisgo.timeseries.loads_active_power.loc[
+            index[1], load_name], 0.2)
+        assert np.isclose(self.edisgo.timeseries.loads_reactive_power.loc[
+                              index[0], load_name], tan(acos(0.9))*0.15*0.2)
+        assert np.isclose(self.edisgo.timeseries.loads_reactive_power.loc[
+                              index[1], load_name], tan(acos(0.9))*0.2)
+        # Todo: test other modes of timeseries (manual, None)
+        # Test add generator
+        num_gens = len(self.edisgo.topology.generators_df)
+        gen_name = self.edisgo.add_component('Generator', generator_id=5,
+                                             bus="Testbus", p_nom=2.5,
+                                             generator_type='solar')
+        assert gen_name == "Generator_solar_MVGrid_1_5"
+        assert len(self.edisgo.topology.generators_df) == num_gens + 1
+        assert self.edisgo.topology.generators_df.loc[gen_name, 'bus'] == \
+               "Testbus"
+        assert self.edisgo.topology.generators_df.loc[gen_name, 'p_nom'] == 2.5
+        assert self.edisgo.topology.generators_df.loc[
+                   gen_name, 'type'] == 'solar'
+        assert np.isclose(self.edisgo.timeseries.generators_active_power.loc[
+                              index[0], gen_name], 0.85*2.5)
+        assert np.isclose(self.edisgo.timeseries.generators_active_power.loc[
+                              index[1], gen_name], 0)
+        assert np.isclose(self.edisgo.timeseries.generators_reactive_power.loc[
+                              index[0], gen_name],
+                          -tan(acos(0.9)) * 0.85 * 2.5)
+        assert np.isclose(self.edisgo.timeseries.generators_reactive_power.loc[
+                              index[1], gen_name], 0)
+        # Todo: test other modes of timeseries (manual, None)
+        # Test add storage unit
+        num_storages = len(self.edisgo.topology.storage_units_df)
+        storage_name = self.edisgo.add_component('StorageUnit', storage_id=1,
+                                             bus="Testbus", p_nom=3.1)
+        assert storage_name == "StorageUnit_MVGrid_1_1"
+        assert len(self.edisgo.topology.storage_units_df) == num_storages + 1
+        assert self.edisgo.topology.storage_units_df.loc[storage_name, 'bus'] \
+               == "Testbus"
+        assert self.edisgo.topology.storage_units_df.loc[storage_name,
+                                                         'p_nom'] == 3.1
+        assert np.isclose(self.edisgo.timeseries.storage_units_active_power.loc[
+                              index[0], storage_name], 3.1)
+        assert np.isclose(self.edisgo.timeseries.storage_units_active_power.loc[
+                              index[1], storage_name], -3.1)
+        assert np.isclose(self.edisgo.timeseries.storage_units_reactive_power.
+                          loc[index[0], storage_name], -tan(acos(0.9))*3.1)
+        assert np.isclose(self.edisgo.timeseries.storage_units_reactive_power.loc[
+                              index[1], storage_name], tan(acos(0.9))*3.1)
+        # Todo: test other modes of timeseries (manual, None)
+        # Remove test objects
+        self.edisgo.topology.remove_storage(storage_name)
+        self.edisgo.topology.remove_load(load_name)
+        self.edisgo.topology.remove_generator(gen_name)

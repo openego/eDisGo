@@ -541,7 +541,20 @@ class Topology:
         self.lines_df.loc[self.lines_df.bus1 == bus_name])
 
     def get_connected_components_from_bus(self, bus_name):
-        #Todo: Docstring
+        """
+        Returns dict of connected elements to bus of provided bus_name.
+
+        Parameters
+        ----------
+        bus_name: str
+            representative of bus
+
+        Returns
+        -------
+         dict of :pandas:`pandas.DataFrame<dataframe>`
+            dictionary of connected elements with keys 'Generator', 'Line',
+            'Load', 'Transformer', 'Transformer_HVMV', 'StorageUnit', 'Switch'
+        """
         components = {}
         components['Generator'] = self.generators_df.loc[
             self.generators_df.bus == bus_name]
@@ -717,17 +730,25 @@ class Topology:
         """
         #ToDo add test
         # check if bus exists
-        if bus not in self.buses_df.index:
+        try:
+            bus_df = self.buses_df.loc[bus]
+        except KeyError:
             raise ValueError(
                 "Specified bus {} is not valid as it is not defined in "
                 "buses_df.".format(bus))
 
+        if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
+            grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
+        else:
+            grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
+
         # generate generator name and check uniqueness
-        generator_name = 'Generator_{}_{}'.format(generator_type, generator_id)
+        generator_name = 'Generator_{}_{}_{}'.format(generator_type, grid_name,
+                                                     generator_id)
         while generator_name in self.generators_df.index:
             random.seed(a=generator_name)
             generator_name = 'Generator_{}_{}'.format(
-                generator_type, random.randint(10**8, 10**9), generator_id)
+                generator_type, random.randint(10**8, 10**9))
 
         # unpack optional parameters
         weather_cell_id = kwargs.get('weather_cell_id', None)
@@ -988,7 +1009,17 @@ class Topology:
         return line_name
 
     def to_csv(self, directory):
-        #Todo: Docstring
+        """
+        Exports topology to csv files with names buses, generators, lines,
+        loads, switches, transformers, transformers_hvmv, network. Files are
+        designed in a way that they can be directly imported to pypsa. A sub-
+        folder named "topology" is added to the provided directory.
+
+        Parameters
+        ----------
+        directory: str
+            path to save topology to
+        """
         topology_dir = os.path.join(directory, 'topology')
         os.makedirs(directory, exist_ok=True)
         os.makedirs(topology_dir, exist_ok=True)
