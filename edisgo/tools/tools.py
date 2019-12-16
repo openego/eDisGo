@@ -262,7 +262,7 @@ def check_bus_for_removal(topology, bus_name):
 
 def drop_duplicated_indices(dataframe, keep='first'):
     """
-    Drop rows of duplicate indices.
+    Drop rows of duplicate indices in dataframe.
 
     Parameters
     ----------

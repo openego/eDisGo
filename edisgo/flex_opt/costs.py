@@ -32,9 +32,8 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False, mode=None):
     `pandas.DataFrame<dataframe>`
         DataFrame containing type and costs plus in the case of lines the
         line length and number of parallel lines of each reinforced
-        transformer and line. Index of the DataFrame is the respective object
-        that can either be a :class:`~.network.components.Line` or a
-        :class:`~.network.components.Transformer`. Columns are the following:
+        transformer and line. Index of the DataFrame is the name of either line
+        or transformer. Columns are the following:
 
         type: String
             Transformer size or cable name
@@ -182,7 +181,7 @@ def line_expansion_costs(edisgo_obj, lines_names):
     ----------
     edisgo_obj : :class:`~.self.edisgo.EDisGo`
         eDisGo object of which lines of lines_df are part
-    lines_df: list of str
+    lines_names: list of str
         List of names of evaluated lines
 
     Returns

@@ -20,7 +20,7 @@ class Topology:
 
     Parameters
     -----------
-    config_data : :class:`~.tools.config.Config`
+    config : :class:`~.tools.config.Config`
         Config object with configuration data from config files.
 
     Attributes
@@ -720,12 +720,19 @@ class Topology:
         ----------
         generator_id : str
             Unique identifier of generator.
-        bus
-        control
-        p_nom
-        generator_type
-        weather_cell_id
-        subtype
+        bus: str
+            Identifier of connected bus
+        control: str
+            Control type of generator. Defaults to 'PQ'.
+        p_nom: float
+            Nominal power [MW]
+        generator_type: str
+            Type of generator, e.g. 'solar' or 'gas'
+        weather_cell_id: int
+            ID of weather cell, required for fluctuating generators import from
+            oedb.
+        subtype: str
+            Further specification of type, e.g. 'solar_roof_mounted'
 
         """
         #ToDo add test
@@ -777,10 +784,14 @@ class Topology:
         ----------
         load_id : str
             Unique identifier of generator.
-        bus
-        peak_load
-        annual_consumption
-        sector
+        bus: str
+            identifier of connected bus
+        peak_load: float
+            peak load in [MVA]
+        annual_consumption: float
+            annual consumption in Todo: specify unit?
+        sector: str
+            can be 'agricultural', 'industrial', 'residential' or 'retail'
         """
         # Todo: overthink load_id as input parameter, only allow auto created
         #  names?
@@ -822,10 +833,14 @@ class Topology:
         Parameters
         ----------
         storage_id : str
-            Unique identifier of generator.
-        bus
-        p_nom
-        control
+            Unique identifier of storage unit.
+        bus: str
+            Identifier of connected bus.
+        p_nom: float
+            Nominal power in [MW]
+        control: str
+            Control type, defaults to 'PQ'
+
         """
         # Todo: overthink storage_id as input parameter, only allow auto
         #  created names?
@@ -864,11 +879,19 @@ class Topology:
         Parameters
         ----------
         bus_name : str
-        v_nom
-        x
-        y
-        lv_grid_id
-        in_building
+            representative of bus
+        v_nom: float
+            nominal voltage at bus [kV]
+        x: float
+            position (e.g. longitude); the Spatial Reference System Identifier
+            (SRID) is saved in the network dataframe
+        y: float
+            position (e.g. longitude); the Spatial Reference System Identifier
+            (SRID) is saved in the network dataframe
+        lv_grid_id: int
+            identifier of LVGrid, None if bus is MV component
+        in_building: bool
+            indicator if bus is inside a building
 
         """
         x = kwargs.get('x', None)
@@ -899,16 +922,24 @@ class Topology:
 
         Parameters
         ----------
-        bus0
-        bus1
-        length
-        x
-        r
-        s_nom
-        num_parallel
+        bus0: str
+            identifier of connected bus
+        bus1: str
+            identifier of connected bus
+        length: float
+            length of line in [km]
+        x: float
+            reactance of line [Ohm]
+        r: float
+            resistance of line [Ohm]
+        s_nom: float
+            nominal power of line [MVA]
+        num_parallel: int
+            number of parallel lines
         type_info : str
             Type of line as specified in `equipment_data`.
-        kind
+        kind: str
+            either 'cable' or 'line'
 
         """
         def _get_line_data():

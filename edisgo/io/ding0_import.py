@@ -48,7 +48,6 @@ def import_ding0_grid(path, edisgo_obj):
         Sort buses of inserted transformers in a way that bus1 always
         represents secondary side of transformer.
         """
-        # ToDo write test
         voltage_bus0 = edisgo_obj.topology.buses_df.loc[
             transformers_df.bus0].v_nom.values
         voltage_bus1 = edisgo_obj.topology.buses_df.loc[
@@ -63,7 +62,6 @@ def import_ding0_grid(path, edisgo_obj):
         Sort buses of inserted HV/MV transformers in a way that bus1 always
         represents secondary side of transformer.
         """
-        #ToDo write test
         for transformer in transformers_df.index:
             if not transformers_df.loc[transformer, 'bus1'] in \
                    edisgo_obj.topology.buses_df.index:
@@ -118,39 +116,41 @@ def import_ding0_grid(path, edisgo_obj):
     _validate_ding0_grid_import(edisgo_obj.topology)
 
 
-def _validate_ding0_grid_import(network):
+def _validate_ding0_grid_import(topology):
     """
-    Check imported data integrity.
+    Check imported data integrity. Checks for duplicated labels and not
+    connected components.
+    Todo: Check with meth:`_check_integrity_of_pypsa` in pypsa_io
 
     Parameters
     ----------
-    network: Topology
+    topology: class:`~.network.topology.Topology`
         topology class containing mv and lv grids
 
     """
     # check for duplicate labels (of components)
     duplicated_labels = []
-    if any(network.buses_df.index.duplicated()):
+    if any(topology.buses_df.index.duplicated()):
         duplicated_labels.append(
-            network.buses_df.index[network.buses_df.index.duplicated()].values)
-    if any(network.generators_df.index.duplicated()):
+            topology.buses_df.index[topology.buses_df.index.duplicated()].values)
+    if any(topology.generators_df.index.duplicated()):
         duplicated_labels.append(
-            network.generators_df.index[
-                network.generators_df.index.duplicated()].values)
-    if any(network.loads_df.index.duplicated()):
+            topology.generators_df.index[
+                topology.generators_df.index.duplicated()].values)
+    if any(topology.loads_df.index.duplicated()):
         duplicated_labels.append(
-            network.loads_df.index[network.loads_df.index.duplicated()].values)
-    if any(network.transformers_df.index.duplicated()):
+            topology.loads_df.index[topology.loads_df.index.duplicated()].values)
+    if any(topology.transformers_df.index.duplicated()):
         duplicated_labels.append(
-            network.transformers_df.index[
-                network.transformers_df.index.duplicated()].values)
-    if any(network.lines_df.index.duplicated()):
+            topology.transformers_df.index[
+                topology.transformers_df.index.duplicated()].values)
+    if any(topology.lines_df.index.duplicated()):
         duplicated_labels.append(
-            network.lines_df.index[network.lines_df.index.duplicated()].values)
-    if any(network.switches_df.index.duplicated()):
+            topology.lines_df.index[topology.lines_df.index.duplicated()].values)
+    if any(topology.switches_df.index.duplicated()):
         duplicated_labels.append(
-            network.switches_df.index[
-                network.switches_df.index.duplicated()].values)
+            topology.switches_df.index[
+                topology.switches_df.index.duplicated()].values)
     if duplicated_labels:
         raise ValueError(
             "{labels} have duplicate entry in one of the components "
@@ -162,8 +162,8 @@ def _validate_ding0_grid_import(network):
     buses = []
 
     for nodal_component in ["loads", "generators", "storage_units"]:
-        df = getattr(network, nodal_component + "_df")
-        missing = df.index[~df.bus.isin(network.buses_df.index)]
+        df = getattr(topology, nodal_component + "_df")
+        missing = df.index[~df.bus.isin(topology.buses_df.index)]
         buses.append(df.bus.values)
         if len(missing) > 0:
             raise ValueError(
@@ -172,10 +172,10 @@ def _validate_ding0_grid_import(network):
                     nodal_component, ', '.join(missing.values)))
 
     for branch_component in ["lines", "transformers"]:
-        df = getattr(network, branch_component + "_df")
+        df = getattr(topology, branch_component + "_df")
         for attr in ["bus0", "bus1"]:
             buses.append(df[attr].values)
-            missing = df.index[~df[attr].isin(network.buses_df.index)]
+            missing = df.index[~df[attr].isin(topology.buses_df.index)]
             if len(missing) > 0:
                 raise ValueError(
                     "The following {} have {} which are not defined: "
@@ -183,9 +183,9 @@ def _validate_ding0_grid_import(network):
                         branch_component, attr, ', '.join(missing.values)))
 
     for attr in ["bus_open", "bus_closed"]:
-        missing = network.switches_df.index[
-            ~network.switches_df[attr].isin(network.buses_df.index)]
-        buses.append(network.switches_df[attr].values)
+        missing = topology.switches_df.index[
+            ~topology.switches_df[attr].isin(topology.buses_df.index)]
+        buses.append(topology.switches_df[attr].values)
         if len(missing) > 0:
             raise ValueError(
                 "The following switches have {} which are not defined: "
@@ -193,7 +193,7 @@ def _validate_ding0_grid_import(network):
                     attr, ', '.join(missing.values)))
 
     all_buses = np.unique(np.concatenate(buses, axis=None))
-    missing = network.buses_df.index[~network.buses_df.index.isin(all_buses)]
+    missing = topology.buses_df.index[~topology.buses_df.index.isin(all_buses)]
     if len(missing) > 0:
         raise ValueError("The following buses are isolated: {}.".format(
             ', '.join(missing.values)))

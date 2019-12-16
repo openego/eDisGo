@@ -565,6 +565,7 @@ def _buses_voltage_set_point(edisgo_obj, buses, slack_bus, timesteps):
 
 def _pypsa_bus_timeseries(network, buses, timesteps):
     """
+    Todo: remove?
     Time series in PyPSA compatible format for bus instances
 
     Set all buses except for the slack bus to voltage of 1 pu (it is assumed
@@ -635,6 +636,7 @@ def _pypsa_bus_timeseries(network, buses, timesteps):
 
 def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
     """
+    Todo: remove?
     Aggregates generator time series per generator subtype and LV topology.
 
     Parameters
@@ -697,6 +699,7 @@ def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
 
 def _pypsa_load_timeseries_aggregated_at_lv_station(network, timesteps):
     """
+    Todo: remove?
     Aggregates load time series per sector and LV topology.
 
     Parameters
@@ -752,6 +755,7 @@ def _pypsa_load_timeseries_aggregated_at_lv_station(network, timesteps):
 
 
 def _check_topology(components):
+    #Todo: remove?
     buses = components['Bus'].index.tolist()
     line_buses = components['Line']['bus0'].tolist() + \
                  components['Line']['bus1'].tolist()
