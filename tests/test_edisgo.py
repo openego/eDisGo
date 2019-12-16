@@ -339,7 +339,7 @@ class TestEDisGo:
         self.edisgo.histogram_relative_line_load()
         plt.close('all')
 
-    def test_component(self):
+    def test_add_component(self):
         """Test add_component method"""
         # Test add bus
         num_buses = len(self.edisgo.topology.buses_df)
@@ -424,6 +424,7 @@ class TestEDisGo:
                               index[1], storage_name], tan(acos(0.9))*3.1)
         # Todo: test other modes of timeseries (manual, None)
         # Remove test objects
-        self.edisgo.topology.remove_storage(storage_name)
-        self.edisgo.topology.remove_load(load_name)
-        self.edisgo.topology.remove_generator(gen_name)
+        self.edisgo.remove_component('StorageUnit', storage_name)
+        self.edisgo.remove_component('Load', load_name)
+        self.edisgo.remove_component('Generator', gen_name)
+        # Todo: check if components were removed

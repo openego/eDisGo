@@ -773,11 +773,17 @@ class EDisGo:
         comp_type: str
             Type of added component. Can be 'Bus', 'Line', 'Load', 'Generator',
             'StorageUnit', 'Transformer'
+        add_ts: Boolean
+            Indicator if timeseries for component are added as well
         **kwargs: dict
             Attributes of added component. See respective functions for required
             entries. For 'Load', 'Generator' and 'StorageUnit' the boolean
-            add_ts determines weather a timeseries is created for the new
+            add_ts determines whether a timeseries is created for the new
             component or not.
+
+        Todo: change into add_components to allow adding of several components
+            at a time, change topology.add_load etc. to add_loads, where
+            lists of parameters can be inserted
         """
         if comp_type == 'Bus':
             self.topology.add_bus(bus_name=kwargs.get('name'),
@@ -812,7 +818,47 @@ class EDisGo:
             raise ValueError("Component type is not correct.")
         return comp_name
 
-    def add_components(self, component_dict, **kwargs):
-        #Todo: implement, change topology.add_load etc. to add_loads, where
-        # lists of parameters can be inserted. Delete add_component afterwards
-        raise NotImplementedError
+    def remove_component(self, comp_type, comp_name, drop_ts=True):
+        """
+        Removes single component from respective DataFrame. If drop_ts is set
+        to True, timeseries of elements are deleted as well.
+
+        Parameters
+        ----------
+        comp_type: str
+            Type of removed component. Can be 'Bus', 'Line', 'Load',
+            'Generator', 'StorageUnit', 'Transformer'.
+        comp_name: str
+            Name of component to be removed.
+        drop_ts: Boolean
+            Indicator if timeseries for component are removed as well. Defaults
+            to True.
+
+        Todo: change into remove_components, when add_component is changed into
+            add_components, to allow removal of several components at a time
+
+        """
+        if comp_type == 'Bus':
+            self.topology.remove_bus(comp_name)
+        elif comp_type == 'Line':
+             self.topology.remove_line(comp_name)
+        elif comp_type == 'Load':
+            self.topology.remove_line(comp_name)
+            if drop_ts:
+                timeseries._drop_existing_component_timeseries(
+                    edisgo_obj=self, comp_type='loads', comp_names=comp_name)
+
+        elif comp_type == 'Generator':
+            self.topology.remove_generator(comp_name)
+            if drop_ts:
+                timeseries._drop_existing_component_timeseries(
+                    edisgo_obj=self, comp_type='generators',
+                    comp_names=comp_name)
+        elif comp_type == 'StorageUnit':
+            self.topology.remove_storage(comp_name)
+            if drop_ts:
+                timeseries._drop_existing_component_timeseries(
+                    edisgo_obj=self, comp_type='storage_units',
+                    comp_names=comp_name)
+        else:
+            raise ValueError("Component type is not correct.")
