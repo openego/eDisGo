@@ -184,7 +184,7 @@ def calculate_line_resistance(line_resistance_per_km, line_length):
 
 def calculate_apparent_power(nominal_voltage, current):
     """
-    Calculates line resistance in Ohm from given line data and length.
+    Calculates apparent power in MVA from given voltage and current.
 
     Parameters
     ----------
@@ -199,7 +199,7 @@ def calculate_apparent_power(nominal_voltage, current):
         Apparent power in MVA.
 
     """
-    return sqrt(3) * nominal_voltage * current / 1e3
+    return sqrt(3) * nominal_voltage * current
 
 
 def translate_df_to_graph(buses_df, lines_df, transformers_df=None):

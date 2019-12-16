@@ -66,23 +66,51 @@ class TestTopology:
         assert name == \
                'Line_Bus_BranchTee_MVGrid_1_8_Bus_GeneratorFluctuating_7'
         assert self.topology.lines_df.loc[name, 'bus0'] == bus0
+        assert self.topology.lines_df.loc[name, 's_nom'] == 1
 
         bus0 = 'Bus_BranchTee_MVGrid_1_8'
-        bus1 = 'Bus_GeneratorFluctuating_7'
-        name = self.topology.add_line(
-            bus0=bus0,
-            bus1=bus1,
-            length=1,
-            kind='cable',
-            type_info='NA2XS2Y 3x1x185 RM/25',
-            x=2
-        )
-        with pytest.warns(Warning):
-            warnings.warn(
-                "When line 'type_info' is provided when creating a new "
-                "line, x, r and s_nom are calculated and provided "
-                "parameters are overwritten.", Warning)
-        assert self.topology.lines_df.loc[name, 'x'] == 1
+        bus1 = 'Bus_GeneratorFluctuating_9'
+        msg = "When line 'type_info' is provided when creating a new " \
+              "line, x, r and s_nom are calculated and provided " \
+              "parameters are overwritten."
+        with pytest.warns(UserWarning, match=msg):
+            name = self.topology.add_line(
+                bus0=bus0,
+                bus1=bus1,
+                length=1,
+                kind='cable',
+                type_info='NA2XS2Y 3x1x185 RM/25',
+                x=2
+            )
+        assert len_df_before + 2 == len(self.topology.lines_df)
+        assert name == \
+               'Line_Bus_BranchTee_MVGrid_1_8_Bus_GeneratorFluctuating_9'
+        assert self.topology.lines_df.loc[name, 's_nom'] == 6.1834213830208915
+        assert self.topology.lines_df.loc[name, 'x'] == 0.38
+
+        msg = "Specified bus Testbus is not valid as it is not defined in " \
+              "buses_df."
+        with pytest.raises(ValueError, match=msg):
+            name = self.topology.add_line(
+                bus0="Testbus",
+                bus1=bus1,
+                length=1,
+                kind='cable',
+                type_info='NA2XS2Y 3x1x185 RM/25',
+                x=2
+            )
+
+        msg = "Specified bus Testbus1 is not valid as it is not defined in " \
+              "buses_df."
+        with pytest.raises(ValueError, match=msg):
+            name = self.topology.add_line(
+                bus0=bus0,
+                bus1="Testbus1",
+                length=1,
+                kind='cable',
+                type_info='NA2XS2Y 3x1x185 RM/25',
+                x=2
+            )
 
     def test_add_generator(self):
         """Test add_generator method"""

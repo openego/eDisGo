@@ -921,7 +921,7 @@ def _check_integrity_of_pypsa(pypsa_network):
 
 def process_pfa_results(edisgo, pypsa, timesteps):
     """
-    Assing values from PyPSA to
+    Passing values from PyPSA to
     :meth:`results <~.edisgo.EDisGo.results>`
 
     Parameters

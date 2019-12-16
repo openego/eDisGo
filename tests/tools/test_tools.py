@@ -23,12 +23,12 @@ class TestTools:
 
     def test_calculate_apparent_power(self):
         data = tools.calculate_apparent_power(20, 30)
-        assert np.isclose(data, 1.03923)
+        assert np.isclose(data, 1039.23)
         data = tools.calculate_apparent_power(30, np.array([20, 30]))
-        assert_allclose(data, np.array([1.03923, 1.55884]), rtol=1e-5)
+        assert_allclose(data, np.array([1039.23, 1558.84]), rtol=1e-5)
         data = tools.calculate_apparent_power(np.array([30, 30]),
                                               np.array([20, 30]))
-        assert_allclose(data, np.array([1.03923, 1.55884]), rtol=1e-5)
+        assert_allclose(data, np.array([1039.23, 1558.84]), rtol=1e-5)
 
     def test_check_bus_for_removal(self):
         parent_dirname = os.path.dirname(os.path.dirname(__file__))

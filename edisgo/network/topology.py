@@ -39,8 +39,8 @@ class Topology:
         self._equipment_data = self._load_equipment_data(
             kwargs.get('config', None))
 
-
-    def _load_equipment_data(self, config=None):
+    @staticmethod
+    def _load_equipment_data(config=None):
         """
         Load equipment data for transformers, cables etc.
 
@@ -898,7 +898,6 @@ class Topology:
         y = kwargs.get('y', None)
         lv_grid_id = kwargs.get('lv_grid_id', None)
         in_building = kwargs.get('in_building', False)
-        #ToDo add test
         # check lv_grid_id
         if v_nom < 1 and lv_grid_id is None:
             raise ValueError(
@@ -973,7 +972,6 @@ class Topology:
                 raise
             return line_data
 
-        #ToDo add test
         # check if buses exist
         if bus0 not in self.buses_df.index:
             raise ValueError(
