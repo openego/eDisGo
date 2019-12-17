@@ -36,7 +36,7 @@ def histogram(data, **kwargs):
     ----------
     data : :pandas:`pandas.DataFrame<dataframe>`
         Data to be plotted, e.g. voltage or current (`v_res` or `i_res` from
-        :class:`edisgo.network.network.Results`). Index of the dataframe must be
+        :class:`network.results.Results`). Index of the dataframe must be
         a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
     timeindex : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
         Specifies time steps histogram is plotted for. If timeindex is None all
@@ -254,7 +254,7 @@ def mv_grid_topology(edisgo_obj, timestep=None,
         parameter `line_color` is set to 'loading'. Default: None.
     grid_expansion_costs : :pandas:`pandas.DataFrame<dataframe>` or None
         Dataframe with network expansion costs in kEUR. See `grid_expansion_costs`
-        in :class:`~.network.network.Results` for more information. Only needs to
+        in :class:`~.network.results.Results` for more information. Only needs to
         be provided when parameter `line_color` is set to 'expansion_costs'.
         Default: None.
     filename : :obj:`str`

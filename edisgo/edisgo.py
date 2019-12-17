@@ -173,10 +173,13 @@ class EDisGo:
 
     Attributes
     ----------
-    network : :class:`~.network.topology.Topology`
-        The topology is a container object holding all data concerning the topology,
-        configurations, equipment data, etc.
-    results : :class:`~.network.network.Results`
+    config: :class:`~.config.Config`
+        Container for all configuration parameters.
+    topology : :class:`~.network.topology.Topology`
+        The topology is a container object holding the topology of the grids.
+    timeseries: :class:`~.network.timeseries.TimeSeries`
+        Container for component timeseries.
+    results : :class:`~.network.results.Results`
         This is a container holding alls calculation results from power flow
         analyses, curtailment, storage integration, etc.
 
@@ -299,9 +302,20 @@ class EDisGo:
 
         Parameters
         ----------
-        pypsa : :pypsa:`pypsa.Network<network>`
-            The `PyPSA network
-            <https://www.pypsa.org/doc/components.html#network>`_ container.
+        **kwargs: dict
+            dict of optional parameters. These can be:
+            mode: can be 'mv', 'mvlv' to export only MV grid, 'lv' to export
+                only LV grid, None to export the whole topology. Defaults
+                to None.
+            timesteps: timesteps of format :pandas:`pandas.Timestamp<timestamp>`
+                for which time dependant values should be exported to pypsa.
+                Defaults to None, then all timesteps defined in
+                :meth:`~.edisgo.timeseries.timeindex` are chosen.
+            aggregation specifications: only relevant when only exporting
+                MV grid, specifies the aggregation method for undelaying LV
+                grid components. See :meth:`~.io.pypsa_io.append_lv_components`
+                for the available specifications.
+
 
         Returns
         -------
@@ -310,7 +324,7 @@ class EDisGo:
             to specify if pypsa representation of the edisgo network
             was created for the whole network topology (MV + LV), only MV or only
             LV. See parameter `mode` in
-            :meth:`~.network.network.EDisGo.analyze` for more information.
+            :meth:`~.edisgo.EDisGo.analyze` for more information.
 
         """
         timesteps = kwargs.get('timesteps', None)
@@ -375,12 +389,8 @@ class EDisGo:
         """Analyzes the network by power flow analysis
 
         Analyze the network for violations of hosting capacity. Means, perform a
-        power flow analysis and obtain voltages at nodes (load, generator,
-        stations/transformers and branch tees) and active/reactive power at
-        lines.
-
-        The power flow analysis can currently only be performed for both network
-        levels MV and LV. See ToDos section for more information.
+        power flow analysis and obtain voltages at buses and active/reactive
+        power on lines.
 
         A static `non-linear power flow analysis is performed using PyPSA
         <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
@@ -393,10 +403,9 @@ class EDisGo:
         ----------
         mode : str
             Allows to toggle between power flow analysis (PFA) on the whole
-            network topology (MV + LV), only MV or only LV. Defaults to None which
-            equals power flow analysis for MV + LV which is the only
-            implemented option at the moment. See ToDos section for
-            more information.
+            network topology (default: None), only MV ('mv' or 'mvlv') or only
+            LV ('lv'). Defaults to None which equals power flow analysis for
+            MV + LV.
         timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
             :pandas:`pandas.Timestamp<timestamp>`
             Timesteps specifies for which time steps to conduct the power flow
@@ -412,17 +421,6 @@ class EDisGo:
 
         ToDos
         ------
-        The option to export only the edisgo MV network (mode = 'mv') to conduct
-        a power flow analysis is implemented in
-        :func:`~.tools.pypsa_io.to_pypsa` but NotImplementedError is raised
-        since the rest of edisgo does not handle this option yet. The analyze
-        function will throw an error since
-        :func:`~.tools.pypsa_io.process_pfa_results`
-        does not handle aggregated loads and generators in the LV grids. Also,
-        network reinforcement, pypsa update of time series, and probably other
-        functionalities do not work when only the MV network is analysed.
-
-        Further ToDos are:
         * explain how power plants are modeled, if possible use a link
         * explain where to find and adjust power flow analysis defining
         parameters
@@ -775,11 +773,17 @@ class EDisGo:
         comp_type: str
             Type of added component. Can be 'Bus', 'Line', 'Load', 'Generator',
             'StorageUnit', 'Transformer'
+        add_ts: Boolean
+            Indicator if timeseries for component are added as well
         **kwargs: dict
             Attributes of added component. See respective functions for required
             entries. For 'Load', 'Generator' and 'StorageUnit' the boolean
-            add_ts determines weather a timeseries is created for the new
+            add_ts determines whether a timeseries is created for the new
             component or not.
+
+        Todo: change into add_components to allow adding of several components
+            at a time, change topology.add_load etc. to add_loads, where
+            lists of parameters can be inserted
         """
         if comp_type == 'Bus':
             self.topology.add_bus(bus_name=kwargs.get('name'),
@@ -814,7 +818,47 @@ class EDisGo:
             raise ValueError("Component type is not correct.")
         return comp_name
 
-    def add_components(self, component_dict, **kwargs):
-        #Todo: implement, change topology.add_load etc. to add_loads, where
-        # lists of parameters can be inserted. Delete add_component afterwards
-        raise NotImplementedError
+    def remove_component(self, comp_type, comp_name, drop_ts=True):
+        """
+        Removes single component from respective DataFrame. If drop_ts is set
+        to True, timeseries of elements are deleted as well.
+
+        Parameters
+        ----------
+        comp_type: str
+            Type of removed component. Can be 'Bus', 'Line', 'Load',
+            'Generator', 'StorageUnit', 'Transformer'.
+        comp_name: str
+            Name of component to be removed.
+        drop_ts: Boolean
+            Indicator if timeseries for component are removed as well. Defaults
+            to True.
+
+        Todo: change into remove_components, when add_component is changed into
+            add_components, to allow removal of several components at a time
+
+        """
+        if comp_type == 'Bus':
+            self.topology.remove_bus(comp_name)
+        elif comp_type == 'Line':
+             self.topology.remove_line(comp_name)
+        elif comp_type == 'Load':
+            self.topology.remove_load(comp_name)
+            if drop_ts:
+                timeseries._drop_existing_component_timeseries(
+                    edisgo_obj=self, comp_type='loads', comp_names=comp_name)
+
+        elif comp_type == 'Generator':
+            self.topology.remove_generator(comp_name)
+            if drop_ts:
+                timeseries._drop_existing_component_timeseries(
+                    edisgo_obj=self, comp_type='generators',
+                    comp_names=comp_name)
+        elif comp_type == 'StorageUnit':
+            self.topology.remove_storage(comp_name)
+            if drop_ts:
+                timeseries._drop_existing_component_timeseries(
+                    edisgo_obj=self, comp_type='storage_units',
+                    comp_names=comp_name)
+        else:
+            raise ValueError("Component type is not correct.")

@@ -27,11 +27,11 @@ def extend_distribution_substation_overloading(edisgo_obj, critical_stations):
     critical_stations : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing over-loaded MV/LV stations, their apparent power
         at maximal over-loading and the corresponding time step.
-        Index of the dataframe are the over-loaded stations of type
-        :class:`~.network.components.LVStation`. Columns are 's_pfa'
-        containing the apparent power at maximal over-loading as float and
-        'time_index' containing the corresponding time step the over-loading
-        occured in as :pandas:`pandas.Timestamp<timestamp>`. See
+        Index of the dataframe are the names of grids with overloaded stations.
+        Columns are 's_pfa' containing the apparent power at maximal over-
+        loading as float and 'time_index' containing the corresponding time
+        step the over-loading occured in as
+        :pandas:`pandas.Timestamp<timestamp>`. See
         :func:`~.flex_opt.check_tech_constraints.mv_lv_station_load` for more
         information.
 
@@ -193,13 +193,12 @@ def extend_substation_overloading(edisgo_obj, critical_stations):
     critical_stations : pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing over-loaded HV/MV stations, their apparent power
         at maximal over-loading and the corresponding time step.
-        Index of the dataframe are the over-loaded stations of type
-        :class:`~.network.components.MVStation`. Columns are 's_pfa'
-        containing the apparent power at maximal over-loading as float and
-        'time_index' containing the corresponding time step the over-loading
-        occured in as :pandas:`pandas.Timestamp<timestamp>`. See
-        :func:`~.flex_opt.check_tech_constraints.hv_mv_station_load` for more
-        information.
+        Index of the dataframe are the names of grids with over-loaded stations.
+        Columns are 's_pfa' containing the apparent power at maximal over-
+        loading as float and 'time_index' containing the corresponding time
+        step the over-loading occured in as :pandas:`pandas.Timestamp<timestamp>`.
+        See :func:`~.flex_opt.check_tech_constraints.hv_mv_station_load` for
+        more information.
 
     Returns
     -------
@@ -299,17 +298,14 @@ def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
     grid : :class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
     crit_nodes : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with critical nodes, sorted descending by voltage deviation.
-        Index of the dataframe are nodes (of type
-        :class:`~.network.components.Generator`, :class:`~.network.components.Load`,
-        etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
-        maximum voltage deviation as float and 'time_index' containing the
-        corresponding time step the over-voltage occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        Index of the dataframe are names of buses with over-voltage issues.
+        Columns are 'v_mag_pu' containing the maximum voltage deviation as
+        float and 'time_index' containing the corresponding time step the
+        over-voltage occured in as :pandas:`pandas.Timestamp<timestamp>`.
 
     Returns
     -------
-    Dictionary with :class:`~.network.components.Line` and the number of lines
-    added.
+    Dictionary with name of lines and the number of lines added.
 
     Notes
     -----
@@ -515,16 +511,14 @@ def reinforce_branches_overloading(edisgo_obj, crit_lines):
     crit_lines : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing over-loaded lines, their maximum relative
         over-loading and the corresponding time step.
-        Index of the dataframe are the over-loaded lines of type
-        :class:`~.network.components.Line`. Columns are 'max_rel_overload'
-        containing the maximum relative over-loading as float and 'time_index'
-        containing the corresponding time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        Index of the dataframe are the names of over-loaded lines. Columns are
+        'max_rel_overload' containing the maximum relative over-loading as
+        float and 'time_index' containing the corresponding time step the
+        over-loading occured in as :pandas:`pandas.Timestamp<timestamp>`.
 
     Returns
     -------
-    Dictionary with :class:`~.network.components.Line` and the number of Lines
-    added.
+    Dictionary with name of lines and the number of Lines added.
         
     Notes
     -----

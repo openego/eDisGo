@@ -960,5 +960,50 @@ class Testget_component_timeseries:
                loads_active_power, loads_reactive_power, \
                storage_units_active_power, storage_units_reactive_power
 
-    #Todo: implement test for methods drop_existing_load_timeseries and
-    # drop_existing_generator_timeseries
+    def test_drop_existing_component_timeseries(self):
+        """Test for _drop_existing_timseries_method"""
+        self.topology.add_storage_unit('1', 'Bus_MVStation_1',
+                                       0.3)
+        timeindex = pd.date_range('1/1/1970', periods=2, freq='H')
+        timeseries.get_component_timeseries(edisgo_obj=self, mode='worst-case')
+        # test drop load timeseries
+        assert hasattr(self.timeseries.loads_active_power,
+                       'Load_agricultural_LVGrid_1_1')
+        assert hasattr(self.timeseries.loads_reactive_power,
+                       'Load_agricultural_LVGrid_1_1')
+        timeseries._drop_existing_component_timeseries(
+            self, 'loads', ['Load_agricultural_LVGrid_1_1'])
+        with pytest.raises(KeyError):
+            self.timeseries.loads_active_power.loc[
+                timeindex, 'Load_agricultural_LVGrid_1_1']
+        with pytest.raises(KeyError):
+            self.timeseries.loads_reactive_power.loc[
+                timeindex, 'Load_agricultural_LVGrid_1_1']
+        # test drop generators timeseries
+        assert hasattr(self.timeseries.generators_active_power,
+                       'GeneratorFluctuating_7')
+        assert hasattr(self.timeseries.generators_reactive_power,
+                       'GeneratorFluctuating_7')
+        timeseries._drop_existing_component_timeseries(
+            self, 'generators', 'GeneratorFluctuating_7')
+        with pytest.raises(KeyError):
+            self.timeseries.generators_active_power.loc[
+                timeindex, 'GeneratorFluctuating_7']
+        with pytest.raises(KeyError):
+            self.timeseries.generators_reactive_power.loc[
+                timeindex, 'GeneratorFluctuating_7']
+        # test drop storage units timeseries
+        assert hasattr(self.timeseries.storage_units_active_power,
+                       'StorageUnit_MVGrid_1_1')
+        assert hasattr(self.timeseries.storage_units_reactive_power,
+                       'StorageUnit_MVGrid_1_1')
+        timeseries._drop_existing_component_timeseries(
+            self, 'storage_units', 'StorageUnit_MVGrid_1_1')
+        with pytest.raises(KeyError):
+            self.timeseries.storage_units_active_power.loc[
+                timeindex, 'StorageUnit_MVGrid_1_1']
+        with pytest.raises(KeyError):
+            self.timeseries.storage_units_reactive_power.loc[
+                timeindex, 'StorageUnit_MVGrid_1_1']
+        self.topology.remove_storage('StorageUnit_MVGrid_1_1')
+

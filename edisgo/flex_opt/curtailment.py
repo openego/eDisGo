@@ -80,7 +80,7 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
     # get the voltages at the generators
     if not edisgo.network.pypsa.edisgo_mode:
         voltages_lv_gens = edisgo.network.results.v_res(
-            nodes=generators.loc[(generators.voltage_level == 'lv')].index,
+            nodes_df=generators.loc[(generators.voltage_level == 'lv')].index,
             level='lv')
     else:
         # if only MV topology was analyzed (edisgo_mode = 'mv') all LV
@@ -88,13 +88,13 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
         # primary side
         lv_gens = generators[generators.voltage_level == 'lv']
         voltages_lv_stations = edisgo.network.results.v_res(
-            nodes=[_.station for _ in lv_gens.grid.unique()], level='mv')
+            nodes_df=[_.station for _ in lv_gens.grid.unique()], level='mv')
         voltages_lv_gens = pd.DataFrame()
         for lv_gen in lv_gens.index:
             voltages_lv_gens[repr(lv_gen)] = voltages_lv_stations[
                 repr(lv_gen.grid.station)]
     voltages_mv_gens = edisgo.network.results.v_res(
-        nodes=generators.loc[(generators.voltage_level == 'mv')].index,
+        nodes_df=generators.loc[(generators.voltage_level == 'mv')].index,
         level='mv')
     voltages_gens = voltages_lv_gens.join(voltages_mv_gens)
 
@@ -123,9 +123,9 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
         lv_stations = [_.station for _ in grids
                        if 'LVStation' in repr(_.station)]
         voltage_lv_stations = edisgo.network.results.v_res(
-            nodes=lv_stations, level='lv')
+            nodes_df=lv_stations, level='lv')
         voltages_mv_station = edisgo.network.results.v_res(
-            nodes=[edisgo.network.mv_grid.station], level='mv')
+            nodes_df=[edisgo.network.mv_grid.station], level='mv')
         voltages_stations = voltage_lv_stations.join(voltages_mv_station)
 
         # assign allowed voltage deviation
@@ -150,7 +150,7 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
         station = edisgo.network.mv_grid.station
         # get voltages at HV/MV station
         voltages_station = edisgo.network.results.v_res(
-            nodes=[station], level='mv')
+            nodes_df=[station], level='mv')
 
         # assign allowed voltage deviation
         generators['allowed_voltage_dev'] = allowed_voltage_dev_mv

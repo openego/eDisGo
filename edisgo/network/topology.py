@@ -8,7 +8,8 @@ import warnings
 import edisgo
 from edisgo.network.components import Generator, Load
 from edisgo.tools.tools import calculate_line_resistance, \
-    calculate_line_reactance, calculate_apparent_power, check_bus_for_removal
+    calculate_line_reactance, calculate_apparent_power, check_bus_for_removal, \
+    check_line_for_removal
 
 logger = logging.getLogger('edisgo')
 
@@ -20,7 +21,7 @@ class Topology:
 
     Parameters
     -----------
-    config_data : :class:`~.tools.config.Config`
+    config : :class:`~.tools.config.Config`
         Config object with configuration data from config files.
 
     Attributes
@@ -39,8 +40,8 @@ class Topology:
         self._equipment_data = self._load_equipment_data(
             kwargs.get('config', None))
 
-
-    def _load_equipment_data(self, config=None):
+    @staticmethod
+    def _load_equipment_data(config=None):
         """
         Load equipment data for transformers, cables etc.
 
@@ -643,7 +644,10 @@ class Topology:
         self._generators_df.drop(name, inplace=True)
         # if no other elements are connected to same bus, remove line and bus
         if check_bus_for_removal(self, bus_name=bus):
-            self.remove_line(self.get_connected_lines_from_bus(bus).index[0])
+            line_name = self.get_connected_lines_from_bus(bus).index[0]
+            self.remove_line(line_name)
+            logger.debug("Line {} removed together with generator {}.".format(
+                line_name, name))
 
     def remove_load(self, name):
         """
@@ -662,7 +666,10 @@ class Topology:
         self._loads_df.drop(name, inplace=True)
         # if no other elements are connected, remove line and bus as well
         if check_bus_for_removal(self, bus_name=bus):
-            self.remove_line(self.get_connected_lines_from_bus(bus).index[0])
+            line_name = self.get_connected_lines_from_bus(bus).index[0]
+            self.remove_line(line_name)
+            logger.debug("Line {} removed together with load {}.".format(
+                line_name, name))
 
     def remove_storage(self, name):
         """
@@ -674,14 +681,16 @@ class Topology:
             Name of storage as specified in index of `storage_units_df`.
 
         """
-        # Todo: add test
         # get bus to check if other elements are connected to bus
         bus = self.storage_units_df.at[name, 'bus']
         # remove load
         self._storage_units_df.drop(name, inplace=True)
         # if no other elements are connected, remove line and bus as well
         if check_bus_for_removal(self, bus_name=bus):
-            self.remove_line(self.get_connected_lines_from_bus(bus).index[0])
+            line_name = self.get_connected_lines_from_bus(bus).index[0]
+            self.remove_line(line_name)
+            logger.debug("Line {} removed together with storage unit {}.".
+                format(line_name, name))
 
     def remove_line(self, name):
         """
@@ -693,6 +702,9 @@ class Topology:
             Name of line as specified in index of `lines_df`.
 
         """
+        if not check_line_for_removal(self, line_name=name):
+            raise AssertionError("Removal of line {} would create isolated "
+                                 "node.".format(name))
 
         # backup buses of line and check if buses can be removed as well
         bus0 = self.lines_df.at[name, 'bus0']
@@ -706,8 +718,12 @@ class Topology:
         # drop buses if no other elements are connected
         if remove_bus0:
             self.remove_bus(bus0)
+            logger.debug("Bus {} removed together with line {}".format(bus0,
+                                                                       name))
         if remove_bus1:
             self.remove_bus(bus1)
+            logger.debug("Bus {} removed together with line {}".format(bus1,
+                                                                       name))
 
     def add_generator(self, generator_id, bus, p_nom, generator_type,
                       **kwargs):
@@ -720,12 +736,19 @@ class Topology:
         ----------
         generator_id : str
             Unique identifier of generator.
-        bus
-        control
-        p_nom
-        generator_type
-        weather_cell_id
-        subtype
+        bus: str
+            Identifier of connected bus
+        control: str
+            Control type of generator. Defaults to 'PQ'.
+        p_nom: float
+            Nominal power [MW]
+        generator_type: str
+            Type of generator, e.g. 'solar' or 'gas'
+        weather_cell_id: int
+            ID of weather cell, required for fluctuating generators import from
+            oedb.
+        subtype: str
+            Further specification of type, e.g. 'solar_roof_mounted'
 
         """
         #ToDo add test
@@ -777,10 +800,14 @@ class Topology:
         ----------
         load_id : str
             Unique identifier of generator.
-        bus
-        peak_load
-        annual_consumption
-        sector
+        bus: str
+            identifier of connected bus
+        peak_load: float
+            peak load in [MVA]
+        annual_consumption: float
+            annual consumption in Todo: specify unit?
+        sector: str
+            can be 'agricultural', 'industrial', 'residential' or 'retail'
         """
         # Todo: overthink load_id as input parameter, only allow auto created
         #  names?
@@ -822,10 +849,14 @@ class Topology:
         Parameters
         ----------
         storage_id : str
-            Unique identifier of generator.
-        bus
-        p_nom
-        control
+            Unique identifier of storage unit.
+        bus: str
+            Identifier of connected bus.
+        p_nom: float
+            Nominal power in [MW]
+        control: str
+            Control type, defaults to 'PQ'
+
         """
         # Todo: overthink storage_id as input parameter, only allow auto
         #  created names?
@@ -864,18 +895,25 @@ class Topology:
         Parameters
         ----------
         bus_name : str
-        v_nom
-        x
-        y
-        lv_grid_id
-        in_building
+            representative of bus
+        v_nom: float
+            nominal voltage at bus [kV]
+        x: float
+            position (e.g. longitude); the Spatial Reference System Identifier
+            (SRID) is saved in the network dataframe
+        y: float
+            position (e.g. longitude); the Spatial Reference System Identifier
+            (SRID) is saved in the network dataframe
+        lv_grid_id: int
+            identifier of LVGrid, None if bus is MV component
+        in_building: bool
+            indicator if bus is inside a building
 
         """
         x = kwargs.get('x', None)
         y = kwargs.get('y', None)
         lv_grid_id = kwargs.get('lv_grid_id', None)
         in_building = kwargs.get('in_building', False)
-        #ToDo add test
         # check lv_grid_id
         if v_nom < 1 and lv_grid_id is None:
             raise ValueError(
@@ -899,16 +937,24 @@ class Topology:
 
         Parameters
         ----------
-        bus0
-        bus1
-        length
-        x
-        r
-        s_nom
-        num_parallel
+        bus0: str
+            identifier of connected bus
+        bus1: str
+            identifier of connected bus
+        length: float
+            length of line in [km]
+        x: float
+            reactance of line [Ohm]
+        r: float
+            resistance of line [Ohm]
+        s_nom: float
+            nominal power of line [MVA]
+        num_parallel: int
+            number of parallel lines
         type_info : str
             Type of line as specified in `equipment_data`.
-        kind
+        kind: str
+            either 'cable' or 'line'
 
         """
         def _get_line_data():
@@ -942,7 +988,6 @@ class Topology:
                 raise
             return line_data
 
-        #ToDo add test
         # check if buses exist
         if bus0 not in self.buses_df.index:
             raise ValueError(
