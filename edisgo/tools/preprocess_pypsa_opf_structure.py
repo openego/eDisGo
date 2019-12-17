@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from edisgo.flex_opt.costs import line_expansion_costs
+from pypsa.descriptors import Dict
 
 
 def preprocess_pypsa_opf_structure(edisgo_grid, psa_network,hvmv_trafo=False):
@@ -11,6 +12,8 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network,hvmv_trafo=False):
     - move slack to hv side of HVMV-Transformer
     :param edisgo_grid: eDisGo obj
     :param psa_network: PyPsaNetwork
+    :param hvmv_trafo (optional): if True, hv side of hvmv trafo is added to buses,
+                                    and generator slack is moved to hv side
     :return:
     """
     mode = "mv"
@@ -30,7 +33,8 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network,hvmv_trafo=False):
     is_fluct = psa_network.generators.fluctuating.loc[gen_slack_loc][0]
     if is_fluct != is_fluct:
         print("value of fluctuating for slack generator is {}, it is changed to zero".format(is_fluct))
-        psa_network.generators.fluctuating.loc[gen_slack_loc] = 0
+        psa_network.generators.fluctuating.loc[gen_slack_loc] = False
+        psa_network.generators.p_nom.loc[gen_slack_loc] = False
 
     if not hvmv_trafo:
         print("no hvmv trafo is added")
@@ -94,4 +98,63 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network,hvmv_trafo=False):
         # print(len(val.columns))
 
     return
+
+def aggregate_fluct_generators(psa_network):
+    """
+    iterate over all generator buses, if multiple generators attached, aggregate fluctuating generators of same type
+    :param psa_network: pypsa network
+    :return:
+    """
+    gen_df = psa_network.generators.copy()
+    gen_t_dict = psa_network.generators_t.copy()
+    gen_buses = np.unique(gen_df.bus)
+    gen_aggr_df_all = pd.DataFrame(columns=gen_df.columns)
+    for gen_bus in gen_buses:
+        gens = gen_df[gen_df.bus == gen_bus]
+        n_gens = len(gens)
+        if n_gens <= 1:
+            # no generators to aggregate at this bus
+            continue
+        else:
+            print("{} has {} generators attached".format(gen_bus, n_gens))
+
+            for fluct in ["wind", "solar"]:
+                gen_name = "Generator_mvgd_460_{}".format(fluct)
+                # ToDo check for type rather than generator name
+                gens_to_aggr = gens.loc[gens.index.str.contains(fluct)]
+                print("{} gens of type {}".format(len(gens_to_aggr), fluct))
+                gen_aggr_df = pd.DataFrame({'bus': [gens_to_aggr.bus[0]], 'control': ['PQ'],
+                                            'p_set': gens_to_aggr['p_set'].iloc[0],
+                                            'q_set': gens_to_aggr['q_set'].iloc[0],
+                                            'p_nom': [sum(gens_to_aggr.p_nom)],
+                                            'start_up_cost': gens_to_aggr['start_up_cost'].iloc[0],
+                                            'shut_down_cost': gens_to_aggr['shut_down_cost'].iloc[0],
+                                            'marginal_cost': gens_to_aggr['marginal_cost'].iloc[0],
+                                            'fluctuating': [True if gens_to_aggr.fluctuating.all() else
+                                                            False if ~gens_to_aggr.fluctuating.any() else
+                                                            'Mixed']}, index=[gen_name])
+                gen_aggr_df_all = gen_aggr_df_all.append(gen_aggr_df)
+                # drop aggregated generators and add new generator to generator dataframe
+                gen_df = gen_df.drop(gens_to_aggr.index)
+                gen_df = gen_df.append(gen_aggr_df)
+                # gens = gens.drop(gens_to_aggr.index)
+
+                # sum timeseries for aggregated generators
+                p_set_sum = pd.DataFrame(gen_t_dict["p_set"][gens_to_aggr.index].agg("sum", axis=1),
+                                         columns=[gen_name])
+                gen_t_dict["p_set"] = gen_t_dict["p_set"].drop(gens_to_aggr.index, axis=1)
+                gen_t_dict["p_set"] = gen_t_dict["p_set"].join(p_set_sum)
+
+                q_set_sum = pd.DataFrame(gen_t_dict["q_set"][gens_to_aggr.index].agg("sum", axis=1),
+                                         columns=[gen_name])
+                gen_t_dict["q_set"] = gen_t_dict["q_set"].drop(gens_to_aggr.index, axis=1)
+                gen_t_dict["q_set"] = gen_t_dict["q_set"].join(q_set_sum)
+
+    # print(gen_df.shape[0] == gen_t_dict["p_set"].shape[1] and gen_df.shape[0] ==
+    #       gen_t_dict["q_set"].shape[1])
+
+    # write aggregated generator dataframe on pypsa network
+    psa_network.generators = gen_df
+    # write aggregated timeseries into psa_network.generators_t as pypsa.descriptors.Dict()
+    psa_network.generators_t = Dict(gen_t_dict)
 
