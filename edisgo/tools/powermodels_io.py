@@ -250,7 +250,7 @@ def _build_gen(psa_net,ppc):
     # adjust bus types
     bus_types = ["PQ", "PV", "Slack", "None"]
     gen_types = np.array([bus_types.index(gen_type) + 1 for gen_type in psa_net.generators["control"].values], dtype=int)
-    ppc["bus"][bus_indices,BUS_TYPE] = gen_types
+    # ppc["bus"][bus_indices,BUS_TYPE] = gen_types
     # set setpoint of pg and qg
     ppc["gen"][:,PG] = psa_net.generators["p_set"].values
     ppc["gen"][:,QG] = psa_net.generators["q_set"].values

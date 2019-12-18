@@ -29,7 +29,7 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network,hvmv_trafo=False):
 
     # check if generator slack has a fluctuating variable set
     gen_slack_loc = psa_network.generators.control == "Slack"
-
+    psa_network.buses.control.loc[psa_network.generators.bus.loc[gen_slack_loc]] = "Slack"
     is_fluct = psa_network.generators.fluctuating.loc[gen_slack_loc][0]
     if is_fluct != is_fluct:
         print("value of fluctuating for slack generator is {}, it is changed to zero".format(is_fluct))
