@@ -10,6 +10,13 @@ import pypsa
 def to_powermodels(pypsa_net):
     """
     Convert pypsa network to network dictionary format, using the pypower structure as an intermediate steps
+
+    powermodels network dictionary:
+    https://lanl-ansi.github.io/PowerModels.jl/stable/network-data/
+
+    pypower caseformat:
+    https://github.com/rwl/PYPOWER/blob/master/pypower/caseformat.py
+
     :param pypsa_net:
     :return:
     """
@@ -27,7 +34,13 @@ def to_powermodels(pypsa_net):
 
 
 def pypsa2ppc(psa_net):
-    """Converter from pypsa data structure to pypower data structure"""
+    """Converter from pypsa data structure to pypower data structure
+
+        adapted from pandapower's pd2ppc converter
+
+        https://github.com/e2nIEE/pandapower/blob/911f300a96ee0ac062d82f7684083168ff052586/pandapower/pd2ppc.py
+
+    """
 
     # build static pypower structure
     ppc = _init_ppc()
@@ -66,7 +79,10 @@ def pypsa2ppc(psa_net):
 
 def ppc2pm(ppc,psa_net): #pragma: no cover
     """
-    converter from pypower datastructure to powermodels dictionary, adapted from pandapower to powermodels converter
+    converter from pypower datastructure to powermodels dictionary,
+
+    adapted from pandapower to powermodels converter:
+    https://github.com/e2nIEE/pandapower/blob/develop/pandapower/converter/powermodels/to_pm.py
 
     :param ppc:
     :return:
@@ -145,6 +161,9 @@ def ppc2pm(ppc,psa_net): #pragma: no cover
     # for idx, row in enumerate(is_fluctuating, start=1):
     #     pm["gen"][str(idx)]["fluctuating"] = row
 
+    for idx,row in enumerate(psa_net.generators["control"],start=1):
+        pm["gen"][str(idx)]["gen_slack"] = (row=="Slack")*1
+
     for idx, row in enumerate(psa_net.generators["fluctuating"], start=1):
         # convert boolean to 0 and 1, check if row is nan, e.g. slack bus
         pm["gen"][str(idx)]["fluctuating"] = (not(math.isnan(row)) and row)*1
@@ -210,8 +229,7 @@ def _build_bus(psa_net,ppc):
                 "v_ang_set","v_nom","zone","v_mag_pu_max","v_mag_pu_min".split(", ")
     bus_cols = len(col_names)
     ppc["bus"] = np.zeros(shape=(n_bus, bus_cols), dtype=float)
-    ppc["bus"][:, :bus_cols] = np.array([0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1.06, 0.94
-                                         ])
+    ppc["bus"][:, :bus_cols] = np.array([0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1.06, 0.94])
     ppc["bus"][:, BUS_I] = np.arange(n_bus)
     bus_types = ["PQ", "PV", "Slack", "None"]
     bus_types_int = np.array([bus_types.index(b_type) + 1 for b_type in psa_net.buses["control"].values], dtype=int)
@@ -222,17 +240,17 @@ def _build_bus(psa_net,ppc):
 
 def _build_gen(psa_net,ppc):
     n_gen = psa_net.generators.shape[0]
-    print("build {} generators".format(n_gen))
     gen_cols = 21
     # "bus, p_set, q_set, q_max, q_min, v_set_pu, mva_base, status, p_nom, p_min, Pc1, Pc2, Qc1min, Qc1max, Qc2min, Qc2max, ramp_agc, ramp_10, ramp_30, ramp_q, apf
     ppc["gen"] = np.zeros(shape=(n_gen, gen_cols), dtype=float)
     # get bus indices for generators
     bus_indices = np.array([psa_net.buses.index.get_loc(bus_name) for bus_name in psa_net.generators["bus"]])
+    print("build {} generators, distributed on {} buses".format(n_gen, len(np.unique(bus_indices))))
     ppc["gen"][:,GEN_BUS] = bus_indices
     # adjust bus types
     bus_types = ["PQ", "PV", "Slack", "None"]
     gen_types = np.array([bus_types.index(gen_type) + 1 for gen_type in psa_net.generators["control"].values], dtype=int)
-    ppc["bus"][bus_indices,BUS_TYPE] = gen_types
+    # ppc["bus"][bus_indices,BUS_TYPE] = gen_types
     # set setpoint of pg and qg
     ppc["gen"][:,PG] = psa_net.generators["p_set"].values
     ppc["gen"][:,QG] = psa_net.generators["q_set"].values
@@ -330,7 +348,18 @@ def _build_transformers(psa_net,ppc):
     transformers[:, ANGMAX] = 360
 
     ppc["branch"] = np.append(ppc["branch"],transformers, axis=0)
+    # add trafo costs to branch cost with same shape
+    if len(ppc["branchcost"])>0:
+        print("append transformer costs")
+        ncost = ppc["branchcost"].shape[1]-1
 
+        trafo_costs =  np.zeros(shape=(n_transformers,ncost+1), dtype=float)
+
+        if hasattr(psa_net.transformers,"trafo_costs"):
+            trafo_costs[:, 0] = ncost
+            trafo_costs[:, 1] = psa_net.transformers["trafo_costs"].values
+        print(trafo_costs)
+        ppc["branchcost"] = np.append(ppc["branchcost"], trafo_costs, axis=0)
     return
 
 
@@ -380,8 +409,10 @@ def _build_load_dict(psa_net,ppc):
     for t in range(time_horizon):
         load_dict["load_data"][str(t+1)] = dict()
         for (load_idx,bus_idx) in enumerate(load_buses):
-            p_d = psa_net.loads_t["p_set"].values[t,load_idx]
-            qd = psa_net.loads_t["q_set"].values[t,load_idx]
+            # p_d = psa_net.loads_t["p_set"].values[t,load_idx]
+            # qd = psa_net.loads_t["q_set"].values[t,load_idx]
+            p_d = psa_net.loads_t["p_set"][psa_net.loads.index[load_idx]][t]
+            qd = psa_net.loads_t["q_set"][psa_net.loads.index[load_idx]][t]
             load_dict["load_data"][str(t+1)][str(load_idx + 1)] = {"pd": p_d, "qd": qd, "load_bus": int(bus_idx+1),
                                                                  "status": True, "index": int(load_idx + 1)}
 
@@ -399,8 +430,10 @@ def _build_generator_dict(psa_net,ppc):
     for t in range(time_horizon):
         generator_dict["gen_data"][str(t+1)] = dict()
         for (gen_idx, bus_idx) in enumerate(gen_buses):
-            pg = psa_net.generators_t["p_set"].values[t, gen_idx]
-            qg = psa_net.generators_t["q_set"].values[t, gen_idx]
+            # pg = psa_net.generators_t["p_set"].values[t, gen_idx]
+            # qg = psa_net.generators_t["q_set"].values[t, gen_idx]
+            pg = psa_net.generators_t["p_set"][psa_net.generators.index[gen_idx]][t]
+            qg = psa_net.generators_t["q_set"][psa_net.generators.index[gen_idx]][t]
             # if no value is set, set pg and qg to large value, e.g. representing slack
             # TODO verify or find another solution not using "large" value
             if np.isnan(pg):
