@@ -278,14 +278,14 @@ class EDisGo:
 
     def import_ding0_grid(self, path):
         """
-        Import ding0 network data from csv files.
+        Import ding0 topology data from csv files in the format as
+        `Ding0 <https://github.com/openego/ding0>`_ provides it via
+        csv files.
 
         Parameters
         -----------
         path : :obj:'str`
             Path to directory containing csv files of network to be loaded.
-
-        #ToDo docstring
 
         """
         if path is not None:
@@ -314,7 +314,8 @@ class EDisGo:
             aggregation specifications: only relevant when only exporting
                 MV grid, specifies the aggregation method for undelaying LV
                 grid components. See :meth:`~.io.pypsa_io.append_lv_components`
-                for the available specifications.
+                for the available specifications for the optional parameters
+                aggregate_loads, aggregate_generators and aggregate_storages.
 
 
         Returns
