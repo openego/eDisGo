@@ -123,6 +123,8 @@ def aggregate_fluct_generators(psa_network):
                 # ToDo check for type rather than generator name
                 gens_to_aggr = gens.loc[gens.index.str.contains(fluct)]
                 print("{} gens of type {}".format(len(gens_to_aggr), fluct))
+                if len(gens_to_aggr) == 0:
+                    continue
                 gen_aggr_df = pd.DataFrame({'bus': [gens_to_aggr.bus[0]], 'control': ['PQ'],
                                             'p_set': gens_to_aggr['p_set'].iloc[0],
                                             'q_set': gens_to_aggr['q_set'].iloc[0],
