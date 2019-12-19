@@ -328,6 +328,7 @@ class EDisGo:
 
         """
         timesteps = kwargs.get('timesteps', None)
+        kwargs.pop('timesteps', None)
         mode = kwargs.get('mode', None)
 
         if timesteps is None:
