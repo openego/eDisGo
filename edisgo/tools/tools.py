@@ -33,9 +33,9 @@ def select_worstcase_snapshots(edisgo_obj):
 
     timestamp = {}
     timestamp['load_case'] = (
-        residual_load.idxmax() if max(residual_load) < 0 else None)
+        residual_load.idxmin() if min(residual_load) < 0 else None)
     timestamp['feedin_case'] = (
-        residual_load.idxmin() if min(residual_load) > 0 else None)
+        residual_load.idxmax() if max(residual_load) > 0 else None)
     return timestamp
 
 
