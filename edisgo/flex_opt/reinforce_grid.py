@@ -327,8 +327,8 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
     # solve voltage problems in LV grids
     if not mode:
         logger.debug('==> Check voltage in LV grids.')
-        crit_nodes = checks.lv_voltage_deviation(edisgo_reinforce,
-                                                 voltage_levels=voltage_levels)
+        crit_nodes = checks.lv_voltage_deviation(
+            edisgo_reinforce, voltage_levels=voltage_levels)
 
         while_counter = 0
         while crit_nodes and while_counter < max_while_iterations:
@@ -341,8 +341,8 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
                 # write changed lines to results.equipment_changes
                 _add_lines_changes_to_equipment_changes()
 
-            # run power flow analysis again (after updating pypsa object) and
-            # check if all over-voltage problems were solved
+            # run power flow analysis again (after updating pypsa object)
+            # and check if all over-voltage problems were solved
             logger.debug('==> Run power flow analysis.')
             edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
             logger.debug('==> Recheck voltage in LV grids.')
