@@ -275,7 +275,6 @@ class EDisGo:
         """
         return self._timeseries
 
-
     def import_ding0_grid(self, path):
         """
         Import ding0 topology data from csv files in the format as
@@ -439,7 +438,7 @@ class EDisGo:
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
 
-        pypsa_network = pypsa_io.to_pypsa(self, mode=mode, timesteps=timesteps)
+        pypsa_network = self.to_pypsa(mode=mode, timesteps=timesteps)
 
         # Todo: check if still needed, if so update to new structure, at this point not needed, maybe later
         # check if all timesteps are in pypsa.snapshots, if not update time
