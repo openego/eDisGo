@@ -80,16 +80,16 @@ class TestReinforceMeasures:
                                        index=['MVGrid_1'])
         transformer_changes = \
             extend_substation_overloading(self.edisgo, crit_mv_station)
-        assert transformer_changes['added']['MVGrid_1'][0] == \
-            'MVStation_1_transformer_reinforced_2'
+        assert 'MVStation_1_transformer_reinforced_2' in \
+               transformer_changes['added']['MVGrid_1']
         trafo = self.edisgo.topology.transformers_hvmv_df.loc[
             'MVStation_1_transformer_reinforced_2']
         assert trafo.bus0 == 'Bus_primary_MVStation_1'
         assert trafo.bus1 == 'Bus_MVStation_1'
         assert np.isnan(trafo.x_pu)
         assert np.isnan(trafo.r_pu)
-        assert trafo.s_nom == 20
-        assert trafo.type_info == 'dummy'
+        assert trafo.s_nom == 40
+        assert trafo.type_info == '40 MVA'
         print('Extend substation successful.')
         # check if transformer have to be removed
         crit_mv_station.loc['MVGrid_1', 's_pfa'] = 35.45
