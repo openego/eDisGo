@@ -138,7 +138,8 @@ def _line_load(edisgo_obj, grid, crit_lines):
         edisgo_obj.config['grid_expansion_load_factors'][
             '{}_load_case_line'.format(grid_level)]
     i_lines_allowed = \
-        edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
+        edisgo_obj.timeseries.timesteps_load_feedin_case.loc[
+            edisgo_obj.results.i_res.index].apply(
             lambda _: i_lines_allowed_per_case[_])
     try:
         i_lines_pfa = edisgo_obj.results.i_res[grid.lines_df.index]
