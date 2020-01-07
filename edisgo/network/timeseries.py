@@ -328,16 +328,6 @@ class TimeSeries:
         1. Load case: positive (load - generation) at HV/MV substation
         2. Feed-in case: negative (load - generation) at HV/MV substation
 
-        See also :func:`~.tools.tools.assign_load_feedin_case`.
-
-        Parameters
-        -----------
-        timeseries_load_feedin_case : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with information on whether time step is handled as load
-            case ('load_case') or feed-in case ('feedin_case') for each time
-            step in :py:attr:`~timeindex`. Index of the series is the
-            :py:attr:`~timeindex`.
-
         Returns
         -------
         :pandas:`pandas.Series<series>`
