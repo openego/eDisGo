@@ -526,7 +526,7 @@ def mv_grid_topology(edisgo_obj, timestep=None,
     cmap = plt.cm.get_cmap(lines_cmap)
     ll = pypsa_plot.plot(line_colors=line_colors, line_cmap=cmap, ax=ax,
                          title=title, line_widths=line_width,
-                         branch_components=['Line'], basemap=True,
+                         branch_components=['Line'], geomap=False,
                          bus_sizes=bus_sizes, bus_colors=bus_colors,
                          bus_cmap=bus_cmap)
 
