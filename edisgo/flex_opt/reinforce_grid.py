@@ -127,7 +127,7 @@ def reinforce_grid(edisgo, timesteps_pfa=None, copy_graph=False,
         if (isinstance(timesteps_pfa, str) and
                     timesteps_pfa == 'snapshot_analysis'):
             snapshots = tools.select_worstcase_snapshots(
-                edisgo_reinforce.topology)
+                edisgo_reinforce)
             # drop None values in case any of the two snapshots does not exist
             timesteps_pfa = pd.DatetimeIndex(data=[
                 snapshots['load_case'], snapshots['feedin_case']]).dropna()
