@@ -682,10 +682,12 @@ def _voltage_deviation(edisgo_obj, nodes, v_dev_allowed_upper,
     voltage_diff_uv = voltage_diff_uv.append(
         -nodes_uv.T + v_dev_allowed_lower.loc[v_mag_pu_pfa.index].values)
     # append to crit nodes dataframe
-    crit_nodes_grid = \
-        crit_nodes_grid.append(_append_crit_nodes(voltage_diff_ov))
-    crit_nodes_grid = \
-        crit_nodes_grid.append(_append_crit_nodes(voltage_diff_uv))
+    if not voltage_diff_ov.empty:
+        crit_nodes_grid = \
+            crit_nodes_grid.append(_append_crit_nodes(voltage_diff_ov))
+    if not voltage_diff_uv.empty:
+        crit_nodes_grid = \
+            crit_nodes_grid.append(_append_crit_nodes(voltage_diff_uv))
 
     return crit_nodes_grid
 
