@@ -1,9 +1,9 @@
 Variable;Symbol;Unit;Comment
-Current;I;A;
+Current;I;kA;
 Length;l;km;
-Active Power;P;kW;In PyPSA representation (:attr:`~.grid.network.Network.pypsa`) MW are used
-Reactive Power;Q;kvar;In PyPSA representation (:attr:`~.grid.network.Network.pypsa`) MVar are used
-Apparent Power;S;kVA;In PyPSA representation (:attr:`~.grid.network.Network.pypsa`) MVA are used
+Active Power;P;MW;
+Reactive Power;Q;MVar;
+Apparent Power;S;MVA;
 Resistance;R;Ohm or Ohm/km;Ohm/km applies to lines
 Reactance;X;Ohm or Ohm/km;Ohm/km applies to lines
 Voltage;V;kV;
