@@ -293,6 +293,28 @@ class TimeSeries:
         self._curtailment = curtailment
 
     @property
+    def residual_load(self):
+        """
+        Returns residual load.
+
+        Residual load for each time step is calculated from total generation
+        plus storage active power (discharge is positive) minus total load.
+        A positive residual load represents a feed-in case while a negative
+        residual load here represents a load case.
+        Grid losses are not considered.
+
+        Returns
+        -------
+        :pandas:`pandas.Series<series>`
+
+            Series with residual load in MW.
+
+        """
+        return self.generators_active_power.sum(axis=1) + \
+               self.storage_units_active_power.sum(axis=1) - \
+               self.loads_active_power.sum(axis=1)
+
+    @property
     def timesteps_load_feedin_case(self):
         """
         Contains residual load and information on feed-in and load case.
