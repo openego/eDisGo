@@ -351,12 +351,9 @@ class TimeSeries:
             load and 'feedin_case' for negative residual load.
 
         """
-        residual_load = self.generators_active_power.sum(axis=1) + \
-                        self.storage_units_active_power.sum(axis=1) - \
-                        self.loads_active_power.sum(axis=1)
 
-        return residual_load.apply(
-            lambda _: 'feedin_case' if _ < 0 else 'load_case')
+        return self.residual_load.apply(
+            lambda _: 'feedin_case' if _ > 0 else 'load_case')
 
     def to_csv(self, directory):
         """
