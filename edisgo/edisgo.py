@@ -521,7 +521,7 @@ class EDisGo:
             if self.results.pfa_v_mag_pu is None:
                 logging.warning("Voltages `pfa_v_mag_pu` from power flow "
                                 "analysis must be available to plot them.")
-            return
+                return
         except AttributeError:
             logging.warning("Results must be available to plot voltages. "
                             "Please analyze grid first.")
