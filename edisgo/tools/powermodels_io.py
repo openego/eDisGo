@@ -229,12 +229,16 @@ def _build_bus(psa_net,ppc):
                 "v_ang_set","v_nom","zone","v_mag_pu_max","v_mag_pu_min".split(", ")
     bus_cols = len(col_names)
     ppc["bus"] = np.zeros(shape=(n_bus, bus_cols), dtype=float)
-    ppc["bus"][:, :bus_cols] = np.array([0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1.06, 0.94])
+    ppc["bus"][:, :bus_cols] = np.array([0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1.05, 0.95])
     ppc["bus"][:, BUS_I] = np.arange(n_bus)
     bus_types = ["PQ", "PV", "Slack", "None"]
     bus_types_int = np.array([bus_types.index(b_type) + 1 for b_type in psa_net.buses["control"].values], dtype=int)
     ppc["bus"][:, BUS_TYPE] = bus_types_int
     ppc["bus"][:, BASE_KV] = psa_net.buses["v_nom"].values
+    # for edisgo scenario voltage bounds defined for load and feedin case with 0.985<= v <= 1.05
+    # bounds have to be at least in that range, only accept stronger bounds if given
+    ppc["bus"][:, VMAX] = [min(val,1.05) for val in psa_net.buses["v_mag_pu_max"].values]
+    ppc["bus"][:, VMIN] = [max(val, 0.985) for val in psa_net.buses["v_mag_pu_min"].values]
     return
 
 
