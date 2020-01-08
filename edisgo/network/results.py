@@ -563,7 +563,8 @@ class Results:
 
         """
         if self.pfa_p is None:
-            raise Exception('No results pfa_p to check. Please analyze grid first.')
+            raise Exception('No results pfa_p to check. '
+                            'Please analyze grid first.')
 
         if components_df is not None:
             labels_included = components_df.index[components_df.index.isin(

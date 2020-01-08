@@ -59,12 +59,7 @@ class TestEDisGo:
             self.edisgo.analyze()
         # check results
         overloaded_mv_station = checks.hv_mv_station_load(self.edisgo)
-        assert (len(overloaded_mv_station) == 1)
-        assert (np.isclose(
-            overloaded_mv_station.at['MVGrid_1', 's_pfa'],
-            23.824099, atol=1e-5))
-        assert (overloaded_mv_station.at[
-                   'MVGrid_1', 'time_index'] == self.timesteps[0])
+        assert overloaded_mv_station.empty
         overloaded_lv_station = checks.mv_lv_station_load(self.edisgo)
         assert(len(overloaded_lv_station) == 4)
         assert (np.isclose(
@@ -93,14 +88,14 @@ class TestEDisGo:
         assert (np.isclose(
             lv_crit_lines.at['Line_60000003', 'max_rel_overload'],
             1.03784, atol=1e-5))
-        assert len(mv_crit_lines) == 9
+        assert len(mv_crit_lines) == 4
         assert (mv_crit_lines.time_index == self.timesteps[0]).all()
         assert (np.isclose(
             mv_crit_lines.at['Line_10006', 'max_rel_overload'],
-            2.32612, atol=1e-5))
+            1.16306, atol=1e-5))
         assert (np.isclose(
             mv_crit_lines.at['Line_10026', 'max_rel_overload'],
-            2.12460, atol=1e-5))
+            1.06230, atol=1e-5))
 
     def test_analyze(self):
         if self.edisgo.results.grid_losses is None:
@@ -141,8 +136,8 @@ class TestEDisGo:
     def test_reinforce(self):
         results = self.edisgo.reinforce(combined_analysis=True)
         assert not results.unresolved_issues
-        assert len(results.grid_expansion_costs) == 18
-        assert len(results.equipment_changes) == 18
+        assert len(results.grid_expansion_costs) == 12
+        assert len(results.equipment_changes) == 12
         #Todo: test other relevant values
 
     def test_to_pypsa(self):

@@ -270,7 +270,7 @@ def add_and_connect_lv_generator(edisgo_object, generator,
     elif generator.voltage_level == 7:
 
         lv_loads = lv_grid.loads_df
-        if generator.electrical_capacity <= 30:
+        if generator.electrical_capacity <= 0.030:
             target_loads = lv_loads[lv_loads.sector == 'residential']
         else:
             target_loads = lv_loads[lv_loads.sector.isin(

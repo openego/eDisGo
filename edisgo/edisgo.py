@@ -275,17 +275,16 @@ class EDisGo:
         """
         return self._timeseries
 
-
     def import_ding0_grid(self, path):
         """
-        Import ding0 network data from csv files.
+        Import ding0 topology data from csv files in the format as
+        `Ding0 <https://github.com/openego/ding0>`_ provides it via
+        csv files.
 
         Parameters
         -----------
         path : :obj:'str`
             Path to directory containing csv files of network to be loaded.
-
-        #ToDo docstring
 
         """
         if path is not None:
@@ -314,7 +313,8 @@ class EDisGo:
             aggregation specifications: only relevant when only exporting
                 MV grid, specifies the aggregation method for undelaying LV
                 grid components. See :meth:`~.io.pypsa_io.append_lv_components`
-                for the available specifications.
+                for the available specifications for the optional parameters
+                aggregate_loads, aggregate_generators and aggregate_storages.
 
 
         Returns
@@ -328,6 +328,7 @@ class EDisGo:
 
         """
         timesteps = kwargs.get('timesteps', None)
+        kwargs.pop('timesteps', None)
         mode = kwargs.get('mode', None)
 
         if timesteps is None:
@@ -437,7 +438,7 @@ class EDisGo:
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
 
-        pypsa_network = pypsa_io.to_pypsa(self, mode=mode, timesteps=timesteps)
+        pypsa_network = self.to_pypsa(mode=mode, timesteps=timesteps)
 
         # Todo: check if still needed, if so update to new structure, at this point not needed, maybe later
         # check if all timesteps are in pypsa.snapshots, if not update time
@@ -520,7 +521,7 @@ class EDisGo:
             if self.results.pfa_v_mag_pu is None:
                 logging.warning("Voltages `pfa_v_mag_pu` from power flow "
                                 "analysis must be available to plot them.")
-            return
+                return
         except AttributeError:
             logging.warning("Results must be available to plot voltages. "
                             "Please analyze grid first.")

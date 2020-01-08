@@ -364,7 +364,7 @@ def oedb(edisgo_object):
             lv_gens_voltage_level_7 = len(lv_grid.generators_df[
                 lv_grid.generators_df.bus != lv_grid.station.index[0]])
             # warn if there're more generators than loads in LV grid
-            if lv_gens_voltage_level_7 > lv_loads:
+            if lv_gens_voltage_level_7 > lv_loads * 2:
                 logger.debug(
                     'There are {} generators (voltage level 7) but only {} '
                     'loads in LV grid {}.'.format(

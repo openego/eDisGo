@@ -138,7 +138,8 @@ def _line_load(edisgo_obj, grid, crit_lines):
         edisgo_obj.config['grid_expansion_load_factors'][
             '{}_load_case_line'.format(grid_level)]
     i_lines_allowed = \
-        edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
+        edisgo_obj.timeseries.timesteps_load_feedin_case.loc[
+            edisgo_obj.results.i_res.index].apply(
             lambda _: i_lines_allowed_per_case[_])
     try:
         i_lines_pfa = edisgo_obj.results.i_res[grid.lines_df.index]
@@ -682,10 +683,12 @@ def _voltage_deviation(edisgo_obj, nodes, v_dev_allowed_upper,
     voltage_diff_uv = voltage_diff_uv.append(
         -nodes_uv.T + v_dev_allowed_lower.loc[v_mag_pu_pfa.index].values)
     # append to crit nodes dataframe
-    crit_nodes_grid = \
-        crit_nodes_grid.append(_append_crit_nodes(voltage_diff_ov))
-    crit_nodes_grid = \
-        crit_nodes_grid.append(_append_crit_nodes(voltage_diff_uv))
+    if not voltage_diff_ov.empty:
+        crit_nodes_grid = \
+            crit_nodes_grid.append(_append_crit_nodes(voltage_diff_ov))
+    if not voltage_diff_uv.empty:
+        crit_nodes_grid = \
+            crit_nodes_grid.append(_append_crit_nodes(voltage_diff_uv))
 
     return crit_nodes_grid
 

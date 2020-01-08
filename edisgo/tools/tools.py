@@ -1,10 +1,9 @@
 import pandas as pd
-import numpy as np
 from networkx import OrderedGraph
 from math import pi, sqrt
 
 
-def select_worstcase_snapshots(network):
+def select_worstcase_snapshots(edisgo_obj):
     """
     Select two worst-case snapshots from time series
 
@@ -20,8 +19,7 @@ def select_worstcase_snapshots(network):
 
     Parameters
     ----------
-    network : :class:`~.network.topology.Topology`
-        Topology for which worst-case snapshots are identified.
+    edisgo_obj : :class:`~.EDisGo`
 
     Returns
     -------
@@ -31,15 +29,13 @@ def select_worstcase_snapshots(network):
         :pandas:`pandas.Timestamp<timestamp>` or None.
 
     """
-    timeseries_load_feedin_case = network.timeseries.timesteps_load_feedin_case
+    residual_load = edisgo_obj.timeseries.residual_load
 
     timestamp = {}
     timestamp['load_case'] = (
-        timeseries_load_feedin_case.residual_load.idxmax()
-        if max(timeseries_load_feedin_case.residual_load) > 0 else None)
+        residual_load.idxmin() if min(residual_load) < 0 else None)
     timestamp['feedin_case'] = (
-        timeseries_load_feedin_case.residual_load.idxmin()
-        if min(timeseries_load_feedin_case.residual_load) < 0 else None)
+        residual_load.idxmax() if max(residual_load) > 0 else None)
     return timestamp
 
 

@@ -293,6 +293,28 @@ class TimeSeries:
         self._curtailment = curtailment
 
     @property
+    def residual_load(self):
+        """
+        Returns residual load.
+
+        Residual load for each time step is calculated from total generation
+        plus storage active power (discharge is positive) minus total load.
+        A positive residual load represents a feed-in case while a negative
+        residual load here represents a load case.
+        Grid losses are not considered.
+
+        Returns
+        -------
+        :pandas:`pandas.Series<series>`
+
+            Series with residual load in MW.
+
+        """
+        return self.generators_active_power.sum(axis=1) + \
+               self.storage_units_active_power.sum(axis=1) - \
+               self.loads_active_power.sum(axis=1)
+
+    @property
     def timesteps_load_feedin_case(self):
         """
         Contains residual load and information on feed-in and load case.
@@ -305,16 +327,6 @@ class TimeSeries:
 
         1. Load case: positive (load - generation) at HV/MV substation
         2. Feed-in case: negative (load - generation) at HV/MV substation
-
-        See also :func:`~.tools.tools.assign_load_feedin_case`.
-
-        Parameters
-        -----------
-        timeseries_load_feedin_case : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe with information on whether time step is handled as load
-            case ('load_case') or feed-in case ('feedin_case') for each time
-            step in :py:attr:`~timeindex`. Index of the series is the
-            :py:attr:`~timeindex`.
 
         Returns
         -------
@@ -329,12 +341,9 @@ class TimeSeries:
             load and 'feedin_case' for negative residual load.
 
         """
-        residual_load = self.generators_active_power.sum(axis=1) + \
-                        self.storage_units_active_power.sum(axis=1) - \
-                        self.loads_active_power.sum(axis=1)
 
-        return residual_load.apply(
-            lambda _: 'feedin_case' if _ < 0 else 'load_case')
+        return self.residual_load.apply(
+            lambda _: 'feedin_case' if _ > 0 else 'load_case')
 
     def to_csv(self, directory):
         """
