@@ -69,6 +69,7 @@ class OPFResults:
         # Bus Variables
         self.set_bus_variables(pypsa_net)
         # Generator Variables
+        #TODO Adjust for case that generators are fixed and no variables are returned from julia
         # self.set_gen_variables(pypsa_net)
         # Storage Variables
         self.set_strg_variables(pypsa_net)
@@ -77,7 +78,7 @@ class OPFResults:
         solution_data = self.solution_data
 
         # time independent variables: ne: line expansion factor, 1.0 => no expansion
-        br_statics = pd.Series(solution_data["branch"]["static"]["ne"], name='ne').to_frame()
+        br_statics = pd.Series(solution_data["branch"]["static"]["ne"], name='nep').to_frame()
         br_statics.index = br_statics.index.astype(int)
         br_statics = br_statics.sort_index()
         br_statics.index = pypsa_net.lines.index
@@ -147,9 +148,12 @@ class OPFResults:
 
         # time dependent values
         ts = pypsa_net.snapshots
-        uc_t = pd.DataFrame(index=ts, columns=pypsa_net.buses.index)
-        ud_t = pd.DataFrame(index=ts, columns=pypsa_net.buses.index)
-        soc_t = pd.DataFrame(index=ts, columns=pypsa_net.buses.index)
+        # uc_t = pd.DataFrame(index=ts, columns=pypsa_net.buses.index)
+        # ud_t = pd.DataFrame(index=ts, columns=pypsa_net.buses.index)
+        # soc_t = pd.DataFrame(index=ts, columns=pypsa_net.buses.index)
+        uc_t = pd.DataFrame(index=ts, columns=strg_statics.index)
+        ud_t = pd.DataFrame(index=ts, columns=strg_statics.index)
+        soc_t = pd.DataFrame(index=ts, columns=strg_statics.index)
         for (t, date_idx) in enumerate(ts):
             strg_t = pd.DataFrame(solution_data["storage"]["nw"][str(t + 1)])
             strg_t.index = strg_t.index.astype(int)
