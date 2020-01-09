@@ -119,7 +119,10 @@ def aggregate_fluct_generators(psa_network):
             print("{} has {} generators attached".format(gen_bus, n_gens))
 
             for fluct in ["wind", "solar"]:
-                gen_name = "Generator_mvgd_460_{}".format(fluct)
+                if "mvgd" in gen_bus:
+                    gen_name = "Generator_aggr_{}_{}".format(gen_bus[gen_bus.index("mvgd"):],fluct)
+                else:
+                    gen_name = "Generator_aggr_{}_{}".format(gen_bus,fluct)
                 # ToDo check for type rather than generator name
                 gens_to_aggr = gens.loc[gens.index.str.contains(fluct)]
                 print("{} gens of type {}".format(len(gens_to_aggr), fluct))
