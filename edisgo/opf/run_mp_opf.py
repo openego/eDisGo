@@ -65,6 +65,15 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
         # TODO worst case snapshot analysis
         print("TODO implement worst case snapshots")
         return
+
+    # read settings from kwargs
+    settings = opf_settings()
+    settings["time_horizon"] = len(timesteps)
+    for args in kwargs.items():
+        if args[0] in settings:
+            # if hasattr(settings,args[0]):
+            settings[args[0]] = args[1]
+
     # convert edisgo network to pypsa network for timesteps on MV-level
     # aggregate all loads and generators in LV-grids
     # TODO check aggregation
@@ -84,12 +93,6 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     # convert pypsa structure to network dictionary and create dictionaries for time series of loads and generators
     pm, load_data, gen_data = to_powermodels(pypsa_mv)
 
-    # read settings from kwargs
-    settings = opf_settings()
-    settings["time_horizon"] = timehorizon
-    for args in kwargs.items():
-        if hasattr(settings,args[0]):
-            settings[args[0]] = args[1]
 
     # dump json files for static network information, timeseries of loads and generators, and opf settings
     with open("{}/{}_static.json".format(scenario_data_dir, pm["name"]), 'w') as outfile:
