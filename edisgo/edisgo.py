@@ -493,6 +493,10 @@ class EDisGo:
 
     def perform_mp_opf(self,**kwargs):
         timesteps = kwargs.pop('timesteps',None)
+        if timesteps is None:
+            # TODO worst case snapshot analysis
+            print("TODO implement worst case snapshots")
+            raise ValueError("Need to specify timesteps for multiperiod opf")
         status = run_mp_opf(self,timesteps,**kwargs)
         return status
 

@@ -1,15 +1,10 @@
 import os
-import pandas as pd
-import numpy as np
-from edisgo import EDisGo
-from edisgo.tools.tools import select_worstcase_snapshots
 from edisgo.tools.preprocess_pypsa_opf_structure import preprocess_pypsa_opf_structure, aggregate_fluct_generators
 from edisgo.tools.powermodels_io import to_powermodels
 import json
 from edisgo.opf.util.scenario_settings import opf_settings
 import subprocess
 from timeit import default_timer as timer
-from edisgo.opf.results.opf_result_class import OPFResults
 
 
 def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
