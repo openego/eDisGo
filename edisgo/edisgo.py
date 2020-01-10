@@ -12,6 +12,8 @@ from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.tools.config import Config
 from edisgo.flex_opt.curtailment import CurtailmentControl
 from edisgo.flex_opt.storage_integration import StorageControl
+from edisgo.opf.run_mp_opf import run_mp_opf
+from edisgo.opf.results.opf_result_class import OPFResults
 
 logger = logging.getLogger('edisgo')
 
@@ -216,6 +218,9 @@ class EDisGo:
         # set up results and time series container
         self.results = Results(self)
         self._timeseries = timeseries.TimeSeries()
+
+        # set up opf results container
+        self.opf_results = OPFResults()
 
         # import new generators
         if kwargs.get('generator_scenario', None) is not None:
@@ -485,6 +490,11 @@ class EDisGo:
         """
         StorageControl(edisgo=self, timeseries=timeseries,
                        position=position, **kwargs)
+
+    def perform_mp_opf(self,**kwargs):
+        timesteps = kwargs.pop('timesteps',None)
+        status = run_mp_opf(self,timesteps,**kwargs)
+        return status
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
