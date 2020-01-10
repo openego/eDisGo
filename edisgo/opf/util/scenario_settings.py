@@ -28,5 +28,13 @@ def opf_settings():
         # Maximal allowed curtailment over entire time horizon,
         # DEFAULT: "3percent"=> 3% of total RES generation in time horizon may be curtailed, else: Float
         "curtailment_total": "3percent",
+        # Solver options
+        # DEFAULT: IPOPT
+        "solver": "Ipopt",
+        "solver_tol": 1e-8,
+        # estimated working space for MUMPS if IPOPT,
+        # smaller values might reduce required memory requirements, DEFAULT: 1000
+        # see: https://coin-or.github.io/Ipopt/OPTIONS.html
+        "mumps_mem_percent": 1000
         }
     return opf_settings
