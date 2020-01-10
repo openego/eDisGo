@@ -64,8 +64,11 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     if timesteps is None:
         # TODO worst case snapshot analysis
         print("TODO implement worst case snapshots")
-        return
+        raise ValueError("Need to specify timesteps for multiperiod opf")
 
+
+    # only mv mode possible
+    mode="mv"
     # read settings from kwargs
     settings = opf_settings()
     settings["time_horizon"] = len(timesteps)
@@ -78,7 +81,7 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     # aggregate all loads and generators in LV-grids
     # TODO check aggregation
     print("convert to pypsa_mv")
-    pypsa_mv = edisgo_network.to_pypsa(mode="mv",
+    pypsa_mv = edisgo_network.to_pypsa(mode=mode,
                                        # aggregate_loads="all",
                                        # aggregate_generators="all",
                                        timesteps=timesteps)
@@ -114,8 +117,8 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     solution_dir = os.path.join(opf_dir, "opf_solutions")
     solution_file = "{}_{}_{}_opf_sol.json".format(pm["name"],settings["scenario"],settings["relaxation"])
 
-    opf_results = OPFResults()
-    opf_results.set_solution(solution_name="{}/{}".format(solution_dir,solution_file),
+    # opf_results = OPFResults()
+    edisgo_network.opf_results.set_solution(solution_name="{}/{}".format(solution_dir,solution_file),
                              pypsa_net=pypsa_mv)
 
-    return opf_results
+    return edisgo_network.opf_results.status #opf_results
