@@ -6,7 +6,7 @@ write_opf_solution:
 =#
 # using JSON
 
-function write_opf_solution(pm,status,network_name="test_network")
+function write_opf_solution(pm,status,sol_time,network_name="test_network")
     filename = "$(network_name)_opf_sol.json"
     bus_vars = [:w]
     # symbol :ne added afterwards with ne = I_max/I_lb represents line expansion factor
@@ -20,6 +20,7 @@ function write_opf_solution(pm,status,network_name="test_network")
         "name"=>pm.data["nw"]["1"]["name"],
         "solver"=>typeof(pm.model.solver),
         "status"=>status,
+        "sol_time"=>sol_time,
         "obj"=>getvalue(pm.model.obj),
         "branch" => Dict("nw"=>Dict(),"static"=>Dict()),
         "bus" => Dict("nw"=>Dict()),

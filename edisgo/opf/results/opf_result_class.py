@@ -34,6 +34,7 @@ class OPFResults:
         self.name = None
         self.obj = None
         self.status = None
+        self.solution_time = None
         self.solver = None
         self.lines = None
         self.lines_t = LineVariables()
@@ -63,6 +64,7 @@ class OPFResults:
         self.name = solution_data["name"]
         self.obj = solution_data["obj"]
         self.status = solution_data["status"]
+        self.solution_time = solution_data["sol_time"]
         self.solver = solution_data["solver"]
         # Line Variables
         self.set_line_variables(pypsa_net)
