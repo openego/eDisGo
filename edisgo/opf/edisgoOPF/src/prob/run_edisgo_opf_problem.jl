@@ -5,9 +5,9 @@ function run_edisgo_opf_problem(network_name::String,solution_file::String)
     post_method_edisgo(pm)
 
     JuMP.setsolver(pm.model,IpoptSolver())
-    status = solve(pm.model)
+    status,sol_time = @timed solve(pm.model)
     solution_file = "$(solution_file)_$(pm.data["scenario"])_$(pm.data["relaxation"])"
-    write_opf_solution(pm,status,solution_file)
+    write_opf_solution(pm,status,sol_time,solution_file)
 end
 
 function post_method_edisgo(pm)
