@@ -1,35 +1,39 @@
 def opf_settings():
     opf_settings = {
-        # name of postmethod
+        # name of postmethod, right now this is just the scenario name and every scenario is handle in one problem setup
+        # the so-called postmethod
+        # for future extension define multiple postmethods in different julia files which will be call by the scenarioname
         "scenario": "nep",
-        # objective function
+        # objective function, DEFAULT "nep", future extension might include "generation costs" "storage costs" etc.
         "objective": "nep",
-        # chosen relaxation
+        # chosen relaxation, DEFAULT: "none", options: "none", "soc", "soc_cr", "cr", relaxation are described in
+        # masterthesis "MULTIPERIOD OPTIMAL POWER FLOW PROBLEM IN DISTRIBUTION SYSTEM PLANNING" by Jaap Pedersen
         "relaxation": "none",
-        # upper bound on network expansion
+        # upper bound on network expansion, int, DEFAULT: 10
         "max_exp": 10,
         # number of time steps considered in optimization
         "time_horizon": 2,
         # length of time step in hours
         "time_elapsed": 1.0,
-        # storage units are considered
+        # storage units are considered, DEFAULT:False, if true storage units will be located either at buses given in
+        # "storage_buses" or if "storage_buses"=[] all buses are considered as possible locations
         "storage_units": False,
         # positioning of storage units, if empty list, all buses are potential positions of storage units and
-        # capacity is optimized
+        # capacity is optimized, entries of list need to be type "int"
         "storage_buses": [],
-        # total storage capacity in the network
+        # total storage capacity in the network, sizing of storages is a decision variable and will be found in optimization
         "total_storage_capacity": 0.0,
-        # Requirements for curtailment in every time step is considered
+        # Requirements for curtailment in every time step is considered, DEFAULT: False
         "curtailment_requirement": False,
         # List of total curtailment for each time step, len(list)== "time_horizon"
         "curtailment_requirement_series": [],
-        # An overall allowance of curtailment is considered
+        # An overall allowance of curtailment is considered DEFAULT: False,
         "curtailment_allowance": False,
         # Maximal allowed curtailment over entire time horizon,
-        # DEFAULT: "3percent"=> 3% of total RES generation in time horizon may be curtailed, else: Float
-        "curtailment_total": "3percent",
+        # DEFAULT: 0.0, float
+        "curtailment_total": 0.0,
         # Solver options
-        # DEFAULT: IPOPT
+        # DEFAULT: IPOPT, right now only option
         "solver": "Ipopt",
         "solver_tol": 1e-8,
         # estimated working space for MUMPS if IPOPT,
