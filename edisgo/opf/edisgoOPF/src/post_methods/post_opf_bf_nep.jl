@@ -8,22 +8,17 @@ multiperiod optimal power flow as branch flow model including network expansion
 - `obj::String` choose objective function between `both`,`onlyGen`,`onlyExp` 
     for minimizing generation and expansion or one of them
 ### setup:
-
-    variables:
-            I_max, r, x
-            sqr voltages, sqr current
-            p, q
-            pg, qg
-
-    constraints:
-            expansion variables and current limit
-            branch flow
-            power balance at buses
-            ohms law
-    
-    objectives:
-            either 'both generation and expansion' or
-            'generation' or 'expansion'
+`` \\begin{equation}
+\\begin{aligned}
+& \\displaystyle p_k =  \\sum_{m:k\\rightarrow m}P_{km} - \\sum_{i:i\\rightarrow k}\\left(P_{ik} - r_{ik}\\ell_{ik}  \\right) + g_kv_k ,&&\\forall k \\in N\\newline
+& \\displaystyle q_k =  \\sum_{m:k\\rightarrow m}Q_{km} - \\sum_{i:i\\rightarrow k}\\left(Q_{ik} - x_{ik}\\ell_{ik}  \\right) - b_kv_k ,&&\\forall k \\in N \\newline
+& v_k = v_i - 2\\left(r_{ik}P_{ik} + x_{ik}Q_{ik} \\right) + \\left(r_{ik}^2 + x_{ik}^2 \\right) \\ell_{ik}, && \\forall \\left(i,k \\right)  \\in E \\newline
+& v_i \\ell_{ik} = P_{ik}^2 + Q_{ik}^2,&&\\forall \\left(i,k \\right)  \\in E\\label{BF}\\newline
+& \\ell_{ik} \\leq \\left| I_{ik}^{max}\\right|^2 &&\\forall \\left(i,k \\right)  \\in E\\newline
+& r_{ik}I_{ik}^{max} = \\boldsymbol{r_{ik}^0I_{ik}^{max,0}}  &&\\forall 		\\left(i,k \\right)  \\in E\\newline
+& x_{ik}I_{ik}^{max} = \\boldsymbol{x_{ik}^0 I_{ik}^{max,0}}  &&\\forall \\left(i,k \\right)  \\in E
+\\end{aligned}
+\\end{equation} ``
 """
 function post_opf_bf_nep(pm::GenericPowerModel{T};maxexp::Integer=10,obj::String="both") where T <: PowerModels.AbstractBFForm
         # cost factor for network expansion

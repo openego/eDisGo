@@ -159,7 +159,7 @@ function add_var_max_current(pm)
         #lowerbound = ub[i], upperbound = 4*ub[i])
     #@warn("Upperbound of variable maximal current rating I_max is not set")
 end
-
+# add_var_storage() only used in post_opf_bf_strg_nep.jl, for edisgo scenario look at storage_variables.jl
 function add_var_storage(pm,nw::Int=pm.cnw,cnd::Int=pm.ccnd)
     var(pm,nw)[:uc] = @variable(pm.model,[i in ids(pm,nw,:storage)],basename="uc_$(nw)",
         lowerbound = 0,
