@@ -93,18 +93,19 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
 
 
     # dump json files for static network information, timeseries of loads and generators, and opf settings
-    with open("{}/{}_static.json".format(scenario_data_dir, pm["name"]), 'w') as outfile:
+    with open(os.path.join(scenario_data_dir, "{}_static.json".format(pm["name"])), 'w') as outfile:
         json.dump(pm, outfile)
-    with open("{}/{}_loads.json".format(scenario_data_dir, pm["name"]), 'w') as outfile:
+    with open(os.path.join(scenario_data_dir, "{}_loads.json".format(pm["name"])), 'w') as outfile:
         json.dump(load_data, outfile)
-    with open("{}/{}_gens.json".format(scenario_data_dir, pm["name"]), 'w') as outfile:
+    with open(os.path.join(scenario_data_dir, "{}_gens.json".format(pm["name"])), 'w') as outfile:
         json.dump(gen_data, outfile)
-    with open("{}/{}_opf_setting.json".format(scenario_data_dir, pm["name"]), 'w') as outfile:
+    with open(os.path.join(scenario_data_dir, "{}_opf_setting.json".format(pm["name"])), 'w') as outfile:
         json.dump(settings, outfile)
     print("start julia process")
     start = timer()
     subprocess.run(['julia', '--project={}'.format(julia_env_dir),
-                    '{}/optimization_evaluation.jl'.format(opf_dir), opf_dir, pm["name"]])
+                    os.path.join(opf_dir, 'optimization_evaluation.jl'),
+                    opf_dir, pm["name"]])
     end = timer()
     run_time = end-start
     print("julia terminated after {} s".format(run_time))
@@ -113,7 +114,8 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     solution_file = "{}_{}_{}_opf_sol.json".format(pm["name"],settings["scenario"],settings["relaxation"])
 
     # opf_results = OPFResults()
-    edisgo_network.opf_results.set_solution(solution_name="{}/{}".format(solution_dir,solution_file),
-                             pypsa_net=pypsa_mv)
+    edisgo_network.opf_results.set_solution(
+        solution_name=os.path.join(solution_dir,solution_file),
+        pypsa_net=pypsa_mv)
 
     return edisgo_network.opf_results.status #opf_results
