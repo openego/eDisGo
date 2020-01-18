@@ -9,7 +9,7 @@ def plot_line_expansion(edisgo_obj,timesteps):
     pypsa_plot.buses.x.loc[bus_index] = edisgo_obj.topology.mv_grid.buses_df.x.loc[bus_index]
     pypsa_plot.buses.y.loc[bus_index] = edisgo_obj.topology.mv_grid.buses_df.y.loc[bus_index]
     line_colors = edisgo_obj.opf_results.lines.squeeze()
-    plt.figure(figsize=(12, 8))
+    fig = plt.figure(figsize=(12, 8))
     ax = plt.gca()
     v = np.linspace(min(line_colors), max(line_colors), 101)
     psa_plot = pypsa_plot.plot(line_colors=line_colors, line_cmap=plt.cm.cool, ax=ax, geomap=False)
@@ -18,4 +18,4 @@ def plot_line_expansion(edisgo_obj,timesteps):
     cb.set_label('Number of installed lines')
     plt.show()
 
-    return
+    return fig,ax

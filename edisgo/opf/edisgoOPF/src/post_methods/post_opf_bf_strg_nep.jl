@@ -7,6 +7,23 @@
 - `obj::String` DEFAULT = `both`, choose objective function between `both`,`onlyGen`,`onlyExp` 
     for minimizing generation and expansion or one of them
 - `relaxation::String` relaxation scheme that is used, DEFAULT = `none`, options `cr`,`soc`,`soc_cr`
+
+### Setup:
+
+`` \\begin{equation}
+\\begin{aligned}
+& \\displaystyle p_k =  \\sum_{m:k\\rightarrow m}P_{km} - \\sum_{i:i\\rightarrow k}\\left(P_{ik} - r_{ik}\\ell_{ik}  \\right) + g_kv_k ,&&\\forall k \\in N\\newline
+& \\displaystyle q_k =  \\sum_{m:k\\rightarrow m}Q_{km} - \\sum_{i:i\\rightarrow k}\\left(Q_{ik} - x_{ik}\\ell_{ik}  \\right) - b_kv_k ,&&\\forall k \\in N \\newline
+& v_k = v_i - 2\\left(r_{ik}P_{ik} + x_{ik}Q_{ik} \\right) + \\left(r_{ik}^2 + x_{ik}^2 \\right) \\ell_{ik}, && \\forall \\left(i,k \\right)  \\in E \\newline
+& v_i \\ell_{ik} = P_{ik}^2 + Q_{ik}^2,&&\\forall \\left(i,k \\right)  \\in E\\label{BF}\\newline
+& \\ell_{ik} \\leq \\left| I_{ik}^{max}\\right|^2 &&\\forall \\left(i,k \\right)  \\in E\\newline
+& r_{ik}I_{ik}^{max} = \\boldsymbol{r_{ik}^0I_{ik}^{max,0}}  &&\\forall 		\\left(i,k \\right)  \\in E\\newline
+& x_{ik}I_{ik}^{max} = \\boldsymbol{x_{ik}^0 I_{ik}^{max,0}}  &&\\forall \\left(i,k \\right)  \\in E\\newline
+& T_s \\left( \\eta_{c,i} u_{c,i}^t - \\frac{u_{d,i}^t}{\\eta_{d,i}}\\right)=e_i^{t+1} - e_i^t && \\forall i \\in S\\newline
+&e_i^0 = e_i^{T+1} &&\\forall i \\in S
+\\end{aligned}
+\\end{equation} ``
+
 ### Relaxation schemes:
 #### `cr` relaxation:
 `` \\begin{equation}
@@ -24,26 +41,6 @@
 \\end{aligned}
 \\end{equation} ``
 
-### Setup:
-    variables:
-            NEP: I_max, r, x
-            Storages: uc, ud, soc
-            Power flow:
-                sqr voltages, sqr current
-                p, q
-                pg, qg
-
-    constraints:
-            expansion variables and current limit
-            branch flow
-            power balance at buses
-            ohms law
-            approximated complementary constraint storages
-            state of charge storages
-    
-    objectives:
-            either 'both generation and expansion' or
-            'generation' or 'expansion'
 """
 function post_opf_bf_strg_nep(pm::GenericPowerModel{T};maxexp::Integer=10,obj::String="both",relaxation::String="none") where T <: PowerModels.AbstractBFForm
     # cost for network expansion
