@@ -46,7 +46,8 @@ setup(
         'multiprocess',
         'workalendar',
         'egoio >= 0.4.7',
-        'matplotlib'
+        'matplotlib',
+        'pypower'
     ],
     extras_require={
         'geoplot': ['geopandas', 'contextily'],
