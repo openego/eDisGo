@@ -491,13 +491,27 @@ class EDisGo:
         StorageControl(edisgo=self, timeseries=timeseries,
                        position=position, **kwargs)
 
-    def perform_mp_opf(self,**kwargs):
-        timesteps = kwargs.pop('timesteps',None)
-        if timesteps is None:
-            # TODO worst case snapshot analysis
-            print("TODO implement worst case snapshots")
-            raise ValueError("Need to specify timesteps for multiperiod opf")
-        status = run_mp_opf(self,timesteps,**kwargs)
+    def perform_mp_opf(self, timesteps, **kwargs):
+        """
+        Run optimal power flow with julia.
+
+        Parameters
+        -----------
+        timesteps : list
+            List of timesteps to perform OPF for.
+        kwargs :
+            See :func:`edisgo.opf.run_mp_opf.run_mp_opf` for further
+            information.
+
+        Returns
+        --------
+        str
+            Status of optimization.
+
+        """
+        if not timesteps:
+            raise ValueError("Need to specify timesteps for multiperiod OPF.")
+        status = run_mp_opf(self, timesteps, **kwargs)
         return status
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
