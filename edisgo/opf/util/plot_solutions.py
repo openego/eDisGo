@@ -16,5 +16,6 @@ def plot_line_expansion(edisgo_obj,timesteps):
     cb = plt.colorbar(psa_plot[1])
     cb.set_clim(vmin=v[0], vmax=v[-1])
     cb.set_label('Number of installed lines')
+    plt.show()
 
     return
