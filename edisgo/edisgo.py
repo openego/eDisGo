@@ -509,7 +509,7 @@ class EDisGo:
             Status of optimization.
 
         """
-        if not timesteps:
+        if timesteps is None:
             raise ValueError("Need to specify timesteps for multiperiod OPF.")
         status = run_mp_opf(self, timesteps, **kwargs)
         return status
