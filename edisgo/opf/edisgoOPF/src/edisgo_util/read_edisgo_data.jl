@@ -46,40 +46,35 @@ function read_gen_timeseries(network_name::String)
     return gen_data, isgens
 end
 
-"Returns dictionaries to look up load bus for load and to look up load ids of of load buses in data"
+#= Create a Dict that maps each load to its respective bus =#
 function look_up_dicts(data,load_data)
-    look_up_load_bus = Dict()
-    for (load_i,val) in load_data["1"]
-        look_up_load_bus[load_i] = val["load_bus"]
-    end
     look_up_load_ids = Dict()
-    for (load_ids,val) in data["nw"]["1"]["load"]
-        look_up_load_ids[val["load_bus"]] = [load_ids,false]
+    for (load_ids, val) in data["nw"]["1"]["load"]
+        look_up_load_ids[val["load_bus"]] = load_ids
     end
-    return look_up_load_bus,look_up_load_ids
+    return look_up_load_ids
 end
 
 function add_load_timeseries(data,load_data)
-    # create look up dictionaries for load buses and load ids at load buses
-    look_up_load_bus,look_up_load_ids = look_up_dicts(data,load_data)
-    # iterate over all timesteps nw and add set values for loads
+    look_up_load_ids = look_up_dicts(data,load_data)
+
+    #= Initialize Load variables for each time step=#
     for (nw,loads) in load_data
         for (i,load_i) in loads
-            # aggregate loads for each load bus
-            load_id,is_set = look_up_load_ids[load_i["load_bus"]]
-            if !is_set
-                # first time load_id is called set new value in data and set is_set=true
-                data["nw"][nw]["load"][load_id]["pd"] = load_i["pd"]
-                data["nw"][nw]["load"][load_id]["qd"] = load_i["qd"]
-                look_up_load_ids[load_i["load_bus"]][2]=true
-            else
-                # load_id has been called before add load to existing data
-                data["nw"][nw]["load"][load_id]["pd"] += load_i["pd"]
-                data["nw"][nw]["load"][load_id]["qd"] += load_i["qd"]
-            end
+            load_id = look_up_load_ids[load_i["load_bus"]]
+            data["nw"][nw]["load"][load_id]["pd"] = 0
+            data["nw"][nw]["load"][load_id]["qd"] = 0
         end
     end
-    return look_up_load_bus,look_up_load_ids
+
+    #= Accumulate the loads connected to each bus for every timestep=#
+    for (nw,loads) in load_data
+        for (i,load_i) in loads
+            load_id = look_up_load_ids[load_i["load_bus"]]
+            data["nw"][nw]["load"][load_id]["pd"] += load_i["pd"]
+            data["nw"][nw]["load"][load_id]["qd"] += load_i["qd"]
+        end
+    end
 end
 
 function read_data(network_name::String)
