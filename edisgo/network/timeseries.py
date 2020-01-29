@@ -605,6 +605,27 @@ def _load_from_timeseries(edisgo_obj, load_names=None):
 
 
 def _generation_from_timeseries(edisgo_obj, generator_names=None):
+
+    def _timeseries_fluctuating():
+        if isinstance(edisgo_obj.timeseries.generation_fluctuating.columns,
+                      pd.MultiIndex):
+            return gens_fluctuating.apply(
+                lambda x: edisgo_obj.timeseries.generation_fluctuating[
+                              x.type][x.weather_cell_id].T * x.p_nom, axis=1).T
+        else:
+            return gens_fluctuating.apply(
+                lambda x: edisgo_obj.timeseries.generation_fluctuating[
+                              x.type].T * x.p_nom, axis=1).T
+
+    def _timeseries_dispatchable():
+        return gens_dispatchable.apply(
+            lambda x: edisgo_obj.timeseries.generation_dispatchable[x.type].T *
+                      x.p_nom
+            if x.type in edisgo_obj.timeseries.generation_dispatchable.columns
+            else edisgo_obj.timeseries.generation_dispatchable['other'].T *
+                 x.p_nom,
+            axis=1).T
+
     if generator_names is None:
         generator_names = edisgo_obj.topology.generators_df.index
     # get all generators
@@ -618,30 +639,14 @@ def _generation_from_timeseries(edisgo_obj, generator_names=None):
     if gens_dispatchable.empty and gens_fluctuating.empty:
         logger.debug("No generators provided to add timeseries for.")
         return
-    elif gens_dispatchable.empty:
+    if not gens_dispatchable.empty:
         edisgo_obj.timeseries.generators_active_power = \
-            edisgo_obj.timeseries.generators_active_power.T.append(
-                gens_fluctuating.apply(
-                    lambda x:
-                    edisgo_obj.timeseries.generation_fluctuating[
-                        x.type][x.weather_cell_id].T * x.p_nom, axis=1)).T
-    elif gens_fluctuating.empty:
+            pd.concat([edisgo_obj.timeseries.generators_active_power,
+                       _timeseries_dispatchable()], axis=1)
+    if not gens_fluctuating.empty:
         edisgo_obj.timeseries.generators_active_power = \
-            edisgo_obj.timeseries.generators_active_power.T.append(
-                edisgo_obj.timeseries.generation_dispatchable.
-                loc[:, gens_dispatchable.index].T).T
-    else:
-        edisgo_obj.timeseries.generators_active_power = \
-            edisgo_obj.timeseries.generators_active_power.T.append(
-                pd.concat(
-                    [gens_fluctuating.apply(
-                        lambda x:
-                        edisgo_obj.timeseries.generation_fluctuating[
-                            x.type][x.weather_cell_id].T * x.p_nom,
-                        axis=1),
-                        edisgo_obj.timeseries.generation_dispatchable.
-                        loc[:, gens_dispatchable.index].T],
-                    axis=0)).T
+            pd.concat([edisgo_obj.timeseries.generators_active_power,
+                       _timeseries_fluctuating()], axis=1)
 
     # set reactive power if given as attribute
     if hasattr(edisgo_obj.timeseries, 'generation_reactive_power')\

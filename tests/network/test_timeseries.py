@@ -90,7 +90,7 @@ class Testget_component_timeseries:
                                        'Bus_BranchTee_LVGrid_1_10', 0.05)
 
         timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
-        ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775]*8760},
+        ts_gen_dispatchable = pd.DataFrame({'other': [0.775]*8760},
                                            index=timeindex)
         # test error raising in case of missing ts for dispatchable gens
         msg = \
@@ -441,7 +441,7 @@ class Testget_component_timeseries:
         self.topology.remove_load(load_name)
         # test import timeseries from dbs
         timeindex = pd.date_range('1/1/2011', periods=24, freq='H')
-        ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775] * 24},
+        ts_gen_dispatchable = pd.DataFrame({'other': [0.775] * 24},
                                            index=timeindex)
         timeseries.get_component_timeseries(timeindex=timeindex,
             edisgo_obj=self, timeseries_generation_fluctuating='oedb',
@@ -597,7 +597,7 @@ class Testget_component_timeseries:
         # TEST TIMESERIES IMPORT
         # test import timeseries from dbs
         timeindex = pd.date_range('1/1/2011', periods=24, freq='H')
-        ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775] * 24},
+        ts_gen_dispatchable = pd.DataFrame({'other': [0.775] * 24},
                                            index=timeindex)
         timeseries.get_component_timeseries(timeindex=timeindex,
                                 edisgo_obj=self,
@@ -632,8 +632,7 @@ class Testget_component_timeseries:
             data=(np.array([[p_nom2 * 0.97], [p_nom3 * 0.98]])
                   .repeat(len(timeindex), axis=1).T))
         timeseries.add_generators_timeseries(self,
-            [gen_name2, gen_name3],
-            timeseries_generation_dispatchable=new_gens_active_power)
+            [gen_name2, gen_name3])
         assert (self.timeseries.generators_active_power.shape == (
             24, num_gens + 3))
         assert (self.timeseries.generators_reactive_power.shape ==
@@ -641,11 +640,11 @@ class Testget_component_timeseries:
         assert np.isclose(
             self.timeseries.generators_active_power.loc[
                 timeindex, [gen_name2, gen_name3]].values,
-            [p_nom2*0.97, p_nom3*0.98]).all()
+            [p_nom2*0.775, p_nom3*0.775]).all()
         assert np.isclose(
             self.timeseries.generators_reactive_power.loc[
                 timeindex, [gen_name2, gen_name3]].values,
-            [-tan(acos(0.9))*p_nom2*0.97, -tan(acos(0.95))*p_nom3*0.98]).all()
+            [-tan(acos(0.9))*p_nom2*0.775, -tan(acos(0.95))*p_nom3*0.775]).all()
         # check values when reactive power is inserted as timeseries
         new_gens_reactive_power = pd.DataFrame(
             index=timeindex, columns=[gen_name2, gen_name3],
@@ -661,7 +660,7 @@ class Testget_component_timeseries:
         assert np.isclose(
             self.timeseries.generators_active_power.loc[
                 timeindex, [gen_name2, gen_name3]].values,
-            [p_nom2 * 0.97, p_nom3 * 0.98]).all()
+            [p_nom2 * 0.775, p_nom3 * 0.775]).all()
         assert np.isclose(
             self.timeseries.generators_reactive_power.loc[
                 timeindex, [gen_name2, gen_name3]].values,
@@ -799,7 +798,7 @@ class Testget_component_timeseries:
         # TEST TIMESERIES IMPORT
         # test import timeseries from dbs
         timeindex = pd.date_range('1/1/2011', periods=24, freq='H')
-        ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775] * 24},
+        ts_gen_dispatchable = pd.DataFrame({'other': [0.775] * 24},
                                            index=timeindex)
         # reindex timeseries
         storage_units_active_power = \
