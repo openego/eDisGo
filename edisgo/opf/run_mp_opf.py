@@ -1,10 +1,11 @@
 import os
-from edisgo.tools.preprocess_pypsa_opf_structure import preprocess_pypsa_opf_structure, aggregate_fluct_generators
-from edisgo.tools.powermodels_io import to_powermodels
 import json
-from edisgo.opf.util.scenario_settings import opf_settings
 import subprocess
 from timeit import default_timer as timer
+
+from edisgo.tools.preprocess_pypsa_opf_structure import preprocess_pypsa_opf_structure, aggregate_fluct_generators
+from edisgo.tools.powermodels_io import to_powermodels
+from edisgo.opf.util.scenario_settings import opf_settings
 
 
 def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
@@ -103,12 +104,15 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
         json.dump(settings, outfile)
     print("start julia process")
     start = timer()
-    subprocess.run(['julia', '--project={}'.format(julia_env_dir),
+    julia_process = subprocess.run(['julia', '--project={}'.format(julia_env_dir),
                     os.path.join(opf_dir, 'optimization_evaluation.jl'),
                     opf_dir, pm["name"]])
     end = timer()
     run_time = end-start
     print("julia terminated after {} s".format(run_time))
+
+    if julia_process.returncode != 0:
+        raise RuntimeError("Julia Subprocess failed")
 
     solution_dir = os.path.join(opf_dir, "opf_solutions")
     solution_file = "{}_{}_{}_opf_sol.json".format(pm["name"],settings["scenario"],settings["relaxation"])
