@@ -1,12 +1,14 @@
 import os
 import json
 import subprocess
+import logging
 from timeit import default_timer as timer
 
 from edisgo.tools.preprocess_pypsa_opf_structure import preprocess_pypsa_opf_structure, aggregate_fluct_generators
 from edisgo.tools.powermodels_io import to_powermodels
 from edisgo.opf.util.scenario_settings import opf_settings
 
+logger = logging.getLogger(__name__)
 
 def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     """
@@ -46,8 +48,8 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     julia_env_dir = os.path.join(opf_dir, "edisgoOPF")
 
     scenario_data_dir = os.path.join(opf_dir, "edisgo_scenario_data")
-    print(julia_env_dir)
-    print(scenario_data_dir)
+    logger.debug(julia_env_dir)
+    logger.debug(scenario_data_dir)
     # solution_dir = os.path.join(opf_dir, "opf_solutions/")
 
                     # set path to edisgoOPF folder for scenario data and julia module relative to this file
@@ -59,7 +61,7 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
 
     if timesteps is None:
         # TODO worst case snapshot analysis
-        print("TODO implement worst case snapshots")
+        logger.error("TODO implement worst case snapshots")
         raise ValueError("Need to specify timesteps for multiperiod opf")
 
 
@@ -76,7 +78,7 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     # convert edisgo network to pypsa network for timesteps on MV-level
     # aggregate all loads and generators in LV-grids
     # TODO check aggregation
-    print("convert to pypsa_mv")
+    logger.debug("converting to pypsa_mv")
     pypsa_mv = edisgo_network.to_pypsa(mode=mode,
                                        # aggregate_loads="all",
                                        # aggregate_generators="all",
@@ -86,7 +88,7 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     pypsa_mv.name = "ding0_{}_t_{}".format(edisgo_network.topology.id,timehorizon)
 
     # preprocess pypsa structure
-    print("preprocsee pypsa structure for opf")
+    logger.debug("preprocessing pypsa structure for opf")
     preprocess_pypsa_opf_structure(edisgo_network, pypsa_mv, hvmv_trafo=False)
     aggregate_fluct_generators(pypsa_mv)
     # convert pypsa structure to network dictionary and create dictionaries for time series of loads and generators
@@ -102,14 +104,14 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
         json.dump(gen_data, outfile)
     with open(os.path.join(scenario_data_dir, "{}_opf_setting.json".format(pm["name"])), 'w') as outfile:
         json.dump(settings, outfile)
-    print("start julia process")
+    logger.info("starting julia process")
     start = timer()
     julia_process = subprocess.run(['julia', '--project={}'.format(julia_env_dir),
                     os.path.join(opf_dir, 'optimization_evaluation.jl'),
                     opf_dir, pm["name"]])
     end = timer()
     run_time = end-start
-    print("julia terminated after {} s".format(run_time))
+    logger.info("julia terminated after {} s".format(run_time))
 
     if julia_process.returncode != 0:
         raise RuntimeError("Julia Subprocess failed")
