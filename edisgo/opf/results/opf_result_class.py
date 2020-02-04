@@ -138,7 +138,8 @@ class OPFResults:
         solution_data = self.solution_data
 
         # time independent values
-        strg_statics = pd.Series(solution_data["storage"]["static"]["emax"], name='emax').to_frame()
+        strg_statics = pd.DataFrame.from_dict(solution_data["storage"]["static"]["emax"], orient='index').rename({'0':'emax'})
+        
         strg_statics.index = strg_statics.index.astype(int)
         strg_statics = strg_statics.sort_index()
         try:
@@ -150,20 +151,19 @@ class OPFResults:
 
         # time dependent values
         ts = pypsa_net.snapshots
-        # uc_t = pd.DataFrame(index=ts, columns=pypsa_net.buses.index)
-        # ud_t = pd.DataFrame(index=ts, columns=pypsa_net.buses.index)
-        # soc_t = pd.DataFrame(index=ts, columns=pypsa_net.buses.index)
         uc_t = pd.DataFrame(index=ts, columns=strg_statics.index)
         ud_t = pd.DataFrame(index=ts, columns=strg_statics.index)
         soc_t = pd.DataFrame(index=ts, columns=strg_statics.index)
+
         for (t, date_idx) in enumerate(ts):
             strg_t = pd.DataFrame(solution_data["storage"]["nw"][str(t + 1)])
             strg_t.index = strg_t.index.astype(int)
             strg_t = strg_t.sort_index()
+            strg_t.index = strg_statics.index
 
-            uc_t.loc[date_idx] = strg_t.uc
-            ud_t.loc[date_idx] = strg_t.ud
-            soc_t.loc[date_idx] = strg_t.soc
+            uc_t.loc[date_idx].update(strg_t['uc'])
+            ud_t.loc[date_idx].update(strg_t['ud'])
+            soc_t.loc[date_idx].update(strg_t['soc'])
 
         self.storage_units_t.soc = soc_t
         self.storage_units_t.uc = uc_t
