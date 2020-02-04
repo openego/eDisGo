@@ -143,6 +143,7 @@ class OPFResults:
         strg_statics.index = strg_statics.index.astype(int)
         strg_statics = strg_statics.sort_index()
         try:
+            # FIXME: This will be incorrect if only a subset of buses are storage units
             strg_statics.index = pypsa_net.buses.index
         except Exception as e:
             print("error when reindexing of storage indices: {}".format(e))
