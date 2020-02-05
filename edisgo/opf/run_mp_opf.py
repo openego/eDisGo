@@ -10,6 +10,28 @@ from edisgo.opf.util.scenario_settings import opf_settings
 
 logger = logging.getLogger(__name__)
 
+def bus_names_to_ints(edisgo, bus_names):
+    """
+    :param edisgo_network:
+    :param bus_names: List of bus names to be remapped to indices
+    :return bus_indices: List of one-based bus indices
+
+    This remaps a list of eDisGo bus names from Strings to Integers.
+    Integer indices are needed for the optimization.
+    The result uses one-based indexing, as it gets passed on to Julia
+    directly.
+    """
+
+    # map bus name to its integer index
+    bus_indices = []
+    for name in bus_names:
+        bus_indices.append(edisgo.topology.mv_grid.buses_df.index.get_loc(name))
+
+    # Increment each Python index by one, as Julia uses one-based indexing
+    bus_indices = [i + 1 for i in bus_indices]
+
+    return bus_indices
+
 def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     """
     :param edisgo_network:
@@ -70,6 +92,13 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     # read settings from kwargs
     settings = opf_settings()
     settings["time_horizon"] = len(timesteps)
+
+    # Remap storage bus names to Integers, if any
+    if "storage_buses" in kwargs:
+        bus_names = kwargs["storage_buses"]
+        bus_indices = bus_names_to_ints(edisgo_network, bus_names)
+        kwargs["storage_buses"] = bus_indices
+
     for args in kwargs.items():
         if args[0] in settings:
             # if hasattr(settings,args[0]):
@@ -93,7 +122,6 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     aggregate_fluct_generators(pypsa_mv)
     # convert pypsa structure to network dictionary and create dictionaries for time series of loads and generators
     pm, load_data, gen_data = to_powermodels(pypsa_mv)
-
 
     # dump json files for static network information, timeseries of loads and generators, and opf settings
     with open(os.path.join(scenario_data_dir, "{}_static.json".format(pm["name"])), 'w') as outfile:

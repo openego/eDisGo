@@ -138,15 +138,15 @@ class OPFResults:
         solution_data = self.solution_data
 
         # time independent values
-        strg_statics = pd.DataFrame.from_dict(solution_data["storage"]["static"]["emax"], orient='index').rename({'0':'emax'})
+        strg_statics = pd.DataFrame.from_dict(solution_data["storage"]["static"]["emax"], orient='index')
+        strg_statics.columns = ['emax']
         
         strg_statics.index = strg_statics.index.astype(int)
         strg_statics = strg_statics.sort_index()
-        try:
-            # FIXME: This will be incorrect if only a subset of buses are storage units
-            strg_statics.index = pypsa_net.buses.index
-        except Exception as e:
-            print("error when reindexing of storage indices: {}".format(e))
+
+        # Convert one-based storage indices back to string names
+        idx_names = [pypsa_net.buses.index[i-1] for i in strg_statics.index]
+        strg_statics.index = pd.Index(idx_names)
 
         self.storage_units = strg_statics
 
@@ -169,8 +169,6 @@ class OPFResults:
         self.storage_units_t.soc = soc_t
         self.storage_units_t.uc = uc_t
         self.storage_units_t.ud = ud_t
-
-        return
 
 # opf_results = OPFResults()
 # opf_results.read_solution("solution_name.json")
