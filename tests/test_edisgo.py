@@ -237,7 +237,7 @@ class TestEDisGo:
         dirname = os.path.dirname(__file__)
         test_network_directory = os.path.join(dirname, 'ding0_test_network')
         timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
-        ts_gen_dispatchable = pd.DataFrame({'Generator_1': [0.775] * 8760},
+        ts_gen_dispatchable = pd.DataFrame({'other': [0.775] * 8760},
                                            index=timeindex)
         edisgo = EDisGo(ding0_grid=test_network_directory,
                         timeseries_generation_fluctuating='oedb',

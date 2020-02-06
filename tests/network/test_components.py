@@ -1,6 +1,6 @@
 import pytest
 import os
-import math
+import pandas as pd
 
 from edisgo import EDisGo
 from edisgo.network.components import Load, Generator, Storage, Switch
@@ -16,13 +16,14 @@ class TestComponents:
         test_network_directory = os.path.join(
             parent_dirname, 'ding0_test_network')
         edisgo = EDisGo(ding0_grid=test_network_directory,
-                             worst_case_analysis='worst-case')
+                        worst_case_analysis='worst-case')
         self.edisgo_obj = edisgo
 
     def test_load_class(self):
         """Test Load class getter, setter, methods"""
 
-        load = Load(id='Load_agricultural_LVGrid_1_1', edisgo_obj=self.edisgo_obj)
+        load = Load(id='Load_agricultural_LVGrid_1_1',
+                    edisgo_obj=self.edisgo_obj)
 
         # test getter
         assert load.id == 'Load_agricultural_LVGrid_1_1'
@@ -32,8 +33,9 @@ class TestComponents:
         assert load.bus == 'Bus_Load_agricultural_LVGrid_1_1'
         assert load.grid == self.edisgo_obj.topology._grids['LVGrid_1']
         assert load.voltage_level == 'lv'
-        assert load.geom == None
-        #ToDo add test for active_power_timeseries and reactive_power_timeseries once implemented
+        assert load.geom is None
+        assert isinstance(load.active_power_timeseries, pd.Series)
+        assert isinstance(load.reactive_power_timeseries, pd.Series)
 
         # test setter
         load.peak_load = 0.06
@@ -67,7 +69,8 @@ class TestComponents:
         assert gen.type == 'wind'
         assert gen.subtype == 'wind_wind_onshore'
         assert gen.weather_cell_id == 1122075
-        #ToDo add test for active_power_timeseries and reactive_power_timeseries once implemented
+        assert isinstance(gen.active_power_timeseries, pd.Series)
+        assert isinstance(gen.reactive_power_timeseries, pd.Series)
 
         # test setter
         gen.nominal_power = 4
@@ -113,7 +116,3 @@ class TestComponents:
         switch.open()
         switch._state = None
         assert switch.state == 'open'
-
-
-
-

@@ -406,33 +406,35 @@ class Topology:
     def storage_units_df(self, storage_units_df):
         self._storage_units_df = storage_units_df
 
-    @property
-    def generators(self):
-        """
-        Connected generators within the network.
-
-        Returns
-        -------
-        list(:class:`~.network.components.Generator`)
-            List of generators within the network.
-
-        """
-        for gen in self.generators_df.drop(labels=['Generator_slack']).index:
-            yield Generator(id=gen)
-
-    @property
-    def loads(self):
-        """
-        Connected loads within the network.
-
-        Returns
-        -------
-        list(:class:`~.network.components.Load`)
-            List of loads within the network.
-
-        """
-        for l in self.loads_df.index:
-            yield Load(id=l)
+    #TODO: fix instantiation of Generator and Load objects (they require
+    #edisgo_obj that topology does have as a parameter)
+    # @property
+    # def generators(self):
+    #     """
+    #     Connected generators within the network.
+    #
+    #     Returns
+    #     -------
+    #     list(:class:`~.network.components.Generator`)
+    #         List of generators within the network.
+    #
+    #     """
+    #     for gen in self.generators_df.drop(labels=['Generator_slack']).index:
+    #         yield Generator(id=gen)
+    #
+    # @property
+    # def loads(self):
+    #     """
+    #     Connected loads within the network.
+    #
+    #     Returns
+    #     -------
+    #     list(:class:`~.network.components.Load`)
+    #         List of loads within the network.
+    #
+    #     """
+    #     for l in self.loads_df.index:
+    #         yield Load(id=l)
 
     @property
     def id(self):
