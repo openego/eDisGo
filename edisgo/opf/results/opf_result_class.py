@@ -139,7 +139,8 @@ class OPFResults:
 
         # time independent values
         strg_statics = pd.DataFrame.from_dict(solution_data["storage"]["static"]["emax"], orient='index')
-        strg_statics.columns = ['emax']
+        if len(strg_statics.columns) == 1:
+            strg_statics.columns = ['emax']
         
         strg_statics.index = strg_statics.index.astype(int)
         strg_statics = strg_statics.sort_index()
