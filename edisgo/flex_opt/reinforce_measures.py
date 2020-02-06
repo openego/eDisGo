@@ -1,4 +1,3 @@
-import copy
 import math
 import networkx as nx
 from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
@@ -6,7 +5,6 @@ from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
 import pandas as pd
 import numpy as np
 
-from edisgo.network.components import Generator, Load
 from edisgo.network.grids import LVGrid, MVGrid
 
 import logging

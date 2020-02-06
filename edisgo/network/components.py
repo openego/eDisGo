@@ -4,8 +4,6 @@ import logging
 from math import acos, tan
 from abc import ABC, abstractmethod
 
-from edisgo.network import topology
-
 if 'READTHEDOCS' not in os.environ:
     from shapely.geometry import Point
 
