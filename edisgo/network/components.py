@@ -336,7 +336,7 @@ class Load(Component):
             Active power time series of load in MW.
 
         """
-        return self.edisgo_obj.topology.loads_t.p_set.loc[self.id]
+        return self.edisgo_obj.timeseries.loads_active_power.loc[:, self.id]
 
     @property
     def reactive_power_timeseries(self):
@@ -349,7 +349,7 @@ class Load(Component):
             Reactive power time series of load in Mvar.
 
         """
-        return self.edisgo_obj.topology.loads_t.q_set.loc[self.id]
+        return self.edisgo_obj.timeseries.loads_reactive_power.loc[:, self.id]
 
     def _set_bus(self, bus):
         # check if bus is valid
@@ -402,6 +402,7 @@ class Generator(Component):
             Nominal power of generator in MW.
 
         """
+        #ToDo: Should this change the time series as well? (same for loads, and type setter...)
         return self.edisgo_obj.topology.generators_df.at[self.id, 'p_nom']
 
     @nominal_power.setter
@@ -467,7 +468,8 @@ class Generator(Component):
             Active power time series of generator in MW.
 
         """
-        return self.edisgo_obj.topology.generators_t.p_set.loc[self.id]
+        return self.edisgo_obj.timeseries.generators_active_power.loc[
+               :, self.id]
 
     @property
     def reactive_power_timeseries(self):
@@ -480,7 +482,8 @@ class Generator(Component):
             Reactive power time series of generator in Mvar.
 
         """
-        return self.edisgo_obj.topology.generators_t.q_set.loc[self.id]
+        return self.edisgo_obj.timeseries.generators_reactive_power.loc[
+               :, self.id]
 
     @property
     def weather_cell_id(self):

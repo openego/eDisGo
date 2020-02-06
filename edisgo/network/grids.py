@@ -106,7 +106,7 @@ class Grid(ABC):
 
         """
         for gen in self.generators_df.index:
-            yield Generator(id=gen)
+            yield Generator(id=gen, edisgo_obj=self.edisgo_obj)
 
     @property
     def loads_df(self):
@@ -135,7 +135,7 @@ class Grid(ABC):
 
         """
         for l in self.loads_df.index:
-            yield Load(id=l)
+            yield Load(id=l, edisgo_obj=self.edisgo_obj)
 
     @property
     def storage_units_df(self):
