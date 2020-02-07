@@ -39,6 +39,7 @@ def opf_settings():
         # estimated working space for MUMPS if IPOPT,
         # smaller values might reduce required memory requirements, DEFAULT: 1000
         # see: https://coin-or.github.io/Ipopt/OPTIONS.html
-        "mumps_mem_percent": 1000
+        "mumps_mem_percent": 1000,
+        "clusters" : {}
         }
     return opf_settings
