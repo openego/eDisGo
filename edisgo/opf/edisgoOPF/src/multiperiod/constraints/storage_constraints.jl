@@ -61,8 +61,15 @@ function constraint_soc(pm,i,nw_1::Int,nw_2::Int)
         println("network data should specify time_elapsed, using 1.0 as a default")
         Ts = 1.0
     end
-    uc_1 = var(pm,nw_1,:uc,i)
-    ud_1 = var(pm,nw_1,:ud,i)
+
+    #= Get shared Charge and discharge voltages from cluster instance=#
+    if haskey(pm.data["clusters"], nw_1)
+        uc_1 = var(pm,pm.data["clusters"][nw_1],:uc,i)
+        ud_1 = var(pm,pm.data["clusters"][nw_1],:ud,i)
+    else
+        uc_1 = var(pm,nw_1,:uc,i)
+        ud_1 = var(pm,nw_1,:ud,i)
+    end
     soc_nw_2 = var(pm,nw_2,:soc,i)
     soc_nw_1 = var(pm,nw_1,:soc,i)
     # if no charge or discarge efficiency is given in data, Default: 1.0

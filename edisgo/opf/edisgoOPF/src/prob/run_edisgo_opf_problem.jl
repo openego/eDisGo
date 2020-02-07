@@ -2,6 +2,7 @@ function run_edisgo_opf_problem(network_name::String,solution_file::String)
     data = read_edisgo_problem(network_name)
     pm = PowerModels.GenericPowerModel(data,SOCBFForm);
 
+
     post_method_edisgo(pm)
 
     JuMP.setsolver(pm.model,IpoptSolver(mumps_mem_percent=100))
@@ -64,8 +65,13 @@ function post_method_edisgo(pm)
     if pm.data["storage_units"]
         add_var_energy_rating(pm)
         for (t,network) in nws(pm)
-            add_var_charging_rate(pm,nw=t,bounded=false)
             add_var_soc(pm,nw=t,bounded=false)
+
+            #= Only set up SOC, skip uc and ud for linked steps=#
+            if haskey(pm.data["clusters"], t)
+                continue
+            end
+            add_var_charging_rate(pm,nw=t,bounded=false)
         end
     end
     #### Network expansion variables
@@ -74,6 +80,10 @@ function post_method_edisgo(pm)
     constraint_network_expansion(pm)
     #### Power flow variables
     for (t,network) in nws(pm)
+        #= Dont set up variables if this is a linked step=#
+        if haskey(pm.data["clusters"], t)
+            continue
+        end
         add_var_sqr_voltage(pm,t)
         add_var_power_gen(pm,t)
         add_var_power_flow(pm,t)
@@ -107,6 +117,7 @@ function post_method_edisgo(pm)
     end
     maxexp = pm.data["max_exp"]
     set_ub_flows(pm,maxexp)
+
     ### Constraints
     #### Relaxation scheme
     if pm.data["relaxation"]=="none"
@@ -134,6 +145,10 @@ function post_method_edisgo(pm)
     end
     #### Power flow equations
     for (t,network) in nws(pm)
+        #= Don't calculate power flow for linked steps=#
+        if haskey(pm.data["clusters"], t)
+            continue
+        end
         # current limit depending on maximal allowed current I_max variable
         if cr
             constraint_current_rating_relaxed(pm,t)    
@@ -161,8 +176,13 @@ function post_method_edisgo(pm)
             t_2 = t+1 in network_ids ? t+1 : (t+1) % length(network_ids)
             for i in ids(pm, nw=t,:storage)
                 constraint_energy_rating(pm,i,nw=t)
-                constraint_charge_rating(pm,i,nw=t)
                 constraint_soc(pm,i,t,t_2)
+
+                #= Set up charge rating once per cluster=#
+                if haskey(pm.data["clusters"], t)
+                    continue
+                end
+                constraint_charge_rating(pm,i,nw=t)
             end
         end
     end

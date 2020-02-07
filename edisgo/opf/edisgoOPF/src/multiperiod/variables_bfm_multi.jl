@@ -217,6 +217,9 @@ function set_ub_flows(pm,maxexp,br_list::Array=[])
         end
         
         for (nw,network) in nws(pm)
+            if haskey(pm.data["clusters"], nw)
+                continue
+            end
             setupperbound(var(pm,nw,:cm,i),ub_current_rating^2)
             setupperbound(var(pm,nw,:p,idx),ub_power_rating)
             setlowerbound(var(pm,nw,:p,idx),-ub_power_rating)
