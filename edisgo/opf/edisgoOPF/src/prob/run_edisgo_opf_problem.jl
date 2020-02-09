@@ -186,6 +186,8 @@ function post_method_edisgo(pm)
     if pm.data["objective"]=="nep"
         add_objective_nep(pm)
     end
+
+    println(pm)
 end
 
 
