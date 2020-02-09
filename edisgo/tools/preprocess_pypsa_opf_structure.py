@@ -20,6 +20,7 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network,hvmv_trafo=False):
     mv_grid = edisgo_grid.topology.mv_grid
 
     # add line expansion costs for all lines
+    #ToDo annualize line costs!!
     if not hasattr(psa_network.lines, "costs_cable") or psa_network.lines.costs_earthworks.dropna().empty:
         line_names = psa_network.lines.index
         linecosts_df = line_expansion_costs(edisgo_grid, line_names)
