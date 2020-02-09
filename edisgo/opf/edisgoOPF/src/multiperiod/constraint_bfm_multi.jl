@@ -77,7 +77,7 @@ function constraint_power_balance(pm, i,nw::Int=pm.cnw, cnd::Int=pm.ccnd)
                         sum(p[idx] for idx in outgoing_arcs)-
                         sum(p[idx]-r[idx[1]]*cm[idx[1]] for idx in incoming_arcs) +
                         sum(gs for gs in values(bus_gs))*w[i])
-    
+
     @constraint(pm.model, sum(qg[g] for g in bus_gens)-sum(qd for qd in values(bus_qd)) ==
                         sum(q[idx] for idx in outgoing_arcs)-
                         sum(q[idx]-x[idx[1]]*cm[idx[1]] for idx in incoming_arcs)-
@@ -164,21 +164,6 @@ function constraint_network_expansion(pm)
         end
     end
 end
-# moved to constraints/storage_constraints.jl
-#function constraint_complementary(pm,i,nw::Int=pm.cnw,cnd::Int=pm.ccnd)
-#    uc = var(pm,nw,:uc,i)
-#    ud = var(pm,nw,:ud,i)
-#    @constraint(pm.model,uc*ud==0)
-#end
-
-# move to to constraints/storage_constraints.jl
-#function constraint_complementary_approx(pm,i,nw::Int=pm.cnw,cnd::Int=pm.ccnd)
-#    Rmax_discharging = ref(pm,nw,:storage,i,"discharge_rating")
-#    Rmax_charging = ref(pm,nw,:storage,i,"charge_rating")
-#    uc = var(pm,nw,:uc,i)
-#    ud = var(pm,nw,:ud,i)
-#    @constraint(pm.model,uc <= -(Rmax_charging/Rmax_discharging)*ud + Rmax_charging)
-#end
 
 function constraint_soc(pm,i,nw::Int=pm.cnw)
     constraint_soc_initial(pm,i,nw)

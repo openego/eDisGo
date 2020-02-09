@@ -63,18 +63,12 @@ function add_var_power_flow(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd,bounded::Bool=fa
     """
     n_branches = length(ref(pm,:branch))
     var(pm, nw)[:p] = @variable(pm.model,
-        [(l,i,j) in ref(pm, nw, :arcs)[1:n_branches]], basename="p_$(nw)"#,
-    #     lowerbound = flow_lb[l],
-    #     upperbound = flow_ub[l],
-    #     start = PowerModels.getval(ref(pm, nw, :branch, l), "p_start", cnd)
+        [(l,i,j) in ref(pm, nw, :arcs)[1:n_branches]], basename="p_$(nw)"
     )
 
 
     var(pm, nw)[:q] = @variable(pm.model,
-        [(l,i,j) in ref(pm, nw, :arcs)[1:n_branches]], basename="q_$(nw)"#,
-    #     lowerbound = flow_lb[l],
-    #     upperbound = flow_ub[l],
-    #     start = PowerModels.getval(ref(pm, nw, :branch, l), "q_start", cnd)
+        [(l,i,j) in ref(pm, nw, :arcs)[1:n_branches]], basename="q_$(nw)"
     )
 end
 
@@ -115,12 +109,10 @@ function add_var_resistance(pm)
     var(pm)[:r]=@variable(pm.model,
         [i in ids(pm, :branch)], basename="r",
         lowerbound=0, upperbound=r_init[i])
-        #lowerbound=r_init[i]/4, upperbound=r_init[i])
 
     var(pm)[:x]=@variable(pm.model,
         [i in ids(pm, :branch)], basename="x",
         lowerbound=0, upperbound=x_init[i])
-        #lowerbound=x_init[i]/4, upperbound=x_init[i])
     
 
     r = var(pm)[:r]
@@ -128,13 +120,11 @@ function add_var_resistance(pm)
     r_sqr= var(pm)[:r_sqr]=@variable(pm.model,
         [i in ids(pm, :branch)], basename="r_sqr",
         lowerbound=0, upperbound=r_init[i]^2)
-        #lowerbound=(r_init[i]/4)^2, upperbound=r_init[i]^2)
     @constraint(pm.model,[i in ids(pm,:branch)],r[i]^2==r_sqr[i])
 
     x_sqr = var(pm)[:x_sqr] = @variable(pm.model,
         [i in ids(pm,:branch)], basename="x_sqr",
         lowerbound=0, upperbound=x_init[i]^2)
-        #lowerbound=(x_init[i]/4)^2, upperbound=x_init[i]^2)
     @constraint(pm.model,[i in ids(pm,:branch)],x[i]^2==x_sqr[i]) 
 
 end
