@@ -29,3 +29,4 @@ def expand_network(edisgo, tolerance=1e-6):
     edisgo.topology.lines_df.loc[mv_lines, 'num_parallel'] *= nep_factor
     edisgo.topology.lines_df.loc[mv_lines, 'r'] /= nep_factor
     edisgo.topology.lines_df.loc[mv_lines, 'x'] /= nep_factor
+    edisgo.topology.lines_df.loc[mv_lines, 's_nom'] *= nep_factor
