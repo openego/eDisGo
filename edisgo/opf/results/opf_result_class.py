@@ -140,36 +140,37 @@ class OPFResults:
 
         # time independent values
         strg_statics = pd.DataFrame.from_dict(solution_data["storage"]["static"]["emax"], orient='index')
-        strg_statics.columns = ['emax']
-        
-        strg_statics.index = strg_statics.index.astype(int)
-        strg_statics = strg_statics.sort_index()
+        if not strg_statics.empty:
+            strg_statics.columns = ['emax']
 
-        # Convert one-based storage indices back to string names
-        idx_names = [pypsa_net.buses.index[i-1] for i in strg_statics.index]
-        strg_statics.index = pd.Index(idx_names)
+            strg_statics.index = strg_statics.index.astype(int)
+            strg_statics = strg_statics.sort_index()
 
-        self.storage_units = strg_statics
+            # Convert one-based storage indices back to string names
+            idx_names = [pypsa_net.buses.index[i-1] for i in strg_statics.index]
+            strg_statics.index = pd.Index(idx_names)
 
-        # time dependent values
-        ts = pypsa_net.snapshots
-        uc_t = pd.DataFrame(index=ts, columns=strg_statics.index)
-        ud_t = pd.DataFrame(index=ts, columns=strg_statics.index)
-        soc_t = pd.DataFrame(index=ts, columns=strg_statics.index)
+            self.storage_units = strg_statics
 
-        for (t, date_idx) in enumerate(ts):
-            strg_t = pd.DataFrame(solution_data["storage"]["nw"][str(t + 1)])
-            strg_t.index = strg_t.index.astype(int)
-            strg_t = strg_t.sort_index()
-            strg_t.index = strg_statics.index
+            # time dependent values
+            ts = pypsa_net.snapshots
+            uc_t = pd.DataFrame(index=ts, columns=strg_statics.index)
+            ud_t = pd.DataFrame(index=ts, columns=strg_statics.index)
+            soc_t = pd.DataFrame(index=ts, columns=strg_statics.index)
 
-            uc_t.loc[date_idx].update(strg_t['uc'])
-            ud_t.loc[date_idx].update(strg_t['ud'])
-            soc_t.loc[date_idx].update(strg_t['soc'])
+            for (t, date_idx) in enumerate(ts):
+                strg_t = pd.DataFrame(solution_data["storage"]["nw"][str(t + 1)])
+                strg_t.index = strg_t.index.astype(int)
+                strg_t = strg_t.sort_index()
+                strg_t.index = strg_statics.index
 
-        self.storage_units_t.soc = soc_t
-        self.storage_units_t.uc = uc_t
-        self.storage_units_t.ud = ud_t
+                uc_t.loc[date_idx].update(strg_t['uc'])
+                ud_t.loc[date_idx].update(strg_t['ud'])
+                soc_t.loc[date_idx].update(strg_t['soc'])
+
+            self.storage_units_t.soc = soc_t
+            self.storage_units_t.uc = uc_t
+            self.storage_units_t.ud = ud_t
 
 # opf_results = OPFResults()
 # opf_results.read_solution("solution_name.json")
