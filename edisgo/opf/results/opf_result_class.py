@@ -37,6 +37,7 @@ class OPFResults:
         self.solution_time = None
         self.solver = None
         self.lines = None
+        self.pypsa = None
         self.lines_t = LineVariables()
         self.buses_t = BusVariables()
         self.generators_t = GeneratorVariables()
@@ -46,7 +47,6 @@ class OPFResults:
     def set_solution(self,solution_name,pypsa_net):
         self.read_solution_file(solution_name)
         self.set_solution_to_results(pypsa_net)
-
 
     def read_solution_file(self, solution_name):
         with open(solution_name) as json_file:
@@ -66,6 +66,7 @@ class OPFResults:
         self.status = solution_data["status"]
         self.solution_time = solution_data["sol_time"]
         self.solver = solution_data["solver"]
+        self.pypsa = pypsa_net
         # Line Variables
         self.set_line_variables(pypsa_net)
         # Bus Variables
