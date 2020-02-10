@@ -137,7 +137,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             'StorageUnit': grid_object.topology.storage_units_df.loc[
                            :, ['bus', 'control']],
             'Line': grid_object.topology.lines_df.loc[
-                    :, ['bus0', 'bus1', 'x', 'r', 's_nom']],
+                    :, ['bus0', 'bus1', 'x', 'r', 's_nom',
+                        'num_parallel', 'length']],
             'Transformer': grid_object.topology.transformers_df.loc[
                            :, ['bus0', 'bus1', 'x_pu', 'r_pu', 'type',
                                's_nom']].rename(
@@ -160,7 +161,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             'StorageUnit': grid_object.storage_units_df.loc[
                            :, ['bus', 'control']],
             'Line': grid_object.lines_df.loc[
-                    :, ['bus0', 'bus1', 'x', 'r', 's_nom']]
+                    :, ['bus0', 'bus1', 'x', 'r', 's_nom',
+                        'num_parallel', 'length']]
         }
         mv_components['Generator']['fluctuating'] = \
             grid_object.generators_df.type.isin(['solar', 'wind'])
@@ -225,7 +227,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             'StorageUnit': grid_object.storage_units_df.loc[
                            :, ['bus', 'control']],
             'Line': grid_object.lines_df.loc[
-                    :, ['bus0', 'bus1', 'x', 'r', 's_nom']]
+                    :, ['bus0', 'bus1', 'x', 'r', 's_nom',
+                        'num_parallel', 'length']]
         }
     else:
         raise ValueError("Provide proper mode or leave it empty to export "
