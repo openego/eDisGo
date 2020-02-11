@@ -245,6 +245,16 @@ class TimeSeries:
         """
         return self._timeindex
 
+    @timeindex.setter
+    def timeindex(self, new_index):
+        if self._timeindex is not None:
+            # check if new time index is subset of existing time index
+            if not new_index.isin(self.timeindex).all():
+                logger.warning(
+                    "Not all time steps of new time index lie within existing "
+                    "time index. This may cause problems later on.")
+        self._timeindex = new_index
+
     @property
     def curtailment(self):
         """
