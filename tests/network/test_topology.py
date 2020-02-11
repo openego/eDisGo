@@ -193,11 +193,10 @@ class TestTopology:
     def test_add_storage_unit(self):
         """Test add_storage_unit method"""
 
-        msg = "Specified bus Unknown_bus is not valid as it is not defined in " \
-              "buses_df."
+        msg = "Specified bus Unknown_bus is not valid as it is not " \
+              "defined in buses_df."
         with pytest.raises(ValueError, match=msg):
             self.topology.add_storage_unit(
-                storage_id=8,
                 bus="Unknown_bus",
                 p_nom=1,
                 control='PQ'
@@ -207,38 +206,34 @@ class TestTopology:
 
         # check if name of load does not exist yet
         name = self.topology.add_storage_unit(
-            storage_id=3,
             bus="Bus_BranchTee_LVGrid_1_5",
             p_nom=1,
             control='Test'
             )
         assert len_df_before+1 == len(self.topology.storage_units_df)
-        assert name == "StorageUnit_LVGrid_1_3"
+        assert name == "StorageUnit_LVGrid_1_0"
         assert self.topology.storage_units_df.loc[name, 'p_nom'] == 1
         assert self.topology.storage_units_df.loc[name, 'control'] == "Test"
 
         # check auto creation of name when load name with load_id already
         # exists
         name = self.topology.add_storage_unit(
-            storage_id=3,
             bus="Bus_BranchTee_LVGrid_1_4",
             p_nom=2
         )
         assert len_df_before + 2 == len(self.topology.storage_units_df)
-        assert name == "StorageUnit_LVGrid_1_2"
+        assert name == "StorageUnit_LVGrid_1_1"
         assert self.topology.storage_units_df.loc[name, 'p_nom'] == 2
         assert self.topology.storage_units_df.loc[name, 'control'] == 'PQ'
 
         # check auto creation of name if auto created name already exists
         name = self.topology.add_storage_unit(
-            storage_id=3,
             bus="Bus_BranchTee_LVGrid_1_4",
             p_nom=5
         )
 
         assert len_df_before + 3 == len(self.topology.storage_units_df)
-        assert name != "StorageUnit_LVGrid_1_3"
-        assert len(name) == 30
+        assert name == "StorageUnit_LVGrid_1_2"
         assert self.topology.storage_units_df.loc[name, 'p_nom'] == 5
         assert self.topology.storage_units_df.loc[name, 'control'] == 'PQ'
 

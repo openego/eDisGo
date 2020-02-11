@@ -82,12 +82,12 @@ class Testget_component_timeseries:
 
     def test_timeseries_imported(self):
         # test storage ts
-        self.topology.add_storage_unit('Test_storage_1', 'Bus_MVStation_1',
-                                       0.3)
-        self.topology.add_storage_unit('Test_storage_2',
-                                       'Bus_GeneratorFluctuating_2', 0.45)
-        self.topology.add_storage_unit('Test_storage_3',
-                                       'Bus_BranchTee_LVGrid_1_10', 0.05)
+        storage_1 = self.topology.add_storage_unit(
+            'Bus_MVStation_1', 0.3)
+        storage_2 = self.topology.add_storage_unit(
+            'Bus_GeneratorFluctuating_2', 0.45)
+        storage_3 = self.topology.add_storage_unit(
+            'Bus_BranchTee_LVGrid_1_10', 0.05)
 
         timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
         ts_gen_dispatchable = pd.DataFrame({'other': [0.775]*8760},
@@ -132,9 +132,9 @@ class Testget_component_timeseries:
         #Todo: test with inserted reactive generation and/or reactive load
 
         # remove storages
-        self.topology.remove_storage('StorageUnit_MVGrid_1_Test_storage_1')
-        self.topology.remove_storage('StorageUnit_MVGrid_1_Test_storage_2')
-        self.topology.remove_storage('StorageUnit_LVGrid_1_Test_storage_3')
+        self.topology.remove_storage(storage_1)
+        self.topology.remove_storage(storage_2)
+        self.topology.remove_storage(storage_3)
 
     def test_import_load_timeseries(self):
         with pytest.raises(NotImplementedError):
@@ -153,15 +153,15 @@ class Testget_component_timeseries:
     def test_worst_case(self):
         """Test creation of worst case time series"""
         # test storage ts
-        self.topology.add_storage_unit('Test_storage_1', 'Bus_MVStation_1',
-                                       0.3)
-        self.topology.add_storage_unit('Test_storage_2',
-                                       'Bus_GeneratorFluctuating_2', 0.45)
-        self.topology.add_storage_unit('Test_storage_3',
-                                       'Bus_BranchTee_LVGrid_1_10', 0.05)
+        storage_1 = self.topology.add_storage_unit(
+            'Bus_MVStation_1', 0.3)
+        # storage_2 = self.topology.add_storage_unit(
+        #     'Bus_GeneratorFluctuating_2', 0.45)
+        storage_3 = self.topology.add_storage_unit(
+            'Bus_BranchTee_LVGrid_1_10', 0.05)
 
         timeseries.get_component_timeseries(edisgo_obj=self,
-                                                         mode='worst-case')
+                                            mode='worst-case')
 
         # check type
         assert isinstance(
@@ -270,7 +270,7 @@ class Testget_component_timeseries:
             self.timeseries.loads_reactive_power.loc[:, load],
             exp * pf, check_exact=False, check_dtype=False)
 
-        storage = 'StorageUnit_MVGrid_1_Test_storage_1' # storage, mv
+        storage = storage_1 # storage, mv
         exp = pd.Series(data=[1 * 0.3, -1 * 0.3],
                         name=storage, index=self.timeseries.timeindex)
 
@@ -282,7 +282,7 @@ class Testget_component_timeseries:
             self.timeseries.storage_units_reactive_power.loc[:, storage],
             exp * pf, check_exact=False, check_dtype=False)
 
-        storage = 'StorageUnit_LVGrid_1_Test_storage_3' # storage, lv
+        storage = storage_3 # storage, lv
         exp = pd.Series(data=[1 * 0.05, -1 * 0.05],
                         name=storage, index=self.timeseries.timeindex)
 
@@ -295,9 +295,9 @@ class Testget_component_timeseries:
             exp * pf, check_exact=False, check_dtype=False)
 
         # remove storages
-        self.topology.remove_storage('StorageUnit_MVGrid_1_Test_storage_1')
-        self.topology.remove_storage('StorageUnit_MVGrid_1_Test_storage_2')
-        self.topology.remove_storage('StorageUnit_LVGrid_1_Test_storage_3')
+        self.topology.remove_storage(storage_1)
+        #self.topology.remove_storage(storage_2)
+        self.topology.remove_storage(storage_3)
 
         # test for only feed-in case
         timeseries.get_component_timeseries(edisgo_obj=self,
@@ -679,7 +679,7 @@ class Testget_component_timeseries:
         p_nom = 2.1
         timeindex = pd.date_range('1/1/1970', periods=2, freq='H')
         storage_name = self.topology.add_storage_unit(
-            storage_id=1, bus='Bus_MVStation_1', p_nom=p_nom)
+            bus='Bus_MVStation_1', p_nom=p_nom)
         timeseries.add_storage_units_timeseries(self, storage_name)
         assert (self.timeseries.storage_units_active_power.index ==
                 timeindex).all()
@@ -697,10 +697,10 @@ class Testget_component_timeseries:
         # add two storage units
         p_nom2 = 1.3
         storage_name2 = self.topology.add_storage_unit(
-            storage_id=1, bus='Bus_BranchTee_LVGrid_1_13', p_nom=p_nom2)
+            bus='Bus_BranchTee_LVGrid_1_13', p_nom=p_nom2)
         p_nom3 = 3.12
         storage_name3 = self.topology.add_storage_unit(
-            storage_id=2, bus='Bus_primary_LVStation_6', p_nom=p_nom3)
+            bus='Bus_primary_LVStation_6', p_nom=p_nom3)
         timeseries.add_storage_units_timeseries(self,
                                                 [storage_name2, storage_name3])
         assert (self.timeseries.storage_units_active_power.shape ==
@@ -737,7 +737,7 @@ class Testget_component_timeseries:
             storage_units_reactive_power=storage_units_reactive_power)
         # add single mv solar generator
         storage_name = self.topology.add_storage_unit(
-            storage_id=1, bus='Bus_MVStation_1', p_nom=p_nom)
+            bus='Bus_MVStation_1', p_nom=p_nom)
         new_storage_active_power = pd.DataFrame(
             index=timeindex, columns=[storage_name],
             data=([p_nom * 0.97] * len(timeindex)))
@@ -761,10 +761,10 @@ class Testget_component_timeseries:
         # add multiple generators and check
         p_nom2 = 1.3
         storage_name2 = self.topology.add_storage_unit(
-            storage_id=1, bus='Bus_BranchTee_LVGrid_1_13', p_nom=p_nom2)
+            bus='Bus_BranchTee_LVGrid_1_13', p_nom=p_nom2)
         p_nom3 = 3.12
         storage_name3 = self.topology.add_storage_unit(
-            storage_id=2, bus='Bus_primary_LVStation_6', p_nom=p_nom3)
+            bus='Bus_primary_LVStation_6', p_nom=p_nom3)
 
         new_storages_active_power = pd.DataFrame(
             index=timeindex, columns=[storage_name2, storage_name3],
@@ -821,7 +821,7 @@ class Testget_component_timeseries:
 
         # add single mv solar generator
         storage_name = self.topology.add_storage_unit(
-            storage_id=1, bus='Bus_MVStation_1', p_nom=p_nom)
+            bus='Bus_MVStation_1', p_nom=p_nom)
 
         timeseries.add_storage_units_timeseries(self,
             storage_name, timeseries_storage_units=new_storage_active_power,
@@ -838,10 +838,10 @@ class Testget_component_timeseries:
         # add multiple generators and check
         p_nom2 = 1.3
         storage_name2 = self.topology.add_storage_unit(
-            storage_id=1, bus='Bus_BranchTee_LVGrid_1_13', p_nom=p_nom2)
+            bus='Bus_BranchTee_LVGrid_1_13', p_nom=p_nom2)
         p_nom3 = 3.12
         storage_name3 = self.topology.add_storage_unit(
-            storage_id=2, bus='Bus_primary_LVStation_6', p_nom=p_nom3)
+            bus='Bus_primary_LVStation_6', p_nom=p_nom3)
 
         timeseries.add_storage_units_timeseries(self,
             [storage_name2, storage_name3],
@@ -961,8 +961,8 @@ class Testget_component_timeseries:
 
     def test_drop_existing_component_timeseries(self):
         """Test for _drop_existing_timseries_method"""
-        self.topology.add_storage_unit('1', 'Bus_MVStation_1',
-                                       0.3)
+        storage_1 = self.topology.add_storage_unit(
+            'Bus_MVStation_1', 0.3)
         timeindex = pd.date_range('1/1/1970', periods=2, freq='H')
         timeseries.get_component_timeseries(edisgo_obj=self, mode='worst-case')
         # test drop load timeseries
@@ -993,16 +993,16 @@ class Testget_component_timeseries:
                 timeindex, 'GeneratorFluctuating_7']
         # test drop storage units timeseries
         assert hasattr(self.timeseries.storage_units_active_power,
-                       'StorageUnit_MVGrid_1_1')
+                       storage_1)
         assert hasattr(self.timeseries.storage_units_reactive_power,
-                       'StorageUnit_MVGrid_1_1')
+                       storage_1)
         timeseries._drop_existing_component_timeseries(
-            self, 'storage_units', 'StorageUnit_MVGrid_1_1')
+            self, 'storage_units', storage_1)
         with pytest.raises(KeyError):
             self.timeseries.storage_units_active_power.loc[
-                timeindex, 'StorageUnit_MVGrid_1_1']
+                timeindex, storage_1]
         with pytest.raises(KeyError):
             self.timeseries.storage_units_reactive_power.loc[
-                timeindex, 'StorageUnit_MVGrid_1_1']
-        self.topology.remove_storage('StorageUnit_MVGrid_1_1')
+                timeindex, storage_1]
+        self.topology.remove_storage(storage_1)
 

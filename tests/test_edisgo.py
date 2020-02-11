@@ -299,17 +299,17 @@ class TestEDisGo:
 
     def test_plot_mv_storage_integration(self):
         plt.ion()
-        self.edisgo.topology.add_storage_unit(1, 'Bus_BranchTee_MVGrid_1_8',
-                                              0.3)
-        self.edisgo.topology.add_storage_unit(1, 'Bus_BranchTee_MVGrid_1_8',
-                                              0.6)
-        self.edisgo.topology.add_storage_unit(1, 'Bus_BranchTee_MVGrid_1_10',
-                                              0.3)
+        storage_1 = self.edisgo.topology.add_storage_unit(
+            'Bus_BranchTee_MVGrid_1_8', 0.3)
+        storage_2 = self.edisgo.topology.add_storage_unit(
+            'Bus_BranchTee_MVGrid_1_8', 0.6)
+        storage_3 = self.edisgo.topology.add_storage_unit(
+            'Bus_BranchTee_MVGrid_1_10', 0.3)
         self.edisgo.plot_mv_storage_integration()
         plt.close('all')
-        self.edisgo.topology.remove_storage('StorageUnit_MVGrid_1_1')
-        self.edisgo.topology.remove_storage('StorageUnit_MVGrid_1_2')
-        self.edisgo.topology.remove_storage('StorageUnit_MVGrid_1_3')
+        self.edisgo.topology.remove_storage(storage_1)
+        self.edisgo.topology.remove_storage(storage_2)
+        self.edisgo.topology.remove_storage(storage_3)
 
     def test_histogramm_voltage(self):
         plt.ion()
@@ -401,9 +401,9 @@ class TestEDisGo:
         # Todo: test other modes of timeseries (manual, None)
         # Test add storage unit
         num_storages = len(self.edisgo.topology.storage_units_df)
-        storage_name = self.edisgo.add_component('StorageUnit', storage_id=1,
+        storage_name = self.edisgo.add_component('StorageUnit',
                                              bus="Testbus", p_nom=3.1)
-        assert storage_name == "StorageUnit_MVGrid_1_1"
+        assert storage_name == "StorageUnit_MVGrid_1_0"
         assert len(self.edisgo.topology.storage_units_df) == num_storages + 1
         assert self.edisgo.topology.storage_units_df.loc[storage_name, 'bus'] \
                == "Testbus"
