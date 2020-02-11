@@ -842,7 +842,7 @@ class Topology:
         self.loads_df = self._loads_df.append(new_load_df)
         return load_name
 
-    def add_storage_unit(self, storage_id, bus, p_nom, control=None):
+    def add_storage_unit(self, bus, p_nom, control=None):
         """
         Adds storage unit to topology.
 
@@ -850,8 +850,6 @@ class Topology:
 
         Parameters
         ----------
-        storage_id : str
-            Unique identifier of storage unit.
         bus: str
             Identifier of connected bus.
         p_nom: float
@@ -860,8 +858,6 @@ class Topology:
             Control type, defaults to 'PQ'
 
         """
-        # Todo: overthink storage_id as input parameter, only allow auto
-        #  created names?
         try:
             bus_df = self.buses_df.loc[bus]
         except KeyError:
@@ -874,10 +870,10 @@ class Topology:
             grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
         else:
             grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
+        storage_id = len(self._grids[grid_name].storage_units_df)
         storage_name = 'StorageUnit_{}_{}'.format(grid_name, storage_id)
         if storage_name in self.storage_units_df.index:
-            nr_storages = len(self._grids[grid_name].storage_units_df)
-            storage_name = 'StorageUnit_{}_{}'.format(grid_name, nr_storages+1)
+            storage_name = 'StorageUnit_{}_{}'.format(grid_name, storage_id+1)
             while storage_name in self.storage_units_df.index:
                 storage_name = 'StorageUnit_{}_{}'.format(
                     grid_name, random.randint(10 ** 8, 10 ** 9))

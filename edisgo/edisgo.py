@@ -836,8 +836,9 @@ class EDisGo:
                                                      **kwargs)
         elif comp_type == 'StorageUnit':
             comp_name = self.topology.add_storage_unit(
-                storage_id=kwargs.get('storage_id'), bus=kwargs.get('bus'),
-                p_nom=kwargs.get('p_nom'), control=kwargs.get('control', None))
+                bus=kwargs.get('bus'),
+                p_nom=kwargs.get('p_nom'),
+                control=kwargs.get('control', None))
             if add_ts:
                 timeseries.add_storage_units_timeseries(
                     edisgo_obj=self, storage_unit_names=comp_name, **kwargs)
