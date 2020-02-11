@@ -95,11 +95,6 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     settings = opf_settings()
     settings["time_horizon"] = len(timesteps)
 
-    for args in kwargs.items():
-        if args[0] in settings:
-            # if hasattr(settings,args[0]):
-            settings[args[0]] = args[1]
-
     # convert edisgo network to pypsa network for timesteps on MV-level
     # aggregate all loads and generators in LV-grids
     # TODO check aggregation
@@ -117,6 +112,11 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
         bus_names = kwargs["storage_buses"]
         bus_indices = bus_names_to_ints(pypsa_mv, bus_names)
         kwargs["storage_buses"] = bus_indices
+
+    for args in kwargs.items():
+        if args[0] in settings:
+            # if hasattr(settings,args[0]):
+            settings[args[0]] = args[1]
 
     # preprocess pypsa structure
     logger.debug("preprocessing pypsa structure for opf")
