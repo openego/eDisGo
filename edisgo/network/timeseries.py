@@ -717,25 +717,21 @@ def _storage_from_timeseries(edisgo_obj,  ts_active_power, ts_reactive_power,
         try:
             # check if indices and columns are correct
             if (ts_active_power.index == \
-                    edisgo_obj.timeseries.timeindex).all() \
-                and (ts_active_power.columns == \
-                    storage_units_df.index).all():
+                    edisgo_obj.timeseries.timeindex).all():
                 edisgo_obj.timeseries.storage_units_active_power = \
                     drop_duplicated_indices(
                         edisgo_obj.timeseries.
                         storage_units_active_power.T.append(
-                            ts_active_power.T)).T
+                            ts_active_power.loc[:, name_storage_units].T)).T
                 # check if reactive power is given
                 if ts_reactive_power is not None and \
                     (ts_active_power.index == \
-                        edisgo_obj.timeseries.timeindex).all() \
-                    and (ts_active_power.columns == \
-                        storage_units_df.index).all():
+                        edisgo_obj.timeseries.timeindex).all():
                     edisgo_obj.timeseries.storage_units_reactive_power = \
                         drop_duplicated_indices(
                             edisgo_obj.timeseries.
                             storage_units_reactive_power.T.append(
-                                ts_reactive_power.T)).T
+                                ts_reactive_power.loc[:, name_storage_units].T)).T
                 else:
                     _reactive_power_storage_by_cos_phi(edisgo_obj=edisgo_obj,
                         storage_units_df=storage_units_df)
