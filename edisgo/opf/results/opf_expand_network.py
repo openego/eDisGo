@@ -21,6 +21,9 @@ def expand_network(edisgo, tolerance=1e-6):
 
     # Only round up numbers that are reasonably far away from the nearest
     # Integer
+    #ToDo: fix! if there was more than 1 line before the optimization this ceil
+    #will overestimate the number of added lines (np.ceil(nep_factor*lines.num_parallel - tolerance))
+    #this will give number of added lines
     nep_factor = np.ceil(nep_factor - tolerance)
 
     # Get the names of all MV grid lines
