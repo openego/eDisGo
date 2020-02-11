@@ -316,11 +316,14 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             storages_timeseries_reactive = \
                 edisgo_obj.timeseries.storage_units_reactive_power.loc[
                     timesteps, components['StorageUnit'].index]
-        import_series_from_dataframe(pypsa_network, storages_timeseries_active,
-                                     'StorageUnit', 'p_set')
-        import_series_from_dataframe(pypsa_network,
-                                     storages_timeseries_reactive,
-                                     'StorageUnit', 'q_set')
+        import_series_from_dataframe(
+            pypsa_network,
+            storages_timeseries_active.apply(pd.to_numeric),
+            'StorageUnit', 'p_set')
+        import_series_from_dataframe(
+            pypsa_network,
+            storages_timeseries_reactive.apply(pd.to_numeric),
+            'StorageUnit', 'q_set')
 
     _check_integrity_of_pypsa(pypsa_network)
 
