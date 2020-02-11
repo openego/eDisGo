@@ -9,11 +9,12 @@ using PowerModels
 PowerModels.silence()
 path = ARGS[1]
 network_name = ARGS[2]
+results_path = ARGS[3]
 scenario_folder = "$(path)/edisgo_scenario_data"
 
 network_files = "$(scenario_folder)/$(network_name)"
 
-solution_files = "$(path)/opf_solutions/$(network_name)"
+solution_files = "$(results_path)/$(network_name)"
 
 edisgoOPF.greet()
 println(network_files)

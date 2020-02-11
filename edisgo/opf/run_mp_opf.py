@@ -66,6 +66,8 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
         # Maximal allowed curtailment over entire time horizon,
         # DEFAULT: "3percent"=> 3% of total RES generation in time horizon may be curtailed, else: Float
         "curtailment_total": "3percent",
+        "results_path": "opf_solutions"
+        # path to where OPF results are stored
     :return:
     """
     opf_dir = os.path.dirname(os.path.abspath(__file__))
@@ -136,9 +138,11 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
         json.dump(settings, outfile)
     logger.info("starting julia process")
     start = timer()
+    solution_dir = kwargs.get("results_path",
+                              os.path.join(opf_dir, "opf_solutions"))
     julia_process = subprocess.run(['julia', '--project={}'.format(julia_env_dir),
                     os.path.join(opf_dir, 'optimization_evaluation.jl'),
-                    opf_dir, pm["name"]])
+                    opf_dir, pm["name"], solution_dir])
     end = timer()
     run_time = end-start
     logger.info("julia terminated after {} s".format(run_time))
@@ -146,7 +150,6 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     if julia_process.returncode != 0:
         raise RuntimeError("Julia Subprocess failed")
 
-    solution_dir = os.path.join(opf_dir, "opf_solutions")
     solution_file = "{}_{}_{}_opf_sol.json".format(pm["name"],settings["scenario"],settings["relaxation"])
 
     # opf_results = OPFResults()
