@@ -77,31 +77,41 @@ function write_opf_solution(pm,status,sol_time,network_name="test_network")
 
     # save variables for each time step
     for (nw,net) in nws(pm)
+        step = nw
+        #= Replace values with those of linked step for clustered data=#
+        if haskey(pm.data["clusters"], nw)
+            step = pm.data["clusters"][nw]
+        end
         for (i,br) in ref(pm,:branch)
             idx = (i,br["f_bus"],br["t_bus"])
             for sym in branch_vars
                 try
-                    sol["branch"]["nw"][nw][string(sym)][i] = getvalue(var(pm,nw,sym,i))
+                    sol["branch"]["nw"][nw][string(sym)][i] = getvalue(var(pm,step,sym,i))
                 catch
-                    sol["branch"]["nw"][nw][string(sym)][idx[1]] = getvalue(var(pm,nw,sym,idx))
+                    sol["branch"]["nw"][nw][string(sym)][idx[1]] = getvalue(var(pm,step,sym,idx))
                 end
             end
         end
         for (i,b) in ref(pm,:bus)
             for sym in bus_vars
-                sol["bus"]["nw"][nw][string(sym)][i] = getvalue(var(pm,nw,sym,i))
+                sol["bus"]["nw"][nw][string(sym)][i] = getvalue(var(pm,step,sym,i))
             end
         end
 
         for (i,g) in ref(pm,:gen)
             for sym in gen_vars
-                sol["gen"]["nw"][nw][string(sym)][i] = getvalue(var(pm,nw,sym,i))
+                sol["gen"]["nw"][nw][string(sym)][i] = getvalue(var(pm,step,sym,i))
             end
         end
 
         for (i,s) in ref(pm,:storage)
             for sym in strg_vars
-                sol["storage"]["nw"][nw][string(sym)][i] = getvalue(var(pm,nw,sym,i))
+                #= Read SOC value from actual time step (as it differs), other variables from linked step=#
+                if sym == :soc
+                    sol["storage"]["nw"][nw][string(sym)][i] = getvalue(var(pm,nw,sym,i))
+                else
+                    sol["storage"]["nw"][nw][string(sym)][i] = getvalue(var(pm,step,sym,i))
+                end
             end
         end
     end

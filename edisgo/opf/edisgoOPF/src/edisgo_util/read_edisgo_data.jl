@@ -188,6 +188,10 @@ function read_edisgo_problem(network_name::String;timehorizon::Int=-1)
         println("Storage buses is empty= $(isempty(storage_buses))")
         add_storages_to_network_data(network_data,storage_buses)
     end
+
+    #= Cast cluster IDs to Int explicitly=#
+    network_data["clusters"] = Dict(parse(Int64,k) => Int64(v) for (k,v) in network_data["clusters"])
+    
     # read time series for demand and generation
     load_data,_ = read_load_timeseries(network_name)
     gen_data,_ = read_gen_timeseries(network_name)
