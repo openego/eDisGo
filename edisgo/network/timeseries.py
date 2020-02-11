@@ -1027,20 +1027,20 @@ def _fixed_cosphi(active_power, q_sign, power_factor):
 
 def _worst_case_storage(edisgo_obj, modes, storage_names=None):
     """
-        Define worst case storage unit time series.
+    Define worst case storage unit time series.
 
-        Parameters
-        ----------
-        edisgo_obj: :class:`~.self.edisgo.EDisGo`
-            The eDisGo model overall container
-        modes : list
-            List with worst-cases to generate time series for. Can be
-            'feedin_case', 'load_case' or both.
-        storage_namess: str or list of str
-            Names of storage units to add timeseries for. Default None,
-            timeseries for all storage units of edisgo_obj are set then.
+    Parameters
+    ----------
+    edisgo_obj: :class:`~.self.edisgo.EDisGo`
+        The eDisGo model overall container
+    modes : list
+        List with worst-cases to generate time series for. Can be
+        'feedin_case', 'load_case' or both.
+    storage_namess: str or list of str
+        Names of storage units to add timeseries for. Default None,
+        timeseries for all storage units of edisgo_obj are set then.
 
-        """
+    """
     if len(edisgo_obj.topology.storage_units_df) == 0:
         edisgo_obj.timeseries.storage_units_active_power = \
             pd.DataFrame({}, index=edisgo_obj.timeseries.timeindex)
