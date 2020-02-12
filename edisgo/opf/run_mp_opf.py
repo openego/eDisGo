@@ -2,6 +2,7 @@ import os
 import json
 import subprocess
 import logging
+import numpy as np
 from timeit import default_timer as timer
 
 from edisgo.tools.preprocess_pypsa_opf_structure import preprocess_pypsa_opf_structure, aggregate_fluct_generators
@@ -10,6 +11,14 @@ from edisgo.opf.util.scenario_settings import opf_settings
 
 logger = logging.getLogger(__name__)
 
+
+def convert(o):
+    """
+    Helper function for json dump, as int64 cannot be dumped.
+
+    """
+    if isinstance(o, np.int64): return int(o)
+    raise TypeError
 
 def bus_names_to_ints(pypsa_network, bus_names):
     """
@@ -129,13 +138,13 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
 
     # dump json files for static network information, timeseries of loads and generators, and opf settings
     with open(os.path.join(scenario_data_dir, "{}_static.json".format(pm["name"])), 'w') as outfile:
-        json.dump(pm, outfile)
+        json.dump(pm, outfile, default=convert)
     with open(os.path.join(scenario_data_dir, "{}_loads.json".format(pm["name"])), 'w') as outfile:
-        json.dump(load_data, outfile)
+        json.dump(load_data, outfile, default=convert)
     with open(os.path.join(scenario_data_dir, "{}_gens.json".format(pm["name"])), 'w') as outfile:
-        json.dump(gen_data, outfile)
+        json.dump(gen_data, outfile, default=convert)
     with open(os.path.join(scenario_data_dir, "{}_opf_setting.json".format(pm["name"])), 'w') as outfile:
-        json.dump(settings, outfile)
+        json.dump(settings, outfile, default=convert)
     logger.info("starting julia process")
     start = timer()
     solution_dir = kwargs.get("results_path",
