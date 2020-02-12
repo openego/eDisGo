@@ -531,6 +531,8 @@ def mv_grid_topology(edisgo_obj, timestep=None,
                          bus_cmap=bus_cmap)
 
     # color bar line loading
+    # ToDo this does not really work as colorbar is already set in pypsa plot
+    # and needs to be overridden here somehow
     if line_color == 'loading':
         if limits_cb_lines is None:
             limits_cb_lines = (min(line_colors), max(line_colors))
