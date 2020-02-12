@@ -9,7 +9,7 @@ from geoalchemy2 import shape
 from pyproj import Proj, transform
 import matplotlib
 
-from edisgo.tools import tools, session_scope, geo
+from edisgo.tools import tools, session_scope
 
 
 if not 'READTHEDOCS' in os.environ:
@@ -25,7 +25,6 @@ if not 'READTHEDOCS' in os.environ:
         import contextily as ctx
     except:
         contextily = False
-    import shapely.ops as shp
 
 
 def histogram(data, **kwargs):
