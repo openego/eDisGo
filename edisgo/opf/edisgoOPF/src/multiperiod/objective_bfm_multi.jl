@@ -3,6 +3,10 @@ function add_objective(pm;ismultinetwork::Bool=true,cost_factor=1.,scenario="bot
     cnd=pm.ccnd
     gen_cost = Dict()
     for (nw,nw_ref) in nws(pm)
+        if haskey(pm.data["clusters"], nw)
+            nw = pm.data["clusters"][nw]
+            nw_ref = ref(pm, nw)
+        end
         for (i,gen) in nw_ref[:gen]
             pg = sum(var(pm, nw, :pg, i))
     
@@ -19,19 +23,24 @@ function add_objective(pm;ismultinetwork::Bool=true,cost_factor=1.,scenario="bot
     end
     
 
+    gen_sum = 0
+    for (nw, nw_ref) in nws(pm)
+        if haskey(pm.data["clusters"], nw)
+            nw = pm.data["clusters"][nw]
+            nw_ref = ref(pm, nw)
+        end
+        gen_sum += sum(gen_cost[(nw,i)] for (i,gen) in nw_ref[:gen])
+    end
     if scenario=="onlyGen"
 #         @objective(pm.model,Min,sum(g["cost"][1]*pg[i] for (i,g) in ref(pm,nw,:gen) if !isempty(g["cost"])) )
-        @objective(pm.model,Min, sum(
-            sum(gen_cost[(nw,i)] for (i,gen) in nw_ref[:gen])
-            for (nw, nw_ref) in nws(pm)))
+        @objective(pm.model,Min,gen_sum) 
     elseif scenario=="onlyExp"
         I_max = var(pm,:I_max) 
         @objective(pm.model,Min,sum(I_max[i] for (i,b) in ref(pm,:branch)))
     else
         I_max = var(pm,:I_max) 
-        @objective(pm.model,Min,sum(
-            sum(gen_cost[(nw,i)] for (i,gen) in nw_ref[:gen])
-            for (nw, nw_ref) in nws(pm)) + 
+        @objective(pm.model,Min,
+            gen_sum +
             cost_factor*sum(I_max[i] for (i,b) in ref(pm,:branch)))
 #         @objective(pm.model,Min,sum(g["cost"][1]*pg[i] for (i,g) in ref(pm,nw,:gen) if !isempty(g["cost"])) + 
 #                         sum(I_max[i] for (i,b) in ref(pm,nw,:branch)))

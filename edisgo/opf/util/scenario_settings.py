@@ -9,6 +9,8 @@ def opf_settings():
         # chosen relaxation, DEFAULT: "none", options: "none", "soc", "soc_cr", "cr", relaxation are described in
         # masterthesis "MULTIPERIOD OPTIMAL POWER FLOW PROBLEM IN DISTRIBUTION SYSTEM PLANNING" by Jaap Pedersen
         "relaxation": "none",
+        # Dictionary of linked time steps in the format {linked step => original step}
+        "clusters" : {},
         # upper bound on network expansion, int, DEFAULT: 10
         "max_exp": 10,
         # number of time steps considered in optimization
@@ -39,6 +41,6 @@ def opf_settings():
         # estimated working space for MUMPS if IPOPT,
         # smaller values might reduce required memory requirements, DEFAULT: 1000
         # see: https://coin-or.github.io/Ipopt/OPTIONS.html
-        "mumps_mem_percent": 1000
+        "mumps_mem_percent": 1000,
         }
     return opf_settings
