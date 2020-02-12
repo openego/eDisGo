@@ -685,7 +685,7 @@ class Topology:
         """
         # get bus to check if other elements are connected to bus
         bus = self.storage_units_df.at[name, 'bus']
-        # remove load
+        # remove storage unit
         self._storage_units_df.drop(name, inplace=True)
         # if no other elements are connected, remove line and bus as well
         if check_bus_for_removal(self, bus_name=bus):

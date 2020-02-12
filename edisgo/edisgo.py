@@ -840,6 +840,8 @@ class EDisGo:
                 p_nom=kwargs.get('p_nom'),
                 control=kwargs.get('control', None))
             if add_ts:
+                #Todo it should be possible to provide timeseries as series
+                #instead of dataframe because comp_name is not known beforehand
                 timeseries.add_storage_units_timeseries(
                     edisgo_obj=self, storage_unit_names=comp_name, **kwargs)
         else:

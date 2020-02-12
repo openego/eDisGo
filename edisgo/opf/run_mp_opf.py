@@ -2,6 +2,7 @@ import os
 import json
 import subprocess
 import logging
+import numpy as np
 from timeit import default_timer as timer
 
 from edisgo.tools.preprocess_pypsa_opf_structure import preprocess_pypsa_opf_structure, aggregate_fluct_generators
@@ -10,9 +11,18 @@ from edisgo.opf.util.scenario_settings import opf_settings
 
 logger = logging.getLogger(__name__)
 
-def bus_names_to_ints(edisgo, bus_names):
+
+def convert(o):
     """
-    :param edisgo_network:
+    Helper function for json dump, as int64 cannot be dumped.
+
+    """
+    if isinstance(o, np.int64): return int(o)
+    raise TypeError
+
+def bus_names_to_ints(pypsa_network, bus_names):
+    """
+    :param pypsa_network:
     :param bus_names: List of bus names to be remapped to indices
     :return bus_indices: List of one-based bus indices
 
@@ -25,12 +35,13 @@ def bus_names_to_ints(edisgo, bus_names):
     # map bus name to its integer index
     bus_indices = []
     for name in bus_names:
-        bus_indices.append(edisgo.topology.mv_grid.buses_df.index.get_loc(name))
+        bus_indices.append(pypsa_network.buses.index.get_loc(name))
 
     # Increment each Python index by one, as Julia uses one-based indexing
     bus_indices = [i + 1 for i in bus_indices]
 
     return bus_indices
+
 
 def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     """
@@ -64,6 +75,8 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
         # Maximal allowed curtailment over entire time horizon,
         # DEFAULT: "3percent"=> 3% of total RES generation in time horizon may be curtailed, else: Float
         "curtailment_total": "3percent",
+        "results_path": "opf_solutions"
+        # path to where OPF results are stored
     :return:
     """
     opf_dir = os.path.dirname(os.path.abspath(__file__))
@@ -93,17 +106,6 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     settings = opf_settings()
     settings["time_horizon"] = len(timesteps)
 
-    # Remap storage bus names to Integers, if any
-    if "storage_buses" in kwargs:
-        bus_names = kwargs["storage_buses"]
-        bus_indices = bus_names_to_ints(edisgo_network, bus_names)
-        kwargs["storage_buses"] = bus_indices
-
-    for args in kwargs.items():
-        if args[0] in settings:
-            # if hasattr(settings,args[0]):
-            settings[args[0]] = args[1]
-
     # convert edisgo network to pypsa network for timesteps on MV-level
     # aggregate all loads and generators in LV-grids
     # TODO check aggregation
@@ -116,6 +118,17 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     # set name of pypsa network
     pypsa_mv.name = "ding0_{}_t_{}".format(edisgo_network.topology.id,timehorizon)
 
+    # Remap storage bus names to Integers, if any
+    if "storage_buses" in kwargs:
+        bus_names = kwargs["storage_buses"]
+        bus_indices = bus_names_to_ints(pypsa_mv, bus_names)
+        kwargs["storage_buses"] = bus_indices
+
+    for args in kwargs.items():
+        if args[0] in settings:
+            # if hasattr(settings,args[0]):
+            settings[args[0]] = args[1]
+
     # preprocess pypsa structure
     logger.debug("preprocessing pypsa structure for opf")
     preprocess_pypsa_opf_structure(edisgo_network, pypsa_mv, hvmv_trafo=False)
@@ -125,18 +138,20 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
 
     # dump json files for static network information, timeseries of loads and generators, and opf settings
     with open(os.path.join(scenario_data_dir, "{}_static.json".format(pm["name"])), 'w') as outfile:
-        json.dump(pm, outfile)
+        json.dump(pm, outfile, default=convert)
     with open(os.path.join(scenario_data_dir, "{}_loads.json".format(pm["name"])), 'w') as outfile:
-        json.dump(load_data, outfile)
+        json.dump(load_data, outfile, default=convert)
     with open(os.path.join(scenario_data_dir, "{}_gens.json".format(pm["name"])), 'w') as outfile:
-        json.dump(gen_data, outfile)
+        json.dump(gen_data, outfile, default=convert)
     with open(os.path.join(scenario_data_dir, "{}_opf_setting.json".format(pm["name"])), 'w') as outfile:
-        json.dump(settings, outfile)
+        json.dump(settings, outfile, default=convert)
     logger.info("starting julia process")
     start = timer()
+    solution_dir = kwargs.get("results_path",
+                              os.path.join(opf_dir, "opf_solutions"))
     julia_process = subprocess.run(['julia', '--project={}'.format(julia_env_dir),
                     os.path.join(opf_dir, 'optimization_evaluation.jl'),
-                    opf_dir, pm["name"]])
+                    opf_dir, pm["name"], solution_dir])
     end = timer()
     run_time = end-start
     logger.info("julia terminated after {} s".format(run_time))
@@ -144,7 +159,6 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     if julia_process.returncode != 0:
         raise RuntimeError("Julia Subprocess failed")
 
-    solution_dir = os.path.join(opf_dir, "opf_solutions")
     solution_file = "{}_{}_{}_opf_sol.json".format(pm["name"],settings["scenario"],settings["relaxation"])
 
     # opf_results = OPFResults()

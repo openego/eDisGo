@@ -207,7 +207,6 @@ function post_method_edisgo(pm)
         add_objective_nep(pm)
     end
 
-    println(pm)
 end
 
 
