@@ -88,7 +88,8 @@ function add_var_sqr_current_magnitude(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd, boun
     if bounded
         ub = Dict()
         for (i, b) in branch
-            ub[i] = ((b["rate_a"][cnd]*b["tap"][cnd])/(buses[b["f_bus"]]["vmin"][cnd]))^2
+            ub[i] = (b["rate_a"][cnd]*b["tap"][cnd])^2
+            #ub[i] = ((b["rate_a"][cnd]*b["tap"][cnd])/(buses[b["f_bus"]]["vmin"][cnd]))^2
             setupperbound(var(pm, nw)[:cm][i],ub[i])
         end
         
@@ -140,7 +141,8 @@ function add_var_max_current(pm)
     branch = ref(pm)[:branch]
     ub = Dict()
     for (i, b) in branch
-        ub[i] = ((b["rate_a"]*b["tap"])/(buses[b["f_bus"]]["vmin"]))
+        ub[i] = b["rate_a"]*b["tap"]
+        #ub[i] = ((b["rate_a"]*b["tap"])/(buses[b["f_bus"]]["vmin"]))
     end
 
     var(pm)[:I_max] = @variable(pm.model,
@@ -199,10 +201,12 @@ function set_ub_flows(pm,maxexp,br_list::Array=[])
             @warn("variable maximal current rating I_max is not defined, data from ref(pm) is used for rate_a")
             if i in br_list
                 ub_power_rating = maxexp * ref(pm,:branch,i)["rate_a"]
-                ub_current_rating = ub_power_rating * lb_voltage
+                ub_current_rating = ub_power_rating
+                #ub_current_rating = ub_power_rating * lb_voltage
             else
                 ub_power_rating = ref(pm,:branch,i)["rate_a"]
-                ub_current_rating = ref(pm,:branch,i)["rate_a"] * lb_voltage
+                ub_current_rating = ref(pm,:branch,i)["rate_a"]
+                #ub_current_rating = ref(pm,:branch,i)["rate_a"] * lb_voltage
             end
         end
         
