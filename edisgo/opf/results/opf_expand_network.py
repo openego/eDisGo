@@ -86,7 +86,7 @@ def grid_expansion_costs(opf_results, tolerance=1e-6):
 
 
 def integrate_storage_units(edisgo, min_storage_size=0.3, timeseries=True,
-                            as_generator=False):
+                            as_load=False):
     """
     Integrates storage units from OPF into edisgo grid topology.
 
@@ -101,8 +101,8 @@ def integrate_storage_units(edisgo, min_storage_size=0.3, timeseries=True,
         Smaller storage units are ignored.
     timeseries : bool
         If True time series is added to component.
-    as_generator : bool
-        If True, storage is added as generator to the edisgo topology. This
+    as_load : bool
+        If True, storage is added as load to the edisgo topology. This
         is temporarily needed as the OPF cannot handle storage units from
         edisgo yet. This way, storage units with fixed position and time
         series can be considered in OPF.
@@ -119,9 +119,10 @@ def integrate_storage_units(edisgo, min_storage_size=0.3, timeseries=True,
     added_storage_units = []
 
     if timeseries:
-        storage_ts = edisgo.opf_results.storage_units_t.ud - \
-                     edisgo.opf_results.storage_units_t.uc
-        reactive_power_ts = pd.DataFrame(0,
+        storage_ts = (edisgo.opf_results.storage_units_t.ud -
+                      edisgo.opf_results.storage_units_t.uc).apply(
+            pd.to_numeric)
+        reactive_power_ts = pd.DataFrame(0.0,
                                          columns=storage_ts.columns,
                                          index=storage_ts.index)
 
@@ -132,22 +133,23 @@ def integrate_storage_units(edisgo, min_storage_size=0.3, timeseries=True,
         storage_cap = edisgo.opf_results.storage_units.at[st, 'emax']
         if storage_cap >= min_storage_size and \
                 (storage_ts.loc[:, st] > 0.001).any():
-            if not as_generator:
+            if not as_load:
                 storage = edisgo.topology.add_storage_unit(
                     bus=st,
                     p_nom=storage_cap)  # as C-rate is currently always 1
             else:
-                storage = edisgo.topology.add_generator(
-                    generator_id=1,
+                storage = edisgo.topology.add_load(
+                    load_id=1,
                     bus=st,
-                    p_nom=storage_cap,
-                    generator_type='storage')
+                    peak_load=storage_cap,
+                    annual_consumption=0.0,
+                    sector='storage')
             if timeseries:
                 ts_active = storage_ts.loc[:, [st]].rename(
                     columns={st: storage})
                 ts_reactive = reactive_power_ts.loc[:, [st]].rename(
                     columns={st: storage})
-                if not as_generator:
+                if not as_load:
                     add_storage_units_timeseries(
                         edisgo_obj=edisgo,
                         storage_unit_names=storage,
@@ -155,10 +157,10 @@ def integrate_storage_units(edisgo, min_storage_size=0.3, timeseries=True,
                         timeseries_storage_units_reactive_power=ts_reactive)
                 else:
                     #ToDo change once fixed in timeseries
-                    edisgo.timeseries.generators_active_power = \
+                    edisgo.timeseries.loads_active_power = \
                         pd.concat(
-                            [edisgo.timeseries.generators_active_power,
-                             ts_active], axis=1)
+                            [edisgo.timeseries.loads_active_power,
+                             -ts_active], axis=1)
                     edisgo.timeseries.generators_reactive_power = \
                         pd.concat(
                             [edisgo.timeseries.generators_reactive_power,
