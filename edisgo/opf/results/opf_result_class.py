@@ -1,5 +1,8 @@
 import json
 import pandas as pd
+import logging
+
+logger = logging.getLogger('edisgo')
 
 
 class LineVariables:
@@ -73,7 +76,7 @@ class OPFResults:
         self.set_bus_variables(pypsa_net)
         # Generator Variables
         #TODO Adjust for case that generators are fixed and no variables are returned from julia
-        # self.set_gen_variables(pypsa_net)
+        self.set_gen_variables(pypsa_net)
         # Storage Variables
         self.set_strg_variables(pypsa_net)
 
@@ -119,21 +122,58 @@ class OPFResults:
         self.buses_t.w = w_t
         return
 
-    def set_gen_variables(self,pypsa_net):
-        solution_data = self.solution_data
+    def set_gen_variables(self, pypsa_net):
+        #ToDo disaggregate aggregated generators?
+        gen_solution_data = self.solution_data["gen"]["nw"]
         ts = pypsa_net.snapshots
-        pg_t = pd.DataFrame(index=ts, columns=pypsa_net.generators.index)
-        qg_t = pd.DataFrame(index=ts, columns=pypsa_net.generators.index)
-        for (t, date_idx) in enumerate(ts):
-            gen_t = pd.DataFrame(solution_data["gen"]["nw"][str(t + 1)])
-            gen_t.index = gen_t.index.astype(int)
-            gen_t = gen_t.sort_index()
-            gen_t.index = pypsa_net.generators.index
-            pg_t.loc[date_idx] = gen_t.pg
-            qg_t.loc[date_idx] = gen_t.qg
-        self.generators_t.pg = pg_t
-        self.generators_t.qg = qg_t
-        return
+
+        # in case no curtailment requirement was given, all generators are
+        # made to fixed loads and Slack is the only remaining generator
+        if len(gen_solution_data['1']['pg'].keys()) == 1:
+            try:
+                # check if generator index in pypsa corresponds to generator
+                # int
+                slack = pypsa_net.generators[
+                    pypsa_net.generators.control=='Slack'].index.values[0]
+                ind = pypsa_net.generators.index.get_loc(slack) + 1
+                if not str(ind) in gen_solution_data['1']['pg'].keys():
+                    logger.warning("Slack indexes do not match.")
+                # write slack results
+                pg_t = pd.DataFrame(index=ts,
+                                    columns=[slack])
+                qg_t = pd.DataFrame(index=ts,
+                                    columns=[slack])
+                for (t, date_idx) in enumerate(ts):
+                    gen_t = pd.DataFrame(
+                        gen_solution_data[str(t + 1)])
+                    gen_t.index = [slack]
+                    pg_t.loc[date_idx] = gen_t.pg
+                    qg_t.loc[date_idx] = gen_t.qg
+                self.generators_t.pg = pg_t
+                self.generators_t.qg = qg_t
+            except:
+                logger.warning(
+                    "Error in writing OPF solutions for slack time "
+                    "series.")
+        else:
+            try:
+                pg_t = pd.DataFrame(index=ts,
+                                    columns=pypsa_net.generators.index)
+                qg_t = pd.DataFrame(index=ts,
+                                    columns=pypsa_net.generators.index)
+                for (t, date_idx) in enumerate(ts):
+                    gen_t = pd.DataFrame(gen_solution_data[str(t + 1)])
+                    gen_t.index = gen_t.index.astype(int)
+                    gen_t = gen_t.sort_index()
+                    gen_t.index = pypsa_net.generators.index
+                    pg_t.loc[date_idx] = gen_t.pg
+                    qg_t.loc[date_idx] = gen_t.qg
+                self.generators_t.pg = pg_t
+                self.generators_t.qg = qg_t
+            except:
+                logger.warning(
+                    "Error in writing OPF solutions for generator time "
+                    "series.")
 
     def set_strg_variables(self,pypsa_net):
         solution_data = self.solution_data
