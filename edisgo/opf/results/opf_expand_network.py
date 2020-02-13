@@ -175,3 +175,100 @@ def integrate_storage_units(edisgo, min_storage_size=0.3, timeseries=True,
     return added_storage_units, storage_cap_discarded
 
 
+def get_curtailment_per_node(edisgo, curtailment_ts=None, tolerance=1e-3):
+    """
+    Gets curtailed power per node.
+
+    As LV generators are aggregated at the corresponding LV station curtailment
+    is not determined per generator but per node.
+
+    This function also checks if curtailment requirements were met by OPF in
+    case the curtailment requirement time series is provided.
+
+    Parameters
+    -----------
+    edisgo : EDisGo object
+    curtailment_ts : pd.Series
+        Series with curtailment requirement per time step. Only needs to be
+        provided if you want to check if requirement was met.
+    tolerance : float
+        Tolerance for checking if curtailment requirement and curtailed
+        power are equal.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with curtailed power in MW per node. Column names correspond
+        to nodes and index to time steps calculated.
+
+    """
+    slack = edisgo.opf_results.pypsa.generators[
+        edisgo.opf_results.pypsa.generators.control == 'Slack'].index[0]
+    opf_gen_results = edisgo.opf_results.generators_t.pg.loc[:,
+                      edisgo.opf_results.generators_t.pg.columns != slack]
+    # feed-in per node without curtailment
+    rename_dict = {g: edisgo.opf_results.pypsa.generators.at[g, 'bus']
+                   for g in edisgo.opf_results.pypsa.generators.index}
+    pypsa_gen_ts = \
+        edisgo.opf_results.pypsa.generators_t.p_set.loc[
+        :, edisgo.opf_results.pypsa.generators_t.p_set.columns != slack]
+    feedin_per_node = pypsa_gen_ts.rename(columns=rename_dict)
+
+    # feed-in per node with curtailment
+    rename_dict = {g: edisgo.opf_results.pypsa.generators.at[g, 'bus']
+                   for g in edisgo.opf_results.pypsa.generators.index}
+    feedin_curtailed = opf_gen_results.rename(
+        columns=rename_dict)
+
+    # curtailment per node
+    curtailment_per_node = feedin_per_node - feedin_curtailed
+    # aggregate nodes in case they appear more than once
+    curtailment_per_node = curtailment_per_node.groupby(
+        curtailment_per_node.columns.unique(), axis=1).sum(axis=1)
+
+    if curtailment_ts is not None:
+        if (abs(curtailment_ts - curtailment_per_node.sum(axis=1)) >
+                tolerance).any():
+            logger.warning("Curtailment requirement not met through OPF.")
+    return curtailment_per_node
+
+
+def integrate_curtailment_as_load(edisgo, curtailment_per_node):
+    """
+    Adds load curtailed power per node as load
+
+    This is done because curtailment results from OPF are not given per
+    generator but per node (as LV generators are aggregated per LV grid).
+
+    :param edisgo:
+    :param curtailment_per_node:
+    :return:
+    """
+    active_power_ts = curtailment_per_node.apply(pd.to_numeric)
+    reactive_power_ts = pd.DataFrame(
+        0.0,
+        columns=active_power_ts.columns,
+        index=active_power_ts.index)
+
+    for n in curtailment_per_node.columns:
+        # add load component
+        load = edisgo.topology.add_load(
+            load_id=1,
+            bus=n,
+            peak_load=curtailment_per_node.loc[:, n].max(),
+            annual_consumption=0.0,
+            sector='curtailment')
+
+        # add time series
+        ts_active = active_power_ts.loc[:, [n]].rename(
+            columns={n: load})
+        ts_reactive = reactive_power_ts.loc[:, [n]].rename(
+            columns={n: load})
+        edisgo.timeseries.loads_active_power = \
+            pd.concat(
+                [edisgo.timeseries.loads_active_power,
+                 ts_active], axis=1)
+        edisgo.timeseries.generators_reactive_power = \
+            pd.concat(
+                [edisgo.timeseries.generators_reactive_power,
+                 ts_reactive], axis=1)
