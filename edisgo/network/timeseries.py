@@ -320,9 +320,9 @@ class TimeSeries:
             Series with residual load in MW.
 
         """
-        return self.generators_active_power.sum(axis=1) + \
-               self.storage_units_active_power.sum(axis=1) - \
-               self.loads_active_power.sum(axis=1)
+        return (self.generators_active_power.sum(axis=1) +
+                self.storage_units_active_power.sum(axis=1) -
+                self.loads_active_power.sum(axis=1)).loc[self.timeindex]
 
     @property
     def timesteps_load_feedin_case(self):
