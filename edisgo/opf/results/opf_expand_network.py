@@ -58,6 +58,7 @@ def grid_expansion_costs(opf_results, tolerance=1e-6):
         Grid expansion costs determined by OPF
 
     """
+    #ToDo maybe choose differenct default tolerance
     lines = opf_results.lines.index
 
     num_new_lines = np.ceil(
