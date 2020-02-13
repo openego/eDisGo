@@ -602,7 +602,8 @@ class EDisGo:
             lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
             title=kwargs.get('title', ''),
             scaling_factor_line_width=kwargs.get(
-                'scaling_factor_line_width', None))
+                'scaling_factor_line_width', None),
+            curtailment_df=kwargs.get('curtailment_df', None))
 
     def plot_mv_grid_expansion_costs(self, **kwargs):
         """

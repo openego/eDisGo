@@ -199,7 +199,8 @@ def mv_grid_topology(edisgo_obj, timestep=None,
                      grid_district_geom=True, background_map=True,
                      voltage=None, limits_cb_lines=None, limits_cb_nodes=None,
                      xlim=None, ylim=None, lines_cmap='inferno_r',
-                     title='', scaling_factor_line_width=None):
+                     title='', scaling_factor_line_width=None,
+                     curtailment_df=None):
     """
     Plot line loading as color on lines.
 
@@ -245,6 +246,11 @@ def mv_grid_topology(edisgo_obj, timestep=None,
         * None (default)
           Nodes are not plotted. Is also the fallback option in case of wrong
           input.
+        * 'curtailment'
+          Plots curtailment per node. Size of node corresponds to share of
+          curtailed power for the given time span. When this option is chosen
+          a dataframe with curtailed power per time step and node needs to be
+          provided in parameter `curtailment_df`.
 
     line_load : :pandas:`pandas.DataFrame<dataframe>` or None
         Dataframe with current results from power flow analysis in A. Index of
@@ -296,6 +302,10 @@ def mv_grid_topology(edisgo_obj, timestep=None,
         If provided line width is set according to the nominal apparent power
         of the lines. If line width is None a default line width of 2 is used
         for each line. Default: None.
+    curtailment_df : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe with curtailed power per time step and node. Columns of the
+        dataframe correspond to buses and index to the time step. Only needs
+        to be provided if `node_color` is set to 'curtailment'.
 
     """
 
@@ -379,10 +389,25 @@ def mv_grid_topology(edisgo_obj, timestep=None,
         buses_without_storages = \
             buses[~buses.isin(buses_with_storages)]
         bus_sizes.update({bus: 0 for bus in buses_without_storages})
+        # size nodes such that 300 kW storage equals size 100
         bus_sizes.update(
             {bus: edisgo_obj.topology.get_connected_components_from_bus(
                 bus)['StorageUnit'].p_nom.values.sum() * 1000 / 3
-             for bus in buses_with_storages}) #Todo: why *1000/3?
+             for bus in buses_with_storages})
+        return bus_sizes
+
+    def nodes_curtailment(buses, curtailment_df):
+        bus_sizes = {}
+        buses_with_curtailment = \
+            buses[buses.isin(curtailment_df.columns)]
+        buses_without_curtailment = \
+            buses[~buses.isin(buses_with_curtailment)]
+        bus_sizes.update({bus: 0 for bus in buses_without_curtailment})
+        curtailment_total = curtailment_df.sum().sum()
+        # size nodes such that 100% curtailment share equals size 500
+        bus_sizes.update(
+            {bus: curtailment_df.loc[:, bus].sum() / curtailment_total * 500
+             for bus in buses_with_curtailment})
         return bus_sizes
 
     def nodes_by_costs(buses, grid_expansion_costs, edisgo_obj):
@@ -478,6 +503,10 @@ def mv_grid_topology(edisgo_obj, timestep=None,
     elif node_color is None:
         bus_sizes = 0
         bus_colors = 'r'
+        bus_cmap = None
+    elif node_color == 'curtailment':
+        bus_sizes = nodes_curtailment(pypsa_plot.buses.index, curtailment_df)
+        bus_colors = 'orangered'
         bus_cmap = None
     else:
         logging.warning('Choice for `node_color` is not valid. Default is '
@@ -575,7 +604,12 @@ def mv_grid_topology(edisgo_obj, timestep=None,
         node_color == 'expansion_costs') and \
             edisgo_obj.topology.storage_units_df.loc[:, 'p_nom'].any() > 0:
         scatter_handle = plt.scatter(
-            [], [], c='orangered', s=100, label='= 300 kW battery storage')
+            [], [], c='orangered', s=100,
+            label='= 300 kW battery storage')
+    elif node_color == 'curtailment':
+        scatter_handle = plt.scatter(
+            [], [], c='orangered', s=50,
+            label='$\equiv$ 10% share of curtailment')
     else:
         scatter_handle = None
     if scaling_factor_line_width is not None:
@@ -590,7 +624,7 @@ def mv_grid_topology(edisgo_obj, timestep=None,
                    loc=2, framealpha=0.5, fontsize='medium')
     elif scatter_handle:
         plt.legend(handles=[scatter_handle], labelspacing=1,
-                   title='Storage size', borderpad=0.5,
+                   title=None, borderpad=0.5,
                    loc=2, framealpha=0.5, fontsize='medium')
     elif line_handle:
         plt.legend(handles=[line_handle[0]], labelspacing=1,
