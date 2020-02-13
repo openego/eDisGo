@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
-from edisgo.network.timeseries import add_generators_timeseries, \
-    add_storage_units_timeseries
+from edisgo.network.timeseries import add_storage_units_timeseries
 import logging
 
 logger = logging.getLogger('edisgo')
