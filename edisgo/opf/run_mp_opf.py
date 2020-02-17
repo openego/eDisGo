@@ -166,4 +166,5 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
         solution_name=os.path.join(solution_dir,solution_file),
         pypsa_net=pypsa_mv)
 
-    return edisgo_network.opf_results.status #opf_results
+    if edisgo_network.opf_results.status != 'Optimal':
+        raise RuntimeError("Optimal solution not found.")
