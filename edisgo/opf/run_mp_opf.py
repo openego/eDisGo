@@ -157,7 +157,7 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
     logger.info("julia terminated after {} s".format(run_time))
 
     if julia_process.returncode != 0:
-        raise RuntimeError("Julia Subprocess failed")
+        raise RuntimeError("Julia subprocess failed.")
 
     solution_file = "{}_{}_{}_opf_sol.json".format(pm["name"],settings["scenario"],settings["relaxation"])
 
@@ -168,3 +168,5 @@ def run_mp_opf(edisgo_network,timesteps=None,**kwargs):
 
     if edisgo_network.opf_results.status != 'Optimal':
         raise RuntimeError("Optimal solution not found.")
+
+    return edisgo_network.opf_results.status
