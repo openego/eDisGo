@@ -1,5 +1,6 @@
 import os
 import logging
+import pandas as pd
 
 import edisgo
 from edisgo.network.topology import Topology
@@ -791,7 +792,8 @@ class EDisGo:
         if save_timeseries:
             self.timeseries.to_csv(directory)
 
-    def add_component(self, comp_type, add_ts=True, **kwargs):
+    def add_component(self, comp_type, add_ts=True, ts_active_power=None,
+                      ts_reactive_power=None, **kwargs):
         """
         Adds single component to topology and respective timeseries if add_ts
         is set to True.
@@ -803,6 +805,10 @@ class EDisGo:
             'StorageUnit', 'Transformer'
         add_ts: Boolean
             Indicator if timeseries for component are added as well
+        ts_active_power : pd.Series
+            Active power time series of added component.
+        ts_reactive_power : pd.Series
+            Reactive power time series of added component.
         **kwargs: dict
             Attributes of added component. See respective functions for required
             entries. For 'Load', 'Generator' and 'StorageUnit' the boolean
@@ -841,10 +847,17 @@ class EDisGo:
                 p_nom=kwargs.get('p_nom'),
                 control=kwargs.get('control', None))
             if add_ts:
-                #Todo it should be possible to provide timeseries as series
-                #instead of dataframe because comp_name is not known beforehand
+                if isinstance(ts_active_power, pd.Series):
+                    ts_active_power = pd.DataFrame(
+                        {comp_name: ts_active_power})
+                if isinstance(ts_reactive_power, pd.Series):
+                    ts_reactive_power = pd.DataFrame(
+                        {comp_name: ts_reactive_power})
                 timeseries.add_storage_units_timeseries(
-                    edisgo_obj=self, storage_unit_names=comp_name, **kwargs)
+                    edisgo_obj=self, storage_unit_names=comp_name,
+                    timeseries_storage_units=ts_active_power,
+                    timeseries_storage_units_reactive_power=ts_reactive_power,
+                    **kwargs)
         else:
             raise ValueError("Component type is not correct.")
         return comp_name
