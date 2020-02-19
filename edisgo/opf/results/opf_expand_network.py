@@ -161,9 +161,9 @@ def integrate_storage_units(edisgo, min_storage_size=0.3, timeseries=True,
                         pd.concat(
                             [edisgo.timeseries.loads_active_power,
                              -ts_active], axis=1)
-                    edisgo.timeseries.generators_reactive_power = \
+                    edisgo.timeseries.loads_reactive_power = \
                         pd.concat(
-                            [edisgo.timeseries.generators_reactive_power,
+                            [edisgo.timeseries.loads_reactive_power,
                              ts_reactive], axis=1)
 
             added_storage_units.append(storage)
@@ -268,7 +268,7 @@ def integrate_curtailment_as_load(edisgo, curtailment_per_node):
             pd.concat(
                 [edisgo.timeseries.loads_active_power,
                  ts_active], axis=1)
-        edisgo.timeseries.generators_reactive_power = \
+        edisgo.timeseries.loads_reactive_power = \
             pd.concat(
-                [edisgo.timeseries.generators_reactive_power,
+                [edisgo.timeseries.loads_reactive_power,
                  ts_reactive], axis=1)
