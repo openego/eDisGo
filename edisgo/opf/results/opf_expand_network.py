@@ -245,6 +245,8 @@ def integrate_curtailment_as_load(edisgo, curtailment_per_node):
     :return:
     """
     active_power_ts = curtailment_per_node.apply(pd.to_numeric)
+    # drop all zeros
+    active_power_ts = active_power_ts.loc[:, ~(active_power_ts == 0.0).all()]
     reactive_power_ts = pd.DataFrame(
         0.0,
         columns=active_power_ts.columns,
