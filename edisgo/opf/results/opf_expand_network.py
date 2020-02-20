@@ -252,7 +252,7 @@ def integrate_curtailment_as_load(edisgo, curtailment_per_node):
         columns=active_power_ts.columns,
         index=active_power_ts.index)
 
-    for n in curtailment_per_node.columns:
+    for n in active_power_ts.columns:
         # add load component
         load = edisgo.topology.add_load(
             load_id=1,
