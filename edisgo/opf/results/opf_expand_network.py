@@ -206,19 +206,23 @@ def get_curtailment_per_node(edisgo, curtailment_ts=None, tolerance=1e-3):
         edisgo.opf_results.pypsa.generators.control == 'Slack'].index[0]
     opf_gen_results = edisgo.opf_results.generators_t.pg.loc[:,
                       edisgo.opf_results.generators_t.pg.columns != slack]
+
     # feed-in per node without curtailment
-    rename_dict = {g: edisgo.opf_results.pypsa.generators.at[g, 'bus']
-                   for g in edisgo.opf_results.pypsa.generators.index}
     pypsa_gen_ts = \
         edisgo.opf_results.pypsa.generators_t.p_set.loc[
         :, edisgo.opf_results.pypsa.generators_t.p_set.columns != slack]
-    feedin_per_node = pypsa_gen_ts.rename(columns=rename_dict)
+    tmp = pypsa_gen_ts.T
+    tmp.index = [
+        edisgo.opf_results.pypsa.generators.at[pypsa_gen_ts.columns[i], 'bus']
+        for i in range(0, len(pypsa_gen_ts.columns))]
+    feedin_per_node = tmp.groupby(tmp.index, axis=0).sum().T
 
     # feed-in per node with curtailment
-    rename_dict = {g: edisgo.opf_results.pypsa.generators.at[g, 'bus']
-                   for g in edisgo.opf_results.pypsa.generators.index}
-    feedin_curtailed = opf_gen_results.rename(
-        columns=rename_dict)
+    tmp = opf_gen_results.T
+    tmp.index = [
+        edisgo.opf_results.pypsa.generators.at[pypsa_gen_ts.columns[i], 'bus']
+        for i in range(0, len(opf_gen_results.columns))]
+    feedin_curtailed = tmp.groupby(tmp.index, axis=0).sum().T
 
     # curtailment per node
     curtailment_per_node = feedin_per_node - feedin_curtailed
