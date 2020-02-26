@@ -251,6 +251,8 @@ def mv_grid_topology(edisgo_obj, timestep=None,
           curtailed power for the given time span. When this option is chosen
           a dataframe with curtailed power per time step and node needs to be
           provided in parameter `curtailment_df`.
+        * 'charging_park'
+          Plots nodes with charging stations in red.
 
     line_load : :pandas:`pandas.DataFrame<dataframe>` or None
         Dataframe with current results from power flow analysis in A. Index of
@@ -365,6 +367,25 @@ def mv_grid_topology(edisgo_obj, timestep=None,
                 edisgo_obj.topology.get_connected_components_from_bus(bus)
             bus_colors[bus], bus_sizes[bus] = get_color_and_size(
                 connected_components, colors_dict, sizes_dict)
+        return bus_sizes, bus_colors
+
+    def nodes_charging_park(buses, edisgo_obj):
+        bus_sizes = {}
+        bus_colors = {}
+        colors_dict = {'ChargingPark': 'r',
+                       'else': 'black'}
+        sizes_dict = {'ChargingPark': 100,
+                      'else': 10}
+        for bus in buses:
+            connected_components = \
+                edisgo_obj.topology.get_connected_components_from_bus(bus)
+            if not connected_components['Load'].empty and 'charging_park' in \
+                    connected_components['Load'].sector.values:
+                    bus_colors[bus] = colors_dict['ChargingPark']
+                    bus_sizes[bus] = sizes_dict['ChargingPark']
+            else:
+                bus_colors[bus] = colors_dict['else']
+                bus_sizes[bus] = sizes_dict['else']
         return bus_sizes, bus_colors
 
     def nodes_by_voltage(buses, voltages):
@@ -507,6 +528,10 @@ def mv_grid_topology(edisgo_obj, timestep=None,
     elif node_color == 'curtailment':
         bus_sizes = nodes_curtailment(pypsa_plot.buses.index, curtailment_df)
         bus_colors = 'orangered'
+        bus_cmap = None
+    elif node_color == 'charging_park':
+        bus_sizes, bus_colors = nodes_charging_park(
+            pypsa_plot.buses.index, edisgo_obj)
         bus_cmap = None
     else:
         logging.warning('Choice for `node_color` is not valid. Default is '

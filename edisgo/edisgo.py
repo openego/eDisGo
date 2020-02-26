@@ -654,6 +654,16 @@ class EDisGo:
             xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
             title=kwargs.get('title', ''))
 
+    def plot_mv_grid(self, **kwargs):
+        """
+        General plotting function giving all options function
+        :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        """
+        plots.mv_grid_topology(
+            self,
+            **kwargs)
+
     def histogram_voltage(self, timestep=None, title=True, **kwargs):
         """
         Plots histogram of voltages.
