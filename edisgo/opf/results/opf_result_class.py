@@ -2,8 +2,27 @@ import json
 import pandas as pd
 import logging
 
-logger = logging.getLogger('edisgo')
+from edisgo.tools.preprocess_pypsa_opf_structure import preprocess_pypsa_opf_structure, aggregate_fluct_generators
 
+logger = logging.getLogger("edisgo")
+
+
+"""
+:param edisgo_obj:  An edisgo object with the same network topology
+                    that the optimization was run on
+:path:              Path of the optimization result JSON file
+:mode:              voltage level, currently only supports "mv"
+
+This reads the optimization results directly from a JSON result file
+without carrying out the optimization process
+"""
+def read_from_json(edisgo_obj, path, mode="mv"):
+    pypsa_net  = edisgo_obj.to_pypsa(mode=mode, timesteps=edisgo_obj.timeseries.timeindex)
+    timehorizon = len(pypsa_net.snapshots)
+    pypsa_net.name = "ding0_{}_t_{}".format(edisgo_obj.topology.id,timehorizon)
+    preprocess_pypsa_opf_structure(edisgo_obj, pypsa_net, hvmv_trafo=False)
+    aggregate_fluct_generators(pypsa_net)
+    edisgo_obj.opf_results.set_solution(path, pypsa_net)
 
 class LineVariables:
     def __init__(self):
@@ -47,7 +66,7 @@ class OPFResults:
         self.storage_units = None
         self.storage_units_t = StorageVariables()
 
-    def set_solution(self,solution_name,pypsa_net):
+    def set_solution(self, solution_name, pypsa_net):
         self.read_solution_file(solution_name)
         self.set_solution_to_results(pypsa_net)
 
