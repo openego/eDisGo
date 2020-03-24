@@ -36,7 +36,10 @@ def mv_line_load(edisgo_obj):
     """
 
     crit_lines = pd.DataFrame()
-    crit_lines = _line_load(edisgo_obj, edisgo_obj.topology.mv_grid, crit_lines)
+    crit_lines = _line_load(
+        edisgo_obj,
+        edisgo_obj.topology.mv_grid,
+        crit_lines)
 
     if not crit_lines.empty:
         logger.debug('==> {} line(s) in MV topology has/have load issues.'.format(
@@ -102,10 +105,10 @@ def lines_allowed_load(edisgo_obj, grid, grid_level):
     -------
     :pandas:`pandas.DataFrame<dataframe>`
         Dataframe containing the maximum allowed current per line per time step
-        Index of the dataframe are the timesteps of the supplied network of type 
+        Index of the dataframe are the timesteps of the supplied network of type
         :pandas:`pandas.Timestamp<timestamp>`.
-        
-        Columns are the network lines of type :class:`~.network.components.Line`. 
+
+        Columns are the network lines of type :class:`~.network.components.Line`.
         They contain the maximum allowed current flow for each line per time step
 
     """
@@ -123,6 +126,7 @@ def lines_allowed_load(edisgo_obj, grid, grid_level):
             edisgo_obj.results.i_res.index].apply(
             lambda _: i_lines_allowed_per_case[_])
     return i_lines_allowed
+
 
 def _line_load(edisgo_obj, grid, crit_lines):
     """
@@ -154,8 +158,8 @@ def _line_load(edisgo_obj, grid, crit_lines):
 
     """
     if edisgo_obj.results.i_res is None:
-        raise Exception ('No results i_res to check. '
-                         'Please analyze grid first.')
+        raise Exception('No results i_res to check. '
+                        'Please analyze grid first.')
 
     if isinstance(grid, LVGrid):
         grid_level = 'lv'
@@ -168,9 +172,9 @@ def _line_load(edisgo_obj, grid, crit_lines):
 
     try:
         i_lines_pfa = edisgo_obj.results.i_res[grid.lines_df.index]
-        relative_i_res = i_lines_pfa/i_lines_allowed
+        relative_i_res = i_lines_pfa / i_lines_allowed
         crit_lines_relative_load = relative_i_res[
-                relative_i_res > 1].max().dropna()
+            relative_i_res > 1].max().dropna()
         if len(crit_lines_relative_load) > 0:
             tmp_lines = pd.concat([crit_lines_relative_load,
                                    relative_i_res.idxmax()[
@@ -330,10 +334,10 @@ def _station_load(edisgo_obj, grid, crit_stations):
     s_station_allowed_per_case = {}
     s_station_allowed_per_case['feedin_case'] = s_station * edisgo_obj.config[
         'grid_expansion_load_factors']['{}_feedin_case_transformer'.format(
-        grid_level)]
+            grid_level)]
     s_station_allowed_per_case['load_case'] = s_station * edisgo_obj.config[
         'grid_expansion_load_factors']['{}_load_case_transformer'.format(
-        grid_level)]
+            grid_level)]
     # maximum allowed apparent power of station in each time step
     s_station_allowed = \
         edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
@@ -344,7 +348,7 @@ def _station_load(edisgo_obj, grid, crit_stations):
             s_station_pfa = edisgo_obj.results.s_res(
                 transformers_df).sum(axis=1)
         elif grid_level == 'mv':
-            s_station_pfa = (edisgo_obj.results.hv_mv_exchanges.p ** 2 + \
+            s_station_pfa = (edisgo_obj.results.hv_mv_exchanges.p ** 2 +
                              edisgo_obj.results.hv_mv_exchanges.q ** 2) ** 0.5
         else:
             raise ValueError('Unknown grid level. Please check.')
@@ -394,13 +398,13 @@ def mv_allowed_deviations(edisgo_obj, voltage_levels):
     Returns
     -------
     :pandas:`pandas.DataFrame<dataframe>`
-        Dataframe containing the maximum allowed relative upper voltage deviation 
-        Index of the dataframe are the timesteps of the supplied network of type 
+        Dataframe containing the maximum allowed relative upper voltage deviation
+        Index of the dataframe are the timesteps of the supplied network of type
         :pandas:`pandas.Timestamp<timestamp>`.
 
     :pandas:`pandas.DataFrame<dataframe>`
-        Dataframe containing the maximum allowed relative lower voltage deviation 
-        Index of the dataframe are the timesteps of the supplied network of type 
+        Dataframe containing the maximum allowed relative lower voltage deviation
+        Index of the dataframe are the timesteps of the supplied network of type
         :pandas:`pandas.Timestamp<timestamp>`.
 
     """
@@ -445,6 +449,7 @@ def mv_allowed_deviations(edisgo_obj, voltage_levels):
 
     return v_dev_allowed_upper, v_dev_allowed_lower
 
+
 def mv_voltage_deviation(edisgo_obj, voltage_levels='mv_lv'):
     """
     Checks for voltage stability issues in MV topology.
@@ -487,7 +492,8 @@ def mv_voltage_deviation(edisgo_obj, voltage_levels='mv_lv'):
 
     nodes = edisgo_obj.topology.mv_grid.buses_df
 
-    v_dev_allowed_upper, v_dev_allowed_lower = mv_allowed_voltages(edisgo_obj, voltage_levels)
+    v_dev_allowed_upper, v_dev_allowed_lower = mv_allowed_voltages(
+        edisgo_obj, voltage_levels)
 
     crit_nodes_grid = _voltage_deviation(
         edisgo_obj, nodes, v_dev_allowed_upper, v_dev_allowed_lower,
@@ -570,7 +576,7 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels='mv_lv'):
             'grid_expansion_allowed_voltage_deviations']['load_case_upper']
 
         v_dev_allowed_upper = \
-                edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
+            edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
                 lambda _: v_dev_allowed_per_case['{}_upper'.format(_)])
         v_dev_allowed_lower = \
             edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
@@ -600,7 +606,7 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels='mv_lv'):
                 # feed-in case and lower bound for load case
                 v_lv_station_primary = edisgo_obj.results.v_res(
                     nodes_df=edisgo_obj.topology.buses_df.loc[
-                          [lv_grid.transformers_df.iloc[0].bus0], :],
+                        [lv_grid.transformers_df.iloc[0].bus0], :],
                     level='mv').iloc[:, 0]
                 timeindex = v_lv_station_primary.index
                 v_dev_allowed_per_case['feedin_case_upper'] = \
@@ -671,7 +677,9 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels='mv_lv'):
 
     return crit_nodes
 
-def voltage_diff(edisgo_obj, nodes, v_dev_allowed_upper, v_dev_allowed_lower, voltage_level):
+
+def voltage_diff(edisgo_obj, nodes, v_dev_allowed_upper,
+                 v_dev_allowed_lower, voltage_level):
     """
     Returns upper and lower voltage violations per node
 
@@ -706,12 +714,13 @@ def voltage_diff(edisgo_obj, nodes, v_dev_allowed_upper, v_dev_allowed_lower, vo
     'grid_expansion_allowed_voltage_deviations'.
 
     """
-    v_mag_pu_pfa = edisgo_obj.results.v_res(nodes_df=nodes, level=voltage_level)
+    v_mag_pu_pfa = edisgo_obj.results.v_res(
+        nodes_df=nodes, level=voltage_level)
 
     v_dev_allowed_upper_format = np.tile((v_dev_allowed_upper.loc[
-            v_mag_pu_pfa.index]).values, (v_mag_pu_pfa.shape[1],1))
+        v_mag_pu_pfa.index]).values, (v_mag_pu_pfa.shape[1], 1))
     v_dev_allowed_lower_format = np.tile((v_dev_allowed_lower.loc[
-            v_mag_pu_pfa.index]).values, (v_mag_pu_pfa.shape[1],1))
+        v_mag_pu_pfa.index]).values, (v_mag_pu_pfa.shape[1], 1))
     overvoltage = v_mag_pu_pfa.T[
         v_mag_pu_pfa.T > v_dev_allowed_upper_format].dropna(how='all')
     undervoltage = v_mag_pu_pfa.T[
@@ -720,8 +729,8 @@ def voltage_diff(edisgo_obj, nodes, v_dev_allowed_upper, v_dev_allowed_lower, vo
     # worst case is saved
     nodes_both = v_mag_pu_pfa[
         overvoltage[overvoltage.index.isin(undervoltage.index)].index]
-    voltage_diff_ov = nodes_both.T-v_dev_allowed_upper.loc[
-            v_mag_pu_pfa.index].values
+    voltage_diff_ov = nodes_both.T - v_dev_allowed_upper.loc[
+        v_mag_pu_pfa.index].values
     voltage_diff_uv = -nodes_both.T + v_dev_allowed_lower.loc[
         v_mag_pu_pfa.index].values
     voltage_diff_ov = voltage_diff_ov.loc[voltage_diff_ov.max(axis=1) >
@@ -732,7 +741,7 @@ def voltage_diff(edisgo_obj, nodes, v_dev_allowed_upper, v_dev_allowed_lower, vo
     nodes_ov = v_mag_pu_pfa[
         overvoltage[~overvoltage.index.isin(nodes_both.columns)].index]
     voltage_diff_ov = voltage_diff_ov.append(
-        nodes_ov.T-v_dev_allowed_upper.loc[v_mag_pu_pfa.index].values)
+        nodes_ov.T - v_dev_allowed_upper.loc[v_mag_pu_pfa.index].values)
 
     # handle nodes with undervoltage issues and append to voltage_diff_uv
     nodes_uv = v_mag_pu_pfa[
@@ -782,7 +791,8 @@ def _voltage_deviation(edisgo_obj, nodes, v_dev_allowed_upper,
 
     crit_nodes_grid = pd.DataFrame()
 
-    voltage_diff_uv, voltage_diff_ov = voltage_diff(edisgo_obj, nodes, v_dev_allowed_upper, v_dev_allowed_lower, voltage_level)
+    voltage_diff_uv, voltage_diff_ov = voltage_diff(
+        edisgo_obj, nodes, v_dev_allowed_upper, v_dev_allowed_lower, voltage_level)
 
     # append to crit nodes dataframe
     if not voltage_diff_ov.empty:
