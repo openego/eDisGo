@@ -135,7 +135,7 @@ def oedb(edisgo_object):
 
         # convert capacity from kW to MW
         generators_mv.electrical_capacity = \
-            generators_mv.electrical_capacity / 1e3
+            pd.to_numeric(generators_mv.electrical_capacity) / 1e3
 
         # extend basic query for LV generators and read data from db
         generators_lv_sqla = generators_sqla. \
@@ -151,7 +151,7 @@ def oedb(edisgo_object):
 
         # convert capacity from kW to MW
         generators_lv.electrical_capacity = \
-            generators_lv.electrical_capacity / 1e3
+            pd.to_numeric(generators_lv.electrical_capacity) / 1e3
 
         return generators_mv, generators_lv
 
