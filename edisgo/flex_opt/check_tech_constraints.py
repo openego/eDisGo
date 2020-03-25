@@ -492,7 +492,7 @@ def mv_voltage_deviation(edisgo_obj, voltage_levels='mv_lv'):
 
     nodes = edisgo_obj.topology.mv_grid.buses_df
 
-    v_dev_allowed_upper, v_dev_allowed_lower = mv_allowed_voltages(
+    v_dev_allowed_upper, v_dev_allowed_lower = mv_allowed_deviations(
         edisgo_obj, voltage_levels)
 
     crit_nodes_grid = _voltage_deviation(
