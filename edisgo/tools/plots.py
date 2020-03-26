@@ -431,9 +431,9 @@ def mv_grid_topology(edisgo_obj, timestep=None,
             buses[~buses.isin(buses_with_curtailment)]
         bus_sizes.update({bus: 0 for bus in buses_without_curtailment})
         curtailment_total = curtailment_df.sum().sum()
-        # size nodes such that 100% curtailment share equals size 500
+        # size nodes such that 100% curtailment share equals size 1000
         bus_sizes.update(
-            {bus: curtailment_df.loc[:, bus].sum() / curtailment_total * 500
+            {bus: curtailment_df.loc[:, bus].sum() / curtailment_total * 2000
              for bus in buses_with_curtailment})
         return bus_sizes
 
@@ -639,7 +639,7 @@ def mv_grid_topology(edisgo_obj, timestep=None,
             label='= 300 kW battery storage')
     elif node_color == 'curtailment':
         scatter_handle = plt.scatter(
-            [], [], c='orangered', s=50,
+            [], [], c='orangered', s=200,
             label='$\equiv$ 10% share of curtailment')
     else:
         scatter_handle = None
