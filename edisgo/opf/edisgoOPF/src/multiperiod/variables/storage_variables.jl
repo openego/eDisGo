@@ -22,8 +22,8 @@ function add_var_charging_rate(pm;nw::Int=pm.cnw,cnd::Int=pm.ccnd,bounded=true)
         var(pm,nw)[:ud] = @variable(pm.model,[i in ids(pm,nw,:storage)], basename="ud_$(nw)",
             lowerbound = 0)
     end
-        
 end
+
 """
 variables for state of starge `soc`
 

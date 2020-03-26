@@ -46,6 +46,23 @@ function read_gen_timeseries(network_name::String)
     return gen_data, isgens
 end
 
+function read_storage_timeseries(network_name::String)
+    filename = "$(network_name)_storage.json"
+    io = open(filename, "r");
+    data_string=read(io,String)
+    storage_file = JSON.parse(data_string)
+    close(io)
+    storage_data,isstorage = haskey(storage_file,"time_horizon") ?
+    (storage_file["storage_data"],!isempty(storage_file["storage_data"]["1"])) : (Dict{String, Any}(),false)
+    return storage_data, isstorage
+end
+
+function add_storage_timeseries(data,storage_data)
+    for (nw, storage_total) in storage_data
+        data["nw"][nw]["storage_total"] = storage_total["p"]
+    end
+end
+
 #= Create a Dict that maps each load to its respective bus =#
 function look_up_dicts(data,load_data)
     look_up_load_ids = Dict()
@@ -81,6 +98,7 @@ function read_data(network_name::String)
     network_data = read_statics(network_name)
     load_data, isloads = read_load_timeseries(network_name)
     gen_data, isgens = read_gen_timeseries(network_name)
+    storage_data, isstorage = read_storage_timeseries(network_name)
     
     # replicate static network_data if time horizon is given
     if isgens || isloads
@@ -101,6 +119,11 @@ function read_data(network_name::String)
         add_load_timeseries(data,load_data)
     else
         println("no loads given")
+    end
+    if isstorage
+        add_storage_timeseries(data,load_data)
+    else
+        println("no storage time series given")
     end
     if isgens
         for (nw,gens) in gen_data
@@ -126,8 +149,11 @@ function read_data(network_name::String)
     return data
 end
 
-function read_data(network_data::Dict{String,Any},
-    load_data::Dict{String,Any},gen_data::Dict{String,Any};
+function read_data(
+    network_data::Dict{String,Any},
+    load_data::Dict{String,Any},
+    gen_data::Dict{String,Any},
+    storage_data::Dict{String,Any};
     global_keys::Set{String}=Set{String}(),
     timehorizon::Int=-1)
     if timehorizon==-1
@@ -138,6 +164,7 @@ function read_data(network_data::Dict{String,Any},
     data = PowerModels.replicate(network_data,thorizon,global_keys=global_keys)
     # write timeseries on replicated data
     add_load_timeseries(data,load_data)
+    add_storage_timeseries(data,storage_data)
     for (nw,gens) in gen_data
         for (i,gen_i) in gens
             data["nw"][nw]["gen"][i]["pmax"] = gen_i["pg"]
@@ -195,6 +222,7 @@ function read_edisgo_problem(network_name::String;timehorizon::Int=-1)
     # read time series for demand and generation
     load_data,_ = read_load_timeseries(network_name)
     gen_data,_ = read_gen_timeseries(network_name)
+    storage_data,_ = read_storage_timeseries(network_name)
 
     if timehorizon==0 || length(load_data)<=timehorizon
         @warn("timehorizon has to be -1 and in range of timeseries given, timehorizon is set on maximal length of timeseries")
@@ -216,7 +244,7 @@ function read_edisgo_problem(network_name::String;timehorizon::Int=-1)
     end
 
     # merge network_data with load and generation data
-    data = read_data(network_data,load_data,gen_data,global_keys=Set(global_keys),timehorizon=timehorizon)
+    data = read_data(network_data,load_data,gen_data,storage_data,global_keys=Set(global_keys),timehorizon=timehorizon)
     return data
 #     return gen_data,gen_data2
 end
