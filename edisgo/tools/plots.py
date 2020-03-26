@@ -200,7 +200,7 @@ def mv_grid_topology(edisgo_obj, timestep=None,
                      voltage=None, limits_cb_lines=None, limits_cb_nodes=None,
                      xlim=None, ylim=None, lines_cmap='inferno_r',
                      title='', scaling_factor_line_width=None,
-                     curtailment_df=None):
+                     curtailment_df=None, **kwargs):
     """
     Plot line loading as color on lines.
 
@@ -308,6 +308,9 @@ def mv_grid_topology(edisgo_obj, timestep=None,
         Dataframe with curtailed power per time step and node. Columns of the
         dataframe correspond to buses and index to the time step. Only needs
         to be provided if `node_color` is set to 'curtailment'.
+    legend_loc : str
+        Location of legend. See matplotlib legend location options for more
+        information. Default: 'upper left'.
 
     """
 
@@ -646,18 +649,19 @@ def mv_grid_topology(edisgo_obj, timestep=None,
             label='= 10 MVA')
     else:
         line_handle = None
+    legend_loc = kwargs.get('legend_loc', 'upper left')
     if scatter_handle and line_handle:
         plt.legend(handles=[scatter_handle, line_handle[0]], labelspacing=1,
                    title='Storage size and line capacity', borderpad=0.5,
-                   loc=2, framealpha=0.5, fontsize='medium')
+                   loc=legend_loc, framealpha=0.5, fontsize='medium')
     elif scatter_handle:
-        plt.legend(handles=[scatter_handle], labelspacing=1,
-                   title=None, borderpad=0.5,
-                   loc=2, framealpha=0.5, fontsize='medium')
+        plt.legend(handles=[scatter_handle], labelspacing=0,
+                   title=None, borderpad=0.3,
+                   loc=legend_loc, framealpha=0.5, fontsize='medium')
     elif line_handle:
         plt.legend(handles=[line_handle[0]], labelspacing=1,
                    title='Line capacity', borderpad=0.5,
-                   loc=2, framealpha=0.5, fontsize='medium')
+                   loc=legend_loc, framealpha=0.5, fontsize='medium')
 
     # axes limits
     if xlim is not None:
