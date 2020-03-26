@@ -372,20 +372,23 @@ def mv_grid_topology(edisgo_obj, timestep=None,
     def nodes_charging_park(buses, edisgo_obj):
         bus_sizes = {}
         bus_colors = {}
+        positions = []
         colors_dict = {'ChargingPark': 'r',
                        'else': 'black'}
         sizes_dict = {'ChargingPark': 100,
                       'else': 10}
+        for bus in edisgo_obj.topology.loads_df.index:
+            if 'charging_park' in bus:
+                position = str(bus).rsplit('_')[-1]
+                positions.append(position)
         for bus in buses:
-            connected_components = \
-                edisgo_obj.topology.get_connected_components_from_bus(bus)
-            if not connected_components['Load'].empty and 'charging_park' in \
-                    connected_components['Load'].sector.values:
+            for position in positions:
+                if position in bus:
                     bus_colors[bus] = colors_dict['ChargingPark']
                     bus_sizes[bus] = sizes_dict['ChargingPark']
-            else:
-                bus_colors[bus] = colors_dict['else']
-                bus_sizes[bus] = sizes_dict['else']
+                else:
+                    bus_colors[bus] = colors_dict['else']
+                    bus_sizes[bus] = sizes_dict['else']
         return bus_sizes, bus_colors
 
     def nodes_by_voltage(buses, voltages):
