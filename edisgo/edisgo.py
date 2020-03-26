@@ -647,12 +647,12 @@ class EDisGo:
         """
         plots.mv_grid_topology(
             self,
-            node_color='storage_integration',
-            filename=kwargs.get('filename', None),
-            grid_district_geom=kwargs.get('grid_district_geom', True),
-            background_map=kwargs.get('background_map', True),
-            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-            title=kwargs.get('title', ''))
+            node_color='storage_integration', **kwargs)
+            # filename=kwargs.get('filename', None),
+            # grid_district_geom=kwargs.get('grid_district_geom', True),
+            # background_map=kwargs.get('background_map', True),
+            # xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+            # title=kwargs.get('title', ''))
 
     def plot_mv_grid(self, **kwargs):
         """
@@ -835,7 +835,7 @@ class EDisGo:
             comp_name = kwargs.get('name')
         elif comp_type == 'Line':
             comp_name = self.topology.add_line(**kwargs)
-        elif comp_type == 'Load':
+        elif comp_type == 'Load' or comp_type == 'charging_park':
             comp_name = self.topology.add_load(
                 load_id=kwargs.get('load_id'), bus=kwargs.get('bus'),
                 peak_load=kwargs.get('peak_load'),

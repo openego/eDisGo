@@ -200,7 +200,7 @@ def mv_grid_topology(edisgo_obj, timestep=None,
                      voltage=None, limits_cb_lines=None, limits_cb_nodes=None,
                      xlim=None, ylim=None, lines_cmap='inferno_r',
                      title='', scaling_factor_line_width=None,
-                     curtailment_df=None):
+                     curtailment_df=None, **kwargs):
     """
     Plot line loading as color on lines.
 
@@ -308,6 +308,9 @@ def mv_grid_topology(edisgo_obj, timestep=None,
         Dataframe with curtailed power per time step and node. Columns of the
         dataframe correspond to buses and index to the time step. Only needs
         to be provided if `node_color` is set to 'curtailment'.
+    legend_loc : str
+        Location of legend. See matplotlib legend location options for more
+        information. Default: 'upper left'.
 
     """
 
@@ -372,20 +375,23 @@ def mv_grid_topology(edisgo_obj, timestep=None,
     def nodes_charging_park(buses, edisgo_obj):
         bus_sizes = {}
         bus_colors = {}
+        positions = []
         colors_dict = {'ChargingPark': 'r',
                        'else': 'black'}
         sizes_dict = {'ChargingPark': 100,
                       'else': 10}
+        for bus in edisgo_obj.topology.loads_df.index:
+            if 'charging_park' in bus:
+                position = str(bus).rsplit('_')[-1]
+                positions.append(position)
         for bus in buses:
-            connected_components = \
-                edisgo_obj.topology.get_connected_components_from_bus(bus)
-            if not connected_components['Load'].empty and 'charging_park' in \
-                    connected_components['Load'].sector.values:
+            for position in positions:
+                if position in bus:
                     bus_colors[bus] = colors_dict['ChargingPark']
                     bus_sizes[bus] = sizes_dict['ChargingPark']
-            else:
-                bus_colors[bus] = colors_dict['else']
-                bus_sizes[bus] = sizes_dict['else']
+                else:
+                    bus_colors[bus] = colors_dict['else']
+                    bus_sizes[bus] = sizes_dict['else']
         return bus_sizes, bus_colors
 
     def nodes_by_voltage(buses, voltages):
@@ -425,9 +431,9 @@ def mv_grid_topology(edisgo_obj, timestep=None,
             buses[~buses.isin(buses_with_curtailment)]
         bus_sizes.update({bus: 0 for bus in buses_without_curtailment})
         curtailment_total = curtailment_df.sum().sum()
-        # size nodes such that 100% curtailment share equals size 500
+        # size nodes such that 100% curtailment share equals size 1000
         bus_sizes.update(
-            {bus: curtailment_df.loc[:, bus].sum() / curtailment_total * 500
+            {bus: curtailment_df.loc[:, bus].sum() / curtailment_total * 2000
              for bus in buses_with_curtailment})
         return bus_sizes
 
@@ -633,7 +639,7 @@ def mv_grid_topology(edisgo_obj, timestep=None,
             label='= 300 kW battery storage')
     elif node_color == 'curtailment':
         scatter_handle = plt.scatter(
-            [], [], c='orangered', s=50,
+            [], [], c='orangered', s=200,
             label='$\equiv$ 10% share of curtailment')
     else:
         scatter_handle = None
@@ -643,18 +649,19 @@ def mv_grid_topology(edisgo_obj, timestep=None,
             label='= 10 MVA')
     else:
         line_handle = None
+    legend_loc = kwargs.get('legend_loc', 'upper left')
     if scatter_handle and line_handle:
         plt.legend(handles=[scatter_handle, line_handle[0]], labelspacing=1,
                    title='Storage size and line capacity', borderpad=0.5,
-                   loc=2, framealpha=0.5, fontsize='medium')
+                   loc=legend_loc, framealpha=0.5, fontsize='medium')
     elif scatter_handle:
-        plt.legend(handles=[scatter_handle], labelspacing=1,
-                   title=None, borderpad=0.5,
-                   loc=2, framealpha=0.5, fontsize='medium')
+        plt.legend(handles=[scatter_handle], labelspacing=0,
+                   title=None, borderpad=0.3,
+                   loc=legend_loc, framealpha=0.5, fontsize='medium')
     elif line_handle:
         plt.legend(handles=[line_handle[0]], labelspacing=1,
                    title='Line capacity', borderpad=0.5,
-                   loc=2, framealpha=0.5, fontsize='medium')
+                   loc=legend_loc, framealpha=0.5, fontsize='medium')
 
     # axes limits
     if xlim is not None:
