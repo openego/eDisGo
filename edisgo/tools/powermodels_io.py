@@ -32,6 +32,14 @@ def to_powermodels(pypsa_net):
 
     return pm,loads_t,gens_t
 
+def convert_storage_series(timeseries):
+    if timeseries is None:
+        return {}
+    else:
+        storage = {'time_horizon': len(timeseries), 'storage_data': {}}
+        for i,v in enumerate(timeseries.values):
+            storage['storage_data'][i+1] = {'p':v}
+        return storage
 
 def pypsa2ppc(psa_net):
     """Converter from pypsa data structure to pypower data structure
