@@ -43,7 +43,7 @@ def bus_names_to_ints(pypsa_network, bus_names):
     return bus_indices
 
 
-def run_mp_opf(edisgo_network, timesteps=None, **kwargs):
+def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
     """
     :param edisgo_network:
     :param timesteps: `pandas.DatetimeIndex<datetimeindex>` or `pandas.Timestamp<timestamp>`
@@ -126,12 +126,7 @@ def run_mp_opf(edisgo_network, timesteps=None, **kwargs):
         bus_indices = bus_names_to_ints(pypsa_mv, bus_names)
         kwargs["storage_buses"] = bus_indices
 
-    storage_series = None
     for args in kwargs.items():
-        # FIXME: This is awful... Pass parameter explicitly to fix
-        if args[0] is "storage_series":
-            storage_series = args[1]
-            continue
         if args[0] in settings:
             # if hasattr(settings,args[0]):
             settings[args[0]] = args[1]

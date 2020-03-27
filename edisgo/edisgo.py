@@ -492,7 +492,7 @@ class EDisGo:
         StorageControl(edisgo=self, timeseries=timeseries,
                        position=position, **kwargs)
 
-    def perform_mp_opf(self, timesteps, **kwargs):
+    def perform_mp_opf(self, timesteps, storage_series=[], **kwargs):
         """
         Run optimal power flow with julia.
 

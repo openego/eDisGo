@@ -33,7 +33,7 @@ def to_powermodels(pypsa_net):
     return pm,loads_t,gens_t
 
 def convert_storage_series(timeseries):
-    if timeseries is None:
+    if len(timeseries) == 0:
         return {}
     else:
         storage = {'time_horizon': len(timeseries), 'storage_data': {}}
