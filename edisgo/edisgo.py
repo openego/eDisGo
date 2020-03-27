@@ -510,7 +510,7 @@ class EDisGo:
             Status of optimization.
 
         """
-        status = run_mp_opf(self, timesteps, **kwargs)
+        status = run_mp_opf(self, timesteps, storage_series=storage_series, **kwargs)
         return status
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
