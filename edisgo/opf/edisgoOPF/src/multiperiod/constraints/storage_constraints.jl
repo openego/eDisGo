@@ -1,4 +1,18 @@
 """
+constraint for required storage utilization
+
+``\\sum_{\\forall i \\in S} u_{c,i}^t - \\sum_{\\forall i \\in S} u_{d,i}^t = p_{req}^t``
+"""
+function constraint_storage_utilization(pm;nw::Int=pm.cnw,cnd::Int=pm.ccnd)
+    #= println(pm.data["nw"][string(nw)])=#
+    #= exit()=#
+    p_req = pm.data["nw"][string(nw)]["storage_total"]
+    uc_nw = var(pm,nw,:uc)
+    ud_nw = var(pm,nw,:ud)
+    @constraint(pm.model, sum(uc_nw) - sum(ud_nw) == p_req)
+end
+
+"""
 constraint for total storage capacity in system
 
 ``\\sum_{\\forall i \\in S}  \\overline{e_{i}} = \\boldsymbol{E_{Sys}}``
