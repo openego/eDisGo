@@ -54,7 +54,7 @@ def get_steps_curtailment(edisgo_obj, percentage=0.5):
     '''
 
     # Run power flow if not available
-    if edisgo_obj.results is None:
+    if edisgo_obj.results.i_res is None:
         logger.debug('Running initial power flow')
         edisgo_obj.analyze(mode='mv')
 
@@ -70,6 +70,10 @@ def get_steps_curtailment(edisgo_obj, percentage=0.5):
     num_steps_voltage = int(len(voltage_scores) * percentage)
     steps.extend(voltage_scores[:num_steps_voltage].index.tolist())
 
+    if len(steps) == 0:
+        logger.warning(
+            "No critical steps detected. No network expansion required.")
+
     return steps
 
 
@@ -82,7 +86,7 @@ def get_steps_storage(edisgo_obj, window=5):
     :returns:  list of `pandas.Timestamp<timestamp>` -- the reduced time steps for modeling storage
     '''
     # Run power flow if not available
-    if edisgo_obj.results is None:
+    if edisgo_obj.results.i_res is None:
         logger.debug('Running initial power flow')
         edisgo_obj.analyze(mode='mv')
 
@@ -118,5 +122,9 @@ def get_steps_storage(edisgo_obj, window=5):
 
     # strip duplicates
     reduced = list(dict.fromkeys(reduced))
-    logger.debug(reduced)
+
+    if len(reduced) == 0:
+        logger.warning(
+            "No critical steps detected. No network expansion required.")
+
     return reduced
