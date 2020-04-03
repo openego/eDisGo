@@ -50,7 +50,7 @@ def get_steps_curtailment(edisgo_obj, percentage=0.5):
     :type name: :class:`~.network.network.EDisGo`
     :param percentage: The percentage of most critical time steps to select
     :type percentage: float
-    :returns:  list of `pandas.Timestamp<timestamp>` -- the reduced time steps for modeling curtailment
+    :returns: `pandas.DatetimeIndex` -- the reduced time index for modeling curtailment
     '''
 
     # Run power flow if not available
@@ -74,7 +74,10 @@ def get_steps_curtailment(edisgo_obj, percentage=0.5):
         logger.warning(
             "No critical steps detected. No network expansion required.")
 
-    return steps
+    # Strip duplicates
+    steps = list(dict.fromkeys(steps))
+
+    return pd.DatetimeIndex(steps)
 
 
 def get_steps_storage(edisgo_obj, window=5):
@@ -83,7 +86,7 @@ def get_steps_storage(edisgo_obj, window=5):
     :type name: :class:`~.network.network.EDisGo`
     :param window: The additional hours to include before and after each critical time step
     :type window: int
-    :returns:  list of `pandas.Timestamp<timestamp>` -- the reduced time steps for modeling storage
+    :returns:  `pandas.DatetimeIndex` -- the reduced time index for modeling storage
     '''
     # Run power flow if not available
     if edisgo_obj.results.i_res is None:
@@ -127,4 +130,4 @@ def get_steps_storage(edisgo_obj, window=5):
         logger.warning(
             "No critical steps detected. No network expansion required.")
 
-    return reduced
+    return pd.DatetimeIndex(reduced)
