@@ -139,7 +139,10 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
     # convert pypsa structure to network dictionary and create dictionaries for time series of loads and generators
     pm, load_data, gen_data = to_powermodels(pypsa_mv)
     storage_data = convert_storage_series(storage_series)
-    add_storage_from_edisgo(edisgo_network, pypsa_mv, pm)
+
+    # Export eDisGo storage only for operation only as they would interfere with positioning
+    if settings["storage_operation_only"]:
+        add_storage_from_edisgo(edisgo_network, pypsa_mv, pm)
 
     # dump json files for static network information, timeseries of loads and generators, and opf settings
     with open(os.path.join(scenario_data_dir, "{}_static.json".format(pm["name"])), 'w') as outfile:
