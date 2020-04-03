@@ -49,7 +49,23 @@ variable for energy rating, i.e. maximal state-of-charge, with lower bound 0
 
 ``0\\leq \\overline{e_i}``
 """
-function add_var_energy_rating(pm)
-    var(pm)[:emax] = @variable(pm.model,[i in ids(pm,:storage)],basename="emax",
-        lowerbound = 0)
+function add_var_energy_rating(pm, bounded=false)
+    if bounded
+        #= Storage size fixed and known=#
+        var(pm)[:emax] = @variable(
+            pm.model,
+            [i in ids(pm, :storage)],
+            basename="emax",
+            lowerbound = ref(pm,:storage,i,"energy_rating"),
+            upperbound = ref(pm,:storage,i,"energy_rating")
+        )
+    else
+        #= Storage size optimizable=#
+        var(pm)[:emax] = @variable(
+            pm.model,
+            [i in ids(pm,:storage)],
+            basename="emax",
+            lowerbound = 0
+        )
+    end
 end
