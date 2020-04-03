@@ -48,9 +48,17 @@ function post_method_edisgo(pm)
     ### Variables
     #### Storage units
     if pm.data["storage_units"]
-        add_var_energy_rating(pm)
+        if pm.data["storage_operation_only"]
+            add_var_energy_rating(pm, true)
+        else
+            add_var_energy_rating(pm, false)
+        end
         for (t,network) in nws(pm)
-            add_var_soc(pm,nw=t,bounded=false)
+            if pm.data["storage_operation_only"]
+                add_var_soc(pm,nw=t,bounded=true)
+            else
+                add_var_soc(pm,nw=t,bounded=false)
+            end
             add_var_charging_rate(pm,nw=t,bounded=false)
         end
     end
@@ -115,7 +123,12 @@ function post_method_edisgo(pm)
     end
     #### Storage constraints
     if pm.data["storage_units"]
-        constraint_total_storage_capacity(pm)
+
+        #= For operation, storage size doesn't need to be fixed because it's already known=#
+        if !pm.data["storage_operation_only"]
+            constraint_total_storage_capacity(pm)
+        end
+
         network_ids = sort(collect(nw_ids(pm)))
         for t in network_ids
 

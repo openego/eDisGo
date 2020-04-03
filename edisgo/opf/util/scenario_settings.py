@@ -23,6 +23,9 @@ def opf_settings():
         # positioning of storage units, if empty list, all buses are potential positions of storage units and
         # capacity is optimized, entries of list need to be type "int"
         "storage_buses": [],
+
+        # Only optimize operation of storages exported from eDisGo. Do not optimize storage positioning.
+        "storage_operation_only" : False,
         # total storage capacity in the network, sizing of storages is a decision variable and will be found in optimization
         "total_storage_capacity": 0.0,
         # Requirements for curtailment in every time step is considered, DEFAULT: False

@@ -210,7 +210,7 @@ function read_edisgo_problem(network_name::String;timehorizon::Int=-1)
         push!(global_keys,key)
     end
     # add default storage units to network_data if considered
-    if network_data["storage_units"]
+    if network_data["storage_units"] && !network_data["storage_operation_only"]
         storage_buses = network_data["storage_buses"]
         println("Storage buses is empty= $(isempty(storage_buses))")
         add_storages_to_network_data(network_data,storage_buses)
