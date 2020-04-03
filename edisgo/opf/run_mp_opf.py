@@ -6,7 +6,8 @@ import numpy as np
 from timeit import default_timer as timer
 
 from edisgo.tools.preprocess_pypsa_opf_structure import preprocess_pypsa_opf_structure, aggregate_fluct_generators
-from edisgo.tools.powermodels_io import to_powermodels, convert_storage_series
+from edisgo.tools.powermodels_io import to_powermodels, convert_storage_series, add_storage_from_edisgo
+
 from edisgo.opf.util.scenario_settings import opf_settings
 
 logger = logging.getLogger(__name__)
@@ -138,6 +139,7 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
     # convert pypsa structure to network dictionary and create dictionaries for time series of loads and generators
     pm, load_data, gen_data = to_powermodels(pypsa_mv)
     storage_data = convert_storage_series(storage_series)
+    add_storage_from_edisgo(edisgo_network, pypsa_mv, pm)
 
     # dump json files for static network information, timeseries of loads and generators, and opf settings
     with open(os.path.join(scenario_data_dir, "{}_static.json".format(pm["name"])), 'w') as outfile:

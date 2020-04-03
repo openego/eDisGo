@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import math
 from pypower.idx_brch import *
 from pypower.idx_bus import *
@@ -40,6 +41,53 @@ def convert_storage_series(timeseries):
         for i,v in enumerate(timeseries.values):
             storage['storage_data'][i+1] = {'p_req':v}
         return storage
+
+
+# FIXME: Static storage data is exported from the eDisGo network rather than the PyPSA network as the capacity of network doesn't seem to be available there. For consistency with the rest of the conversion, it should be converted from PyPSA as well.
+# TODO: This will (probably) not work if there are multiple storage units connected to the same bus.
+def add_storage_from_edisgo(edisgo_obj, psa_net, pm_dict):
+    '''
+    Read static storage data (position and capacity) from eDisGo and export to Powermodels dict
+    '''
+    # Drop values that are not available
+    storage = pd.DataFrame(edisgo_obj.topology.storage_units_df[['bus','p_nom']])
+
+    # Rename storage parameters to PowerModels naming convention
+    storage.columns = ['storage_bus', 'energy_rating']
+
+    # Fill in missing values so that PowerModels doesn't complain
+    # TODO: Get (some of) these from eDisGo/PyPSA as well
+    storage['energy'] = 0.0
+
+    storage['charge_rating'] = 1.0
+    storage['discharge_rating'] = 1.0
+    storage['charge_efficiency'] = 1.0
+    storage['discharge_efficiency'] = 1.0
+
+    storage['ps'] = 0.0
+    storage['qs'] = 0.0
+
+    storage['qmin'] = 0.0
+    storage['qmax'] = 0.0
+
+    storage['r'] = 0.0
+    storage['x'] = 0.0
+
+    storage['p_loss'] = 0.0
+    storage['q_loss'] = 0.0
+    storage['standby_loss'] = 0.0
+
+    storage['status'] = 1
+
+    # Get Bus indices from PyPSA net
+    storage['storage_bus'] = [psa_net.buses.index.get_loc(bus) + 1 for bus in storage['storage_bus']]
+    storage.index = [i+1 for i in range(len(storage))]
+
+    # Add dedicated 'index' column because PowerModels likes it
+    storage['index'] = storage.index.to_list()
+
+    # Add to PowerModels statics Dict
+    pm_dict['storage'] = storage.to_dict(orient='index')
 
 def pypsa2ppc(psa_net):
     """Converter from pypsa data structure to pypower data structure
