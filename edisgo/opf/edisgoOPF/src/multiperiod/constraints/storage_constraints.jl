@@ -9,7 +9,7 @@ function constraint_storage_utilization(pm;nw::Int=pm.cnw,cnd::Int=pm.ccnd)
     p_req = pm.data["nw"][string(nw)]["storage_total"]
     uc_nw = var(pm,nw,:uc)
     ud_nw = var(pm,nw,:ud)
-    @constraint(pm.model, sum(uc_nw) - sum(ud_nw) == p_req)
+    @constraint(pm.model, sum(ud_nw) - sum(uc_nw) == p_req)
 end
 
 """
