@@ -137,13 +137,16 @@ function post_method_edisgo(pm)
                 constraint_storage_utilization(pm, nw=t)
             end
 
-            # no periodic constraint, as that would interfere with storage utilization
-            t_2 = t+1 in network_ids ? t+1 : continue
+            t_2 = t+1 in network_ids ? t+1 : 1
             for i in ids(pm, nw=t,:storage)
-                constraint_complementary(pm,i,nw=t)
                 constraint_energy_rating(pm,i,nw=t)
-                constraint_soc(pm,i,t,t_2)
                 constraint_charge_rating(pm,i,nw=t)
+
+                # no periodic constraint, as that would interfere with storage utilization
+                if t_2 == 1
+                    continue
+                end
+                constraint_soc(pm,i,t,t_2)
             end
         end
     end
