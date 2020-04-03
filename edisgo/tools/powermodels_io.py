@@ -38,7 +38,7 @@ def convert_storage_series(timeseries):
     else:
         storage = {'time_horizon': len(timeseries), 'storage_data': {}}
         for i,v in enumerate(timeseries.values):
-            storage['storage_data'][i+1] = {'p':v}
+            storage['storage_data'][i+1] = {'p_req':v}
         return storage
 
 def pypsa2ppc(psa_net):

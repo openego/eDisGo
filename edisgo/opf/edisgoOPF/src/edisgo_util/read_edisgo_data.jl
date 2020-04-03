@@ -59,7 +59,7 @@ end
 
 function add_storage_timeseries(data,storage_data)
     for (nw, storage_total) in storage_data
-        data["nw"][nw]["storage_total"] = storage_total["p"]
+        data["nw"][nw]["storage_total"] = storage_total["p_req"]
     end
 end
 
