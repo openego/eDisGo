@@ -92,8 +92,9 @@ def get_linked_steps(cluster_params, num_steps):
 
 def get_steps_curtailment(edisgo_obj, percentage=0.5):
     '''
+    Get the time steps with the most critical violations for curtailment optimization
     :param edisgo_obj: The eDisGo API object
-    :type name: :class:`~.network.network.EDisGo`
+    :type edisgo_obj: :class:`~.network.network.EDisGo`
     :param percentage: The percentage of most critical time steps to select
     :type percentage: float
     :returns: `pandas.DatetimeIndex` -- the reduced time index for modeling curtailment
@@ -128,6 +129,7 @@ def get_steps_curtailment(edisgo_obj, percentage=0.5):
 
 def get_steps_storage(edisgo_obj, window=5):
     '''
+    Get the most critical time steps from series for storage problems
     :param edisgo_obj: The eDisGo API object
     :type name: :class:`~.network.network.EDisGo`
     :param window: The additional hours to include before and after each critical time step
