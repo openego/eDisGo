@@ -2,7 +2,6 @@ function run_edisgo_opf_problem(network_name::String,solution_file::String)
     data = read_edisgo_problem(network_name)
     pm = PowerModels.GenericPowerModel(data,SOCBFForm);
 
-
     post_method_edisgo(pm)
 
     JuMP.setsolver(pm.model,IpoptSolver(mumps_mem_percent=100))
@@ -59,6 +58,9 @@ function post_method_edisgo(pm)
             else
                 add_var_soc(pm,nw=t,bounded=false)
             end
+            if haskey(pm.data["clusters"], t)
+                continue
+            end
             add_var_charging_rate(pm,nw=t,bounded=false)
         end
     end
@@ -69,6 +71,9 @@ function post_method_edisgo(pm)
     constraint_network_expansion(pm)
     #### Power flow variables
     for (t,network) in nws(pm)
+        if haskey(pm.data["clusters"], t)
+            continue
+        end
         add_var_sqr_voltage(pm,t)
         add_var_power_gen(pm,t)
         add_var_power_flow(pm,t)
@@ -108,6 +113,9 @@ function post_method_edisgo(pm)
     
     #### Power flow equations
     for (t,network) in nws(pm)
+        if haskey(pm.data["clusters"], t)
+            continue
+        end
         constraint_current_rating(pm,t)
     
         # adding constraint for branch flow model
@@ -133,20 +141,23 @@ function post_method_edisgo(pm)
         for t in network_ids
 
             #= Constrain total storage input/output to upper grid layer=#
-            if haskey(pm.data["nw"][string(t)], "storage_total")
+            if haskey(pm.data["nw"][string(t)], "storage_total") &&
+                !haskey(pm.data["clusters"], t)
                 constraint_storage_utilization(pm, nw=t)
             end
 
             t_2 = t+1 in network_ids ? t+1 : 1
             for i in ids(pm, nw=t,:storage)
                 constraint_energy_rating(pm,i,nw=t)
-                constraint_charge_rating(pm,i,nw=t)
 
                 # no periodic constraint, as that would interfere with storage utilization
-                if t_2 == 1
+                if t_2 != 1
+                    constraint_soc(pm,i,t,t_2)
+                end
+                if haskey(pm.data["clusters"], t)
                     continue
                 end
-                constraint_soc(pm,i,t,t_2)
+                constraint_charge_rating(pm,i,nw=t)
             end
         end
     end
