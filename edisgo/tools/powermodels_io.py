@@ -61,8 +61,8 @@ def add_storage_from_edisgo(edisgo_obj, psa_net, pm_dict):
 
     storage['charge_rating'] = 1.0
     storage['discharge_rating'] = 1.0
-    storage['charge_efficiency'] = 1.0
-    storage['discharge_efficiency'] = 1.0
+    storage['charge_efficiency'] = 0.9487
+    storage['discharge_efficiency'] = 0.9487
 
     storage['ps'] = 0.0
     storage['qs'] = 0.0
