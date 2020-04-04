@@ -48,13 +48,15 @@ def _scored_critical_voltage(edisgo_obj, grid):
     return (voltage_diff_ov + voltage_diff_uv).sort_values(ascending=False)
 
 
-def get_linked_steps(cluster_params, num_steps):
+def get_linked_steps(cluster_params, num_steps=24, keep_steps=[]):
     '''
     Use provided data to identify representative time steps and create mapping Dict that can be passed to optimization
     :param cluster_params: Time series containing the parameters to be considered for distance between points
     :type cluster_params: :pandas:`pandas.DataFrame<dataframe>`
     :param num_steps: The number of representative time steps to be selected
     :type num_steps: int
+    :param keep_steps: Time steps to retain with full resolution, regardless of clustering result
+    :type keep_steps: Iterable of the same type as cluster_params.index
     :returns: Dict -- Dict where each represented time step is a key and its representative time step is a value
     '''
 
@@ -79,8 +81,14 @@ def get_linked_steps(cluster_params, num_steps):
         representatives.append(r)
     representatives = np.array(representatives)
 
+    # Create list with numerical values of steps to be ignored
+    ignore = [cluster_params.index.get_loc(i) for i in keep_steps]
+    ignore = list(dict.fromkeys(ignore))
+
     linked_steps = {}
     for step, cluster_id in enumerate(km.labels_):
+        if step in ignore:
+            continue
         # current step was not identified as representative
         if not np.isin(representatives, step).any():
             # find representative and link to it.
