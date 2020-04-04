@@ -1,7 +1,11 @@
 import logging
 import pandas as pd
+import numpy as np
 
 from edisgo.flex_opt import check_tech_constraints
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +46,48 @@ def _scored_critical_voltage(edisgo_obj, grid):
     voltage_diff_ov = voltage_diff_ov[voltage_diff_ov > 0].dropna(
         axis=1, how='all').sum(axis=0)
     return (voltage_diff_ov + voltage_diff_uv).sort_values(ascending=False)
+
+
+def get_linked_steps(cluster_params, num_steps):
+    '''
+    Use provided data to identify representative time steps and create mapping Dict that can be passed to optimization
+    :param cluster_params: Time series containing the parameters to be considered for distance between points
+    :type cluster_params: :pandas:`pandas.DataFrame<dataframe>`
+    :param num_steps: The number of representative time steps to be selected
+    :type num_steps: int
+    :returns: Dict -- Dict where each represented time step is a key and its representative time step is a value
+    '''
+
+    # From all values, find the subvector with the smallest SSD to a given
+    # cluster center and return its index
+    def get_representative(center, values):
+        temp = (values - center)**2
+        temp = temp.sum(axis=1)
+        return temp.argmin()
+
+    # Make values comparable and run k-Means
+    sc = StandardScaler()
+    X = sc.fit_transform(cluster_params.values)
+    km = KMeans(n_clusters=num_steps).fit(X)
+
+    # k-Means returns synthetic points which do not exist in the original time series.
+    # We need to link to existing steps, so we pick the point that is closest
+    # to each cluster center as a cluster representative instead
+    representatives = []
+    for c in km.cluster_centers_:
+        r = get_representative(c, X)
+        representatives.append(r)
+    representatives = np.array(representatives)
+
+    linked_steps = {}
+    for step, cluster_id in enumerate(km.labels_):
+        # current step was not identified as representative
+        if not np.isin(representatives, step).any():
+            # find representative and link to it.
+            # Also add offset for one-based indexing
+            linked_steps[step + 1] = representatives[cluster_id] + 1
+
+    return linked_steps
 
 
 def get_steps_curtailment(edisgo_obj, percentage=0.5):
