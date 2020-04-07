@@ -31,21 +31,19 @@ def _scored_critical_current(edisgo_obj, grid):
     return crit_lines_score.sort_values(ascending=False)
 
 
-def _scored_critical_voltage(edisgo_obj, grid):
+def _scored_critical_overvoltage(edisgo_obj, grid):
     nodes = grid.buses_df
 
     # Get allowed deviations per time step
     v_dev_allowed_upper, v_dev_allowed_lower = check_tech_constraints.mv_allowed_deviations(
         edisgo_obj, voltage_levels='mv')
-    voltage_diff_uv, voltage_diff_ov = check_tech_constraints.voltage_diff(
+    _, voltage_diff_ov = check_tech_constraints.voltage_diff(
         edisgo_obj, nodes, v_dev_allowed_upper, v_dev_allowed_lower, voltage_level='mv')
 
     # Get score for nodes that are over or under the allowed deviations
-    voltage_diff_uv = voltage_diff_uv[voltage_diff_uv > 0].dropna(
-        axis=1, how='all').sum(axis=0)
     voltage_diff_ov = voltage_diff_ov[voltage_diff_ov > 0].dropna(
         axis=1, how='all').sum(axis=0)
-    return (voltage_diff_ov + voltage_diff_uv).sort_values(ascending=False)
+    return voltage_diff_ov.sort_values(ascending=False)
 
 
 def get_linked_steps(cluster_params, num_steps=24, keep_steps=[]):
@@ -97,7 +95,6 @@ def get_linked_steps(cluster_params, num_steps=24, keep_steps=[]):
 
     return linked_steps
 
-
 def get_steps_curtailment(edisgo_obj, percentage=0.5):
     '''
     Get the time steps with the most critical violations for curtailment optimization
@@ -115,15 +112,20 @@ def get_steps_curtailment(edisgo_obj, percentage=0.5):
 
     grid = edisgo_obj.topology.mv_grid
 
-    # Select most critical steps based on current viaolations
-    current_scores = scored_critical_current(edisgo_obj, grid)
+
+    # Select most critical steps based on current violations
+    current_scores = _scored_critical_current(edisgo_obj, grid)
     num_steps_current = int(len(current_scores) * percentage)
+    print(num_steps_current)
     steps = current_scores[:num_steps_current].index.tolist()
 
-    # Select most critical steps based on voltage viaolations
-    voltage_scores = scored_critical_voltage(edisgo_obj, grid)
+    # Select most critical steps based on voltage violations
+    voltage_scores = _scored_critical_overvoltage(edisgo_obj, grid)
     num_steps_voltage = int(len(voltage_scores) * percentage)
     steps.extend(voltage_scores[:num_steps_voltage].index.tolist())
+
+    # Always add worst cases
+    steps.extend(get_steps_storage(edisgo_obj, window=0).tolist())
 
     if len(steps) == 0:
         logger.warning(
