@@ -46,55 +46,6 @@ def _scored_critical_overvoltage(edisgo_obj, grid):
     return voltage_diff_ov.sort_values(ascending=False)
 
 
-def get_linked_steps(cluster_params, num_steps=24, keep_steps=[]):
-    '''
-    Use provided data to identify representative time steps and create mapping Dict that can be passed to optimization
-    :param cluster_params: Time series containing the parameters to be considered for distance between points
-    :type cluster_params: :pandas:`pandas.DataFrame<dataframe>`
-    :param num_steps: The number of representative time steps to be selected
-    :type num_steps: int
-    :param keep_steps: Time steps to retain with full resolution, regardless of clustering result
-    :type keep_steps: Iterable of the same type as cluster_params.index
-    :returns: Dict -- Dict where each represented time step is a key and its representative time step is a value
-    '''
-
-    # From all values, find the subvector with the smallest SSD to a given
-    # cluster center and return its index
-    def get_representative(center, values):
-        temp = (values - center)**2
-        temp = temp.sum(axis=1)
-        return temp.argmin()
-
-    # Make values comparable and run k-Means
-    sc = StandardScaler()
-    X = sc.fit_transform(cluster_params.values)
-    km = KMeans(n_clusters=num_steps).fit(X)
-
-    # k-Means returns synthetic points which do not exist in the original time series.
-    # We need to link to existing steps, so we pick the point that is closest
-    # to each cluster center as a cluster representative instead
-    representatives = []
-    for c in km.cluster_centers_:
-        r = get_representative(c, X)
-        representatives.append(r)
-    representatives = np.array(representatives)
-
-    # Create list with numerical values of steps to be ignored
-    ignore = [cluster_params.index.get_loc(i) for i in keep_steps]
-    ignore = list(dict.fromkeys(ignore))
-
-    linked_steps = {}
-    for step, cluster_id in enumerate(km.labels_):
-        if step in ignore:
-            continue
-        # current step was not identified as representative
-        if not np.isin(representatives, step).any():
-            # find representative and link to it.
-            # Also add offset for one-based indexing
-            linked_steps[step + 1] = representatives[cluster_id] + 1
-
-    return linked_steps
-
 def get_steps_curtailment(edisgo_obj, percentage=0.5):
     '''
     Get the time steps with the most critical violations for curtailment optimization
@@ -111,7 +62,6 @@ def get_steps_curtailment(edisgo_obj, percentage=0.5):
         edisgo_obj.analyze(mode='mv')
 
     grid = edisgo_obj.topology.mv_grid
-
 
     # Select most critical steps based on current violations
     current_scores = _scored_critical_current(edisgo_obj, grid)
@@ -189,3 +139,53 @@ def get_steps_storage(edisgo_obj, window=5):
             "No critical steps detected. No network expansion required.")
 
     return pd.DatetimeIndex(reduced)
+
+
+def get_linked_steps(cluster_params, num_steps=24, keep_steps=[]):
+    '''
+    Use provided data to identify representative time steps and create mapping Dict that can be passed to optimization
+    :param cluster_params: Time series containing the parameters to be considered for distance between points
+    :type cluster_params: :pandas:`pandas.DataFrame<dataframe>`
+    :param num_steps: The number of representative time steps to be selected
+    :type num_steps: int
+    :param keep_steps: Time steps to retain with full resolution, regardless of clustering result
+    :type keep_steps: Iterable of the same type as cluster_params.index
+    :returns: Dict -- Dict where each represented time step is a key and its representative time step is a value
+    '''
+
+    # From all values, find the subvector with the smallest SSD to a given
+    # cluster center and return its index
+    def get_representative(center, values):
+        temp = (values - center)**2
+        temp = temp.sum(axis=1)
+        return temp.argmin()
+
+    # Make values comparable and run k-Means
+    sc = StandardScaler()
+    X = sc.fit_transform(cluster_params.values)
+    km = KMeans(n_clusters=num_steps).fit(X)
+
+    # k-Means returns synthetic points which do not exist in the original time series.
+    # We need to link to existing steps, so we pick the point that is closest
+    # to each cluster center as a cluster representative instead
+    representatives = []
+    for c in km.cluster_centers_:
+        r = get_representative(c, X)
+        representatives.append(r)
+    representatives = np.array(representatives)
+
+    # Create list with numerical values of steps to be ignored
+    ignore = [cluster_params.index.get_loc(i) for i in keep_steps]
+    ignore = list(dict.fromkeys(ignore))
+
+    linked_steps = {}
+    for step, cluster_id in enumerate(km.labels_):
+        if step in ignore:
+            continue
+        # current step was not identified as representative
+        if not np.isin(representatives, step).any():
+            # find representative and link to it.
+            # Also add offset for one-based indexing
+            linked_steps[step + 1] = representatives[cluster_id] + 1
+
+    return linked_steps
