@@ -71,7 +71,11 @@ function write_opf_solution(pm,status,sol_time,network_name="test_network")
     end
     for (i,s) in ref(pm,:storage)
         for sym in strg_vars_static
-            sol["storage"]["static"][string(sym)][i] = getvalue(var(pm,sym,i))
+            if sym == :emax && pm.data["storage_operation_only"]
+                sol["storage"]["static"][string(sym)][i] = ref(pm,:storage,i,"energy_rating")
+            else
+                sol["storage"]["static"][string(sym)][i] = getvalue(var(pm,sym,i))
+            end
         end
     end
 

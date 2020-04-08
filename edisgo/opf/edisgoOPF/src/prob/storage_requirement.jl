@@ -47,9 +47,7 @@ function post_method_edisgo(pm)
     ### Variables
     #### Storage units
     if pm.data["storage_units"]
-        if pm.data["storage_operation_only"]
-            add_var_energy_rating(pm, true)
-        else
+        if !pm.data["storage_operation_only"]
             add_var_energy_rating(pm, false)
         end
         for (t,network) in nws(pm)
@@ -132,8 +130,10 @@ function post_method_edisgo(pm)
     #### Storage constraints
     if pm.data["storage_units"]
 
+        fixed_size = pm.data["storage_operation_only"]
+
         #= For operation, storage size doesn't need to be fixed because it's already known=#
-        if !pm.data["storage_operation_only"]
+        if !fixed_size
             constraint_total_storage_capacity(pm)
         end
 
@@ -148,16 +148,17 @@ function post_method_edisgo(pm)
 
             t_2 = t+1 in network_ids ? t+1 : 1
             for i in ids(pm, nw=t,:storage)
-                constraint_energy_rating(pm,i,nw=t)
+                constraint_energy_rating(pm,i,nw=t, fixed_size=fixed_size)
 
                 # no periodic constraint, as that would interfere with storage utilization
                 if t_2 != 1
                     constraint_soc(pm,i,t,t_2)
                 end
+
                 if haskey(pm.data["clusters"], t)
                     continue
                 end
-                constraint_charge_rating(pm,i,nw=t)
+                constraint_charge_rating(pm,i,nw=t, fixed_size=fixed_size)
             end
         end
     end

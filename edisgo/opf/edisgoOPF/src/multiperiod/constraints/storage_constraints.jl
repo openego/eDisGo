@@ -4,8 +4,6 @@ constraint for required storage utilization
 ``\\sum_{\\forall i \\in S} u_{c,i}^t - \\sum_{\\forall i \\in S} u_{d,i}^t = p_{req}^t``
 """
 function constraint_storage_utilization(pm;nw::Int=pm.cnw,cnd::Int=pm.ccnd)
-    #= println(pm.data["nw"][string(nw)])=#
-    #= exit()=#
     p_req = pm.data["nw"][string(nw)]["storage_total"]
     uc_nw = var(pm,nw,:uc)
     ud_nw = var(pm,nw,:ud)
@@ -37,9 +35,13 @@ upper bound constraint for state of charge if capacity of storages is variable
 
 - ``soc_i \\leq \\overline{e_i}``
 """
-function constraint_energy_rating(pm,i;nw::Int=pm.cnw,cnd::Int=pm.ccnd)
+function constraint_energy_rating(pm,i;nw::Int=pm.cnw,cnd::Int=pm.ccnd, fixed_size::Bool=false)
     soc_nw = var(pm,nw,:soc,i)
-    emax = var(pm,:emax,i)
+    if fixed_size
+        emax = ref(pm,:storage,i,"energy_rating")
+    else
+        emax = var(pm,:emax,i)
+    end
     @constraint(pm.model,soc_nw <= emax)       
 end
 """
@@ -50,11 +52,15 @@ upper bound constraint on charging and discharging rate with C-rate = 1
 and relaxed complementary constraint
 - ``uc_i + ud_i \\leq \\frac{\\overline{e_i}}{T_s}``
 """
-function constraint_charge_rating(pm,i;nw::Int=pm.cnw,cnd::Int=pm.ccnd)
+function constraint_charge_rating(pm,i;nw::Int=pm.cnw,cnd::Int=pm.ccnd, fixed_size=false)
     Ts = pm.data["time_elapsed"]
     uc_nw = var(pm,nw,:uc,i)
     ud_nw = var(pm,nw,:ud,i)
-    emax = var(pm,:emax,i)
+    if fixed_size
+        emax = ref(pm,:storage,i,"energy_rating")
+    else
+        emax = var(pm,:emax,i)
+    end
     # upper bounds of charging and discarging rate with a C-rate of 1
     @constraint(pm.model, uc_nw <= emax/Ts)
     @constraint(pm.model, ud_nw <= emax/Ts)
