@@ -21,10 +21,10 @@ class Grid(ABC):
     """
 
     def __init__(self, **kwargs):
-        self._id = kwargs.get('id', None)
+        self._id = kwargs.get("id", None)
         if isinstance(self._id, float):
             self._id = int(self._id)
-        self._edisgo_obj = kwargs.get('edisgo_obj', None)
+        self._edisgo_obj = kwargs.get("edisgo_obj", None)
 
         self._nominal_voltage = None
 
@@ -74,8 +74,9 @@ class Grid(ABC):
         side bus information.
 
         """
-        return self.buses_df.loc[
-            self.transformers_df.iloc[0].bus1].to_frame().T
+        return (
+            self.buses_df.loc[self.transformers_df.iloc[0].bus1].to_frame().T
+        )
 
     @property
     def generators_df(self):
@@ -92,7 +93,9 @@ class Grid(ABC):
         """
         return self.edisgo_obj.topology.generators_df[
             self.edisgo_obj.topology.generators_df.bus.isin(
-                self.buses_df.index)]
+                self.buses_df.index
+            )
+        ]
 
     @property
     def generators(self):
@@ -121,7 +124,8 @@ class Grid(ABC):
 
         """
         return self.edisgo_obj.topology.loads_df[
-            self.edisgo_obj.topology.loads_df.bus.isin(self.buses_df.index)]
+            self.edisgo_obj.topology.loads_df.bus.isin(self.buses_df.index)
+        ]
 
     @property
     def loads(self):
@@ -152,7 +156,9 @@ class Grid(ABC):
         """
         return self.edisgo_obj.topology.storage_units_df[
             self.edisgo_obj.topology.storage_units_df.bus.isin(
-                self.buses_df.index)]
+                self.buses_df.index
+            )
+        ]
 
     @property
     def switch_disconnectors_df(self):
@@ -172,9 +178,12 @@ class Grid(ABC):
         """
         return self.edisgo_obj.topology.switches_df[
             self.edisgo_obj.topology.switches_df.bus_closed.isin(
-                self.buses_df.index)][
-            self.edisgo_obj.topology.switches_df.type_info ==
-            'Switch Disconnector']
+                self.buses_df.index
+            )
+        ][
+            self.edisgo_obj.topology.switches_df.type_info
+            == "Switch Disconnector"
+        ]
 
     @property
     def switch_disconnectors(self):
@@ -202,8 +211,9 @@ class Grid(ABC):
             dataframe see :attr:`~.network.topology.Topology.lines_df`.
         """
         return self.edisgo_obj.topology.lines_df[
-            self.edisgo_obj.topology.lines_df.bus0.isin(self.buses_df.index) &
-            self.edisgo_obj.topology.lines_df.bus1.isin(self.buses_df.index)]
+            self.edisgo_obj.topology.lines_df.bus0.isin(self.buses_df.index)
+            & self.edisgo_obj.topology.lines_df.bus1.isin(self.buses_df.index)
+        ]
 
     @property
     @abstractmethod
@@ -259,7 +269,7 @@ class Grid(ABC):
             per technology type in MW.
 
         """
-        return self.generators_df.groupby(['type']).sum()['p_nom']
+        return self.generators_df.groupby(["type"]).sum()["p_nom"]
 
     @property
     def peak_load(self):
@@ -285,10 +295,10 @@ class Grid(ABC):
             Cumulative peak load of loads in the network per sector in MW.
 
         """
-        return self.loads_df.groupby(['sector']).sum()['peak_load']
+        return self.loads_df.groupby(["sector"]).sum()["peak_load"]
 
     def __repr__(self):
-        return '_'.join([self.__class__.__name__, str(self.id)])
+        return "_".join([self.__class__.__name__, str(self.id)])
 
     def connect_generators(self, generators):
         """
@@ -313,7 +323,7 @@ class MVGrid(Grid):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self._lv_grids = kwargs.get('lv_grids', [])
+        self._lv_grids = kwargs.get("lv_grids", [])
 
     @property
     def lv_grids(self):
@@ -351,7 +361,8 @@ class MVGrid(Grid):
 
         """
         return self.edisgo_obj.topology.buses_df.drop(
-            self.edisgo_obj.topology.buses_df.lv_grid_id.dropna().index)
+            self.edisgo_obj.topology.buses_df.lv_grid_id.dropna().index
+        )
 
     @property
     def transformers_df(self):
@@ -399,7 +410,8 @@ class LVGrid(Grid):
 
         """
         return self.edisgo_obj.topology.buses_df.loc[
-            self.edisgo_obj.topology.buses_df.lv_grid_id == self.id]
+            self.edisgo_obj.topology.buses_df.lv_grid_id == self.id
+        ]
 
     @property
     def transformers_df(self):
@@ -416,7 +428,9 @@ class LVGrid(Grid):
         """
         return self.edisgo_obj.topology.transformers_df[
             self.edisgo_obj.topology.transformers_df.bus1.isin(
-                self.buses_df.index)]
+                self.buses_df.index
+            )
+        ]
 
     def draw(self):
         """

@@ -3,7 +3,7 @@ import pandas as pd
 from edisgo.network.timeseries import add_storage_units_timeseries
 import logging
 
-logger = logging.getLogger('edisgo')
+logger = logging.getLogger("edisgo")
 
 
 def expand_network(edisgo, tolerance=1e-6):
@@ -21,23 +21,23 @@ def expand_network(edisgo, tolerance=1e-6):
     if edisgo.opf_results is None:
         raise ValueError("OPF results not found. Run optimization first.")
 
-    nep_factor = edisgo.opf_results.lines.nep.values.astype('float')
+    nep_factor = edisgo.opf_results.lines.nep.values.astype("float")
 
     # Only round up numbers that are reasonably far away from the nearest
     # Integer
-    #ToDo: fix! if there was more than 1 line before the optimization this ceil
-    #will overestimate the number of added lines (np.ceil(nep_factor*lines.num_parallel - tolerance))
-    #this will give number of added lines
+    # ToDo: fix! if there was more than 1 line before the optimization this ceil
+    # will overestimate the number of added lines (np.ceil(nep_factor*lines.num_parallel - tolerance))
+    # this will give number of added lines
     nep_factor = np.ceil(nep_factor - tolerance)
 
     # Get the names of all MV grid lines
     mv_lines = edisgo.topology.mv_grid.lines_df.index
 
     # Increase number of parallel lines, shrink respective resistance
-    edisgo.topology.lines_df.loc[mv_lines, 'num_parallel'] *= nep_factor
-    edisgo.topology.lines_df.loc[mv_lines, 'r'] /= nep_factor
-    edisgo.topology.lines_df.loc[mv_lines, 'x'] /= nep_factor
-    edisgo.topology.lines_df.loc[mv_lines, 's_nom'] *= nep_factor
+    edisgo.topology.lines_df.loc[mv_lines, "num_parallel"] *= nep_factor
+    edisgo.topology.lines_df.loc[mv_lines, "r"] /= nep_factor
+    edisgo.topology.lines_df.loc[mv_lines, "x"] /= nep_factor
+    edisgo.topology.lines_df.loc[mv_lines, "s_nom"] *= nep_factor
 
 
 def grid_expansion_costs(opf_results, tolerance=1e-6):
@@ -58,29 +58,38 @@ def grid_expansion_costs(opf_results, tolerance=1e-6):
         Grid expansion costs determined by OPF
 
     """
-    #ToDo maybe choose differenct default tolerance
+    # ToDo maybe choose differenct default tolerance
     lines = opf_results.lines.index
 
-    num_new_lines = np.ceil(
-        opf_results.lines.nep *
-        opf_results.pypsa.lines.loc[lines, 'num_parallel'] -
-        tolerance) - opf_results.pypsa.lines.loc[lines, 'num_parallel']
-    costs_cable = opf_results.pypsa.lines.loc[lines, 'costs_cable'] * \
-                  num_new_lines
+    num_new_lines = (
+        np.ceil(
+            opf_results.lines.nep
+            * opf_results.pypsa.lines.loc[lines, "num_parallel"]
+            - tolerance
+        )
+        - opf_results.pypsa.lines.loc[lines, "num_parallel"]
+    )
+    costs_cable = (
+        opf_results.pypsa.lines.loc[lines, "costs_cable"] * num_new_lines
+    )
 
     earthworks = [1 if num_new_lines[l] > 0 else 0 for l in lines]
-    costs_earthwork = \
-        opf_results.pypsa.lines.loc[lines, 'costs_earthworks'] * earthworks
+    costs_earthwork = (
+        opf_results.pypsa.lines.loc[lines, "costs_earthworks"] * earthworks
+    )
 
     total_costs = costs_cable + costs_earthwork
     extended_lines = total_costs[total_costs > 0].index
     costs_df = pd.DataFrame(
-        data={'total_costs': total_costs.loc[extended_lines],
-              'type': ['line'] * len(extended_lines),
-              'length': opf_results.pypsa.lines.loc[extended_lines, 'length'],
-              'quantity': num_new_lines.loc[extended_lines],
-              'voltage_level': ['mv'] * len(extended_lines)},
-        index=extended_lines)
+        data={
+            "total_costs": total_costs.loc[extended_lines],
+            "type": ["line"] * len(extended_lines),
+            "length": opf_results.pypsa.lines.loc[extended_lines, "length"],
+            "quantity": num_new_lines.loc[extended_lines],
+            "voltage_level": ["mv"] * len(extended_lines),
+        },
+        index=extended_lines,
+    )
 
     return costs_df
 
@@ -103,35 +112,45 @@ def grid_expansion_costs(opf_results, tolerance=1e-6):
         Grid expansion costs determined by OPF
 
     """
-    #ToDo maybe choose differenct default tolerance
+    # ToDo maybe choose differenct default tolerance
     lines = opf_results.lines.index
 
-    num_new_lines = np.ceil(
-        opf_results.lines.nep *
-        opf_results.pypsa.lines.loc[lines, 'num_parallel'] -
-        tolerance) - opf_results.pypsa.lines.loc[lines, 'num_parallel']
-    costs_cable = opf_results.pypsa.lines.loc[lines, 'costs_cable'] * \
-                  num_new_lines
+    num_new_lines = (
+        np.ceil(
+            opf_results.lines.nep
+            * opf_results.pypsa.lines.loc[lines, "num_parallel"]
+            - tolerance
+        )
+        - opf_results.pypsa.lines.loc[lines, "num_parallel"]
+    )
+    costs_cable = (
+        opf_results.pypsa.lines.loc[lines, "costs_cable"] * num_new_lines
+    )
 
     earthworks = [1 if num_new_lines[l] > 0 else 0 for l in lines]
-    costs_earthwork = \
-        opf_results.pypsa.lines.loc[lines, 'costs_earthworks'] * earthworks
+    costs_earthwork = (
+        opf_results.pypsa.lines.loc[lines, "costs_earthworks"] * earthworks
+    )
 
     total_costs = costs_cable + costs_earthwork
     extended_lines = total_costs[total_costs > 0].index
     costs_df = pd.DataFrame(
-        data={'total_costs': total_costs.loc[extended_lines],
-              'type': ['line'] * len(extended_lines),
-              'length': opf_results.pypsa.lines.loc[extended_lines, 'length'],
-              'quantity': num_new_lines.loc[extended_lines],
-              'voltage_level': ['mv'] * len(extended_lines)},
-        index=extended_lines)
+        data={
+            "total_costs": total_costs.loc[extended_lines],
+            "type": ["line"] * len(extended_lines),
+            "length": opf_results.pypsa.lines.loc[extended_lines, "length"],
+            "quantity": num_new_lines.loc[extended_lines],
+            "voltage_level": ["mv"] * len(extended_lines),
+        },
+        index=extended_lines,
+    )
 
     return costs_df
 
 
-def integrate_storage_units(edisgo, min_storage_size=0.3, timeseries=True,
-                            as_load=False):
+def integrate_storage_units(
+    edisgo, min_storage_size=0.3, timeseries=True, as_load=False
+):
     """
     Integrates storage units from OPF into edisgo grid topology.
 
@@ -164,58 +183,66 @@ def integrate_storage_units(edisgo, min_storage_size=0.3, timeseries=True,
     added_storage_units = []
 
     if timeseries:
-        storage_ts = (edisgo.opf_results.storage_units_t.ud -
-                      edisgo.opf_results.storage_units_t.uc).apply(
-            pd.to_numeric)
-        reactive_power_ts = pd.DataFrame(0.0,
-                                         columns=storage_ts.columns,
-                                         index=storage_ts.index)
+        storage_ts = (
+            edisgo.opf_results.storage_units_t.ud
+            - edisgo.opf_results.storage_units_t.uc
+        ).apply(pd.to_numeric)
+        reactive_power_ts = pd.DataFrame(
+            0.0, columns=storage_ts.columns, index=storage_ts.index
+        )
 
     # ToDo adding timeseries will only work if timeseries.mode is None
     # ToDo @Anya why is for mode manual kwarg called 'storage_units_reactive_power'
     # and for mode None kwarg called 'timeseries_storage_units'
     for st in edisgo.opf_results.storage_units.index:
-        storage_cap = edisgo.opf_results.storage_units.at[st, 'emax']
-        if storage_cap >= min_storage_size and \
-                (storage_ts.loc[:, st] > 0.001).any():
+        storage_cap = edisgo.opf_results.storage_units.at[st, "emax"]
+        if (
+            storage_cap >= min_storage_size
+            and (storage_ts.loc[:, st] > 0.001).any()
+        ):
             if not as_load:
                 storage = edisgo.topology.add_storage_unit(
-                    bus=st,
-                    p_nom=storage_cap)  # as C-rate is currently always 1
+                    bus=st, p_nom=storage_cap
+                )  # as C-rate is currently always 1
             else:
                 storage = edisgo.topology.add_load(
                     load_id=1,
                     bus=st,
                     peak_load=storage_cap,
                     annual_consumption=0.0,
-                    sector='storage')
+                    sector="storage",
+                )
             if timeseries:
                 ts_active = storage_ts.loc[:, [st]].rename(
-                    columns={st: storage})
+                    columns={st: storage}
+                )
                 ts_reactive = reactive_power_ts.loc[:, [st]].rename(
-                    columns={st: storage})
+                    columns={st: storage}
+                )
                 if not as_load:
                     add_storage_units_timeseries(
                         edisgo_obj=edisgo,
                         storage_unit_names=storage,
                         timeseries_storage_units=ts_active,
-                        timeseries_storage_units_reactive_power=ts_reactive)
+                        timeseries_storage_units_reactive_power=ts_reactive,
+                    )
                 else:
-                    #ToDo change once fixed in timeseries
-                    edisgo.timeseries.loads_active_power = \
-                        pd.concat(
-                            [edisgo.timeseries.loads_active_power,
-                             -ts_active], axis=1)
-                    edisgo.timeseries.loads_reactive_power = \
-                        pd.concat(
-                            [edisgo.timeseries.loads_reactive_power,
-                             ts_reactive], axis=1)
+                    # ToDo change once fixed in timeseries
+                    edisgo.timeseries.loads_active_power = pd.concat(
+                        [edisgo.timeseries.loads_active_power, -ts_active],
+                        axis=1,
+                    )
+                    edisgo.timeseries.loads_reactive_power = pd.concat(
+                        [edisgo.timeseries.loads_reactive_power, ts_reactive],
+                        axis=1,
+                    )
 
             added_storage_units.append(storage)
         else:
             logger.info(
                 "Storage size of storage unit at bus {} is too small and "
-                "therefore discarded.".format(st))
+                "therefore discarded.".format(st)
+            )
             storage_cap_discarded += storage_cap
     return added_storage_units, storage_cap_discarded
 
@@ -248,36 +275,42 @@ def get_curtailment_per_node(edisgo, curtailment_ts=None, tolerance=1e-3):
 
     """
     slack = edisgo.opf_results.pypsa.generators[
-        edisgo.opf_results.pypsa.generators.control == 'Slack'].index[0]
-    opf_gen_results = edisgo.opf_results.generators_t.pg.loc[:,
-                      edisgo.opf_results.generators_t.pg.columns != slack]
+        edisgo.opf_results.pypsa.generators.control == "Slack"
+    ].index[0]
+    opf_gen_results = edisgo.opf_results.generators_t.pg.loc[
+        :, edisgo.opf_results.generators_t.pg.columns != slack
+    ]
 
     # feed-in per node without curtailment
-    pypsa_gen_ts = \
-        edisgo.opf_results.pypsa.generators_t.p_set.loc[
-        :, edisgo.opf_results.pypsa.generators_t.p_set.columns != slack]
+    pypsa_gen_ts = edisgo.opf_results.pypsa.generators_t.p_set.loc[
+        :, edisgo.opf_results.pypsa.generators_t.p_set.columns != slack
+    ]
     tmp = pypsa_gen_ts.T
     tmp.index = [
-        edisgo.opf_results.pypsa.generators.at[pypsa_gen_ts.columns[i], 'bus']
-        for i in range(0, len(pypsa_gen_ts.columns))]
+        edisgo.opf_results.pypsa.generators.at[pypsa_gen_ts.columns[i], "bus"]
+        for i in range(0, len(pypsa_gen_ts.columns))
+    ]
     feedin_per_node = tmp.groupby(tmp.index, axis=0).sum().T
 
     # feed-in per node with curtailment
     tmp = opf_gen_results.T
     tmp.index = [
-        edisgo.opf_results.pypsa.generators.at[pypsa_gen_ts.columns[i], 'bus']
-        for i in range(0, len(opf_gen_results.columns))]
+        edisgo.opf_results.pypsa.generators.at[pypsa_gen_ts.columns[i], "bus"]
+        for i in range(0, len(opf_gen_results.columns))
+    ]
     feedin_curtailed = tmp.groupby(tmp.index, axis=0).sum().T
 
     # curtailment per node
     curtailment_per_node = feedin_per_node - feedin_curtailed
     # aggregate nodes in case they appear more than once
     curtailment_per_node = curtailment_per_node.groupby(
-        curtailment_per_node.columns.unique(), axis=1).sum(axis=1)
+        curtailment_per_node.columns.unique(), axis=1
+    ).sum(axis=1)
 
     if curtailment_ts is not None:
-        if (abs(curtailment_ts - curtailment_per_node.sum(axis=1)) >
-                tolerance).any():
+        if (
+            abs(curtailment_ts - curtailment_per_node.sum(axis=1)) > tolerance
+        ).any():
             logger.warning("Curtailment requirement not met through OPF.")
     return curtailment_per_node
 
@@ -297,9 +330,8 @@ def integrate_curtailment_as_load(edisgo, curtailment_per_node):
     # drop all zeros
     active_power_ts = active_power_ts.loc[:, ~(active_power_ts == 0.0).all()]
     reactive_power_ts = pd.DataFrame(
-        0.0,
-        columns=active_power_ts.columns,
-        index=active_power_ts.index)
+        0.0, columns=active_power_ts.columns, index=active_power_ts.index
+    )
 
     for n in active_power_ts.columns:
         # add load component
@@ -308,18 +340,15 @@ def integrate_curtailment_as_load(edisgo, curtailment_per_node):
             bus=n,
             peak_load=curtailment_per_node.loc[:, n].max(),
             annual_consumption=0.0,
-            sector='curtailment')
+            sector="curtailment",
+        )
 
         # add time series
-        ts_active = active_power_ts.loc[:, [n]].rename(
-            columns={n: load})
-        ts_reactive = reactive_power_ts.loc[:, [n]].rename(
-            columns={n: load})
-        edisgo.timeseries.loads_active_power = \
-            pd.concat(
-                [edisgo.timeseries.loads_active_power,
-                 ts_active], axis=1)
-        edisgo.timeseries.loads_reactive_power = \
-            pd.concat(
-                [edisgo.timeseries.loads_reactive_power,
-                 ts_reactive], axis=1)
+        ts_active = active_power_ts.loc[:, [n]].rename(columns={n: load})
+        ts_reactive = reactive_power_ts.loc[:, [n]].rename(columns={n: load})
+        edisgo.timeseries.loads_active_power = pd.concat(
+            [edisgo.timeseries.loads_active_power, ts_active], axis=1
+        )
+        edisgo.timeseries.loads_reactive_power = pd.concat(
+            [edisgo.timeseries.loads_reactive_power, ts_reactive], axis=1
+        )

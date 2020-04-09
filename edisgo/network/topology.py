@@ -7,11 +7,15 @@ import warnings
 
 import edisgo
 from edisgo.network.components import Generator, Load
-from edisgo.tools.tools import calculate_line_resistance, \
-    calculate_line_reactance, calculate_apparent_power, check_bus_for_removal, \
-    check_line_for_removal
+from edisgo.tools.tools import (
+    calculate_line_resistance,
+    calculate_line_reactance,
+    calculate_apparent_power,
+    check_bus_for_removal,
+    check_line_for_removal,
+)
 
-logger = logging.getLogger('edisgo')
+logger = logging.getLogger("edisgo")
 
 
 class Topology:
@@ -31,14 +35,16 @@ class Topology:
         values the grid objects)
 
     """
-    #ToDo Implement update (and add) functions for component dataframes to
+
+    # ToDo Implement update (and add) functions for component dataframes to
     # avoid using protected variables in other classes and modules
 
     def __init__(self, **kwargs):
 
         # load configuration and equipment data
         self._equipment_data = self._load_equipment_data(
-            kwargs.get('config', None))
+            kwargs.get("config", None)
+        )
 
     @staticmethod
     def _load_equipment_data(config=None):
@@ -99,22 +105,25 @@ class Topology:
 
         """
 
-        equipment = {'mv': ['transformers', 'overhead_lines', 'cables'],
-                     'lv': ['transformers', 'cables']}
+        equipment = {
+            "mv": ["transformers", "overhead_lines", "cables"],
+            "lv": ["transformers", "cables"],
+        }
 
         # if config is not provided set default path and filenames
         if config is None:
-            equipment_dir = 'equipment'
+            equipment_dir = "equipment"
             config = {}
             for voltage_level, eq_list in equipment.items():
                 for i in eq_list:
-                    config['equipment_{}_parameters_{}'.format(
-                        voltage_level, i)] = \
-                        'equipment-parameters_{}_{}.csv'.format(
-                            voltage_level.upper(), i)
+                    config[
+                        "equipment_{}_parameters_{}".format(voltage_level, i)
+                    ] = "equipment-parameters_{}_{}.csv".format(
+                        voltage_level.upper(), i
+                    )
         else:
-            equipment_dir = config['system_dirs']['equipment_dir']
-            config = config['equipment']
+            equipment_dir = config["system_dirs"]["equipment_dir"]
+            config = config["equipment"]
 
         package_path = edisgo.__path__[0]
         data = {}
@@ -122,26 +131,31 @@ class Topology:
         for voltage_level, eq_list in equipment.items():
             for i in eq_list:
                 equipment_parameters = config[
-                    'equipment_{}_parameters_{}'.format(voltage_level, i)]
-                data['{}_{}'.format(voltage_level, i)] = pd.read_csv(
-                    os.path.join(package_path, equipment_dir,
-                                 equipment_parameters),
-                    comment='#', index_col='name',
-                    delimiter=',', decimal='.')
+                    "equipment_{}_parameters_{}".format(voltage_level, i)
+                ]
+                data["{}_{}".format(voltage_level, i)] = pd.read_csv(
+                    os.path.join(
+                        package_path, equipment_dir, equipment_parameters
+                    ),
+                    comment="#",
+                    index_col="name",
+                    delimiter=",",
+                    decimal=".",
+                )
                 # calculate electrical values of transformer from standard
                 # values (so far only for LV transformers, not necessary for
                 # MV as MV impedances are not used)
-                if voltage_level == 'lv' and i == 'transformers':
-                    data['{}_{}'.format(voltage_level, i)]['r_pu'] = \
-                        data['{}_{}'.format(voltage_level, i)]['P_k'] / \
-                        (data['{}_{}'.format(voltage_level, i)][
-                             'S_nom'] )
-                    data['{}_{}'.format(voltage_level, i)][
-                        'x_pu'] = np.sqrt(
-                        (data['{}_{}'.format(voltage_level, i)][
-                             'u_kr'] / 100) ** 2 \
-                        - data['{}_{}'.format(voltage_level, i)][
-                            'r_pu'] ** 2)
+                if voltage_level == "lv" and i == "transformers":
+                    data["{}_{}".format(voltage_level, i)]["r_pu"] = data[
+                        "{}_{}".format(voltage_level, i)
+                    ]["P_k"] / (
+                        data["{}_{}".format(voltage_level, i)]["S_nom"]
+                    )
+                    data["{}_{}".format(voltage_level, i)]["x_pu"] = np.sqrt(
+                        (data["{}_{}".format(voltage_level, i)]["u_kr"] / 100)
+                        ** 2
+                        - data["{}_{}".format(voltage_level, i)]["r_pu"] ** 2
+                    )
         return data
 
     @property
@@ -189,10 +203,14 @@ class Topology:
     @property
     def slack_df(self):
         slack_bus = self.transformers_hvmv_df.bus1.iloc[0]
-        return pd.DataFrame({'bus': [slack_bus],
-                             'control': ['Slack'],
-                             'p_nom': [0],
-                             'name':['Generator_slack']}).set_index('name')
+        return pd.DataFrame(
+            {
+                "bus": [slack_bus],
+                "control": ["Slack"],
+                "p_nom": [0],
+                "name": ["Generator_slack"],
+            }
+        ).set_index("name")
 
     @property
     def generators_df(self):
@@ -406,8 +424,8 @@ class Topology:
     def storage_units_df(self, storage_units_df):
         self._storage_units_df = storage_units_df
 
-    #TODO: fix instantiation of Generator and Load objects (they require
-    #edisgo_obj that topology does have as a parameter)
+    # TODO: fix instantiation of Generator and Load objects (they require
+    # edisgo_obj that topology does have as a parameter)
     # @property
     # def generators(self):
     #     """
@@ -539,9 +557,9 @@ class Topology:
             Dataframe of connected lines
 
         """
-        return self.lines_df.loc[
-        self.lines_df.bus0 == bus_name].append(
-        self.lines_df.loc[self.lines_df.bus1 == bus_name])
+        return self.lines_df.loc[self.lines_df.bus0 == bus_name].append(
+            self.lines_df.loc[self.lines_df.bus1 == bus_name]
+        )
 
     def get_connected_components_from_bus(self, bus_name):
         """
@@ -559,22 +577,29 @@ class Topology:
             'Load', 'Transformer', 'Transformer_HVMV', 'StorageUnit', 'Switch'
         """
         components = {}
-        components['Generator'] = self.generators_df.loc[
-            self.generators_df.bus == bus_name]
-        components['Line'] = self.get_connected_lines_from_bus(bus_name)
-        components['Load'] = self.loads_df.loc[
-            self.loads_df.bus == bus_name]
-        components['Transformer'] = self.transformers_df.loc[
-            self.transformers_df.bus0 == bus_name].append(
-            self.transformers_df.loc[self.transformers_df.bus1 == bus_name])
-        components['Transformer_HVMV'] = self.transformers_hvmv_df.loc[
-            self.transformers_hvmv_df.bus0 == bus_name].append(
+        components["Generator"] = self.generators_df.loc[
+            self.generators_df.bus == bus_name
+        ]
+        components["Line"] = self.get_connected_lines_from_bus(bus_name)
+        components["Load"] = self.loads_df.loc[self.loads_df.bus == bus_name]
+        components["Transformer"] = self.transformers_df.loc[
+            self.transformers_df.bus0 == bus_name
+        ].append(
+            self.transformers_df.loc[self.transformers_df.bus1 == bus_name]
+        )
+        components["Transformer_HVMV"] = self.transformers_hvmv_df.loc[
+            self.transformers_hvmv_df.bus0 == bus_name
+        ].append(
             self.transformers_hvmv_df.loc[
-                self.transformers_hvmv_df.bus1 == bus_name])
-        components['StorageUnit'] = self.storage_units_df.loc[
-            self.storage_units_df.bus == bus_name]
-        components['Switch'] = self.switches_df.loc[
-            self.switches_df.bus_open == bus_name]
+                self.transformers_hvmv_df.bus1 == bus_name
+            ]
+        )
+        components["StorageUnit"] = self.storage_units_df.loc[
+            self.storage_units_df.bus == bus_name
+        ]
+        components["Switch"] = self.switches_df.loc[
+            self.switches_df.bus_open == bus_name
+        ]
         return components
 
     def get_neighbours(self, bus_name):
@@ -615,17 +640,21 @@ class Topology:
         """
 
         # check if bus is isolated
-        if name in self.lines_df.bus0.values or \
-            name in self.lines_df.bus1.values or \
-            name in self.storage_units_df.bus.values or \
-            name in self.generators_df.bus.values or \
-            name in self.loads_df.bus.values or \
-            name in self.transformers_hvmv_df.bus0.values or \
-            name in self.transformers_hvmv_df.bus1.values or \
-            name in self.transformers_df.bus0.values or \
-            name in self.transformers_df.bus1.values:
-            raise AssertionError("Bus {} is not isolated. Remove all connected "
-                                 "elements first to remove bus.".format(name))
+        if (
+            name in self.lines_df.bus0.values
+            or name in self.lines_df.bus1.values
+            or name in self.storage_units_df.bus.values
+            or name in self.generators_df.bus.values
+            or name in self.loads_df.bus.values
+            or name in self.transformers_hvmv_df.bus0.values
+            or name in self.transformers_hvmv_df.bus1.values
+            or name in self.transformers_df.bus0.values
+            or name in self.transformers_df.bus1.values
+        ):
+            raise AssertionError(
+                "Bus {} is not isolated. Remove all connected "
+                "elements first to remove bus.".format(name)
+            )
         else:
             self._buses_df.drop(name, inplace=True)
 
@@ -641,15 +670,18 @@ class Topology:
         """
 
         # get bus to check if other elements are connected to bus
-        bus = self.generators_df.at[name, 'bus']
+        bus = self.generators_df.at[name, "bus"]
         # remove generator
         self._generators_df.drop(name, inplace=True)
         # if no other elements are connected to same bus, remove line and bus
         if check_bus_for_removal(self, bus_name=bus):
             line_name = self.get_connected_lines_from_bus(bus).index[0]
             self.remove_line(line_name)
-            logger.debug("Line {} removed together with generator {}.".format(
-                line_name, name))
+            logger.debug(
+                "Line {} removed together with generator {}.".format(
+                    line_name, name
+                )
+            )
 
     def remove_load(self, name):
         """
@@ -663,15 +695,18 @@ class Topology:
         """
 
         # get bus to check if other elements are connected to bus
-        bus = self.loads_df.at[name, 'bus']
+        bus = self.loads_df.at[name, "bus"]
         # remove load
         self._loads_df.drop(name, inplace=True)
         # if no other elements are connected, remove line and bus as well
         if check_bus_for_removal(self, bus_name=bus):
             line_name = self.get_connected_lines_from_bus(bus).index[0]
             self.remove_line(line_name)
-            logger.debug("Line {} removed together with load {}.".format(
-                line_name, name))
+            logger.debug(
+                "Line {} removed together with load {}.".format(
+                    line_name, name
+                )
+            )
 
     def remove_storage(self, name):
         """
@@ -684,15 +719,18 @@ class Topology:
 
         """
         # get bus to check if other elements are connected to bus
-        bus = self.storage_units_df.at[name, 'bus']
+        bus = self.storage_units_df.at[name, "bus"]
         # remove storage unit
         self._storage_units_df.drop(name, inplace=True)
         # if no other elements are connected, remove line and bus as well
         if check_bus_for_removal(self, bus_name=bus):
             line_name = self.get_connected_lines_from_bus(bus).index[0]
             self.remove_line(line_name)
-            logger.debug("Line {} removed together with storage unit {}.".
-                format(line_name, name))
+            logger.debug(
+                "Line {} removed together with storage unit {}.".format(
+                    line_name, name
+                )
+            )
 
     def remove_line(self, name):
         """
@@ -705,13 +743,15 @@ class Topology:
 
         """
         if not check_line_for_removal(self, line_name=name):
-            raise AssertionError("Removal of line {} would create isolated "
-                                 "node.".format(name))
+            raise AssertionError(
+                "Removal of line {} would create isolated "
+                "node.".format(name)
+            )
 
         # backup buses of line and check if buses can be removed as well
-        bus0 = self.lines_df.at[name, 'bus0']
+        bus0 = self.lines_df.at[name, "bus0"]
         remove_bus0 = check_bus_for_removal(self, bus0)
-        bus1 = self.lines_df.at[name, 'bus1']
+        bus1 = self.lines_df.at[name, "bus1"]
         remove_bus1 = check_bus_for_removal(self, bus1)
 
         # drop line
@@ -720,15 +760,18 @@ class Topology:
         # drop buses if no other elements are connected
         if remove_bus0:
             self.remove_bus(bus0)
-            logger.debug("Bus {} removed together with line {}".format(bus0,
-                                                                       name))
+            logger.debug(
+                "Bus {} removed together with line {}".format(bus0, name)
+            )
         if remove_bus1:
             self.remove_bus(bus1)
-            logger.debug("Bus {} removed together with line {}".format(bus1,
-                                                                       name))
+            logger.debug(
+                "Bus {} removed together with line {}".format(bus1, name)
+            )
 
-    def add_generator(self, generator_id, bus, p_nom, generator_type,
-                      **kwargs):
+    def add_generator(
+        self, generator_id, bus, p_nom, generator_type, **kwargs
+    ):
         """
         Adds generator to topology.
 
@@ -753,14 +796,15 @@ class Topology:
             Further specification of type, e.g. 'solar_roof_mounted'
 
         """
-        #ToDo add test
+        # ToDo add test
         # check if bus exists
         try:
             bus_df = self.buses_df.loc[bus]
         except KeyError:
             raise ValueError(
                 "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus))
+                "buses_df.".format(bus)
+            )
 
         if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
             grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
@@ -768,27 +812,32 @@ class Topology:
             grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
 
         # generate generator name and check uniqueness
-        generator_name = 'Generator_{}_{}_{}'.format(generator_type, grid_name,
-                                                     generator_id)
+        generator_name = "Generator_{}_{}_{}".format(
+            generator_type, grid_name, generator_id
+        )
         while generator_name in self.generators_df.index:
             random.seed(a=generator_name)
-            generator_name = 'Generator_{}_{}'.format(
-                generator_type, random.randint(10**8, 10**9))
+            generator_name = "Generator_{}_{}".format(
+                generator_type, random.randint(10 ** 8, 10 ** 9)
+            )
 
         # unpack optional parameters
-        weather_cell_id = kwargs.get('weather_cell_id', None)
-        subtype = kwargs.get('subtype', None)
-        control = kwargs.get('control', None)
+        weather_cell_id = kwargs.get("weather_cell_id", None)
+        subtype = kwargs.get("subtype", None)
+        control = kwargs.get("control", None)
 
         # create new generator dataframe
         new_gen_df = pd.DataFrame(
-            data={'bus': bus,
-                  'p_nom': p_nom,
-                  'control': control if control is not None else 'PQ',
-                  'type': generator_type,
-                  'weather_cell_id': weather_cell_id,
-                  'subtype': subtype},
-            index=[generator_name])
+            data={
+                "bus": bus,
+                "p_nom": p_nom,
+                "control": control if control is not None else "PQ",
+                "type": generator_type,
+                "weather_cell_id": weather_cell_id,
+                "subtype": subtype,
+            },
+            index=[generator_name],
+        )
         self.generators_df = self._generators_df.append(new_gen_df)
         return generator_name
 
@@ -818,27 +867,32 @@ class Topology:
         except KeyError:
             raise ValueError(
                 "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus))
+                "buses_df.".format(bus)
+            )
 
         # generate load name and check uniqueness
         if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
             grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
         else:
             grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
-        load_name = 'Load_{}_{}_{}'.format(sector, grid_name, load_id)
+        load_name = "Load_{}_{}_{}".format(sector, grid_name, load_id)
         if load_name in self.loads_df.index:
             nr_loads = len(self._grids[grid_name].loads_df)
-            load_name = 'Load_{}_{}_{}'.format(sector, grid_name, nr_loads+1)
+            load_name = "Load_{}_{}_{}".format(sector, grid_name, nr_loads + 1)
             while load_name in self.loads_df.index:
-                load_name = 'Load_{}_{}_{}'.format(
-                    sector, grid_name, random.randint(10 ** 8, 10 ** 9))
+                load_name = "Load_{}_{}_{}".format(
+                    sector, grid_name, random.randint(10 ** 8, 10 ** 9)
+                )
 
         new_load_df = pd.DataFrame(
-            data={'bus': bus,
-                  'peak_load': peak_load,
-                  'annual_consumption': annual_consumption,
-                  'sector': sector},
-            index=[load_name])
+            data={
+                "bus": bus,
+                "peak_load": peak_load,
+                "annual_consumption": annual_consumption,
+                "sector": sector,
+            },
+            index=[load_name],
+        )
         self.loads_df = self._loads_df.append(new_load_df)
         return load_name
 
@@ -863,7 +917,8 @@ class Topology:
         except KeyError:
             raise ValueError(
                 "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus))
+                "buses_df.".format(bus)
+            )
 
         # generate storage name and check uniqueness
         if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
@@ -871,18 +926,24 @@ class Topology:
         else:
             grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
         storage_id = len(self._grids[grid_name].storage_units_df)
-        storage_name = 'StorageUnit_{}_{}'.format(grid_name, storage_id)
+        storage_name = "StorageUnit_{}_{}".format(grid_name, storage_id)
         if storage_name in self.storage_units_df.index:
-            storage_name = 'StorageUnit_{}_{}'.format(grid_name, storage_id+1)
+            storage_name = "StorageUnit_{}_{}".format(
+                grid_name, storage_id + 1
+            )
             while storage_name in self.storage_units_df.index:
-                storage_name = 'StorageUnit_{}_{}'.format(
-                    grid_name, random.randint(10 ** 8, 10 ** 9))
+                storage_name = "StorageUnit_{}_{}".format(
+                    grid_name, random.randint(10 ** 8, 10 ** 9)
+                )
 
         new_storage_df = pd.DataFrame(
-            data={'bus': bus,
-                  'p_nom': p_nom,
-                  'control': control if control is not None else 'PQ'},
-            index=[storage_name])
+            data={
+                "bus": bus,
+                "p_nom": p_nom,
+                "control": control if control is not None else "PQ",
+            },
+            index=[storage_name],
+        )
         self.storage_units_df = self._storage_units_df.append(new_storage_df)
         return storage_name
 
@@ -908,22 +969,26 @@ class Topology:
             indicator if bus is inside a building
 
         """
-        x = kwargs.get('x', None)
-        y = kwargs.get('y', None)
-        lv_grid_id = kwargs.get('lv_grid_id', None)
-        in_building = kwargs.get('in_building', False)
+        x = kwargs.get("x", None)
+        y = kwargs.get("y", None)
+        lv_grid_id = kwargs.get("lv_grid_id", None)
+        in_building = kwargs.get("in_building", False)
         # check lv_grid_id
         if v_nom < 1 and lv_grid_id is None:
             raise ValueError(
-                "You need to specify an lv_grid_id for low-voltage buses.")
+                "You need to specify an lv_grid_id for low-voltage buses."
+            )
         new_bus_df = pd.DataFrame(
-            data={'v_nom': v_nom,
-                  'x': x,
-                  'y': y,
-                  'mv_grid_id': self.mv_grid.id,
-                  'lv_grid_id': lv_grid_id,
-                  'in_building': in_building},
-            index=[bus_name])
+            data={
+                "v_nom": v_nom,
+                "x": x,
+                "y": y,
+                "mv_grid_id": self.mv_grid.id,
+                "lv_grid_id": lv_grid_id,
+                "in_building": in_building,
+            },
+            index=[bus_name],
+        )
         self._buses_df = self._buses_df.append(new_bus_df)
 
     def add_line(self, bus0, bus1, length, **kwargs):
@@ -955,6 +1020,7 @@ class Topology:
             either 'cable' or 'line'
 
         """
+
         def _get_line_data():
             """
             Gets line data for line type specified in `line_type` from
@@ -966,20 +1032,21 @@ class Topology:
                 Line data from equipment_data
 
             """
-            if self.buses_df.loc[bus0, 'v_nom'] < 1:
-                voltage_level = 'lv'
+            if self.buses_df.loc[bus0, "v_nom"] < 1:
+                voltage_level = "lv"
             else:
-                voltage_level = 'mv'
+                voltage_level = "mv"
 
             # try to get cable data
             try:
                 line_data = self.equipment_data[
-                           '{}_cables'.format(voltage_level)].loc[type_info, :]
+                    "{}_cables".format(voltage_level)
+                ].loc[type_info, :]
             except KeyError:
                 try:
                     line_data = self.equipment_data[
-                                    '{}_overhead_lines'.format(
-                                        voltage_level)].loc[type_info, :]
+                        "{}_overhead_lines".format(voltage_level)
+                    ].loc[type_info, :]
                 except:
                     raise ValueError("Specified line type is not valid.")
             except:
@@ -990,28 +1057,32 @@ class Topology:
         if bus0 not in self.buses_df.index:
             raise ValueError(
                 "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus0))
+                "buses_df.".format(bus0)
+            )
         if bus1 not in self.buses_df.index:
             raise ValueError(
                 "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus1))
+                "buses_df.".format(bus1)
+            )
 
         # check if line between given buses already exists
         bus0_bus1 = self.lines_df[
-            (self.lines_df.bus0 == bus0) & (self.lines_df.bus1 == bus1)]
+            (self.lines_df.bus0 == bus0) & (self.lines_df.bus1 == bus1)
+        ]
         bus1_bus0 = self.lines_df[
-            (self.lines_df.bus1 == bus0) & (self.lines_df.bus0 == bus1)]
+            (self.lines_df.bus1 == bus0) & (self.lines_df.bus0 == bus1)
+        ]
         if not bus0_bus1.empty and bus1_bus0.empty:
             logging.debug("Line between bus0 {} and bus1 {} already exists.")
             return bus1_bus0.append(bus0_bus1).index[0]
 
         # unpack optional parameters
-        x = kwargs.get('x', None)
-        r = kwargs.get('r', None)
-        s_nom = kwargs.get('s_nom', None)
-        num_parallel = kwargs.get('num_parallel', 1)
-        type_info = kwargs.get('type_info',None)
-        kind = kwargs.get('kind', None)
+        x = kwargs.get("x", None)
+        r = kwargs.get("r", None)
+        s_nom = kwargs.get("s_nom", None)
+        num_parallel = kwargs.get("num_parallel", 1)
+        type_info = kwargs.get("type_info", None)
+        kind = kwargs.get("kind", None)
 
         # if type of line is specified calculate x, r and s_nom
         if type_info is not None:
@@ -1019,35 +1090,43 @@ class Topology:
                 warnings.warn(
                     "When line 'type_info' is provided when creating a new "
                     "line, x, r and s_nom are calculated and provided "
-                    "parameters are overwritten.")
+                    "parameters are overwritten."
+                )
             line_data = _get_line_data()
             if isinstance(line_data, pd.DataFrame) and len(line_data) > 1:
-                line_data = (line_data[line_data.U_n == self.buses_df.loc[
-                    bus0, 'v_nom']]).iloc[0, :]
+                line_data = (
+                    line_data[
+                        line_data.U_n == self.buses_df.loc[bus0, "v_nom"]
+                    ]
+                ).iloc[0, :]
             x = calculate_line_resistance(line_data.L_per_km, length)
             r = calculate_line_reactance(line_data.R_per_km, length)
             s_nom = calculate_apparent_power(line_data.U_n, line_data.I_max_th)
 
         # generate line name and check uniqueness
-        line_name = 'Line_{}_{}'.format(bus0, bus1)
+        line_name = "Line_{}_{}".format(bus0, bus1)
         while line_name in self.lines_df.index:
-            line_name = 'Line_{}_{}_{}'.format(
-                bus0, bus1, random.randint(10**8, 10**9))
+            line_name = "Line_{}_{}_{}".format(
+                bus0, bus1, random.randint(10 ** 8, 10 ** 9)
+            )
 
-        #ToDo
+        # ToDo
         # # calculate r if not provided
         # if x is None and type_info:
         new_line_df = pd.DataFrame(
-            data={'bus0': bus0,
-                  'bus1': bus1,
-                  'x': x,
-                  'r': r,
-                  'length': length,
-                  'type_info': type_info,
-                  'num_parallel': num_parallel,
-                  'kind': kind,
-                  's_nom': s_nom},
-            index=[line_name])
+            data={
+                "bus0": bus0,
+                "bus1": bus1,
+                "x": x,
+                "r": r,
+                "length": length,
+                "type_info": type_info,
+                "num_parallel": num_parallel,
+                "kind": kind,
+                "s_nom": s_nom,
+            },
+            index=[line_name],
+        )
         self._lines_df = self._lines_df.append(new_line_df)
         return line_name
 
@@ -1063,27 +1142,35 @@ class Topology:
         directory: str
             path to save topology to
         """
-        topology_dir = os.path.join(directory, 'topology')
+        topology_dir = os.path.join(directory, "topology")
         os.makedirs(directory, exist_ok=True)
         os.makedirs(topology_dir, exist_ok=True)
-        self._buses_df.to_csv(os.path.join(topology_dir, 'buses.csv'))
+        self._buses_df.to_csv(os.path.join(topology_dir, "buses.csv"))
         self._generators_df.append(self.slack_df).to_csv(
-            os.path.join(topology_dir, 'generators.csv'))
-        self._lines_df.to_csv(os.path.join(topology_dir, 'lines.csv'))
-        self._loads_df.to_csv(os.path.join(topology_dir, 'loads.csv'))
-        self._storage_units_df.to_csv(os.path.join(topology_dir, 'storage_units.csv'))
-        self._switches_df.to_csv(os.path.join(topology_dir, 'switches.csv'))
-        self._transformers_df.rename({'x_pu':'x', 'r_pu':'r'}, axis=1).to_csv(
-            os.path.join(topology_dir, 'transformers.csv'))
-        self._transformers_hvmv_df.rename({'x_pu':'x', 'r_pu':'r'}, axis=1).\
-            to_csv(os.path.join(topology_dir, 'transformers_hvmv.csv'))
-        network = {'name': self.mv_grid.id}
+            os.path.join(topology_dir, "generators.csv")
+        )
+        self._lines_df.to_csv(os.path.join(topology_dir, "lines.csv"))
+        self._loads_df.to_csv(os.path.join(topology_dir, "loads.csv"))
+        self._storage_units_df.to_csv(
+            os.path.join(topology_dir, "storage_units.csv")
+        )
+        self._switches_df.to_csv(os.path.join(topology_dir, "switches.csv"))
+        self._transformers_df.rename(
+            {"x_pu": "x", "r_pu": "r"}, axis=1
+        ).to_csv(os.path.join(topology_dir, "transformers.csv"))
+        self._transformers_hvmv_df.rename(
+            {"x_pu": "x", "r_pu": "r"}, axis=1
+        ).to_csv(os.path.join(topology_dir, "transformers_hvmv.csv"))
+        network = {"name": self.mv_grid.id}
         network.update(self._grid_district)
-        pd.DataFrame([network]).set_index('name').rename(
-            {'geom': 'mv_grid_district_geom',
-             'population': 'mv_grid_district_population'}, axis=1).to_csv(
-            os.path.join(topology_dir, 'network.csv'))
+        pd.DataFrame([network]).set_index("name").rename(
+            {
+                "geom": "mv_grid_district_geom",
+                "population": "mv_grid_district_population",
+            },
+            axis=1,
+        ).to_csv(os.path.join(topology_dir, "network.csv"))
         logger.debug("Topology exported.")
 
     def __repr__(self):
-        return 'Network topology ' + str(self.id)
+        return "Network topology " + str(self.id)

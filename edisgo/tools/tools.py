@@ -35,10 +35,12 @@ def select_worstcase_snapshots(edisgo_obj):
     residual_load = edisgo_obj.timeseries.residual_load
 
     timestamp = {}
-    timestamp['load_case'] = (
-        residual_load.idxmin() if min(residual_load) < 0 else None)
-    timestamp['feedin_case'] = (
-        residual_load.idxmax() if max(residual_load) > 0 else None)
+    timestamp["load_case"] = (
+        residual_load.idxmin() if min(residual_load) < 0 else None
+    )
+    timestamp["feedin_case"] = (
+        residual_load.idxmax() if max(residual_load) > 0 else None
+    )
     return timestamp
 
 
@@ -59,22 +61,27 @@ def get_residual_load_from_pypsa_network(edisgo_obj):
 
     """
     # Todo: write test
-    loads_active_power = edisgo_obj.timeseries.loads_active_power.sum(
-        axis=1)
-    generators_active_power = \
-        edisgo_obj.timeseries.generators_active_power.loc[
-            :, edisgo_obj.timeseries.generators_active_power.columns !=
-            'Generator_slack'].sum(axis=1)
-    storage_units_active_power = \
-        edisgo_obj.timeseries.storage_units_active_power.sum(axis=1)
+    loads_active_power = edisgo_obj.timeseries.loads_active_power.sum(axis=1)
+    generators_active_power = edisgo_obj.timeseries.generators_active_power.loc[
+        :,
+        edisgo_obj.timeseries.generators_active_power.columns
+        != "Generator_slack",
+    ].sum(
+        axis=1
+    )
+    storage_units_active_power = edisgo_obj.timeseries.storage_units_active_power.sum(
+        axis=1
+    )
 
-    residual_load = loads_active_power - \
-                    (generators_active_power + storage_units_active_power)
+    residual_load = loads_active_power - (
+        generators_active_power + storage_units_active_power
+    )
     return residual_load
 
 
-def calculate_relative_line_load(edisgo_obj, line_load,
-                                 lines=None, timesteps=None):
+def calculate_relative_line_load(
+    edisgo_obj, line_load, lines=None, timesteps=None
+):
     """
     Calculates relative line loading.
 
@@ -120,23 +127,35 @@ def calculate_relative_line_load(edisgo_obj, line_load,
 
     residual_load = get_residual_load_from_pypsa_network(edisgo_obj)
     case = residual_load.apply(
-        lambda _: 'feedin_case' if _ < 0 else 'load_case')
+        lambda _: "feedin_case" if _ < 0 else "load_case"
+    )
 
     load_factor = pd.DataFrame(
-        data={'i_nom': [float(edisgo_obj.config[
-                                  'grid_expansion_load_factors'][
-                                  'mv_{}_line'.format(case.loc[_])])
-                        for _ in timesteps]},
-        index=timesteps)
+        data={
+            "i_nom": [
+                float(
+                    edisgo_obj.config["grid_expansion_load_factors"][
+                        "mv_{}_line".format(case.loc[_])
+                    ]
+                )
+                for _ in timesteps
+            ]
+        },
+        index=timesteps,
+    )
 
     # current from power flow
     i_res = line_load.loc[timesteps, line_indices]
     # allowed current
     lines = edisgo_obj.topology.lines_df.loc[line_indices]
-    lines = lines.join(edisgo_obj.topology.buses_df.loc[lines.bus0, 'v_nom'],
-                       on='bus0', how='left').drop_duplicates()
+    lines = lines.join(
+        edisgo_obj.topology.buses_df.loc[lines.bus0, "v_nom"],
+        on="bus0",
+        how="left",
+    ).drop_duplicates()
     i_allowed = load_factor.dot(
-        (lines.s_nom / (sqrt(3) * lines.v_nom)).to_frame('i_nom').T)
+        (lines.s_nom / (sqrt(3) * lines.v_nom)).to_frame("i_nom").T
+    )
 
     return i_res.divide(i_allowed)
 
@@ -210,12 +229,22 @@ def translate_df_to_graph(buses_df, lines_df, transformers_df=None):
     # add branches
     branches = []
     for line_name, line in lines_df.iterrows():
-        branches.append((line.bus0, line.bus1,
-                         {'branch_name': line_name, 'length': line.length}))
+        branches.append(
+            (
+                line.bus0,
+                line.bus1,
+                {"branch_name": line_name, "length": line.length},
+            )
+        )
     if transformers_df is not None:
         for trafo_name, trafo in transformers_df.iterrows():
-            branches.append((trafo.bus0, trafo.bus1,
-                             {'branch_name': trafo_name, 'length': 0}))
+            branches.append(
+                (
+                    trafo.bus0,
+                    trafo.bus1,
+                    {"branch_name": trafo_name, "length": 0},
+                )
+            )
     graph.add_edges_from(branches)
     return graph
 
@@ -242,18 +271,22 @@ def check_bus_for_removal(topology, bus_name):
     # Todo: move to topology?
     # check if bus is party of topology
     if bus_name not in topology.buses_df.index:
-        raise ValueError("Bus of name {} not in Topology. Cannot be checked "
-                         "to be removed.".format(bus_name))
+        raise ValueError(
+            "Bus of name {} not in Topology. Cannot be checked "
+            "to be removed.".format(bus_name)
+        )
     connected_lines = topology.get_connected_lines_from_bus(bus_name)
     # if more than one line is connected to node, it cannot be removed
     if len(connected_lines) > 1:
         return False
     # if another element is connected to node, it cannot be removed
-    elif bus_name in topology.loads_df.bus.values or \
-        bus_name in topology.generators_df.bus.values or \
-        bus_name in topology.storage_units_df.bus.values or \
-        bus_name in topology.transformers_df.bus0.values or \
-        bus_name in topology.transformers_df.bus1.values:
+    elif (
+        bus_name in topology.loads_df.bus.values
+        or bus_name in topology.generators_df.bus.values
+        or bus_name in topology.storage_units_df.bus.values
+        or bus_name in topology.transformers_df.bus0.values
+        or bus_name in topology.transformers_df.bus1.values
+    ):
         return False
     else:
         return True
@@ -282,18 +315,23 @@ def check_line_for_removal(topology, line_name):
     # Todo: move to topology?
     # check if line is part of topology
     if line_name not in topology.lines_df.index:
-        raise ValueError("Line of name {} not in Topology. Cannot be checked "
-                         "to be removed.".format(line_name))
+        raise ValueError(
+            "Line of name {} not in Topology. Cannot be checked "
+            "to be removed.".format(line_name)
+        )
 
-    bus0 = topology.lines_df.loc[line_name, 'bus0']
-    bus1 = topology.lines_df.loc[line_name, 'bus1']
+    bus0 = topology.lines_df.loc[line_name, "bus0"]
+    bus1 = topology.lines_df.loc[line_name, "bus1"]
     # if either of the buses can be removed as well, line can be removed safely
-    if check_bus_for_removal(topology, bus0) or \
-            check_bus_for_removal(topology, bus1):
+    if check_bus_for_removal(topology, bus0) or check_bus_for_removal(
+        topology, bus1
+    ):
         return True
     # otherwise both buses have to be connected to at least two lines
-    if len(topology.get_connected_lines_from_bus(bus0)) > 1 and \
-        len(topology.get_connected_lines_from_bus(bus1)) > 1:
+    if (
+        len(topology.get_connected_lines_from_bus(bus0)) > 1
+        and len(topology.get_connected_lines_from_bus(bus1)) > 1
+    ):
         return True
     else:
         return False
@@ -302,7 +340,7 @@ def check_line_for_removal(topology, line_name):
     #  networks are created by removing the line.
 
 
-def drop_duplicated_indices(dataframe, keep='first'):
+def drop_duplicated_indices(dataframe, keep="first"):
     """
     Drop rows of duplicate indices in dataframe.
 
@@ -351,51 +389,60 @@ def select_cable(edisgo_obj, level, apparent_power):
 
     cable_count = 1
 
-    if level == 'mv':
+    if level == "mv":
 
-        cable_data = edisgo_obj.topology.equipment_data['mv_cables']
+        cable_data = edisgo_obj.topology.equipment_data["mv_cables"]
         available_cables = cable_data[
-            cable_data['U_n'] == edisgo_obj.topology.mv_grid.voltage_nom]
+            cable_data["U_n"] == edisgo_obj.topology.mv_grid.voltage_nom
+        ]
 
         suitable_cables = available_cables[
-            available_cables['I_max_th'] *
-            edisgo_obj.topology.mv_grid.voltage_nom > apparent_power]
+            available_cables["I_max_th"]
+            * edisgo_obj.topology.mv_grid.voltage_nom
+            > apparent_power
+        ]
 
         # increase cable count until appropriate cable type is found
         while suitable_cables.empty and cable_count < 20:
             cable_count += 1
             suitable_cables = available_cables[
-                available_cables['I_max_th'] *
-                edisgo_obj.topology.mv_grid.voltage_nom *
-                cable_count > apparent_power]
+                available_cables["I_max_th"]
+                * edisgo_obj.topology.mv_grid.voltage_nom
+                * cable_count
+                > apparent_power
+            ]
         if suitable_cables.empty and cable_count == 20:
             raise exceptions.MaximumIterationError(
                 "Could not find a suitable cable for apparent power of "
-                "{} kVA.".format(apparent_power))
+                "{} kVA.".format(apparent_power)
+            )
 
-        cable_type = suitable_cables.ix[suitable_cables['I_max_th'].idxmin()]
+        cable_type = suitable_cables.ix[suitable_cables["I_max_th"].idxmin()]
 
-    elif level == 'lv':
+    elif level == "lv":
 
-        cable_data = edisgo_obj.topology.equipment_data['lv_cables']
+        cable_data = edisgo_obj.topology.equipment_data["lv_cables"]
         suitable_cables = cable_data[
-            cable_data['I_max_th'] * cable_data['U_n'] > apparent_power]
+            cable_data["I_max_th"] * cable_data["U_n"] > apparent_power
+        ]
 
         # increase cable count until appropriate cable type is found
         while suitable_cables.empty and cable_count < 20:
             cable_count += 1
             suitable_cables = cable_data[
-                cable_data['I_max_th'] * cable_data['U_n'] * cable_count >
-                apparent_power]
+                cable_data["I_max_th"] * cable_data["U_n"] * cable_count
+                > apparent_power
+            ]
         if suitable_cables.empty and cable_count == 20:
             raise exceptions.MaximumIterationError(
                 "Could not find a suitable cable for apparent power of "
-                "{} kVA.".format(apparent_power))
+                "{} kVA.".format(apparent_power)
+            )
 
-        cable_type = suitable_cables.ix[suitable_cables['I_max_th'].idxmin()]
+        cable_type = suitable_cables.ix[suitable_cables["I_max_th"].idxmin()]
 
     else:
-        raise ValueError('Please supply a level (either \'mv\' or \'lv\').')
+        raise ValueError("Please supply a level (either 'mv' or 'lv').")
 
     return cable_type, cable_count
 
@@ -477,10 +524,10 @@ def get_mv_feeder_from_line(line):
             if feeder_1 == feeder_2:
                 return feeder_1
             else:
-                logging.warning('Different feeders for line {}.'.format(line))
+                logging.warning("Different feeders for line {}.".format(line))
                 return None
         else:
             return feeder_1 if feeder_1 is not None else feeder_2
     except Exception as e:
-        logging.warning('Failed to get MV feeder: {}.'.format(e))
+        logging.warning("Failed to get MV feeder: {}.".format(e))
         return None

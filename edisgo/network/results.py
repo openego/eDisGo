@@ -6,7 +6,7 @@ from math import sqrt
 
 from edisgo.network.grids import MVGrid
 
-logger = logging.getLogger('edisgo')
+logger = logging.getLogger("edisgo")
 
 
 class Results:
@@ -24,7 +24,7 @@ class Results:
 
     def __init__(self, edisgo_object):
         self.edisgo_object = edisgo_object
-        self._measures = ['original']
+        self._measures = ["original"]
         self._pfa_p = None
         self._pfa_q = None
         self._pfa_v_mag_pu = None
@@ -362,7 +362,7 @@ class Results:
             is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         """
-        #ToDo: Instead of hv_mv_exchanges just use slack (is more general in
+        # ToDo: Instead of hv_mv_exchanges just use slack (is more general in
         # case only LV grid was analyzed)
         return self._hv_mv_exchanges
 
@@ -431,22 +431,25 @@ class Results:
         raise NotImplementedError
 
         grids = [self.edisgo_object.topology.mv_grid] + list(
-            self.edisgo_object.topology.mv_grid.lv_grids)
+            self.edisgo_object.topology.mv_grid.lv_grids
+        )
         storage_results = {}
-        storage_results['storage_id'] = []
-        storage_results['nominal_power'] = []
-        storage_results['voltage_level'] = []
-        storage_results['grid_connection_point'] = []
+        storage_results["storage_id"] = []
+        storage_results["nominal_power"] = []
+        storage_results["voltage_level"] = []
+        storage_results["grid_connection_point"] = []
         for grid in grids:
-            for storage in grid.graph.nodes_by_attribute('storage'):
-                storage_results['storage_id'].append(repr(storage))
-                storage_results['nominal_power'].append(storage.nominal_power)
-                storage_results['voltage_level'].append(
-                    'mv' if isinstance(grid, MVGrid) else 'lv')
-                storage_results['grid_connection_point'].append(
-                     list(grid.graph.neighbors(storage))[0])
+            for storage in grid.graph.nodes_by_attribute("storage"):
+                storage_results["storage_id"].append(repr(storage))
+                storage_results["nominal_power"].append(storage.nominal_power)
+                storage_results["voltage_level"].append(
+                    "mv" if isinstance(grid, MVGrid) else "lv"
+                )
+                storage_results["grid_connection_point"].append(
+                    list(grid.graph.neighbors(storage))[0]
+                )
 
-        return pd.DataFrame(storage_results).set_index('storage_id')
+        return pd.DataFrame(storage_results).set_index("storage_id")
 
     def storage_units_timeseries(self):
         """
@@ -468,9 +471,10 @@ class Results:
         storage_units_p = pd.DataFrame()
         storage_units_q = pd.DataFrame()
         grids = [self.edisgo_object.topology.mv_grid] + list(
-            self.edisgo_object.topology.mv_grid.lv_grids)
+            self.edisgo_object.topology.mv_grid.lv_grids
+        )
         for grid in grids:
-            for storage in grid.graph.nodes_by_attribute('storage'):
+            for storage in grid.graph.nodes_by_attribute("storage"):
                 ts = storage.timeseries
                 storage_units_p[repr(storage)] = ts.p
                 storage_units_q[repr(storage)] = ts.q
@@ -576,26 +580,35 @@ class Results:
 
         """
         if self.pfa_p is None:
-            raise Exception('No results pfa_p to check. '
-                            'Please analyze grid first.')
+            raise Exception(
+                "No results pfa_p to check. " "Please analyze grid first."
+            )
 
         if components_df is not None:
-            labels_included = components_df.index[components_df.index.isin(
-                self.pfa_p.columns) & components_df.index.isin(
-                self.pfa_q.columns)]
+            labels_included = components_df.index[
+                components_df.index.isin(self.pfa_p.columns)
+                & components_df.index.isin(self.pfa_q.columns)
+            ]
             labels_not_included = components_df.index[
-                ~(components_df.index.isin(
-                    self.pfa_p.columns) & components_df.index.isin(
-                    self.pfa_q.columns))]
+                ~(
+                    components_df.index.isin(self.pfa_p.columns)
+                    & components_df.index.isin(self.pfa_q.columns)
+                )
+            ]
             if len(labels_not_included) > 0:
                 logging.warning(
                     "Apparent power for {lines} are not returned from "
-                    "PFA".format(lines=labels_not_included))
+                    "PFA".format(lines=labels_not_included)
+                )
         else:
             labels_included = self.pfa_p.columns
 
-        s_res = ((self.pfa_p[labels_included] ** 2 + self.pfa_q[
-            labels_included] ** 2)).applymap(sqrt)
+        s_res = (
+            (
+                self.pfa_p[labels_included] ** 2
+                + self.pfa_q[labels_included] ** 2
+            )
+        ).applymap(sqrt)
 
         return s_res
 
@@ -629,32 +642,38 @@ class Results:
 
         """
         # First check if results are available:
-        if hasattr(self, 'pfa_v_mag_pu'):
+        if hasattr(self, "pfa_v_mag_pu"):
             # unless index is lexsorted, it cannot be sliced
             self.pfa_v_mag_pu.sort_index(axis=1, inplace=True)
         else:
-            message = "No Power Flow Calculation has be done yet, " \
-                      "so there are no results yet."
+            message = (
+                "No Power Flow Calculation has be done yet, "
+                "so there are no results yet."
+            )
             raise AttributeError(message)
 
         if level is None:
-            level = ['mv', 'lv']
+            level = ["mv", "lv"]
 
         if nodes_df is None:
             return self.pfa_v_mag_pu.loc[:, (level, slice(None))]
         else:
             labels = nodes_df.index
-            not_included = [_ for _ in labels
-                            if _ not in list(self.pfa_v_mag_pu[level].columns)]
+            not_included = [
+                _
+                for _ in labels
+                if _ not in list(self.pfa_v_mag_pu[level].columns)
+            ]
             labels_included = [_ for _ in labels if _ not in not_included]
 
             if not_included:
-                logging.warning("Voltage levels for {nodes} are not returned "
-                                "from PFA".format(
-                nodes=not_included))
+                logging.warning(
+                    "Voltage levels for {nodes} are not returned "
+                    "from PFA".format(nodes=not_included)
+                )
             return self.pfa_v_mag_pu[level][labels_included]
 
-    def save(self, directory, parameters='all'):
+    def save(self, directory, parameters="all"):
         """
         Saves results to disk.
 
@@ -726,6 +745,7 @@ class Results:
             * 'storage_integration_results'
 
         """
+
         def _save_power_flow_results(target_dir):
             if self.pfa_v_mag_pu is not None:
                 # create directory
@@ -733,31 +753,36 @@ class Results:
 
                 # voltage
                 self.pfa_v_mag_pu.to_csv(
-                    os.path.join(target_dir, 'voltages_pu.csv'))
+                    os.path.join(target_dir, "voltages_pu.csv")
+                )
 
                 # current
-                self.i_res.to_csv(
-                    os.path.join(target_dir, 'currents.csv'))
+                self.i_res.to_csv(os.path.join(target_dir, "currents.csv"))
 
                 # active power
                 self.pfa_p.to_csv(
-                    os.path.join(target_dir, 'active_powers.csv'))
+                    os.path.join(target_dir, "active_powers.csv")
+                )
 
                 # reactive power
                 self.pfa_q.to_csv(
-                    os.path.join(target_dir, 'reactive_powers.csv'))
+                    os.path.join(target_dir, "reactive_powers.csv")
+                )
 
                 # apparent power
                 self.s_res().to_csv(
-                    os.path.join(target_dir, 'apparent_powers.csv'))
+                    os.path.join(target_dir, "apparent_powers.csv")
+                )
 
                 # network losses
                 self.grid_losses.to_csv(
-                    os.path.join(target_dir, 'grid_losses.csv'))
+                    os.path.join(target_dir, "grid_losses.csv")
+                )
 
                 # network exchanges
-                self.hv_mv_exchanges.to_csv(os.path.join(
-                    target_dir, 'hv_mv_exchanges.csv'))
+                self.hv_mv_exchanges.to_csv(
+                    os.path.join(target_dir, "hv_mv_exchanges.csv")
+                )
 
         def _save_grid_expansion_results(target_dir):
             if self.grid_expansion_costs is not None:
@@ -765,16 +790,19 @@ class Results:
                 os.makedirs(target_dir, exist_ok=True)
 
                 # network expansion costs
-                self.grid_expansion_costs.to_csv(os.path.join(
-                    target_dir, 'grid_expansion_costs.csv'))
+                self.grid_expansion_costs.to_csv(
+                    os.path.join(target_dir, "grid_expansion_costs.csv")
+                )
 
                 # unresolved issues
-                pd.DataFrame(self.unresolved_issues).to_csv(os.path.join(
-                    target_dir, 'unresolved_issues.csv'))
+                pd.DataFrame(self.unresolved_issues).to_csv(
+                    os.path.join(target_dir, "unresolved_issues.csv")
+                )
 
                 # equipment changes
-                self.equipment_changes.to_csv(os.path.join(
-                    target_dir, 'equipment_changes.csv'))
+                self.equipment_changes.to_csv(
+                    os.path.join(target_dir, "equipment_changes.csv")
+                )
 
         def _save_curtailment_results(target_dir):
             pass
@@ -820,18 +848,21 @@ class Results:
 
         # dictionary with function to call to save each parameter
         func_dict = {
-            'powerflow_results': _save_power_flow_results,
-            'grid_expansion_results': _save_grid_expansion_results,
-            'curtailment_results': _save_curtailment_results,
-            'storage_integration_results': _save_storage_integration_results
+            "powerflow_results": _save_power_flow_results,
+            "grid_expansion_results": _save_grid_expansion_results,
+            "curtailment_results": _save_curtailment_results,
+            "storage_integration_results": _save_storage_integration_results,
         }
 
         # if string is given convert to list
         if isinstance(parameters, str):
-            if parameters == 'all':
-                parameters = ['powerflow_results',
-                              'grid_expansion_results', 'curtailment_results',
-                              'storage_integration_results']
+            if parameters == "all":
+                parameters = [
+                    "powerflow_results",
+                    "grid_expansion_results",
+                    "curtailment_results",
+                    "storage_integration_results",
+                ]
             else:
                 parameters = [parameters]
 
@@ -840,26 +871,29 @@ class Results:
             try:
                 func_dict[parameter](os.path.join(directory, parameter))
             except KeyError:
-                message = "Invalid input {} for `parameters` when saving " \
-                          "results. Must be any or a list of the following: " \
-                          "'powerflow_results', " \
-                          "'grid_expansion_results', 'curtailment_results', " \
-                          "'storage_integration_results'.".format(parameter)
+                message = (
+                    "Invalid input {} for `parameters` when saving "
+                    "results. Must be any or a list of the following: "
+                    "'powerflow_results', "
+                    "'grid_expansion_results', 'curtailment_results', "
+                    "'storage_integration_results'.".format(parameter)
+                )
                 logger.error(message)
                 raise KeyError(message)
             except:
                 raise
         # save measures
-        pd.DataFrame(data={'measure': self.measures}).to_csv(
-            os.path.join(directory, 'measures.csv'))
+        pd.DataFrame(data={"measure": self.measures}).to_csv(
+            os.path.join(directory, "measures.csv")
+        )
         # save configs
-        with open(os.path.join(directory, 'configs.csv'), 'w') as f:
+        with open(os.path.join(directory, "configs.csv"), "w") as f:
             writer = csv.writer(f)
             rows = [
-                ['{}'.format(key)] + [value for item in values.items()
-                                      for value in item]
-                for key, values in
-                self.edisgo_object.config._data.items()]
+                ["{}".format(key)]
+                + [value for item in values.items() for value in item]
+                for key, values in self.edisgo_object.config._data.items()
+            ]
             writer.writerows(rows)
 
 

@@ -10,7 +10,7 @@ def opf_settings():
         # masterthesis "MULTIPERIOD OPTIMAL POWER FLOW PROBLEM IN DISTRIBUTION SYSTEM PLANNING" by Jaap Pedersen
         "relaxation": "none",
         # Dictionary of linked time steps in the format {linked step => original step}
-        "clusters" : {},
+        "clusters": {},
         # upper bound on network expansion, int, DEFAULT: 10
         "max_exp": 10,
         # number of time steps considered in optimization
@@ -23,9 +23,8 @@ def opf_settings():
         # positioning of storage units, if empty list, all buses are potential positions of storage units and
         # capacity is optimized, entries of list need to be type "int"
         "storage_buses": [],
-
         # Only optimize operation of storages exported from eDisGo. Do not optimize storage positioning.
-        "storage_operation_only" : False,
+        "storage_operation_only": False,
         # total storage capacity in the network, sizing of storages is a decision variable and will be found in optimization
         "total_storage_capacity": 0.0,
         # Requirements for curtailment in every time step is considered, DEFAULT: False
@@ -45,5 +44,5 @@ def opf_settings():
         # smaller values might reduce required memory requirements, DEFAULT: 1000
         # see: https://coin-or.github.io/Ipopt/OPTIONS.html
         "mumps_mem_percent": 1000,
-        }
+    }
     return opf_settings

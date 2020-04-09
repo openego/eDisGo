@@ -7,13 +7,16 @@ import logging
 
 from egoio.db_tables import model_draft, supply
 from edisgo.tools import session_scope
-from edisgo.tools.geo import \
-    calc_geo_dist_vincenty, calc_geo_lines_in_buffer, \
-    proj2equidistant, proj2equidistant_reverse
+from edisgo.tools.geo import (
+    calc_geo_dist_vincenty,
+    calc_geo_lines_in_buffer,
+    proj2equidistant,
+    proj2equidistant_reverse,
+)
 
-logger = logging.getLogger('edisgo')
+logger = logging.getLogger("edisgo")
 
-if 'READTHEDOCS' not in os.environ:
+if "READTHEDOCS" not in os.environ:
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
@@ -54,27 +57,33 @@ def oedb(edisgo_object):
         """
 
         # build query
-        generators_sqla = session.query(
-            orm_conv_generators.columns.id,
-            orm_conv_generators.columns.subst_id,
-            orm_conv_generators.columns.la_id,
-            orm_conv_generators.columns.capacity,
-            orm_conv_generators.columns.type,
-            orm_conv_generators.columns.voltage_level,
-            orm_conv_generators.columns.fuel,
-            func.ST_AsText(func.ST_Transform(
-                orm_conv_generators.columns.geom, srid))
-        ). \
-            filter(orm_conv_generators.columns.subst_id ==
-                   edisgo_object.topology.mv_grid.id). \
-            filter(orm_conv_generators.columns.voltage_level.in_(
-            [4, 5, 6, 7])). \
-            filter(orm_conv_generators_version)
+        generators_sqla = (
+            session.query(
+                orm_conv_generators.columns.id,
+                orm_conv_generators.columns.subst_id,
+                orm_conv_generators.columns.la_id,
+                orm_conv_generators.columns.capacity,
+                orm_conv_generators.columns.type,
+                orm_conv_generators.columns.voltage_level,
+                orm_conv_generators.columns.fuel,
+                func.ST_AsText(
+                    func.ST_Transform(orm_conv_generators.columns.geom, srid)
+                ),
+            )
+            .filter(
+                orm_conv_generators.columns.subst_id
+                == edisgo_object.topology.mv_grid.id
+            )
+            .filter(
+                orm_conv_generators.columns.voltage_level.in_([4, 5, 6, 7])
+            )
+            .filter(orm_conv_generators_version)
+        )
 
         # read data from db
-        generators_mv = pd.read_sql_query(generators_sqla.statement,
-                                          session.bind,
-                                          index_col='id')
+        generators_mv = pd.read_sql_query(
+            generators_sqla.statement, session.bind, index_col="id"
+        )
 
         return generators_mv
 
@@ -101,65 +110,82 @@ def oedb(edisgo_object):
         # Create filter for generation technologies
         # ToDo: This needs to be removed when all generators can be imported
         types_filter = orm_re_generators.columns.generation_type.in_(
-            ['solar', 'wind'])
+            ["solar", "wind"]
+        )
 
         # build basic query
-        generators_sqla = session.query(
-            orm_re_generators.columns.id,
-            orm_re_generators.columns.subst_id,
-            orm_re_generators.columns.la_id,
-            orm_re_generators.columns.mvlv_subst_id,
-            orm_re_generators.columns.electrical_capacity,
-            orm_re_generators.columns.generation_type,
-            orm_re_generators.columns.generation_subtype,
-            orm_re_generators.columns.voltage_level,
-            orm_re_generators.columns.w_id,
-            func.ST_AsText(func.ST_Transform(
-                orm_re_generators.columns.rea_geom_new, srid)).label('geom'),
-            func.ST_AsText(func.ST_Transform(
-            orm_re_generators.columns.geom, srid)).label('geom_em')). \
-                filter(orm_re_generators.columns.subst_id ==
-                       edisgo_object.topology.mv_grid.id). \
-            filter(orm_re_generators_version). \
-            filter(types_filter)
+        generators_sqla = (
+            session.query(
+                orm_re_generators.columns.id,
+                orm_re_generators.columns.subst_id,
+                orm_re_generators.columns.la_id,
+                orm_re_generators.columns.mvlv_subst_id,
+                orm_re_generators.columns.electrical_capacity,
+                orm_re_generators.columns.generation_type,
+                orm_re_generators.columns.generation_subtype,
+                orm_re_generators.columns.voltage_level,
+                orm_re_generators.columns.w_id,
+                func.ST_AsText(
+                    func.ST_Transform(
+                        orm_re_generators.columns.rea_geom_new, srid
+                    )
+                ).label("geom"),
+                func.ST_AsText(
+                    func.ST_Transform(orm_re_generators.columns.geom, srid)
+                ).label("geom_em"),
+            )
+            .filter(
+                orm_re_generators.columns.subst_id
+                == edisgo_object.topology.mv_grid.id
+            )
+            .filter(orm_re_generators_version)
+            .filter(types_filter)
+        )
 
         # extend basic query for MV generators and read data from db
-        generators_mv_sqla = generators_sqla. \
-            filter(orm_re_generators.columns.voltage_level.in_([4, 5]))
-        generators_mv = pd.read_sql_query(generators_mv_sqla.statement,
-                                          session.bind,
-                                          index_col='id')
+        generators_mv_sqla = generators_sqla.filter(
+            orm_re_generators.columns.voltage_level.in_([4, 5])
+        )
+        generators_mv = pd.read_sql_query(
+            generators_mv_sqla.statement, session.bind, index_col="id"
+        )
 
         # define generators with unknown subtype as 'unknown'
-        generators_mv.loc[generators_mv[
-                              'generation_subtype'].isnull(),
-                          'generation_subtype'] = 'unknown'
+        generators_mv.loc[
+            generators_mv["generation_subtype"].isnull(), "generation_subtype"
+        ] = "unknown"
 
         # convert capacity from kW to MW
-        generators_mv.electrical_capacity = \
+        generators_mv.electrical_capacity = (
             pd.to_numeric(generators_mv.electrical_capacity) / 1e3
+        )
 
         # extend basic query for LV generators and read data from db
-        generators_lv_sqla = generators_sqla. \
-            filter(orm_re_generators.columns.voltage_level.in_([6, 7]))
-        generators_lv = pd.read_sql_query(generators_lv_sqla.statement,
-                                       session.bind,
-                                       index_col='id')
+        generators_lv_sqla = generators_sqla.filter(
+            orm_re_generators.columns.voltage_level.in_([6, 7])
+        )
+        generators_lv = pd.read_sql_query(
+            generators_lv_sqla.statement, session.bind, index_col="id"
+        )
 
         # define generators with unknown subtype as 'unknown'
-        generators_lv.loc[generators_lv[
-                              'generation_subtype'].isnull(),
-                          'generation_subtype'] = 'unknown'
+        generators_lv.loc[
+            generators_lv["generation_subtype"].isnull(), "generation_subtype"
+        ] = "unknown"
 
         # convert capacity from kW to MW
-        generators_lv.electrical_capacity = \
+        generators_lv.electrical_capacity = (
             pd.to_numeric(generators_lv.electrical_capacity) / 1e3
+        )
 
         return generators_mv, generators_lv
 
-    def _update_grids(edisgo_object, imported_generators_mv,
-                      imported_generators_lv,
-                      remove_missing=True):
+    def _update_grids(
+        edisgo_object,
+        imported_generators_mv,
+        imported_generators_lv,
+        remove_missing=True,
+    ):
         """
         Update network according to new generator dataset.
 
@@ -227,18 +253,22 @@ def oedb(edisgo_object):
 
         # get all imported generators
         imported_gens = pd.concat(
-            [imported_generators_lv, imported_generators_mv])
+            [imported_generators_lv, imported_generators_mv]
+        )
 
-        logger.debug('{} generators imported.'.format(
-            len(imported_gens)))
+        logger.debug("{} generators imported.".format(len(imported_gens)))
 
         # get existing generators in MV and LV grids and append ID column
         existing_gens = edisgo_object.topology.generators_df
-        existing_gens['id'] = list(
-            map(lambda _: int(_.split('_')[-1]), existing_gens.index))
+        existing_gens["id"] = list(
+            map(lambda _: int(_.split("_")[-1]), existing_gens.index)
+        )
 
-        logger.debug('Cumulative generator capacity (existing): {} MW'
-                     .format(round(existing_gens.p_nom.sum(), 1)))
+        logger.debug(
+            "Cumulative generator capacity (existing): {} MW".format(
+                round(existing_gens.p_nom.sum(), 1)
+            )
+        )
 
         # check if capacity of any of the imported generators is <= 0
         # (this may happen if dp is buggy) and remove generator if it is
@@ -249,8 +279,9 @@ def oedb(edisgo_object):
                 gen_name = existing_gens[existing_gens.id == id].index[0]
                 edisgo_object.topology.remove_generator(gen_name)
                 logger.warning(
-                    'Capacity of generator {} is <= 0, it is therefore '
-                    'removed. Check your data source.'.format(gen_name))
+                    "Capacity of generator {} is <= 0, it is therefore "
+                    "removed. Check your data source.".format(gen_name)
+                )
             # remove from imported generators
             imported_gens.drop(id, inplace=True)
             if id in imported_generators_mv.index:
@@ -264,30 +295,34 @@ def oedb(edisgo_object):
 
         # filter for generators that need to be updated (i.e. that
         # appear in the imported and existing generators dataframes)
-        gens_to_update = existing_gens[existing_gens.id.isin(
-            imported_gens.index.values)]
+        gens_to_update = existing_gens[
+            existing_gens.id.isin(imported_gens.index.values)
+        ]
 
         # calculate capacity difference between existing and imported
         # generators
-        gens_to_update['cap_diff'] = \
-            imported_gens.loc[
-                gens_to_update.id, 'electrical_capacity'].values - \
-            gens_to_update.p_nom
+        gens_to_update["cap_diff"] = (
+            imported_gens.loc[gens_to_update.id, "electrical_capacity"].values
+            - gens_to_update.p_nom
+        )
         # in case there are generators whose capacity does not match, update
         # their capacity
         gens_to_update_cap = gens_to_update[
-            abs(gens_to_update.cap_diff) > cap_diff_threshold]
+            abs(gens_to_update.cap_diff) > cap_diff_threshold
+        ]
 
         for id, row in gens_to_update_cap.iterrows():
-            edisgo_object.topology._generators_df.loc[id, 'p_nom'] = \
-                imported_gens.loc[row['id'], 'electrical_capacity']
+            edisgo_object.topology._generators_df.loc[
+                id, "p_nom"
+            ] = imported_gens.loc[row["id"], "electrical_capacity"]
 
         log_geno_count = len(gens_to_update_cap)
-        log_geno_cap = gens_to_update_cap['cap_diff'].sum()
+        log_geno_cap = gens_to_update_cap["cap_diff"].sum()
         logger.debug(
-            'Capacities of {} of {} existing generators updated ({} MW).'
-                .format(log_geno_count, len(gens_to_update),
-                        round(log_geno_cap, 1)))
+            "Capacities of {} of {} existing generators updated ({} MW).".format(
+                log_geno_count, len(gens_to_update), round(log_geno_cap, 1)
+            )
+        )
 
         # ==================================================
         # Step 2: Remove decommissioned MV and LV generators
@@ -295,24 +330,28 @@ def oedb(edisgo_object):
 
         # filter for MV generators that do not appear in the imported but in
         # the existing generators dataframe
-        decommissioned_gens = existing_gens[~existing_gens.id.isin(
-            imported_gens.index.values)]
+        decommissioned_gens = existing_gens[
+            ~existing_gens.id.isin(imported_gens.index.values)
+        ]
 
         if not decommissioned_gens.empty and remove_missing:
             for gen in decommissioned_gens.index:
                 edisgo_object.topology.remove_generator(gen)
             log_geno_cap = decommissioned_gens.p_nom.sum()
             log_geno_count = len(decommissioned_gens)
-            logger.debug('{} decommissioned generators removed ({} MW).'
-                         .format(log_geno_count,
-                                 round(log_geno_cap, 1)))
+            logger.debug(
+                "{} decommissioned generators removed ({} MW).".format(
+                    log_geno_count, round(log_geno_cap, 1)
+                )
+            )
 
         # ===============================
         # Step 3: Add new MV generators
         # ===============================
 
         new_gens_mv = imported_generators_mv[
-            ~imported_generators_mv.index.isin(list(existing_gens.id))]
+            ~imported_generators_mv.index.isin(list(existing_gens.id))
+        ]
         number_new_gens = len(new_gens_mv)
 
         # iterate over new generators and create them
@@ -320,59 +359,76 @@ def oedb(edisgo_object):
             # check if geom is available, skip otherwise
             geom = _check_mv_generator_geom(new_gens_mv.loc[id, :])
             if geom is None:
-                logger.warning('Generator {} has no geom entry and will'
-                               'not be imported!'.format(id))
+                logger.warning(
+                    "Generator {} has no geom entry and will"
+                    "not be imported!".format(id)
+                )
                 new_gens_mv.drop(id)
                 continue
-            new_gens_mv.at[id, 'geom'] = geom
-            _add_and_connect_mv_generator(edisgo_object, new_gens_mv.loc[id, :])
+            new_gens_mv.at[id, "geom"] = geom
+            _add_and_connect_mv_generator(
+                edisgo_object, new_gens_mv.loc[id, :]
+            )
 
         log_geno_count = len(new_gens_mv)
-        log_geno_cap = new_gens_mv['electrical_capacity'].sum()
-        logger.debug('{} of {} new MV generators added ({} MW).'
-                     .format(log_geno_count,
-                             number_new_gens,
-                             round(log_geno_cap, 1)))
+        log_geno_cap = new_gens_mv["electrical_capacity"].sum()
+        logger.debug(
+            "{} of {} new MV generators added ({} MW).".format(
+                log_geno_count, number_new_gens, round(log_geno_cap, 1)
+            )
+        )
 
         # ===============================
         # Step 4: Add new LV generators
         # ===============================
 
         new_gens_lv = imported_generators_lv[
-            ~imported_generators_lv.index.isin(list(existing_gens.id))]
+            ~imported_generators_lv.index.isin(list(existing_gens.id))
+        ]
 
         # check if new generators can be allocated to an existing LV grid
         grid_ids = [_.id for _ in edisgo_object.topology._grids.values()]
-        if not any([_ in grid_ids
-                    for _ in list(imported_generators_lv['mvlv_subst_id'])]):
+        if not any(
+            [
+                _ in grid_ids
+                for _ in list(imported_generators_lv["mvlv_subst_id"])
+            ]
+        ):
             logger.warning(
-                'None of the imported LV generators can be allocated '
-                'to an existing LV grid. Check compatibility of grid '
-                'and generator datasets.')
+                "None of the imported LV generators can be allocated "
+                "to an existing LV grid. Check compatibility of grid "
+                "and generator datasets."
+            )
 
         # iterate over new generators and create them
         for id in new_gens_lv.index:
             _add_and_connect_lv_generator(
-                edisgo_object, new_gens_lv.loc[id, :])
+                edisgo_object, new_gens_lv.loc[id, :]
+            )
 
         log_geno_count = len(new_gens_lv)
-        log_geno_cap = new_gens_lv['electrical_capacity'].sum()
-        logger.debug('{} new LV generators added ({} MW).'
-                     .format(log_geno_count,
-                             round(log_geno_cap, 1)))
+        log_geno_cap = new_gens_lv["electrical_capacity"].sum()
+        logger.debug(
+            "{} new LV generators added ({} MW).".format(
+                log_geno_count, round(log_geno_cap, 1)
+            )
+        )
 
         for lv_grid in edisgo_object.topology.mv_grid.lv_grids:
             lv_loads = len(lv_grid.loads_df)
-            lv_gens_voltage_level_7 = len(lv_grid.generators_df[
-                lv_grid.generators_df.bus != lv_grid.station.index[0]])
+            lv_gens_voltage_level_7 = len(
+                lv_grid.generators_df[
+                    lv_grid.generators_df.bus != lv_grid.station.index[0]
+                ]
+            )
             # warn if there're more generators than loads in LV grid
             if lv_gens_voltage_level_7 > lv_loads * 2:
                 logger.debug(
-                    'There are {} generators (voltage level 7) but only {} '
-                    'loads in LV grid {}.'.format(
-                        lv_gens_voltage_level_7,
-                        lv_loads,
-                        lv_grid.id))
+                    "There are {} generators (voltage level 7) but only {} "
+                    "loads in LV grid {}.".format(
+                        lv_gens_voltage_level_7, lv_loads, lv_grid.id
+                    )
+                )
 
     def _check_mv_generator_geom(generator_data):
         """
@@ -400,8 +456,9 @@ def oedb(edisgo_object):
             # set geom to EnergyMap's geom, if available
             if generator_data.geom_em:
                 logger.debug(
-                    'Generator {} has no geom entry, EnergyMap\'s geom '
-                    'entry will be used.'.format(generator_data.name))
+                    "Generator {} has no geom entry, EnergyMap's geom "
+                    "entry will be used.".format(generator_data.name)
+                )
                 return generator_data.geom_em
         return None
 
@@ -431,18 +488,21 @@ def oedb(edisgo_object):
         # ToDo use select_cable instead of standard line?
 
         # get standard equipment
-        std_line_type = edisgo_object.topology.equipment_data['mv_cables'].loc[
-            edisgo_object.config['grid_expansion_standard_equipment'][
-                'mv_line']]
+        std_line_type = edisgo_object.topology.equipment_data["mv_cables"].loc[
+            edisgo_object.config["grid_expansion_standard_equipment"][
+                "mv_line"
+            ]
+        ]
 
         # add generator bus
-        gen_bus = 'Bus_Generator_{}'.format(generator.name)
+        gen_bus = "Bus_Generator_{}".format(generator.name)
         geom = wkt_loads(generator.geom)
         edisgo_object.topology.add_bus(
             bus_name=gen_bus,
             v_nom=edisgo_object.topology.mv_grid.nominal_voltage,
             x=geom.x,
-            y=geom.y)
+            y=geom.y,
+        )
 
         # add generator
         edisgo_object.topology.add_generator(
@@ -451,7 +511,8 @@ def oedb(edisgo_object):
             p_nom=generator.electrical_capacity,
             generator_type=generator.generation_type,
             subtype=generator.generation_subtype,
-            weather_cell_id=generator.w_id)
+            weather_cell_id=generator.w_id,
+        )
 
         # ===== voltage level 4: generator is connected to MV station =====
         if generator.voltage_level == 4:
@@ -461,19 +522,22 @@ def oedb(edisgo_object):
             line_length = calc_geo_dist_vincenty(
                 edisgo_object=edisgo_object,
                 bus_source=gen_bus,
-                bus_target=edisgo_object.topology.mv_grid.station.index[0])
+                bus_target=edisgo_object.topology.mv_grid.station.index[0],
+            )
 
             line_name = edisgo_object.topology.add_line(
                 bus0=edisgo_object.topology.mv_grid.station.index[0],
                 bus1=gen_bus,
                 length=line_length,
-                kind='cable',
-                type_info=std_line_type.name)
+                kind="cable",
+                type_info=std_line_type.name,
+            )
 
             # add line to equipment changes to track costs
             _add_line_to_equipment_changes(
                 edisgo_object=edisgo_object,
-                line=edisgo_object.topology.lines_df.loc[line_name])
+                line=edisgo_object.topology.lines_df.loc[line_name],
+            )
 
         # == voltage level 5: generator is connected to MV grid (next-neighbor) ==
         elif generator.voltage_level == 5:
@@ -483,13 +547,15 @@ def oedb(edisgo_object):
             lines = calc_geo_lines_in_buffer(
                 edisgo_object=edisgo_object,
                 bus=edisgo_object.topology.buses_df.loc[gen_bus, :],
-                grid=edisgo_object.topology.mv_grid)
+                grid=edisgo_object.topology.mv_grid,
+            )
 
             # calc distance between generator and grid's lines -> find nearest line
             conn_objects_min_stack = _find_nearest_conn_objects(
                 edisgo_object=edisgo_object,
                 bus=edisgo_object.topology.buses_df.loc[gen_bus, :],
-                lines=lines)
+                lines=lines,
+            )
 
             # connect
             # go through the stack (from nearest to most far connection target
@@ -499,7 +565,8 @@ def oedb(edisgo_object):
                 target_obj_result = _connect_mv_node(
                     edisgo_object=edisgo_object,
                     bus=edisgo_object.topology.buses_df.loc[gen_bus, :],
-                    target_obj=dist_min_obj)
+                    target_obj=dist_min_obj,
+                )
 
                 if target_obj_result is not None:
                     generator_connected = True
@@ -507,13 +574,15 @@ def oedb(edisgo_object):
 
             if not generator_connected:
                 logger.debug(
-                    'Generator {} could not be connected, try to '
-                    'increase the parameter `conn_buffer_radius` in '
-                    'config file `config_grid.cfg` to gain more possible '
-                    'connection points.'.format(generator.name))
+                    "Generator {} could not be connected, try to "
+                    "increase the parameter `conn_buffer_radius` in "
+                    "config file `config_grid.cfg` to gain more possible "
+                    "connection points.".format(generator.name)
+                )
 
-    def _add_and_connect_lv_generator(edisgo_object, generator,
-                                      allow_multiple_genos_per_load=True):
+    def _add_and_connect_lv_generator(
+        edisgo_object, generator, allow_multiple_genos_per_load=True
+    ):
         """
         Add and connect new LV generator to existing grids.
 
@@ -553,44 +622,52 @@ def oedb(edisgo_object):
         lv_grid_ids = [_.id for _ in edisgo_object.topology.mv_grid.lv_grids]
 
         add_generator_data = {
-            'generator_id': generator.name,
-            'p_nom': generator.electrical_capacity,
-            'generator_type': generator.generation_type,
-            'subtype': generator.generation_subtype,
-            'weather_cell_id': generator.w_id}
+            "generator_id": generator.name,
+            "p_nom": generator.electrical_capacity,
+            "generator_type": generator.generation_type,
+            "subtype": generator.generation_subtype,
+            "weather_cell_id": generator.w_id,
+        }
 
         # determine LV grid the generator should be connected in
 
         # if substation ID (= LV grid ID) is given but it does not match an
         # existing LV grid ID (i.e. it is an aggregated LV grid), connect
         # generator to HV-MV substation
-        if (generator.mvlv_subst_id and
-                generator.mvlv_subst_id not in lv_grid_ids):
+        if (
+            generator.mvlv_subst_id
+            and generator.mvlv_subst_id not in lv_grid_ids
+        ):
             # add generator
             edisgo_object.topology.add_generator(
                 bus=edisgo_object.topology.mv_grid.station.index[0],
-                **add_generator_data)
+                **add_generator_data
+            )
             return
 
         # if substation ID (= LV grid ID) is given and it matches an existing LV
         # grid ID (i.e. it is not an aggregated LV grid), set grid to connect
         # generator to to specified grid (in case the generator has no geometry
         # it is connected to the grid's station)
-        elif generator.mvlv_subst_id and generator.mvlv_subst_id in lv_grid_ids:
+        elif (
+            generator.mvlv_subst_id and generator.mvlv_subst_id in lv_grid_ids
+        ):
 
             # get LV grid
             lv_grid = edisgo_object.topology._grids[
-                'LVGrid_{}'.format(generator.mvlv_subst_id)]
+                "LVGrid_{}".format(generator.mvlv_subst_id)
+            ]
 
             # if no geom is given, connect to LV grid's station
             if not generator.geom:
                 # add generator
                 edisgo_object.topology.add_generator(
-                    bus=lv_grid.station.index[0],
-                    **add_generator_data)
+                    bus=lv_grid.station.index[0], **add_generator_data
+                )
                 logger.debug(
                     "Generator {} has no geom entry and will be connected to "
-                    "grid's LV stations.".format(generator.id))
+                    "grid's LV stations.".format(generator.id)
+                )
                 return
 
         # if no MV-LV substation ID is given, choose random LV grid and connect
@@ -599,52 +676,61 @@ def oedb(edisgo_object):
             random.seed(a=generator.name)
             lv_grid = random.choice(lv_grid_ids)
             edisgo_object.topology.add_generator(
-                bus=lv_grid.station.index[0],
-                **add_generator_data)
+                bus=lv_grid.station.index[0], **add_generator_data
+            )
             logger.warning(
-                'Generator {} has no mvlv_subst_id. It is therefore allocated to '
-                'a random LV Grid ({}); geom was set to stations\' geom.'.format(
-                    generator.id, lv_grid.id))
+                "Generator {} has no mvlv_subst_id. It is therefore allocated to "
+                "a random LV Grid ({}); geom was set to stations' geom.".format(
+                    generator.id, lv_grid.id
+                )
+            )
             return
 
         # generator is of v_level 6 -> connect to grid's LV station
         if generator.voltage_level == 6:
 
-            gen_bus = 'Bus_Generator_{}'.format(generator.name)
+            gen_bus = "Bus_Generator_{}".format(generator.name)
             geom = wkt_loads(generator.geom)
             edisgo_object.topology.add_bus(
                 bus_name=gen_bus,
                 v_nom=lv_grid.nominal_voltage,
                 x=geom.x,
                 y=geom.y,
-                lv_grid_id=lv_grid.id)
+                lv_grid_id=lv_grid.id,
+            )
 
             line_length = calc_geo_dist_vincenty(
                 edisgo_object=edisgo_object,
                 bus_source=gen_bus,
-                bus_target=lv_grid.station.index[0])
+                bus_target=lv_grid.station.index[0],
+            )
 
             # get standard equipment
-            std_line_type = \
-            edisgo_object.topology.equipment_data['lv_cables'].loc[
-                edisgo_object.config[
-                    'grid_expansion_standard_equipment']['lv_line']]
+            std_line_type = edisgo_object.topology.equipment_data[
+                "lv_cables"
+            ].loc[
+                edisgo_object.config["grid_expansion_standard_equipment"][
+                    "lv_line"
+                ]
+            ]
             line_name = edisgo_object.topology.add_line(
                 bus0=lv_grid.station.index[0],
                 bus1=gen_bus,
                 length=line_length,
-                kind='cable',
-                type_info=std_line_type.name)
+                kind="cable",
+                type_info=std_line_type.name,
+            )
 
             # add line to equipment changes to track costs
             _add_line_to_equipment_changes(
                 edisgo_object=edisgo_object,
-                line=edisgo_object.topology.lines_df.loc[line_name])
+                line=edisgo_object.topology.lines_df.loc[line_name],
+            )
 
             # add generator
             edisgo_object.topology.add_generator(
-                bus=gen_bus,
-                **add_generator_data)
+                bus=gen_bus, **add_generator_data
+            )
 
         # generator is of v_level 7 -> assign generator to load
         # generators with P <= 30kW are connected to residential loads, if
@@ -660,27 +746,33 @@ def oedb(edisgo_object):
 
             lv_loads = lv_grid.loads_df
             if generator.electrical_capacity <= 0.030:
-                target_loads = lv_loads[lv_loads.sector == 'residential']
+                target_loads = lv_loads[lv_loads.sector == "residential"]
             else:
-                target_loads = lv_loads[lv_loads.sector.isin(
-                    ['industrial', 'agricultural', 'retail'])]
+                target_loads = lv_loads[
+                    lv_loads.sector.isin(
+                        ["industrial", "agricultural", "retail"]
+                    )
+                ]
 
             # generate random list (unique elements) of possible target loads
             # to connect generators to
             random.seed(a=generator.name)
             if len(target_loads) > 0:
-                lv_loads_rnd = set(random.sample(
-                    list(target_loads.index), len(target_loads)))
+                lv_loads_rnd = set(
+                    random.sample(list(target_loads.index), len(target_loads))
+                )
             else:
                 logger.debug(
-                    'No load to connect LV generator to. The '
-                    'generator is therefore connected to random LV bus.')
+                    "No load to connect LV generator to. The "
+                    "generator is therefore connected to random LV bus."
+                )
                 gen_bus = random.choice(
-                    lv_grid.buses_df[lv_grid.buses_df.in_building].index)
+                    lv_grid.buses_df[lv_grid.buses_df.in_building].index
+                )
                 # add generator
                 edisgo_object.topology.add_generator(
-                    bus=gen_bus,
-                    **add_generator_data)
+                    bus=gen_bus, **add_generator_data
+                )
                 return
 
             # search through list of loads for load with less
@@ -691,34 +783,41 @@ def oedb(edisgo_object):
                 lv_load = lv_loads_rnd.pop()
 
                 # determine number of generators of LV load
-                load_bus = target_loads.at[lv_load, 'bus']
-                if np.logical_not(edisgo_object.topology.buses_df.at[
-                                      load_bus, 'in_building']):
-                    neighbours = \
-                        list(edisgo_object.topology.get_neighbours(load_bus))
+                load_bus = target_loads.at[lv_load, "bus"]
+                if np.logical_not(
+                    edisgo_object.topology.buses_df.at[load_bus, "in_building"]
+                ):
+                    neighbours = list(
+                        edisgo_object.topology.get_neighbours(load_bus)
+                    )
                     branch_tee_in_building = neighbours[0]
-                    if len(neighbours) > 1 or \
-                            np.logical_not(edisgo_object.topology.buses_df.at[
-                                               branch_tee_in_building, 'in_building']):
+                    if len(neighbours) > 1 or np.logical_not(
+                        edisgo_object.topology.buses_df.at[
+                            branch_tee_in_building, "in_building"
+                        ]
+                    ):
                         raise ValueError(
-                            "Expected neighbour to be branch tee in building.")
+                            "Expected neighbour to be branch tee in building."
+                        )
                 else:
                     branch_tee_in_building = load_bus
                 generators_at_load = edisgo_object.topology.generators_df[
                     edisgo_object.topology.generators_df.bus.isin(
-                        [load_bus, branch_tee_in_building])]
+                        [load_bus, branch_tee_in_building]
+                    )
+                ]
                 if len(generators_at_load) < 2:
                     lv_conn_target = branch_tee_in_building
 
             if lv_conn_target is None:
                 logger.debug(
-                    'No valid connection target found for generator {}. '
-                    'Connected to LV station.'.format(
-                        generator.name))
+                    "No valid connection target found for generator {}. "
+                    "Connected to LV station.".format(generator.name)
+                )
 
                 station_bus = lv_grid.station.index[0]
 
-                gen_bus = 'Bus_Generator_{}'.format(generator.name)
+                gen_bus = "Bus_Generator_{}".format(generator.name)
                 lv_conn_target = gen_bus
                 geom = wkt_loads(generator.geom)
                 edisgo_object.topology.add_bus(
@@ -726,34 +825,41 @@ def oedb(edisgo_object):
                     v_nom=lv_grid.nominal_voltage,
                     x=geom.x,
                     y=geom.y,
-                    lv_grid_id=lv_grid.id)
+                    lv_grid_id=lv_grid.id,
+                )
 
                 line_length = calc_geo_dist_vincenty(
                     edisgo_object=edisgo_object,
                     bus_source=gen_bus,
-                    bus_target=station_bus)
+                    bus_target=station_bus,
+                )
 
                 # get standard equipment
-                std_line_type = \
-                    edisgo_object.topology.equipment_data['lv_cables'].loc[
-                        edisgo_object.config[
-                            'grid_expansion_standard_equipment']['lv_line']]
+                std_line_type = edisgo_object.topology.equipment_data[
+                    "lv_cables"
+                ].loc[
+                    edisgo_object.config["grid_expansion_standard_equipment"][
+                        "lv_line"
+                    ]
+                ]
                 line_name = edisgo_object.topology.add_line(
                     bus0=station_bus,
                     bus1=gen_bus,
                     length=line_length,
-                    kind='cable',
-                    type_info=std_line_type.name)
+                    kind="cable",
+                    type_info=std_line_type.name,
+                )
 
                 # add line to equipment changes to track costs
                 _add_line_to_equipment_changes(
                     edisgo_object=edisgo_object,
-                    line=edisgo_object.topology.lines_df.loc[line_name])
+                    line=edisgo_object.topology.lines_df.loc[line_name],
+                )
 
             # add generator
             edisgo_object.topology.add_generator(
-                bus=lv_conn_target,
-                **add_generator_data)
+                bus=lv_conn_target, **add_generator_data
+            )
             return
 
     def _add_line_to_equipment_changes(edisgo_object, line):
@@ -772,17 +878,17 @@ def oedb(edisgo_object):
             representative is the series name.
 
         """
-        edisgo_object.results.equipment_changes = \
-            edisgo_object.results.equipment_changes.append(
-                pd.DataFrame(
-                    {'iteration_step': [0],
-                     'change': ['added'],
-                     'equipment': [line.type_info],
-                     'quantity': [1]
-                     },
-                    index=[line.name]
-                )
+        edisgo_object.results.equipment_changes = edisgo_object.results.equipment_changes.append(
+            pd.DataFrame(
+                {
+                    "iteration_step": [0],
+                    "change": ["added"],
+                    "equipment": [line.type_info],
+                    "quantity": [1],
+                },
+                index=[line.name],
             )
+        )
 
     def _del_line_from_equipment_changes(edisgo_object, line_repr):
         """
@@ -801,8 +907,9 @@ def oedb(edisgo_object):
 
         """
         if line_repr in edisgo_object.results.equipment_changes.index:
-            edisgo_object.results.equipment_changes = \
-                edisgo_object.results.equipment_changes.drop(line_repr)
+            edisgo_object.results.equipment_changes = edisgo_object.results.equipment_changes.drop(
+                line_repr
+            )
 
     def _find_nearest_conn_objects(edisgo_object, bus, lines):
         """
@@ -838,70 +945,88 @@ def oedb(edisgo_object):
 
         # threshold which is used to determine if 2 objects are at the same
         # position (see below for details on usage)
-        conn_diff_tolerance = edisgo_object.config['grid_connection'][
-            'conn_diff_tolerance']
+        conn_diff_tolerance = edisgo_object.config["grid_connection"][
+            "conn_diff_tolerance"
+        ]
 
         conn_objects_min_stack = []
 
-        srid = edisgo_object.topology.grid_district['srid']
+        srid = edisgo_object.topology.grid_district["srid"]
         bus_shp = transform(proj2equidistant(srid), Point(bus.x, bus.y))
 
         for line in lines:
 
             line_bus0 = edisgo_object.topology.buses_df.loc[
-                edisgo_object.topology.lines_df.loc[line, 'bus0']]
+                edisgo_object.topology.lines_df.loc[line, "bus0"]
+            ]
             line_bus1 = edisgo_object.topology.buses_df.loc[
-                edisgo_object.topology.lines_df.loc[line, 'bus1']]
+                edisgo_object.topology.lines_df.loc[line, "bus1"]
+            ]
 
             # create shapely objects for 2 buses and line between them,
             # transform to equidistant CRS
-            line_bus0_shp = transform(proj2equidistant(srid),
-                                      Point(line_bus0.x, line_bus0.y))
-            line_bus1_shp = transform(proj2equidistant(srid),
-                                      Point(line_bus1.x, line_bus1.y))
+            line_bus0_shp = transform(
+                proj2equidistant(srid), Point(line_bus0.x, line_bus0.y)
+            )
+            line_bus1_shp = transform(
+                proj2equidistant(srid), Point(line_bus1.x, line_bus1.y)
+            )
             line_shp = LineString([line_bus0_shp, line_bus1_shp])
 
             # create dict with line & 2 adjacent buses and their shapely objects
             # and distances
-            conn_objects = {'s1': {'repr': line_bus0.name,
-                                   'shp': line_bus0_shp,
-                                   'dist': bus_shp.distance(line_bus0_shp) *
-                                           0.999},
-                            's2': {'repr': line_bus1.name,
-                                   'shp': line_bus1_shp,
-                                   'dist': bus_shp.distance(line_bus1_shp) *
-                                           0.999},
-                            'b': {'repr': line,
-                                  'shp': line_shp,
-                                  'dist': bus_shp.distance(line_shp)}}
+            conn_objects = {
+                "s1": {
+                    "repr": line_bus0.name,
+                    "shp": line_bus0_shp,
+                    "dist": bus_shp.distance(line_bus0_shp) * 0.999,
+                },
+                "s2": {
+                    "repr": line_bus1.name,
+                    "shp": line_bus1_shp,
+                    "dist": bus_shp.distance(line_bus1_shp) * 0.999,
+                },
+                "b": {
+                    "repr": line,
+                    "shp": line_shp,
+                    "dist": bus_shp.distance(line_shp),
+                },
+            }
 
             # remove line from the dict of possible conn. objects if it is too
             # close to the bus (necessary to assure that connection target is
             # reproducible)
-            if (abs(conn_objects['s1']['dist'] - conn_objects['b']['dist']) <
-                    conn_diff_tolerance or
-                    abs(conn_objects['s2']['dist'] - conn_objects['b'][
-                        'dist']) <
-                    conn_diff_tolerance):
-                del conn_objects['b']
+            if (
+                abs(conn_objects["s1"]["dist"] - conn_objects["b"]["dist"])
+                < conn_diff_tolerance
+                or abs(conn_objects["s2"]["dist"] - conn_objects["b"]["dist"])
+                < conn_diff_tolerance
+            ):
+                del conn_objects["b"]
 
             # remove MV station as possible connection point
-            if conn_objects['s1']['repr'] == \
-                    edisgo_object.topology.mv_grid.station.index[0]:
-                del conn_objects['s1']
-            elif conn_objects['s2']['repr'] == \
-                    edisgo_object.topology.mv_grid.station.index[0]:
-                del conn_objects['s2']
+            if (
+                conn_objects["s1"]["repr"]
+                == edisgo_object.topology.mv_grid.station.index[0]
+            ):
+                del conn_objects["s1"]
+            elif (
+                conn_objects["s2"]["repr"]
+                == edisgo_object.topology.mv_grid.station.index[0]
+            ):
+                del conn_objects["s2"]
 
             # find nearest connection point in conn_objects
-            conn_objects_min = min(conn_objects.values(),
-                                   key=lambda v: v['dist'])
+            conn_objects_min = min(
+                conn_objects.values(), key=lambda v: v["dist"]
+            )
 
             conn_objects_min_stack.append(conn_objects_min)
 
         # sort all objects by distance from node
-        conn_objects_min_stack = [_ for _ in sorted(conn_objects_min_stack,
-                                                    key=lambda x: x['dist'])]
+        conn_objects_min_stack = [
+            _ for _ in sorted(conn_objects_min_stack, key=lambda x: x["dist"])
+        ]
 
         return conn_objects_min_stack
 
@@ -937,96 +1062,111 @@ def oedb(edisgo_object):
         """
 
         # get standard equipment
-        std_line_type = edisgo_object.topology.equipment_data['mv_cables'].loc[
-            edisgo_object.config['grid_expansion_standard_equipment'][
-                'mv_line']]
-        std_line_kind = 'cable'
+        std_line_type = edisgo_object.topology.equipment_data["mv_cables"].loc[
+            edisgo_object.config["grid_expansion_standard_equipment"][
+                "mv_line"
+            ]
+        ]
+        std_line_kind = "cable"
 
-        srid = edisgo_object.topology.grid_district['srid']
+        srid = edisgo_object.topology.grid_district["srid"]
         bus_shp = transform(proj2equidistant(srid), Point(bus.x, bus.y))
 
         # MV line is nearest connection point => split old line into 2 segments
         # (delete old line and create 2 new ones)
-        if isinstance(target_obj['shp'], LineString):
+        if isinstance(target_obj["shp"], LineString):
 
-            line_data = edisgo_object.topology.lines_df.loc[target_obj['repr'],
-                        :]
+            line_data = edisgo_object.topology.lines_df.loc[
+                target_obj["repr"], :
+            ]
 
             # find nearest point on MV line
-            conn_point_shp = target_obj['shp'].interpolate(
-                target_obj['shp'].project(bus_shp))
-            conn_point_shp = transform(proj2equidistant_reverse(srid),
-                                       conn_point_shp)
+            conn_point_shp = target_obj["shp"].interpolate(
+                target_obj["shp"].project(bus_shp)
+            )
+            conn_point_shp = transform(
+                proj2equidistant_reverse(srid), conn_point_shp
+            )
 
             # create new branch tee bus
-            branch_tee_repr = 'BranchTee_{}'.format(target_obj['repr'])
+            branch_tee_repr = "BranchTee_{}".format(target_obj["repr"])
             edisgo_object.topology.add_bus(
                 bus_name=branch_tee_repr,
                 v_nom=edisgo_object.topology.mv_grid.nominal_voltage,
                 x=conn_point_shp.x,
-                y=conn_point_shp.y)
+                y=conn_point_shp.y,
+            )
 
             # add new line between newly created branch tee and line's bus0
             line_length = calc_geo_dist_vincenty(
                 edisgo_object=edisgo_object,
                 bus_source=line_data.bus0,
-                bus_target=branch_tee_repr)
+                bus_target=branch_tee_repr,
+            )
 
             line_name_bus0 = edisgo_object.topology.add_line(
                 bus0=branch_tee_repr,
                 bus1=line_data.bus0,
                 length=line_length,
                 kind=line_data.kind,
-                type_info=line_data.type_info)
+                type_info=line_data.type_info,
+            )
 
             # add line to equipment changes
             # ToDo @Anya?
             _add_line_to_equipment_changes(
                 edisgo_object=edisgo_object,
-                line=edisgo_object.topology.lines_df.loc[line_name_bus0, :])
+                line=edisgo_object.topology.lines_df.loc[line_name_bus0, :],
+            )
 
             # add new line between newly created branch tee and line's bus0
             line_length = calc_geo_dist_vincenty(
                 edisgo_object=edisgo_object,
                 bus_source=line_data.bus1,
-                bus_target=branch_tee_repr)
+                bus_target=branch_tee_repr,
+            )
 
             line_name_bus1 = edisgo_object.topology.add_line(
                 bus0=branch_tee_repr,
                 bus1=line_data.bus1,
                 length=line_length,
                 kind=line_data.kind,
-                type_info=line_data.type_info)
+                type_info=line_data.type_info,
+            )
 
             # add line to equipment changes
             _add_line_to_equipment_changes(
                 edisgo_object=edisgo_object,
-                line=edisgo_object.topology.lines_df.loc[line_name_bus1, :])
+                line=edisgo_object.topology.lines_df.loc[line_name_bus1, :],
+            )
 
             # add new line for new bus
             line_length = calc_geo_dist_vincenty(
                 edisgo_object=edisgo_object,
                 bus_source=bus.name,
-                bus_target=branch_tee_repr)
+                bus_target=branch_tee_repr,
+            )
 
             new_line_name = edisgo_object.topology.add_line(
                 bus0=branch_tee_repr,
                 bus1=bus.name,
                 length=line_length,
                 kind=std_line_kind,
-                type_info=std_line_type.name)
+                type_info=std_line_type.name,
+            )
 
             # add line to equipment changes
             _add_line_to_equipment_changes(
                 edisgo_object=edisgo_object,
-                line=edisgo_object.topology.lines_df.loc[new_line_name, :])
+                line=edisgo_object.topology.lines_df.loc[new_line_name, :],
+            )
 
             # remove old line from topology and equipment changes
             edisgo_object.topology.remove_line(line_data.name)
 
             _del_line_from_equipment_changes(
-                edisgo_object=edisgo_object,
-                line_repr=line_data.name)
+                edisgo_object=edisgo_object, line_repr=line_data.name
+            )
 
             return branch_tee_repr
 
@@ -1037,21 +1177,24 @@ def oedb(edisgo_object):
             line_length = calc_geo_dist_vincenty(
                 edisgo_object=edisgo_object,
                 bus_source=bus.name,
-                bus_target=target_obj['repr'])
+                bus_target=target_obj["repr"],
+            )
 
             new_line_name = edisgo_object.topology.add_line(
-                bus0=target_obj['repr'],
+                bus0=target_obj["repr"],
                 bus1=bus.name,
                 length=line_length,
                 kind=std_line_kind,
-                type_info=std_line_type.name)
+                type_info=std_line_type.name,
+            )
 
             # add line to equipment changes
             _add_line_to_equipment_changes(
                 edisgo_object=edisgo_object,
-                line=edisgo_object.topology.lines_df.loc[new_line_name, :])
+                line=edisgo_object.topology.lines_df.loc[new_line_name, :],
+            )
 
-            return target_obj['repr']
+            return target_obj["repr"]
 
     def _validate_generation():
         """
@@ -1065,26 +1208,34 @@ def oedb(edisgo_object):
         # set capacity difference threshold
         cap_diff_threshold = 10 ** -1
 
-        capacity_imported = generators_res_mv['electrical_capacity'].sum() + \
-                            generators_res_lv['electrical_capacity'].sum() #+ \
-                            #generators_conv_mv['capacity'].sum()
+        capacity_imported = (
+            generators_res_mv["electrical_capacity"].sum()
+            + generators_res_lv["electrical_capacity"].sum()
+        )  # + \
+        # generators_conv_mv['capacity'].sum()
 
         capacity_grid = edisgo_object.topology.generators_df.p_nom.sum()
 
-        logger.debug('Cumulative generator capacity (updated): {} MW'
-                     .format(round(capacity_imported, 1)))
+        logger.debug(
+            "Cumulative generator capacity (updated): {} MW".format(
+                round(capacity_imported, 1)
+            )
+        )
 
         if abs(capacity_imported - capacity_grid) > cap_diff_threshold:
             raise ValueError(
-                'Cumulative capacity of imported generators ({} MW) '
-                'differ from cumulative capacity of generators '
-                'in updated grid ({} MW) by {} MW.'
-                    .format(round(capacity_imported, 1),
-                            round(capacity_grid, 1),
-                            round(capacity_imported - capacity_grid, 1)))
+                "Cumulative capacity of imported generators ({} MW) "
+                "differ from cumulative capacity of generators "
+                "in updated grid ({} MW) by {} MW.".format(
+                    round(capacity_imported, 1),
+                    round(capacity_grid, 1),
+                    round(capacity_imported - capacity_grid, 1),
+                )
+            )
         else:
             logger.debug(
-                'Cumulative capacity of imported generators validated.')
+                "Cumulative capacity of imported generators validated."
+            )
 
     def _validate_sample_geno_location():
         """
@@ -1093,93 +1244,110 @@ def oedb(edisgo_object):
         The check is performed for two randomly sampled generators.
 
         """
-        if all(generators_res_lv['geom'].notnull()) \
-                and all(generators_res_mv['geom'].notnull()) \
-                and not generators_res_lv['geom'].empty \
-                and not generators_res_mv['geom'].empty:
+        if (
+            all(generators_res_lv["geom"].notnull())
+            and all(generators_res_mv["geom"].notnull())
+            and not generators_res_lv["geom"].empty
+            and not generators_res_mv["geom"].empty
+        ):
 
             # get geom of 1 random MV and 1 random LV generator and transform
             sample_mv_geno_geom_shp = transform(
                 proj2equidistant(srid),
                 wkt_loads(
-                    generators_res_mv['geom'].dropna().sample(n=1).values[0]))
+                    generators_res_mv["geom"].dropna().sample(n=1).values[0]
+                ),
+            )
             sample_lv_geno_geom_shp = transform(
                 proj2equidistant(srid),
                 wkt_loads(
-                    generators_res_lv['geom'].dropna().sample(n=1).values[0]))
+                    generators_res_lv["geom"].dropna().sample(n=1).values[0]
+                ),
+            )
 
             # get geom of MV grid district
             mvgd_geom_shp = transform(
                 proj2equidistant(srid),
-                edisgo_object.topology.grid_district['geom'])
+                edisgo_object.topology.grid_district["geom"],
+            )
 
             # check if MVGD contains geno
-            if not (mvgd_geom_shp.contains(sample_mv_geno_geom_shp) and
-                    mvgd_geom_shp.contains(sample_lv_geno_geom_shp)):
+            if not (
+                mvgd_geom_shp.contains(sample_mv_geno_geom_shp)
+                and mvgd_geom_shp.contains(sample_lv_geno_geom_shp)
+            ):
                 raise ValueError(
-                    'At least one imported generator is not located in the MV '
-                    'grid area. Check compatibility of grid and generator '
-                    'datasets.')
+                    "At least one imported generator is not located in the MV "
+                    "grid area. Check compatibility of grid and generator "
+                    "datasets."
+                )
 
-    logging.warning('Right now only solar and wind generators can be '
-                    'imported from the oedb.')
+    logging.warning(
+        "Right now only solar and wind generators can be "
+        "imported from the oedb."
+    )
 
-    oedb_data_source = edisgo_object.config['data_source']['oedb_data_source']
+    oedb_data_source = edisgo_object.config["data_source"]["oedb_data_source"]
     scenario = edisgo_object.topology.generator_scenario
-    srid = edisgo_object.topology.grid_district['srid']
+    srid = edisgo_object.topology.grid_district["srid"]
 
     # load ORM names
-    orm_conv_generators_name = \
-        edisgo_object.config[oedb_data_source]['conv_generators_prefix'] + \
-        scenario + \
-        edisgo_object.config[oedb_data_source]['conv_generators_suffix']
-    orm_re_generators_name = \
-        edisgo_object.config[oedb_data_source]['re_generators_prefix'] + \
-        scenario + \
-        edisgo_object.config[oedb_data_source]['re_generators_suffix']
+    orm_conv_generators_name = (
+        edisgo_object.config[oedb_data_source]["conv_generators_prefix"]
+        + scenario
+        + edisgo_object.config[oedb_data_source]["conv_generators_suffix"]
+    )
+    orm_re_generators_name = (
+        edisgo_object.config[oedb_data_source]["re_generators_prefix"]
+        + scenario
+        + edisgo_object.config[oedb_data_source]["re_generators_suffix"]
+    )
 
-    if oedb_data_source == 'model_draft':
+    if oedb_data_source == "model_draft":
 
         # import ORMs
         orm_conv_generators = model_draft.__getattribute__(
-            orm_conv_generators_name)
+            orm_conv_generators_name
+        )
         orm_re_generators = model_draft.__getattribute__(
-            orm_re_generators_name)
+            orm_re_generators_name
+        )
 
         # set dummy version condition (select all generators)
         orm_conv_generators_version = 1 == 1
         orm_re_generators_version = 1 == 1
 
-    elif oedb_data_source == 'versioned':
+    elif oedb_data_source == "versioned":
 
-        data_version = edisgo_object.config['versioned']['version']
+        data_version = edisgo_object.config["versioned"]["version"]
 
         # import ORMs
-        orm_conv_generators = supply.__getattribute__(
-            orm_conv_generators_name)
-        orm_re_generators = supply.__getattribute__(
-            orm_re_generators_name)
+        orm_conv_generators = supply.__getattribute__(orm_conv_generators_name)
+        orm_re_generators = supply.__getattribute__(orm_re_generators_name)
 
         # set version condition
-        orm_conv_generators_version = orm_conv_generators.columns.version == \
-                                      data_version
-        orm_re_generators_version = orm_re_generators.columns.version == \
-                                    data_version
+        orm_conv_generators_version = (
+            orm_conv_generators.columns.version == data_version
+        )
+        orm_re_generators_version = (
+            orm_re_generators.columns.version == data_version
+        )
 
     # get conventional and renewable generators
     with session_scope() as session:
         # generators_conv_mv = _import_conv_generators(session)
-        generators_res_mv, generators_res_lv = _import_res_generators(
-            session)
+        generators_res_mv, generators_res_lv = _import_res_generators(session)
 
     # generators_mv = generators_conv_mv.append(generators_res_mv)
 
     # validate that imported generators are located inside the grid district
     _validate_sample_geno_location()
 
-    _update_grids(edisgo_object=edisgo_object,
-                  #generators_mv=generators_mv,
-                  imported_generators_mv=generators_res_mv,
-                  imported_generators_lv=generators_res_lv)
+    _update_grids(
+        edisgo_object=edisgo_object,
+        # generators_mv=generators_mv,
+        imported_generators_mv=generators_res_mv,
+        imported_generators_lv=generators_res_lv,
+    )
 
     _validate_generation()

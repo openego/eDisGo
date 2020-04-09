@@ -4,10 +4,10 @@ import logging
 from math import acos, tan
 from abc import ABC, abstractmethod
 
-if 'READTHEDOCS' not in os.environ:
+if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
 
-logger = logging.getLogger('edisgo')
+logger = logging.getLogger("edisgo")
 
 
 class BasicComponent(ABC):
@@ -17,8 +17,8 @@ class BasicComponent(ABC):
     """
 
     def __init__(self, **kwargs):
-        self._id = kwargs.get('id', None)
-        self._edisgo_obj = kwargs.get('edisgo_obj')
+        self._id = kwargs.get("id", None)
+        self._edisgo_obj = kwargs.get("edisgo_obj")
 
     @property
     def id(self):
@@ -58,7 +58,7 @@ class BasicComponent(ABC):
             voltage and 'mv' if component is connected to the medium voltage.
 
         """
-        return 'lv' if self.grid.nominal_voltage < 1 else 'mv'
+        return "lv" if self.grid.nominal_voltage < 1 else "mv"
 
     @property
     @abstractmethod
@@ -74,7 +74,7 @@ class BasicComponent(ABC):
         """
 
     def __repr__(self):
-        return '_'.join([self.__class__.__name__, str(self._id)])
+        return "_".join([self.__class__.__name__, str(self._id)])
 
 
 class Component(BasicComponent):
@@ -110,7 +110,7 @@ class Component(BasicComponent):
             Bus component is connected to.
 
         """
-        return self._network_component_df.at[self.id, 'bus']
+        return self._network_component_df.at[self.id, "bus"]
 
     @bus.setter
     def bus(self, bus):
@@ -131,13 +131,15 @@ class Component(BasicComponent):
 
         """
         grid = self.edisgo_obj.topology.buses_df.loc[
-            self._network_component_df.loc[self.id, 'bus'],
-            ['mv_grid_id', 'lv_grid_id']]
+            self._network_component_df.loc[self.id, "bus"],
+            ["mv_grid_id", "lv_grid_id"],
+        ]
         if math.isnan(grid.lv_grid_id):
             return self.edisgo_obj.topology.mv_grid
         else:
-            return self.edisgo_obj.topology._grids['LVGrid_{}'.format(
-                int(grid.lv_grid_id))]
+            return self.edisgo_obj.topology._grids[
+                "LVGrid_{}".format(int(grid.lv_grid_id))
+            ]
 
     @property
     def geom(self):
@@ -150,17 +152,18 @@ class Component(BasicComponent):
 
         """
         [x, y] = self.edisgo_obj.topology.buses_df.loc[
-            self._network_component_df.loc[self.id, 'bus'], ['x', 'y']]
+            self._network_component_df.loc[self.id, "bus"], ["x", "y"]
+        ]
         if math.isnan(x) or math.isnan(y):
             return None
         else:
             return Point(x, y)
 
     def __repr__(self):
-        return '_'.join([self.__class__.__name__, str(self._id)])
+        return "_".join([self.__class__.__name__, str(self._id)])
 
 
-#ToDo implement if needed
+# ToDo implement if needed
 # class Station(Component):
 #     """Station object (medium or low voltage)
 #
@@ -267,12 +270,12 @@ class Load(Component):
             Peak load in MW.
 
         """
-        return self.edisgo_obj.topology.loads_df.at[self.id, 'peak_load']
+        return self.edisgo_obj.topology.loads_df.at[self.id, "peak_load"]
 
     @peak_load.setter
     def peak_load(self, peak_load):
         # ToDo: Maybe perform type check before setting it.
-        self.edisgo_obj.topology._loads_df.at[self.id, 'peak_load'] = peak_load
+        self.edisgo_obj.topology._loads_df.at[self.id, "peak_load"] = peak_load
 
     @property
     def annual_consumption(self):
@@ -290,12 +293,15 @@ class Load(Component):
             Annual consumption of load in MWh.
 
         """
-        return self.edisgo_obj.topology.loads_df.at[self.id, 'annual_consumption']
+        return self.edisgo_obj.topology.loads_df.at[
+            self.id, "annual_consumption"
+        ]
 
     @annual_consumption.setter
     def annual_consumption(self, annual_consumption):
         self.edisgo_obj.topology._loads_df.at[
-            self.id, 'annual_consumption'] = annual_consumption
+            self.id, "annual_consumption"
+        ] = annual_consumption
 
     @property
     def sector(self):
@@ -318,12 +324,12 @@ class Load(Component):
         #ToDo: Maybe return 'not specified' in case sector is None?
 
         """
-        return self.edisgo_obj.topology.loads_df.at[self.id, 'sector']
+        return self.edisgo_obj.topology.loads_df.at[self.id, "sector"]
 
     @sector.setter
     def sector(self, sector):
         # ToDo: Maybe perform type check before setting it.
-        self.edisgo_obj.topology._loads_df.at[self.id, 'sector'] = sector
+        self.edisgo_obj.topology._loads_df.at[self.id, "sector"] = sector
 
     @property
     def active_power_timeseries(self):
@@ -354,7 +360,7 @@ class Load(Component):
     def _set_bus(self, bus):
         # check if bus is valid
         if bus in self.edisgo_obj.topology.buses_df.index:
-            self.edisgo_obj.topology._loads_df.at[self.id, 'bus'] = bus
+            self.edisgo_obj.topology._loads_df.at[self.id, "bus"] = bus
             # reset topology
             self._grid = None
         else:
@@ -402,13 +408,15 @@ class Generator(Component):
             Nominal power of generator in MW.
 
         """
-        #ToDo: Should this change the time series as well? (same for loads, and type setter...)
-        return self.edisgo_obj.topology.generators_df.at[self.id, 'p_nom']
+        # ToDo: Should this change the time series as well? (same for loads, and type setter...)
+        return self.edisgo_obj.topology.generators_df.at[self.id, "p_nom"]
 
     @nominal_power.setter
     def nominal_power(self, nominal_power):
         # ToDo: Maybe perform type check before setting it.
-        self.edisgo_obj.topology._generators_df.at[self.id, 'p_nom'] = nominal_power
+        self.edisgo_obj.topology._generators_df.at[
+            self.id, "p_nom"
+        ] = nominal_power
 
     @property
     def type(self):
@@ -427,12 +435,12 @@ class Generator(Component):
         #ToDo: Maybe return 'not specified' in case type is None?
 
         """
-        return self.edisgo_obj.topology.generators_df.at[self.id, 'type']
+        return self.edisgo_obj.topology.generators_df.at[self.id, "type"]
 
     @type.setter
     def type(self, type):
-        #ToDo: Maybe perform type check before setting it.
-        self.edisgo_obj.topology._generators_df.at[self.id, 'type'] = type
+        # ToDo: Maybe perform type check before setting it.
+        self.edisgo_obj.topology._generators_df.at[self.id, "type"] = type
 
     @property
     def subtype(self):
@@ -451,11 +459,13 @@ class Generator(Component):
         #ToDo: Maybe return 'not specified' in case subtype is None?
 
         """
-        return self.edisgo_obj.topology.generators_df.at[self.id, 'subtype']
+        return self.edisgo_obj.topology.generators_df.at[self.id, "subtype"]
 
     @subtype.setter
     def subtype(self, subtype):
-        self.edisgo_obj.topology._generators_df.at[self.id, 'subtype'] = subtype
+        self.edisgo_obj.topology._generators_df.at[
+            self.id, "subtype"
+        ] = subtype
 
     @property
     def active_power_timeseries(self):
@@ -469,7 +479,8 @@ class Generator(Component):
 
         """
         return self.edisgo_obj.timeseries.generators_active_power.loc[
-               :, self.id]
+            :, self.id
+        ]
 
     @property
     def reactive_power_timeseries(self):
@@ -483,7 +494,8 @@ class Generator(Component):
 
         """
         return self.edisgo_obj.timeseries.generators_reactive_power.loc[
-               :, self.id]
+            :, self.id
+        ]
 
     @property
     def weather_cell_id(self):
@@ -504,17 +516,20 @@ class Generator(Component):
             Weather cell ID of generator.
 
         """
-        return self.edisgo_obj.topology.generators_df.at[self.id, 'weather_cell_id']
+        return self.edisgo_obj.topology.generators_df.at[
+            self.id, "weather_cell_id"
+        ]
 
     @weather_cell_id.setter
     def weather_cell_id(self, weather_cell_id):
         self.edisgo_obj.topology._generators_df.at[
-            self.id, 'weather_cell_id'] = weather_cell_id
+            self.id, "weather_cell_id"
+        ] = weather_cell_id
 
     def _set_bus(self, bus):
         # check if bus is valid
         if bus in self.edisgo_obj.topology.buses_df.index:
-            self.edisgo_obj.topology._generators_df.at[self.id, 'bus'] = bus
+            self.edisgo_obj.topology._generators_df.at[self.id, "bus"] = bus
             # reset topology
             self._grid = None
         else:
@@ -539,18 +554,18 @@ class Storage(Component):
 
         raise NotImplementedError
 
-        self._timeseries = kwargs.get('timeseries', None)
-        self._nominal_power = kwargs.get('nominal_power', None)
-        self._power_factor = kwargs.get('power_factor', None)
-        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
+        self._timeseries = kwargs.get("timeseries", None)
+        self._nominal_power = kwargs.get("nominal_power", None)
+        self._power_factor = kwargs.get("power_factor", None)
+        self._reactive_power_mode = kwargs.get("reactive_power_mode", None)
 
-        self._max_hours = kwargs.get('max_hours', None)
-        self._soc_initial = kwargs.get('soc_initial', None)
-        self._efficiency_in = kwargs.get('efficiency_in', None)
-        self._efficiency_out = kwargs.get('efficiency_out', None)
-        self._standing_loss = kwargs.get('standing_loss', None)
-        self._operation = kwargs.get('operation', None)
-        self._reactive_power_mode = kwargs.get('reactive_power_mode', None)
+        self._max_hours = kwargs.get("max_hours", None)
+        self._soc_initial = kwargs.get("soc_initial", None)
+        self._efficiency_in = kwargs.get("efficiency_in", None)
+        self._efficiency_out = kwargs.get("efficiency_out", None)
+        self._standing_loss = kwargs.get("standing_loss", None)
+        self._operation = kwargs.get("operation", None)
+        self._reactive_power_mode = kwargs.get("reactive_power_mode", None)
         self._q_sign = None
 
     @property
@@ -591,14 +606,17 @@ class Storage(Component):
         """
         # check if time series for reactive power is given, otherwise
         # calculate it
-        if 'q' in self._timeseries.columns:
+        if "q" in self._timeseries.columns:
             return self._timeseries
         else:
-            self._timeseries['q'] = abs(self._timeseries.p) * self.q_sign * \
-                                    tan(acos(self.power_factor))
+            self._timeseries["q"] = (
+                abs(self._timeseries.p)
+                * self.q_sign
+                * tan(acos(self.power_factor))
+            )
             return self._timeseries.loc[
-                   self.grid.edisgo_obj.timeseries.timeindex, :]
-
+                self.grid.edisgo_obj.timeseries.timeindex, :
+            ]
 
     @property
     def nominal_power(self):
@@ -782,13 +800,16 @@ class Storage(Component):
         -------
         :obj: `int` : +1 or -1
         """
-        if self.reactive_power_mode.lower() == 'inductive':
+        if self.reactive_power_mode.lower() == "inductive":
             return -1
-        elif self.reactive_power_mode.lower() == 'capacitive':
+        elif self.reactive_power_mode.lower() == "capacitive":
             return 1
         else:
-            raise ValueError("Unknown value {} in reactive_power_mode".format(
-                self.reactive_power_mode))
+            raise ValueError(
+                "Unknown value {} in reactive_power_mode".format(
+                    self.reactive_power_mode
+                )
+            )
 
     def __repr__(self):
         return str(self._id)
@@ -811,7 +832,7 @@ class Switch(BasicComponent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self._state = kwargs.get('state', None)
+        self._state = kwargs.get("state", None)
 
     @property
     def _network_component_df(self):
@@ -847,11 +868,11 @@ class Switch(BasicComponent):
             Type of switch.
 
         """
-        return self.edisgo_obj.topology.switches_df.at[self.id, 'type_info']
+        return self.edisgo_obj.topology.switches_df.at[self.id, "type_info"]
 
     @type.setter
     def type(self, type):
-        self.edisgo_obj.topology._switches_df.at[self.id, 'type_info'] = type
+        self.edisgo_obj.topology._switches_df.at[self.id, "type_info"] = type
 
     @property
     def bus_open(self):
@@ -868,7 +889,7 @@ class Switch(BasicComponent):
             Bus in 'open' state.
 
         """
-        return self.edisgo_obj.topology.switches_df.at[self.id, 'bus_open']
+        return self.edisgo_obj.topology.switches_df.at[self.id, "bus_open"]
 
     @property
     def bus_closed(self):
@@ -885,7 +906,7 @@ class Switch(BasicComponent):
             Bus in 'closed' state.
 
         """
-        return self.edisgo_obj.topology.switches_df.at[self.id, 'bus_closed']
+        return self.edisgo_obj.topology.switches_df.at[self.id, "bus_closed"]
 
     @property
     def state(self):
@@ -902,12 +923,13 @@ class Switch(BasicComponent):
             col_closed = self._get_bus_column(self.bus_closed)
             col_open = self._get_bus_column(self.bus_open)
             if col_closed is None and col_open is not None:
-                self._state = 'open'
+                self._state = "open"
             elif col_closed is not None and col_open is None:
-                self._state = 'closed'
+                self._state = "closed"
             else:
                 raise AttributeError(
-                    "State of switch could not be determined.")
+                    "State of switch could not be determined."
+                )
         return self._state
 
     @property
@@ -921,7 +943,7 @@ class Switch(BasicComponent):
             Branch the switch is represented by.
 
         """
-        return self.edisgo_obj.topology.switches_df.at[self.id, 'branch']
+        return self.edisgo_obj.topology.switches_df.at[self.id, "branch"]
 
     @property
     def grid(self):
@@ -935,59 +957,70 @@ class Switch(BasicComponent):
 
         """
         grid = self.edisgo_obj.topology.buses_df.loc[
-            self.bus_closed, ['mv_grid_id', 'lv_grid_id']]
+            self.bus_closed, ["mv_grid_id", "lv_grid_id"]
+        ]
         if math.isnan(grid.lv_grid_id):
             return self.edisgo_obj.topology.mv_grid
         else:
-            return self.edisgo_obj.topology._grids['LVGrid_{}'.format(int(grid.lv_grid_id))]
+            return self.edisgo_obj.topology._grids[
+                "LVGrid_{}".format(int(grid.lv_grid_id))
+            ]
 
     def open(self):
         """
         Open switch.
 
         """
-        if self.state != 'open':
-            self._state = 'open'
+        if self.state != "open":
+            self._state = "open"
             col = self._get_bus_column(self.bus_closed)
             if col is not None:
-                self.edisgo_obj.topology.lines_df.at[self.branch, col] = self.bus_open
+                self.edisgo_obj.topology.lines_df.at[
+                    self.branch, col
+                ] = self.bus_open
             else:
                 raise AttributeError(
                     "Could not open switch {}. Specified branch {} of switch "
                     "has no bus {}. Please check the switch.".format(
-                        self.id, self.branch, self.bus_closed))
+                        self.id, self.branch, self.bus_closed
+                    )
+                )
 
     def close(self):
         """
         Close switch.
 
         """
-        if self.state != 'closed':
-            self._state = 'closed'
+        if self.state != "closed":
+            self._state = "closed"
             col = self._get_bus_column(self.bus_open)
             if col is not None:
-                self.edisgo_obj.topology.lines_df.at[self.branch, col] = self.bus_closed
+                self.edisgo_obj.topology.lines_df.at[
+                    self.branch, col
+                ] = self.bus_closed
             else:
                 raise AttributeError(
                     "Could not close switch {}. Specified branch {} of switch "
                     "has no bus {}. Please check the switch.".format(
-                        self.id, self.branch, self.bus_closed))
+                        self.id, self.branch, self.bus_closed
+                    )
+                )
 
     def _get_bus_column(self, bus):
         """
         Returns column name of lines_df given bus is in.
 
         """
-        if bus == self.edisgo_obj.topology.lines_df.at[self.branch, 'bus0']:
-            col = 'bus0'
-        elif bus == self.edisgo_obj.topology.lines_df.at[self.branch, 'bus1']:
-            col = 'bus1'
+        if bus == self.edisgo_obj.topology.lines_df.at[self.branch, "bus0"]:
+            col = "bus0"
+        elif bus == self.edisgo_obj.topology.lines_df.at[self.branch, "bus1"]:
+            col = "bus1"
         else:
             return None
         return col
 
 
-#ToDo implement if needed
+# ToDo implement if needed
 # class MVStation(Station):
 #     """MV Station object"""
 #
@@ -1030,7 +1063,7 @@ class Switch(BasicComponent):
 #         else:
 #             return repr_base
 
-#ToDo Implement if necessary
+# ToDo Implement if necessary
 # class Line(Component):
 #     """
 #     Line object

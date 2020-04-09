@@ -15,7 +15,7 @@ from edisgo.flex_opt.curtailment import CurtailmentControl
 from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.opf.results.opf_result_class import OPFResults
 
-logger = logging.getLogger('edisgo')
+logger = logging.getLogger("edisgo")
 
 
 class EDisGo:
@@ -209,11 +209,11 @@ class EDisGo:
     def __init__(self, **kwargs):
 
         # load configuration and equipment data
-        self._config = Config(config_path=kwargs.get('config_path', None))
+        self._config = Config(config_path=kwargs.get("config_path", None))
 
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
-        self.import_ding0_grid(path=kwargs.get('ding0_grid', None))
+        self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
 
         # set up results and time series container
         self.results = Results(self)
@@ -223,27 +223,33 @@ class EDisGo:
         self.opf_results = OPFResults()
 
         # import new generators
-        if kwargs.get('generator_scenario', None) is not None:
-            self.import_generators(kwargs.get('generator_scenario'))
-            
+        if kwargs.get("generator_scenario", None) is not None:
+            self.import_generators(kwargs.get("generator_scenario"))
+
         # set up time series for feed-in and load
         # worst-case time series
-        if kwargs.get('worst_case_analysis', None):
+        if kwargs.get("worst_case_analysis", None):
             timeseries.get_component_timeseries(
-                edisgo_obj=self, mode=kwargs.get('worst_case_analysis', None))
+                edisgo_obj=self, mode=kwargs.get("worst_case_analysis", None)
+            )
         else:
             timeseries.get_component_timeseries(
                 edisgo_obj=self,
                 timeseries_generation_fluctuating=kwargs.get(
-                    'timeseries_generation_fluctuating', None),
+                    "timeseries_generation_fluctuating", None
+                ),
                 timeseries_generation_dispatchable=kwargs.get(
-                    'timeseries_generation_dispatchable', None),
+                    "timeseries_generation_dispatchable", None
+                ),
                 timeseries_generation_reactive_power=kwargs.get(
-                    'timeseries_generation_reactive_power', None),
-                timeseries_load=kwargs.get('timeseries_load', None),
+                    "timeseries_generation_reactive_power", None
+                ),
+                timeseries_load=kwargs.get("timeseries_load", None),
                 timeseries_load_reactive_power=kwargs.get(
-                    'timeseries_load_reactive_power', None),
-                timeindex=kwargs.get('timeindex', None))
+                    "timeseries_load_reactive_power", None
+                ),
+                timeindex=kwargs.get("timeindex", None),
+            )
 
     @property
     def config(self):
@@ -332,9 +338,9 @@ class EDisGo:
             :meth:`~.edisgo.EDisGo.analyze` for more information.
 
         """
-        timesteps = kwargs.get('timesteps', None)
-        kwargs.pop('timesteps', None)
-        mode = kwargs.get('mode', None)
+        timesteps = kwargs.get("timesteps", None)
+        kwargs.pop("timesteps", None)
+        mode = kwargs.get("mode", None)
 
         if timesteps is None:
             timesteps = self.timeseries.timeindex
@@ -344,25 +350,33 @@ class EDisGo:
         # export grid
         if not mode:
             return pypsa_io.to_pypsa(self, timesteps, **kwargs)
-        elif 'mv' in mode:
-            return pypsa_io.to_pypsa(self.topology.mv_grid, timesteps,
-                                     **kwargs)
-        elif mode == 'lv':
-            lv_grid_name = kwargs.get('lv_grid_name', None)
+        elif "mv" in mode:
+            return pypsa_io.to_pypsa(
+                self.topology.mv_grid, timesteps, **kwargs
+            )
+        elif mode == "lv":
+            lv_grid_name = kwargs.get("lv_grid_name", None)
             if not lv_grid_name:
-                raise ValueError("For exporting lv grids, name of lv_grid has "
-                                 "to be provided.")
+                raise ValueError(
+                    "For exporting lv grids, name of lv_grid has "
+                    "to be provided."
+                )
             # Todo: property grids in Topology?
-            return pypsa_io.to_pypsa(self.topology._grids[lv_grid_name],
-                                     mode=mode, timesteps=timesteps)
+            return pypsa_io.to_pypsa(
+                self.topology._grids[lv_grid_name],
+                mode=mode,
+                timesteps=timesteps,
+            )
         else:
             raise ValueError("The entered mode is not a valid option.")
 
     def to_graph(self):
 
-        graph = tools.translate_df_to_graph(self.topology.buses_df,
-                                            self.topology.lines_df,
-                                            self.topology.transformers_df)
+        graph = tools.translate_df_to_graph(
+            self.topology.buses_df,
+            self.topology.lines_df,
+            self.topology.transformers_df,
+        )
 
         return graph
 
@@ -449,15 +463,15 @@ class EDisGo:
         # Todo: check if still needed, if so update to new structure, at this point not needed, maybe later
         # check if all timesteps are in pypsa.snapshots, if not update time
         # series
-        if False in [True if _ in pypsa_network.snapshots else False
-                     for _ in timesteps]:
+        if False in [
+            True if _ in pypsa_network.snapshots else False for _ in timesteps
+        ]:
             pypsa_io.update_pypsa_timeseries(self, timesteps=timesteps)
         # run power flow analysis
         pf_results = pypsa_network.pf(timesteps)
 
-        if all(pf_results['converged']['0'].tolist()):
-            pypsa_io.process_pfa_results(
-                self, pypsa_network, timesteps)
+        if all(pf_results["converged"]["0"].tolist()):
+            pypsa_io.process_pfa_results(self, pypsa_network, timesteps)
         else:
             raise ValueError("Power flow analysis did not converge.")
 
@@ -469,16 +483,17 @@ class EDisGo:
 
         """
         results = reinforce_grid(
-            self, max_while_iterations=kwargs.get(
-                'max_while_iterations', 10),
-            copy_graph=kwargs.get('copy_graph', False),
-            timesteps_pfa=kwargs.get('timesteps_pfa', None),
-            combined_analysis=kwargs.get('combined_analysis', False),
-            mode=kwargs.get('mode', None))
+            self,
+            max_while_iterations=kwargs.get("max_while_iterations", 10),
+            copy_graph=kwargs.get("copy_graph", False),
+            timesteps_pfa=kwargs.get("timesteps_pfa", None),
+            combined_analysis=kwargs.get("combined_analysis", False),
+            mode=kwargs.get("mode", None),
+        )
 
         # add measure to Results object
-        if not kwargs.get('copy_graph', False):
-            self.results.measures = 'grid_expansion'
+        if not kwargs.get("copy_graph", False):
+            self.results.measures = "grid_expansion"
 
         return results
 
@@ -500,7 +515,9 @@ class EDisGo:
             Status of optimization.
 
         """
-        status = run_mp_opf(self, timesteps, storage_series=storage_series, **kwargs)
+        status = run_mp_opf(
+            self, timesteps, storage_series=storage_series, **kwargs
+        )
         return status
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
@@ -520,12 +537,14 @@ class EDisGo:
 
         plots.mv_grid_topology(
             self,
-            node_color='technology' if technologies is True else None,
-            filename=kwargs.get('filename', None),
-            grid_district_geom=kwargs.get('grid_district_geom', True),
-            background_map=kwargs.get('background_map', True),
-            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-            title=kwargs.get('title', ''))
+            node_color="technology" if technologies is True else None,
+            filename=kwargs.get("filename", None),
+            grid_district_geom=kwargs.get("grid_district_geom", True),
+            background_map=kwargs.get("background_map", True),
+            xlim=kwargs.get("xlim", None),
+            ylim=kwargs.get("ylim", None),
+            title=kwargs.get("title", ""),
+        )
 
     def plot_mv_voltages(self, **kwargs):
         """
@@ -536,27 +555,33 @@ class EDisGo:
         """
         try:
             if self.results.pfa_v_mag_pu is None:
-                logging.warning("Voltages `pfa_v_mag_pu` from power flow "
-                                "analysis must be available to plot them.")
+                logging.warning(
+                    "Voltages `pfa_v_mag_pu` from power flow "
+                    "analysis must be available to plot them."
+                )
                 return
         except AttributeError:
-            logging.warning("Results must be available to plot voltages. "
-                            "Please analyze grid first.")
+            logging.warning(
+                "Results must be available to plot voltages. "
+                "Please analyze grid first."
+            )
             return
         except ValueError:
             pass
 
         plots.mv_grid_topology(
             self,
-            timestep=kwargs.get('timestep', None),
-            node_color='voltage',
-            filename=kwargs.get('filename', None),
-            grid_district_geom=kwargs.get('grid_district_geom', True),
-            background_map=kwargs.get('background_map', True),
+            timestep=kwargs.get("timestep", None),
+            node_color="voltage",
+            filename=kwargs.get("filename", None),
+            grid_district_geom=kwargs.get("grid_district_geom", True),
+            background_map=kwargs.get("background_map", True),
             voltage=self.results.pfa_v_mag_pu,
-            limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
-            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-            title=kwargs.get('title', ''))
+            limits_cb_nodes=kwargs.get("limits_cb_nodes", None),
+            xlim=kwargs.get("xlim", None),
+            ylim=kwargs.get("ylim", None),
+            title=kwargs.get("title", ""),
+        )
 
     def plot_mv_line_loading(self, **kwargs):
         """
@@ -568,33 +593,40 @@ class EDisGo:
         """
         try:
             if self.results.i_res is None:
-                logging.warning("Currents `i_res` from power flow analysis "
-                                "must be available to plot line loading.")
+                logging.warning(
+                    "Currents `i_res` from power flow analysis "
+                    "must be available to plot line loading."
+                )
                 return
         except AttributeError:
-            logging.warning("Results must be available to plot line loading. "
-                            "Please analyze grid first.")
+            logging.warning(
+                "Results must be available to plot line loading. "
+                "Please analyze grid first."
+            )
             return
 
         plots.mv_grid_topology(
             self,
-            timestep=kwargs.get('timestep', None),
-            line_color='loading',
-            node_color=kwargs.get('node_color', None),
+            timestep=kwargs.get("timestep", None),
+            line_color="loading",
+            node_color=kwargs.get("node_color", None),
             line_load=self.results.i_res,
-            filename=kwargs.get('filename', None),
-            arrows=kwargs.get('arrows', None),
-            grid_district_geom=kwargs.get('grid_district_geom', True),
-            background_map=kwargs.get('background_map', True),
+            filename=kwargs.get("filename", None),
+            arrows=kwargs.get("arrows", None),
+            grid_district_geom=kwargs.get("grid_district_geom", True),
+            background_map=kwargs.get("background_map", True),
             voltage=self.results.pfa_v_mag_pu,
-            limits_cb_lines=kwargs.get('limits_cb_lines', None),
-            limits_cb_nodes=kwargs.get('limits_cb_nodes', None),
-            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-            lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
-            title=kwargs.get('title', ''),
+            limits_cb_lines=kwargs.get("limits_cb_lines", None),
+            limits_cb_nodes=kwargs.get("limits_cb_nodes", None),
+            xlim=kwargs.get("xlim", None),
+            ylim=kwargs.get("ylim", None),
+            lines_cmap=kwargs.get("lines_cmap", "inferno_r"),
+            title=kwargs.get("title", ""),
             scaling_factor_line_width=kwargs.get(
-                'scaling_factor_line_width', None),
-            curtailment_df=kwargs.get('curtailment_df', None))
+                "scaling_factor_line_width", None
+            ),
+            curtailment_df=kwargs.get("curtailment_df", None),
+        )
 
     def plot_mv_grid_expansion_costs(self, **kwargs):
         """
@@ -605,27 +637,33 @@ class EDisGo:
         """
         try:
             if self.results.grid_expansion_costs is None:
-                logging.warning("Grid expansion cost results needed to plot "
-                                "them. Please do grid reinforcement.")
+                logging.warning(
+                    "Grid expansion cost results needed to plot "
+                    "them. Please do grid reinforcement."
+                )
                 return
         except AttributeError:
-            logging.warning("Results of MV topology needed to  plot topology "
-                            "expansion costs. Please reinforce first.")
+            logging.warning(
+                "Results of MV topology needed to  plot topology "
+                "expansion costs. Please reinforce first."
+            )
             return
 
         plots.mv_grid_topology(
             self,
-            line_color='expansion_costs',
+            line_color="expansion_costs",
             grid_expansion_costs=self.results.grid_expansion_costs,
-            filename=kwargs.get('filename', None),
-            grid_district_geom=kwargs.get('grid_district_geom', True),
-            background_map=kwargs.get('background_map', True),
-            limits_cb_lines=kwargs.get('limits_cb_lines', None),
-            xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-            lines_cmap=kwargs.get('lines_cmap', 'inferno_r'),
-            title=kwargs.get('title', ''),
+            filename=kwargs.get("filename", None),
+            grid_district_geom=kwargs.get("grid_district_geom", True),
+            background_map=kwargs.get("background_map", True),
+            limits_cb_lines=kwargs.get("limits_cb_lines", None),
+            xlim=kwargs.get("xlim", None),
+            ylim=kwargs.get("ylim", None),
+            lines_cmap=kwargs.get("lines_cmap", "inferno_r"),
+            title=kwargs.get("title", ""),
             scaling_factor_line_width=kwargs.get(
-                'scaling_factor_line_width', None)
+                "scaling_factor_line_width", None
+            ),
         )
 
     def plot_mv_storage_integration(self, **kwargs):
@@ -636,13 +674,13 @@ class EDisGo:
 
         """
         plots.mv_grid_topology(
-            self,
-            node_color='storage_integration', **kwargs)
-            # filename=kwargs.get('filename', None),
-            # grid_district_geom=kwargs.get('grid_district_geom', True),
-            # background_map=kwargs.get('background_map', True),
-            # xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-            # title=kwargs.get('title', ''))
+            self, node_color="storage_integration", **kwargs
+        )
+        # filename=kwargs.get('filename', None),
+        # grid_district_geom=kwargs.get('grid_district_geom', True),
+        # background_map=kwargs.get('background_map', True),
+        # xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
+        # title=kwargs.get('title', ''))
 
     def plot_mv_grid(self, **kwargs):
         """
@@ -650,9 +688,7 @@ class EDisGo:
         :func:`edisgo.tools.plots.mv_grid_topology`.
 
         """
-        plots.mv_grid_topology(
-            self,
-            **kwargs)
+        plots.mv_grid_topology(self, **kwargs)
 
     def histogram_voltage(self, timestep=None, title=True, **kwargs):
         """
@@ -674,12 +710,16 @@ class EDisGo:
         try:
             data = self.results.pfa_v_mag_pu
             if data is None:
-                logger.warning("Results for pfa_v_mag_pu are required for "
-                               "voltage histogramm. Please analyze first.")
+                logger.warning(
+                    "Results for pfa_v_mag_pu are required for "
+                    "voltage histogramm. Please analyze first."
+                )
                 return
         except AttributeError:
-            logger.warning("Results are required for "
-                           "voltage histogramm. Please analyze first.")
+            logger.warning(
+                "Results are required for "
+                "voltage histogramm. Please analyze first."
+            )
             return
 
         if timestep is None:
@@ -691,16 +731,19 @@ class EDisGo:
         if title is True:
             if len(timestep) == 1:
                 title = "Voltage histogram for time step {}".format(
-                    timestep[0])
+                    timestep[0]
+                )
             else:
                 title = "Voltage histogram \nfor time steps {} to {}".format(
-                    timestep[0], timestep[-1])
+                    timestep[0], timestep[-1]
+                )
         elif title is False:
             title = None
         plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
 
-    def histogram_relative_line_load(self, timestep=None, title=True,
-                                     voltage_level='mv_lv', **kwargs):
+    def histogram_relative_line_load(
+        self, timestep=None, title=True, voltage_level="mv_lv", **kwargs
+    ):
         """
         Plots histogram of relative line loads.
 
@@ -726,26 +769,33 @@ class EDisGo:
         """
         try:
             if self.results.i_res is None:
-                logger.warning("Currents `i_res` from power flow analysis "
-                               "must be available to plot histogram line "
-                               "loading.")
+                logger.warning(
+                    "Currents `i_res` from power flow analysis "
+                    "must be available to plot histogram line "
+                    "loading."
+                )
                 return
         except AttributeError:
-            logger.warning("Results must be available to plot histogram line "
-                           "loading. Please analyze grid first.")
+            logger.warning(
+                "Results must be available to plot histogram line "
+                "loading. Please analyze grid first."
+            )
             return
 
-        if voltage_level == 'mv':
+        if voltage_level == "mv":
             lines = self.topology.lines_df.loc[
-                self.topology.lines_df.v_nom > 1]
-        elif voltage_level == 'lv':
+                self.topology.lines_df.v_nom > 1
+            ]
+        elif voltage_level == "lv":
             lines = self.topology.lines_df.loc[
-                self.topology.lines_df.v_nom < 1]
+                self.topology.lines_df.v_nom < 1
+            ]
         else:
             lines = self.topology.lines_df
 
         rel_line_loading = tools.calculate_relative_line_load(
-            self, self.results.i_res, lines.index, timestep)
+            self, self.results.i_res, lines.index, timestep
+        )
 
         if timestep is None:
             timestep = rel_line_loading.index
@@ -756,16 +806,24 @@ class EDisGo:
         if title is True:
             if len(timestep) == 1:
                 title = "Relative line load histogram for time step {}".format(
-                    timestep[0])
+                    timestep[0]
+                )
             else:
-                title = "Relative line load histogram \nfor time steps " \
-                        "{} to {}".format(timestep[0], timestep[-1])
+                title = (
+                    "Relative line load histogram \nfor time steps "
+                    "{} to {}".format(timestep[0], timestep[-1])
+                )
         elif title is False:
             title = None
         plots.histogram(data=rel_line_loading, title=title, **kwargs)
 
-    def save(self, directory,
-             save_results=True, save_topology=True, save_timeseries=True):
+    def save(
+        self,
+        directory,
+        save_results=True,
+        save_topology=True,
+        save_timeseries=True,
+    ):
         """
         Saves edisgo_obj parameters to csv. It can be chosen if results,
         topology and timeseries should be save respectively. For each one a
@@ -785,15 +843,21 @@ class EDisGo:
         """
         os.makedirs(directory, exist_ok=True)
         if save_results:
-            os.makedirs(os.path.join(directory, 'results'), exist_ok=True)
-            self.results.save(os.path.join(directory, 'results'))
+            os.makedirs(os.path.join(directory, "results"), exist_ok=True)
+            self.results.save(os.path.join(directory, "results"))
         if save_topology:
             self.topology.to_csv(directory)
         if save_timeseries:
             self.timeseries.to_csv(directory)
 
-    def add_component(self, comp_type, add_ts=True, ts_active_power=None,
-                      ts_reactive_power=None, **kwargs):
+    def add_component(
+        self,
+        comp_type,
+        add_ts=True,
+        ts_active_power=None,
+        ts_reactive_power=None,
+        **kwargs
+    ):
         """
         Adds single component to topology and respective timeseries if add_ts
         is set to True.
@@ -819,45 +883,52 @@ class EDisGo:
             at a time, change topology.add_load etc. to add_loads, where
             lists of parameters can be inserted
         """
-        if comp_type == 'Bus':
-            self.topology.add_bus(bus_name=kwargs.get('name'),
-                                  **kwargs)
-            comp_name = kwargs.get('name')
-        elif comp_type == 'Line':
+        if comp_type == "Bus":
+            self.topology.add_bus(bus_name=kwargs.get("name"), **kwargs)
+            comp_name = kwargs.get("name")
+        elif comp_type == "Line":
             comp_name = self.topology.add_line(**kwargs)
-        elif comp_type == 'Load' or comp_type == 'charging_park':
+        elif comp_type == "Load" or comp_type == "charging_park":
             comp_name = self.topology.add_load(
-                load_id=kwargs.get('load_id'), bus=kwargs.get('bus'),
-                peak_load=kwargs.get('peak_load'),
-                annual_consumption=kwargs.get('annual_consumption'),
-                sector=kwargs.get('sector'))
+                load_id=kwargs.get("load_id"),
+                bus=kwargs.get("bus"),
+                peak_load=kwargs.get("peak_load"),
+                annual_consumption=kwargs.get("annual_consumption"),
+                sector=kwargs.get("sector"),
+            )
             if add_ts:
-                timeseries.add_loads_timeseries(edisgo_obj=self,
-                                                load_names=comp_name, **kwargs)
+                timeseries.add_loads_timeseries(
+                    edisgo_obj=self, load_names=comp_name, **kwargs
+                )
 
-        elif comp_type == 'Generator':
+        elif comp_type == "Generator":
             comp_name = self.topology.add_generator(**kwargs)
             if add_ts:
-                timeseries.add_generators_timeseries(edisgo_obj=self,
-                                                     generator_names=comp_name,
-                                                     **kwargs)
-        elif comp_type == 'StorageUnit':
+                timeseries.add_generators_timeseries(
+                    edisgo_obj=self, generator_names=comp_name, **kwargs
+                )
+        elif comp_type == "StorageUnit":
             comp_name = self.topology.add_storage_unit(
-                bus=kwargs.get('bus'),
-                p_nom=kwargs.get('p_nom'),
-                control=kwargs.get('control', None))
+                bus=kwargs.get("bus"),
+                p_nom=kwargs.get("p_nom"),
+                control=kwargs.get("control", None),
+            )
             if add_ts:
                 if isinstance(ts_active_power, pd.Series):
                     ts_active_power = pd.DataFrame(
-                        {comp_name: ts_active_power})
+                        {comp_name: ts_active_power}
+                    )
                 if isinstance(ts_reactive_power, pd.Series):
                     ts_reactive_power = pd.DataFrame(
-                        {comp_name: ts_reactive_power})
+                        {comp_name: ts_reactive_power}
+                    )
                 timeseries.add_storage_units_timeseries(
-                    edisgo_obj=self, storage_unit_names=comp_name,
+                    edisgo_obj=self,
+                    storage_unit_names=comp_name,
                     timeseries_storage_units=ts_active_power,
                     timeseries_storage_units_reactive_power=ts_reactive_power,
-                    **kwargs)
+                    **kwargs
+                )
         else:
             raise ValueError("Component type is not correct.")
         return comp_name
@@ -882,27 +953,32 @@ class EDisGo:
             add_components, to allow removal of several components at a time
 
         """
-        if comp_type == 'Bus':
+        if comp_type == "Bus":
             self.topology.remove_bus(comp_name)
-        elif comp_type == 'Line':
-             self.topology.remove_line(comp_name)
-        elif comp_type == 'Load':
+        elif comp_type == "Line":
+            self.topology.remove_line(comp_name)
+        elif comp_type == "Load":
             self.topology.remove_load(comp_name)
             if drop_ts:
                 timeseries._drop_existing_component_timeseries(
-                    edisgo_obj=self, comp_type='loads', comp_names=comp_name)
+                    edisgo_obj=self, comp_type="loads", comp_names=comp_name
+                )
 
-        elif comp_type == 'Generator':
+        elif comp_type == "Generator":
             self.topology.remove_generator(comp_name)
             if drop_ts:
                 timeseries._drop_existing_component_timeseries(
-                    edisgo_obj=self, comp_type='generators',
-                    comp_names=comp_name)
-        elif comp_type == 'StorageUnit':
+                    edisgo_obj=self,
+                    comp_type="generators",
+                    comp_names=comp_name,
+                )
+        elif comp_type == "StorageUnit":
             self.topology.remove_storage(comp_name)
             if drop_ts:
                 timeseries._drop_existing_component_timeseries(
-                    edisgo_obj=self, comp_type='storage_units',
-                    comp_names=comp_name)
+                    edisgo_obj=self,
+                    comp_type="storage_units",
+                    comp_names=comp_name,
+                )
         else:
             raise ValueError("Component type is not correct.")

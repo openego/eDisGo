@@ -5,8 +5,15 @@ import logging
 import numpy as np
 from timeit import default_timer as timer
 
-from edisgo.tools.preprocess_pypsa_opf_structure import preprocess_pypsa_opf_structure, aggregate_fluct_generators
-from edisgo.tools.powermodels_io import to_powermodels, convert_storage_series, add_storage_from_edisgo
+from edisgo.tools.preprocess_pypsa_opf_structure import (
+    preprocess_pypsa_opf_structure,
+    aggregate_fluct_generators,
+)
+from edisgo.tools.powermodels_io import (
+    to_powermodels,
+    convert_storage_series,
+    add_storage_from_edisgo,
+)
 
 from edisgo.opf.util.scenario_settings import opf_settings
 
@@ -18,8 +25,10 @@ def convert(o):
     Helper function for json dump, as int64 cannot be dumped.
 
     """
-    if isinstance(o, np.int64): return int(o)
+    if isinstance(o, np.int64):
+        return int(o)
     raise TypeError
+
 
 def bus_names_to_ints(pypsa_network, bus_names):
     """
@@ -90,21 +99,20 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
     logger.debug(scenario_data_dir)
     # solution_dir = os.path.join(opf_dir, "opf_solutions/")
 
-                    # set path to edisgoOPF folder for scenario data and julia module relative to this file
-                    # abspath = os.path.dirname(os.path.abspath(__file__))
-                    # opf_dir = os.path.join(abspath, "edisgoOPF/")
-                    # scenario_data_dir = os.path.join(opf_dir, "edisgo_scenario_data")
-                    # set julia env path
-                    # julia_env_dir = os.path.join(opf_dir, "edisgoOPF/")
+    # set path to edisgoOPF folder for scenario data and julia module relative to this file
+    # abspath = os.path.dirname(os.path.abspath(__file__))
+    # opf_dir = os.path.join(abspath, "edisgoOPF/")
+    # scenario_data_dir = os.path.join(opf_dir, "edisgo_scenario_data")
+    # set julia env path
+    # julia_env_dir = os.path.join(opf_dir, "edisgoOPF/")
 
     if timesteps is None:
         # TODO worst case snapshot analysis
         logger.error("TODO implement worst case snapshots")
         raise ValueError("Need to specify timesteps for multiperiod opf")
 
-
     # only mv mode possible
-    mode="mv"
+    mode = "mv"
     # read settings from kwargs
     settings = opf_settings()
     settings["time_horizon"] = len(timesteps)
@@ -113,13 +121,17 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
     # aggregate all loads and generators in LV-grids
     # TODO check aggregation
     logger.debug("converting to pypsa_mv")
-    pypsa_mv = edisgo_network.to_pypsa(mode=mode,
-                                       # aggregate_loads="all",
-                                       # aggregate_generators="all",
-                                       timesteps=timesteps)
+    pypsa_mv = edisgo_network.to_pypsa(
+        mode=mode,
+        # aggregate_loads="all",
+        # aggregate_generators="all",
+        timesteps=timesteps,
+    )
     timehorizon = len(pypsa_mv.snapshots)
     # set name of pypsa network
-    pypsa_mv.name = "ding0_{}_t_{}".format(edisgo_network.topology.id,timehorizon)
+    pypsa_mv.name = "ding0_{}_t_{}".format(
+        edisgo_network.topology.id, timehorizon
+    )
 
     # Remap storage bus names to Integers, if any
     if "storage_buses" in kwargs:
@@ -145,39 +157,66 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
         add_storage_from_edisgo(edisgo_network, pypsa_mv, pm)
 
     # dump json files for static network information, timeseries of loads and generators, and opf settings
-    with open(os.path.join(scenario_data_dir, "{}_static.json".format(pm["name"])), 'w') as outfile:
+    with open(
+        os.path.join(scenario_data_dir, "{}_static.json".format(pm["name"])),
+        "w",
+    ) as outfile:
         json.dump(pm, outfile, default=convert)
-    with open(os.path.join(scenario_data_dir, "{}_loads.json".format(pm["name"])), 'w') as outfile:
+    with open(
+        os.path.join(scenario_data_dir, "{}_loads.json".format(pm["name"])),
+        "w",
+    ) as outfile:
         json.dump(load_data, outfile, default=convert)
-    with open(os.path.join(scenario_data_dir, "{}_gens.json".format(pm["name"])), 'w') as outfile:
+    with open(
+        os.path.join(scenario_data_dir, "{}_gens.json".format(pm["name"])), "w"
+    ) as outfile:
         json.dump(gen_data, outfile, default=convert)
-    with open(os.path.join(scenario_data_dir, "{}_storage.json".format(pm["name"])), 'w') as outfile:
+    with open(
+        os.path.join(scenario_data_dir, "{}_storage.json".format(pm["name"])),
+        "w",
+    ) as outfile:
         json.dump(storage_data, outfile, default=convert)
-    with open(os.path.join(scenario_data_dir, "{}_opf_setting.json".format(pm["name"])), 'w') as outfile:
+    with open(
+        os.path.join(
+            scenario_data_dir, "{}_opf_setting.json".format(pm["name"])
+        ),
+        "w",
+    ) as outfile:
         json.dump(settings, outfile, default=convert)
 
     logger.info("starting julia process")
     start = timer()
-    solution_dir = kwargs.get("results_path",
-                              os.path.join(opf_dir, "opf_solutions"))
-    julia_process = subprocess.run(['julia', '--project={}'.format(julia_env_dir),
-                    os.path.join(opf_dir, 'optimization_evaluation.jl'),
-                    opf_dir, pm["name"], solution_dir])
+    solution_dir = kwargs.get(
+        "results_path", os.path.join(opf_dir, "opf_solutions")
+    )
+    julia_process = subprocess.run(
+        [
+            "julia",
+            "--project={}".format(julia_env_dir),
+            os.path.join(opf_dir, "optimization_evaluation.jl"),
+            opf_dir,
+            pm["name"],
+            solution_dir,
+        ]
+    )
     end = timer()
-    run_time = end-start
+    run_time = end - start
     logger.info("julia terminated after {} s".format(run_time))
 
     if julia_process.returncode != 0:
         raise RuntimeError("Julia subprocess failed.")
 
-    solution_file = "{}_{}_{}_opf_sol.json".format(pm["name"],settings["scenario"],settings["relaxation"])
+    solution_file = "{}_{}_{}_opf_sol.json".format(
+        pm["name"], settings["scenario"], settings["relaxation"]
+    )
 
     # opf_results = OPFResults()
     edisgo_network.opf_results.set_solution(
-        solution_name=os.path.join(solution_dir,solution_file),
-        pypsa_net=pypsa_mv)
+        solution_name=os.path.join(solution_dir, solution_file),
+        pypsa_net=pypsa_mv,
+    )
 
-    if edisgo_network.opf_results.status != 'Optimal':
+    if edisgo_network.opf_results.status != "Optimal":
         raise RuntimeError("Optimal solution not found.")
 
     return edisgo_network.opf_results.status

@@ -3,12 +3,14 @@ from functools import partial
 from geopy.distance import vincenty
 
 import os
-if not 'READTHEDOCS' in os.environ:
+
+if not "READTHEDOCS" in os.environ:
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
 
 import logging
-logger = logging.getLogger('edisgo')
+
+logger = logging.getLogger("edisgo")
 
 
 def proj2equidistant(srid):
@@ -26,10 +28,11 @@ def proj2equidistant(srid):
 
     """
 
-    return partial(pyproj.transform,
-                   pyproj.Proj(init='epsg:{}'.format(srid)),  # source CRS
-                   pyproj.Proj(init='epsg:3035')  # destination CRS
-                   )
+    return partial(
+        pyproj.transform,
+        pyproj.Proj(init="epsg:{}".format(srid)),  # source CRS
+        pyproj.Proj(init="epsg:3035"),  # destination CRS
+    )
 
 
 def proj2equidistant_reverse(srid):
@@ -47,10 +50,11 @@ def proj2equidistant_reverse(srid):
 
     """
 
-    return partial(pyproj.transform,
-                   pyproj.Proj(init='epsg:3035'),  # source CRS
-                   pyproj.Proj(init='epsg:{}'.format(srid))  # destination CRS
-                   )
+    return partial(
+        pyproj.transform,
+        pyproj.Proj(init="epsg:3035"),  # source CRS
+        pyproj.Proj(init="epsg:{}".format(srid)),  # destination CRS
+    )
 
 
 def proj_by_srids(srid1, srid2):
@@ -75,10 +79,11 @@ def proj_by_srids(srid1, srid2):
 
     """
 
-    return partial(pyproj.transform,
-                   pyproj.Proj(init='epsg:{}'.format(srid1)),  # source CRS
-                   pyproj.Proj(init='epsg:{}'.format(srid2))  # destination CRS
-                   )
+    return partial(
+        pyproj.transform,
+        pyproj.Proj(init="epsg:{}".format(srid1)),  # source CRS
+        pyproj.Proj(init="epsg:{}".format(srid2)),  # destination CRS
+    )
 
 
 def calc_geo_lines_in_buffer(edisgo_object, bus, grid):
@@ -109,24 +114,27 @@ def calc_geo_lines_in_buffer(edisgo_object, bus, grid):
     """
 
     buffer_radius = int(
-        edisgo_object.config['grid_connection']['conn_buffer_radius'])
+        edisgo_object.config["grid_connection"]["conn_buffer_radius"]
+    )
     buffer_radius_inc = int(
-        edisgo_object.config['grid_connection']['conn_buffer_radius_inc'])
+        edisgo_object.config["grid_connection"]["conn_buffer_radius_inc"]
+    )
 
     lines = []
-    srid = edisgo_object.topology.grid_district['srid']
+    srid = edisgo_object.topology.grid_district["srid"]
     bus_shp = transform(proj2equidistant(srid), Point(bus.x, bus.y))
 
     while not lines:
         buffer_zone_shp = bus_shp.buffer(buffer_radius)
         for line in grid.lines_df.index:
-            line_bus0 = edisgo_object.topology.lines_df.loc[line, 'bus0']
+            line_bus0 = edisgo_object.topology.lines_df.loc[line, "bus0"]
             bus0 = edisgo_object.topology.buses_df.loc[line_bus0, :]
-            line_bus1 = edisgo_object.topology.lines_df.loc[line, 'bus1']
+            line_bus1 = edisgo_object.topology.lines_df.loc[line, "bus1"]
             bus1 = edisgo_object.topology.buses_df.loc[line_bus1, :]
             line_shp = transform(
                 proj2equidistant(srid),
-                LineString([Point(bus0.x, bus0.y), Point(bus1.x, bus1.y)]))
+                LineString([Point(bus0.x, bus0.y), Point(bus1.x, bus1.y)]),
+            )
             if buffer_zone_shp.intersects(line_shp):
                 lines.append(line)
         buffer_radius += buffer_radius_inc
@@ -155,16 +163,20 @@ def calc_geo_dist_vincenty(edisgo_object, bus_source, bus_target):
 
     """
 
-    branch_detour_factor = edisgo_object.config['grid_connection'][
-        'branch_detour_factor']
+    branch_detour_factor = edisgo_object.config["grid_connection"][
+        "branch_detour_factor"
+    ]
 
     bus_source = edisgo_object.topology.buses_df.loc[bus_source, :]
     bus_target = edisgo_object.topology.buses_df.loc[bus_target, :]
 
     # notice: vincenty takes (lat,lon)
-    branch_length = branch_detour_factor * \
-                    vincenty((bus_source.y, bus_source.x),
-                             (bus_target.y, bus_target.x)).m
+    branch_length = (
+        branch_detour_factor
+        * vincenty(
+            (bus_source.y, bus_source.x), (bus_target.y, bus_target.x)
+        ).m
+    )
 
     # ========= BUG: LINE LENGTH=0 WHEN CONNECTING GENERATORS ===========
     # When importing generators, the geom_new field is used as position. If it
@@ -173,8 +185,10 @@ def calc_geo_dist_vincenty(edisgo_object, bus_source, bus_target):
     # line is 0. See issue #76
     if branch_length == 0:
         branch_length = 1
-        logger.debug('Geo distance is zero, check objects\' positions. '
-                     'Distance is set to 1m.')
+        logger.debug(
+            "Geo distance is zero, check objects' positions. "
+            "Distance is set to 1m."
+        )
     # ===================================================================
 
     return branch_length / 1e3
