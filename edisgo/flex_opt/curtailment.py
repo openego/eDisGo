@@ -6,7 +6,6 @@ from pyomo.environ import ConcreteModel, Set, Param, Objective, Constraint, \
 from pyomo.opt import SolverFactory
 
 from edisgo.tools import pypsa_io
-from edisgo.network.tools import get_gen_info
 
 
 def voltage_based(feedin, generators, curtailment_timeseries, edisgo,

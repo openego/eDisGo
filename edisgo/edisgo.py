@@ -12,7 +12,6 @@ from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.tools.config import Config
 from edisgo.flex_opt.curtailment import CurtailmentControl
-from edisgo.flex_opt.storage_integration import StorageControl
 from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.opf.results.opf_result_class import OPFResults
 
@@ -377,9 +376,10 @@ class EDisGo:
         parameters and methodologies.
 
         """
-        CurtailmentControl(edisgo=self, methodology=methodology,
-                           curtailment_timeseries=curtailment_timeseries,
-                           mode=kwargs.pop('mode', None), **kwargs)
+        raise NotImplementedError
+        # CurtailmentControl(edisgo=self, methodology=methodology,
+        #                    curtailment_timeseries=curtailment_timeseries,
+        #                    mode=kwargs.pop('mode', None), **kwargs)
 
     def import_generators(self, generator_scenario=None):
         """Import generators
@@ -481,16 +481,6 @@ class EDisGo:
             self.results.measures = 'grid_expansion'
 
         return results
-
-    def integrate_storage(self, timeseries, position, **kwargs):
-        """
-        Integrates storage into network.
-
-        See :class:`~.network.network.StorageControl` for more information.
-
-        """
-        StorageControl(edisgo=self, timeseries=timeseries,
-                       position=position, **kwargs)
 
     def perform_mp_opf(self, timesteps, storage_series=[], **kwargs):
         """
