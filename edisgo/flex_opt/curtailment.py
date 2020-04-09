@@ -14,6 +14,8 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
     """
     Implements curtailment methodology 'voltage-based'.
 
+    ToDo: adapt to refactored code!
+
     The curtailment that has to be met in each time step is allocated depending
     on the exceedance of the allowed voltage deviation at the nodes of the
     generators. The higher the exceedance, the higher the curtailment.
@@ -71,6 +73,8 @@ def voltage_based(feedin, generators, curtailment_timeseries, edisgo,
         Default: 'cbc'
 
     """
+
+    raise NotImplementedError
 
     voltage_threshold = pd.Series(kwargs.get('voltage_threshold', 0.0),
                                   index=curtailment_timeseries.index)
@@ -212,6 +216,8 @@ def _optimize_voltage_based_curtailment(feedin, voltage_pu, total_curtailment,
     Formulates and solves linear problem to find linear relation between
     curtailment and node voltage.
 
+    ToDo: adapt to refactored code!
+
     Parameters
     ------------
     feedin : :pandas:`pandas.DataFrame<dataframe>`
@@ -241,6 +247,8 @@ def _optimize_voltage_based_curtailment(feedin, voltage_pu, total_curtailment,
         generator representatives.
 
     """
+
+    raise NotImplementedError
 
     logging.debug("Start curtailment optimization.")
   
@@ -343,6 +351,8 @@ def feedin_proportional(feedin, generators, curtailment_timeseries, edisgo,
     """
     Implements curtailment methodology 'feedin-proportional'.
 
+    ToDo: adapt to refactored code!
+
     The curtailment that has to be met in each time step is allocated
     equally to all generators depending on their share of total
     feed-in in that time step.
@@ -369,6 +379,8 @@ def feedin_proportional(feedin, generators, curtailment_timeseries, edisgo,
         the technology if :obj:`str` the curtailment is specified for.
 
     """
+    raise NotImplementedError
+
     # calculate curtailment in each time step of each generator
     curtailment = feedin.divide(feedin.sum(axis=1), axis=0). \
         multiply(curtailment_timeseries, axis=0)
@@ -389,6 +401,8 @@ def _check_curtailment_target(curtailment, curtailment_target,
     """
     Raises an error if curtailment target was not met in any time step.
 
+    ToDo: adapt to refactored code!
+
     Parameters
     -----------
     curtailment : :pandas:`pandas:DataFrame<dataframe>`
@@ -404,6 +418,8 @@ def _check_curtailment_target(curtailment, curtailment_target,
         the technology if :obj:`str` the curtailment was specified for.
 
     """
+    raise NotImplementedError
+
     if not (abs(curtailment.sum(axis=1) - curtailment_target) < 1e-1).all():
         message = 'Curtailment target not met for {}.'.format(curtailment_key)
         logging.error(message)
@@ -413,6 +429,8 @@ def _check_curtailment_target(curtailment, curtailment_target,
 def _assign_curtailment(curtailment, edisgo, generators, curtailment_key):
     """
     Helper function to write curtailment time series to generator objects.
+
+    ToDo: adapt to refactored code!
 
     This function also writes a list of the curtailed generators to curtailment
     in :class:`edisgo.network.network.TimeSeries` and
@@ -436,6 +454,7 @@ def _assign_curtailment(curtailment, edisgo, generators, curtailment_key):
         the technology if :obj:`str` the curtailment is specified for.
 
     """
+    raise NotImplementedError
 
     gen_object_list = []
     for gen in curtailment.columns:
@@ -461,6 +480,8 @@ def _assign_curtailment(curtailment, edisgo, generators, curtailment_key):
 class CurtailmentControl:
     """
     Allocates given curtailment targets to solar and wind generators.
+
+    ToDo: adapt to refactored code!
 
     Parameters
     ----------
@@ -525,6 +546,8 @@ class CurtailmentControl:
     # ToDo move some properties from topology here (e.g. peak_load, generators,...)
     def __init__(self, edisgo, methodology, curtailment_timeseries, mode=None,
                  **kwargs):
+
+        raise NotImplementedError
 
         logging.info("Start curtailment methodology {}.".format(methodology))
 
@@ -627,6 +650,8 @@ class CurtailmentControl:
             information.
 
         """
+        raise NotImplementedError
+
         if curtailment_timeseries is None:
             message = 'No curtailment given.'
             logging.error(message)
@@ -657,6 +682,8 @@ class CurtailmentControl:
             Technology (and weather cell) curtailment is given for.
 
         """
+        raise NotImplementedError
+
         if not feedin_df.empty:
             feedin_selected_sum = feedin_df.sum(axis=1)
             diff = feedin_selected_sum - curtailment_timeseries
@@ -693,6 +720,8 @@ class CurtailmentControl:
             time index.
 
         """
+        raise NotImplementedError
+
         curtailment = network.timeseries.curtailment
         gen_repr = [repr(_) for _ in curtailment.columns]
         feedin_repr = feedin.loc[:, gen_repr]

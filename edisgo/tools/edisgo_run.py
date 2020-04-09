@@ -10,8 +10,8 @@ import argparse
 import logging
 
 import pandas as pd
-from edisgo.network.network import EDisGo
-from edisgo.network.network import Results
+from edisgo import EDisGo
+from edisgo.network.results import Results
 from edisgo.flex_opt.exceptions import MaximumIterationError
 
 
@@ -81,6 +81,8 @@ def run_edisgo_basic(ding0_filepath,
     """
     Analyze edisgo network extension cost as reference scenario
 
+    ToDo: adapt to refactored code!
+
     Parameters
     ----------
     ding0_filepath : str
@@ -105,6 +107,7 @@ def run_edisgo_basic(ding0_filepath,
         Grids resulting in an error including error message
 
     """
+    raise NotImplementedError
 
     grid_district = _get_griddistrict(ding0_filepath)
 
@@ -169,6 +172,8 @@ def run_edisgo_twice(run_args):
     """
     Run network analysis twice on same network: once w/ and once w/o new generators
 
+    ToDo: adapt to refactored code!
+
     First run without connection of new generators approves sufficient network
     hosting capacity. Otherwise, network is reinforced.
     Second run assessment network extension needs in terms of RES integration
@@ -189,6 +194,7 @@ def run_edisgo_twice(run_args):
     all_grid_issues : dict
         Remaining overloading or over-voltage issues in network
     """
+    raise NotImplementedError
 
     # base case with no generator import
     edisgo_grid, \

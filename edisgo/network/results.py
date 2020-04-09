@@ -375,6 +375,8 @@ class Results:
         """
         Holds curtailment assigned to each generator per curtailment target.
 
+        ToDo: adapt to refactored code!
+
         Returns
         -------
         :obj:`dict` with :pandas:`pandas.DataFrame<dataframe>`
@@ -391,6 +393,7 @@ class Results:
             :class:`edisgo.network.components.GeneratorFluctuating`.
 
         """
+        raise NotImplementedError
         if self._curtailment is not None:
             result_dict = {}
             for key, gen_list in self._curtailment.items():
@@ -406,6 +409,8 @@ class Results:
     def storage_units(self):
         """
         Gathers relevant storage results.
+
+        ToDo: adapt to refactored code!
 
         Returns
         -------
@@ -423,6 +428,8 @@ class Results:
                 or 'lv'.
 
         """
+        raise NotImplementedError
+
         grids = [self.edisgo_object.topology.mv_grid] + list(
             self.edisgo_object.topology.mv_grid.lv_grids)
         storage_results = {}
@@ -445,6 +452,8 @@ class Results:
         """
         Returns a dataframe with storage time series.
 
+        ToDo: adapt to refactored code!
+
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
@@ -455,6 +464,7 @@ class Results:
             storage representatives.
 
         """
+        raise NotImplementedError
         storage_units_p = pd.DataFrame()
         storage_units_q = pd.DataFrame()
         grids = [self.edisgo_object.topology.mv_grid] + list(
@@ -471,6 +481,8 @@ class Results:
     def storage_units_costs_reduction(self):
         """
         Contains costs reduction due to storage integration.
+
+        ToDo: adapt to refactored code!
 
         Parameters
         ----------
@@ -490,6 +502,7 @@ class Results:
             the dataframe is the MV network id.
 
         """
+        raise NotImplementedError
         return self._storage_units_costs_reduction
 
     @storage_units_costs_reduction.setter
@@ -645,6 +658,8 @@ class Results:
         """
         Saves results to disk.
 
+        ToDo: adapt to refactored code!
+
         Depending on which results are selected and if they exist, the
         following directories and files are created:
 
@@ -762,23 +777,24 @@ class Results:
                     target_dir, 'equipment_changes.csv'))
 
         def _save_curtailment_results(target_dir):
-            if self.curtailment is not None:
-                # create directory
-                os.makedirs(target_dir, exist_ok=True)
-
-                for key, curtailment_df in self.curtailment.items():
-                    if type(key) == tuple:
-                        type_prefix = '-'.join([key[0], str(key[1])])
-                    elif type(key) == str:
-                        type_prefix = key
-                    else:
-                        raise KeyError("Unknown key type {} for key {}".format(
-                            type(key), key))
-
-                    filename = os.path.join(
-                        target_dir, '{}.csv'.format(type_prefix))
-
-                    curtailment_df.to_csv(filename, index_label=type_prefix)
+            pass
+            # if self.curtailment is not None:
+            #     # create directory
+            #     os.makedirs(target_dir, exist_ok=True)
+            #
+            #     for key, curtailment_df in self.curtailment.items():
+            #         if type(key) == tuple:
+            #             type_prefix = '-'.join([key[0], str(key[1])])
+            #         elif type(key) == str:
+            #             type_prefix = key
+            #         else:
+            #             raise KeyError("Unknown key type {} for key {}".format(
+            #                 type(key), key))
+            #
+            #         filename = os.path.join(
+            #             target_dir, '{}.csv'.format(type_prefix))
+            #
+            #         curtailment_df.to_csv(filename, index_label=type_prefix)
 
         def _save_storage_integration_results(target_dir):
             pass

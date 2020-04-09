@@ -19,6 +19,8 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
     """
     Allocates the given storage capacity to multiple smaller storages.
 
+    ToDo: adapt to refactored code!
+
     For each feeder with load or voltage issues it is checked if integrating a
     storage will reduce peaks in the feeder, starting with the feeder with
     the highest theoretical network expansion costs. A heuristic approach is used
@@ -306,6 +308,8 @@ def one_storage_per_feeder(edisgo, storage_timeseries,
                 crit_line, 'max_rel_overload'] * crit_line.quantity) - \
                                      crit_line.quantity
         return number_parallel_lines
+
+    raise NotImplementedError
 
     debug = kwargs.get('debug', False)
     check_costs_reduction = kwargs.get('check_costs_reduction', False)

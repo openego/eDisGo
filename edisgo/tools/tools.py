@@ -1,6 +1,9 @@
 import pandas as pd
+import networkx as nx
 from networkx import OrderedGraph
 from math import pi, sqrt
+
+from edisgo.flex_opt import exceptions
 
 
 def select_worstcase_snapshots(edisgo_obj):
@@ -312,3 +315,172 @@ def drop_duplicated_indices(dataframe, keep='first'):
         see pandas.DataFrame.drop_duplicates() method
     """
     return dataframe[~dataframe.index.duplicated(keep=keep)]
+
+
+def select_cable(edisgo_obj, level, apparent_power):
+    """Selects an appropriate cable type and quantity using given apparent
+    power.
+
+    ToDo: adapt to refactored code!
+
+    Considers load factor.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.network.topology.Topology`
+        The eDisGo container object
+    level : :obj:`str`
+        Grid level ('mv' or 'lv')
+    apparent_power : :obj:`float`
+        Apparent power the cable must carry in kVA
+
+    Returns
+    -------
+    :pandas:`pandas.Series<series>`
+        Cable type
+    :obj:`ìnt`
+        Cable count
+
+    Notes
+    ------
+    Cable is selected to be able to carry the given `apparent_power`, no load
+    factor is considered.
+
+    """
+    raise NotImplementedError
+
+    cable_count = 1
+
+    if level == 'mv':
+
+        cable_data = edisgo_obj.topology.equipment_data['mv_cables']
+        available_cables = cable_data[
+            cable_data['U_n'] == edisgo_obj.topology.mv_grid.voltage_nom]
+
+        suitable_cables = available_cables[
+            available_cables['I_max_th'] *
+            edisgo_obj.topology.mv_grid.voltage_nom > apparent_power]
+
+        # increase cable count until appropriate cable type is found
+        while suitable_cables.empty and cable_count < 20:
+            cable_count += 1
+            suitable_cables = available_cables[
+                available_cables['I_max_th'] *
+                edisgo_obj.topology.mv_grid.voltage_nom *
+                cable_count > apparent_power]
+        if suitable_cables.empty and cable_count == 20:
+            raise exceptions.MaximumIterationError(
+                "Could not find a suitable cable for apparent power of "
+                "{} kVA.".format(apparent_power))
+
+        cable_type = suitable_cables.ix[suitable_cables['I_max_th'].idxmin()]
+
+    elif level == 'lv':
+
+        cable_data = edisgo_obj.topology.equipment_data['lv_cables']
+        suitable_cables = cable_data[
+            cable_data['I_max_th'] * cable_data['U_n'] > apparent_power]
+
+        # increase cable count until appropriate cable type is found
+        while suitable_cables.empty and cable_count < 20:
+            cable_count += 1
+            suitable_cables = cable_data[
+                cable_data['I_max_th'] * cable_data['U_n'] * cable_count >
+                apparent_power]
+        if suitable_cables.empty and cable_count == 20:
+            raise exceptions.MaximumIterationError(
+                "Could not find a suitable cable for apparent power of "
+                "{} kVA.".format(apparent_power))
+
+        cable_type = suitable_cables.ix[suitable_cables['I_max_th'].idxmin()]
+
+    else:
+        raise ValueError('Please supply a level (either \'mv\' or \'lv\').')
+
+    return cable_type, cable_count
+
+
+def assign_mv_feeder_to_nodes(mv_grid):
+    """
+    Assigns an MV feeder to every generator, LV station, load, and branch tee
+
+    ToDo: adapt to refactored code!
+
+    Parameters
+    -----------
+    mv_grid : :class:`~.network.grids.MVGrid`
+
+    """
+    raise NotImplementedError
+
+    mv_station_neighbors = list(mv_grid.graph.neighbors(mv_grid.station))
+    # get all nodes in MV network and remove MV station to get separate subgraphs
+    mv_graph_nodes = list(mv_grid.graph.nodes())
+    mv_graph_nodes.remove(mv_grid.station)
+    subgraph = mv_grid.graph.subgraph(mv_graph_nodes)
+
+    for neighbor in mv_station_neighbors:
+        # determine feeder
+        mv_feeder = mv_grid.graph.line_from_nodes(mv_grid.station, neighbor)
+        # get all nodes in that feeder by doing a DFS in the disconnected
+        # subgraph starting from the node adjacent to the MVStation `neighbor`
+        subgraph_neighbor = nx.dfs_tree(subgraph, source=neighbor)
+        for node in subgraph_neighbor.nodes():
+            # in case of an LV station assign feeder to all nodes in that LV
+            # network
+            if isinstance(node, LVStation):
+                for lv_node in node.grid.graph.nodes():
+                    lv_node.mv_feeder = mv_feeder
+            else:
+                node.mv_feeder = mv_feeder
+
+
+def get_mv_feeder_from_line(line):
+    """
+    Determines MV feeder the given line is in.
+
+    ToDo: adapt to refactored code!
+
+    MV feeders are identified by the first line segment of the half-ring.
+
+    Parameters
+    ----------
+    line : :class:`~.network.components.Line`
+        Line to find the MV feeder for.
+
+    Returns
+    -------
+    :class:`~.network.components.Line`
+        MV feeder identifier (representative of the first line segment
+        of the half-ring)
+
+    """
+    raise NotImplementedError
+    try:
+        # get nodes of line
+        nodes = line.grid.graph.nodes_from_line(line)
+
+        # get feeders
+        feeders = {}
+        for node in nodes:
+            # if one of the nodes is an MV station the line is an MV feeder
+            # itself
+            if isinstance(node, MVStation):
+                feeders[repr(node)] = None
+            else:
+                feeders[repr(node)] = node.mv_feeder
+
+        # return feeder that is not None
+        feeder_1 = feeders[repr(nodes[0])]
+        feeder_2 = feeders[repr(nodes[1])]
+        if not feeder_1 is None and not feeder_2 is None:
+            if feeder_1 == feeder_2:
+                return feeder_1
+            else:
+                logging.warning('Different feeders for line {}.'.format(line))
+                return None
+        else:
+            return feeder_1 if feeder_1 is not None else feeder_2
+    except Exception as e:
+        logging.warning('Failed to get MV feeder: {}.'.format(e))
+        return None

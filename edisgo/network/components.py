@@ -525,6 +525,8 @@ class Storage(Component):
     """
     Storage object
 
+    ToDo: adapt to refactored code!
+
     Describes a single storage instance in the eDisGo network. Includes technical
     parameters such as :attr:`Storage.efficiency_in` or
     :attr:`Storage.standing_loss` as well as its time series of operation
@@ -534,6 +536,9 @@ class Storage(Component):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+        raise NotImplementedError
+
         self._timeseries = kwargs.get('timeseries', None)
         self._nominal_power = kwargs.get('nominal_power', None)
         self._power_factor = kwargs.get('power_factor', None)
