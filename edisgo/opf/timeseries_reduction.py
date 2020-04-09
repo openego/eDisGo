@@ -66,7 +66,6 @@ def get_steps_curtailment(edisgo_obj, percentage=0.5):
     # Select most critical steps based on current violations
     current_scores = _scored_critical_current(edisgo_obj, grid)
     num_steps_current = int(len(current_scores) * percentage)
-    print(num_steps_current)
     steps = current_scores[:num_steps_current].index.tolist()
 
     # Select most critical steps based on voltage violations
