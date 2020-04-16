@@ -6,9 +6,9 @@ Subpackages
 
 .. toctree::
 
-    edisgo.data
     edisgo.flex_opt
-    edisgo.grid
+    edisgo.io
+    edisgo.network
     edisgo.tools
 
 Module contents

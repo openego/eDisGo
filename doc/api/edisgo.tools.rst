@@ -5,7 +5,7 @@ Submodules
 ----------
 
 edisgo.tools.config module
---------------------------
+---------------------------
 
 .. automodule:: edisgo.tools.config
     :members:
@@ -13,7 +13,7 @@ edisgo.tools.config module
     :show-inheritance:
 
 edisgo.tools.edisgo\_run module
--------------------------------
+--------------------------------
 
 .. automodule:: edisgo.tools.edisgo_run
     :members:
@@ -36,8 +36,24 @@ edisgo.tools.plots module
     :undoc-members:
     :show-inheritance:
 
+edisgo.tools.powermodels\_io module
+-------------------------------------
+
+.. automodule:: edisgo.tools.powermodels_io
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+edisgo.tools.preprocess\_pypsa\_opf\_structure module
+------------------------------------------------------
+
+.. automodule:: edisgo.tools.preprocess_pypsa_opf_structure
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 edisgo.tools.pypsa\_io module
------------------------------
+------------------------------
 
 .. automodule:: edisgo.tools.pypsa_io
     :members:
@@ -45,7 +61,7 @@ edisgo.tools.pypsa\_io module
     :show-inheritance:
 
 edisgo.tools.tools module
--------------------------
+--------------------------
 
 .. automodule:: edisgo.tools.tools
     :members:
