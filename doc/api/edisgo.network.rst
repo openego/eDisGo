@@ -1,9 +1,6 @@
 edisgo.network package
 =======================
 
-Submodules
-----------
-
 edisgo.network.components module
 ----------------------------------
 
@@ -40,14 +37,6 @@ edisgo.network.topology module
 ---------------------------------
 
 .. automodule:: edisgo.network.topology
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Module contents
-----------------
-
-.. automodule:: edisgo.network
     :members:
     :undoc-members:
     :show-inheritance:

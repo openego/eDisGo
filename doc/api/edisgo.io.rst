@@ -1,9 +1,6 @@
 edisgo.io package
 ===================
 
-Submodules
-----------
-
 edisgo.io.ding0\_import module
 -------------------------------
 
@@ -24,14 +21,6 @@ edisgo.io.timeseries\_import module
 ------------------------------------
 
 .. automodule:: edisgo.io.timeseries_import
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: edisgo.io
     :members:
     :undoc-members:
     :show-inheritance:

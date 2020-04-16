@@ -1,9 +1,6 @@
 edisgo.tools package
 ====================
 
-Submodules
-----------
-
 edisgo.tools.config module
 ---------------------------
 

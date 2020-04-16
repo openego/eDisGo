@@ -1,9 +1,6 @@
 edisgo.flex\_opt package
 ========================
 
-Submodules
-----------
-
 edisgo.flex\_opt.check\_tech\_constraints module
 ------------------------------------------------
 
@@ -56,14 +53,6 @@ edisgo.flex\_opt.storage\_positioning module
 ----------------------------------------------
 
 .. automodule:: edisgo.flex_opt.storage_positioning
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: edisgo.flex_opt
     :members:
     :undoc-members:
     :show-inheritance:
