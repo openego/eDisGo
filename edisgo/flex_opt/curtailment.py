@@ -64,7 +64,7 @@ def voltage_based(
         The curtailment in kW to be distributed amongst the generators in
         `generators` parameter. Index of the series is a
         :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-    edisgo : :class:`edisgo.grid.network.EDisGo`
+    edisgo : :class:`~.edisgo.EDisGo`
     curtailment_key : :obj:`str` or :obj:`tuple` with :obj:`str`
         The technology and weather cell ID if :obj:`tuple` or only
         the technology if :obj:`str` the curtailment is specified for.
@@ -427,7 +427,7 @@ def feedin_proportional(
         The curtailment in kW to be distributed amongst the generators in
         `generators` parameter. Index of the series is a
         :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-    edisgo : :class:`edisgo.grid.network.EDisGo`
+    edisgo : :class:`~.edisgo.EDisGo`
     curtailment_key::obj:`str` or :obj:`tuple` with :obj:`str`
         The technology and weather cell ID if :obj:`tuple` or only
         the technology if :obj:`str` the curtailment is specified for.
@@ -501,7 +501,7 @@ def _assign_curtailment(curtailment, edisgo, generators, curtailment_key):
         `curtailment_key` parameter. Index is a
         :pandas:`pandas.DatetimeIndex<datetimeindex>`, columns are the
         generator representatives.
-    edisgo : :class:`edisgo.grid.network.EDisGo`
+    edisgo : :class:`~.edisgo.EDisGo`
     generators : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with all generators of the type (and in weather cell)
         specified in `curtailment_key` parameter. See return value of

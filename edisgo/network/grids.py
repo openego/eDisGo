@@ -204,11 +204,12 @@ class Grid(ABC):
         """
         Lines within the network.
 
-         Returns
+        Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Dataframe with all buses in topology. For more information on the
             dataframe see :attr:`~.network.topology.Topology.lines_df`.
+
         """
         return self.edisgo_obj.topology.lines_df[
             self.edisgo_obj.topology.lines_df.bus0.isin(self.buses_df.index)
@@ -221,7 +222,7 @@ class Grid(ABC):
         """
         Buses within the network.
 
-         Returns
+        Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Dataframe with all buses in topology. For more information on the
@@ -353,7 +354,7 @@ class MVGrid(Grid):
         """
         Buses within the network.
 
-         Returns
+        Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Dataframe with all buses in topology. For more information on the

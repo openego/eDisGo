@@ -344,22 +344,22 @@ class Results:
 
         The exchanges are essentially the slack results. As the slack is placed
         at the secondary side of the HV/MV station, this gives the energy
-        transferred to and taken from the HV network at the secondary side of the
-        HV/MV station.
+        transferred to and taken from the HV network at the secondary side of
+        the HV/MV station.
 
         Parameters
         ----------
         hv_mv_exchanges : :pandas:`pandas.DataFrame<dataframe>`
             Dataframe holding active and reactive power exchanged with the HV
-            network in columns 'p' and 'q' and in kW and kvar, respectively. Index
-            is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+            network in columns 'p' and 'q' and in kW and kvar, respectively.
+            Index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>
+        :pandas:`pandas.DataFrame<dataframe>`
             Dataframe holding active and reactive power exchanged with the HV
-            network in columns 'p' and 'q' and in kW and kvar, respectively. Index
-            is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+            network in columns 'p' and 'q' and in kW and kvar, respectively.
+            Index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
 
         """
         # ToDo: Instead of hv_mv_exchanges just use slack (is more general in

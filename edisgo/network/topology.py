@@ -518,6 +518,7 @@ class Topology:
         Dictionary with MV grid district information.
 
         The dictionary contains the following information:
+
         * 'population'
           Number of inhabitants in grid district as integer.
         * 'geom'

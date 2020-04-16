@@ -227,9 +227,9 @@ def line_expansion_costs(edisgo_obj, lines_names):
     Returns costs for earthworks and per added cable as well as voltage level
     for chosen lines in edisgo_obj.
 
-    Attributes
-    ----------
-    edisgo_obj : :class:`~.self.edisgo.EDisGo`
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.edisgo.EDisGo`
         eDisGo object of which lines of lines_df are part
     lines_names: list of str
         List of names of evaluated lines
@@ -239,6 +239,7 @@ def line_expansion_costs(edisgo_obj, lines_names):
     costs: :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with names of lines as index and entries for
         'costs_earthworks', 'costs_cable', 'voltage_level' for each line
+
     """
     lines_df = edisgo_obj.topology.lines_df.loc[lines_names, ["length"]]
     mv_lines = lines_df[

@@ -6,8 +6,8 @@ Usage details
 As eDisGo is designed to serve as a toolbox, it provides several methods to
 analyze distribution grids for grid issues and to evaluate measures responding these.
 We provide two examples, an 
-:download:`example script <../edisgo/examples/example.py>`
-and :download:`jupyter notebook <../edisgo/examples/edisgo_simple_example.ipynb>`.
+:download:`example script <../examples/example.py>` and
+:download:`jupyter notebook <../examples/edisgo_simple_example.ipynb>`.
 
 Further, we discuss how different features can be used in detail below.
 

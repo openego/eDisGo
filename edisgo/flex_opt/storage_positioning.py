@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 from math import sqrt, ceil
 
-from edisgo.network import tools
+from edisgo.tools import tools
 from edisgo.flex_opt import check_tech_constraints, costs
 from edisgo.tools import plots
 

@@ -6,15 +6,20 @@ from pypsa.descriptors import Dict
 
 def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
     """
-    Prepare PyPsa Network for OPF Problem
-    - add line costs
-    - add hv side of HVMV-Transformer to network
-    - move slack to hv side of HVMV-Transformer
-    :param edisgo_grid: eDisGo obj
-    :param psa_network: PyPsaNetwork
-    :param hvmv_trafo (optional): if True, hv side of hvmv trafo is added to buses,
-                                    and generator slack is moved to hv side
-    :return:
+    Prepares pypsa network for OPF problem.
+
+    * adds line costs
+    * adds HV side of HV/MV transformer to network
+    * moves slack to HV side of HV/MV transformer
+
+    Parameters
+    ----------
+    edisgo_grid : :class:`~.edisgo.EDisGo`
+    psa_network : :pypsa:`pypsa.Network<network>`
+    hvmv_trafo : :obj:`Boolean`
+        If True, HV side of HV/MV transformer is added to buses and Slack
+        generator is moved to HV side.
+
     """
     mode = "mv"
     mv_grid = edisgo_grid.topology.mv_grid
@@ -121,16 +126,19 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
                 )
             except ValueError as e:
                 print("ValueError: {}".format(e))
-        # print(len(val.columns))
-
-    return
 
 
 def aggregate_fluct_generators(psa_network):
     """
-    iterate over all generator buses, if multiple generators attached, aggregate fluctuating generators of same type
-    :param psa_network: pypsa network
-    :return:
+    Aggregates fluctuating generators of same type at the same node.
+
+    Iterates over all generator buses. If multiple fluctuating generators are
+    attached, they are aggregated by type.
+
+    Parameters
+    ----------
+    psa_network: :pypsa:`pypsa.Network<network>`
+
     """
     gen_df = psa_network.generators.copy()
     gen_t_dict = psa_network.generators_t.copy()

@@ -47,7 +47,7 @@ edisgo.network.topology module
 Module contents
 ----------------
 
-.. automodule:: edisgo.grid
+.. automodule:: edisgo.network
     :members:
     :undoc-members:
     :show-inheritance:

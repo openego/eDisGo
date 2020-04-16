@@ -21,32 +21,32 @@ class TimeSeries:
     Can also contain time series for loads (sector-specific), generators
     (technology-specific), and curtailment (technology-specific).
 
-    Attributes
-    ----------
+    Parameters
+    -----------
     timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`, optional
         Can be used to define a time range for which to obtain the provided
         time series and run power flow analysis. Default: None.
-    generators_active_power: :pandas:`pandas.DataFrame<dataframe>`, optional
+    generators_active_power : :pandas:`pandas.DataFrame<dataframe>`, optional
         Active power timeseries of all generators in topology. Index of
         DataFrame has to contain timeindex and column names are names of
         generators.
-    generators_reactive_power: :pandas:`pandas.DataFrame<dataframe>`, optional
+    generators_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
         Reactive power timeseries of all generators in topology. Format is the
         same as for generators_active power.
-    loads_active_power: :pandas:`pandas.DataFrame<dataframe>`, optional
+    loads_active_power : :pandas:`pandas.DataFrame<dataframe>`, optional
         Active power timeseries of all loads in topology. Index of DataFrame
         has to contain timeindex and column names are names of loads.
-    loads_reactive_power: :pandas:`pandas.DataFrame<dataframe>`, optional
+    loads_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
         Reactive power timeseries of all loads in topology. Format is the
         same as for loads_active power.
-    storage_units_active_power: :pandas:`pandas.DataFrame<dataframe>`, optional
+    storage_units_active_power : :pandas:`pandas.DataFrame<dataframe>`, optional
         Active power timeseries of all storage units in topology. Index of
         DataFrame has to contain timeindex and column names are names of
         storage units.
-    storage_units_reactive_power: :pandas:`pandas.DataFrame<dataframe>`, optional
+    storage_units_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
         Reactive power timeseries of all storage_units in topology. Format is
         the same as for storage_units_active power.
-    curtailment : :pandas:`pandas.DataFrame<dataframe>` or List, optional
+    curtailment : :pandas:`pandas.DataFrame<dataframe>` or list, optional
         In the case curtailment is applied to all fluctuating renewables
         this needs to be a DataFrame with active power curtailment time series.
         Time series can either be aggregated by technology type or by type
@@ -102,7 +102,7 @@ class TimeSeries:
     @property
     def generators_active_power(self):
         """
-        Active power timeseries of generators [MW].
+        Active power time series of all generators in MW.
 
         Returns
         -------
@@ -125,11 +125,11 @@ class TimeSeries:
     @property
     def generators_reactive_power(self):
         """
-        Reactive power timeseries of generators in [MVA].
+        Reactive power timeseries of generators in MVA.
 
         Returns
         -------
-        :pandas: `pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
 
         """
@@ -148,7 +148,7 @@ class TimeSeries:
     @property
     def loads_active_power(self):
         """
-        Active power timeseries of loads in [MW].
+        Active power timeseries of loads in MW.
 
         Returns
         -------
@@ -171,11 +171,11 @@ class TimeSeries:
     @property
     def loads_reactive_power(self):
         """
-        Reactive power timeseries in [MVA].
+        Reactive power timeseries in MVA.
 
         Returns
         -------
-        :pandas: `pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
 
         """
@@ -194,7 +194,7 @@ class TimeSeries:
     @property
     def storage_units_active_power(self):
         """
-        Active power timeseries of storage units in [MW].
+        Active power timeseries of storage units in MW.
 
         Returns
         -------
@@ -219,11 +219,11 @@ class TimeSeries:
     @property
     def storage_units_reactive_power(self):
         """
-        Reactive power timeseries of storage_units in [MVA].
+        Reactive power timeseries of storage_units in MVA.
 
         Returns
         -------
-        :pandas: `pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<dataframe>`
             See class definition for details.
 
         """
