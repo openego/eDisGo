@@ -32,7 +32,7 @@ def grid_expansion_costs(
 
     Returns
     -------
-    `pandas.DataFrame<dataframe>`
+    `pandas.DataFrame<DataFrame>`
         DataFrame containing type and costs plus in the case of lines the
         line length and number of parallel lines of each reinforced
         transformer and line. Index of the DataFrame is the name of either line
@@ -236,7 +236,7 @@ def line_expansion_costs(edisgo_obj, lines_names):
 
     Returns
     -------
-    costs: :pandas:`pandas.DataFrame<dataframe>`
+    costs: :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with names of lines as index and entries for
         'costs_earthworks', 'costs_cable', 'voltage_level' for each line
 

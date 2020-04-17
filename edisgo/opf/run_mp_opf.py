@@ -56,7 +56,7 @@ def bus_names_to_ints(pypsa_network, bus_names):
 def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
     """
     :param edisgo_network:
-    :param timesteps: `pandas.DatetimeIndex<datetimeindex>` or `pandas.Timestamp<timestamp>`
+    :param timesteps: `pandas.DatetimeIndex<DatetimeIndex>` or `pandas.Timestamp<Timestamp>`
     :param **kwargs:
         "scenario" : "nep"
         # objective function

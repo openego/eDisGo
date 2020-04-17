@@ -157,7 +157,7 @@ def get_linked_steps(cluster_params, num_steps=24, keep_steps=[]):
     """
     Use provided data to identify representative time steps and create mapping Dict that can be passed to optimization
     :param cluster_params: Time series containing the parameters to be considered for distance between points
-    :type cluster_params: :pandas:`pandas.DataFrame<dataframe>`
+    :type cluster_params: :pandas:`pandas.DataFrame<DataFrame>`
     :param num_steps: The number of representative time steps to be selected
     :type num_steps: int
     :param keep_steps: Time steps to retain with full resolution, regardless of clustering result

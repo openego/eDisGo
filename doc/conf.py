@@ -70,7 +70,7 @@ napoleon_use_param = True
 napoleon_use_rtype = True
 napoleon_use_keyword = False
 # Dictionary of external links
-extlinks = {'pandas':('http://pandas.pydata.org/pandas-docs/stable/reference/%s.html',
+extlinks = {'pandas':('http://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.%s.html',
                       'pandas.'),
             'networkx':('https://networkx.readthedocs.io/en/stable/reference/classes.graph.html%s',
                         'NetworkX Graph Obj'),

@@ -18,14 +18,14 @@ def mv_line_load(edisgo_obj):
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded MV lines, their maximum relative
         over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded lines of type
         :class:`~.network.components.Line`. Columns are 'max_rel_overload'
         containing the maximum relative over-loading as float and 'time_index'
         containing the corresponding time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
     Notes
     -----
@@ -62,14 +62,14 @@ def lv_line_load(edisgo_obj):
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded LV lines, their maximum relative
         over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded lines of type
         :class:`~.network.components.Line`. Columns are 'max_rel_overload'
         containing the maximum relative over-loading as float and 'time_index'
         containing the corresponding time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
     Notes
     -----
@@ -108,10 +108,10 @@ def lines_allowed_load(edisgo_obj, grid, grid_level):
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing the maximum allowed current per line per time step
         Index of the dataframe are the timesteps of the supplied network of type
-        :pandas:`pandas.Timestamp<timestamp>`.
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
         Columns are the network lines of type :class:`~.network.components.Line`.
         They contain the maximum allowed current flow for each line per time step
@@ -150,25 +150,25 @@ def _line_load(edisgo_obj, grid, crit_lines):
     ----------
     network : :class:`~.network.network.Network`
     grid : :class:`~.network.grids.LVGrid` or :class:`~.network.grids.MVGrid`
-    crit_lines : :pandas:`pandas.DataFrame<dataframe>`
+    crit_lines : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded lines, their maximum relative
         over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded lines of type
         :class:`~.network.components.Line`. Columns are 'max_rel_overload'
         containing the maximum relative over-loading as float and 'time_index'
         containing the corresponding time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded lines, their maximum relative
         over-loading and the corresponding time step.
         Index of the dataframe are the over-loaded lines of type
         :class:`~.network.components.Line`. Columns are 'max_rel_overload'
         containing the maximum relative over-loading as float and 'time_index'
         containing the corresponding time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
     """
     if edisgo_obj.results.i_res is None:
@@ -243,7 +243,7 @@ def hv_mv_station_load(edisgo):
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded HV/MV stations, their apparent power
         at maximal over-loading and the corresponding time step.
         Index of the dataframe are the representatives of the MVGrid of type
@@ -251,7 +251,7 @@ def hv_mv_station_load(edisgo):
         Columns are 's_pfa' containing the apparent power at maximal
         over-loading as float and 'time_index' containing the corresponding
         time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
     Notes
     -----
@@ -282,7 +282,7 @@ def mv_lv_station_load(edisgo_obj):
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded MV/LV stations, their apparent power
         at maximal over-loading and the corresponding time step.
         Index of the dataframe are the representatives of LVGrids of type
@@ -290,7 +290,7 @@ def mv_lv_station_load(edisgo_obj):
         Columns are 's_pfa' containing the apparent power at maximal
         over-loading as float and 'time_index' containing  the corresponding
         time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
     Notes
     -----
@@ -324,25 +324,25 @@ def _station_load(edisgo_obj, grid, crit_stations):
     ----------
     edisgo_obj : :class:`~.edisgo.Edisgo`
     grid : :class:`~.network.grids.LVGrid` or :class:`~.network.grids.MVGrid`
-    crit_stations : :pandas:`pandas.DataFrame<dataframe>`
+    crit_stations : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded stations, their apparent power at
         maximal over-loading and the corresponding time step.
         Index of the dataframe are the representatives of the grids with
         over-loaded stations. Columns are 's_pfa' containing the apparent power
         at maximal over-loading as float and 'time_index' containing the
         corresponding time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded stations, their apparent power at
         maximal over-loading and the corresponding time step.
         Index of the dataframe are the representatives of the grids with
         over-loaded stations. Columns are 's_pfa' containing the apparent power
         at maximal over-loading as float and 'time_index' containing the
         corresponding time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
     """
 
@@ -444,15 +444,15 @@ def mv_allowed_deviations(edisgo_obj, voltage_levels):
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing the maximum allowed relative upper voltage deviation
         Index of the dataframe are the timesteps of the supplied network of type
-        :pandas:`pandas.Timestamp<timestamp>`.
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing the maximum allowed relative lower voltage deviation
         Index of the dataframe are the timesteps of the supplied network of type
-        :pandas:`pandas.Timestamp<timestamp>`.
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
     """
     v_dev_allowed_per_case = {}
@@ -540,12 +540,12 @@ def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
     -------
     :obj:`dict`
         Dictionary with representative of :class:`~.network.grids.MVGrid` as
-        key and a :pandas:`pandas.DataFrame<dataframe>` with its critical
+        key and a :pandas:`pandas.DataFrame<DataFrame>` with its critical
         nodes, sorted descending by voltage deviation, as value.
-        Index of the dataframe are all buses with over-voltage issues.
+        Index of the dataframe are all buses with voltage issues.
         Columns are 'v_mag_pu' containing the maximum voltage deviation as
         float and 'time_index' containing the corresponding time step the
-        over-voltage occured in as :pandas:`pandas.Timestamp<timestamp>`.
+        voltage issue occured in as :pandas:`pandas.Timestamp<Timestamp>`.
 
     Notes
     -----
@@ -879,23 +879,23 @@ def _voltage_deviation(
     edisgo_obj : :class:`~.edisgo.EDisGo`
     nodes : :obj:`list`
         List of buses to check voltage deviation for.
-    v_dev_allowed_upper : :pandas:`pandas.Series<series>`
-        Series with time steps (of type :pandas:`pandas.Timestamp<timestamp>`)
+    v_dev_allowed_upper : :pandas:`pandas.Series<Series>`
+        Series with time steps (of type :pandas:`pandas.Timestamp<Timestamp>`)
         power flow analysis was conducted for and the allowed upper limit of
         voltage deviation for each time step as float.
-    v_dev_allowed_lower : :pandas:`pandas.Series<series>`
-        Series with time steps (of type :pandas:`pandas.Timestamp<timestamp>`)
+    v_dev_allowed_lower : :pandas:`pandas.Series<Series>`
+        Series with time steps (of type :pandas:`pandas.Timestamp<Timestamp>`)
         power flow analysis was conducted for and the allowed lower limit of
         voltage deviation for each time step as float.
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with critical nodes, sorted descending by voltage deviation.
         Index of the dataframe are name of all nodes with over-voltage issues.
         Columns are 'v_mag_pu' containing the maximum voltage deviation as
         float and 'time_index' containing the corresponding time step the
-        over-voltage occured in as :pandas:`pandas.Timestamp<timestamp>`.
+        over-voltage occured in as :pandas:`pandas.Timestamp<Timestamp>`.
 
     """
 

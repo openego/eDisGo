@@ -109,7 +109,7 @@ def run_edisgo_basic(
     -------
     edisgo_grid : :class:`~.network.network.EDisGo`
         eDisGo network container
-    costs : :pandas:`pandas.Dataframe<dataframe>`
+    costs : :pandas:`pandas.Dataframe<DataFrame>`
         Cost of network extension
     grid_issues : dict
         Grids resulting in an error including error message
@@ -212,11 +212,11 @@ def run_edisgo_twice(run_args):
 
     Returns
     -------
-    all_costs_before_geno_import : :pandas:`pandas.Dataframe<dataframe>`
+    all_costs_before_geno_import : :pandas:`pandas.Dataframe<DataFrame>`
         Grid extension cost before network connection of new generators
     all_grid_issues_before_geno_import : dict
         Remaining overloading or over-voltage issues in network
-    all_costs : :pandas:`pandas.Dataframe<dataframe>`
+    all_costs : :pandas:`pandas.Dataframe<DataFrame>`
         Grid extension cost due to network connection of new generators
     all_grid_issues : dict
         Remaining overloading or over-voltage issues in network

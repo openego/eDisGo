@@ -59,7 +59,7 @@ class Topology:
         Returns
         -------
         :obj:`dict`
-            Dictionary with :pandas:`pandas.DataFrame<dataframe>` containing
+            Dictionary with :pandas:`pandas.DataFrame<DataFrame>` containing
             equipment data. Keys of the dictionary are 'mv_transformers',
             'mv_overhead_lines', 'mv_cables', 'lv_transformers', and
             'lv_cables'.
@@ -165,7 +165,7 @@ class Topology:
 
         Returns
         --------
-        :obj:`dict` of :pandas:`pandas.DataFrame<dataframe>`
+        :obj:`dict` of :pandas:`pandas.DataFrame<DataFrame>`
             Data of electrical equipment.
 
         """
@@ -178,7 +178,7 @@ class Topology:
 
         Parameters
         ----------
-        buses_df : :pandas:`pandas.DataFrame<dataframe>`
+        buses_df : :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all buses in MV network and underlying LV grids.
             Index of the dataframe are bus names. Columns of the dataframe are:
             v_nom
@@ -190,7 +190,7 @@ class Topology:
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all buses in MV network and underlying LV grids.
 
         """
@@ -219,7 +219,7 @@ class Topology:
 
         Parameters
         ----------
-        generators_df : :pandas:`pandas.DataFrame<dataframe>`
+        generators_df : :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all generators in MV network and underlying LV grids.
             Index of the dataframe are generator names. Columns of the
             dataframe are:
@@ -232,7 +232,7 @@ class Topology:
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all generators in MV network and underlying LV
             grids.
 
@@ -250,7 +250,7 @@ class Topology:
 
         Parameters
         ----------
-        loads_df : :pandas:`pandas.DataFrame<dataframe>`
+        loads_df : :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all loads in MV network and underlying LV grids.
             Index of the dataframe are load names. Columns of the
             dataframe are:
@@ -261,7 +261,7 @@ class Topology:
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all loads in MV network and underlying LV grids.
 
         """
@@ -278,7 +278,7 @@ class Topology:
 
         Parameters
         ----------
-        transformers_df : :pandas:`pandas.DataFrame<dataframe>`
+        transformers_df : :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all transformers.
             Index of the dataframe are transformer names. Columns of the
             dataframe are:
@@ -291,7 +291,7 @@ class Topology:
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all transformers.
 
         """
@@ -308,7 +308,7 @@ class Topology:
 
         Parameters
         ----------
-        transformers_df : :pandas:`pandas.DataFrame<dataframe>`
+        transformers_df : :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all transformers.
             Index of the dataframe are transformer names. Columns of the
             dataframe are:
@@ -321,7 +321,7 @@ class Topology:
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all HVMV transformers.
 
         """
@@ -338,7 +338,7 @@ class Topology:
 
         Parameters
         ----------
-        lines_df : :pandas:`pandas.DataFrame<dataframe>`
+        lines_df : :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all lines in MV network and underlying LV grids.
             Index of the dataframe are line names. Columns of the
             dataframe are:
@@ -354,7 +354,7 @@ class Topology:
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all lines in MV network and underlying LV grids.
 
         """
@@ -371,7 +371,7 @@ class Topology:
 
         Parameters
         ----------
-        switches_df : :pandas:`pandas.DataFrame<dataframe>`
+        switches_df : :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all switches in MV network and underlying LV grids.
             Index of the dataframe are switch names. Columns of the
             dataframe are:
@@ -382,7 +382,7 @@ class Topology:
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all switches in MV network and underlying LV grids.
 
         """
@@ -399,7 +399,7 @@ class Topology:
 
         Parameters
         ----------
-        storage_units_df : :pandas:`pandas.DataFrame<dataframe>`
+        storage_units_df : :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all storage units in MV grid and underlying LV
             grids.
             Index of the dataframe are storage names. Columns of the
@@ -413,7 +413,7 @@ class Topology:
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all storage units in MV network and underlying LV
             grids.
 
@@ -554,7 +554,7 @@ class Topology:
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe of connected lines
 
         """
@@ -573,7 +573,7 @@ class Topology:
 
         Returns
         -------
-         dict of :pandas:`pandas.DataFrame<dataframe>`
+         dict of :pandas:`pandas.DataFrame<DataFrame>`
             dictionary of connected elements with keys 'Generator', 'Line',
             'Load', 'Transformer', 'Transformer_HVMV', 'StorageUnit', 'Switch'
         """

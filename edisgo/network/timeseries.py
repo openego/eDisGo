@@ -23,30 +23,30 @@ class TimeSeries:
 
     Parameters
     -----------
-    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`, optional
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`, optional
         Can be used to define a time range for which to obtain the provided
         time series and run power flow analysis. Default: None.
-    generators_active_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+    generators_active_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
         Active power timeseries of all generators in topology. Index of
         DataFrame has to contain timeindex and column names are names of
         generators.
-    generators_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+    generators_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
         Reactive power timeseries of all generators in topology. Format is the
         same as for generators_active power.
-    loads_active_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+    loads_active_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
         Active power timeseries of all loads in topology. Index of DataFrame
         has to contain timeindex and column names are names of loads.
-    loads_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+    loads_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
         Reactive power timeseries of all loads in topology. Format is the
         same as for loads_active power.
-    storage_units_active_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+    storage_units_active_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
         Active power timeseries of all storage units in topology. Index of
         DataFrame has to contain timeindex and column names are names of
         storage units.
-    storage_units_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+    storage_units_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
         Reactive power timeseries of all storage_units in topology. Format is
         the same as for storage_units_active power.
-    curtailment : :pandas:`pandas.DataFrame<dataframe>` or list, optional
+    curtailment : :pandas:`pandas.DataFrame<DataFrame>` or list, optional
         In the case curtailment is applied to all fluctuating renewables
         this needs to be a DataFrame with active power curtailment time series.
         Time series can either be aggregated by technology type or by type
@@ -106,7 +106,7 @@ class TimeSeries:
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See class definition for details.
 
         """
@@ -129,7 +129,7 @@ class TimeSeries:
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See class definition for details.
 
         """
@@ -152,7 +152,7 @@ class TimeSeries:
 
         Returns
         -------
-        dict or :pandas:`pandas.DataFrame<dataframe>`
+        dict or :pandas:`pandas.DataFrame<DataFrame>`
             See class definition for details.
 
         """
@@ -175,7 +175,7 @@ class TimeSeries:
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See class definition for details.
 
         """
@@ -198,7 +198,7 @@ class TimeSeries:
 
         Returns
         -------
-        dict or :pandas:`pandas.DataFrame<dataframe>`
+        dict or :pandas:`pandas.DataFrame<DataFrame>`
             See class definition for details.
 
         """
@@ -223,7 +223,7 @@ class TimeSeries:
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See class definition for details.
 
         """
@@ -250,7 +250,7 @@ class TimeSeries:
 
         Returns
         -------
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
             See class definition for details.
 
         """
@@ -275,7 +275,7 @@ class TimeSeries:
 
         Parameters
         ----------
-        curtailment : list or :pandas:`pandas.DataFrame<dataframe>`
+        curtailment : list or :pandas:`pandas.DataFrame<DataFrame>`
             See class definition for details.
 
         Returns
@@ -327,7 +327,7 @@ class TimeSeries:
 
         Returns
         -------
-        :pandas:`pandas.Series<series>`
+        :pandas:`pandas.Series<Series>`
 
             Series with residual load in MW.
 
@@ -354,7 +354,7 @@ class TimeSeries:
 
         Returns
         -------
-        :pandas:`pandas.Series<series>`
+        :pandas:`pandas.Series<Series>`
 
             Series with information on whether time step is handled as load
             case ('load_case') or feed-in case ('feedin_case') for each time
@@ -457,7 +457,7 @@ def get_component_timeseries(edisgo_obj, **kwargs):
     timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
         DataFrame with time series of normalized reactive power (normalized by
         the rated nominal active power) per technology and weather cell. Index
-        needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
         Columns represent generator type and can be a MultiIndex column
         containing the weather cell ID in the second level. If the technology
         doesn't contain weather cell information i.e. if it is other than solar
@@ -486,7 +486,7 @@ def get_component_timeseries(edisgo_obj, **kwargs):
         Parameter to get the time series of the reactive power of loads. It should be a
         DataFrame with time series of normalized reactive power (normalized by
         annual energy demand) per load sector. Index needs to be a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
         Columns represent load type:
 
           * 'residential'
@@ -495,7 +495,7 @@ def get_component_timeseries(edisgo_obj, **kwargs):
           * 'agricultural'
 
         Default: None.
-    timeindex : :pandas:`pandas.DatetimeIndex<datetimeindex>`
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
         Can be used to define a time range for which to obtain load time series
         and feed-in time series of fluctuating renewables or to define time
         ranges of the given time series that will be used in the analysis.

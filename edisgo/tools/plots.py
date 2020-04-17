@@ -37,8 +37,8 @@ def histogram(data, **kwargs):
     data : :pandas:`pandas.DataFrame<dataframe>`
         Data to be plotted, e.g. voltage or current (`v_res` or `i_res` from
         :class:`network.results.Results`). Index of the dataframe must be
-        a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-    timeindex : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+        a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+    timeindex : :pandas:`pandas.Timestamp<Timestamp>` or list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
         Specifies time steps histogram is plotted for. If timeindex is None all
         time steps provided in `data` are used. Default: None.
     directory : :obj:`str` or None, optional
@@ -236,7 +236,7 @@ def mv_grid_topology(
     Parameters
     ----------
     edisgo_obj : :class:`~edisgo.EDisGo`
-    timestep : :pandas:`pandas.Timestamp<timestamp>`
+    timestep : :pandas:`pandas.Timestamp<Timestamp>`
         Time step to plot analysis results for. If `timestep` is None maximum
         line load and if given, maximum voltage deviation, is used. In that
         case arrows cannot be drawn. Default: None.
@@ -283,7 +283,7 @@ def mv_grid_topology(
 
     line_load : :pandas:`pandas.DataFrame<dataframe>` or None
         Dataframe with current results from power flow analysis in A. Index of
-        the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
         columns are the line representatives. Only needs to be provided when
         parameter `line_color` is set to 'loading'. Default: None.
     grid_expansion_costs : :pandas:`pandas.DataFrame<dataframe>` or None
@@ -307,7 +307,7 @@ def mv_grid_topology(
         contextily package to be installed. Default: True.
     voltage : :pandas:`pandas.DataFrame<dataframe>`
         Dataframe with voltage results from power flow analysis in p.u.. Index
-        of the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        of the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
         columns are the bus representatives. Only needs to be provided when
         parameter `node_color` is set to 'voltage'. Default: None.
     limits_cb_lines : :obj:`tuple`

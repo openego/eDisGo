@@ -50,20 +50,20 @@ def voltage_based(
 
     Parameters
     ----------
-    feedin : :pandas:`pandas.DataFrame<dataframe>`
+    feedin : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe holding the feed-in of each generator in kW for the
         technology (and weather cell) specified in `curtailment_key` parameter.
         Index of the dataframe is a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`. Columns are the
         representatives of the fluctuating generators.
-    generators : :pandas:`pandas.DataFrame<dataframe>`
+    generators : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with all generators of the type (and in weather cell)
         specified in `curtailment_key` parameter. See return value of
         :func:`edisgo.network.tools.get_gen_info` for more information.
-    curtailment_timeseries : :pandas:`pandas.Series<series>`
+    curtailment_timeseries : :pandas:`pandas.Series<Series>`
         The curtailment in kW to be distributed amongst the generators in
         `generators` parameter. Index of the series is a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
     edisgo : :class:`~.edisgo.EDisGo`
     curtailment_key : :obj:`str` or :obj:`tuple` with :obj:`str`
         The technology and weather cell ID if :obj:`tuple` or only
@@ -261,30 +261,30 @@ def _optimize_voltage_based_curtailment(
 
     Parameters
     ------------
-    feedin : :pandas:`pandas.DataFrame<dataframe>`
+    feedin : :pandas:`pandas.DataFrame<DataFrame>`
         See `feedin` parameter in
         :func:`edisgo.flex_opt.curtailment.voltage_based` for more information.
-    voltage_pu : :pandas:`pandas.DataFrame<dataframe>
+    voltage_pu : :pandas:`pandas.DataFrame<DataFrame>
         Dataframe containing voltages in p.u. at the generator nodes. Index
-        of the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        of the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
         columns are the generator representatives.
-    total_curtailment : :pandas:`pandas.Series<series>`
+    total_curtailment : :pandas:`pandas.Series<Series>`
         Series containing the specific curtailment in kW to be allocated to the
         generators. The index is a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
-    voltage_threshold : :pandas:`pandas.Series<series>`
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+    voltage_threshold : :pandas:`pandas.Series<Series>`
         Series containing the voltage thresholds in p.u. below which no
         generator curtailment will occur. The index is a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
     solver : :obj:`str`
         The solver used to optimize the linear problem. Default: 'cbc'.
 
     Returns
     -------
-    :pandas:`pandas:DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing the curtailment in kW per generator and time step
         feed-in was provided for in `feedin` parameter. Index is a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`, columns are the
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`, columns are the
         generator representatives.
 
     """
@@ -413,20 +413,20 @@ def feedin_proportional(
 
     Parameters
     ----------
-    feedin : :pandas:`pandas.DataFrame<dataframe>`
+    feedin : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe holding the feed-in of each generator in kW for the
         technology (and weather cell) specified in `curtailment_key` parameter.
         Index of the dataframe is a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`. Columns are the
         representatives of the fluctuating generators.
-    generators : :pandas:`pandas.DataFrame<dataframe>`
+    generators : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with all generators of the type (and in weather cell)
         specified in `curtailment_key` parameter. See return value of
         :func:`edisgo.network.tools.get_gen_info` for more information.
-    curtailment_timeseries : :pandas:`pandas.Series<series>`
+    curtailment_timeseries : :pandas:`pandas.Series<Series>`
         The curtailment in kW to be distributed amongst the generators in
         `generators` parameter. Index of the series is a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
     edisgo : :class:`~.edisgo.EDisGo`
     curtailment_key::obj:`str` or :obj:`tuple` with :obj:`str`
         The technology and weather cell ID if :obj:`tuple` or only
@@ -462,14 +462,14 @@ def _check_curtailment_target(
 
     Parameters
     -----------
-    curtailment : :pandas:`pandas:DataFrame<dataframe>`
+    curtailment : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing the curtailment in kW per generator and time step.
-        Index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`, columns are
+        Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`, columns are
         the generator representatives.
-    curtailment_target : :pandas:`pandas.Series<series>`
+    curtailment_target : :pandas:`pandas.Series<Series>`
         The curtailment in kW that was to be distributed amongst the
         generators. Index of the series is a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
     curtailment_key : :obj:`str` or :obj:`tuple` with :obj:`str`
         The technology and weather cell ID if :obj:`tuple` or only
         the technology if :obj:`str` the curtailment was specified for.
@@ -495,14 +495,14 @@ def _assign_curtailment(curtailment, edisgo, generators, curtailment_key):
 
     Parameters
     ----------
-    curtailment : :pandas:`pandas.DataFrame<dataframe>`
+    curtailment : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing the curtailment in kW per generator and time step
         for all generators of the type (and in weather cell) specified in
         `curtailment_key` parameter. Index is a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`, columns are the
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`, columns are the
         generator representatives.
     edisgo : :class:`~.edisgo.EDisGo`
-    generators : :pandas:`pandas.DataFrame<dataframe>`
+    generators : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with all generators of the type (and in weather cell)
         specified in `curtailment_key` parameter. See return value of
         :func:`edisgo.network.tools.get_gen_info` for more information.
@@ -565,10 +565,10 @@ class CurtailmentControl:
           'solver'. For more information see
           :func:`edisgo.flex_opt.curtailment.voltage_based`.
 
-    curtailment_timeseries : :pandas:`pandas.Series<series>` or \
-        :pandas:`pandas.DataFrame<dataframe>`, optional
+    curtailment_timeseries : :pandas:`pandas.Series<Series>` or \
+        :pandas:`pandas.DataFrame<DataFrame>`, optional
         Series or DataFrame containing the curtailment time series in kW. Index
-        needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
         Provide a Series if the curtailment time series applies to wind and
         solar generators. Provide a DataFrame if the curtailment time series
         applies to a specific technology and optionally weather cell. In the
@@ -723,8 +723,8 @@ class CurtailmentControl:
 
         Parameters
         -----------
-        curtailment_timeseries : :pandas:`pandas.Series<series>` or \
-            :pandas:`pandas.DataFrame<dataframe>`
+        curtailment_timeseries : :pandas:`pandas.Series<Series>` or \
+            :pandas:`pandas.DataFrame<DataFrame>`
             See parameter `curtailment_timeseries` in class definition for more
             information.
 
@@ -753,10 +753,10 @@ class CurtailmentControl:
 
         Parameters
         -----------
-        curtailment_timeseries : :pandas:`pandas.Series<series>`
+        curtailment_timeseries : :pandas:`pandas.Series<Series>`
             Curtailment time series in kW for the technology (and weather
             cell) specified in `curtailment_key`.
-        feedin_df : :pandas:`pandas.Series<series>`
+        feedin_df : :pandas:`pandas.Series<Series>`
             Feed-in time series in kW for all generators of type (and in
             weather cell) specified in `curtailment_key`.
         curtailment_key : :obj:`str` or :obj:`tuple` with :obj:`str`
@@ -801,7 +801,7 @@ class CurtailmentControl:
         Parameters
         -----------
         network : :class:`~.network.topology.Topology`
-        feedin : :pandas:`pandas.DataFrame<dataframe>`
+        feedin : :pandas:`pandas.DataFrame<DataFrame>`
             DataFrame with feed-in time series in kW. Columns of the dataframe
             are :class:`~.network.components.GeneratorFluctuating`, index is
             time index.

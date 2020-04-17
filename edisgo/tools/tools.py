@@ -29,7 +29,7 @@ def select_worstcase_snapshots(edisgo_obj):
     :obj:`dict`
         Dictionary with keys 'load_case' and 'feedin_case'. Values are
         corresponding worst-case snapshots of type
-        :pandas:`pandas.Timestamp<timestamp>` or None.
+        :pandas:`pandas.Timestamp<Timestamp>` or None.
 
     """
     residual_load = edisgo_obj.timeseries.residual_load
@@ -54,10 +54,10 @@ def get_residual_load_from_pypsa_network(edisgo_obj):
 
     Returns
     -------
-    :pandas:`pandas.Series<series>`
+    :pandas:`pandas.Series<Series>`
         Series with residual load in MW for each time step. Positiv values
         indicate a higher demand than generation and vice versa. Index of the
-        series is a :pandas:`pandas.DatetimeIndex<datetimeindex>`
+        series is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
 
     """
     # Todo: write test
@@ -93,23 +93,23 @@ def calculate_relative_line_load(
     ----------
     edisgo_obj : :class:`~.edisgo.EDisGo`
         Pypsa network with lines to calculate line loading for.
-    line_load : :pandas:`pandas.DataFrame<dataframe>`
+    line_load : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with current results from power flow analysis in A. Index of
-        the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
         columns are the line representatives.
     lines : list(str) or None, optional
         Line names/representatives of lines to calculate line loading for. If
         None line loading of all lines in `line_load` dataframe are used.
         Default: None.
-    timesteps : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+    timesteps : :pandas:`pandas.Timestamp<Timestamp>` or list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
         Specifies time steps to calculate line loading for. If timesteps is
         None all time steps in `line_load` dataframe are used. Default: None.
 
     Returns
     --------
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with relative line loading (unitless). Index of
-        the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
         columns are the line representatives.
 
     """
@@ -346,7 +346,7 @@ def drop_duplicated_indices(dataframe, keep="first"):
 
     Parameters
     ----------
-    dataframe::pandas:`pandas.DataFrame<dataframe>`
+    dataframe::pandas:`pandas.DataFrame<DataFrame>`
         handled dataframe
     keep: str
         indicator of row to be kept, 'first', 'last' or False,
@@ -374,7 +374,7 @@ def select_cable(edisgo_obj, level, apparent_power):
 
     Returns
     -------
-    :pandas:`pandas.Series<series>`
+    :pandas:`pandas.Series<Series>`
         Cable type
     :obj:`ìnt`
         Cable count

@@ -89,7 +89,7 @@ class EDisGo:
           'solar' and 'wind'; in the second case columns need to be a
           :pandas:`pandas.MultiIndex<multiindex>` with the first level
           containing the type and the second level the weather cell id.
-          Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+          Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
 
          .. ToDo: explain how to obtain weather cell id,
 
@@ -98,7 +98,7 @@ class EDisGo:
     timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`
         DataFrame with time series for active power of each (aggregated)
         type of dispatchable generator normalized with corresponding capacity.
-        Index needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
         Columns represent generator type:
 
         * 'gas'
@@ -112,7 +112,7 @@ class EDisGo:
     timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
         DataFrame with time series of normalized reactive power (normalized by
         the rated nominal active power) per technology and weather cell. Index
-        needs to be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
         Columns represent generator type and can be a MultiIndex column
         containing the weather cell ID in the second level. If the technology
         doesn't contain weather cell information i.e. if it is other than solar
@@ -136,7 +136,7 @@ class EDisGo:
         * :pandas:`pandas.DataFrame<dataframe>`
           DataFrame with load time series of each (cumulative) type of load
           normalized with corresponding annual energy demand. Index needs to
-          be a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+          be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
           Columns represent load type:
           * 'residential'
           * 'retail'
@@ -146,7 +146,7 @@ class EDisGo:
     timeseries_load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
         DataFrame with time series of normalized reactive power (normalized by
         annual energy demand) per load sector. Index needs to be a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
         Columns represent load type:
 
           * 'residential'
@@ -167,7 +167,7 @@ class EDisGo:
 
         .. ToDo: Add link to explanation of scenarios.
 
-    timeindex : None or :pandas:`pandas.DatetimeIndex<datetimeindex>`
+    timeindex : None or :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
         Can be used to select time ranges of the feed-in and load time series
         that will be used in the power flow analysis. Also defines the year
         load time series are obtained for when choosing the 'demandlib' option
@@ -317,7 +317,7 @@ class EDisGo:
             mode: can be 'mv', 'mvlv' to export only MV grid, 'lv' to export
                 only LV grid, None to export the whole topology. Defaults
                 to None.
-            timesteps: timesteps of format :pandas:`pandas.Timestamp<timestamp>`
+            timesteps: timesteps of format :pandas:`pandas.Timestamp<Timestamp>`
                 for which time dependant values should be exported to pypsa.
                 Defaults to None, then all timesteps defined in
                 :meth:`~.edisgo.timeseries.timeindex` are chosen.
@@ -427,8 +427,8 @@ class EDisGo:
             network topology (default: None), only MV ('mv' or 'mvlv') or only
             LV ('lv'). Defaults to None which equals power flow analysis for
             MV + LV.
-        timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
-            :pandas:`pandas.Timestamp<timestamp>`
+        timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+            :pandas:`pandas.Timestamp<Timestamp>`
             Timesteps specifies for which time steps to conduct the power flow
             analysis. It defaults to None in which case the time steps in
             timeseries.timeindex (see :class:`~.network.network.TimeSeries`) are
@@ -699,7 +699,7 @@ class EDisGo:
 
         Parameters
         ----------
-        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+        timestep : :pandas:`pandas.Timestamp<Timestamp>` or list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
             Specifies time steps histogram is plotted for. If timestep is None
             all time steps voltages are calculated for are used. Default: None.
         title : :obj:`str` or :obj:`bool`, optional
@@ -754,7 +754,7 @@ class EDisGo:
 
         Parameters
         ----------
-        timestep : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+        timestep : :pandas:`pandas.Timestamp<Timestamp>` or list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
             Specifies time step(s) histogram is plotted for. If `timestep` is
             None all time steps currents are calculated for are used.
             Default: None.

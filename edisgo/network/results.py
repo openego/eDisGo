@@ -138,7 +138,7 @@ class Results:
         df : :pandas:`pandas.DataFrame<frame>`
             Dataframe with voltages at nodes in p.u. from power flow analysis.
             Index of the dataframe is a
-            :pandas:`pandas.DatetimeIndex<datetimeindex>` indicating the time
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>` indicating the time
             steps the power flow analysis was conducted for; columns of the
             dataframe are the bus names of all buses in the analyzed grids.
 
@@ -150,7 +150,7 @@ class Results:
         :pandas:`pandas.DataFrame<frame>`
             Dataframe with voltages at nodes in p.u. from power flow analysis.
             Index of the dataframe is a
-            :pandas:`pandas.DatetimeIndex<datetimeindex>` indicating the time
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>` indicating the time
             steps the power flow analysis was conducted for; columns of the
             dataframe are the bus names of all buses in the analyzed grids.
 
@@ -171,7 +171,7 @@ class Results:
         df : :pandas:`pandas.DataFrame<frame>`
             Dataframe with currents in kA from power flow analysis.
             Index of the dataframe is a
-            :pandas:`pandas.DatetimeIndex<datetimeindex>` indicating the time
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>` indicating the time
             steps the power flow analysis was conducted for; columns of the
             dataframe are the line and transformer names of all lines and
             transformers in the analyzed grids.
@@ -184,7 +184,7 @@ class Results:
         :pandas:`pandas.DataFrame<frame>`
             Dataframe with currents in kA from power flow analysis.
             Index of the dataframe is a
-            :pandas:`pandas.DatetimeIndex<datetimeindex>` indicating the time
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>` indicating the time
             steps the power flow analysis was conducted for; columns of the
             dataframe are the line and transformer names of all lines and
             transformers in the analyzed grids.
@@ -313,14 +313,14 @@ class Results:
         pypsa_grid_losses : :pandas:`pandas.DataFrame<dataframe>`
             Dataframe holding active and reactive network losses in columns 'p'
             and 'q' and in kW and kvar, respectively. Index is a
-            :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Dataframe holding active and reactive network losses in columns 'p'
             and 'q' and in kW and kvar, respectively. Index is a
-            :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
 
         Notes
         ------
@@ -356,14 +356,14 @@ class Results:
         hv_mv_exchanges : :pandas:`pandas.DataFrame<dataframe>`
             Dataframe holding active and reactive power exchanged with the HV
             network in columns 'p' and 'q' and in kW and kvar, respectively.
-            Index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+            Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<dataframe>`
             Dataframe holding active and reactive power exchanged with the HV
             network in columns 'p' and 'q' and in kW and kvar, respectively.
-            Index is a :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+            Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
 
         """
         # ToDo: Instead of hv_mv_exchanges just use slack (is more general in
@@ -392,7 +392,7 @@ class Results:
             ('type','weather_cell_id').
             Values of the dictionary are dataframes with the curtailed power in
             kW per generator and time step. Index of the dataframe is a
-            :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>`. Columns are the
             generators of type
             :class:`edisgo.network.components.GeneratorFluctuating`.
 
@@ -467,7 +467,7 @@ class Results:
 
             Dataframe containing time series of all storage units installed in
             the MV network and LV grids. Index of the dataframe is a
-            :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>`. Columns are the
             storage representatives.
 
         """
@@ -1074,7 +1074,7 @@ class ResultsReimport:
 #
 #             Dataframe containing time series of all storages installed in the
 #             MV network and LV grids. Index of the dataframe is a
-#             :pandas:`pandas.DatetimeIndex<datetimeindex>`. Columns are the
+#             :pandas:`pandas.DatetimeIndex<DatetimeIndex>`. Columns are the
 #             storage representatives.
 #
 #         """

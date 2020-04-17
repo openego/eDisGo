@@ -85,7 +85,7 @@ class Grid(ABC):
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all generators in topology. For more information on
             the dataframe see
             :attr:`~.network.topology.Topology.generators_df`.
@@ -118,7 +118,7 @@ class Grid(ABC):
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all loads in topology. For more information on the
             dataframe see :attr:`~.network.topology.Topology.loads_df`.
 
@@ -148,7 +148,7 @@ class Grid(ABC):
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all storage units in topology. For more information
             on the dataframe see
             :attr:`~.network.topology.Topology.storage_units_df`.
@@ -170,7 +170,7 @@ class Grid(ABC):
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all switch disconnectors in network. For more
             information on the dataframe see
             :attr:`~.network.topology.Topology.switches_df`.
@@ -206,7 +206,7 @@ class Grid(ABC):
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all buses in topology. For more information on the
             dataframe see :attr:`~.network.topology.Topology.lines_df`.
 
@@ -224,7 +224,7 @@ class Grid(ABC):
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all buses in topology. For more information on the
             dataframe see :attr:`~.network.topology.Topology.buses_df`.
 
@@ -265,7 +265,7 @@ class Grid(ABC):
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Cumulative peak generation capacity of generators in the network
             per technology type in MW.
 
@@ -292,7 +292,7 @@ class Grid(ABC):
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Cumulative peak load of loads in the network per sector in MW.
 
         """
@@ -307,7 +307,7 @@ class Grid(ABC):
 
         Parameters
         ----------
-        generators : :pandas:`pandas.DataFrame<dataframe>`
+        generators : :pandas:`pandas.DataFrame<DataFrame>`
             Generators to be connected.
 
         """
@@ -356,7 +356,7 @@ class MVGrid(Grid):
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all buses in topology. For more information on the
             dataframe see :attr:`~.network.topology.Topology.buses_df`.
 
@@ -372,7 +372,7 @@ class MVGrid(Grid):
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all transformers to overlaying network. For more
             information on the dataframe see
             :attr:`~.network.topology.Topology.transformers_df`.
@@ -405,7 +405,7 @@ class LVGrid(Grid):
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all buses in topology. For more information on the
             dataframe see :attr:`~.network.topology.Topology.buses_df`.
 
@@ -421,7 +421,7 @@ class LVGrid(Grid):
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all transformers to overlaying network. For more
             information on the dataframe see
             :attr:`~.network.topology.Topology.transformers_df`.

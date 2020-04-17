@@ -73,8 +73,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
           station's secondary side.
           #ToDo change name of this mode or use kwarg to define where to aggregate lv loads and generation
         * 'lv' to export specified LV network only.
-    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or \
-        :pandas:`pandas.Timestamp<timestamp>`
+    timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+        :pandas:`pandas.Timestamp<Timestamp>`
         Timesteps specifies which time steps to export to pypsa representation
         and use in power flow analysis.
 
@@ -405,7 +405,7 @@ def _append_lv_components(
     comp: str
         indicator for component type, can be 'Load', 'Generator' or
         'StorageUnit'
-    comps: `pandas.DataFrame<dataframe>`
+    comps: `pandas.DataFrame<DataFrame>`
         component dataframe of elements to be aggregated
     lv_components: dict
         dictionary of LV grid components, keys are the 'Load', 'Generator' and
@@ -573,12 +573,12 @@ def _get_timeseries_with_aggregated_elements(
     ----------
     edisgo_obj: :class:`~.self.edisgo.EDisGo`
         the eDisGo network container
-    timesteps: timesteps of format :pandas:`pandas.Timestamp<timestamp>`
+    timesteps: timesteps of format :pandas:`pandas.Timestamp<Timestamp>`
         index timesteps for component's load or generation timeseries
     element_type: str
         type of element which was aggregated. Can be 'loads', 'generators' or
         'storage_units'
-    elements: `pandas.DataFrame<dataframe>`
+    elements: `pandas.DataFrame<DataFrame>`
         component dataframe of all elements for which timeseries are added
     aggr_dict: dict
         dictionary containing aggregated elements as values and the
@@ -587,7 +587,7 @@ def _get_timeseries_with_aggregated_elements(
 
     Returns
     -------
-    tuple of `pandas.DataFrame<dataframe>`
+    tuple of `pandas.DataFrame<DataFrame>`
         active and reactive power timeseries for chosen elements. Dataframes
         with timesteps as index and name of elements as columns.
     """
@@ -631,7 +631,7 @@ def _buses_voltage_set_point(edisgo_obj, buses, slack_bus, timesteps):
         The eDisGo model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
-        :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
+        :pandas:`pandas.Timestamp<Timestamp>` specifying which time steps
         to export to pypsa representation and use in power flow analysis.
     buses : list
         Buses names
@@ -639,7 +639,7 @@ def _buses_voltage_set_point(edisgo_obj, buses, slack_bus, timesteps):
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Time series table in PyPSA format
     """
 
@@ -702,14 +702,14 @@ def _pypsa_bus_timeseries(network, buses, timesteps):
         The eDisGo topology topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
-        :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
+        :pandas:`pandas.Timestamp<Timestamp>` specifying which time steps
         to export to pypsa representation and use in power flow analysis.
     buses : list
         Buses names
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Time series table in PyPSA format
     """
 
@@ -760,12 +760,12 @@ def _pypsa_generator_timeseries_aggregated_at_lv_station(network, timesteps):
         The eDisGo topology topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
-        :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
+        :pandas:`pandas.Timestamp<Timestamp>` specifying which time steps
         to export to pypsa representation and use in power flow analysis.
 
     Returns
     -------
-    tuple of :pandas:`pandas.DataFrame<dataframe>`
+    tuple of :pandas:`pandas.DataFrame<DataFrame>`
         Tuple of size two containing DataFrames that represent
 
             1. 'p_set' of aggregated Generation per subtype at each LV station
@@ -839,12 +839,12 @@ def _pypsa_load_timeseries_aggregated_at_lv_station(network, timesteps):
         The eDisGo topology topology model overall container
     timesteps : array_like
         Timesteps is an array-like object with entries of type
-        :pandas:`pandas.Timestamp<timestamp>` specifying which time steps
+        :pandas:`pandas.Timestamp<Timestamp>` specifying which time steps
         to export to pypsa representation and use in power flow analysis.
 
     Returns
     -------
-    tuple of :pandas:`pandas.DataFrame<dataframe>`
+    tuple of :pandas:`pandas.DataFrame<DataFrame>`
         Tuple of size two containing DataFrames that represent
 
             1. 'p_set' of aggregated Load per sector at each LV station
@@ -1127,7 +1127,7 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     pypsa : :pypsa:`pypsa.Network<network>`
         The PyPSA `Network container
         <https://www.pypsa.org/doc/components.html#network>`_
-    timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
+    timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or :pandas:`pandas.Timestamp<Timestamp>`
         Time steps for which latest power flow analysis was conducted and
         for which to retrieve pypsa results.
 

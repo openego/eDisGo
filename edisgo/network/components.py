@@ -338,7 +338,7 @@ class Load(Component):
 
         Returns
         --------
-        :pandas:`pandas.Series<series>`
+        :pandas:`pandas.Series<Series>`
             Active power time series of load in MW.
 
         """
@@ -351,7 +351,7 @@ class Load(Component):
 
         Returns
         --------
-        :pandas:`pandas.Series<series>`
+        :pandas:`pandas.Series<Series>`
             Reactive power time series of load in Mvar.
 
         """
@@ -474,7 +474,7 @@ class Generator(Component):
 
         Returns
         --------
-        :pandas:`pandas.Series<series>`
+        :pandas:`pandas.Series<Series>`
             Active power time series of generator in MW.
 
         """
@@ -489,7 +489,7 @@ class Generator(Component):
 
         Returns
         --------
-        :pandas:`pandas.Series<series>`
+        :pandas:`pandas.Series<Series>`
             Reactive power time series of generator in Mvar.
 
         """
@@ -1070,7 +1070,7 @@ class Switch(BasicComponent):
 #
 #     Parameters
 #     ----------
-#     _type: :pandas:`pandas.Series<series>`
+#     _type: :pandas:`pandas.Series<Series>`
 #         Equipment specification including R and X for power flow analysis
 #         Columns:
 #

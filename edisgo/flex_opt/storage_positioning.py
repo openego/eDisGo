@@ -32,12 +32,12 @@ def one_storage_per_feeder(
     Parameters
     -----------
     edisgo : :class:`~.network.network.EDisGo`
-    storage_timeseries : :pandas:`pandas.DataFrame<dataframe>`
+    storage_timeseries : :pandas:`pandas.DataFrame<DataFrame>`
         Total active and reactive power time series that will be allocated to
         the smaller storages in feeders with load or voltage issues. Columns of
         the dataframe are 'p' containing active power time series in kW and 'q'
         containing the reactive power time series in kvar. Index is a
-        :pandas:`pandas.DatetimeIndex<datetimeindex>`.
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
     storage_nominal_power : :obj:`float` or None
         Nominal power in kW that will be allocated to the smaller storages in
         feeders with load or voltage issues. If no nominal power is provided
@@ -77,13 +77,13 @@ def one_storage_per_feeder(
 
         Parameters
         ----------
-        grid_expansion_costs : :pandas:`pandas.DataFrame<dataframe>`
+        grid_expansion_costs : :pandas:`pandas.DataFrame<DataFrame>`
             grid_expansion_costs DataFrame from :class:`~.network.network.Results`
             of the copied edisgo object.
 
         Returns
         -------
-        :pandas:`pandas.Series<series>`
+        :pandas:`pandas.Series<Series>`
             Series with ranked MV feeders (in the copied graph) of type
             :class:`~.network.components.Line`. Feeders are ranked by total network
             expansion costs of all measures conducted in the feeder. The
@@ -120,7 +120,7 @@ def one_storage_per_feeder(
         -----------
         edisgo : :class:`~.network.network.EDisGo`
             The original edisgo object.
-        critical_lines_feeder : :pandas:`pandas.DataFrame<dataframe>`
+        critical_lines_feeder : :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe containing over-loaded lines in MV feeder, their maximum
             relative over-loading and the corresponding time step. See
             :func:`edisgo.flex_opt.check_tech_constraints.mv_line_load` for
@@ -322,7 +322,7 @@ def one_storage_per_feeder(
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe containing over-loaded lines in MV feeder, their maximum
             relative over-loading and the corresponding time step. See
             :func:`edisgo.flex_opt.check_tech_constraints.mv_line_load` for
