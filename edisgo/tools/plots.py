@@ -443,14 +443,14 @@ def mv_grid_topology(
             bus_colors_dict.update(
                 {
                     bus: 100
-                    * max(abs(1 - voltages.loc[timestep, ("mv", bus)]))
+                    * max(abs(1 - voltages.loc[timestep, bus]))
                     for bus in buses
                 }
             )
         else:
             bus_colors_dict.update(
                 {
-                    bus: 100 * max(abs(1 - voltages.loc[:, ("mv", bus)]))
+                    bus: 100 * max(abs(1 - voltages.loc[:, bus]))
                     for bus in buses
                 }
             )

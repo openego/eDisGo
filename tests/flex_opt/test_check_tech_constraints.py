@@ -22,17 +22,17 @@ class TestCheckTechConstraints:
 
     def test_mv_voltage_deviation(self):
         # create power flow issues
-        self.edisgo.results.pfa_v_mag_pu['mv'].at[self.timesteps[0],
+        self.edisgo.results.v_res.at[self.timesteps[0],
             'Bus_GeneratorFluctuating_2'] = 1.14
-        self.edisgo.results.pfa_v_mag_pu['mv'].at[self.timesteps[1],
+        self.edisgo.results.v_res.at[self.timesteps[1],
             'Bus_GeneratorFluctuating_2'] = 0.89
-        self.edisgo.results.pfa_v_mag_pu['mv'].at[self.timesteps[0],
+        self.edisgo.results.v_res.at[self.timesteps[0],
             'Bus_GeneratorFluctuating_3'] = 1.15
-        self.edisgo.results.pfa_v_mag_pu['mv'].at[self.timesteps[1],
+        self.edisgo.results.v_res.at[self.timesteps[1],
             'Bus_GeneratorFluctuating_4'] = 0.89
-        self.edisgo.results.pfa_v_mag_pu['mv'].at[self.timesteps[0],
+        self.edisgo.results.v_res.at[self.timesteps[0],
             'Bus_GeneratorFluctuating_5'] = 1.16
-        self.edisgo.results.pfa_v_mag_pu['mv'].at[self.timesteps[1],
+        self.edisgo.results.v_res.at[self.timesteps[1],
             'Bus_GeneratorFluctuating_6'] = 0.82
 
         voltage_issues = mv_voltage_deviation(self.edisgo)
@@ -65,19 +65,19 @@ class TestCheckTechConstraints:
 
     def test_lv_voltage_deviation(self):
         # create power flow issues
-        self.edisgo.results.pfa_v_mag_pu['mv'].at[self.timesteps[0],
+        self.edisgo.results.v_res.at[self.timesteps[0],
             'Bus_primary_LVStation_9'] = 1.14
-        self.edisgo.results.pfa_v_mag_pu['lv'].at[self.timesteps[0],
+        self.edisgo.results.v_res.at[self.timesteps[0],
             'Bus_secondary_LVStation_9'] = 1.14
-        self.edisgo.results.pfa_v_mag_pu['lv'].at[self.timesteps[1],
+        self.edisgo.results.v_res.at[self.timesteps[1],
             'Bus_secondary_LVStation_9'] = 0.89
-        self.edisgo.results.pfa_v_mag_pu['lv'].at[self.timesteps[0],
+        self.edisgo.results.v_res.at[self.timesteps[0],
             'Bus_BranchTee_LVGrid_1_4'] = 1.15
-        self.edisgo.results.pfa_v_mag_pu['lv'].at[self.timesteps[1],
+        self.edisgo.results.v_res.at[self.timesteps[1],
             'Bus_BranchTee_LVGrid_1_5'] = 0.89
-        self.edisgo.results.pfa_v_mag_pu['lv'].at[self.timesteps[0],
+        self.edisgo.results.v_res.at[self.timesteps[0],
             'Bus_Load_residential_LVGrid_1_7'] = 1.16
-        self.edisgo.results.pfa_v_mag_pu['lv'].at[self.timesteps[1],
+        self.edisgo.results.v_res.at[self.timesteps[1],
             'Bus_GeneratorFluctuating_13'] = 0.82
 
         lvgrid_1 = self.edisgo.topology._grids['LVGrid_1']
@@ -124,11 +124,11 @@ class TestCheckTechConstraints:
 
     def test_check_ten_percent_voltage_deviation(self):
         # reset values
-        if self.edisgo.results.pfa_v_mag_pu['mv'].at[
+        if self.edisgo.results.v_res.at[
                 self.timesteps[0], 'Bus_primary_LVStation_9'] == 1.14:
             self.edisgo.analyze()
         check_ten_percent_voltage_deviation(self.edisgo)
-        self.edisgo.results.pfa_v_mag_pu['mv'].at[
+        self.edisgo.results.v_res.at[
                 self.timesteps[0], 'Bus_primary_LVStation_9'] = 1.14
         msg = "Maximum allowed voltage deviation of 10% exceeded."
         with pytest.raises(ValueError, match=msg):

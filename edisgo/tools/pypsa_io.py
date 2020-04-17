@@ -1210,27 +1210,5 @@ def process_pfa_results(edisgo, pypsa, timesteps):
         pypsa.lines_t["p0"], pypsa.lines_t["q0"]
     ).truediv(pypsa.lines["v_nom"] * bus0_v_mag_pu.T, axis="columns") / sqrt(3)
 
-    # process voltage results
-    buses_mv = edisgo.topology.mv_grid.buses_df
-    pfa_v_mag_pu_mv = pypsa.buses_t["v_mag_pu"][buses_mv.index]
-    # check if LV was analyzed as well
-    if pypsa.buses_t["v_mag_pu"].shape[1] > buses_mv.shape[0]:
-        buses_lv = pd.DataFrame()
-        for lv_grid in edisgo.topology.mv_grid.lv_grids:
-            buses_lv = buses_lv.append(lv_grid.buses_df)
-        pfa_v_mag_pu_lv = pypsa.buses_t["v_mag_pu"][buses_lv.index]
-    else:
-        buses_lv = None
-    # write voltage levels obtained from power flow to results object
-    if buses_lv is not None:
-        edisgo.results.pfa_v_mag_pu = pd.concat(
-            {
-                "mv": pfa_v_mag_pu_mv.loc[timesteps, :],
-                "lv": pfa_v_mag_pu_lv.loc[timesteps, :],
-            },
-            axis=1,
-        )
-    else:
-        edisgo.results.pfa_v_mag_pu = pd.concat(
-            {"mv": pfa_v_mag_pu_mv.loc[timesteps, :]}, axis=1
-        )
+    # get voltage results in kV
+    edisgo.results._v_res = pypsa.buses_t["v_mag_pu"]

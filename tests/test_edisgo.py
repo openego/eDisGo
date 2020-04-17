@@ -110,12 +110,12 @@ class TestEDisGo:
             np.array([[-21.29377, 10.68470], [0.96392, 0.37883]]),
             atol=1e-5).all())
         assert(np.isclose(
-            self.edisgo.results.pfa_v_mag_pu.lv.loc[
+            self.edisgo.results.v_res.loc[
                 self.timesteps, 'Bus_GeneratorFluctuating_18'].values,
             np.array([1.01699, 0.99917]),
             atol=1e-5).all())
         assert(np.isclose(
-            self.edisgo.results.pfa_v_mag_pu.mv.loc[
+            self.edisgo.results.v_res.loc[
                 self.timesteps, 'virtual_Bus_primary_LVStation_4'].values,
             np.array([1.00630, 0.99929]),
             atol=1e-5).all())
@@ -264,7 +264,7 @@ class TestEDisGo:
         plt.ion()
         # if not already done so, analyse grid
         try:
-            if self.results.pfa_v_mag_pu is None:
+            if self.results.v_res is None:
                 self.edisgo.analyze()
         except AttributeError:
             self.edisgo.analyze()

@@ -554,9 +554,9 @@ class EDisGo:
 
         """
         try:
-            if self.results.pfa_v_mag_pu is None:
+            if self.results.v_res is None:
                 logging.warning(
-                    "Voltages `pfa_v_mag_pu` from power flow "
+                    "Voltages from power flow "
                     "analysis must be available to plot them."
                 )
                 return
@@ -576,7 +576,7 @@ class EDisGo:
             filename=kwargs.get("filename", None),
             grid_district_geom=kwargs.get("grid_district_geom", True),
             background_map=kwargs.get("background_map", True),
-            voltage=self.results.pfa_v_mag_pu,
+            voltage=self.results.v_res,
             limits_cb_nodes=kwargs.get("limits_cb_nodes", None),
             xlim=kwargs.get("xlim", None),
             ylim=kwargs.get("ylim", None),
@@ -615,7 +615,7 @@ class EDisGo:
             arrows=kwargs.get("arrows", None),
             grid_district_geom=kwargs.get("grid_district_geom", True),
             background_map=kwargs.get("background_map", True),
-            voltage=self.results.pfa_v_mag_pu,
+            voltage=self.results.v_res,
             limits_cb_lines=kwargs.get("limits_cb_lines", None),
             limits_cb_nodes=kwargs.get("limits_cb_nodes", None),
             xlim=kwargs.get("xlim", None),
@@ -708,10 +708,10 @@ class EDisGo:
 
         """
         try:
-            data = self.results.pfa_v_mag_pu
+            data = self.results.v_res
             if data is None:
                 logger.warning(
-                    "Results for pfa_v_mag_pu are required for "
+                    "Results for voltages are required for "
                     "voltage histogramm. Please analyze first."
                 )
                 return

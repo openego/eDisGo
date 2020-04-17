@@ -33,7 +33,7 @@ def _scored_critical_current(edisgo_obj, grid):
 
 
 def _scored_critical_overvoltage(edisgo_obj, grid):
-    nodes = grid.buses_df
+    nodes = grid.buses_df.index
 
     # Get allowed deviations per time step
     (
@@ -46,8 +46,7 @@ def _scored_critical_overvoltage(edisgo_obj, grid):
         edisgo_obj,
         nodes,
         v_dev_allowed_upper,
-        v_dev_allowed_lower,
-        voltage_level="mv",
+        v_dev_allowed_lower
     )
 
     # Get score for nodes that are over or under the allowed deviations

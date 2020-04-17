@@ -27,8 +27,8 @@ class Results:
         self._measures = ["original"]
         self._pfa_p = None
         self._pfa_q = None
-        self._pfa_v_mag_pu = None
         self._i_res = None
+        self._v_res = None
         self._equipment_changes = pd.DataFrame()
         self._grid_expansion_costs = None
         self._grid_losses = None
@@ -129,36 +129,37 @@ class Results:
         self._pfa_q = pypsa
 
     @property
-    def pfa_v_mag_pu(self):
+    def v_res(self):
         """
-        Voltage deviation at node in p.u.
-
-        Holds power flow analysis results for relative voltage deviation for
-        the last iteration step. Index of the DataFrame is a DatetimeIndex
-        indicating the time period the power flow analysis was conducted for;
-        columns of the DataFrame are the nodes as well as stations of the network
-        topology.
+        Voltages at nodes in p.u. from last power flow analysis.
 
         Parameters
         ----------
-        pypsa : :pandas:`pandas.DataFrame<dataframe>`
-            Results time series of voltage deviation in p.u. from the
-            `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+        df : :pandas:`pandas.DataFrame<frame>`
+            Dataframe with voltages at nodes in p.u. from power flow analysis.
+            Index of the dataframe is a
+            :pandas:`pandas.DatetimeIndex<datetimeindex>` indicating the time
+            steps the power flow analysis was conducted for; columns of the
+            dataframe are the bus names of all buses in the analyzed grids.
 
             Provide this if you want to set values. For retrieval of data do
-            not pass an argument
+            not pass an argument.
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Voltage level nodes of network
+        :pandas:`pandas.DataFrame<frame>`
+            Dataframe with voltages at nodes in p.u. from power flow analysis.
+            Index of the dataframe is a
+            :pandas:`pandas.DatetimeIndex<datetimeindex>` indicating the time
+            steps the power flow analysis was conducted for; columns of the
+            dataframe are the bus names of all buses in the analyzed grids.
 
         """
-        return self._pfa_v_mag_pu
+        return self._v_res
 
-    @pfa_v_mag_pu.setter
-    def pfa_v_mag_pu(self, pypsa):
-        self._pfa_v_mag_pu = pypsa
+    @v_res.setter
+    def v_res(self, df):
+        self._v_res = df
 
     @property
     def i_res(self):
@@ -612,67 +613,6 @@ class Results:
 
         return s_res
 
-    def v_res(self, nodes_df=None, level=None):
-        """
-        Get voltage results (in p.u.) from power flow analysis.
-
-        Parameters
-        ----------
-        nodes_df : :pandas:`pandas.DataFrame<dataframe>`
-            Grid topology component or list of network topology components.
-            If not provided defaults to column names available in network level
-            `level`.
-        level : str
-            Either 'mv' or 'lv' or None (default). Depending on which network
-            level results you are interested in. It is required to provide this
-            argument in order to distinguish voltage levels at primary and
-            secondary side of the transformer/LV station.
-            If not provided (respectively None) defaults to ['mv', 'lv'].
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Resulting voltage levels obtained from power flow analysis
-
-        Notes
-        -----
-        Limitation:  When power flow analysis is performed for MV only
-        (with aggregated LV loads and generators) this methods only returns
-        voltage at secondary side busbar and not at load/generator.
-
-        """
-        # First check if results are available:
-        if hasattr(self, "pfa_v_mag_pu"):
-            # unless index is lexsorted, it cannot be sliced
-            self.pfa_v_mag_pu.sort_index(axis=1, inplace=True)
-        else:
-            message = (
-                "No Power Flow Calculation has be done yet, "
-                "so there are no results yet."
-            )
-            raise AttributeError(message)
-
-        if level is None:
-            level = ["mv", "lv"]
-
-        if nodes_df is None:
-            return self.pfa_v_mag_pu.loc[:, (level, slice(None))]
-        else:
-            labels = nodes_df.index
-            not_included = [
-                _
-                for _ in labels
-                if _ not in list(self.pfa_v_mag_pu[level].columns)
-            ]
-            labels_included = [_ for _ in labels if _ not in not_included]
-
-            if not_included:
-                logging.warning(
-                    "Voltage levels for {nodes} are not returned "
-                    "from PFA".format(nodes=not_included)
-                )
-            return self.pfa_v_mag_pu[level][labels_included]
-
     def save(self, directory, parameters="all"):
         """
         Saves results to disk.
@@ -686,7 +626,7 @@ class Results:
 
           * `voltages_pu.csv`
 
-            See :py:attr:`~pfa_v_mag_pu` for more information.
+            See :py:attr:`~v_res` for more information.
           * `currents.csv`
 
             See :func:`~i_res` for more information.
@@ -747,12 +687,12 @@ class Results:
         """
 
         def _save_power_flow_results(target_dir):
-            if self.pfa_v_mag_pu is not None:
+            if self.v_res is not None:
                 # create directory
                 os.makedirs(target_dir, exist_ok=True)
 
                 # voltage
-                self.pfa_v_mag_pu.to_csv(
+                self.v_res.to_csv(
                     os.path.join(target_dir, "voltages_pu.csv")
                 )
 
