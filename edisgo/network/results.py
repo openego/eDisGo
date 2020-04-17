@@ -164,34 +164,37 @@ class Results:
     @property
     def i_res(self):
         """
-        Current results from power flow analysis in A.
-
-        Holds power flow analysis results for current for the last
-        iteration step. Index of the DataFrame is a DatetimeIndex indicating
-        the time period the power flow analysis was conducted for; columns
-        of the DataFrame are the edges as well as stations of the network
-        topology.
+        Current results in kA from last power flow analysis.
 
         Parameters
         ----------
-        pypsa : :pandas:`pandas.DataFrame<dataframe>`
-            Results time series of current in A from the
-            `PyPSA network <https://www.pypsa.org/doc/components.html#network>`_
+        df : :pandas:`pandas.DataFrame<frame>`
+            Dataframe with currents in kA from power flow analysis.
+            Index of the dataframe is a
+            :pandas:`pandas.DatetimeIndex<datetimeindex>` indicating the time
+            steps the power flow analysis was conducted for; columns of the
+            dataframe are the line and transformer names of all lines and
+            transformers in the analyzed grids.
 
             Provide this if you want to set values. For retrieval of data do
-            not pass an argument
+            not pass an argument.
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Current results from power flow analysis
+        :pandas:`pandas.DataFrame<frame>`
+            Dataframe with currents in kA from power flow analysis.
+            Index of the dataframe is a
+            :pandas:`pandas.DatetimeIndex<datetimeindex>` indicating the time
+            steps the power flow analysis was conducted for; columns of the
+            dataframe are the line and transformer names of all lines and
+            transformers in the analyzed grids.
 
         """
         return self._i_res
 
     @i_res.setter
-    def i_res(self, pypsa):
-        self._i_res = pypsa
+    def i_res(self, df):
+        self._i_res = df
 
     @property
     def equipment_changes(self):
@@ -557,7 +560,7 @@ class Results:
 
     def s_res(self, components_df=None):
         """
-        Get resulting apparent power in kVA at line(s) and transformer(s).
+        Get resulting apparent power in MVA at line(s) and transformer(s).
 
         The apparent power at a line (or transformer) is determined from the
         maximum values of active power P and reactive power Q.
@@ -568,7 +571,7 @@ class Results:
 
         Parameters
         ----------
-        components : :obj:`list`
+        components_df : :obj:`list`
             List with all components (of type :class:`~.network.components.Line`
             or :class:`~.network.components.Transformer`) to get apparent power
             for. If not provided defaults to return apparent power of all lines
@@ -837,13 +840,14 @@ class Results:
             writer.writerows(rows)
 
 
-# class ResultsReimport:
-#     """
-#     Results class created from saved results.
-#
-#     """
-#     def __init__(self, results_path, parameters='all'):
-#
+class ResultsReimport:
+    """
+    Results class created from saved results.
+
+    """
+    def __init__(self, results_path, parameters='all'):
+        raise NotImplementedError
+
 #         # measures
 #         measures_df = pd.read_csv(os.path.join(results_path, 'measures.csv'),
 #                                   index_col=0)

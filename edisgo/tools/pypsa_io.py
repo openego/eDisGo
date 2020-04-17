@@ -1118,37 +1118,36 @@ def _check_integrity_of_pypsa(pypsa_network):
 
 def process_pfa_results(edisgo, pypsa, timesteps):
     """
-    Passing values from PyPSA to
-    :meth:`results <~.edisgo.EDisGo.results>`
+    Passing power flow results from PyPSA to
+    :class:`~.network.results.Results`.
 
     Parameters
     ----------
-    edisgo : :class:`~.edisgo.EDisGo`
-        The eDisGo network model overall container
+    edisgo : :class:`~.EDisGo`
     pypsa : :pypsa:`pypsa.Network<network>`
         The PyPSA `Network container
         <https://www.pypsa.org/doc/components.html#network>`_
     timesteps : :pandas:`pandas.DatetimeIndex<datetimeindex>` or :pandas:`pandas.Timestamp<timestamp>`
-        Time steps for which latest power flow analysis was conducted for and
+        Time steps for which latest power flow analysis was conducted and
         for which to retrieve pypsa results.
 
     Notes
     -----
-    P and Q (and respectively later S) are returned from the line ending/
-    transformer side with highest apparent power S, exemplary written as
+    P and Q are returned from the line ending/transformer side with highest
+    apparent power S, exemplary written as
 
     .. math::
-        S_{max} = max(\sqrt{P0^2 + Q0^2}, \sqrt{P1^2 + Q1^2})
-        P = P0P1(S_{max})
-        Q = Q0Q1(S_{max})
+        S_{max} = max(\sqrt{P_0^2 + Q_0^2}, \sqrt{P_1^2 + Q_1^2}) \\
+        P = P_0 P_1(S_{max}) \\
+        Q = Q_0 Q_1(S_{max})
 
     See Also
     --------
-    :class:`~.network.results.Results`
-        Understand how results of power flow analysis are structured in eDisGo.
+    :class:`~.network.results.Results` to understand how results of power flow
+    analysis are structured in eDisGo.
 
     """
-    # get the absolute losses in the system
+    # get the absolute losses in the system (in MW and Mvar)
     # subtracting total generation (including slack) from total load
     grid_losses = {
         "p": (
@@ -1160,21 +1159,18 @@ def process_pfa_results(edisgo, pypsa, timesteps):
             - pypsa.loads_t["q"].sum(axis=1)
         ),
     }
-
     edisgo.results.grid_losses = pd.DataFrame(grid_losses).loc[timesteps, :]
 
-    # get slack results
+    # get slack results (HV/MV exchanges) in MW and Mvar
     grid_exchanges = {
         "p": (pypsa.generators_t["p"]["Generator_slack"]),
         "q": (pypsa.generators_t["q"]["Generator_slack"]),
     }
-
     edisgo.results.hv_mv_exchanges = pd.DataFrame(grid_exchanges).loc[
         timesteps, :
     ]
 
-    # get p and q of lines, LV transformers and MV Station (slack generator)
-    # in absolute values
+    # get P and Q of lines and transformers in MW and Mvar
     q0 = pd.concat(
         [np.abs(pypsa.lines_t["q0"]), np.abs(pypsa.transformers_t["q0"])],
         axis=1,
@@ -1191,16 +1187,14 @@ def process_pfa_results(edisgo, pypsa, timesteps):
         [np.abs(pypsa.lines_t["p1"]), np.abs(pypsa.transformers_t["p1"])],
         axis=1,
     ).loc[timesteps, :]
-
-    # determine apparent power and line endings/transformers' side
+    # determine apparent power at line endings/transformer sides
     s0 = np.hypot(p0, q0)
     s1 = np.hypot(p1, q1)
-
-    # choose p and q from line ending with max(s0,s1)
+    # choose P and Q from line ending with max(s0,s1)
     edisgo.results.pfa_p = p0.where(s0 > s1, p1)
     edisgo.results.pfa_q = q0.where(s0 > s1, q1)
 
-    # Get line current
+    # calculate line currents in kA
     lines_bus0 = pypsa.lines["bus0"].to_dict()
     bus0_v_mag_pu = (
         pypsa.buses_t["v_mag_pu"].T.loc[list(lines_bus0.values()), :].copy()

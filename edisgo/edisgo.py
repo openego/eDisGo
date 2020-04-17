@@ -74,7 +74,7 @@ class EDisGo:
         and config files must exist and are not automatically created.
 
         Default: None.
-    timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
+    timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<frame>`
         Parameter used to obtain time series for active power feed-in of
         fluctuating renewables wind and solar.
         Possible options are:
