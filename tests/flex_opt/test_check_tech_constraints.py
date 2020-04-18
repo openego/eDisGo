@@ -22,6 +22,37 @@ class TestCheckTechConstraints:
     def run_power_flow(self):
         self.edisgo.analyze()
 
+    def test_voltage_diff(self):
+
+        bus0 = 'Bus_Generator_1'
+        bus1 = 'Bus_GeneratorFluctuating_2'
+        bus2 = 'Bus_GeneratorFluctuating_3'
+
+        # create over- and undervoltage at bus0, with higher undervoltage
+        # deviation
+        self.edisgo.results._v_res.loc[self.timesteps[0], bus0] = 1.11
+        self.edisgo.results._v_res.loc[self.timesteps[1], bus0] = 0.88
+        # create overvoltage at bus1
+        self.edisgo.results._v_res.loc[self.timesteps[0], bus1] = 1.11
+        # create undervoltage at bus0
+        self.edisgo.results._v_res.loc[self.timesteps[0], bus2] = 0.89
+
+        uv_violations, ov_violations = check_tech_constraints.voltage_diff(
+            self.edisgo,
+            self.edisgo.topology.mv_grid.buses_df.index,
+            pd.Series(data=1.1, index=self.timesteps),
+            pd.Series(data=0.9, index=self.timesteps)
+        )
+
+        # check shapes of under- and overvoltage dataframes
+        assert uv_violations.shape == (2, 2)
+        assert ov_violations.shape == (1, 2)
+        # check under- and overvoltage deviation values
+        assert np.isclose(uv_violations.at[bus0, self.timesteps[1]], 0.02)
+        assert np.isclose(uv_violations.at[bus2, self.timesteps[0]], 0.01)
+        assert np.isclose(ov_violations.at[bus1, self.timesteps[0]], 0.01)
+        assert np.isclose(uv_violations.at[bus0, self.timesteps[0]], -0.21)
+
     def test_mv_voltage_deviation(self):
         # create power flow issues
         self.edisgo.results.v_res.at[self.timesteps[0],

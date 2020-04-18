@@ -787,34 +787,45 @@ def voltage_diff(
     edisgo_obj, buses, v_dev_allowed_upper, v_dev_allowed_lower
 ):
     """
-    Returns upper and lower voltage violations per node
+    Function to detect under- and overvoltage at nodes.
+
+    The function returns both under- and overvoltage deviations in p.u. from
+    the allowed lower and upper voltage limit, respectively, in separate
+    dataframes. In case of both under- and overvoltage issues at one node,
+    only the highest voltage deviation is returned.
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
-    nodes : :obj:`list`
+    edisgo_obj : :class:`~.EDisGo`
+    buses : list(str)
         List of buses to check voltage deviation for.
-    v_dev_allowed_upper : :pandas:`pandas.Series<series>`
-        Series with time steps (of type :pandas:`pandas.Timestamp<timestamp>`)
+    v_dev_allowed_upper : :pandas:`pandas.Series<Series>`
+        Series with time steps (of type :pandas:`pandas.Timestamp<Timestamp>`)
         power flow analysis was conducted for and the allowed upper limit of
-        voltage deviation for each time step as float.
-    v_dev_allowed_lower : :pandas:`pandas.Series<series>`
-        Series with time steps (of type :pandas:`pandas.Timestamp<timestamp>`)
+        voltage deviation for each time step as float in p.u..
+    v_dev_allowed_lower : :pandas:`pandas.Series<Series>`
+        Series with time steps (of type :pandas:`pandas.Timestamp<Timestamp>`)
         power flow analysis was conducted for and the allowed lower limit of
-        voltage deviation for each time step as float.
+        voltage deviation for each time step as float in p.u..
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Dataframe with time steps for all nodes for which an undervoltage condition was detected. Columns are of type :pandas:`pandas.Timestamp<timestamp>` and represent to full index of the original time series. Index are all nodes indices for which an undervoltage condition was detected for some time step
-    :pandas:`pandas.DataFrame<dataframe>`
-        Dataframe with time steps for all nodes for which an overvoltage condition was detected. Columns are of type :pandas:`pandas.Timestamp<timestamp>` and represent to full index of the original time series. Index are all nodes indices for which an overvoltage condition was detected for some time step
-
-    Notes
-    -----
-    Voltage issues are determined based on allowed voltage deviations defined
-    in the config file 'config_grid_expansion' in section
-    'grid_expansion_allowed_voltage_deviations'.
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with deviations from allowed lower voltage level.
+        Columns of the dataframe are all time steps power flow analysis was
+        conducted for of type :pandas:`pandas.Timestamp<Timestamp>`; in the
+        index are all nodes for which undervoltage was detected. In case of
+        a higher over- than undervoltage deviation for a node, the node does
+        not appear in this dataframe, but in the dataframe with overvoltage
+        deviations.
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with deviations from allowed upper voltage level.
+        Columns of the dataframe are all time steps power flow analysis was
+        conducted for of type :pandas:`pandas.Timestamp<Timestamp>`; in the
+        index are all nodes for which overvoltage was detected. In case of
+        a higher under- than overvoltage deviation for a node, the node does
+        not appear in this dataframe, but in the dataframe with undervoltage
+        deviations.
 
     """
     v_mag_pu_pfa = edisgo_obj.results.v_res.loc[:, buses]
