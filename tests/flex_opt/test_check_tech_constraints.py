@@ -298,17 +298,9 @@ class TestCheckTechConstraints:
         )
 
     def test_check_ten_percent_voltage_deviation(self):
-        # reset values
-        if (
-            self.edisgo.results.v_res.at[
-                self.timesteps[0], "Bus_primary_LVStation_9"
-            ]
-            == 1.14
-        ):
-            self.edisgo.analyze()
-            check_tech_constraints.check_ten_percent_voltage_deviation(
-                self.edisgo
-            )
+        # check without voltage issues greater than 10%
+        check_tech_constraints.check_ten_percent_voltage_deviation(self.edisgo)
+        # create voltage issues greater 10% and check again
         self.edisgo.results.v_res.at[
             self.timesteps[0], "Bus_primary_LVStation_9"
         ] = 1.14

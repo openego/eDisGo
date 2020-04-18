@@ -959,9 +959,12 @@ def check_ten_percent_voltage_deviation(edisgo_obj):
     """
     Checks if 10% criteria is exceeded.
 
+    Through the 10% criteria it is ensured that voltage is kept between 0.9
+    and 1.1 p.u.. In case of higher or lower voltages a ValueError is raised.
+
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
 
     """
 
