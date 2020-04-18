@@ -26,7 +26,6 @@ class TestCheckTechConstraints:
         """
         self.edisgo.analyze()
 
-    @pytest.fixture()
     def mv_voltage_issues(self):
         """
         Fixture to create voltage issues in MV grid.
@@ -45,7 +44,10 @@ class TestCheckTechConstraints:
         # create undervoltage at bus0
         self.edisgo.results._v_res.loc[self.timesteps[0], bus2] = 0.895
 
-    def test_voltage_diff(self, mv_voltage_issues):
+    def test_voltage_diff(self):
+
+        # create voltage issues
+        self.mv_voltage_issues()
 
         uv_violations, ov_violations = check_tech_constraints.voltage_diff(
             self.edisgo,
@@ -73,7 +75,10 @@ class TestCheckTechConstraints:
             uv_violations.at["Bus_Generator_1", self.timesteps[0]], -0.21
         )
 
-    def test__voltage_deviation(self, mv_voltage_issues):
+    def test__voltage_deviation(self):
+
+        # create voltage issues
+        self.mv_voltage_issues()
 
         v_violations = check_tech_constraints._voltage_deviation(
             self.edisgo,
