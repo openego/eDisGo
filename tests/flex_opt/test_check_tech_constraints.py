@@ -4,8 +4,7 @@ import numpy as np
 import pytest
 
 from edisgo import EDisGo
-from edisgo.flex_opt.check_tech_constraints import mv_voltage_deviation, \
-    lv_voltage_deviation, check_ten_percent_voltage_deviation
+from edisgo.flex_opt import check_tech_constraints
 
 
 class TestCheckTechConstraints:
@@ -17,8 +16,11 @@ class TestCheckTechConstraints:
         test_network_directory = os.path.join(dirname, 'ding0_test_network')
         self.edisgo = EDisGo(ding0_grid=test_network_directory,
                              worst_case_analysis='worst-case')
-        self.edisgo.analyze()
         self.timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
+
+    @pytest.fixture(autouse=True)
+    def run_power_flow(self):
+        self.edisgo.analyze()
 
     def test_mv_voltage_deviation(self):
         # create power flow issues
@@ -35,7 +37,8 @@ class TestCheckTechConstraints:
         self.edisgo.results.v_res.at[self.timesteps[1],
             'Bus_GeneratorFluctuating_6'] = 0.82
 
-        voltage_issues = mv_voltage_deviation(self.edisgo)
+        voltage_issues = check_tech_constraints.mv_voltage_deviation(
+            self.edisgo)
 
         assert len(voltage_issues['MVGrid_1']) == 5
         assert np.isclose(voltage_issues['MVGrid_1'].loc[
@@ -83,7 +86,8 @@ class TestCheckTechConstraints:
         lvgrid_1 = self.edisgo.topology._grids['LVGrid_1']
         lvgrid_9 = self.edisgo.topology._grids['LVGrid_9']
 
-        voltage_issues = lv_voltage_deviation(self.edisgo, mode='stations')
+        voltage_issues = check_tech_constraints.lv_voltage_deviation(
+            self.edisgo, mode='stations')
         assert len(voltage_issues) == 1
         assert len(voltage_issues[lvgrid_9]) == 1
         assert np.isclose(voltage_issues[lvgrid_9].loc[
@@ -92,7 +96,8 @@ class TestCheckTechConstraints:
                    'Bus_secondary_LVStation_9', 'time_index'] == \
                self.timesteps[0]
 
-        voltage_issues = lv_voltage_deviation(self.edisgo)
+        voltage_issues = check_tech_constraints.lv_voltage_deviation(
+            self.edisgo)
 
         assert len(voltage_issues[lvgrid_1]) == 4
         assert len(voltage_issues[lvgrid_9]) == 1
@@ -127,9 +132,11 @@ class TestCheckTechConstraints:
         if self.edisgo.results.v_res.at[
                 self.timesteps[0], 'Bus_primary_LVStation_9'] == 1.14:
             self.edisgo.analyze()
-        check_ten_percent_voltage_deviation(self.edisgo)
+            check_tech_constraints.check_ten_percent_voltage_deviation(
+                self.edisgo)
         self.edisgo.results.v_res.at[
                 self.timesteps[0], 'Bus_primary_LVStation_9'] = 1.14
         msg = "Maximum allowed voltage deviation of 10% exceeded."
         with pytest.raises(ValueError, match=msg):
-            check_ten_percent_voltage_deviation(self.edisgo)
+            check_tech_constraints.check_ten_percent_voltage_deviation(
+                self.edisgo)
