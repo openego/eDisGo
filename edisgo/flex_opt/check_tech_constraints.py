@@ -881,64 +881,77 @@ def voltage_diff(
 
 
 def _voltage_deviation(
-    edisgo_obj, nodes, v_dev_allowed_upper, v_dev_allowed_lower
+    edisgo_obj, buses, v_dev_allowed_upper, v_dev_allowed_lower
 ):
     """
-    Checks for voltage stability issues in LV grids.
+    Function to detect voltage issues at buses.
+
+    The function returns the highest voltage deviation from allowed lower
+    or upper voltage limit in p.u. for all buses with voltage issues.
+
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
-    nodes : :obj:`list`
+    edisgo_obj : :class:`~.EDisGo`
+    buses : list(str)
         List of buses to check voltage deviation for.
     v_dev_allowed_upper : :pandas:`pandas.Series<Series>`
         Series with time steps (of type :pandas:`pandas.Timestamp<Timestamp>`)
         power flow analysis was conducted for and the allowed upper limit of
-        voltage deviation for each time step as float.
+        voltage deviation for each time step as float in p.u..
     v_dev_allowed_lower : :pandas:`pandas.Series<Series>`
         Series with time steps (of type :pandas:`pandas.Timestamp<Timestamp>`)
         power flow analysis was conducted for and the allowed lower limit of
-        voltage deviation for each time step as float.
+        voltage deviation for each time step as float in p.u..
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with critical nodes, sorted descending by voltage deviation.
-        Index of the dataframe are name of all nodes with over-voltage issues.
-        Columns are 'v_mag_pu' containing the maximum voltage deviation as
-        float and 'time_index' containing the corresponding time step the
-        over-voltage occured in as :pandas:`pandas.Timestamp<Timestamp>`.
+    pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with deviations from allowed lower or upper voltage level
+        sorted descending from highest to lowest voltage deviation
+        (it is not distinguished between over- or undervoltage).
+        Columns of the dataframe are 'v_mag_pu' containing the maximum absolute
+        voltage deviation as float and 'time_index' containing the
+        corresponding time step the voltage issue occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`. Index of the dataframe are the
+        names of all buses with voltage issues.
 
     """
 
-    def _append_crit_nodes(dataframe):
+    def _append_crit_buses(df):
         return pd.DataFrame(
             {
-                "v_mag_pu": dataframe.max(axis=1).values,
-                "time_index": dataframe.idxmax(axis=1).values,
+                "v_mag_pu": df.max(axis=1).values,
+                "time_index": df.idxmax(axis=1).values,
             },
-            index=dataframe.index,
+            index=df.index,
         )
 
-    crit_nodes_grid = pd.DataFrame()
+    crit_buses_grid = pd.DataFrame()
 
     voltage_diff_uv, voltage_diff_ov = voltage_diff(
         edisgo_obj,
-        nodes,
+        buses,
         v_dev_allowed_upper,
         v_dev_allowed_lower
     )
 
-    # append to crit nodes dataframe
+    # append to crit buses dataframe
     if not voltage_diff_ov.empty:
-        crit_nodes_grid = crit_nodes_grid.append(
-            _append_crit_nodes(voltage_diff_ov)
+        crit_buses_grid = crit_buses_grid.append(
+            _append_crit_buses(voltage_diff_ov)
         )
     if not voltage_diff_uv.empty:
-        crit_nodes_grid = crit_nodes_grid.append(
-            _append_crit_nodes(voltage_diff_uv)
+        crit_buses_grid = crit_buses_grid.append(
+            _append_crit_buses(voltage_diff_uv)
         )
 
-    return crit_nodes_grid
+    if not crit_buses_grid.empty:
+        crit_buses_grid.sort_values(
+            by=["v_mag_pu"],
+            ascending=False,
+            inplace=True)
+
+    return crit_buses_grid
 
 
 def check_ten_percent_voltage_deviation(edisgo_obj):
