@@ -510,7 +510,9 @@ def mv_allowed_deviations(edisgo_obj, voltage_levels):
 
 def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
     """
-    Checks for voltage stability issues in MV topology.
+    Checks for voltage stability issues in MV network.
+
+    Returns buses with voltage issues and their maximum voltage deviation.
 
     Parameters
     ----------
@@ -520,20 +522,21 @@ def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
         are:
 
         * 'mv_lv'
-          This is the default. The allowed voltage deviation for nodes in the
-          MV topology is the same as for nodes in the LV topology. Further load
-          and feed-in case are not distinguished.
+          This is the default. The allowed voltage deviations for buses in the
+          MV is the same as for buses in the LV. Further load and feed-in case
+          are not distinguished.
         * 'mv'
-          Use this to handle allowed voltage deviations in the MV and LV
-          topology differently. Here, load and feed-in case are differentiated
-          as well.
+          Use this to handle allowed voltage limits in the MV and LV
+          topology differently. In that case load and feed-in case are
+          differentiated.
 
     Returns
     -------
     :obj:`dict`
         Dictionary with representative of :class:`~.network.grids.MVGrid` as
-        key and a :pandas:`pandas.DataFrame<DataFrame>` with its critical
-        nodes, sorted descending by voltage deviation, as value.
+        key and a :pandas:`pandas.DataFrame<DataFrame>` with voltage
+        deviations from allowed lower or upper voltage limits, sorted
+        descending from highest to lowest voltage deviation, as value.
         Index of the dataframe are all buses with voltage issues.
         Columns are 'v_mag_pu' containing the maximum voltage deviation as
         float and 'time_index' containing the corresponding time step the
@@ -547,34 +550,32 @@ def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
 
     """
 
-    crit_nodes = {}
+    crit_buses = {}
 
-    buses = edisgo_obj.topology.mv_grid.buses_df.index
-
-    v_dev_allowed_upper, v_dev_allowed_lower = mv_allowed_deviations(
+    # get allowed lower and upper voltage limits
+    v_limits_upper, v_limits_lower = mv_allowed_deviations(
         edisgo_obj, voltage_levels
     )
 
-    crit_nodes_grid = _voltage_deviation(
+    # find buses with voltage issues and their maximum voltage deviation
+    crit_buses_grid = _voltage_deviation(
         edisgo_obj,
-        buses,
-        v_dev_allowed_upper,
-        v_dev_allowed_lower
+        edisgo_obj.topology.mv_grid.buses_df.index,
+        v_limits_upper,
+        v_limits_lower,
     )
 
-    if not crit_nodes_grid.empty:
-        crit_nodes[
-            repr(edisgo_obj.topology.mv_grid)
-        ] = crit_nodes_grid.sort_values(by=["v_mag_pu"], ascending=False)
+    if not crit_buses_grid.empty:
+        crit_buses[repr(edisgo_obj.topology.mv_grid)] = crit_buses_grid
         logger.debug(
-            "==> {} node(s) in MV topology has/have voltage issues.".format(
-                crit_nodes[repr(edisgo_obj.topology.mv_grid)].shape[0]
+            "==> {} bus(es) in MV topology has/have voltage issues.".format(
+                crit_buses_grid.shape[0]
             )
         )
     else:
         logger.debug("==> No voltage issues in MV topology.")
 
-    return crit_nodes
+    return crit_buses
 
 
 def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):

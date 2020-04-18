@@ -127,89 +127,59 @@ class TestCheckTechConstraints:
         assert 0.90 == v_limits_lower.loc[self.timesteps[1]]
 
     def test_mv_voltage_deviation(self):
-        # create power flow issues
-        self.edisgo.results.v_res.at[
-            self.timesteps[0], "Bus_GeneratorFluctuating_2"
-        ] = 1.14
-        self.edisgo.results.v_res.at[
-            self.timesteps[1], "Bus_GeneratorFluctuating_2"
-        ] = 0.89
-        self.edisgo.results.v_res.at[
-            self.timesteps[0], "Bus_GeneratorFluctuating_3"
-        ] = 1.15
-        self.edisgo.results.v_res.at[
-            self.timesteps[1], "Bus_GeneratorFluctuating_4"
-        ] = 0.89
-        self.edisgo.results.v_res.at[
-            self.timesteps[0], "Bus_GeneratorFluctuating_5"
-        ] = 1.16
-        self.edisgo.results.v_res.at[
-            self.timesteps[1], "Bus_GeneratorFluctuating_6"
-        ] = 0.82
 
+        # check with no voltage issues
         voltage_issues = check_tech_constraints.mv_voltage_deviation(
             self.edisgo
         )
+        assert {} == voltage_issues
 
-        assert len(voltage_issues["MVGrid_1"]) == 5
+        # create voltage issues
+        self.mv_voltage_issues()
+
+        # check with voltage issues and voltage_levels="mv_lv" (default)
+        voltage_issues = check_tech_constraints.mv_voltage_deviation(
+            self.edisgo
+        )
+        # check shape of dataframe
+        assert (3, 2) == voltage_issues["MVGrid_1"].shape
+        # check under- and overvoltage deviation values
+        assert list(voltage_issues["MVGrid_1"].index.values) == [
+            "Bus_Generator_1",
+            "Bus_GeneratorFluctuating_2",
+            "Bus_GeneratorFluctuating_3",
+        ]
         assert np.isclose(
-            voltage_issues["MVGrid_1"].loc[
+            voltage_issues["MVGrid_1"].at[
                 "Bus_GeneratorFluctuating_2", "v_mag_pu"
-            ],
-            0.04,
-        )
-        assert np.isclose(
-            voltage_issues["MVGrid_1"].loc[
-                "Bus_GeneratorFluctuating_3", "v_mag_pu"
-            ],
-            0.05,
-        )
-        assert np.isclose(
-            voltage_issues["MVGrid_1"].loc[
-                "Bus_GeneratorFluctuating_4", "v_mag_pu"
             ],
             0.01,
         )
+        assert (
+            voltage_issues["MVGrid_1"].at["Bus_Generator_1", "time_index"]
+            == self.timesteps[1]
+        )
+
+        # check with voltage issues and voltage_levels="mv"
+        voltage_issues = check_tech_constraints.mv_voltage_deviation(
+            self.edisgo, "mv"
+        )
+        # check shape of dataframe
+        assert (3, 2) == voltage_issues["MVGrid_1"].shape
+        # check under- and overvoltage deviation values
+        assert list(voltage_issues["MVGrid_1"].index.values) == [
+            "Bus_Generator_1",
+            "Bus_GeneratorFluctuating_2",
+            "Bus_GeneratorFluctuating_3",
+        ]
         assert np.isclose(
-            voltage_issues["MVGrid_1"].loc[
-                "Bus_GeneratorFluctuating_5", "v_mag_pu"
+            voltage_issues["MVGrid_1"].at[
+                "Bus_GeneratorFluctuating_2", "v_mag_pu"
             ],
             0.06,
         )
-        assert np.isclose(
-            voltage_issues["MVGrid_1"].loc[
-                "Bus_GeneratorFluctuating_6", "v_mag_pu"
-            ],
-            0.08,
-        )
         assert (
-            voltage_issues["MVGrid_1"].loc[
-                "Bus_GeneratorFluctuating_2", "time_index"
-            ]
-            == self.timesteps[0]
-        )
-        assert (
-            voltage_issues["MVGrid_1"].loc[
-                "Bus_GeneratorFluctuating_3", "time_index"
-            ]
-            == self.timesteps[0]
-        )
-        assert (
-            voltage_issues["MVGrid_1"].loc[
-                "Bus_GeneratorFluctuating_4", "time_index"
-            ]
-            == self.timesteps[1]
-        )
-        assert (
-            voltage_issues["MVGrid_1"].loc[
-                "Bus_GeneratorFluctuating_5", "time_index"
-            ]
-            == self.timesteps[0]
-        )
-        assert (
-            voltage_issues["MVGrid_1"].loc[
-                "Bus_GeneratorFluctuating_6", "time_index"
-            ]
+            voltage_issues["MVGrid_1"].at["Bus_Generator_1", "time_index"]
             == self.timesteps[1]
         )
 
