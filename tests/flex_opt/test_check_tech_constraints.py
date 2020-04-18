@@ -98,6 +98,25 @@ class TestCheckTechConstraints:
             == self.timesteps[1]
         )
 
+    def test_mv_allowed_deviations(self):
+        # run function with voltage_levels="mv"
+        v_limits_upper, v_limits_lower = \
+            check_tech_constraints.mv_allowed_deviations(self.edisgo, "mv")
+
+        assert 1.05 == v_limits_upper.loc[self.timesteps[0]]
+        assert 1.10 == v_limits_upper.loc[self.timesteps[1]]
+        assert 0.90 == v_limits_lower.loc[self.timesteps[0]]
+        assert 0.985 == v_limits_lower.loc[self.timesteps[1]]
+
+        # run function with voltage_levels="mv_lv"
+        v_limits_upper, v_limits_lower = \
+            check_tech_constraints.mv_allowed_deviations(self.edisgo, "mv_lv")
+
+        assert 1.10 == v_limits_upper.loc[self.timesteps[0]]
+        assert 1.10 == v_limits_upper.loc[self.timesteps[1]]
+        assert 0.90 == v_limits_lower.loc[self.timesteps[0]]
+        assert 0.90 == v_limits_lower.loc[self.timesteps[1]]
+
     def test_mv_voltage_deviation(self):
         # create power flow issues
         self.edisgo.results.v_res.at[

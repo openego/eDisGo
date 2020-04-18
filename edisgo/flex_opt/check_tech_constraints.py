@@ -425,96 +425,86 @@ def _station_load(edisgo_obj, grid, crit_stations):
 
 def mv_allowed_deviations(edisgo_obj, voltage_levels):
     """
-    Calculates the allowed relative upper and lower voltage deviations for an MV grid topology
+    Calculates allowed upper and lower MV voltage limits in p.u..
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
     voltage_levels : :obj:`str`
-        Specifies which allowed voltage deviations to use. Possible options
+        Specifies which allowed voltage limits to use. Possible options
         are:
 
         * 'mv_lv'
-          This is the default. The allowed voltage deviation for nodes in the
-          MV topology is the same as for nodes in the LV topology. Further load and
-          feed-in case are not distinguished.
+          The allowed voltage limits for buses in the MV are the same as for
+          buses in the LV. Further load and feed-in case are not distinguished.
         * 'mv'
-          Use this to handle allowed voltage deviations in the MV and LV topology
-          differently. Here, load and feed-in case are differentiated as well.
+          Use this to handle allowed voltage limits in the MV and LV
+          differently. In that case load and feed-in case are differentiated.
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing the maximum allowed relative upper voltage deviation
-        Index of the dataframe are the timesteps of the supplied network of type
-        :pandas:`pandas.Timestamp<Timestamp>`.
+    :pandas:`pandas.Series<Series>`
+        Series containing the allowed upper voltage limits in p.u..
+        Index of the series are all time steps power flow was last conducted
+        for of type :pandas:`pandas.Timestamp<Timestamp>`.
 
-    :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing the maximum allowed relative lower voltage deviation
-        Index of the dataframe are the timesteps of the supplied network of type
-        :pandas:`pandas.Timestamp<Timestamp>`.
+    :pandas:`pandas.Series<Series>`
+        Series containing the allowed lower voltage limits in p.u..
+        Index of the series are all time steps power flow was last conducted
+        for of type :pandas:`pandas.Timestamp<Timestamp>`.
 
     """
-    v_dev_allowed_per_case = {}
-    v_dev_allowed_per_case["feedin_case_lower"] = edisgo_obj.config[
+    v_allowed_per_case = {}
+
+    # get config values for lower voltage limit in feed-in case and upper
+    # voltage limit in load case
+    v_allowed_per_case["feedin_case_lower"] = edisgo_obj.config[
         "grid_expansion_allowed_voltage_deviations"
     ]["feedin_case_lower"]
-    v_dev_allowed_per_case["load_case_upper"] = edisgo_obj.config[
+    v_allowed_per_case["load_case_upper"] = edisgo_obj.config[
         "grid_expansion_allowed_voltage_deviations"
     ]["load_case_upper"]
+
+    # calculate upper voltage limit in feed-in case and lower voltage limit in
+    # load case
     offset = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
         "hv_mv_trafo_offset"
     ]
     control_deviation = edisgo_obj.config[
         "grid_expansion_allowed_voltage_deviations"
     ]["hv_mv_trafo_control_deviation"]
-    if voltage_levels == "mv_lv":
-        v_dev_allowed_per_case["feedin_case_upper"] = (
+
+    if voltage_levels == "mv_lv" or voltage_levels == "mv":
+        v_allowed_per_case["feedin_case_upper"] = (
             1
             + offset
             + control_deviation
             + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "mv_lv_feedin_case_max_v_deviation"
+                "{}_feedin_case_max_v_deviation".format(voltage_levels)
             ]
         )
-        v_dev_allowed_per_case["load_case_lower"] = (
+        v_allowed_per_case["load_case_lower"] = (
             1
             + offset
             - control_deviation
             - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "mv_lv_load_case_max_v_deviation"
-            ]
-        )
-    elif voltage_levels == "mv":
-        v_dev_allowed_per_case["feedin_case_upper"] = (
-            1
-            + offset
-            + control_deviation
-            + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "mv_feedin_case_max_v_deviation"
-            ]
-        )
-        v_dev_allowed_per_case["load_case_lower"] = (
-            1
-            + offset
-            - control_deviation
-            - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "mv_load_case_max_v_deviation"
+                "{}_load_case_max_v_deviation".format(voltage_levels)
             ]
         )
     else:
         raise ValueError(
             "Specified mode {} is not a valid option.".format(voltage_levels)
         )
-    # maximum allowed apparent power of station in each time step
-    v_dev_allowed_upper = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
-        lambda _: v_dev_allowed_per_case["{}_upper".format(_)]
+
+    # create series with upper and lower voltage limits for each time step
+    v_limits_upper = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
+        lambda _: v_allowed_per_case["{}_upper".format(_)]
     )
-    v_dev_allowed_lower = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
-        lambda _: v_dev_allowed_per_case["{}_lower".format(_)]
+    v_limits_lower = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
+        lambda _: v_allowed_per_case["{}_lower".format(_)]
     )
 
-    return v_dev_allowed_upper, v_dev_allowed_lower
+    return v_limits_upper, v_limits_lower
 
 
 def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
