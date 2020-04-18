@@ -14,7 +14,7 @@ def mv_line_load(edisgo_obj):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
 
     Returns
     -------
@@ -429,7 +429,7 @@ def mv_allowed_deviations(edisgo_obj, voltage_levels):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
     voltage_levels : :obj:`str`
         Specifies which allowed voltage deviations to use. Possible options
         are:
@@ -523,18 +523,19 @@ def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
     voltage_levels : :obj:`str`
         Specifies which allowed voltage deviations to use. Possible options
         are:
 
         * 'mv_lv'
           This is the default. The allowed voltage deviation for nodes in the
-          MV topology is the same as for nodes in the LV topology. Further load and
-          feed-in case are not distinguished.
+          MV topology is the same as for nodes in the LV topology. Further load
+          and feed-in case are not distinguished.
         * 'mv'
-          Use this to handle allowed voltage deviations in the MV and LV topology
-          differently. Here, load and feed-in case are differentiated as well.
+          Use this to handle allowed voltage deviations in the MV and LV
+          topology differently. Here, load and feed-in case are differentiated
+          as well.
 
     Returns
     -------
@@ -591,32 +592,32 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
-    mode : None or String
-        If None voltage at all nodes in LV topology is checked. If mode is set to
-        'stations' only voltage at busbar is checked.
+    edisgo_obj : :class:`~.EDisGo`
+    mode : None or :obj:`str`
+        If None voltage at all nodes in LV topology is checked. If mode is set
+        to 'stations' only voltage at bus bar is checked.
     voltage_levels : :obj:`str`
         Specifies which allowed voltage deviations to use. Possible options
         are:
 
         * 'mv_lv'
           This is the default. The allowed voltage deviation for nodes in the
-          MV topology is the same as for nodes in the LV topology. Further load and
-          feed-in case are not distinguished.
+          MV topology is the same as for nodes in the LV topology. Further load
+          and feed-in case are not distinguished.
         * 'lv'
-          Use this to handle allowed voltage deviations in the MV and LV topology
-          differently. Here, load and feed-in case are differentiated as well.
+          Use this to handle allowed voltage deviations in the MV and LV
+          topology differently. Here, load and feed-in case are differentiated.
 
     Returns
     -------
     :obj:`dict`
         Dictionary with representative of :class:`~.network.grids.LVGrid` as
-        key and a :pandas:`pandas.DataFrame<dataframe>` with its critical
-        nodes, sorted descending by voltage deviation, as value.
-        Index of the dataframe are all nodes with over-voltage issues.
+        key and a :pandas:`pandas.DataFrame<DataFrame>` with its critical
+        buses, sorted descending by voltage deviation, as value.
+        Index of the dataframe are all nodes with voltage issues.
         Columns are 'v_mag_pu' containing the maximum voltage deviation as
         float and 'time_index' containing the corresponding time step the
-        over-voltage occured in as :pandas:`pandas.Timestamp<timestamp>`.
+        voltage issue occured in as :pandas:`pandas.Timestamp<Timestamp>`.
 
     Notes
     -----
@@ -787,11 +788,11 @@ def voltage_diff(
     edisgo_obj, buses, v_dev_allowed_upper, v_dev_allowed_lower
 ):
     """
-    Function to detect under- and overvoltage at nodes.
+    Function to detect under- and overvoltage at buses.
 
     The function returns both under- and overvoltage deviations in p.u. from
     the allowed lower and upper voltage limit, respectively, in separate
-    dataframes. In case of both under- and overvoltage issues at one node,
+    dataframes. In case of both under- and overvoltage issues at one bus,
     only the highest voltage deviation is returned.
 
     Parameters
@@ -814,16 +815,16 @@ def voltage_diff(
         Dataframe with deviations from allowed lower voltage level.
         Columns of the dataframe are all time steps power flow analysis was
         conducted for of type :pandas:`pandas.Timestamp<Timestamp>`; in the
-        index are all nodes for which undervoltage was detected. In case of
-        a higher over- than undervoltage deviation for a node, the node does
+        index are all buses for which undervoltage was detected. In case of
+        a higher over- than undervoltage deviation for a bus, the bus does
         not appear in this dataframe, but in the dataframe with overvoltage
         deviations.
     :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with deviations from allowed upper voltage level.
         Columns of the dataframe are all time steps power flow analysis was
         conducted for of type :pandas:`pandas.Timestamp<Timestamp>`; in the
-        index are all nodes for which overvoltage was detected. In case of
-        a higher under- than overvoltage deviation for a node, the node does
+        index are all buses for which overvoltage was detected. In case of
+        a higher under- than overvoltage deviation for a bus, the bus does
         not appear in this dataframe, but in the dataframe with undervoltage
         deviations.
 
@@ -844,16 +845,16 @@ def voltage_diff(
     undervoltage = v_mag_pu_pfa.T[
         v_mag_pu_pfa.T < v_dev_allowed_lower_format
     ].dropna(how="all")
-    # sort nodes with under- and overvoltage issues in a way that
+    # sort buses with under- and overvoltage issues in a way that
     # worst case is saved
-    nodes_both = v_mag_pu_pfa[
+    buses_both = v_mag_pu_pfa[
         overvoltage[overvoltage.index.isin(undervoltage.index)].index
     ]
     voltage_diff_ov = (
-        nodes_both.T - v_dev_allowed_upper.loc[v_mag_pu_pfa.index].values
+            buses_both.T - v_dev_allowed_upper.loc[v_mag_pu_pfa.index].values
     )
     voltage_diff_uv = (
-        -nodes_both.T + v_dev_allowed_lower.loc[v_mag_pu_pfa.index].values
+        -buses_both.T + v_dev_allowed_lower.loc[v_mag_pu_pfa.index].values
     )
     voltage_diff_ov = voltage_diff_ov.loc[
         voltage_diff_ov.max(axis=1) > voltage_diff_uv.max(axis=1)
@@ -861,20 +862,20 @@ def voltage_diff(
     voltage_diff_uv = voltage_diff_uv.loc[
         ~voltage_diff_uv.index.isin(voltage_diff_ov.index)
     ]
-    # handle nodes with overvoltage issues and append to voltage_diff_ov
-    nodes_ov = v_mag_pu_pfa[
-        overvoltage[~overvoltage.index.isin(nodes_both.columns)].index
+    # handle buses with overvoltage issues and append to voltage_diff_ov
+    buses_ov = v_mag_pu_pfa[
+        overvoltage[~overvoltage.index.isin(buses_both.columns)].index
     ]
     voltage_diff_ov = voltage_diff_ov.append(
-        nodes_ov.T - v_dev_allowed_upper.loc[v_mag_pu_pfa.index].values
+        buses_ov.T - v_dev_allowed_upper.loc[v_mag_pu_pfa.index].values
     )
 
-    # handle nodes with undervoltage issues and append to voltage_diff_uv
-    nodes_uv = v_mag_pu_pfa[
-        undervoltage[~undervoltage.index.isin(nodes_both.columns)].index
+    # handle buses with undervoltage issues and append to voltage_diff_uv
+    buses_uv = v_mag_pu_pfa[
+        undervoltage[~undervoltage.index.isin(buses_both.columns)].index
     ]
     voltage_diff_uv = voltage_diff_uv.append(
-        -nodes_uv.T + v_dev_allowed_lower.loc[v_mag_pu_pfa.index].values
+        -buses_uv.T + v_dev_allowed_lower.loc[v_mag_pu_pfa.index].values
     )
 
     return voltage_diff_uv, voltage_diff_ov
