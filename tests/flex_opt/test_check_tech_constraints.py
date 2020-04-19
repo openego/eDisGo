@@ -202,7 +202,8 @@ class TestCheckTechConstraints:
             v_limits_upper,
             v_limits_lower,
         ) = check_tech_constraints._mv_allowed_voltage_limits(
-            self.edisgo, "mv")
+            self.edisgo, "mv"
+        )
 
         assert 1.05 == v_limits_upper.loc[self.timesteps[0]]
         assert 1.10 == v_limits_upper.loc[self.timesteps[1]]
@@ -214,7 +215,8 @@ class TestCheckTechConstraints:
             v_limits_upper,
             v_limits_lower,
         ) = check_tech_constraints._mv_allowed_voltage_limits(
-            self.edisgo, "mv_lv")
+            self.edisgo, "mv_lv"
+        )
 
         assert 1.10 == v_limits_upper.loc[self.timesteps[0]]
         assert 1.10 == v_limits_upper.loc[self.timesteps[1]]
@@ -224,19 +226,22 @@ class TestCheckTechConstraints:
     def test__lv_allowed_voltage_limits(self):
 
         # get LVGrid_1 object
-        lv_grid = self.edisgo.topology._grids['LVGrid_1']
+        lv_grid = self.edisgo.topology._grids["LVGrid_1"]
         # set voltage at stations' secondary side to known value
         self.edisgo.results._v_res.loc[
-            self.timesteps[0], 'Bus_secondary_LVStation_1'] = 1.05
+            self.timesteps[0], "Bus_secondary_LVStation_1"
+        ] = 1.05
         self.edisgo.results._v_res.loc[
-            self.timesteps[1], 'Bus_secondary_LVStation_1'] = 0.98
+            self.timesteps[1], "Bus_secondary_LVStation_1"
+        ] = 0.98
 
         # run function with mode=None
         (
             v_limits_upper,
             v_limits_lower,
         ) = check_tech_constraints._lv_allowed_voltage_limits(
-            self.edisgo, lv_grid, mode=None)
+            self.edisgo, lv_grid, mode=None
+        )
 
         assert 1.085 == v_limits_upper.loc[self.timesteps[0]]
         assert 1.10 == v_limits_upper.loc[self.timesteps[1]]
@@ -245,16 +250,19 @@ class TestCheckTechConstraints:
 
         # set voltage at stations' primary side to known value
         self.edisgo.results._v_res.loc[
-            self.timesteps[0], 'Bus_primary_LVStation_1'] = 1.03
+            self.timesteps[0], "Bus_primary_LVStation_1"
+        ] = 1.03
         self.edisgo.results._v_res.loc[
-            self.timesteps[1], 'Bus_primary_LVStation_1'] = 0.99
+            self.timesteps[1], "Bus_primary_LVStation_1"
+        ] = 0.99
 
         # run function with mode='stations'
         (
             v_limits_upper,
             v_limits_lower,
         ) = check_tech_constraints._lv_allowed_voltage_limits(
-            self.edisgo, lv_grid, mode="stations")
+            self.edisgo, lv_grid, mode="stations"
+        )
 
         assert 1.045 == v_limits_upper.loc[self.timesteps[0]]
         assert 1.10 == v_limits_upper.loc[self.timesteps[1]]
