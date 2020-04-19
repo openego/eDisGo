@@ -423,91 +423,6 @@ def _station_load(edisgo_obj, grid, crit_stations):
     return crit_stations
 
 
-def mv_allowed_deviations(edisgo_obj, voltage_levels):
-    """
-    Calculates allowed upper and lower MV voltage limits in p.u..
-
-    Parameters
-    ----------
-    edisgo_obj : :class:`~.EDisGo`
-    voltage_levels : :obj:`str`
-        Specifies which allowed voltage limits to use. Possible options
-        are:
-
-        * 'mv_lv'
-          The allowed voltage deviations for buses in the MV are the same as
-          for buses in the LV. Further load and feed-in case are not
-          distinguished.
-        * 'mv'
-          Use this to handle allowed voltage limits in the MV and LV
-          differently. In that case load and feed-in case are differentiated.
-
-    Returns
-    -------
-    :pandas:`pandas.Series<Series>`
-        Series containing the allowed upper voltage limits in p.u..
-        Index of the series are all time steps power flow was last conducted
-        for of type :pandas:`pandas.Timestamp<Timestamp>`.
-
-    :pandas:`pandas.Series<Series>`
-        Series containing the allowed lower voltage limits in p.u..
-        Index of the series are all time steps power flow was last conducted
-        for of type :pandas:`pandas.Timestamp<Timestamp>`.
-
-    """
-    v_allowed_per_case = {}
-
-    # get config values for lower voltage limit in feed-in case and upper
-    # voltage limit in load case
-    v_allowed_per_case["feedin_case_lower"] = edisgo_obj.config[
-        "grid_expansion_allowed_voltage_deviations"
-    ]["feedin_case_lower"]
-    v_allowed_per_case["load_case_upper"] = edisgo_obj.config[
-        "grid_expansion_allowed_voltage_deviations"
-    ]["load_case_upper"]
-
-    # calculate upper voltage limit in feed-in case and lower voltage limit in
-    # load case
-    offset = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-        "hv_mv_trafo_offset"
-    ]
-    control_deviation = edisgo_obj.config[
-        "grid_expansion_allowed_voltage_deviations"
-    ]["hv_mv_trafo_control_deviation"]
-
-    if voltage_levels == "mv_lv" or voltage_levels == "mv":
-        v_allowed_per_case["feedin_case_upper"] = (
-            1
-            + offset
-            + control_deviation
-            + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "{}_feedin_case_max_v_deviation".format(voltage_levels)
-            ]
-        )
-        v_allowed_per_case["load_case_lower"] = (
-            1
-            + offset
-            - control_deviation
-            - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "{}_load_case_max_v_deviation".format(voltage_levels)
-            ]
-        )
-    else:
-        raise ValueError(
-            "Specified mode {} is not a valid option.".format(voltage_levels)
-        )
-
-    # create series with upper and lower voltage limits for each time step
-    v_limits_upper = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
-        lambda _: v_allowed_per_case["{}_upper".format(_)]
-    )
-    v_limits_lower = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
-        lambda _: v_allowed_per_case["{}_lower".format(_)]
-    )
-
-    return v_limits_upper, v_limits_lower
-
-
 def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
     """
     Checks for voltage stability issues in MV network.
@@ -553,7 +468,7 @@ def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
     crit_buses = {}
 
     # get allowed lower and upper voltage limits
-    v_limits_upper, v_limits_lower = mv_allowed_deviations(
+    v_limits_upper, v_limits_lower = _mv_allowed_voltage_limits(
         edisgo_obj, voltage_levels
     )
 
@@ -779,6 +694,91 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
 def voltage_diff(
     edisgo_obj, buses, v_dev_allowed_upper, v_dev_allowed_lower
 ):
+def _mv_allowed_voltage_limits(edisgo_obj, voltage_levels):
+    """
+    Calculates allowed upper and lower MV voltage limits in p.u..
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    voltage_levels : :obj:`str`
+        Specifies which allowed voltage limits to use. Possible options
+        are:
+
+        * 'mv_lv'
+          The allowed voltage deviations for buses in the MV are the same as
+          for buses in the LV. Further load and feed-in case are not
+          distinguished.
+        * 'mv'
+          Use this to handle allowed voltage limits in the MV and LV
+          differently. In that case load and feed-in case are differentiated.
+
+    Returns
+    -------
+    :pandas:`pandas.Series<Series>`
+        Series containing the allowed upper voltage limits in p.u..
+        Index of the series are all time steps power flow was last conducted
+        for of type :pandas:`pandas.Timestamp<Timestamp>`.
+
+    :pandas:`pandas.Series<Series>`
+        Series containing the allowed lower voltage limits in p.u..
+        Index of the series are all time steps power flow was last conducted
+        for of type :pandas:`pandas.Timestamp<Timestamp>`.
+
+    """
+    v_allowed_per_case = {}
+
+    # get config values for lower voltage limit in feed-in case and upper
+    # voltage limit in load case
+    v_allowed_per_case["feedin_case_lower"] = edisgo_obj.config[
+        "grid_expansion_allowed_voltage_deviations"
+    ]["feedin_case_lower"]
+    v_allowed_per_case["load_case_upper"] = edisgo_obj.config[
+        "grid_expansion_allowed_voltage_deviations"
+    ]["load_case_upper"]
+
+    # calculate upper voltage limit in feed-in case and lower voltage limit in
+    # load case
+    offset = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+        "hv_mv_trafo_offset"
+    ]
+    control_deviation = edisgo_obj.config[
+        "grid_expansion_allowed_voltage_deviations"
+    ]["hv_mv_trafo_control_deviation"]
+
+    if voltage_levels == "mv_lv" or voltage_levels == "mv":
+        v_allowed_per_case["feedin_case_upper"] = (
+            1
+            + offset
+            + control_deviation
+            + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+                "{}_feedin_case_max_v_deviation".format(voltage_levels)
+            ]
+        )
+        v_allowed_per_case["load_case_lower"] = (
+            1
+            + offset
+            - control_deviation
+            - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+                "{}_load_case_max_v_deviation".format(voltage_levels)
+            ]
+        )
+    else:
+        raise ValueError(
+            "Specified mode {} is not a valid option.".format(voltage_levels)
+        )
+
+    # create series with upper and lower voltage limits for each time step
+    v_limits_upper = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
+        lambda _: v_allowed_per_case["{}_upper".format(_)]
+    )
+    v_limits_lower = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
+        lambda _: v_allowed_per_case["{}_lower".format(_)]
+    )
+
+    return v_limits_upper, v_limits_lower
+
+
     """
     Function to detect under- and overvoltage at buses.
 

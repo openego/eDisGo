@@ -108,7 +108,8 @@ class TestCheckTechConstraints:
         (
             v_limits_upper,
             v_limits_lower,
-        ) = check_tech_constraints.mv_allowed_deviations(self.edisgo, "mv")
+        ) = check_tech_constraints._mv_allowed_voltage_limits(
+            self.edisgo, "mv")
 
         assert 1.05 == v_limits_upper.loc[self.timesteps[0]]
         assert 1.10 == v_limits_upper.loc[self.timesteps[1]]
@@ -119,7 +120,8 @@ class TestCheckTechConstraints:
         (
             v_limits_upper,
             v_limits_lower,
-        ) = check_tech_constraints.mv_allowed_deviations(self.edisgo, "mv_lv")
+        ) = check_tech_constraints._mv_allowed_voltage_limits(
+            self.edisgo, "mv_lv")
 
         assert 1.10 == v_limits_upper.loc[self.timesteps[0]]
         assert 1.10 == v_limits_upper.loc[self.timesteps[1]]
