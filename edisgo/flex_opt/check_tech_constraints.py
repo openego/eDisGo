@@ -779,6 +779,103 @@ def _mv_allowed_voltage_limits(edisgo_obj, voltage_levels):
     return v_limits_upper, v_limits_lower
 
 
+def _lv_allowed_voltage_limits(edisgo_obj, lv_grid, mode):
+    """
+    Calculates allowed upper and lower voltage limits for given LV grid.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    lv_grid : :class:`~.network.grids.LVGrid`
+        LV grid to get voltage limits for.
+    mode : None or :obj:`str`
+        If None, voltage limits for buses in the LV network are returned. In
+        that case the reference bus is the LV stations' secondary side.
+        If mode is set to 'stations', voltage limits for stations' secondary
+        side (LV bus bar) are returned; the reference bus is the stations'
+        primary side.
+
+    Returns
+    -------
+    :pandas:`pandas.Series<Series>`
+        Series containing the allowed upper voltage limits in p.u..
+        Index of the series are all time steps power flow was last conducted
+        for of type :pandas:`pandas.Timestamp<Timestamp>`.
+
+    :pandas:`pandas.Series<Series>`
+        Series containing the allowed lower voltage limits in p.u..
+        Index of the series are all time steps power flow was last conducted
+        for of type :pandas:`pandas.Timestamp<Timestamp>`.
+
+    """
+    v_allowed_per_case = {}
+
+    # get reference voltages for different modes
+    if mode == "stations":
+        # reference voltage is voltage at stations' primary side
+        bus_station_primary = lv_grid.transformers_df.iloc[0].bus0
+        voltage_base = edisgo_obj.results.v_res.loc[
+                       :, bus_station_primary
+                       ]
+        config_string = "mv_lv_station"
+    else:
+        # reference voltage is voltage at stations' secondary side
+        voltage_base = edisgo_obj.results.v_res.loc[
+                       :, lv_grid.station.index.values[0]
+                       ]
+        config_string = "lv"
+
+    # calculate upper voltage limit in feed-in case and lower voltage limit in
+    # load case
+    v_allowed_per_case["feedin_case_upper"] = (
+            voltage_base
+            + edisgo_obj.config[
+                "grid_expansion_allowed_voltage_deviations"
+            ]["{}_feedin_case_max_v_deviation".format(config_string)]
+    )
+    v_allowed_per_case["load_case_lower"] = (
+            voltage_base
+            - edisgo_obj.config[
+                "grid_expansion_allowed_voltage_deviations"
+            ]["{}_load_case_max_v_deviation".format(config_string)]
+    )
+
+    timeindex = voltage_base.index
+    v_allowed_per_case["feedin_case_lower"] = pd.Series(
+        edisgo_obj.config[
+            "grid_expansion_allowed_voltage_deviations"
+        ]["feedin_case_lower"]
+        , index=timeindex
+    )
+    v_allowed_per_case["load_case_upper"] = pd.Series(
+        edisgo_obj.config[
+            "grid_expansion_allowed_voltage_deviations"
+        ]["load_case_upper"]
+        , index=timeindex
+    )
+
+    # create series with upper and lower voltage limits for each time step
+    v_limits_upper = []
+    v_limits_lower = []
+    load_feedin_case = edisgo_obj.timeseries.timesteps_load_feedin_case
+    for t in timeindex:
+        case = load_feedin_case.loc[t]
+        v_limits_upper.append(
+            v_allowed_per_case["{}_upper".format(case)].loc[t]
+        )
+        v_limits_lower.append(
+            v_allowed_per_case["{}_lower".format(case)].loc[t]
+        )
+    v_limits_upper = pd.Series(
+        v_limits_upper, index=timeindex
+    )
+    v_limits_lower = pd.Series(
+        v_limits_lower, index=timeindex
+    )
+
+    return v_limits_upper, v_limits_lower
+
+
     """
     Function to detect under- and overvoltage at buses.
 

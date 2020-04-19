@@ -297,6 +297,46 @@ class TestCheckTechConstraints:
             == self.timesteps[1]
         )
 
+    def test__lv_allowed_voltage_limits(self):
+
+        # get LVGrid_1 object
+        lv_grid = self.edisgo.topology._grids['LVGrid_1']
+        # set voltage at stations' secondary side to known value
+        self.edisgo.results._v_res.loc[
+            self.timesteps[0], 'Bus_secondary_LVStation_1'] = 1.05
+        self.edisgo.results._v_res.loc[
+            self.timesteps[1], 'Bus_secondary_LVStation_1'] = 0.98
+
+        # run function with mode=None
+        (
+            v_limits_upper,
+            v_limits_lower,
+        ) = check_tech_constraints._lv_allowed_voltage_limits(
+            self.edisgo, lv_grid, mode=None)
+
+        assert 1.085 == v_limits_upper.loc[self.timesteps[0]]
+        assert 1.10 == v_limits_upper.loc[self.timesteps[1]]
+        assert 0.90 == v_limits_lower.loc[self.timesteps[0]]
+        assert 0.915 == v_limits_lower.loc[self.timesteps[1]]
+
+        # set voltage at stations' primary side to known value
+        self.edisgo.results._v_res.loc[
+            self.timesteps[0], 'Bus_primary_LVStation_1'] = 1.03
+        self.edisgo.results._v_res.loc[
+            self.timesteps[1], 'Bus_primary_LVStation_1'] = 0.99
+
+        # run function with mode='stations'
+        (
+            v_limits_upper,
+            v_limits_lower,
+        ) = check_tech_constraints._lv_allowed_voltage_limits(
+            self.edisgo, lv_grid, mode="stations")
+
+        assert 1.045 == v_limits_upper.loc[self.timesteps[0]]
+        assert 1.10 == v_limits_upper.loc[self.timesteps[1]]
+        assert 0.90 == v_limits_lower.loc[self.timesteps[0]]
+        assert 0.97 == v_limits_lower.loc[self.timesteps[1]]
+
     def test_check_ten_percent_voltage_deviation(self):
         # check without voltage issues greater than 10%
         check_tech_constraints.check_ten_percent_voltage_deviation(self.edisgo)
