@@ -233,13 +233,13 @@ def _line_load(edisgo_obj, grid, crit_lines):
     return crit_lines
 
 
-def hv_mv_station_load(edisgo):
+def hv_mv_station_load(edisgo_obj):
     """
     Checks for over-loading of HV/MV station.
 
     Parameters
     ----------
-    edisgo : :class:`~.edisgo.Edisgo`
+    edisgo_obj : :class:`~.Edisgo`
 
     Returns
     -------
@@ -262,7 +262,7 @@ def hv_mv_station_load(edisgo):
     """
     crit_stations = pd.DataFrame()
     crit_stations = _station_load(
-        edisgo, edisgo.topology.mv_grid, crit_stations
+        edisgo_obj, edisgo_obj.topology.mv_grid, crit_stations
     )
     if not crit_stations.empty:
         logger.debug("==> HV/MV station has load issues.")
@@ -322,7 +322,7 @@ def _station_load(edisgo_obj, grid, crit_stations):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.Edisgo`
+    edisgo_obj : :class:`~.Edisgo`
     grid : :class:`~.network.grids.LVGrid` or :class:`~.network.grids.MVGrid`
     crit_stations : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded stations, their apparent power at
@@ -438,11 +438,11 @@ def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
 
         * 'mv_lv'
           This is the default. The allowed voltage deviations for buses in the
-          MV is the same as for buses in the LV. Further load and feed-in case
+          MV is the same as for buses in the LV. Further, load and feed-in case
           are not distinguished.
         * 'mv'
           Use this to handle allowed voltage limits in the MV and LV
-          topology differently. In that case load and feed-in case are
+          topology differently. In that case, load and feed-in case are
           differentiated.
 
     Returns
@@ -873,9 +873,7 @@ def _mv_allowed_voltage_limits(edisgo_obj, voltage_levels):
     return voltage_diff_uv, voltage_diff_ov
 
 
-def _voltage_deviation(
-    edisgo_obj, buses, v_dev_allowed_upper, v_dev_allowed_lower
-):
+def _voltage_deviation(edisgo_obj, buses, v_limits_upper, v_limits_lower):
     """
     Function to detect voltage issues at buses.
 
@@ -887,11 +885,11 @@ def _voltage_deviation(
     edisgo_obj : :class:`~.EDisGo`
     buses : list(str)
         List of buses to check voltage deviation for.
-    v_dev_allowed_upper : :pandas:`pandas.Series<Series>`
+    v_limits_upper : :pandas:`pandas.Series<Series>`
         Series with time steps (of type :pandas:`pandas.Timestamp<Timestamp>`)
         power flow analysis was conducted for and the allowed upper limit of
         voltage deviation for each time step as float in p.u..
-    v_dev_allowed_lower : :pandas:`pandas.Series<Series>`
+    v_limits_lower : :pandas:`pandas.Series<Series>`
         Series with time steps (of type :pandas:`pandas.Timestamp<Timestamp>`)
         power flow analysis was conducted for and the allowed lower limit of
         voltage deviation for each time step as float in p.u..
@@ -899,7 +897,7 @@ def _voltage_deviation(
     Returns
     -------
     pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with deviations from allowed lower or upper voltage level
+        Dataframe with deviations from allowed lower or upper voltage limits
         sorted descending from highest to lowest voltage deviation
         (it is not distinguished between over- or undervoltage).
         Columns of the dataframe are 'v_mag_pu' containing the maximum absolute
@@ -922,10 +920,7 @@ def _voltage_deviation(
     crit_buses_grid = pd.DataFrame()
 
     voltage_diff_uv, voltage_diff_ov = voltage_diff(
-        edisgo_obj,
-        buses,
-        v_dev_allowed_upper,
-        v_dev_allowed_lower
+        edisgo_obj, buses, v_limits_upper, v_limits_lower
     )
 
     # append to crit buses dataframe
@@ -940,9 +935,8 @@ def _voltage_deviation(
 
     if not crit_buses_grid.empty:
         crit_buses_grid.sort_values(
-            by=["v_mag_pu"],
-            ascending=False,
-            inplace=True)
+            by=["v_mag_pu"], ascending=False, inplace=True
+        )
 
     return crit_buses_grid
 
