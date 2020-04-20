@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 def _scored_critical_current(edisgo_obj, grid):
     # Get allowed current per line per time step
     i_lines_allowed = check_tech_constraints.lines_allowed_load(
-        edisgo_obj, grid, "mv"
+        edisgo_obj, "mv"
     )
     i_lines_pfa = edisgo_obj.results.i_res[grid.lines_df.index]
 
