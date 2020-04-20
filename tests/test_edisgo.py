@@ -32,8 +32,6 @@ class TestEDisGo:
         self.edisgo.analyze()
         msg = "Inserted grid of unknown type."
         with pytest.raises(ValueError, match=msg):
-            checks._line_load(self.edisgo, None, pd.DataFrame)
-        with pytest.raises(ValueError, match=msg):
             checks._station_load(self.edisgo, None, pd.DataFrame)
         msg = "More than one MV station to extend was given. " \
               "There should only exist one station, please check."
