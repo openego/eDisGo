@@ -43,7 +43,7 @@ class Grid(ABC):
     @property
     def nominal_voltage(self):
         """
-        Nominal voltage of network in V.
+        Nominal voltage of network in kV.
 
         Parameters
         ----------
@@ -52,7 +52,7 @@ class Grid(ABC):
         Returns
         -------
         float
-            Nominal voltage of network in V.
+            Nominal voltage of network in kV.
 
         """
         if self._nominal_voltage is None:
