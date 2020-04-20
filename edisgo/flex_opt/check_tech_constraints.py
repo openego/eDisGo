@@ -10,7 +10,7 @@ logger = logging.getLogger("edisgo")
 
 def mv_line_load(edisgo_obj):
     """
-    Checks for over-loading issues in MV topology.
+    Checks for over-loading issues in MV network.
 
     Parameters
     ----------
@@ -21,10 +21,10 @@ def mv_line_load(edisgo_obj):
     :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded MV lines, their maximum relative
         over-loading and the corresponding time step.
-        Index of the dataframe are the over-loaded lines of type
-        :class:`~.network.components.Line`. Columns are 'max_rel_overload'
-        containing the maximum relative over-loading as float and 'time_index'
-        containing the corresponding time step the over-loading occured in as
+        Index of the dataframe are the names of the over-loaded lines.
+        Columns are 'max_rel_overload' containing the maximum relative
+        over-loading as float and 'time_index' containing the corresponding
+        time step the over-loading occured in as
         :pandas:`pandas.Timestamp<Timestamp>`.
 
     Notes
@@ -35,40 +35,39 @@ def mv_line_load(edisgo_obj):
 
     """
 
-    crit_lines = pd.DataFrame()
     crit_lines = _line_load(
-        edisgo_obj, edisgo_obj.topology.mv_grid, crit_lines
+        edisgo_obj, voltage_level="mv"
     )
 
     if not crit_lines.empty:
         logger.debug(
-            "==> {} line(s) in MV topology has/have load issues.".format(
+            "==> {} line(s) in MV network has/have load issues.".format(
                 crit_lines.shape[0]
             )
         )
     else:
-        logger.debug("==> No line load issues in MV topology.")
+        logger.debug("==> No line load issues in MV network.")
 
     return crit_lines
 
 
 def lv_line_load(edisgo_obj):
     """
-    Checks for over-loading issues in LV grids.
+    Checks for over-loading issues in LV network.
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded LV lines, their maximum relative
         over-loading and the corresponding time step.
-        Index of the dataframe are the over-loaded lines of type
-        :class:`~.network.components.Line`. Columns are 'max_rel_overload'
-        containing the maximum relative over-loading as float and 'time_index'
-        containing the corresponding time step the over-loading occured in as
+        Index of the dataframe are the names of the over-loaded lines.
+        Columns are 'max_rel_overload' containing the maximum relative
+        over-loading as float and 'time_index' containing the corresponding
+        time step the over-loading occured in as
         :pandas:`pandas.Timestamp<Timestamp>`.
 
     Notes
@@ -79,19 +78,16 @@ def lv_line_load(edisgo_obj):
 
     """
 
-    crit_lines = pd.DataFrame()
-
-    for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
-        crit_lines = _line_load(edisgo_obj, lv_grid, crit_lines)
+    crit_lines = _line_load(edisgo_obj, voltage_level="lv")
 
     if not crit_lines.empty:
         logger.debug(
-            "==> {} line(s) in LV grids has/have load issues.".format(
+            "==> {} line(s) in LV networks has/have load issues.".format(
                 crit_lines.shape[0]
             )
         )
     else:
-        logger.debug("==> No line load issues in LV grids.")
+        logger.debug("==> No line load issues in LV networks.")
 
     return crit_lines
 
@@ -158,93 +154,56 @@ def lines_allowed_load(edisgo_obj, voltage_level):
     return i_lines_allowed
 
 
-def _line_load(edisgo_obj, grid, crit_lines):
+def _line_load(edisgo_obj, voltage_level):
     """
     Checks for over-loading issues of lines.
 
     Parameters
     ----------
-    network : :class:`~.network.network.Network`
-    grid : :class:`~.network.grids.LVGrid` or :class:`~.network.grids.MVGrid`
-    crit_lines : :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing over-loaded lines, their maximum relative
-        over-loading and the corresponding time step.
-        Index of the dataframe are the over-loaded lines of type
-        :class:`~.network.components.Line`. Columns are 'max_rel_overload'
-        containing the maximum relative over-loading as float and 'time_index'
-        containing the corresponding time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<Timestamp>`.
+    edisgo_obj : :class:`~.EDisGo`
+    voltage_level : str
+        Voltage level, over-loading is checked for. Possible options are
+        "mv" or "lv".
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded lines, their maximum relative
         over-loading and the corresponding time step.
-        Index of the dataframe are the over-loaded lines of type
-        :class:`~.network.components.Line`. Columns are 'max_rel_overload'
-        containing the maximum relative over-loading as float and 'time_index'
-        containing the corresponding time step the over-loading occured in as
+        Index of the dataframe are the names of the over-loaded lines.
+        Columns are 'max_rel_overload' containing the maximum relative
+        over-loading as float and 'time_index' containing the corresponding
+        time step the over-loading occured in as
         :pandas:`pandas.Timestamp<Timestamp>`.
 
     """
     if edisgo_obj.results.i_res is None:
         raise Exception(
-            "No results i_res to check. " "Please analyze grid first."
+            "No power flow results to check over-load for. Please perform "
+            "power flow analysis first."
         )
 
-    if isinstance(grid, LVGrid):
-        grid_level = "lv"
-    elif isinstance(grid, MVGrid):
-        grid_level = "mv"
-    else:
-        raise ValueError("Inserted grid of unknown type.")
+    # get allowed line load
+    i_lines_allowed = lines_allowed_load(edisgo_obj, voltage_level)
 
-    i_lines_allowed = lines_allowed_load(edisgo_obj, grid, grid_level)
+    # get line load from power flow analysis
+    i_lines_pfa = edisgo_obj.results.i_res[i_lines_allowed.columns]
 
-    try:
-        i_lines_pfa = edisgo_obj.results.i_res[grid.lines_df.index]
-        relative_i_res = i_lines_pfa / i_lines_allowed
-        crit_lines_relative_load = (
-            relative_i_res[relative_i_res > 1].max().dropna()
+    # calculate relative line load and keep maximum over-load of each line
+    relative_i_res = i_lines_pfa / i_lines_allowed
+    crit_lines_relative_load = (
+        relative_i_res[relative_i_res > 1].max().dropna()
+    )
+    if len(crit_lines_relative_load) > 0:
+        crit_lines = pd.concat(
+            [
+                crit_lines_relative_load,
+                relative_i_res.idxmax()[crit_lines_relative_load.index],
+            ],
+            axis=1,
+            keys=["max_rel_overload", "time_index"],
         )
-        if len(crit_lines_relative_load) > 0:
-            tmp_lines = pd.concat(
-                [
-                    crit_lines_relative_load,
-                    relative_i_res.idxmax()[crit_lines_relative_load.index],
-                ],
-                axis=1,
-                keys=["max_rel_overload", "time_index"],
-            )
-            tmp_lines.loc[:, "grid_level"] = grid_level
-            crit_lines = crit_lines.append(tmp_lines)
-    except KeyError:
-        logger.debug(
-            "No results for line to check overloading. Checking lines "
-            "one by one"
-        )
-        for line_name, line in grid.lines_df.iterrows():
-            try:
-                i_line_pfa = edisgo_obj.results.i_res[line_name]
-                i_line_allowed = i_line_allowed[line_name]
-                if any((i_line_allowed - i_line_pfa) < 0):
-                    # find out largest relative deviation
-                    relative_i_res = i_line_pfa / i_line_allowed
-                    crit_lines = crit_lines.append(
-                        pd.DataFrame(
-                            {
-                                "max_rel_overload": relative_i_res.max(),
-                                "grid_level": grid_level,
-                                "time_index": relative_i_res.idxmax(),
-                            },
-                            index=[line_name],
-                        )
-                    )
-            except KeyError:
-                logger.debug(
-                    "No results for line {} ".format(line.name)
-                    + "to check overloading."
-                )
+        crit_lines.loc[:, "grid_level"] = voltage_level
 
     return crit_lines
 

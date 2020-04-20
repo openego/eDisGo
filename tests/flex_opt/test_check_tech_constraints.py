@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import pytest
+from math import sqrt
 
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints
@@ -25,6 +26,34 @@ class TestCheckTechConstraints:
 
         """
         self.edisgo.analyze()
+
+    def test_mv_line_load(self):
+        # implicitly checks function _line_load
+
+        df = check_tech_constraints.mv_line_load(self.edisgo)
+        # check shape of dataframe
+        assert (4, 3) == df.shape
+        # check relative overload of one line
+        assert np.isclose(
+            df.at["Line_10005", "max_rel_overload"],
+            self.edisgo.results.i_res.at[self.timesteps[0], "Line_10005"]
+            / (7.274613391789284 / 20 / sqrt(3)),
+        )
+        assert df.at["Line_10005", "time_index"] == self.timesteps[0]
+
+    def test_lv_line_load(self):
+        # implicitly checks function _line_load
+
+        df = check_tech_constraints.lv_line_load(self.edisgo)
+        # check shape of dataframe
+        assert (4, 3) == df.shape
+        # check relative overload of one line
+        assert np.isclose(
+            df.at["Line_50000002", "max_rel_overload"],
+            self.edisgo.results.i_res.at[self.timesteps[1], "Line_50000002"]
+            / (0.08521689973238901 / 0.4 / sqrt(3)),
+        )
+        assert df.at["Line_50000002", "time_index"] == self.timesteps[1]
 
     def test_lines_allowed_load(self):
 
