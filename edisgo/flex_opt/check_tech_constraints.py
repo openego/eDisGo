@@ -96,44 +96,60 @@ def lv_line_load(edisgo_obj):
     return crit_lines
 
 
-def lines_allowed_load(edisgo_obj, grid, grid_level):
+def lines_allowed_load(edisgo_obj, voltage_level):
     """
     Get allowed maximum current per line per time step
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
-    grid : :class:`~.network.grids.LVGrid` or :class:`~.network.grids.MVGrid`
-    grid_level : :String: `mv` or `lv`
+    edisgo_obj : :class:`~.EDisGo`
+    voltage_level : str
+        Grid level, allowed line load is returned for. Possible options are
+        "mv" or "lv".
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing the maximum allowed current per line per time step
-        Index of the dataframe are the timesteps of the supplied network of type
-        :pandas:`pandas.Timestamp<Timestamp>`.
-
-        Columns are the network lines of type :class:`~.network.components.Line`.
-        They contain the maximum allowed current flow for each line per time step
+        Dataframe containing the maximum allowed current per line and time step
+        in kA. Index of the dataframe are all time steps power flow analysis
+        was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
+        Columns are line names of all lines in the specified voltage level.
 
     """
+    # get lines and nominal voltage
+    mv_grid = edisgo_obj.topology.mv_grid
+    if voltage_level == "lv":
+        lines_df = edisgo_obj.topology.lines_df[
+            ~edisgo_obj.topology.lines_df.index.isin(
+                mv_grid.lines_df.index)]
+        nominal_voltage = list(mv_grid.lv_grids)[0].nominal_voltage
+    elif voltage_level == "mv":
+        lines_df = mv_grid.lines_df
+        nominal_voltage = mv_grid.nominal_voltage
+    else:
+        raise ValueError(
+            "{} is not a valid option for input variable 'voltage_level' in "
+            "function lines_allowed_load. Try 'mv' or "
+            "'lv'.".format(voltage_level)
+        )
+
     i_lines_allowed_per_case = {}
     i_lines_allowed_per_case["feedin_case"] = (
-        grid.lines_df.s_nom
+        lines_df.s_nom
         / sqrt(3)
-        / grid.nominal_voltage
-        * grid.lines_df.num_parallel
+        / nominal_voltage
+        * lines_df.num_parallel
         * edisgo_obj.config["grid_expansion_load_factors"][
-            "{}_feedin_case_line".format(grid_level)
+            "{}_feedin_case_line".format(voltage_level)
         ]
     )
     i_lines_allowed_per_case["load_case"] = (
-        grid.lines_df.s_nom
+        lines_df.s_nom
         / sqrt(3)
-        / grid.nominal_voltage
-        * grid.lines_df.num_parallel
+        / nominal_voltage
+        * lines_df.num_parallel
         * edisgo_obj.config["grid_expansion_load_factors"][
-            "{}_load_case_line".format(grid_level)
+            "{}_load_case_line".format(voltage_level)
         ]
     )
     i_lines_allowed = edisgo_obj.timeseries.timesteps_load_feedin_case.loc[
