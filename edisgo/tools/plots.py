@@ -427,13 +427,12 @@ def mv_grid_topology(
                 position = str(bus).rsplit("_")[-1]
                 positions.append(position)
         for bus in buses:
+            bus_colors[bus] = colors_dict["else"]
+            bus_sizes[bus] = sizes_dict["else"]
             for position in positions:
                 if position in bus:
                     bus_colors[bus] = colors_dict["ChargingPark"]
                     bus_sizes[bus] = sizes_dict["ChargingPark"]
-                else:
-                    bus_colors[bus] = colors_dict["else"]
-                    bus_sizes[bus] = sizes_dict["else"]
         return bus_sizes, bus_colors
 
     def nodes_by_voltage(buses, voltages):
