@@ -58,9 +58,7 @@ class TestCheckTechConstraints:
     def test_lines_allowed_load(self):
 
         # check for MV
-        df = check_tech_constraints.lines_allowed_load(
-            self.edisgo, "mv"
-        )
+        df = check_tech_constraints.lines_allowed_load(self.edisgo, "mv")
         # check shape of dataframe
         assert (2, 32) == df.shape
         # check in feed-in case
@@ -75,19 +73,17 @@ class TestCheckTechConstraints:
         )
 
         # check for LV
-        df = check_tech_constraints.lines_allowed_load(
-            self.edisgo, "lv"
-        )
+        df = check_tech_constraints.lines_allowed_load(self.edisgo, "lv")
         # check shape of dataframe
         assert (2, 166) == df.shape
         # check in feed-in case
         assert np.isclose(
-            df.at[self.timesteps[0], "Line_40000002"],
+            df.at[self.timesteps[0], "Line_50000002"],
             0.08521689973238901 / 0.4 / sqrt(3),
         )
         # check in load case
         assert np.isclose(
-            df.at[self.timesteps[1], "Line_40000002"],
+            df.at[self.timesteps[1], "Line_50000002"],
             0.08521689973238901 / 0.4 / sqrt(3),
         )
 
