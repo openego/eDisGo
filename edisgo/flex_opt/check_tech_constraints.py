@@ -20,7 +20,8 @@ def mv_line_load(edisgo_obj):
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded MV lines, their maximum relative
-        over-loading and the corresponding time step.
+        over-loading (maximum calculated current over allowed current) and the
+        corresponding time step.
         Index of the dataframe are the names of the over-loaded lines.
         Columns are 'max_rel_overload' containing the maximum relative
         over-loading as float and 'time_index' containing the corresponding
@@ -35,9 +36,7 @@ def mv_line_load(edisgo_obj):
 
     """
 
-    crit_lines = _line_load(
-        edisgo_obj, voltage_level="mv"
-    )
+    crit_lines = _line_load(edisgo_obj, voltage_level="mv")
 
     if not crit_lines.empty:
         logger.debug(
@@ -63,7 +62,8 @@ def lv_line_load(edisgo_obj):
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded LV lines, their maximum relative
-        over-loading and the corresponding time step.
+        over-loading (maximum calculated current over allowed current) and the
+        corresponding time step.
         Index of the dataframe are the names of the over-loaded lines.
         Columns are 'max_rel_overload' containing the maximum relative
         over-loading as float and 'time_index' containing the corresponding
@@ -116,8 +116,8 @@ def lines_allowed_load(edisgo_obj, voltage_level):
     mv_grid = edisgo_obj.topology.mv_grid
     if voltage_level == "lv":
         lines_df = edisgo_obj.topology.lines_df[
-            ~edisgo_obj.topology.lines_df.index.isin(
-                mv_grid.lines_df.index)]
+            ~edisgo_obj.topology.lines_df.index.isin(mv_grid.lines_df.index)
+        ]
         nominal_voltage = list(mv_grid.lv_grids)[0].nominal_voltage
     elif voltage_level == "mv":
         lines_df = mv_grid.lines_df
@@ -169,7 +169,8 @@ def _line_load(edisgo_obj, voltage_level):
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded lines, their maximum relative
-        over-loading and the corresponding time step.
+        over-loading (maximum calculated current over allowed current) and the
+        corresponding time step.
         Index of the dataframe are the names of the over-loaded lines.
         Columns are 'max_rel_overload' containing the maximum relative
         over-loading as float and 'time_index' containing the corresponding
@@ -214,18 +215,17 @@ def hv_mv_station_load(edisgo_obj):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.Edisgo`
+    edisgo_obj : :class:`~.EDisGo`
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing over-loaded HV/MV stations, their apparent power
+        Dataframe containing over-loaded HV/MV station, their apparent power
         at maximal over-loading and the corresponding time step.
-        Index of the dataframe are the representatives of the MVGrid of type
-        :class:'~.network.grids.MVGrid' where over-loaded stations occur.
-        Columns are 's_pfa' containing the apparent power at maximal
-        over-loading as float and 'time_index' containing the corresponding
-        time step the over-loading occured in as
+        Index of the dataframe is the representative of the MVGrid.
+        Columns are 's_missing' containing the missing
+        apparent power at maximal over-loading in MVA as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
         :pandas:`pandas.Timestamp<Timestamp>`.
 
     Notes
@@ -235,10 +235,7 @@ def hv_mv_station_load(edisgo_obj):
     section 'grid_expansion_load_factors'.
 
     """
-    crit_stations = pd.DataFrame()
-    crit_stations = _station_load(
-        edisgo_obj, edisgo_obj.topology.mv_grid, crit_stations
-    )
+    crit_stations = _station_load(edisgo_obj, edisgo_obj.topology.mv_grid)
     if not crit_stations.empty:
         logger.debug("==> HV/MV station has load issues.")
     else:
@@ -253,18 +250,17 @@ def mv_lv_station_load(edisgo_obj):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing over-loaded MV/LV stations, their apparent power
-        at maximal over-loading and the corresponding time step.
-        Index of the dataframe are the representatives of LVGrids of type
-        :class:'~.network.grids.LVGrid' with over-loaded stations.
-        Columns are 's_pfa' containing the apparent power at maximal
-        over-loading as float and 'time_index' containing  the corresponding
-        time step the over-loading occured in as
+        Dataframe containing over-loaded MV/LV stations, their missing apparent
+        power at maximal over-loading and the corresponding time step.
+        Index of the dataframe are the representatives of the grids with
+        over-loaded stations. Columns are 's_missing' containing the missing
+        apparent power at maximal over-loading in MVA as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
         :pandas:`pandas.Timestamp<Timestamp>`.
 
     Notes
@@ -276,9 +272,10 @@ def mv_lv_station_load(edisgo_obj):
     """
 
     crit_stations = pd.DataFrame()
-
     for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
-        crit_stations = _station_load(edisgo_obj, lv_grid, crit_stations)
+        crit_stations = crit_stations.append(
+            _station_load(edisgo_obj, lv_grid)
+        )
     if not crit_stations.empty:
         logger.debug(
             "==> {} MV/LV station(s) has/have load issues.".format(
@@ -291,109 +288,71 @@ def mv_lv_station_load(edisgo_obj):
     return crit_stations
 
 
-def _station_load(edisgo_obj, grid, crit_stations):
+def _station_load(edisgo_obj, grid):
     """
     Checks for over-loading of stations.
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.Edisgo`
+    edisgo_obj : :class:`~.EDisGo`
     grid : :class:`~.network.grids.LVGrid` or :class:`~.network.grids.MVGrid`
-    crit_stations : :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing over-loaded stations, their apparent power at
-        maximal over-loading and the corresponding time step.
-        Index of the dataframe are the representatives of the grids with
-        over-loaded stations. Columns are 's_pfa' containing the apparent power
-        at maximal over-loading as float and 'time_index' containing the
-        corresponding time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<Timestamp>`.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing over-loaded stations, their apparent power at
-        maximal over-loading and the corresponding time step.
+        Dataframe containing over-loaded stations, their missing apparent
+        power at maximal over-loading and the corresponding time step.
         Index of the dataframe are the representatives of the grids with
-        over-loaded stations. Columns are 's_pfa' containing the apparent power
-        at maximal over-loading as float and 'time_index' containing the
-        corresponding time step the over-loading occured in as
+        over-loaded stations. Columns are 's_missing' containing the missing
+        apparent power at maximal over-loading in MVA as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
         :pandas:`pandas.Timestamp<Timestamp>`.
 
     """
-
+    # get apparent power over station from power flow analysis
     if isinstance(grid, LVGrid):
         grid_level = "lv"
         transformers_df = grid.transformers_df
+        s_station_pfa = edisgo_obj.results.s_res.loc[
+            :, transformers_df.index
+        ].sum(axis=1)
     elif isinstance(grid, MVGrid):
         grid_level = "mv"
         transformers_df = edisgo_obj.topology.transformers_hvmv_df
-    else:
-        raise ValueError("Inserted grid of unknown type.")
-
-    if len(transformers_df) < 1:
-        logger.warning("No transformers found, cannot check station.")
-        return crit_stations
-
-    # maximum allowed apparent power of station for feed-in and load case
-    s_station = sum(transformers_df.s_nom)
-    s_station_allowed_per_case = {}
-    s_station_allowed_per_case["feedin_case"] = (
-        s_station
-        * edisgo_obj.config["grid_expansion_load_factors"][
-            "{}_feedin_case_transformer".format(grid_level)
-        ]
-    )
-    s_station_allowed_per_case["load_case"] = (
-        s_station
-        * edisgo_obj.config["grid_expansion_load_factors"][
-            "{}_load_case_transformer".format(grid_level)
-        ]
-    )
-    # maximum allowed apparent power of station in each time step
-    s_station_allowed = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
-        lambda _: s_station_allowed_per_case[_]
-    )
-
-    try:
-        if grid_level == "lv":
-            s_station_pfa = edisgo_obj.results.s_res(transformers_df).sum(
-                axis=1
-            )
-        elif grid_level == "mv":
-            s_station_pfa = (
-                edisgo_obj.results.hv_mv_exchanges.p ** 2
-                + edisgo_obj.results.hv_mv_exchanges.q ** 2
-            ) ** 0.5
-        else:
-            raise ValueError("Unknown grid level. Please check.")
-        s_res = s_station_allowed - s_station_pfa
-        s_res = s_res[s_res < 0]
-        # check if maximum allowed apparent power of station exceeds
-        # apparent power from power flow analysis at any time step
-        if not s_res.empty:
-            # find out largest relative deviation
-            load_factor = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
-                lambda _: edisgo_obj.config["grid_expansion_load_factors"][
-                    "{}_{}_transformer".format(grid_level, _)
-                ]
-            )
-            relative_s_res = load_factor * s_res
-            crit_stations = crit_stations.append(
-                pd.DataFrame(
-                    {
-                        "s_pfa": s_station_pfa.loc[relative_s_res.idxmin()],
-                        "time_index": relative_s_res.idxmin(),
-                    },
-                    index=[repr(grid)],
-                )
-            )
-
-    except KeyError:
-        logger.debug(
-            "No results for {} station to check overloading.".format(
-                grid_level.upper()
-            )
+        s_station_pfa = np.hypot(
+            edisgo_obj.results.hv_mv_exchanges.p,
+            edisgo_obj.results.hv_mv_exchanges.q,
         )
+    else:
+        raise ValueError("Inserted grid is invalid.")
+
+    # get maximum allowed apparent power of station in each time step
+    s_station = sum(transformers_df.s_nom)
+    load_factor = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
+        lambda _: edisgo_obj.config["grid_expansion_load_factors"][
+            "{}_{}_transformer".format(grid_level, _)
+        ]
+    )
+    s_station_allowed = s_station * load_factor
+
+    # calculate residual apparent power (if negative, station is over-loaded)
+    s_res = s_station_allowed - s_station_pfa
+    s_res = s_res[s_res < 0]
+
+    if not s_res.empty:
+        # calculate greatest apparent power missing (residual apparent power is
+        # devided by the load factor to account for load factors smaller than
+        # one, which lead to a higher needed additional capacity)
+        s_missing = (s_res / load_factor).dropna()
+        crit_stations = pd.DataFrame(
+            {
+                "s_missing": abs(s_missing.min()),
+                "time_index": s_missing.idxmin(),
+            },
+            index=[repr(grid)],
+        )
+    else:
+        crit_stations = pd.DataFrame()
 
     return crit_stations
 

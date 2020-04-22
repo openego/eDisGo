@@ -55,6 +55,40 @@ class TestCheckTechConstraints:
         )
         assert df.at["Line_50000002", "time_index"] == self.timesteps[1]
 
+    def test_hv_mv_station_load(self):
+        # implicitly checks function _station_load
+
+        # create over-load problem in both time steps with higher over-load
+        # in load case
+        self.edisgo.results.hv_mv_exchanges = pd.DataFrame(
+            data={"p": [30, 25], "q": [30, 25]}, index=self.timesteps
+        )
+
+        df = check_tech_constraints.hv_mv_station_load(self.edisgo)
+        # check shape of dataframe
+        assert (1, 2) == df.shape
+        # check missing transformer capacity
+        assert np.isclose(
+            df.at["MVGrid_1", "s_missing"], (sqrt(1250) - 20) / 0.5,
+        )
+        assert df.at["MVGrid_1", "time_index"] == self.timesteps[1]
+
+    def test_mv_lv_station_load(self):
+        # implicitly checks function _station_load
+
+        df = check_tech_constraints.mv_lv_station_load(self.edisgo)
+        # check shape of dataframe
+        assert (4, 2) == df.shape
+        # check missing transformer capacity of one grid
+        assert np.isclose(
+            df.at["LVGrid_1", "s_missing"],
+            self.edisgo.results.s_res.at[
+                self.timesteps[1], "LVStation_1_transformer_1"
+            ]
+            - 0.16,
+        )
+        assert df.at["LVGrid_1", "time_index"] == self.timesteps[1]
+
     def test_lines_allowed_load(self):
 
         # check for MV
