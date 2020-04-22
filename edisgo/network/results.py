@@ -691,7 +691,7 @@ class Results:
                 )
 
                 # apparent power
-                self.s_res().to_csv(
+                self.s_res.to_csv(
                     os.path.join(target_dir, "apparent_powers.csv")
                 )
 

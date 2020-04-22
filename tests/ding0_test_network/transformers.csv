@@ -2,7 +2,8 @@ name,bus0,bus1,x,r,s_nom,type_info
 LVStation_1_transformer_1,Bus_primary_LVStation_1,Bus_secondary_LVStation_1,0.016,0.00588,0.16,160 kVA
 LVStation_2_transformer_1,Bus_primary_LVStation_2,Bus_secondary_LVStation_2,0.0246,0.0098,0.05,50 kVA
 LVStation_3_transformer_1,Bus_primary_LVStation_3,Bus_secondary_LVStation_3,0.016,0.007,0.1,100 kVA
-LVStation_4_transformer_1,Bus_primary_LVStation_4,Bus_secondary_LVStation_4,0.0246,0.0098,0.05,50 kVA
+LVStation_4_transformer_1,Bus_primary_LVStation_4,Bus_secondary_LVStation_4,0.0246,0.0098,0.04,40 kVA
+LVStation_4_transformer_2,Bus_primary_LVStation_4,Bus_secondary_LVStation_4,0.0246,0.0098,0.01,10 kVA
 LVStation_5_transformer_1,Bus_primary_LVStation_5,Bus_secondary_LVStation_5,0.016,0.007,0.1,100 kVA
 LVStation_6_transformer_1,Bus_secondary_LVStation_6,Bus_primary_LVStation_6,0.0246,0.0098,0.05,50 kVA
 LVStation_7_transformer_1,Bus_primary_LVStation_7,Bus_secondary_LVStation_7,0.016,0.007,0.1,100 kVA

@@ -23,16 +23,14 @@ class TestEDisGo:
         self.timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
 
     def test_exceptions(self):
-        msg = "No results pfa_p to check. Please analyze grid first."
-        with pytest.raises(Exception, match=msg):
-            checks.mv_lv_station_load(self.edisgo)
-        msg = "No results i_res to check. Please analyze grid first."
+        msg = "No power flow results to check over-load for. Please perform " \
+              "power flow analysis first."
         with pytest.raises(Exception, match=msg):
             checks.mv_line_load(self.edisgo)
         self.edisgo.analyze()
-        msg = "Inserted grid of unknown type."
+        msg = "Inserted grid is invalid."
         with pytest.raises(ValueError, match=msg):
-            checks._station_load(self.edisgo, None, pd.DataFrame)
+            checks._station_load(self.edisgo, None)
         msg = "More than one MV station to extend was given. " \
               "There should only exist one station, please check."
         with pytest.raises(Exception, match=msg):
@@ -61,13 +59,13 @@ class TestEDisGo:
         overloaded_lv_station = checks.mv_lv_station_load(self.edisgo)
         assert(len(overloaded_lv_station) == 4)
         assert (np.isclose(
-            overloaded_lv_station.at['LVGrid_1', 's_pfa'],
-            0.17942, atol=1e-5))
+            overloaded_lv_station.at['LVGrid_1', 's_missing'],
+            0.01942, atol=1e-5))
         assert (overloaded_lv_station.at[
                     'LVGrid_1', 'time_index'] == self.timesteps[1])
         assert (np.isclose(
-            overloaded_lv_station.at['LVGrid_4', 's_pfa'],
-            0.08426, atol=1e-5))
+            overloaded_lv_station.at['LVGrid_4', 's_missing'],
+            0.03426, atol=1e-5))
         assert (overloaded_lv_station.at[
                     'LVGrid_4', 'time_index'] == self.timesteps[0])
 

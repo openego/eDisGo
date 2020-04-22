@@ -27,7 +27,7 @@ class TestImportFromDing0:
         assert self.topology.generators_df.shape[0] == 28
         assert self.topology.loads_df.shape[0] == 50
         assert self.topology.lines_df.shape[0] == 198
-        assert self.topology.transformers_df.shape[0] == 9
+        assert self.topology.transformers_df.shape[0] == 10
         assert self.topology.transformers_hvmv_df.shape[0] == 1
         assert self.topology.switches_df.shape[0] == 2
         assert self.topology.storage_units_df.shape[0] == 0
