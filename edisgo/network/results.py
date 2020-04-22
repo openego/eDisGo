@@ -197,6 +197,42 @@ class Results:
         self._i_res = df
 
     @property
+    def s_res(self):
+        """
+        Get resulting apparent power in MVA over lines and transformers.
+
+        The apparent power returned is the highest apparent power determined
+        from active and reactive power at the line endings / transformer
+        sides.
+
+        .. math::
+
+            S = max(\sqrt{p_0^2 + q_0^2}, \sqrt{p_1^2 + q_1^2})
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            Apparent power in MVA over lines and transformers.
+            Index of the dataframe is a
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>` indicating the time
+            steps the power flow analysis was conducted for; columns of the
+            dataframe are the line and transformer names of all lines and
+            transformers in the analyzed grids.
+
+        """
+        if self.pfa_p is None:
+            return None
+
+        s_res = (
+            (
+                self.pfa_p ** 2
+                + self.pfa_q ** 2
+            )
+        ).applymap(sqrt)
+
+        return s_res
+
+    @property
     def equipment_changes(self):
         """
         Tracks changes in the equipment (e.g. replaced or added cable, etc.)
@@ -557,64 +593,6 @@ class Results:
     @unresolved_issues.setter
     def unresolved_issues(self, issues):
         self._unresolved_issues = issues
-
-    def s_res(self, components_df=None):
-        """
-        Get resulting apparent power in MVA at line(s) and transformer(s).
-
-        The apparent power at a line (or transformer) is determined from the
-        maximum values of active power P and reactive power Q.
-
-        .. math::
-
-            S = max(\sqrt{p_0^2 + q_0^2}, \sqrt{p_1^2 + q_1^2})
-
-        Parameters
-        ----------
-        components_df : :obj:`list`
-            List with all components (of type :class:`~.network.components.Line`
-            or :class:`~.network.components.Transformer`) to get apparent power
-            for. If not provided defaults to return apparent power of all lines
-            and transformers in the network.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Apparent power in kVA for lines and/or transformers.
-
-        """
-        if self.pfa_p is None:
-            raise Exception(
-                "No results pfa_p to check. " "Please analyze grid first."
-            )
-
-        if components_df is not None:
-            labels_included = components_df.index[
-                components_df.index.isin(self.pfa_p.columns)
-                & components_df.index.isin(self.pfa_q.columns)
-            ]
-            labels_not_included = components_df.index[
-                ~(
-                    components_df.index.isin(self.pfa_p.columns)
-                    & components_df.index.isin(self.pfa_q.columns)
-                )
-            ]
-            if len(labels_not_included) > 0:
-                logging.warning(
-                    "Apparent power for {lines} are not returned from "
-                    "PFA".format(lines=labels_not_included)
-                )
-        else:
-            labels_included = self.pfa_p.columns
-
-        s_res = (
-            (
-                self.pfa_p[labels_included] ** 2
-                + self.pfa_q[labels_included] ** 2
-            )
-        ).applymap(sqrt)
-
-        return s_res
 
     def save(self, directory, parameters="all"):
         """
