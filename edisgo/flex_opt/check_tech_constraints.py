@@ -205,6 +205,8 @@ def _line_load(edisgo_obj, voltage_level):
             keys=["max_rel_overload", "time_index"],
         )
         crit_lines.loc[:, "grid_level"] = voltage_level
+    else:
+        crit_lines = pd.DataFrame()
 
     return crit_lines
 
