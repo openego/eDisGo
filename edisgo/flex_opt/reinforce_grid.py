@@ -197,7 +197,7 @@ def reinforce_grid(
 
         if not overloaded_lv_stations.empty:
             # reinforce distribution substations
-            transformer_changes = reinforce_measures.extend_distribution_substation_overloading(
+            transformer_changes = reinforce_measures.reinforce_mv_lv_station_overloading(
                 edisgo_reinforce, overloaded_lv_stations
             )
             # write added and removed transformers to results.equipment_changes
@@ -443,7 +443,7 @@ def reinforce_grid(
 
         if not overloaded_lv_stations.empty:
             # reinforce substations
-            transformer_changes = reinforce_measures.extend_distribution_substation_overloading(
+            transformer_changes = reinforce_measures.reinforce_mv_lv_station_overloading(
                 edisgo_reinforce, overloaded_lv_stations
             )
             # write added and removed transformers to results.equipment_changes

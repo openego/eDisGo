@@ -13,7 +13,7 @@ import logging
 logger = logging.getLogger("edisgo")
 
 
-def extend_distribution_substation_overloading(edisgo_obj, critical_stations):
+def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):
     """
     Reinforce MV/LV substations due to overloading issues.
 
@@ -23,22 +23,28 @@ def extend_distribution_substation_overloading(edisgo_obj, critical_stations):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
     critical_stations : :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing over-loaded MV/LV stations, their apparent power
-        at maximal over-loading and the corresponding time step.
-        Index of the dataframe are the names of grids with overloaded stations.
-        Columns are 's_pfa' containing the apparent power at maximal over-
-        loading as float and 'time_index' containing the corresponding time
-        step the over-loading occured in as
-        :pandas:`pandas.Timestamp<Timestamp>`. See
-        :func:`~.flex_opt.check_tech_constraints.mv_lv_station_load` for more
-        information.
+        Dataframe containing over-loaded MV/LV stations, their missing apparent
+        power at maximal over-loading and the corresponding time step.
+        Index of the dataframe are the representatives of the grids with
+        over-loaded stations. Columns are 's_missing' containing the missing
+        apparent power at maximal over-loading in MVA as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
     Returns
     -------
     dict
-        Dictionary with lists of added and removed transformers.
+        Dictionary with added and removed transformers in the form::
+
+        {'added': {'Grid_1': ['transformer_reinforced_1',
+                              ...,
+                              'transformer_reinforced_x'],
+                   'Grid_10': ['transformer_reinforced_10']
+                   },
+         'removed': {'Grid_1': ['transformer_1']}
+        }
 
     """
 
@@ -59,18 +65,8 @@ def extend_distribution_substation_overloading(edisgo_obj, critical_stations):
         grid = edisgo_obj.topology._grids[grid_name]
         # list of maximum power of each transformer in the station
         s_max_per_trafo = grid.transformers_df.s_nom
-
-        # maximum station load from power flow analysis
-        s_station_pfa = critical_stations.s_pfa[grid_name]
-
-        # determine missing transformer power to solve overloading issue
-        case = edisgo_obj.timeseries.timesteps_load_feedin_case[
-            critical_stations.time_index[grid_name]
-        ]
-        load_factor = edisgo_obj.config["grid_expansion_load_factors"][
-            "lv_{}_transformer".format(case)
-        ]
-        s_trafo_missing = s_station_pfa / load_factor - sum(s_max_per_trafo)
+        # missing capacity
+        s_trafo_missing = critical_stations.at[grid_name, "s_missing"]
 
         # check if second transformer of the same kind is sufficient
         # if true install second transformer, otherwise install as many
@@ -91,11 +87,10 @@ def extend_distribution_substation_overloading(edisgo_obj, critical_stations):
             edisgo_obj.topology.transformers_df = edisgo_obj.topology.transformers_df.append(
                 duplicated_transformer
             )
-
+            # add new transformer to list of added transformers
             transformers_changes["added"][grid_name] = [
                 duplicated_transformer.name
             ]
-
         else:
             # get any transformer to get attributes for new transformer from
             duplicated_transformer = grid.transformers_df.iloc[0]
@@ -105,28 +100,32 @@ def extend_distribution_substation_overloading(edisgo_obj, critical_stations):
             duplicated_transformer.r_pu = standard_transformer.r_pu
             duplicated_transformer.x_pu = standard_transformer.x_pu
             duplicated_transformer.type_info = standard_transformer.name
-            # calculate how many parallel standard transformers are needed
-            number_transformers = math.ceil(
-                s_station_pfa / (standard_transformer.S_nom * load_factor)
-            )
 
+            # set up as many new transformers as needed
+            number_transformers = math.ceil(
+                s_trafo_missing / standard_transformer.S_nom
+            )
             new_transformers = pd.DataFrame()
-            # add transformer to station
             for i in range(number_transformers):
                 name[-1] = i + 1
                 duplicated_transformer.name = "_".join([str(_) for _ in name])
                 new_transformers = new_transformers.append(
                     duplicated_transformer
                 )
+
+            # add new transformer to list of added transformers
             transformers_changes["added"][
                 grid_name
             ] = new_transformers.index.values
+            # add previous transformers to list of removed transformers
             transformers_changes["removed"][
                 grid_name
             ] = grid.transformers_df.index.values
+            # remove previous transformers from topology
             edisgo_obj.topology.transformers_df.drop(
                 grid.transformers_df.index.values, inplace=True
             )
+            # add new transformers to topology
             edisgo_obj.topology.transformers_df = edisgo_obj.topology.transformers_df.append(
                 new_transformers
             )

@@ -37,38 +37,69 @@ class TestReinforceMeasures:
         self.edisgo.analyze()
         self.timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
 
-    def test_extend_distribution_substation_overloading(self):
-        crit_lv_stations = pd.DataFrame({'s_pfa': [0.1792, 0.3321],
-                                         'time_index': [self.timesteps[1]]*2},
-                                        index=['LVGrid_1', 'LVGrid_5'])
-        transformer_changes = \
-            extend_distribution_substation_overloading(self.edisgo,
-                                                       crit_lv_stations)
-        assert transformer_changes['added']['LVGrid_1'][0] == \
-            'LVStation_1_transformer_reinforced_2'
-        assert transformer_changes['added']['LVGrid_5'][0] == \
-            'LVStation_5_transformer_reinforced_1'
-        assert transformer_changes['removed']['LVGrid_5'][0] == \
-            'LVStation_5_transformer_1'
-        assert ('LVStation_5_transformer_1' not in \
-             self.edisgo.topology.transformers_df.index)
-        trafo1 = self.edisgo.topology.transformers_df.loc[
-            'LVStation_1_transformer_reinforced_2']
-        assert trafo1.bus0 == 'Bus_primary_LVStation_1'
-        assert trafo1.bus1 == 'Bus_secondary_LVStation_1'
-        assert trafo1.r_pu == 0.00588
-        assert trafo1.x_pu == 0.016
-        assert trafo1.s_nom == 0.16
-        assert trafo1.type_info == '160 kVA'
-        trafo2 = self.edisgo.topology.transformers_df.loc[
-            'LVStation_5_transformer_reinforced_1']
-        assert trafo2.bus0 == 'Bus_primary_LVStation_5'
-        assert trafo2.bus1 == 'Bus_secondary_LVStation_5'
-        assert trafo2.r_pu == 0.010317460317460317
-        assert trafo2.x_pu == 0.03864647477581405
-        assert trafo2.s_nom == 0.63
-        assert trafo2.type_info == '630 kVA'
-        print('Reinforcement of LV Stations successful.')
+    def test_reinforce_mv_lv_station_overloading(self):
+        # create problems such that in LVGrid_1 existing transformer is
+        # exchanged with standard transformer and in LVGrid_4 a third
+        # transformer is added
+        crit_lv_stations = pd.DataFrame(
+            {
+                "s_missing": [0.17, 0.04],
+                "time_index": [self.timesteps[1]] * 2,
+            },
+            index=["LVGrid_1", "LVGrid_4"],
+        )
+        transformer_changes = reinforce_measures.reinforce_mv_lv_station_overloading(
+            self.edisgo, crit_lv_stations
+        )
+
+        # check transformer changes
+        assert len(transformer_changes["added"].keys()) == 2
+        assert len(transformer_changes["removed"].keys()) == 1
+
+        assert (
+            transformer_changes["added"]["LVGrid_1"][0]
+            == "LVStation_1_transformer_reinforced_1"
+        )
+        assert (
+            transformer_changes["removed"]["LVGrid_1"][0]
+            == "LVStation_1_transformer_1"
+        )
+        assert (
+            transformer_changes["added"]["LVGrid_4"][0]
+            == "LVStation_4_transformer_reinforced_3"
+        )
+
+        # check that removed transformer is removed from topology
+        assert (
+            "LVStation_1_transformer_1"
+            not in self.edisgo.topology.transformers_df.index
+        )
+
+        # check values of transformers
+        trafo_new = self.edisgo.topology.transformers_df.loc[
+            "LVStation_1_transformer_reinforced_1"
+        ]
+        trafo_copy = self.edisgo.topology.equipment_data[
+            "lv_transformers"].loc["630 kVA"]
+        assert trafo_new.bus0 == "Bus_primary_LVStation_1"
+        assert trafo_new.bus1 == "Bus_secondary_LVStation_1"
+        assert trafo_new.r_pu == trafo_copy.r_pu
+        assert trafo_new.x_pu == trafo_copy.x_pu
+        assert trafo_new.s_nom == trafo_copy.S_nom
+        assert trafo_new.type_info == "630 kVA"
+
+        trafo_new = self.edisgo.topology.transformers_df.loc[
+            "LVStation_4_transformer_reinforced_3"
+        ]
+        trafo_copy = self.edisgo.topology.transformers_df.loc[
+            "LVStation_4_transformer_1"
+        ]
+        assert trafo_new.bus0 == "Bus_primary_LVStation_4"
+        assert trafo_new.bus1 == "Bus_secondary_LVStation_4"
+        assert trafo_new.r_pu == trafo_copy.r_pu
+        assert trafo_new.x_pu == trafo_copy.x_pu
+        assert trafo_new.s_nom == trafo_copy.s_nom
+        assert trafo_new.type_info == "40 kVA"
 
     def test_extend_substation_overloading(self):
         # manipulate HV/MV transformer so that it is over-loaded (s_nom before
