@@ -299,7 +299,7 @@ def reinforce_grid(
         for k, v in crit_nodes.items():
             for node in v.index:
                 edisgo_reinforce.results.unresolved_issues.update(
-                    {node: v.loc[node, "v_mag_pu"]}
+                    {node: v.loc[node, "v_diff_max"]}
                 )
         raise exceptions.MaximumIterationError(
             "Over-voltage issues for the following nodes in MV topology could "
@@ -353,7 +353,7 @@ def reinforce_grid(
             for k, v in crit_stations.items():
                 for node in v.index:
                     edisgo_reinforce.results.unresolved_issues.update(
-                        {node: v.loc[node, "v_mag_pu"]}
+                        {node: v.loc[node, "v_diff_max"]}
                     )
             raise exceptions.MaximumIterationError(
                 "Over-voltage issues at busbar could not be solved for the "
@@ -401,7 +401,7 @@ def reinforce_grid(
             for k, v in crit_nodes.items():
                 for node in v.index:
                     edisgo_reinforce.results.unresolved_issues.update(
-                        {repr(node): v.loc[node, "v_mag_pu"]}
+                        {repr(node): v.loc[node, "v_diff_max"]}
                     )
             raise exceptions.MaximumIterationError(
                 "Over-voltage issues for the following nodes in LV grids "

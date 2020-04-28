@@ -164,7 +164,7 @@ class TestCheckTechConstraints:
         ]
         assert np.isclose(
             voltage_issues["MVGrid_1"].at[
-                "Bus_GeneratorFluctuating_2", "v_mag_pu"
+                "Bus_GeneratorFluctuating_2", "v_diff_max"
             ],
             0.01,
         )
@@ -187,7 +187,7 @@ class TestCheckTechConstraints:
         ]
         assert np.isclose(
             voltage_issues["MVGrid_1"].at[
-                "Bus_GeneratorFluctuating_2", "v_mag_pu"
+                "Bus_GeneratorFluctuating_2", "v_diff_max"
             ],
             0.06,
         )
@@ -221,7 +221,7 @@ class TestCheckTechConstraints:
         assert len(voltage_issues[lvgrid_6]) == 1
         assert np.isclose(
             voltage_issues[lvgrid_6].loc[
-                "Bus_secondary_LVStation_6", "v_mag_pu"
+                "Bus_secondary_LVStation_6", "v_diff_max"
             ],
             0.010635,
         )
@@ -241,7 +241,7 @@ class TestCheckTechConstraints:
         assert len(voltage_issues[lvgrid_6]) == 1
         assert np.isclose(
             voltage_issues[lvgrid_6].loc[
-                "Bus_BranchTee_LVGrid_6_1", "v_mag_pu"
+                "Bus_BranchTee_LVGrid_6_1", "v_diff_max"
             ],
             0.005,
         )
@@ -257,7 +257,7 @@ class TestCheckTechConstraints:
         assert voltage_issues[lvgrid_6].index[0] == "Bus_BranchTee_LVGrid_6_2"
         assert np.isclose(
             voltage_issues[lvgrid_6].loc[
-                "Bus_BranchTee_LVGrid_6_2", "v_mag_pu"
+                "Bus_BranchTee_LVGrid_6_2", "v_diff_max"
             ],
             0.015,
         )
@@ -272,7 +272,7 @@ class TestCheckTechConstraints:
         assert voltage_issues[lvgrid_6].index[0] == "Bus_BranchTee_LVGrid_6_2"
         assert np.isclose(
             voltage_issues[lvgrid_6].loc[
-                "Bus_BranchTee_LVGrid_6_2", "v_mag_pu"
+                "Bus_BranchTee_LVGrid_6_2", "v_diff_max"
             ],
             0.09,
         )
@@ -286,7 +286,7 @@ class TestCheckTechConstraints:
         assert len(voltage_issues[lvgrid_6]) == 1
         assert np.isclose(
             voltage_issues[lvgrid_6].loc[
-                "Bus_secondary_LVStation_6", "v_mag_pu"
+                "Bus_secondary_LVStation_6", "v_diff_max"
             ],
             0.04,
         )
@@ -416,7 +416,7 @@ class TestCheckTechConstraints:
             "Bus_GeneratorFluctuating_3",
         ]
         assert np.isclose(
-            v_violations.at["Bus_GeneratorFluctuating_2", "v_mag_pu"], 0.01
+            v_violations.at["Bus_GeneratorFluctuating_2", "v_diff_max"], 0.01
         )
         assert (
             v_violations.at["Bus_Generator_1", "time_index"]

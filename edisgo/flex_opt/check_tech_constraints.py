@@ -389,7 +389,7 @@ def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
         deviations from allowed lower or upper voltage limits, sorted
         descending from highest to lowest voltage deviation, as value.
         Index of the dataframe are all buses with voltage issues.
-        Columns are 'v_mag_pu' containing the maximum voltage deviation as
+        Columns are 'v_diff_max' containing the maximum voltage deviation as
         float and 'time_index' containing the corresponding time step the
         voltage issue occured in as :pandas:`pandas.Timestamp<Timestamp>`.
 
@@ -462,7 +462,7 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
         deviations from allowed lower or upper voltage limits, sorted
         descending from highest to lowest voltage deviation, as value.
         Index of the dataframe are all buses with voltage issues.
-        Columns are 'v_mag_pu' containing the maximum voltage deviation as
+        Columns are 'v_diff_max' containing the maximum voltage deviation as
         float and 'time_index' containing the corresponding time step the
         voltage issue occured in as :pandas:`pandas.Timestamp<Timestamp>`.
 
@@ -833,8 +833,8 @@ def _voltage_deviation(edisgo_obj, buses, v_limits_upper, v_limits_lower):
         Dataframe with deviations from allowed lower or upper voltage limits
         sorted descending from highest to lowest voltage deviation
         (it is not distinguished between over- or undervoltage).
-        Columns of the dataframe are 'v_mag_pu' containing the maximum absolute
-        voltage deviation as float and 'time_index' containing the
+        Columns of the dataframe are 'v_diff_max' containing the maximum
+        absolute voltage deviation as float and 'time_index' containing the
         corresponding time step the voltage issue occured in as
         :pandas:`pandas.Timestamp<Timestamp>`. Index of the dataframe are the
         names of all buses with voltage issues.
@@ -844,7 +844,7 @@ def _voltage_deviation(edisgo_obj, buses, v_limits_upper, v_limits_lower):
     def _append_crit_buses(df):
         return pd.DataFrame(
             {
-                "v_mag_pu": df.max(axis=1).values,
+                "v_diff_max": df.max(axis=1).values,
                 "time_index": df.idxmax(axis=1).values,
             },
             index=df.index,
@@ -868,7 +868,7 @@ def _voltage_deviation(edisgo_obj, buses, v_limits_upper, v_limits_lower):
 
     if not crit_buses_grid.empty:
         crit_buses_grid.sort_values(
-            by=["v_mag_pu"], ascending=False, inplace=True
+            by=["v_diff_max"], ascending=False, inplace=True
         )
 
     return crit_buses_grid
