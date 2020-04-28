@@ -47,18 +47,133 @@ def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):
         }
 
     """
+    transformers_changes = _station_overloading(
+        edisgo_obj, critical_stations, voltage_level="lv")
 
-    # get parameters for standard transformer
-    try:
-        standard_transformer = edisgo_obj.topology.equipment_data[
-            "lv_transformers"
-        ].loc[
-            edisgo_obj.config["grid_expansion_standard_equipment"][
-                "mv_lv_transformer"
+    if transformers_changes["added"]:
+        logger.debug(
+            "==> MV station has been reinforced due to overloading issues."
+        )
+        logger.debug(
+            "==> {} LV station(s) has/have been reinforced due to "
+            "overloading issues.".format(
+                str(len(transformers_changes["added"]))))
+
+    return transformers_changes
+
+
+def reinforce_hv_mv_station_overloading(edisgo_obj, critical_stations):
+    """
+    Reinforce HV/MV station due to overloading issues.
+
+    In a first step a parallel transformer of the same kind is installed.
+    If this is not sufficient as many standard transformers as needed are
+    installed.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    critical_stations : pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing over-loaded HV/MV stations, their missing apparent
+        power at maximal over-loading and the corresponding time step.
+        Index of the dataframe are the representatives of the grids with
+        over-loaded stations. Columns are 's_missing' containing the missing
+        apparent power at maximal over-loading in MVA as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`.
+
+    Returns
+    -------
+    dict
+        Dictionary with added and removed transformers in the form::
+
+        {'added': {'Grid_1': ['transformer_reinforced_1',
+                              ...,
+                              'transformer_reinforced_x'],
+                   'Grid_10': ['transformer_reinforced_10']
+                   },
+         'removed': {'Grid_1': ['transformer_1']}
+        }
+
+    """
+    transformers_changes = _station_overloading(
+        edisgo_obj, critical_stations, voltage_level="mv")
+
+    if transformers_changes["added"]:
+        logger.debug(
+            "==> MV station has been reinforced due to overloading issues."
+        )
+
+    return transformers_changes
+
+
+def _station_overloading(edisgo_obj, critical_stations, voltage_level):
+    """
+    Reinforce MV/LV substations due to overloading issues.
+
+    In a first step a parallel transformer of the same kind is installed.
+    If this is not sufficient as many standard transformers as needed are
+    installed.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    critical_stations : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing over-loaded MV/LV stations, their missing apparent
+        power at maximal over-loading and the corresponding time step.
+        Index of the dataframe are the representatives of the grids with
+        over-loaded stations. Columns are 's_missing' containing the missing
+        apparent power at maximal over-loading in MVA as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`.
+    voltage_level : str
+        Voltage level, over-loading is checked for. Possible options are
+        "mv" or "lv".
+
+    Returns
+    -------
+    dict
+        Dictionary with added and removed transformers in the form::
+
+        {'added': {'Grid_1': ['transformer_reinforced_1',
+                              ...,
+                              'transformer_reinforced_x'],
+                   'Grid_10': ['transformer_reinforced_10']
+                   },
+         'removed': {'Grid_1': ['transformer_1']}
+        }
+
+    """
+    if voltage_level == "lv":
+        try:
+            standard_transformer = edisgo_obj.topology.equipment_data[
+                "lv_transformers"
+            ].loc[
+                edisgo_obj.config["grid_expansion_standard_equipment"][
+                    "mv_lv_transformer"
+                ]
             ]
-        ]
-    except KeyError:
-        print("Standard MV/LV transformer is not in equipment list.")
+        except KeyError:
+            raise KeyError(
+                "Standard MV/LV transformer is not in equipment list.")
+    elif voltage_level == "mv":
+        try:
+            standard_transformer = edisgo_obj.topology.equipment_data[
+                "mv_transformers"
+            ].loc[
+                edisgo_obj.config["grid_expansion_standard_equipment"][
+                    "hv_mv_transformer"
+                ]
+            ]
+        except KeyError:
+            raise KeyError(
+                "Standard HV/MV transformer is not in equipment list.")
+    else:
+        raise ValueError(
+            "{} is not a valid option for input variable 'voltage_level' in "
+            "function _station_overloading. Try 'mv' or "
+            "'lv'.".format(voltage_level)
+        )
 
     transformers_changes = {"added": {}, "removed": {}}
     for grid_name in critical_stations.index:
@@ -75,21 +190,19 @@ def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):
             # if station has more than one transformer install a new
             # transformer of the same kind as the transformer that best
             # meets the missing power demand
-            duplicated_transformer = grid.transformers_df.loc[
+            new_transformers = grid.transformers_df.loc[
                 grid.transformers_df[s_max_per_trafo >= s_trafo_missing][
                     "s_nom"
                 ].idxmin()
             ]
-            name = duplicated_transformer.name.split("_")
+            name = new_transformers.name.split("_")
             name.insert(-1, "reinforced")
             name[-1] = len(grid.transformers_df) + 1
-            duplicated_transformer.name = "_".join([str(_) for _ in name])
-            edisgo_obj.topology.transformers_df = edisgo_obj.topology.transformers_df.append(
-                duplicated_transformer
-            )
+            new_transformers.name = "_".join([str(_) for _ in name])
+
             # add new transformer to list of added transformers
             transformers_changes["added"][grid_name] = [
-                duplicated_transformer.name
+                new_transformers.name
             ]
         else:
             # get any transformer to get attributes for new transformer from
@@ -97,13 +210,14 @@ def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):
             name = duplicated_transformer.name.split("_")
             name.insert(-1, "reinforced")
             duplicated_transformer.s_nom = standard_transformer.S_nom
-            duplicated_transformer.r_pu = standard_transformer.r_pu
-            duplicated_transformer.x_pu = standard_transformer.x_pu
             duplicated_transformer.type_info = standard_transformer.name
+            if voltage_level == "lv":
+                duplicated_transformer.r_pu = standard_transformer.r_pu
+                duplicated_transformer.x_pu = standard_transformer.x_pu
 
             # set up as many new transformers as needed
             number_transformers = math.ceil(
-                s_trafo_missing / standard_transformer.S_nom
+                (s_trafo_missing + s_max_per_trafo.sum()) / standard_transformer.S_nom
             )
             new_transformers = pd.DataFrame()
             for i in range(number_transformers):
@@ -122,12 +236,27 @@ def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):
                 grid_name
             ] = grid.transformers_df.index.values
             # remove previous transformers from topology
-            edisgo_obj.topology.transformers_df.drop(
-                grid.transformers_df.index.values, inplace=True
+            if voltage_level == "lv":
+                edisgo_obj.topology.transformers_df.drop(
+                    grid.transformers_df.index.values, inplace=True
+                )
+            else:
+                edisgo_obj.topology.transformers_hvmv_df.drop(
+                    grid.transformers_df.index.values, inplace=True
+                )
+
+        # add new transformers to topology
+        if voltage_level == "lv":
+            edisgo_obj.topology.transformers_df = (
+                edisgo_obj.topology.transformers_df.append(
+                    new_transformers
+                )
             )
-            # add new transformers to topology
-            edisgo_obj.topology.transformers_df = edisgo_obj.topology.transformers_df.append(
-                new_transformers
+        else:
+            edisgo_obj.topology.transformers_hvmv_df = (
+                edisgo_obj.topology.transformers_hvmv_df.append(
+                    new_transformers
+                )
             )
     return transformers_changes
 

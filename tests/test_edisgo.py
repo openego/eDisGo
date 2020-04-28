@@ -31,12 +31,6 @@ class TestEDisGo:
         msg = "Inserted grid is invalid."
         with pytest.raises(ValueError, match=msg):
             checks._station_load(self.edisgo, None)
-        msg = "More than one MV station to extend was given. " \
-              "There should only exist one station, please check."
-        with pytest.raises(Exception, match=msg):
-            reinforce.extend_substation_overloading(self.edisgo,
-                                                    [pd.DataFrame(),
-                                                     pd.DataFrame])
 
     def test_save(self):
         cur_dir = os.getcwd()

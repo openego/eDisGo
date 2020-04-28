@@ -4,10 +4,7 @@ import numpy as np
 import pytest
 
 from edisgo import EDisGo
-from edisgo.flex_opt.reinforce_measures import \
-    extend_distribution_substation_overloading, extend_substation_overloading, \
-    reinforce_branches_overloading, reinforce_branches_overvoltage, \
-    extend_distribution_substation_overvoltage
+from edisgo.flex_opt import reinforce_measures
 
 
 def change_line_to_standard_line(test_class, line_name, std_line):
@@ -38,6 +35,8 @@ class TestReinforceMeasures:
         self.timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
 
     def test_reinforce_mv_lv_station_overloading(self):
+        # implicitly checks function _station_overloading
+
         # create problems such that in LVGrid_1 existing transformer is
         # exchanged with standard transformer and in LVGrid_4 a third
         # transformer is added
@@ -101,56 +100,64 @@ class TestReinforceMeasures:
         assert trafo_new.s_nom == trafo_copy.s_nom
         assert trafo_new.type_info == "40 kVA"
 
-    def test_extend_substation_overloading(self):
-        # manipulate HV/MV transformer so that it is over-loaded (s_nom before
-        # is 40 MVA)
-        self.edisgo.topology.transformers_hvmv_df.loc[
-            'MVStation_1_transformer_1', 's_nom'] = 20
-        self.edisgo.topology.transformers_hvmv_df.loc[
-            'MVStation_1_transformer_1', 'type_info'] = 'dummy'
+    def test_reinforce_hv_mv_station_overloading(self):
+        # implicitly checks function _station_overloading
 
         # check adding transformer of same MVA
-        # set up made up critical station df such that adding a transformer
-        # of the same size is sufficient
-        crit_mv_station = pd.DataFrame({'s_pfa': [19],
-                                        'time_index': [self.timesteps[1]]},
-                                       index=['MVGrid_1'])
-        transformer_changes = \
-            extend_substation_overloading(self.edisgo, crit_mv_station)
-        assert len(transformer_changes['added']['MVGrid_1']) == 1
-        assert len(transformer_changes['removed']) == 0
-        trafos = self.edisgo.topology.transformers_hvmv_df
-        assert (trafos.bus0 == 'Bus_primary_MVStation_1').all()
-        assert (trafos.bus1 == 'Bus_MVStation_1').all()
-        assert (trafos.s_nom == 20).all()
-        assert (trafos.type_info == 'dummy').all()
-        assert 'MVStation_1_transformer_reinforced_2' in \
-               transformer_changes['added']['MVGrid_1']
-        print('Extend substation successful.')
+        crit_mv_station = pd.DataFrame(
+            {"s_missing": [19],
+             "time_index": [self.timesteps[1]]},
+            index=["MVGrid_1"],
+        )
+        transformer_changes = reinforce_measures.reinforce_hv_mv_station_overloading(
+            self.edisgo, crit_mv_station
+        )
+        assert len(transformer_changes["added"]["MVGrid_1"]) == 1
+        assert len(transformer_changes["removed"]) == 0
 
-        # check error message in case current transformers are sufficient
-        msg = 'Missing load is negative. Something went wrong. Please report.'
-        with pytest.raises(ValueError, match=msg):
-            extend_substation_overloading(self.edisgo, crit_mv_station)
+        trafo_new = self.edisgo.topology.transformers_hvmv_df.loc[
+            "MVStation_1_transformer_reinforced_2"
+        ]
+        trafo_copy = self.edisgo.topology.transformers_hvmv_df.loc[
+            "MVStation_1_transformer_1"
+        ]
+        assert trafo_new.bus0 == "Bus_primary_MVStation_1"
+        assert trafo_new.bus1 == "Bus_MVStation_1"
+        assert trafo_new.s_nom == trafo_copy.s_nom
+        assert trafo_new.type_info == "40 MVA 110/20 kV"
 
-        # check replacing current transformers and replacing them with standard
-        # transformers
-        # set up made up critical station df
-        crit_mv_station = pd.DataFrame({'s_pfa': [39],
-                                        'time_index': [self.timesteps[1]]},
-                                       index=['MVGrid_1'])
-        transformer_changes = \
-            extend_substation_overloading(self.edisgo, crit_mv_station)
-        assert len(transformer_changes['added']['MVGrid_1']) == 2
-        assert len(transformer_changes['removed']['MVGrid_1']) == 2
+        # delete added transformer from topology
+        self.edisgo.topology.transformers_hvmv_df.drop(
+            "MVStation_1_transformer_reinforced_2",
+            inplace=True)
+
+        # check replacing current transformers and replacing them with three
+        # standard transformers
+        crit_mv_station = pd.DataFrame(
+            {"s_missing": [50],
+             "time_index": [self.timesteps[1]]},
+            index=["MVGrid_1"],
+        )
+        transformer_changes = reinforce_measures.reinforce_hv_mv_station_overloading(
+            self.edisgo, crit_mv_station
+        )
+        assert len(transformer_changes["added"]["MVGrid_1"]) == 3
+        assert len(transformer_changes["removed"]["MVGrid_1"]) == 1
+
         trafos = self.edisgo.topology.transformers_hvmv_df
-        assert (trafos.bus0 == 'Bus_primary_MVStation_1').all()
-        assert (trafos.bus1 == 'Bus_MVStation_1').all()
+        assert (trafos.bus0 == "Bus_primary_MVStation_1").all()
+        assert (trafos.bus1 == "Bus_MVStation_1").all()
         assert (trafos.s_nom == 40).all()
-        assert (trafos.type_info == '40 MVA').all()
-        assert 'MVStation_1_transformer_reinforced_2' in \
-               transformer_changes['added']['MVGrid_1']
-        print('Extend substation successful.')
+        assert (trafos.type_info == "40 MVA").all()
+        assert (
+            "MVStation_1_transformer_reinforced_2"
+            in transformer_changes["added"]["MVGrid_1"]
+        )
+        # check that removed transformer is removed from topology
+        assert (
+                "MVStation_1_transformer_1"
+                not in self.edisgo.topology.transformers_hvmv_df.index
+        )
 
     def test_reinforce_branches_overloading(self):
         std_line_mv = self.edisgo.topology.equipment_data['mv_cables'].loc[
