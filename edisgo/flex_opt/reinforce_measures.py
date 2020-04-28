@@ -341,18 +341,23 @@ def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
     grid : :class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
     crit_nodes : :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with critical nodes, sorted descending by voltage deviation.
-        Index of the dataframe are names of buses with over-voltage issues.
-        Columns are 'v_mag_pu' containing the maximum voltage deviation as
-        float and 'time_index' containing the corresponding time step the
-        over-voltage occured in as :pandas:`pandas.Timestamp<Timestamp>`.
+        Dataframe with all nodes with voltage issues in the grid and
+        their maximal deviations from allowed lower or upper voltage limits
+        sorted descending from highest to lowest voltage deviation
+        (it is not distinguished between over- or undervoltage).
+        Columns of the dataframe are 'v_diff_max' containing the maximum
+        absolute voltage deviation as float and 'time_index' containing the
+        corresponding time step the voltage issue occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`. Index of the dataframe are the
+        names of all buses with voltage issues.
 
     Returns
     -------
-    Dictionary with name of lines and the number of lines added.
+    Dictionary with name of lines as keys and the corresponding number of lines
+    added as values.
 
     Notes
     -----
@@ -365,7 +370,7 @@ def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
     In LV grids only lines outside buildings are reinforced; loads and
     generators in buildings cannot be directly connected to the MV/LV station.
 
-    In MV grids lines can only be disconnected at LVStations because they
+    In MV grids lines can only be disconnected at LV stations because they
     have switch disconnectors needed to operate the lines as half rings (loads
     in MV would be suitable as well because they have a switch bay (Schaltfeld)
     but loads in dingo are only connected to MV busbar). If there is no
@@ -406,7 +411,7 @@ def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
                 ]
             ]
         except KeyError:
-            print("Chosen standard LV line is not in equipment list.")
+            raise KeyError("Chosen standard LV line is not in equipment list.")
     elif isinstance(grid, MVGrid):
         try:
             standard_line = edisgo_obj.topology.equipment_data[
@@ -418,19 +423,20 @@ def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
             ]
             standard_line.U_n = grid.nominal_voltage
         except KeyError:
-            print("Chosen standard MV line is not in equipment list.")
+            raise KeyError("Chosen standard MV line is not in equipment list.")
     else:
-        raise ValueError("Unknown type of inserted grid.")
+        raise ValueError("Inserted grid is invalid.")
 
     station_node = grid.transformers_df.bus1.iloc[0]
+    graph = grid.graph
+
     # find first nodes of every main line as representatives
     rep_main_line = list(
-        nx.predecessor(grid.graph, station_node, cutoff=1).keys()
+        nx.predecessor(graph, station_node, cutoff=1).keys()
     )
     # list containing all representatives of main lines that have already been
     # reinforced
     main_line_reinforced = []
-    graph = grid.graph
     omega = 2 * np.pi * 50
 
     lines_changes = {}
@@ -484,7 +490,7 @@ def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
                 else:
                     while (
                         node_2_3
-                        not in edisgo_obj.topology.transformers_df.bus0
+                        not in edisgo_obj.topology.transformers_df.bus0.values
                     ):
                         try:
                             # try to find LVStation behind node_2_3
@@ -572,18 +578,19 @@ def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
 
             else:
                 logger.debug(
-                    "==> Main line of node {} in network {} ".format(
-                        repr(node), str(grid)
+                    "==> Main line of node {} in network {} has already been "
+                    "reinforced.".format(
+                        node,
+                        grid
                     )
-                    + "has already been reinforced."
                 )
 
     if main_line_reinforced:
         logger.debug(
-            "==> {} branche(s) was/were reinforced ".format(
-                str(len(lines_changes))
+            "==> {} branche(s) was/were reinforced due to voltage "
+            "issues.".format(
+                len(lines_changes)
             )
-            + "due to over-voltage issues."
         )
 
     return lines_changes
