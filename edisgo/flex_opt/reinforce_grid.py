@@ -325,7 +325,7 @@ def reinforce_grid(
         while_counter = 0
         while crit_stations and while_counter < max_while_iterations:
             # reinforce distribution substations
-            transformer_changes = reinforce_measures.extend_distribution_substation_overvoltage(
+            transformer_changes = reinforce_measures.reinforce_mv_lv_station_voltage_issues(
                 edisgo_reinforce, crit_stations
             )
             # write added transformers to results.equipment_changes

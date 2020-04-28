@@ -261,7 +261,7 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
     return transformers_changes
 
 
-def extend_distribution_substation_overvoltage(edisgo_obj, critical_stations):
+def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
     """
     Reinforce MV/LV substations due to voltage issues.
 
@@ -269,20 +269,27 @@ def extend_distribution_substation_overvoltage(edisgo_obj, critical_stations):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
     critical_stations : :obj:`dict`
-        Dictionary with :class:`~.network.grids.LVGrid` as key and a
-        :pandas:`pandas.DataFrame<DataFrame>` with its critical station and
-        maximum voltage deviation as value.
-        Index of the dataframe is the :class:`~.network.components.LVStation`
-        with over-voltage issues. Columns are 'v_mag_pu' containing the
-        maximum voltage deviation as float and 'time_index' containing the
-        corresponding time step the over-voltage occured in as
-        :pandas:`pandas.Timestamp<Timestamp>`.
+        Dictionary with representative of :class:`~.network.grids.LVGrid` as
+        key and a :pandas:`pandas.DataFrame<DataFrame>` with station's voltage
+        deviation from allowed lower or upper voltage limit as value.
+        Index of the dataframe is the station with voltage issues.
+        Columns are 'v_diff_max' containing the maximum voltage deviation as
+        float and 'time_index' containing the corresponding time step the
+        voltage issue occured in as :pandas:`pandas.Timestamp<Timestamp>`.
 
     Returns
     -------
-    Dictionary with lists of added transformers.
+    :obj:`dict`
+        Dictionary with added transformers in the form::
+
+            {'added': {'Grid_1': ['transformer_reinforced_1',
+                                  ...,
+                                  'transformer_reinforced_x'],
+                       'Grid_10': ['transformer_reinforced_10']
+                       }
+            }
 
     """
 
@@ -296,7 +303,7 @@ def extend_distribution_substation_overvoltage(edisgo_obj, critical_stations):
             ]
         ]
     except KeyError:
-        print("Standard MV/LV transformer is not in equipment list.")
+        raise KeyError("Standard MV/LV transformer is not in equipment list.")
 
     transformers_changes = {"added": {}}
     for grid_name in critical_stations.keys():
@@ -322,12 +329,10 @@ def extend_distribution_substation_overvoltage(edisgo_obj, critical_stations):
 
     if transformers_changes["added"]:
         logger.debug(
-            "==> {} LV station(s) has/have been reinforced ".format(
-                str(len(transformers_changes["added"]))
+            "==> {} LV station(s) has/have been reinforced due to voltage "
+            "issues.".format(
+                len(transformers_changes["added"])
             )
-            + "due to overloading issues."
-        )
-
     return transformers_changes
 
 
