@@ -335,7 +335,7 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
     return transformers_changes
 
 
-def reinforce_branches_overvoltage(edisgo_obj, grid, crit_nodes):
+def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
     """
     Reinforce MV and LV topology due to voltage issues.
 

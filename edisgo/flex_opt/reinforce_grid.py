@@ -274,7 +274,7 @@ def reinforce_grid(
     while crit_nodes and while_counter < max_while_iterations:
 
         # reinforce lines
-        lines_changes = reinforce_measures.reinforce_branches_overvoltage(
+        lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
             edisgo_reinforce,
             edisgo_reinforce.topology.mv_grid,
             crit_nodes[repr(edisgo_reinforce.topology.mv_grid)],
@@ -377,7 +377,7 @@ def reinforce_grid(
             # for every topology in crit_nodes do reinforcement
             for grid in crit_nodes:
                 # reinforce lines
-                lines_changes = reinforce_measures.reinforce_branches_overvoltage(
+                lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
                     edisgo_reinforce, grid, crit_nodes[grid]
                 )
                 # write changed lines to results.equipment_changes

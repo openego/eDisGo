@@ -272,7 +272,7 @@ class TestReinforceMeasures:
         assert line_lv_3.num_parallel == 2
         print('Check line overload reinforcement successful.')
 
-    def test_reinforce_branches_overvoltage(self):
+    def test_reinforce_lines_voltage_issues(self):
         # MV:
         # * check where node_2_3 is an LV station => problem at
         #   Bus_BranchTee_MVGrid_1_2, leads to disconnection at
@@ -304,7 +304,7 @@ class TestReinforceMeasures:
         )
 
         grid = self.edisgo.topology.mv_grid
-        lines_changes = reinforce_measures.reinforce_branches_overvoltage(
+        lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
             self.edisgo, grid, crit_nodes
         )
 
@@ -400,7 +400,7 @@ class TestReinforceMeasures:
         )
 
         grid = self.edisgo.topology._grids["LVGrid_5"]
-        lines_changes = reinforce_measures.reinforce_branches_overvoltage(
+        lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
             self.edisgo, grid, crit_nodes
         )
 
