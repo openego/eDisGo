@@ -336,7 +336,7 @@ def reinforce_grid(
             logger.debug("==> Run power flow analysis.")
             edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
             logger.debug(
-                "==> Recheck voltage at secondary side of LV " "stations."
+                "==> Recheck voltage at secondary side of LV stations."
             )
             crit_stations = checks.lv_voltage_deviation(
                 edisgo_reinforce,

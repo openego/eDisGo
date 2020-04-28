@@ -52,9 +52,6 @@ def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):
 
     if transformers_changes["added"]:
         logger.debug(
-            "==> MV station has been reinforced due to overloading issues."
-        )
-        logger.debug(
             "==> {} LV station(s) has/have been reinforced due to "
             "overloading issues.".format(
                 str(len(transformers_changes["added"]))))
@@ -109,7 +106,7 @@ def reinforce_hv_mv_station_overloading(edisgo_obj, critical_stations):
 
 def _station_overloading(edisgo_obj, critical_stations, voltage_level):
     """
-    Reinforce MV/LV substations due to overloading issues.
+    Reinforce stations due to overloading issues.
 
     In a first step a parallel transformer of the same kind is installed.
     If this is not sufficient as many standard transformers as needed are
