@@ -283,7 +283,9 @@ class TestReinforceMeasures:
         # * check where node_2_3 is not an LV station and there is also no
         #   LV station in path => problem at Bus_BranchTee_MVGrid_1_11 leads
         #   to disconnection at Bus_BranchTee_MVGrid_1_11 (Line_10028)
-        # * check problem in same feeder => Bus_BranchTee_MVGrid_1_10
+        # * check problem in same feeder => Bus_BranchTee_MVGrid_1_10 (node
+        #   has higher voltage issue than Bus_BranchTee_MVGrid_1_11, but
+        #   Bus_BranchTee_MVGrid_1_10 is farther away from station)
 
         crit_nodes = pd.DataFrame(
             {
@@ -296,8 +298,8 @@ class TestReinforceMeasures:
                 ],
             },
             index=[
-                "Bus_BranchTee_MVGrid_1_11",
                 "Bus_BranchTee_MVGrid_1_10",
+                "Bus_BranchTee_MVGrid_1_11",
                 "Bus_BranchTee_MVGrid_1_2",
                 "Bus_primary_LVStation_7",
             ],
