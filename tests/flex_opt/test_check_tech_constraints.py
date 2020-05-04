@@ -1,4 +1,3 @@
-import os
 import pandas as pd
 import numpy as np
 import pytest
@@ -9,15 +8,14 @@ from edisgo.flex_opt import check_tech_constraints
 
 
 class TestCheckTechConstraints:
+
     @classmethod
     def setup_class(self):
-        """Setup default values"""
-        dirname = os.path.realpath(os.path.dirname(__file__) + "/..")
-        test_network_directory = os.path.join(dirname, "ding0_test_network")
         self.edisgo = EDisGo(
-            ding0_grid=test_network_directory, worst_case_analysis="worst-case"
+            ding0_grid=pytest.ding0_test_network_path,
+            worst_case_analysis="worst-case"
         )
-        self.timesteps = pd.date_range("1/1/1970", periods=2, freq="H")
+        self.timesteps = self.edisgo.timeseries.timeindex
 
     @pytest.fixture(autouse=True)
     def run_power_flow(self):

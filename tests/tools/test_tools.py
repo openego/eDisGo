@@ -31,11 +31,8 @@ class TestTools:
         assert_allclose(data, np.array([1039.23, 1558.84]), rtol=1e-5)
 
     def test_check_bus_for_removal(self):
-        parent_dirname = os.path.dirname(os.path.dirname(__file__))
-        test_network_directory = os.path.join(
-            parent_dirname, 'ding0_test_network')
         self.topology = Topology()
-        ding0_import.import_ding0_grid(test_network_directory, self)
+        ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
 
         # check for assertion
         msg = "Bus of name Test_bus_to_remove not in Topology. " \

@@ -1,4 +1,4 @@
-import os
+import pytest
 
 from edisgo.network.topology import Topology
 from edisgo.io import ding0_import
@@ -9,12 +9,8 @@ class TestGrids:
 
     @classmethod
     def setup_class(self):
-        """Setup default values"""
-        parent_dirname = os.path.dirname(os.path.dirname(__file__))
-        test_network_directory = os.path.join(
-            parent_dirname, 'ding0_test_network')
         self.topology = Topology()
-        ding0_import.import_ding0_grid(test_network_directory, self)
+        ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
 
     def test_mv_grid(self):
         """Test MVGrid class getter, setter, methods"""

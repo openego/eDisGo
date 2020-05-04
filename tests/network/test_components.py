@@ -1,5 +1,4 @@
 import pytest
-import os
 import pandas as pd
 
 from edisgo import EDisGo
@@ -11,13 +10,9 @@ class TestComponents:
 
     @classmethod
     def setup_class(self):
-        """Setup default values"""
-        parent_dirname = os.path.dirname(os.path.dirname(__file__))
-        test_network_directory = os.path.join(
-            parent_dirname, 'ding0_test_network')
-        edisgo = EDisGo(ding0_grid=test_network_directory,
-                        worst_case_analysis='worst-case')
-        self.edisgo_obj = edisgo
+        self.edisgo_obj = EDisGo(
+            ding0_grid=pytest.ding0_test_network_path,
+            worst_case_analysis='worst-case')
 
     def test_load_class(self):
         """Test Load class getter, setter, methods"""

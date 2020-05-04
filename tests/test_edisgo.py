@@ -7,7 +7,6 @@ from math import tan, acos
 
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints as checks
-from edisgo.flex_opt import reinforce_measures as reinforce
 from matplotlib import pyplot as plt
 
 
@@ -15,10 +14,7 @@ class TestEDisGo:
 
     @classmethod
     def setup_class(self):
-        """Setup default values"""
-        dirname = os.path.dirname(__file__)
-        test_network_directory = os.path.join(dirname, 'ding0_test_network')
-        self.edisgo = EDisGo(ding0_grid=test_network_directory,
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path,
                              worst_case_analysis='worst-case')
         self.timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
 
