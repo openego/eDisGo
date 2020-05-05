@@ -1171,6 +1171,69 @@ class Topology:
             lines_num_parallel.index, "num_parallel"
         ] = lines_num_parallel
 
+    def change_line_type(self, lines, new_line_type):
+        """
+        Changes line type of specified lines to given new line type.
+
+        Be aware that this function replaces the lines by one line of the
+        given line type.
+        Lines must all be in the same voltage level and the new line type
+        must be a cable with technical parameters given in equipment
+        parameters.
+
+        Parameters
+        ----------
+        lines : list(str)
+            List of line names of lines to be changed to new line type.
+        new_line_type : str
+            Specifies new line type of lines. Line type must be a cable with
+            technical parameters given in "mv_cables" or "lv_cables" equipment
+            data.
+
+        """
+
+        try:
+            data_new_line = self.equipment_data[
+                "lv_cables"
+            ].loc[new_line_type]
+        except KeyError:
+            try:
+                data_new_line = self.equipment_data[
+                    "mv_cables"
+                ].loc[new_line_type]
+                # in case of MV cable adapt nominal voltage to MV voltage
+                grid_voltage = self.buses_df.at[
+                    self.lines_df.at[lines[0], "bus0"], "v_nom"]
+                if grid_voltage != data_new_line.U_n:
+                    logging.debug(
+                        "The line type of lines {} is changed to a type with "
+                        "a different nominal voltage (nominal voltage of new "
+                        "line type is {} kV while nominal voltage of the "
+                        "medium voltage grid is {} kV). The nominal voltage "
+                        "of the new line type is therefore set to the grids "
+                        "nominal voltage.")
+                    data_new_line.U_n = grid_voltage
+            except KeyError:
+                raise KeyError(
+                    "Given new line type is not in equipment data. Please "
+                    "make sure to use line type with technical data provided "
+                    "in equipment_data 'mv_cables' or 'lv_cables'.")
+
+        self._lines_df.loc[lines, "type_info"] = data_new_line.name
+        self._lines_df.loc[lines, "num_parallel"] = 1
+        self._lines_df.loc[lines, "kind"] = "cable"
+
+        self._lines_df.loc[lines, "r"] = (
+            data_new_line.R_per_km * self.lines_df.loc[lines, "length"]
+        )
+        self._lines_df.loc[lines, "x"] = (
+            data_new_line.L_per_km * 2 * np.pi * 50 / 1e3
+            * self.lines_df.loc[lines, "length"]
+        )
+        self._lines_df.loc[lines, "s_nom"] = (
+            np.sqrt(3) * data_new_line.U_n * data_new_line.I_max_th
+        )
+
     def to_csv(self, directory):
         """
         Exports topology to csv files with names buses, generators, lines,

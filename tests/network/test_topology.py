@@ -2,6 +2,7 @@ import os
 import pytest
 import shutil
 import pandas as pd
+import numpy as np
 from pandas.util.testing import assert_frame_equal
 
 from edisgo.network.topology import Topology
@@ -442,3 +443,53 @@ class TestTopology:
             self.topology.lines_df.at[line_2, "s_nom"]
             == lines_attributes_pre.at[line_2, "s_nom"] * 5 / 3
         )
+
+    def test_change_line_type(self):
+
+        # test line type not in equipment data
+        line_1 = "Line_10027"
+        msg = ("Given new line type is not in equipment data. Please "
+               "make sure to use line type with technical data provided "
+               "in equipment_data 'mv_cables' or 'lv_cables'.")
+        with pytest.raises(Exception, match=msg):
+            self.topology.change_line_type([line_1], "NAYY")
+
+        # test for single MV line and line type with different nominal voltage
+        self.topology.change_line_type([line_1], "NA2XS2Y 3x1x185 RM/25")
+
+        assert (self.topology.lines_df.at[line_1, "type_info"] ==
+                "NA2XS2Y 3x1x185 RM/25")
+        assert self.topology.lines_df.at[line_1, "num_parallel"] == 1
+        assert self.topology.lines_df.at[line_1, "kind"] == "cable"
+        assert np.isclose(
+            self.topology.lines_df.at[line_1, "r"],
+            0.32265687717586305 * 0.164
+        )
+        assert np.isclose(
+            self.topology.lines_df.at[line_1, "x"],
+            0.38 * 2 * np.pi * 50 / 1e3 * 0.32265687717586305
+        )
+        assert np.isclose(
+            self.topology.lines_df.at[line_1, "s_nom"],
+            0.357 * 20 * np.sqrt(3)
+        )
+
+        # test for multiple LV lines
+        line_1 = "Line_50000006"
+        line_2 = "Line_90000010"
+        self.topology.change_line_type([line_1, line_2], "NAYY 4x1x300")
+
+        assert (self.topology.lines_df.loc[[line_1, line_2], "type_info"] ==
+                "NAYY 4x1x300").all()
+        assert np.isclose(
+            self.topology.lines_df.at[line_1, "r"],
+            0.1 * self.topology.lines_df.at[line_1, "length"]
+        )
+        assert np.isclose(
+            self.topology.lines_df.at[line_2, "r"],
+            0.1 * self.topology.lines_df.at[line_2, "length"]
+        )
+        assert (
+            self.topology.lines_df.loc[[line_1, line_2], "s_nom"] ==
+            np.sqrt(3) * 0.4 * 0.419
+        ).all()
