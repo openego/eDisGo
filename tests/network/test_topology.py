@@ -381,3 +381,44 @@ class TestTopology:
         assert 'Test_bus' not in self.topology.buses_df.index
         assert 'Line_Bus_BranchTee_MVGrid_1_3_Test_bus' not in \
             self.topology.lines_df.index
+    def test_update_number_of_parallel_lines(self):
+
+        line_1 = "Line_10026"
+        line_2 = "Line_90000010"
+        # manipulate number of parallel lines of line_2
+        self.topology.lines_df.at[line_2, "num_parallel"] = 3
+        # save values before update
+        lines_attributes_pre = self.topology.lines_df.loc[
+            [line_1, line_2], :
+        ].copy()
+
+        lines = pd.Series(index=[line_1, line_2], data=[2, 5])
+        self.topology.update_number_of_parallel_lines(lines)
+
+        assert self.topology.lines_df.at[line_1, "num_parallel"] == 2
+        assert (
+            self.topology.lines_df.at[line_1, "x"]
+            == lines_attributes_pre.at[line_1, "x"] / 2
+        )
+        assert (
+            self.topology.lines_df.at[line_1, "r"]
+            == lines_attributes_pre.at[line_1, "r"] / 2
+        )
+        assert (
+            self.topology.lines_df.at[line_1, "s_nom"]
+            == lines_attributes_pre.at[line_1, "s_nom"] * 2
+        )
+
+        assert self.topology.lines_df.at[line_2, "num_parallel"] == 5
+        assert (
+            self.topology.lines_df.at[line_2, "x"]
+            == lines_attributes_pre.at[line_2, "x"] * 3 / 5
+        )
+        assert (
+            self.topology.lines_df.at[line_2, "r"]
+            == lines_attributes_pre.at[line_2, "r"] * 3 / 5
+        )
+        assert (
+            self.topology.lines_df.at[line_2, "s_nom"]
+            == lines_attributes_pre.at[line_2, "s_nom"] * 5 / 3
+        )

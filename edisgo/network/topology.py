@@ -1135,6 +1135,42 @@ class Topology:
         self._lines_df = self._lines_df.append(new_line_df)
         return line_name
 
+    def update_number_of_parallel_lines(self, lines_num_parallel):
+        """
+        Changes number of parallel lines and updates line attributes.
+
+        When number of parallel lines changes attributes x, r, and s_nom have
+        to be adapted, which is done in this function.
+
+        Parameters
+        ------------
+        lines_num_parallel : series
+            index contains names of lines to update and values of series
+            contain corresponding new number of parallel lines.
+
+        """
+        # update x, r and s_nom
+        self._lines_df.loc[lines_num_parallel.index, "x"] = (
+                self._lines_df.loc[lines_num_parallel.index, "x"]
+                * self._lines_df.loc[lines_num_parallel.index, "num_parallel"]
+                / lines_num_parallel
+        )
+        self._lines_df.loc[lines_num_parallel.index, "r"] = (
+                self._lines_df.loc[lines_num_parallel.index, "r"]
+                * self._lines_df.loc[lines_num_parallel.index, "num_parallel"]
+                / lines_num_parallel
+        )
+        self._lines_df.loc[lines_num_parallel.index, "s_nom"] = (
+                self._lines_df.loc[lines_num_parallel.index, "s_nom"]
+                / self._lines_df.loc[lines_num_parallel.index, "num_parallel"]
+                * lines_num_parallel
+        )
+
+        # update number parallel lines
+        self._lines_df.loc[
+            lines_num_parallel.index, "num_parallel"
+        ] = lines_num_parallel
+
     def to_csv(self, directory):
         """
         Exports topology to csv files with names buses, generators, lines,
