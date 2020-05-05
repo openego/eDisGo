@@ -381,50 +381,13 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
 
     """
 
-    def change_line_to_standard_line(line_name):
-        edisgo_obj.topology._lines_df.at[
-            line_name, "type_info"
-        ] = standard_line.name
-        edisgo_obj.topology._lines_df.at[line_name, "num_parallel"] = 1
-        edisgo_obj.topology._lines_df.at[line_name, "kind"] = "cable"
-        edisgo_obj.topology._lines_df.at[line_name, "r"] = (
-            standard_line.R_per_km * grid.lines_df.at[line_name, "length"]
-        )
-        edisgo_obj.topology._lines_df.at[line_name, "x"] = (
-            standard_line.L_per_km
-            * 2 * np.pi * 50
-            / 1e3
-            * grid.lines_df.at[line_name, "length"]
-        )
-        edisgo_obj.topology._lines_df.at[line_name, "s_nom"] = (
-            np.sqrt(3) * standard_line.U_n * standard_line.I_max_th
-        )
-        lines_changes[line_name] = 1
-
     # load standard line data
     if isinstance(grid, LVGrid):
-        try:
-            standard_line = edisgo_obj.topology.equipment_data[
-                "lv_cables"
-            ].loc[
-                edisgo_obj.config["grid_expansion_standard_equipment"][
-                    "lv_line"
-                ]
-            ]
-        except KeyError:
-            raise KeyError("Chosen standard LV line is not in equipment list.")
+        standard_line = edisgo_obj.config[
+            "grid_expansion_standard_equipment"]["lv_line"]
     elif isinstance(grid, MVGrid):
-        try:
-            standard_line = edisgo_obj.topology.equipment_data[
-                "mv_cables"
-            ].loc[
-                edisgo_obj.config["grid_expansion_standard_equipment"][
-                    "mv_line"
-                ]
-            ]
-            standard_line.U_n = grid.nominal_voltage
-        except KeyError:
-            raise KeyError("Chosen standard MV line is not in equipment list.")
+        standard_line = edisgo_obj.config[
+            "grid_expansion_standard_equipment"]["mv_line"]
     else:
         raise ValueError("Inserted grid is invalid.")
 
@@ -512,26 +475,12 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
 
             # if critical line is already a standard line install one
             # more parallel line
-            if crit_line.type_info == standard_line.name:
-                num_parallel_pre = grid.lines_df.at[
-                    crit_line_name, "num_parallel"
-                ]
-                edisgo_obj.topology._lines_df.at[
-                    crit_line_name, "num_parallel"
-                ] += 1
-                edisgo_obj.topology._lines_df.at[
-                    crit_line_name, "r"
-                ] = (
-                    grid.lines_df.at[crit_line_name, "r"]
-                    * num_parallel_pre
-                    / (num_parallel_pre + 1)
-                )
-                edisgo_obj.topology._lines_df.at[
-                    crit_line_name, "x"
-                ] = (
-                    grid.lines_df.at[crit_line_name, "x"]
-                    * num_parallel_pre
-                    / (num_parallel_pre + 1)
+            if crit_line.type_info == standard_line:
+                edisgo_obj.topology.update_number_of_parallel_lines(
+                    pd.Series(index=[crit_line_name],
+                              data=[edisgo_obj.topology._lines_df.at[
+                                        crit_line_name, "num_parallel"] + 1]
+                              )
                 )
                 lines_changes[crit_line_name] = 1
 
@@ -541,7 +490,9 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
                 # number of parallel standard lines could be calculated
                 # following [2] p.103; for now number of parallel
                 # standard lines is iterated
-                change_line_to_standard_line(crit_line_name)
+                edisgo_obj.topology.change_line_type([crit_line_name],
+                                                     standard_line)
+                lines_changes[crit_line_name] = 1
 
         # if node_2_3 is not a representative, disconnect line
         else:
@@ -567,7 +518,10 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
             edisgo_obj.topology._lines_df.at[
                 crit_line_name, "length"
             ] = path_length_dict[node_2_3]
-            change_line_to_standard_line(crit_line_name)
+            edisgo_obj.topology.change_line_type(
+                [crit_line_name],
+                standard_line)
+            lines_changes[crit_line_name] = 1
 
     if not lines_changes:
         logger.debug(
