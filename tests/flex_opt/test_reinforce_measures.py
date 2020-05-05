@@ -10,16 +10,21 @@ def change_line_to_standard_line(test_class, line_name, std_line):
     omega = 2 * np.pi * 50
     std_line.X_per_km = std_line.L_per_km / 1e3 * omega
     std_line.S_nom = np.sqrt(3) * std_line.U_n * std_line.I_max_th
-    test_class.edisgo.topology.lines_df.loc[line_name, 'type_info'] = \
-        std_line.name
-    test_class.edisgo.topology.lines_df.loc[line_name, 'r'] = \
-        std_line.R_per_km * test_class.edisgo.topology.lines_df.loc[
-            line_name, 'length']
-    test_class.edisgo.topology.lines_df.loc[line_name, 'x'] = \
-        std_line.X_per_km * test_class.edisgo.topology.lines_df.loc[
-            line_name, 'length']
-    test_class.edisgo.topology.lines_df.loc[line_name, 's_nom'] = \
-        std_line.S_nom
+    test_class.edisgo.topology.lines_df.loc[
+        line_name, "type_info"
+    ] = std_line.name
+    test_class.edisgo.topology.lines_df.loc[line_name, "r"] = (
+        std_line.R_per_km
+        * test_class.edisgo.topology.lines_df.loc[line_name, "length"]
+    )
+    test_class.edisgo.topology.lines_df.loc[line_name, "x"] = (
+        std_line.X_per_km
+        * test_class.edisgo.topology.lines_df.loc[line_name, "length"]
+    )
+    test_class.edisgo.topology.lines_df.loc[
+        line_name, "s_nom"
+    ] = std_line.S_nom
+
 
 class TestReinforceMeasures:
 
@@ -30,7 +35,7 @@ class TestReinforceMeasures:
             worst_case_analysis="worst-case"
         )
         self.edisgo.analyze()
-        self.timesteps = pd.date_range('1/1/1970', periods=2, freq='H')
+        self.timesteps = pd.date_range("1/1/1970", periods=2, freq="H")
 
     def test_reinforce_mv_lv_station_overloading(self):
         # implicitly checks function _station_overloading
@@ -77,7 +82,8 @@ class TestReinforceMeasures:
             "LVStation_1_transformer_reinforced_1"
         ]
         trafo_copy = self.edisgo.topology.equipment_data[
-            "lv_transformers"].loc["630 kVA"]
+            "lv_transformers"
+        ].loc["630 kVA"]
         assert trafo_new.bus0 == "Bus_primary_LVStation_1"
         assert trafo_new.bus1 == "Bus_secondary_LVStation_1"
         assert trafo_new.r_pu == trafo_copy.r_pu
@@ -103,8 +109,7 @@ class TestReinforceMeasures:
 
         # check adding transformer of same MVA
         crit_mv_station = pd.DataFrame(
-            {"s_missing": [19],
-             "time_index": [self.timesteps[1]]},
+            {"s_missing": [19], "time_index": [self.timesteps[1]]},
             index=["MVGrid_1"],
         )
         transformer_changes = reinforce_measures.reinforce_hv_mv_station_overloading(
@@ -126,14 +131,13 @@ class TestReinforceMeasures:
 
         # delete added transformer from topology
         self.edisgo.topology.transformers_hvmv_df.drop(
-            "MVStation_1_transformer_reinforced_2",
-            inplace=True)
+            "MVStation_1_transformer_reinforced_2", inplace=True
+        )
 
         # check replacing current transformers and replacing them with three
         # standard transformers
         crit_mv_station = pd.DataFrame(
-            {"s_missing": [50],
-             "time_index": [self.timesteps[1]]},
+            {"s_missing": [50], "time_index": [self.timesteps[1]]},
             index=["MVGrid_1"],
         )
         transformer_changes = reinforce_measures.reinforce_hv_mv_station_overloading(
@@ -153,19 +157,16 @@ class TestReinforceMeasures:
         )
         # check that removed transformer is removed from topology
         assert (
-                "MVStation_1_transformer_1"
-                not in self.edisgo.topology.transformers_hvmv_df.index
+            "MVStation_1_transformer_1"
+            not in self.edisgo.topology.transformers_hvmv_df.index
         )
 
     def test_reinforce_mv_lv_station_voltage_issues(self):
         station_9 = pd.DataFrame(
-            {"v_diff_max": [0.03],
-             "time_index": [self.timesteps[0]]},
+            {"v_diff_max": [0.03], "time_index": [self.timesteps[0]]},
             index=["Bus_secondary_LVStation_9"],
         )
-        crit_stations = {
-            "LVGrid_9": station_9
-        }
+        crit_stations = {"LVGrid_9": station_9}
 
         trafos_pre = self.edisgo.topology.transformers_df
 
@@ -181,14 +182,15 @@ class TestReinforceMeasures:
         )
         # check changes in transformers_df
         assert len(self.edisgo.topology.transformers_df) == (
-                len(trafos_pre) + 1
+            len(trafos_pre) + 1
         )
         # check values
         trafo_new = self.edisgo.topology.transformers_df.loc[
             "LVStation_9_transformer_reinforced_2"
         ]
         trafo_copy = self.edisgo.topology.equipment_data[
-            "lv_transformers"].loc["630 kVA"]
+            "lv_transformers"
+        ].loc["630 kVA"]
         assert trafo_new.bus0 == "Bus_primary_LVStation_9"
         assert trafo_new.bus1 == "Bus_secondary_LVStation_9"
         assert trafo_new.r_pu == trafo_copy.r_pu
