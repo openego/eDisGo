@@ -34,6 +34,7 @@ def expand_network(edisgo, tolerance=1e-6):
     mv_lines = edisgo.topology.mv_grid.lines_df.index
 
     # Increase number of parallel lines, shrink respective resistance
+    # ToDo: use function Topology.update_number_of_parallel_lines
     edisgo.topology.lines_df.loc[mv_lines, "num_parallel"] *= nep_factor
     edisgo.topology.lines_df.loc[mv_lines, "r"] /= nep_factor
     edisgo.topology.lines_df.loc[mv_lines, "x"] /= nep_factor
