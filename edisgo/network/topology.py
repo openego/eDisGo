@@ -342,15 +342,19 @@ class Topology:
             Dataframe with all lines in MV network and underlying LV grids.
             Index of the dataframe are line names. Columns of the
             dataframe are:
-            bus0
-            bus1
-            length
-            x
-            r
-            s_nom
-            num_parallel
-            type_info
-            kind
+            bus0 - name of first bus line is attached to
+            bus1 - name of second bus line is attached to
+            length - line length in m
+            x - reactance of line (or in case of multiple parallel lines
+                total reactance of lines) in Ohm
+            r - resistance of line (or in case of multiple parallel lines
+                total resistance of lines) in Ohm
+            s_nom - apparent power which can pass through the
+                line (or in case of multiple parallel lines total apparent
+                power which can pass through the lines) in MVA
+            num_parallel - number of parallel lines
+            type_info - contains type of line as e.g. given in equipment data
+            kind - specifies whether line is a cable or overhead line
 
         Returns
         --------
