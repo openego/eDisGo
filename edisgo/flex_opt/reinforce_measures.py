@@ -356,8 +356,9 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
 
     Returns
     -------
-    Dictionary with name of lines as keys and the corresponding number of lines
-    added as values.
+    dict
+        Dictionary with name of lines as keys and the corresponding number of
+        lines added as values.
 
     Notes
     -----
@@ -570,7 +571,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
 
     if not lines_changes:
         logger.debug(
-            "==> {} branche(s) was/were reinforced due to voltage "
+            "==> {} line(s) was/were reinforced due to voltage "
             "issues.".format(
                 len(lines_changes)
             )
