@@ -136,7 +136,6 @@ def lines_allowed_load(edisgo_obj, voltage_level):
         lines_df.s_nom
         / sqrt(3)
         / nominal_voltage
-        * lines_df.num_parallel
         * edisgo_obj.config["grid_expansion_load_factors"][
             "{}_feedin_case_line".format(voltage_level)
         ]
@@ -145,7 +144,6 @@ def lines_allowed_load(edisgo_obj, voltage_level):
         lines_df.s_nom
         / sqrt(3)
         / nominal_voltage
-        * lines_df.num_parallel
         * edisgo_obj.config["grid_expansion_load_factors"][
             "{}_load_case_line".format(voltage_level)
         ]
