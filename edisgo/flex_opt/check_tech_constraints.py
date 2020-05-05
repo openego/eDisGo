@@ -207,7 +207,7 @@ def _line_load(edisgo_obj, voltage_level):
             axis=1,
             keys=["max_rel_overload", "time_index"],
         )
-        crit_lines.loc[:, "grid_level"] = voltage_level
+        crit_lines.loc[:, "voltage_level"] = voltage_level
     else:
         crit_lines = pd.DataFrame()
 
@@ -316,13 +316,13 @@ def _station_load(edisgo_obj, grid):
     """
     # get apparent power over station from power flow analysis
     if isinstance(grid, LVGrid):
-        grid_level = "lv"
+        voltage_level = "lv"
         transformers_df = grid.transformers_df
         s_station_pfa = edisgo_obj.results.s_res.loc[
             :, transformers_df.index
         ].sum(axis=1)
     elif isinstance(grid, MVGrid):
-        grid_level = "mv"
+        voltage_level = "mv"
         transformers_df = edisgo_obj.topology.transformers_hvmv_df
         s_station_pfa = np.hypot(
             edisgo_obj.results.hv_mv_exchanges.p,
@@ -335,7 +335,7 @@ def _station_load(edisgo_obj, grid):
     s_station = sum(transformers_df.s_nom)
     load_factor = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
         lambda _: edisgo_obj.config["grid_expansion_load_factors"][
-            "{}_{}_transformer".format(grid_level, _)
+            "{}_{}_transformer".format(voltage_level, _)
         ]
     )
     s_station_allowed = s_station * load_factor
