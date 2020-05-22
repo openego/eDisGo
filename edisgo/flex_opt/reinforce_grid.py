@@ -206,7 +206,7 @@ def reinforce_grid(
 
         if not crit_lines.empty:
             # reinforce lines
-            lines_changes = reinforce_measures.reinforce_branches_overloading(
+            lines_changes = reinforce_measures.reinforce_lines_overloading(
                 edisgo_reinforce, crit_lines
             )
             # write changed lines to results.equipment_changes
@@ -452,7 +452,7 @@ def reinforce_grid(
 
         if not crit_lines.empty:
             # reinforce lines
-            lines_changes = reinforce_measures.reinforce_branches_overloading(
+            lines_changes = reinforce_measures.reinforce_lines_overloading(
                 edisgo_reinforce, crit_lines
             )
             # write changed lines to results.equipment_changes

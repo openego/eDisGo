@@ -534,24 +534,29 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
     return lines_changes
 
 
-def reinforce_branches_overloading(edisgo_obj, crit_lines):
+def reinforce_lines_overloading(edisgo_obj, crit_lines):
     """
-    Reinforce MV or LV topology due to overloading.
+    Reinforce lines in MV and LV topology due to overloading.
     
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
     crit_lines : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded lines, their maximum relative
-        over-loading and the corresponding time step.
-        Index of the dataframe are the names of over-loaded lines. Columns are
-        'max_rel_overload' containing the maximum relative over-loading as
-        float and 'time_index' containing the corresponding time step the
-        over-loading occured in as :pandas:`pandas.Timestamp<Timestamp>`.
+        over-loading (maximum calculated current over allowed current) and the
+        corresponding time step.
+        Index of the dataframe are the names of the over-loaded lines.
+        Columns are 'max_rel_overload' containing the maximum relative
+        over-loading as float, 'time_index' containing the corresponding
+        time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
+        the voltage level the line is in (either 'mv' or 'lv').
 
     Returns
     -------
-    Dictionary with name of lines and the number of Lines added.
+    dict
+        Dictionary with name of lines as keys and the corresponding number of
+        lines added as values.
         
     Notes
     -----
@@ -567,146 +572,174 @@ def reinforce_branches_overloading(edisgo_obj, crit_lines):
 
     lines_changes = {}
     # reinforce mv lines
-    lines_changes = reinforce_lines_overloaded_per_grid_level(
-        edisgo_obj, "mv", crit_lines, lines_changes
-    )
+    lines_changes.update(_reinforce_lines_overloading_per_grid_level(
+        edisgo_obj, "mv", crit_lines
+    ))
     # reinforce lv lines
-    lines_changes = reinforce_lines_overloaded_per_grid_level(
-        edisgo_obj, "lv", crit_lines, lines_changes
-    )
+    lines_changes.update(_reinforce_lines_overloading_per_grid_level(
+        edisgo_obj, "lv", crit_lines
+    ))
 
     if not crit_lines.empty:
         logger.debug(
-            "==> {} branche(s) was/were reinforced ".format(
+            "==> {} line(s) was/were reinforced due to over-loading "
+            "issues.".format(
                 crit_lines.shape[0]
             )
-            + "due to over-loading issues."
         )
 
     return lines_changes
 
 
-def reinforce_lines_overloaded_per_grid_level(
-    edisgo_obj, grid_level, crit_lines, lines_changes
+def _reinforce_lines_overloading_per_grid_level(
+    edisgo_obj, voltage_level, crit_lines
 ):
-    def reinforce_standard_lines(relevant_lines):
-        # Todo: make sure, the other parameters are the same as well
-        lines_standard = relevant_lines.loc[
-            relevant_lines.type_info == standard_line.name
-        ]
+    """
+    Reinforce lines in MV or LV topology due to overloading.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    voltage_level : str
+        Voltage level, over-loading is handled for. Possible options are
+        "mv" or "lv".
+    crit_lines : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing over-loaded lines, their maximum relative
+        over-loading (maximum calculated current over allowed current) and the
+        corresponding time step.
+        Index of the dataframe are the names of the over-loaded lines.
+        Columns are 'max_rel_overload' containing the maximum relative
+        over-loading as float, 'time_index' containing the corresponding
+        time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
+        the voltage level the line is in (either 'mv' or 'lv').
+
+    Returns
+    -------
+    dict
+        Dictionary with name of lines as keys and the corresponding number of
+        lines added as values.
+
+    """
+    def _add_parallel_standard_lines(lines):
+        """
+        Adds as many parallel standard lines as needed so solve overloading.
+
+        Adds number of added lines to `lines_changes` dictionary.
+
+        Parameters
+        ----------
+        lines : list(str)
+            List of line names to add parallel standard lines for.
+
+        """
+        # calculate necessary number of parallel lines
         number_parallel_lines = np.ceil(
-            crit_lines.max_rel_overload[lines_standard.index]
-            * lines_standard.num_parallel
+            crit_lines.max_rel_overload[lines] *
+            edisgo_obj.topology.lines_df.loc[lines, "num_parallel"]
         )
+
+        # add number of added lines to lines_changes
         number_parallel_lines_pre = edisgo_obj.topology.lines_df.loc[
-            lines_standard.index, "num_parallel"
+            lines, "num_parallel"
         ]
-        edisgo_obj.topology.lines_df.loc[
-            lines_standard.index, "num_parallel"
-        ] = number_parallel_lines
-        edisgo_obj.topology.lines_df.loc[lines_standard.index, "x"] = (
-            edisgo_obj.topology.lines_df.loc[lines_standard.index, "x"]
-            * number_parallel_lines_pre
-            / number_parallel_lines
-        )
-        edisgo_obj.topology.lines_df.loc[lines_standard.index, "r"] = (
-            edisgo_obj.topology.lines_df.loc[lines_standard.index, "r"]
-            * number_parallel_lines_pre
-            / number_parallel_lines
-        )
         lines_changes.update(
             (number_parallel_lines - number_parallel_lines_pre).to_dict()
         )
-        lines_default = relevant_lines.loc[
-            ~relevant_lines.index.isin(lines_standard.index)
-        ]
-        return lines_default
 
-    def reinforce_single_lines(lines_default):
-        lines_single = (
-            lines_default.loc[lines_default.num_parallel == 1]
-            .loc[lines_default.kind == "cable"]
-            .loc[crit_lines.max_rel_overload < 2]
-        )
-        edisgo_obj.topology.lines_df.loc[
-            lines_single.index, "num_parallel"
-        ] = 2
-        edisgo_obj.topology.lines_df.loc[lines_single.index, "r"] = (
-            edisgo_obj.topology.lines_df.loc[lines_single.index, "r"] / 2
-        )
-        edisgo_obj.topology.lines_df.loc[lines_single.index, "x"] = (
-            edisgo_obj.topology.lines_df.loc[lines_single.index, "x"] / 2
-        )
-        lines_changes.update({_: 1 for _ in lines_single.index})
-        lines_default = lines_default.loc[
-            ~lines_default.index.isin(lines_single.index)
-        ]
-        return lines_default
+        # update number of parallel lines and line accordingly attributes
+        edisgo_obj.topology.update_number_of_parallel_lines(
+            number_parallel_lines)
 
-    def reinforce_default_lines(lines_default):
+    def _add_one_parallel_line_of_same_type(lines):
+        """
+        Adds one parallel line of same type.
+
+        Adds number of added lines to `lines_changes` dictionary.
+
+        Parameters
+        ----------
+        lines : list(str)
+            List of line names to add parallel line of same type for.
+
+        """
+        # add number of added lines to lines_changes
+        lines_changes.update(
+            pd.Series(index=lines,
+                      data=[1] * len(lines)).to_dict()
+        )
+
+        # update number of lines and accordingly line attributes
+        edisgo_obj.topology.update_number_of_parallel_lines(
+            pd.Series(index=lines,
+                      data=[2] * len(lines)))
+
+    def _replace_by_parallel_standard_lines(lines):
+        """
+        Replaces existing line with as many parallel standard lines as needed.
+
+        Adds number of added lines to `lines_changes` dictionary.
+
+        Parameters
+        ----------
+        lines : list(str)
+            List of line names to replace by parallel standard lines.
+
+        """
+        # save old nominal power to calculate number of parallel standard lines
+        s_nom_old = edisgo_obj.topology.lines_df.loc[lines, "s_nom"]
+
+        # change line type to standard line
+        edisgo_obj.topology.change_line_type(
+            lines,
+            standard_line_type)
+
+        # calculate and update number of parallel lines
         number_parallel_lines = np.ceil(
-            lines_default.s_nom
-            * crit_lines.loc[lines_default.index, "max_rel_overload"]
-            / (math.sqrt(3) * standard_line.U_n * standard_line.I_max_th)
+            s_nom_old * crit_lines.loc[lines, "max_rel_overload"]
+            / edisgo_obj.topology.lines_df.loc[lines, "s_nom"]
         )
-        edisgo_obj.topology.lines_df.loc[
-            lines_default.index, "type_info"
-        ] = standard_line.name
-        edisgo_obj.topology.lines_df.loc[lines_default.index, "s_nom"] = (
-            math.sqrt(3) * standard_line.U_n * standard_line.I_max_th
-        )
-        edisgo_obj.topology.lines_df.loc[
-            lines_default.index, "num_parallel"
-        ] = number_parallel_lines
-        edisgo_obj.topology.lines_df.loc[lines_default.index, "r"] = (
-            standard_line.R_per_km
-            * edisgo_obj.topology.lines_df.loc[lines_default.index, "length"]
-            / edisgo_obj.topology.lines_df.loc[
-                lines_default.index, "num_parallel"
-            ]
-        )
-        omega = 2 * np.pi * edisgo_obj.config["network_parameters"]["freq"]
-        edisgo_obj.topology.lines_df.loc[lines_default.index, "x"] = (
-            standard_line.L_per_km
-            * omega
-            * 1e-3
-            * edisgo_obj.topology.lines_df.loc[lines_default.index, "length"]
-            / edisgo_obj.topology.lines_df.loc[
-                lines_default.index, "num_parallel"
-            ]
-        )
+        edisgo_obj.topology.update_number_of_parallel_lines(
+            number_parallel_lines)
+
         lines_changes.update(number_parallel_lines.to_dict())
 
-    # load standard line data
-    try:
-        standard_line = edisgo_obj.topology.equipment_data[
-            "{}_cables".format(grid_level)
-        ].loc[
-            edisgo_obj.config["grid_expansion_standard_equipment"][
-                "{}_line".format(grid_level)
-            ]
+    standard_line_type = \
+        edisgo_obj.config["grid_expansion_standard_equipment"][
+            "{}_line".format(voltage_level)
         ]
-        # Todo: check voltage of standard line to distinguish between 10
-        #  and 20 kV. Remove following part afterwards.
-        if grid_level == "mv":
-            standard_line.U_n = edisgo_obj.topology.mv_grid.nominal_voltage
-    except KeyError:
-        print(
-            "Chosen standard {} line is not in equipment list.".format(
-                grid_level
-            )
-        )
+
+    lines_changes = {}
+
     # chose lines of right grid level
     relevant_lines = edisgo_obj.topology.lines_df.loc[
-        crit_lines[crit_lines.grid_level == grid_level].index
+        crit_lines[crit_lines.voltage_level == voltage_level].index
     ]
+
     # handling of standard lines
-    lines_default = reinforce_standard_lines(relevant_lines)
+    lines_standard = relevant_lines.loc[
+        relevant_lines.type_info == standard_line_type
+        ]
+    _add_parallel_standard_lines(lines_standard.index)
+
+    # get lines that have not been updated yet (i.e. that are not standard
+    # lines)
+    relevant_lines = relevant_lines.loc[
+        ~relevant_lines.index.isin(lines_standard.index)
+    ]
     # handling of cables where adding one cable is sufficient
-    lines_default = reinforce_single_lines(lines_default)
-    # default lines that haven't been handled so far
-    # Todo: removed lines are not handled here unlike for trafos.
-    #  Overthink and unify
-    reinforce_default_lines(lines_default)
+    lines_single = (
+        relevant_lines.loc[relevant_lines.num_parallel == 1]
+            .loc[relevant_lines.kind == "cable"]
+            .loc[crit_lines.max_rel_overload < 2]
+    )
+    _add_one_parallel_line_of_same_type(lines_single.index)
+
+    # handle rest of lines (replace by as many parallel standard lines as
+    # needed)
+    relevant_lines = relevant_lines.loc[
+        ~relevant_lines.index.isin(lines_single.index)
+    ]
+    _replace_by_parallel_standard_lines(relevant_lines.index)
 
     return lines_changes

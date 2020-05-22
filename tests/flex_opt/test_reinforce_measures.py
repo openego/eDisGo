@@ -6,26 +6,6 @@ from edisgo import EDisGo
 from edisgo.flex_opt import reinforce_measures
 
 
-def change_line_to_standard_line(test_class, line_name, std_line):
-    omega = 2 * np.pi * 50
-    std_line.X_per_km = std_line.L_per_km / 1e3 * omega
-    std_line.S_nom = np.sqrt(3) * std_line.U_n * std_line.I_max_th
-    test_class.edisgo.topology.lines_df.loc[
-        line_name, "type_info"
-    ] = std_line.name
-    test_class.edisgo.topology.lines_df.loc[line_name, "r"] = (
-        std_line.R_per_km
-        * test_class.edisgo.topology.lines_df.loc[line_name, "length"]
-    )
-    test_class.edisgo.topology.lines_df.loc[line_name, "x"] = (
-        std_line.X_per_km
-        * test_class.edisgo.topology.lines_df.loc[line_name, "length"]
-    )
-    test_class.edisgo.topology.lines_df.loc[
-        line_name, "s_nom"
-    ] = std_line.S_nom
-
-
 class TestReinforceMeasures:
 
     @classmethod
@@ -197,80 +177,6 @@ class TestReinforceMeasures:
         assert trafo_new.x_pu == trafo_copy.x_pu
         assert trafo_new.s_nom == trafo_copy.S_nom
         assert trafo_new.type_info == "630 kVA"
-
-    def test_reinforce_branches_overloading(self):
-        std_line_mv = self.edisgo.topology.equipment_data['mv_cables'].loc[
-            self.edisgo.config['grid_expansion_standard_equipment'][
-                'mv_line']]
-        std_line_mv.U_n = self.edisgo.topology.mv_grid.nominal_voltage
-
-        std_line_lv = self.edisgo.topology.equipment_data['lv_cables'].loc[
-            self.edisgo.config['grid_expansion_standard_equipment'][
-                'lv_line']]
-        # manipulate lines to sdt_line_type
-        change_line_to_standard_line(self, 'Line_10017', std_line_mv)
-        change_line_to_standard_line(self, 'Line_50000002', std_line_lv)
-
-        # create crit_lines dataframe
-        crit_lines = pd.DataFrame({
-            'max_rel_overload': [2.3261, 2.3261, 1.1792, 2.02, 1.02, 3.32],
-            'grid_level': ['mv'] * 3 + ['lv'] * 3},
-            index=['Line_10003', 'Line_10017', 'Line_10019',
-                   'Line_50000002', 'Line_50000004', 'Line_60000001'])
-
-        lines_changes = reinforce_branches_overloading(self.edisgo, crit_lines)
-
-        # assert values
-        assert len(lines_changes) == 6
-        assert lines_changes['Line_10003'] == 2
-        assert lines_changes['Line_10017'] == 2
-        assert lines_changes['Line_10019'] == 1
-        assert lines_changes['Line_50000002'] == 2
-        assert lines_changes['Line_50000004'] == 1
-        assert lines_changes['Line_60000001'] == 2
-        # check line default
-        line_mv_1 = self.edisgo.topology.lines_df.loc['Line_10003']
-        assert line_mv_1.type_info == std_line_mv.name
-        assert line_mv_1.r == std_line_mv.R_per_km * line_mv_1.length / 2
-        assert line_mv_1.x == std_line_mv.X_per_km * line_mv_1.length / 2
-        assert line_mv_1.s_nom == std_line_mv.S_nom
-        assert line_mv_1.num_parallel == 2
-        # check line standard
-        line_mv_2 = self.edisgo.topology.lines_df.loc['Line_10017']
-        assert line_mv_2.type_info == std_line_mv.name
-        assert line_mv_2.r == std_line_mv.R_per_km * line_mv_2.length / 3
-        assert line_mv_2.x == std_line_mv.X_per_km * line_mv_2.length / 3
-        assert line_mv_2.s_nom == std_line_mv.S_nom
-        assert line_mv_2.num_parallel == 3
-        # check line single
-        line_mv_3 = self.edisgo.topology.lines_df.loc['Line_10019']
-        assert line_mv_3.type_info == '48-AL1/8-ST1A'
-        assert line_mv_3.r == 0.074712625365
-        assert line_mv_3.x == 0.07485557547918019
-        assert line_mv_3.s_nom == 7.274613391789284
-        assert line_mv_3.num_parallel == 2
-        # check lv_lines
-        line_lv_1 = self.edisgo.topology.lines_df.loc['Line_50000002']
-        assert line_lv_1.type_info == std_line_lv.name
-        assert line_lv_1.r == std_line_lv.R_per_km * line_lv_1.length / 3
-        assert line_lv_1.x == std_line_lv.X_per_km * line_lv_1.length / 3
-        assert line_lv_1.s_nom == std_line_lv.S_nom
-        assert line_lv_1.num_parallel == 3
-        # check single
-        line_lv_2 = self.edisgo.topology.lines_df.loc['Line_50000004']
-        assert line_lv_2.type_info == 'NAYY 4x1x35'
-        assert line_lv_2.r == 0.000434
-        assert line_lv_2.x == 4.2568580456141706e-05
-        assert line_lv_2.s_nom == 0.08521689973238901
-        assert line_lv_2.num_parallel == 2
-        # check default
-        line_lv_3 = self.edisgo.topology.lines_df.loc['Line_60000001']
-        assert line_lv_3.type_info == std_line_lv.name
-        assert line_lv_3.r == std_line_lv.R_per_km * line_lv_3.length / 2
-        assert line_lv_3.x == std_line_lv.X_per_km * line_lv_3.length / 2
-        assert line_lv_3.s_nom == std_line_lv.S_nom
-        assert line_lv_3.num_parallel == 2
-        print('Check line overload reinforcement successful.')
 
     def test_reinforce_lines_voltage_issues(self):
         # MV:
@@ -453,3 +359,110 @@ class TestReinforceMeasures:
         line = self.edisgo.topology.lines_df.loc["Line_50000009"]
         assert line.type_info == std_line.name
         assert line.num_parallel == 2
+        assert np.isclose(line.r, 0.02781 / 2)
+        assert np.isclose(line.x, 0.010857344210806 / 2)
+        assert np.isclose(line.s_nom, 0.190525588832576 * 2)
+
+    def test_reinforce_lines_overloading(self):
+        # * check for needed parallel standard lines (MV and LV) => problems at
+        #   Line_10007 and Line_70000006
+        # * check for parallel line of same type => problems at Line_10019
+        #   and Line_50000004
+        # * check for replacement by parallel standard lines (MV and LV) =>
+        #   problems at Line_10003 and Line_60000001
+
+        # create crit_lines dataframe
+        crit_lines = pd.DataFrame(
+            {
+                "max_rel_overload": [2.3261, 1.1792, 2.3261, 2.02, 1.02, 2.1],
+                "voltage_level": ["mv"] * 3 + ["lv"] * 3,
+            },
+            index=[
+                "Line_10007",  # parallel standard line
+                "Line_10019",  # second parallel line of same type
+                "Line_10003",  # exchange by standard line
+                "Line_70000006",  # parallel standard line
+                "Line_50000004",  # second parallel line of same type
+                "Line_60000001",  # exchange by standard line
+            ],
+        )
+
+        lines_changes = reinforce_measures.reinforce_lines_overloading(
+            self.edisgo, crit_lines
+        )
+
+        assert len(lines_changes) == 6
+        assert lines_changes["Line_10003"] == 2
+        assert lines_changes["Line_10007"] == 2
+        assert lines_changes["Line_10019"] == 1
+        assert lines_changes["Line_70000006"] == 2
+        assert lines_changes["Line_50000004"] == 1
+        assert lines_changes["Line_60000001"] == 1
+
+        # check lines that were already standard lines and where parallel
+        # standard lines were added
+        line = self.edisgo.topology.lines_df.loc["Line_10007"]
+        assert line.type_info == "NA2XS2Y 3x1x185 RM/25"
+        assert np.isclose(
+            line.r,
+            0.164 * line.length / 3)
+        assert np.isclose(
+            line.x,
+            0.38 * 2 * np.pi * 50 / 1e3 * line.length / 3)
+        assert np.isclose(
+            line.s_nom, 0.357 * 20 * np.sqrt(3) * 3)
+        assert line.num_parallel == 3
+
+        line = self.edisgo.topology.lines_df.loc["Line_70000006"]
+        assert line.type_info == "NAYY 4x1x150"
+        assert np.isclose(
+            line.r,
+            0.206 * line.length / 3)
+        assert np.isclose(
+            line.x,
+            0.256 * 2 * np.pi * 50 / 1e3 * line.length / 3)
+        assert np.isclose(
+            line.s_nom,
+            0.275 * 0.4 * np.sqrt(3) * 3)
+        assert line.num_parallel == 3
+
+        # check lines where a second parallel line of the same type is added
+        line = self.edisgo.topology.lines_df.loc["Line_10019"]
+        assert line.type_info == "48-AL1/8-ST1A"
+        assert np.isclose(line.r, 0.14942525073 / 2)
+        assert np.isclose(line.x, 0.14971115095836038 / 2)
+        assert np.isclose(line.s_nom, 7.274613391789284 * 2)
+        assert line.num_parallel == 2
+
+        line = self.edisgo.topology.lines_df.loc["Line_50000004"]
+        assert line.type_info == "NAYY 4x1x35"
+        assert np.isclose(line.r, 0.000868 / 2)
+        assert np.isclose(line.x, 8.513716091228341e-05 / 2)
+        assert np.isclose(line.s_nom, 0.08521689973238901 * 2)
+        assert line.num_parallel == 2
+
+        # check lines that were exchanged by parallel standard lines
+        line = self.edisgo.topology.lines_df.loc["Line_10003"]
+        assert line.type_info == "NA2XS2Y 3x1x185 RM/25"
+        assert np.isclose(
+            line.r,
+            0.164 * line.length / 2)
+        assert np.isclose(
+            line.x,
+            0.38 * 2 * np.pi * 50 / 1e3 * line.length / 2)
+        assert np.isclose(
+            line.s_nom, 0.357 * 20 * np.sqrt(3) * 2)
+        assert line.num_parallel == 2
+
+        line = self.edisgo.topology.lines_df.loc["Line_60000001"]
+        assert line.type_info == "NAYY 4x1x150"
+        assert np.isclose(
+            line.r,
+            0.206 * line.length)
+        assert np.isclose(
+            line.x,
+            0.256 * 2 * np.pi * 50 / 1e3 * line.length)
+        assert np.isclose(
+            line.s_nom,
+            0.275 * 0.4 * np.sqrt(3))
+        assert line.num_parallel == 1
