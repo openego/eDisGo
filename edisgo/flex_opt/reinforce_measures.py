@@ -124,7 +124,7 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
         containing the corresponding time step the over-loading occured in as
         :pandas:`pandas.Timestamp<Timestamp>`.
     voltage_level : str
-        Voltage level, over-loading is checked for. Possible options are
+        Voltage level, over-loading is handled for. Possible options are
         "mv" or "lv".
 
     Returns

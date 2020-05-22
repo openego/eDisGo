@@ -127,7 +127,7 @@ default it is set to 10 but can be changed using the parameter *max_while_iterat
 Reinforce lines due to overloading issues
 """""""""""""""""""""""""""""""""""""""""""""
 
-  Line reinforcement due to overloading is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_branches_overloading`. 
+  Line reinforcement due to overloading is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_lines_overloading`.
   In a first step a parallel line of the same line type is installed. If this does not solve the overloading issue as many parallel standard lines as needed are installed.
 
 .. _grid-expansion-measure-station-load-label:

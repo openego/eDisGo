@@ -1139,12 +1139,12 @@ class Topology:
         """
         Changes number of parallel lines and updates line attributes.
 
-        When number of parallel lines changes attributes x, r, and s_nom have
+        When number of parallel lines changes, attributes x, r, and s_nom have
         to be adapted, which is done in this function.
 
         Parameters
         ------------
-        lines_num_parallel : series
+        lines_num_parallel : :pandas:`pandas.Series<series>`
             index contains names of lines to update and values of series
             contain corresponding new number of parallel lines.
 
