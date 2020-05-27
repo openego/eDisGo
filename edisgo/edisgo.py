@@ -248,6 +248,12 @@ class EDisGo:
                 timeseries_load_reactive_power=kwargs.get(
                     "timeseries_load_reactive_power", None
                 ),
+                timeseries_storage_units=kwargs.get(
+                    "timeseries_storage_units", None
+                ),
+                timeseries_storage_units_reactive_power=kwargs.get(
+                    "timeseries_storage_units_reactive_power", None
+                ),
                 timeindex=kwargs.get("timeindex", None),
             )
 

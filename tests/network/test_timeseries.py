@@ -395,6 +395,7 @@ class Testget_component_timeseries:
             active_power_new_load.loc[timeindex[1], load_name],
             peak_load)
         self.topology.remove_load(load_name)
+
         # test manual
         timeindex = pd.date_range('1/1/2018', periods=24, freq='H')
         generators_active_power, generators_reactive_power, \
@@ -435,10 +436,12 @@ class Testget_component_timeseries:
                 (24, num_loads + 1))
 
         self.topology.remove_load(load_name)
+
         # test import timeseries from dbs
         timeindex = pd.date_range('1/1/2011', periods=24, freq='H')
         ts_gen_dispatchable = pd.DataFrame({'other': [0.775] * 24},
                                            index=timeindex)
+        storage_units_active_power.index = timeindex
         timeseries.get_component_timeseries(timeindex=timeindex,
             edisgo_obj=self, timeseries_generation_fluctuating='oedb',
             timeseries_generation_dispatchable=ts_gen_dispatchable,
@@ -595,6 +598,7 @@ class Testget_component_timeseries:
         timeindex = pd.date_range('1/1/2011', periods=24, freq='H')
         ts_gen_dispatchable = pd.DataFrame({'other': [0.775] * 24},
                                            index=timeindex)
+        storage_units_active_power.index = timeindex
         timeseries.get_component_timeseries(timeindex=timeindex,
                                 edisgo_obj=self,
                                 timeseries_generation_fluctuating='oedb',

@@ -87,13 +87,14 @@ class TestEDisGo:
         if self.edisgo.results.grid_losses is None:
             self.edisgo.analyze()
         # check results
+        #ToDo negative grid losses?
         assert(np.isclose(
             self.edisgo.results.grid_losses.loc[self.timesteps].values,
-            np.array([[0.20814, 0.20948], [0.01854, 0.01985]]),
+            np.array([[-0.19186, 0.40321], [0.41854, -0.17388]]),
             atol=1e-5).all())
         assert(np.isclose(
             self.edisgo.results.hv_mv_exchanges.loc[self.timesteps].values,
-            np.array([[-21.29377, 10.68470], [0.96392, 0.37883]]),
+            np.array([[-21.69377, 10.87843], [1.36392, 0.18510]]),
             atol=1e-5).all())
         assert(np.isclose(
             self.edisgo.results.v_res.loc[
@@ -225,10 +226,13 @@ class TestEDisGo:
         timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
         ts_gen_dispatchable = pd.DataFrame({'other': [0.775] * 8760},
                                            index=timeindex)
+        ts_storage = pd.DataFrame({'Storage_1': [0.0] * 8760},
+                                           index=timeindex)
         edisgo = EDisGo(ding0_grid=test_network_directory,
                         timeseries_generation_fluctuating='oedb',
                         timeseries_generation_dispatchable=ts_gen_dispatchable,
-                        timeseries_load='demandlib')
+                        timeseries_load='demandlib',
+                        timeseries_storage_units=ts_storage)
         # check if export to pypsa is possible to make sure all values are set
         pypsa_network = edisgo.to_pypsa()
         assert len(pypsa_network.generators_t['p_set']) == 8760
@@ -389,7 +393,7 @@ class TestEDisGo:
         num_storages = len(self.edisgo.topology.storage_units_df)
         storage_name = self.edisgo.add_component('StorageUnit',
                                              bus="Testbus", p_nom=3.1)
-        assert storage_name == "StorageUnit_MVGrid_1_0"
+        assert storage_name == "StorageUnit_MVGrid_1_1"
         assert len(self.edisgo.topology.storage_units_df) == num_storages + 1
         assert self.edisgo.topology.storage_units_df.loc[storage_name, 'bus'] \
                == "Testbus"

@@ -1,0 +1,2 @@
+name,bus,control,p_nom,capacity,efficiency_store,efficiency_dispatch
+Storage_1,Bus_MVStation_1,PQ,0.4,0.4,0.9,0.9

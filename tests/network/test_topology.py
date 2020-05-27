@@ -29,7 +29,8 @@ class TestTopology:
         assert_frame_equal(self.topology.lines_df, edisgo.topology.lines_df)
         assert_frame_equal(self.topology.loads_df, edisgo.topology.loads_df)
         assert_frame_equal(self.topology.slack_df, edisgo.topology.slack_df)
-        assert edisgo.topology.storage_units_df.empty
+        assert_frame_equal(self.topology.storage_units_df,
+                           edisgo.topology.storage_units_df)
         assert_frame_equal(
             self.topology.switches_df, edisgo.topology.switches_df
         )
