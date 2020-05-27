@@ -531,3 +531,36 @@ def get_mv_feeder_from_line(line):
     except Exception as e:
         logging.warning("Failed to get MV feeder: {}.".format(e))
         return None
+
+
+def assign_voltage_level_to_component(edisgo_obj, df):
+    """
+    Adds column with specification of voltage level component is in.
+
+    The voltage level ('mv' or 'lv') is determined based on the nominal
+    voltage of the bus the component is connected to. If the nominal voltage
+    is smaller than 1 kV, voltage level 'lv' is assigned, otherwise 'mv' is
+    assigned.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    df : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with component names in the index. Only required column is
+        column 'bus', giving the name of the bus the component is connected to.
+
+    Returns
+    --------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Same dataframe as given in parameter `df` with new column
+        'voltage_level' specifying the voltage level the component is in
+        (either 'mv' or 'lv').
+
+    """
+    df["voltage_level"] = df.apply(
+        lambda _: "lv"
+        if edisgo_obj.topology.buses_df.at[_.bus, "v_nom"] < 1
+        else "mv",
+        axis=1,
+    )
+    return df
