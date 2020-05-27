@@ -503,8 +503,10 @@ def get_component_timeseries(edisgo_obj, **kwargs):
     """
 
     mode = kwargs.get("mode", None)
+    # reset TimeSeries
+    edisgo_obj.timeseries = TimeSeries(
+        timeindex=edisgo_obj.timeseries.timeindex)
     edisgo_obj.timeseries.mode = mode
-    _reset_timeseries(edisgo_obj.timeseries)
     if mode:
         if "worst-case" in mode:
             modes = _get_worst_case_modes(mode)
@@ -1765,26 +1767,3 @@ def _get_worst_case_modes(mode):
     return modes
 
 
-def _reset_timeseries(timeseries):
-    """
-    Resets all relevant timeseries to empty DataFrames with index timeindex
-    of inserted TimeSeries object.
-
-    Parameters
-    ----------
-    timeseries: :class:'~.edisgo.network.timeseries.TimeSeries'
-    """
-    timeseries.generators_active_power = pd.DataFrame(
-        index=timeseries.timeindex
-    )
-    timeseries.generators_reactive_power = pd.DataFrame(
-        index=timeseries.timeindex
-    )
-    timeseries.loads_active_power = pd.DataFrame(index=timeseries.timeindex)
-    timeseries.loads_reactive_power = pd.DataFrame(index=timeseries.timeindex)
-    timeseries.storage_units_active_power = pd.DataFrame(
-        index=timeseries.timeindex
-    )
-    timeseries.storage_units_reactive_power = pd.DataFrame(
-        index=timeseries.timeindex
-    )
