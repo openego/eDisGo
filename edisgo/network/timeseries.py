@@ -8,7 +8,8 @@ from workalendar.europe import Germany
 from demandlib import bdew as bdew, particular_profiles as profiles
 
 from edisgo.io.timeseries_import import import_feedin_timeseries
-from edisgo.tools.tools import drop_duplicated_indices
+from edisgo.tools.tools import drop_duplicated_indices, \
+    assign_voltage_level_to_component
 
 logger = logging.getLogger("edisgo")
 
@@ -648,14 +649,11 @@ def _load_from_timeseries(edisgo_obj, load_names=None):
         ).T
     # set default reactive load
     else:
-        # assign voltage level to loads
-        loads["voltage_level"] = loads.apply(
-            lambda _: "lv"
-            if edisgo_obj.topology.buses_df.at[_.bus, "v_nom"] < 1
-            else "mv",
-            axis=1,
+        _set_reactive_power_time_series_for_fixed_cosphi_using_config(
+            edisgo_obj=edisgo_obj,
+            df=loads,
+            component_type="loads"
         )
-        _reactive_power_load_by_cos_phi(edisgo_obj=edisgo_obj, loads_df=loads)
 
 
 def _generation_from_timeseries(edisgo_obj, generator_names=None):
@@ -736,7 +734,11 @@ def _generation_from_timeseries(edisgo_obj, generator_names=None):
     # set default reactive power by cos_phi
     else:
         logger.debug("Reactive power calculated by cos(phi).")
-        _reactive_power_gen_by_cos_phi(edisgo_obj=edisgo_obj, gens_df=gens)
+        _set_reactive_power_time_series_for_fixed_cosphi_using_config(
+            edisgo_obj=edisgo_obj,
+            df=gens,
+            component_type="generators"
+        )
 
 
 def _storage_from_timeseries(
@@ -807,9 +809,10 @@ def _storage_from_timeseries(
                         )
                     ).T
                 else:
-                    _reactive_power_storage_by_cos_phi(
+                    _set_reactive_power_time_series_for_fixed_cosphi_using_config(
                         edisgo_obj=edisgo_obj,
-                        storage_units_df=storage_units_df,
+                        df=storage_units_df,
+                        component_type="storage_units"
                     )
             else:
                 raise ValueError(
@@ -907,46 +910,11 @@ def _worst_case_generation(edisgo_obj, modes, generator_names=None):
     ).T
 
     # calculate reactive power
-    _reactive_power_gen_by_cos_phi(edisgo_obj=edisgo_obj, gens_df=gens_df)
-
-
-def _reactive_power_gen_by_cos_phi(edisgo_obj, gens_df):
-    if gens_df.empty:
-        return
-    # reactive power
-    # assign voltage level to generators
-    gens_df["voltage_level"] = gens_df.apply(
-        lambda _: "lv"
-        if edisgo_obj.topology.buses_df.at[_.bus, "v_nom"] < 1
-        else "mv",
-        axis=1,
+    _set_reactive_power_time_series_for_fixed_cosphi_using_config(
+        edisgo_obj=edisgo_obj,
+        df=gens_df,
+        component_type="generators"
     )
-    # write dataframes with sign of reactive power and power factor
-    # for each generator
-    q_sign = pd.Series(index=gens_df.index)
-    power_factor = pd.Series(index=gens_df.index)
-    for voltage_level in ["mv", "lv"]:
-        cols = gens_df.index[gens_df.voltage_level == voltage_level]
-        if len(cols) > 0:
-            q_sign[cols] = _get_q_sign_generator(
-                edisgo_obj.config["reactive_power_mode"][
-                    "{}_gen".format(voltage_level)
-                ]
-            )
-            power_factor[cols] = edisgo_obj.config["reactive_power_factor"][
-                "{}_gen".format(voltage_level)
-            ]
-
-    # calculate reactive power time series for each generator
-    edisgo_obj.timeseries.generators_reactive_power = edisgo_obj.timeseries.generators_reactive_power.T.append(
-        _fixed_cosphi(
-            edisgo_obj.timeseries.generators_active_power.loc[
-                :, gens_df.index
-            ],
-            q_sign,
-            power_factor,
-        ).T
-    ).T
 
 
 def _worst_case_load(edisgo_obj, modes, load_names=None):
@@ -1029,122 +997,11 @@ def _worst_case_load(edisgo_obj, modes, load_names=None):
         (power_scaling_df * loads_df.loc[:, "peak_load"]).T, sort=False
     ).T
 
-    _reactive_power_load_by_cos_phi(edisgo_obj=edisgo_obj, loads_df=loads_df)
-
-
-def _reactive_power_load_by_cos_phi(edisgo_obj, loads_df):
-    # reactive power
-    # get default configurations
-    reactive_power_mode = edisgo_obj.config["reactive_power_mode"]
-    reactive_power_factor = edisgo_obj.config["reactive_power_factor"]
-    voltage_levels = loads_df.voltage_level.unique()
-    # write dataframes with sign of reactive power and power factor
-    # for each load
-    q_sign = pd.Series(index=loads_df.index)
-    power_factor = pd.Series(index=loads_df.index)
-    for voltage_level in voltage_levels:
-        cols = loads_df.index[loads_df.voltage_level == voltage_level]
-        if len(cols) > 0:
-            q_sign[cols] = _get_q_sign_load(
-                reactive_power_mode["{}_load".format(voltage_level)]
-            )
-            power_factor[cols] = reactive_power_factor[
-                "{}_load".format(voltage_level)
-            ]
-
-    # calculate reactive power time series for each load
-    edisgo_obj.timeseries.loads_reactive_power = edisgo_obj.timeseries.loads_reactive_power.T.append(
-        _fixed_cosphi(
-            edisgo_obj.timeseries.loads_active_power.loc[:, loads_df.index],
-            q_sign,
-            power_factor,
-        ).T,
-        sort=False,
-    ).T
-
-
-def _get_q_sign_generator(reactive_power_mode):
-    """
-    Get the sign of reactive power in generator sign convention.
-
-    In the generator sign convention the reactive power is negative in
-    inductive operation (`reactive_power_mode` is 'inductive') and positive
-    in capacitive operation (`reactive_power_mode` is 'capacitive').
-
-    Parameters
-    ----------
-    reactive_power_mode : str
-        Possible options are 'inductive' and 'capacitive'.
-
-    Returns
-    --------
-    int
-        Sign of reactive power in generator sign convention.
-
-    """
-    if reactive_power_mode.lower() == "inductive":
-        return -1
-    elif reactive_power_mode.lower() == "capacitive":
-        return 1
-    else:
-        raise ValueError(
-            "reactive_power_mode must either be 'capacitive' "
-            "or 'inductive' but is {}.".format(reactive_power_mode)
-        )
-
-
-def _get_q_sign_load(reactive_power_mode):
-    """
-    Get the sign of reactive power in load sign convention.
-
-    In the load sign convention the reactive power is positive in
-    inductive operation (`reactive_power_mode` is 'inductive') and negative
-    in capacitive operation (`reactive_power_mode` is 'capacitive').
-
-    Parameters
-    ----------
-    reactive_power_mode : str
-        Possible options are 'inductive' and 'capacitive'.
-
-    Returns
-    --------
-    int
-        Sign of reactive power in load sign convention.
-
-    """
-    if reactive_power_mode.lower() == "inductive":
-        return 1
-    elif reactive_power_mode.lower() == "capacitive":
-        return -1
-    else:
-        raise ValueError(
-            "reactive_power_mode must either be 'capacitive' "
-            "or 'inductive' but is {}.".format(reactive_power_mode)
-        )
-
-
-def _fixed_cosphi(active_power, q_sign, power_factor):
-    """
-    Calculates reactive power for a fixed cosphi operation.
-
-    Parameters
-    ----------
-    active_power : :pandas:`pandas.DataFrame<dataframe>`
-        Dataframe with active power time series.
-    q_sign : int
-        `q_sign` defines whether the reactive power is positive or
-        negative and must either be -1 or +1.
-    power_factor :
-        Ratio of real to apparent power.
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Dataframe with the same format as the `active_power` dataframe,
-        containing the reactive power.
-
-    """
-    return active_power * q_sign * np.tan(np.arccos(power_factor))
+    _set_reactive_power_time_series_for_fixed_cosphi_using_config(
+        edisgo_obj=edisgo_obj,
+        df=loads_df,
+        component_type="loads"
+    )
 
 
 def _worst_case_storage(edisgo_obj, modes, storage_names=None):
@@ -1213,54 +1070,11 @@ def _worst_case_storage(edisgo_obj, modes, storage_names=None):
             keep="last",
         ).T
 
-        _reactive_power_storage_by_cos_phi(
-            edisgo_obj=edisgo_obj, storage_units_df=storage_df
+        _set_reactive_power_time_series_for_fixed_cosphi_using_config(
+            edisgo_obj=edisgo_obj,
+            df=storage_df,
+            component_type="storage_units"
         )
-
-
-def _reactive_power_storage_by_cos_phi(edisgo_obj, storage_units_df):
-    # reactive power
-    # assign voltage level to storage units
-    if storage_units_df.empty:
-        return
-    storage_units_df["voltage_level"] = storage_units_df.apply(
-        lambda _: "lv"
-        if edisgo_obj.topology.buses_df.at[_.bus, "v_nom"] < 1
-        else "mv",
-        axis=1,
-    )
-    # write dataframes with sign of reactive power and power factor
-    # for each storage unit
-    q_sign = pd.Series(index=storage_units_df.index)
-    power_factor = pd.Series(index=storage_units_df.index)
-    for voltage_level in ["mv", "lv"]:
-        cols = storage_units_df.index[
-            storage_units_df.voltage_level == voltage_level
-        ]
-        if len(cols) > 0:
-            # storage units are handled like generators in pypsa, therefore
-            # use same sign convention as for generators
-            q_sign[cols] = _get_q_sign_generator(
-                edisgo_obj.config["reactive_power_mode"][
-                    "{}_storage".format(voltage_level)
-                ]
-            )
-            power_factor[cols] = edisgo_obj.config["reactive_power_factor"][
-                "{}_storage".format(voltage_level)
-            ]
-
-    # calculate reactive power time series for each storage unit
-    edisgo_obj.timeseries.storage_units_reactive_power = drop_duplicated_indices(
-        edisgo_obj.timeseries.storage_units_reactive_power.T.append(
-            _fixed_cosphi(
-                edisgo_obj.timeseries.storage_units_active_power.loc[
-                    :, storage_units_df.index
-                ],
-                q_sign,
-                power_factor,
-            ).T
-        )
-    ).T
 
 
 def _check_timeindex(edisgo_obj):
@@ -1361,7 +1175,8 @@ def add_loads_timeseries(edisgo_obj, load_names, **kwargs):
             )
     else:
         # create load active and reactive power timeseries
-        _load_from_timeseries(edisgo_obj=edisgo_obj, load_names=load_names)
+        _set_timeseries_of_loads_by_sector(
+            edisgo_obj=edisgo_obj, load_names=load_names)
 
 
 def add_generators_timeseries(edisgo_obj, generator_names, **kwargs):
@@ -1766,4 +1581,182 @@ def _get_worst_case_modes(mode):
         raise ValueError("{} is not a valid mode.".format(mode))
     return modes
 
+def _get_q_sign_generator(reactive_power_mode):
+    """
+    Get the sign of reactive power in generator sign convention.
 
+    In the generator sign convention the reactive power is negative in
+    inductive operation (`reactive_power_mode` is 'inductive') and positive
+    in capacitive operation (`reactive_power_mode` is 'capacitive').
+
+    Parameters
+    ----------
+    reactive_power_mode : str
+        Possible options are 'inductive' and 'capacitive'.
+
+    Returns
+    --------
+    int
+        Sign of reactive power in generator sign convention.
+
+    """
+    if reactive_power_mode.lower() == "inductive":
+        return -1
+    elif reactive_power_mode.lower() == "capacitive":
+        return 1
+    else:
+        raise ValueError(
+            "reactive_power_mode must either be 'capacitive' "
+            "or 'inductive' but is {}.".format(reactive_power_mode)
+        )
+
+
+def _get_q_sign_load(reactive_power_mode):
+    """
+    Get the sign of reactive power in load sign convention.
+
+    In the load sign convention the reactive power is positive in
+    inductive operation (`reactive_power_mode` is 'inductive') and negative
+    in capacitive operation (`reactive_power_mode` is 'capacitive').
+
+    Parameters
+    ----------
+    reactive_power_mode : str
+        Possible options are 'inductive' and 'capacitive'.
+
+    Returns
+    --------
+    int
+        Sign of reactive power in load sign convention.
+
+    """
+    if reactive_power_mode.lower() == "inductive":
+        return 1
+    elif reactive_power_mode.lower() == "capacitive":
+        return -1
+    else:
+        raise ValueError(
+            "reactive_power_mode must either be 'capacitive' "
+            "or 'inductive' but is {}.".format(reactive_power_mode)
+        )
+
+
+def _fixed_cosphi(active_power, q_sign, power_factor):
+    """
+    Calculates reactive power for a fixed cosphi operation.
+
+    Parameters
+    ----------
+    active_power : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with active power time series. Columns of the dataframe are
+        names of the components and index of the dataframe are the time steps
+        reactive power is calculated for.
+    q_sign : :pandas:`pandas.Series<Series>` or int
+        `q_sign` defines whether the reactive power is positive or
+        negative and must either be -1 or +1. In case `q_sign` is given as a
+        series, the index must contain the same component names as given in
+        columns of parameter `active_power`.
+    power_factor : :pandas:`pandas.Series<Series>` or float
+        Ratio of real to apparent power.
+        In case `power_factor` is given as a series, the index must contain the
+        same component names as given in columns of parameter `active_power`.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with the same format as the `active_power` dataframe,
+        containing the reactive power.
+
+    """
+    return active_power * q_sign * np.tan(np.arccos(power_factor))
+
+
+def _set_reactive_power_time_series_for_fixed_cosphi_using_config(
+        edisgo_obj, df, component_type):
+    """
+    Calculates reactive power in Mvar for a fixed cosphi operation.
+
+    This function adds the calculated reactive power time series to the
+    :class:`~.network.timeseries.TimeSeries` object. For
+    `component_type`='generators' time series is added to
+    :attr:`~.network.timeseries.TimeSeries.generators_reactive_power`, for
+    `component_type`='storage_units' time series is added to
+    :attr:`~.network.timeseries.TimeSeries.storage_units_reactive_power` and
+    for `component_type`='loads' time series is added to
+    :attr:`~.network.timeseries.TimeSeries.loads_reactive_power`.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    df : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with component names (in the index) of all components
+        reactive power needs to be calculated for. Only required column is
+        column 'bus', giving the name of the bus the component is connected to.
+        All components must have the same `component_type`.
+    component_type : str
+        Specifies whether to calculate reactive power for generators, storage
+        units or loads. The component type determines the power factor and
+        power mode used. Possible options are 'generators', 'storage_units' and
+        'loads'.
+
+    Notes
+    -----
+    Reactive power is determined based on reactive power factors and reactive
+    power modes defined in the config file 'config_timeseries' in sections
+    'reactive_power_factor' and 'reactive_power_mode'. Both are distinguished
+    between the voltage level the components are in (medium or low voltage).
+
+    """
+    if df.empty:
+        return
+
+    # assign voltage level to generators
+    df = assign_voltage_level_to_component(edisgo_obj, df)
+
+    # get default configurations
+    reactive_power_mode = edisgo_obj.config["reactive_power_mode"]
+    reactive_power_factor = edisgo_obj.config["reactive_power_factor"]
+    voltage_levels = df.voltage_level.unique()
+
+    # write series with sign of reactive power and power factor
+    # for each component
+    q_sign = pd.Series(index=df.index)
+    power_factor = pd.Series(index=df.index)
+    if component_type in ["generators", "storage_units"]:
+        get_q_sign = _get_q_sign_generator
+    elif component_type == "loads":
+        get_q_sign = _get_q_sign_load
+    else:
+        raise ValueError(
+            "Given 'component_type' is not valid. Valid options are "
+            "'generators','storage_units' and 'loads'.")
+    for voltage_level in voltage_levels:
+        cols = df.index[df.voltage_level == voltage_level]
+        if len(cols) > 0:
+            q_sign[cols] = get_q_sign(
+                reactive_power_mode[
+                    "{}_gen".format(voltage_level)
+                ]
+            )
+            power_factor[cols] = reactive_power_factor[
+                "{}_gen".format(voltage_level)
+            ]
+
+    # calculate reactive power time series and append to TimeSeries object
+    reactive_power_df = pd.concat(
+        [getattr(edisgo_obj.timeseries,
+                 component_type + "_reactive_power"),
+         _fixed_cosphi(
+             getattr(edisgo_obj.timeseries,
+                     component_type + "_active_power").loc[:, df.index],
+             q_sign,
+             power_factor
+         )],
+        axis=1
+      )
+
+    setattr(
+        edisgo_obj.timeseries,
+        component_type + "_reactive_power",
+        reactive_power_df
+    )
