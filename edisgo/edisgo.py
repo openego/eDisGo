@@ -217,7 +217,7 @@ class EDisGo:
 
         # set up results and time series container
         self.results = Results(self)
-        self._timeseries = timeseries.TimeSeries()
+        self.timeseries = timeseries.TimeSeries()
 
         # set up opf results container
         self.opf_results = OPFResults()
@@ -273,24 +273,6 @@ class EDisGo:
     @config.setter
     def config(self, config_path):
         self._config = Config(config_path=config_path)
-
-    @property
-    def timeseries(self):
-        """
-        Object containing load and feed-in time series.
-
-        Parameters
-        ----------
-        timeseries : :class:`~.network.network.TimeSeries`
-            Object containing load and feed-in time series.
-
-        Returns
-        --------
-        :class:`~.network.network.TimeSeries`
-            Object containing load and feed-in time series.
-
-        """
-        return self._timeseries
 
     def import_ding0_grid(self, path):
         """
