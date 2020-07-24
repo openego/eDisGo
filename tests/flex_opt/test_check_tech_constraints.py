@@ -214,11 +214,10 @@ class TestCheckTechConstraints:
         voltage_issues = check_tech_constraints.lv_voltage_deviation(
             self.edisgo, voltage_levels="lv", mode="stations"
         )
-        lvgrid_6 = self.edisgo.topology._grids["LVGrid_6"]
         assert len(voltage_issues) == 1
-        assert len(voltage_issues[lvgrid_6]) == 1
+        assert len(voltage_issues["LVGrid_6"]) == 1
         assert np.isclose(
-            voltage_issues[lvgrid_6].loc[
+            voltage_issues["LVGrid_6"].loc[
                 "Bus_secondary_LVStation_6", "v_diff_max"
             ],
             0.010635,
@@ -236,9 +235,9 @@ class TestCheckTechConstraints:
             self.edisgo, voltage_levels="lv"
         )
         assert len(voltage_issues) == 1
-        assert len(voltage_issues[lvgrid_6]) == 1
+        assert len(voltage_issues["LVGrid_6"]) == 1
         assert np.isclose(
-            voltage_issues[lvgrid_6].loc[
+            voltage_issues["LVGrid_6"].loc[
                 "Bus_BranchTee_LVGrid_6_1", "v_diff_max"
             ],
             0.005,
@@ -251,10 +250,10 @@ class TestCheckTechConstraints:
             self.edisgo, voltage_levels="lv"
         )
         assert len(voltage_issues) == 1
-        assert len(voltage_issues[lvgrid_6]) == 2
-        assert voltage_issues[lvgrid_6].index[0] == "Bus_BranchTee_LVGrid_6_2"
+        assert len(voltage_issues["LVGrid_6"]) == 2
+        assert voltage_issues["LVGrid_6"].index[0] == "Bus_BranchTee_LVGrid_6_2"
         assert np.isclose(
-            voltage_issues[lvgrid_6].loc[
+            voltage_issues["LVGrid_6"].loc[
                 "Bus_BranchTee_LVGrid_6_2", "v_diff_max"
             ],
             0.015,
@@ -266,10 +265,10 @@ class TestCheckTechConstraints:
             self.edisgo
         )
         assert len(voltage_issues) == 1
-        assert len(voltage_issues[lvgrid_6]) == 3
-        assert voltage_issues[lvgrid_6].index[0] == "Bus_BranchTee_LVGrid_6_2"
+        assert len(voltage_issues["LVGrid_6"]) == 3
+        assert voltage_issues["LVGrid_6"].index[0] == "Bus_BranchTee_LVGrid_6_2"
         assert np.isclose(
-            voltage_issues[lvgrid_6].loc[
+            voltage_issues["LVGrid_6"].loc[
                 "Bus_BranchTee_LVGrid_6_2", "v_diff_max"
             ],
             0.09,
@@ -281,9 +280,9 @@ class TestCheckTechConstraints:
             self.edisgo, mode="stations"
         )
         assert len(voltage_issues) == 1
-        assert len(voltage_issues[lvgrid_6]) == 1
+        assert len(voltage_issues["LVGrid_6"]) == 1
         assert np.isclose(
-            voltage_issues[lvgrid_6].loc[
+            voltage_issues["LVGrid_6"].loc[
                 "Bus_secondary_LVStation_6", "v_diff_max"
             ],
             0.04,

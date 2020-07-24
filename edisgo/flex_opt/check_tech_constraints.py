@@ -512,7 +512,7 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
         )
 
         if not crit_buses_grid.empty:
-            crit_buses[lv_grid] = crit_buses_grid
+            crit_buses[repr(lv_grid)] = crit_buses_grid
 
     if crit_buses:
         if mode == "stations":

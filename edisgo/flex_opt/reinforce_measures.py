@@ -303,8 +303,8 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         raise KeyError("Standard MV/LV transformer is not in equipment list.")
 
     transformers_changes = {"added": {}}
-    for grid in critical_stations.keys():
-
+    for grid_repr in critical_stations.keys():
+        grid = edisgo_obj.topology._grids[grid_repr]
         # get any transformer to get attributes for new transformer from
         duplicated_transformer = grid.transformers_df.iloc[0]
         # change transformer parameters
@@ -320,7 +320,7 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         edisgo_obj.topology.transformers_df = edisgo_obj.topology.transformers_df.append(
             duplicated_transformer
         )
-        transformers_changes["added"][repr(grid)] = [
+        transformers_changes["added"][grid_repr] = [
             duplicated_transformer.name
         ]
 
