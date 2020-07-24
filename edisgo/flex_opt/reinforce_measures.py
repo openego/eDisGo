@@ -303,8 +303,8 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         raise KeyError("Standard MV/LV transformer is not in equipment list.")
 
     transformers_changes = {"added": {}}
-    for grid_name in critical_stations.keys():
-        grid = edisgo_obj.topology._grids[grid_name]
+    for grid in critical_stations.keys():
+
         # get any transformer to get attributes for new transformer from
         duplicated_transformer = grid.transformers_df.iloc[0]
         # change transformer parameters
@@ -320,7 +320,7 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         edisgo_obj.topology.transformers_df = edisgo_obj.topology.transformers_df.append(
             duplicated_transformer
         )
-        transformers_changes["added"][grid_name] = [
+        transformers_changes["added"][repr(grid)] = [
             duplicated_transformer.name
         ]
 
@@ -720,7 +720,8 @@ def _reinforce_lines_overloading_per_grid_level(
     lines_standard = relevant_lines.loc[
         relevant_lines.type_info == standard_line_type
         ]
-    _add_parallel_standard_lines(lines_standard.index)
+    if not lines_standard.empty:
+        _add_parallel_standard_lines(lines_standard.index)
 
     # get lines that have not been updated yet (i.e. that are not standard
     # lines)
@@ -733,13 +734,15 @@ def _reinforce_lines_overloading_per_grid_level(
             .loc[relevant_lines.kind == "cable"]
             .loc[crit_lines.max_rel_overload < 2]
     )
-    _add_one_parallel_line_of_same_type(lines_single.index)
+    if not lines_single.empty:
+        _add_one_parallel_line_of_same_type(lines_single.index)
 
     # handle rest of lines (replace by as many parallel standard lines as
     # needed)
     relevant_lines = relevant_lines.loc[
         ~relevant_lines.index.isin(lines_single.index)
     ]
-    _replace_by_parallel_standard_lines(relevant_lines.index)
+    if not relevant_lines.empty:
+        _replace_by_parallel_standard_lines(relevant_lines.index)
 
     return lines_changes
