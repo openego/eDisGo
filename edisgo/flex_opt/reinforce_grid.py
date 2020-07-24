@@ -378,7 +378,9 @@ def reinforce_grid(
             for grid in crit_nodes:
                 # reinforce lines
                 lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
-                    edisgo_reinforce, grid, crit_nodes[grid]
+                    edisgo_reinforce,
+                    edisgo_reinforce.topology._grids[grid],
+                    crit_nodes[grid]
                 )
                 # write changed lines to results.equipment_changes
                 _add_lines_changes_to_equipment_changes()
