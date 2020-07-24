@@ -2,6 +2,7 @@ import os
 import logging
 import csv
 import pandas as pd
+import numpy as np
 from math import sqrt
 
 from edisgo.network.grids import MVGrid
@@ -223,14 +224,7 @@ class Results:
         if self.pfa_p is None:
             return None
 
-        s_res = (
-            (
-                self.pfa_p ** 2
-                + self.pfa_q ** 2
-            )
-        ).applymap(sqrt)
-
-        return s_res
+        return np.hypot(self.pfa_p, self.pfa_q)
 
     @property
     def equipment_changes(self):
