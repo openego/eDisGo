@@ -135,7 +135,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             ].rename(columns={"peak_load": "p_set"}),
             "Generator": grid_object.topology.generators_df.loc[
                 :, ["bus", "control", "p_nom"]
-            ].append(slack_df),
+            ],
             "StorageUnit": grid_object.topology.storage_units_df.loc[
                 :, ["bus", "control"]
             ],
@@ -161,7 +161,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             ),
             "Generator": grid_object.generators_df.loc[
                 :, ["bus", "control", "p_nom"]
-            ].append(slack_df),
+            ],
             "StorageUnit": grid_object.storage_units_df.loc[
                 :, ["bus", "control"]
             ],
@@ -245,7 +245,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             ),
             "Generator": grid_object.generators_df.loc[
                 :, ["bus", "control", "p_nom"]
-            ].append(slack_df),
+            ],
             "StorageUnit": grid_object.storage_units_df.loc[
                 :, ["bus", "control"]
             ],
@@ -263,11 +263,13 @@ def to_pypsa(grid_object, timesteps, **kwargs):
     # import network topology to PyPSA network
     # buses are created first to avoid warnings
     pypsa_network.import_components_from_dataframe(buses_df, "Bus")
+    pypsa_network.import_components_from_dataframe(slack_df, "Generator")
     for k, comps in components.items():
         pypsa_network.import_components_from_dataframe(comps, k)
 
     # import time series to PyPSA network
 
+    # set all voltages except for slack
     import_series_from_dataframe(
         pypsa_network,
         _buses_voltage_set_point(
@@ -280,6 +282,20 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         "v_mag_pu_set",
     )
 
+    # set slack time series
+    slack_ts = pd.DataFrame(
+        data=[0] * len(timesteps),
+        columns=[slack_df.index[0]],
+        index=timesteps,
+    )
+    import_series_from_dataframe(
+        pypsa_network, slack_ts, "Generator", "p_set"
+    )
+    import_series_from_dataframe(
+        pypsa_network, slack_ts, "Generator", "q_set"
+    )
+
+    # set generator time series in pypsa
     if len(components["Generator"].index) > 0:
         if len(aggregated_lv_components["Generator"]) > 0:
             (
@@ -305,18 +321,6 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         )
         import_series_from_dataframe(
             pypsa_network, generators_timeseries_reactive, "Generator", "q_set"
-        )
-        # set slack time series
-        slack_ts = pd.DataFrame(
-            data=[0] * len(timesteps),
-            columns=[slack_df.index[0]],
-            index=timesteps,
-        )
-        import_series_from_dataframe(
-            pypsa_network, slack_ts, "Generator", "p_set"
-        )
-        import_series_from_dataframe(
-            pypsa_network, slack_ts, "Generator", "q_set"
         )
 
     if len(components["Load"].index) > 0:
