@@ -738,7 +738,7 @@ def oedb(edisgo_object):
         # retail, industrial, or agricultural load, if available
         # in case no load is available the generator is connected to random
         # bus in LV grid
-        # if load to connect to is available the generator is connected to
+        # if load to connect to is available, the generator is connected to
         # load with less than two generators
         # if every load has two or more generators choose the first load
         # from random sample
@@ -767,7 +767,7 @@ def oedb(edisgo_object):
                     "generator is therefore connected to random LV bus."
                 )
                 gen_bus = random.choice(
-                    lv_grid.buses_df[lv_grid.buses_df.in_building].index
+                    lv_grid.buses_df[~lv_grid.buses_df.in_building].index
                 )
                 # add generator
                 edisgo_object.topology.add_generator(
