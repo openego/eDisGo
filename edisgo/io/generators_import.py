@@ -655,7 +655,7 @@ def oedb(edisgo_object):
 
             # get LV grid
             lv_grid = edisgo_object.topology._grids[
-                "LVGrid_{}".format(generator.mvlv_subst_id)
+                "LVGrid_{}".format(int(generator.mvlv_subst_id))
             ]
 
             # if no geom is given, connect to LV grid's station
