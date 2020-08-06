@@ -1221,7 +1221,8 @@ class Topology:
                         "line type is {} kV while nominal voltage of the "
                         "medium voltage grid is {} kV). The nominal voltage "
                         "of the new line type is therefore set to the grids "
-                        "nominal voltage.")
+                        "nominal voltage.".format(
+                            lines, data_new_line.U_n, grid_voltage))
                     data_new_line.U_n = grid_voltage
             except KeyError:
                 raise KeyError(
