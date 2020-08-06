@@ -6,11 +6,16 @@ Features in detail
 Power flow analysis
 -------------------
 
-In order to analyse voltages and line loadings a non-linear power flow analysis (PF) is conducted. 
+In order to analyse voltages and line loadings a non-linear power flow analysis (PF) using pypsa is conducted.
 All loads and generators are modelled as PQ nodes; the slack is modelled as a PV node with a set voltage of 1\,p.u.
 and positioned at the substation's secondary side.
 
 .. _grid_expansion_methodology:
+
+Multi period optimal power flow
+---------------------------------
+
+.. todo:: Add
 
 Grid expansion
 -------------------------
@@ -80,29 +85,29 @@ in the grid and defined as follows:
 * Load case: positive ( :math:`\sum load` - :math:`\sum generation` ) 
 * Feed-in case: negative ( :math:`\sum load` - :math:`\sum generation` ) -> reverse power flow at HV/MV substation 
 
-Grid losses are not taken into account. See :func:`~edisgo.tools.tools.assign_load_feedin_case` for more
+Grid losses are not taken into account. See :meth:`~edisgo.network.timeseries.TimeSeries.timesteps_load_feedin_case` for more
 details and implementation.
 
 Check line load
 """"""""""""""""""
 
-  Exceedance of allowed line load of MV and LV lines is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_line_load` and
-  :py:func:`~edisgo.flex_opt.check_tech_constraints.lv_line_load`, respectively.
-  The functions use the given load factor and the maximum allowed current given by the manufacturer (see *I_max_th* in tables :ref:`lv_cables_table`, 
-  :ref:`mv_cables_table` and :ref:`mv_lines_table`) to calculate the allowed
-  line load of each LV and MV line. If the line load calculated in the power flow analysis exceeds the allowed line 
-  load, the line is reinforced (see :ref:`grid-expansion-measure-line-load-label`).
+    Exceedance of allowed line load of MV and LV lines is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_line_load` and
+    :py:func:`~edisgo.flex_opt.check_tech_constraints.lv_line_load`, respectively.
+    The functions use the given load factor and the maximum allowed current given by the manufacturer (see *I_max_th* in tables :ref:`lv_cables_table`,
+    :ref:`mv_cables_table` and :ref:`mv_lines_table`) to calculate the allowed
+    line load of each LV and MV line. If the line load calculated in the power flow analysis exceeds the allowed line
+    load, the line is reinforced (see :ref:`grid-expansion-measure-line-load-label`).
   
 
 Check station load
 """"""""""""""""""""
 
-  Exceedance of allowed station load of HV/MV and MV/LV stations is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.hv_mv_station_load` and
-  :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_lv_station_load`, respectively.
-  The functions use the given load factor and the maximum allowed apparent power given by the manufacturer (see *S_nom* in tables :ref:`lv_transformers_table`, 
-  and :ref:`mv_transformers_table`) to calculate the allowed
-  apparent power of the stations. If the apparent power calculated in the power flow analysis exceeds the allowed apparent power the station is reinforced 
-  (see :ref:`grid-expansion-measure-station-load-label`).
+    Exceedance of allowed station load of HV/MV and MV/LV stations is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.hv_mv_station_load` and
+    :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_lv_station_load`, respectively.
+    The functions use the given load factor and the maximum allowed apparent power given by the manufacturer (see *S_nom* in tables :ref:`lv_transformers_table`,
+    and :ref:`mv_transformers_table`) to calculate the allowed
+    apparent power of the stations. If the apparent power calculated in the power flow analysis exceeds the allowed apparent power the station is reinforced
+    (see :ref:`grid-expansion-measure-station-load-label`).
 
 Check line and station voltage deviation
 """"""""""""""""""""""""""""""""""""""""""
@@ -135,8 +140,8 @@ Reinforce lines due to overloading issues
 Reinforce stations due to overloading issues
 """""""""""""""""""""""""""""""""""""""""""""""""""""
  
-  Reinforcement of HV/MV and MV/LV stations due to overloading is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.extend_substation_overloading` and
-  :py:func:`~edisgo.flex_opt.reinforce_measures.extend_distribution_substation_overloading`, respectively. 
+  Reinforcement of HV/MV and MV/LV stations due to overloading is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_hv_mv_station_overloading` and
+  :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_mv_lv_station_overloading`, respectively.
   In a first step a parallel transformer of the same type as the existing transformer is installed. If there is more than one transformer in the station the smallest transformer
   that will solve the overloading issue is used. If this does not solve the overloading issue as many parallel standard transformers as needed are installed.
 
@@ -145,7 +150,7 @@ Reinforce stations due to overloading issues
 Reinforce MV/LV stations due to voltage issues
 """""""""""""""""""""""""""""""""""""""""""""""""""""
 
-  Reinforcement of MV/LV stations due to voltage issues is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.extend_distribution_substation_overvoltage`. 
+  Reinforcement of MV/LV stations due to voltage issues is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_mv_lv_station_voltage_issues`.
   To solve voltage issues, a parallel standard transformer is installed. 
 
   After each station with voltage issues is reinforced, a power flow analysis is conducted and the voltage rechecked. If there are still voltage issues 
@@ -157,7 +162,7 @@ Reinforce MV/LV stations due to voltage issues
 Reinforce lines due to voltage
 """""""""""""""""""""""""""""""""""""""""""""""""""""
 
-  Reinforcement of lines due to voltage issues is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_branches_overvoltage`. 
+  Reinforcement of lines due to voltage issues is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_lines_voltage_issues`.
   In the case of several voltage issues the path to the node with the highest voltage deviation is reinforced first. Therefore, the line between the secondary side of the station and the 
   node with the highest voltage deviation is disconnected at a distribution substation after 2/3 of the path length. If there is no distribution substation where the line can be
   disconnected, the node is directly connected to the busbar. If the node is already directly connected to the busbar a parallel standard line is installed.
@@ -185,6 +190,8 @@ aggregated areas are not modeled but aggregated loads and generators are directl
 Curtailment
 -----------
 
+.. warning:: The curtailment methods are not yet adapted to the refactored code and therefore currently do not work.
+
 eDisGo right now provides two curtailment methodologies called 'feedin-proportional' and 'voltage-based', that are implemented in 
 :py:mod:`~edisgo.flex_opt.curtailment`. 
 Both methods are intended to take a given curtailment target obtained from an optimization of the EHV and HV grids using 
@@ -196,65 +203,67 @@ It is also possible to curtail specific generators internally, though a user fri
 'feedin-proportional'
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-The 'feedin-proportional' curtailment is implemented in :py:func:`~edisgo.flex_opt.curtailment.feedin_proportional`. 
-The curtailment that has to be met in each time step is allocated equally to all generators depending on their share of total
-feed-in in that time step.
+    The 'feedin-proportional' curtailment is implemented in :py:func:`~edisgo.flex_opt.curtailment.feedin_proportional`.
+    The curtailment that has to be met in each time step is allocated equally to all generators depending on their share of total
+    feed-in in that time step.
 
-.. math::
-    c_{g,t} = \frac{a_{g,t}}{\sum\limits_{g \in gens} a_{g,t}} \times  c_{target,t} ~ ~ \forall t\in timesteps
+    .. math::
+        c_{g,t} = \frac{a_{g,t}}{\sum\limits_{g \in gens} a_{g,t}} \times  c_{target,t} ~ ~ \forall t\in timesteps
 
-where :math:`c_{g,t}` is the curtailed power of generator :math:`g` in timestep :math:`t`, :math:`a_{g,t}` is the weather-dependent availability
-of generator :math:`g` in timestep :math:`t` and :math:`c_{target,t}` is the given curtailment target (power) for timestep :math:`t` to be allocated
-to the generators.
+    where :math:`c_{g,t}` is the curtailed power of generator :math:`g` in timestep :math:`t`, :math:`a_{g,t}` is the weather-dependent availability
+    of generator :math:`g` in timestep :math:`t` and :math:`c_{target,t}` is the given curtailment target (power) for timestep :math:`t` to be allocated
+    to the generators.
 
 'voltage-based'
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-The 'voltage-based' curtailment is implemented in :py:func:`~edisgo.flex_opt.curtailment.voltage_based`. 
-The curtailment that has to be met in each time step is allocated to all generators depending on
-the exceedance of the allowed voltage deviation at the nodes of the generators. The higher the exceedance, the higher
-the curtailment.
+    The 'voltage-based' curtailment is implemented in :py:func:`~edisgo.flex_opt.curtailment.voltage_based`.
+    The curtailment that has to be met in each time step is allocated to all generators depending on
+    the exceedance of the allowed voltage deviation at the nodes of the generators. The higher the exceedance, the higher
+    the curtailment.
 
-The optional parameter *voltage_threshold* specifies the threshold for the exceedance of the allowed voltage deviation above
-which a generator is curtailed. By default it is set to zero, meaning that all generators at nodes with voltage deviations
-that exceed the allowed voltage deviation are curtailed. Generators at nodes where the allowed voltage deviation is not
-exceeded are not curtailed. In the case that the required
-curtailment exceeds the weather-dependent availability of all generators with voltage deviations above the specified threshold,
-the voltage threshold is lowered in steps of 0.01 p.u. until the curtailment target can be met.
+    The optional parameter *voltage_threshold* specifies the threshold for the exceedance of the allowed voltage deviation above
+    which a generator is curtailed. By default it is set to zero, meaning that all generators at nodes with voltage deviations
+    that exceed the allowed voltage deviation are curtailed. Generators at nodes where the allowed voltage deviation is not
+    exceeded are not curtailed. In the case that the required
+    curtailment exceeds the weather-dependent availability of all generators with voltage deviations above the specified threshold,
+    the voltage threshold is lowered in steps of 0.01 p.u. until the curtailment target can be met.
 
-Above the threshold, the curtailment is proportional to the exceedance of the allowed voltage deviation. 
+    Above the threshold, the curtailment is proportional to the exceedance of the allowed voltage deviation.
 
-.. math::
-    \frac{c_{g,t}}{a_{g,t}} = n \cdot (V_{g,t} - V_{threshold, g, t}) + offset
+    .. math::
+        \frac{c_{g,t}}{a_{g,t}} = n \cdot (V_{g,t} - V_{threshold, g, t}) + offset
 
-where :math:`c_{g,t}` is the curtailed power of generator :math:`g` in timestep :math:`t`, :math:`a_{g,t}` is the weather-dependent availability
-of generator :math:`g` in timestep :math:`t`, :math:`V_{g,t}` is the voltage at generator :math:`g` in timestep :math:`t` and
-:math:`V_{threshold, g, t}` is the voltage threshold for generator :math:`g` in timestep :math:`t`. :math:`V_{threshold, g, t}` is calculated as follows:
+    where :math:`c_{g,t}` is the curtailed power of generator :math:`g` in timestep :math:`t`, :math:`a_{g,t}` is the weather-dependent availability
+    of generator :math:`g` in timestep :math:`t`, :math:`V_{g,t}` is the voltage at generator :math:`g` in timestep :math:`t` and
+    :math:`V_{threshold, g, t}` is the voltage threshold for generator :math:`g` in timestep :math:`t`. :math:`V_{threshold, g, t}` is calculated as follows:
 
-.. math::
-    V_{threshold, g, t} = V_{g_{station}, t} + \Delta V_{g_{allowed}} + \Delta V_{offset, t}
+    .. math::
+        V_{threshold, g, t} = V_{g_{station}, t} + \Delta V_{g_{allowed}} + \Delta V_{offset, t}
 
-where :math:`V_{g_{station}, t}` is the voltage at the station's secondary side, :math:`\Delta V_{g_{allowed}}` is the allowed voltage 
-deviation in the reverse power flow and :math:`\Delta V_{offset, t}` is the exceedance of the allowed voltage deviation above which generators are curtailed.
+    where :math:`V_{g_{station}, t}` is the voltage at the station's secondary side, :math:`\Delta V_{g_{allowed}}` is the allowed voltage
+    deviation in the reverse power flow and :math:`\Delta V_{offset, t}` is the exceedance of the allowed voltage deviation above which generators are curtailed.
 
-:math:`n` and :math:`offset` in the equation above are slope and y-intercept of a linear relation between
-the curtailment and the exceedance of the allowed voltage deviation. They are calculated by solving the following linear problem that penalizes the offset
-using the python package pyomo:
+    :math:`n` and :math:`offset` in the equation above are slope and y-intercept of a linear relation between
+    the curtailment and the exceedance of the allowed voltage deviation. They are calculated by solving the following linear problem that penalizes the offset
+    using the python package pyomo:
 
-.. math::
-    min \left(\sum\limits_{t} offset_t\right) 
+    .. math::
+        min \left(\sum\limits_{t} offset_t\right)
 
-.. math::
-    s.t. \sum\limits_{g} c_{g,t} = c_{target,t} ~ \forall g \in (solar, wind) \\
-     c_{g,t} \leq a_{g,t}  \forall g \in (solar, wind),t 
+    .. math::
+        s.t. \sum\limits_{g} c_{g,t} = c_{target,t} ~ \forall g \in (solar, wind) \\
+         c_{g,t} \leq a_{g,t}  \forall g \in (solar, wind),t
 
-where :math:`c_{target,t}` is the given curtailment target (power) for timestep :math:`t` to be allocated
-to the generators.
+    where :math:`c_{target,t}` is the given curtailment target (power) for timestep :math:`t` to be allocated
+    to the generators.
 
 .. _storage-integration-label:
 
 Storage integration
 --------------------
+
+.. warning:: The storage integration methods described below are not yet adapted to the refactored code and therefore currently do not work.
 
 Besides the possibility to connect a storage with a given operation to any node in the grid, eDisGo provides a methodology that takes
 a given storage capacity and allocates it to multiple smaller storages such that it reduces line overloading and voltage deviations.
