@@ -19,10 +19,10 @@ the jupyter notebook examples, we provide installation with extra packages:
 
 .. code-block:: bash
 
-    pip3 install edisgo[geoplot]  % to plot grid topology with background maps
-    pip3 install edisgo[examples]  % to run examples
-    pip3 install edisgo[dev]  % developer packages
-    pip3 install edisgo[full]  % combines all of the extras above
+    pip3 install edisgo[geoplot]  # for plotting with background maps
+    pip3 install edisgo[examples]  # to run examples
+    pip3 install edisgo[dev]  # developer packages
+    pip3 install edisgo[full]  # combines all of the extras above
 
 You may also consider installing a developer version as detailed in
 :ref:`dev-notes`.
