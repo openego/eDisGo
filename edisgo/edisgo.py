@@ -851,9 +851,7 @@ class EDisGo:
                 )
         elif comp_type == "StorageUnit":
             comp_name = self.topology.add_storage_unit(
-                bus=kwargs.get("bus"),
-                p_nom=kwargs.get("p_nom"),
-                control=kwargs.get("control", None),
+                **kwargs,
             )
             if add_ts:
                 if isinstance(ts_active_power, pd.Series):

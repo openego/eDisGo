@@ -922,7 +922,7 @@ class Topology:
         bus: str
             Identifier of connected bus.
         p_nom: float
-            Nominal power in [MW]
+            Nominal power in MW
         control: str
             Control type, defaults to 'PQ'
 

@@ -25,7 +25,7 @@ def reinforce_grid(
 
     Parameters
     ----------
-    edisgo : :class:`~.network.network.EDisGo`
+    edisgo : :class:`~.EDisGo`
         The eDisGo API object
     timesteps_pfa : :obj:`str` or \
         :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
