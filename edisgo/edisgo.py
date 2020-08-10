@@ -20,26 +20,33 @@ logger = logging.getLogger("edisgo")
 
 class EDisGo:
     """
-    Provides the top-level API for invocation of data import, analysis of
-    hosting capacity, network reinforcement and flexibility measures.
+    Provides the top-level API for invocation of data import, power flow
+    analysis, network reinforcement and flexibility measures.
 
     Parameters
     ----------
     worst_case_analysis : None or :obj:`str`, optional
         If not None time series for feed-in and load will be generated
-        according to the chosen worst case analysis
+        according to the chosen worst case analysis.
         Possible options are:
 
         * 'worst-case'
-          feed-in for the two worst-case scenarios feed-in case and load case
-          are generated
+
+          Feed-in and load for the two worst-case scenarios feed-in case and
+          load case are generated.
+
         * 'worst-case-feedin'
-          feed-in for the worst-case scenario feed-in case is generated
+
+          Feed-in and load for the worst-case scenario feed-in case is
+          generated.
+
         * 'worst-case-load'
-          feed-in for the worst-case scenario load case is generated
+
+          Feed-in and load for the worst-case scenario load case is generated.
 
         Be aware that if you choose to conduct a worst-case analysis your
         input for the following parameters will not be used:
+
         * `timeseries_generation_fluctuating`
         * `timeseries_generation_dispatchable`
         * `timeseries_load`
@@ -50,16 +57,21 @@ class EDisGo:
         Path to the config directory. Options are:
 
         * None
-          If `config_path` is None configs are loaded from the edisgo
+
+          If `config_path` is None, configs are loaded from the edisgo
           default config directory ($HOME$/.edisgo). If the directory
           does not exist it is created. If config files don't exist the
           default config files are copied into the directory.
+
         * :obj:`str`
-          If `config_path` is a string configs will be loaded from the
+
+          If `config_path` is a string, configs will be loaded from the
           directory specified by `config_path`. If the directory
           does not exist it is created. If config files don't exist the
           default config files are copied into the directory.
+
         * :obj:`dict`
+
           A dictionary can be used to specify different paths to the
           different config files. The dictionary must have the following
           keys:
@@ -69,25 +81,28 @@ class EDisGo:
           * 'config_grid_expansion'
           * 'config_timeseries'
 
-        Values of the dictionary are paths to the corresponding
-        config file. In contrast to the other two options the directories
-        and config files must exist and are not automatically created.
+          Values of the dictionary are paths to the corresponding
+          config file. In contrast to the other two options, the directories
+          and config files must exist and are not automatically created.
 
         Default: None.
-    timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<frame>`
+    timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<DataFrame>`
         Parameter used to obtain time series for active power feed-in of
         fluctuating renewables wind and solar.
         Possible options are:
 
         * 'oedb'
+
           Time series for the year 2011 are obtained from the OpenEnergy
           DataBase.
-        * :pandas:`pandas.DataFrame<dataframe>`
+
+        * :pandas:`pandas.DataFrame<DataFrame>`
+
           DataFrame with time series, normalized with corresponding capacity.
           Time series can either be aggregated by technology type or by type
           and weather cell ID. In the first case columns of the DataFrame are
           'solar' and 'wind'; in the second case columns need to be a
-          :pandas:`pandas.MultiIndex<multiindex>` with the first level
+          :pandas:`pandas.MultiIndex<MultiIndex>` with the first level
           containing the type and the second level the weather cell id.
           Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
 
@@ -95,7 +110,7 @@ class EDisGo:
 
          .. ToDo: add link to explanation of weather cell id
 
-    timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`
+    timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with time series for active power of each (aggregated)
         type of dispatchable generator normalized with corresponding capacity.
         Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
@@ -109,7 +124,7 @@ class EDisGo:
 
         Use 'other' if you don't want to explicitly provide every possible
         type.
-    timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+    timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
         DataFrame with time series of normalized reactive power (normalized by
         the rated nominal active power) per technology and weather cell. Index
         needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
@@ -122,28 +137,29 @@ class EDisGo:
         If no time series for the technology or technology and weather cell ID
         is given, reactive power will be calculated from power factor and
         power factor mode in the config sections `reactive_power_factor` and
-        `reactive_power_mode` and a warning will be raised. See
-        :class:`~.network.components.Generator` and
-        :class:`~.network.components.GeneratorFluctuating` for more information.
-    timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`
-        Parameter used to obtain time series of active power of (cumulative)
-        loads.
+        `reactive_power_mode` and a warning will be raised.
+    timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<DataFrame>`
+        Parameter used to obtain time series of active power of loads.
         Possible options are:
 
         * 'demandlib'
+
           Time series for the year specified in `timeindex` are
           generated using the oemof demandlib.
-        * :pandas:`pandas.DataFrame<dataframe>`
-          DataFrame with load time series of each (cumulative) type of load
+
+        * :pandas:`pandas.DataFrame<DataFrame>`
+
+          DataFrame with load time series of each type of load
           normalized with corresponding annual energy demand. Index needs to
           be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
           Columns represent load type:
+
           * 'residential'
           * 'retail'
           * 'industrial'
           * 'agricultural'
 
-    timeseries_load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+    timeseries_load_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
         DataFrame with time series of normalized reactive power (normalized by
         annual energy demand) per load sector. Index needs to be a
         :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
@@ -158,8 +174,7 @@ class EDisGo:
         If no time series for the load sector is given, reactive power will be
         calculated from power factor and power factor mode in the config
         sections `reactive_power_factor` and `reactive_power_mode` and a
-        warning will be raised. See :class:`~.network.components.Load` for
-        more information.
+        warning will be raised.
     generator_scenario : None or :obj:`str`
         If provided defines which scenario of future generator park to use
         and invokes import of these generators. Possible options are 'nep2035'
@@ -175,8 +190,6 @@ class EDisGo:
 
     Attributes
     ----------
-    config: :class:`~.config.Config`
-        Container for all configuration parameters.
     topology : :class:`~.network.topology.Topology`
         The topology is a container object holding the topology of the grids.
     timeseries: :class:`~.network.timeseries.TimeSeries`
@@ -185,42 +198,21 @@ class EDisGo:
         This is a container holding alls calculation results from power flow
         analyses, curtailment, storage integration, etc.
 
-    Examples
-    --------
-    Assuming you have the Ding0 `ding0_data.pkl` in CWD
-
-    Create eDisGo Network object by loading Ding0 file
-
-    >>> from edisgo.edisgo import EDisGo
-    >>> edisgo = EDisGo(ding0_grid='ding0_data.pkl', mode='worst-case-feedin')
-
-    Analyze hosting capacity for MV and LV network level
-
-    >>> edisgo.analyze()
-
-    Print LV station secondary side voltage levels returned by PFA
-
-    >>> lv_stations = edisgo.topology.mv_grid.graph.nodes_by_attribute(
-    >>>     'lv_station')
-    >>> print(edisgo.results.v_res(lv_stations, 'lv'))
-
     """
 
     def __init__(self, **kwargs):
 
-        # load configuration and equipment data
+        # load configuration
         self._config = Config(config_path=kwargs.get("config_path", None))
 
-        # instantiate topology object and load grid data
+        # instantiate topology object and load grid and equipment data
         self.topology = Topology(config=self.config)
         self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
 
         # set up results and time series container
         self.results = Results(self)
-        self.timeseries = timeseries.TimeSeries()
-
-        # set up opf results container
         self.opf_results = OPFResults()
+        self.timeseries = timeseries.TimeSeries()
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
@@ -277,12 +269,11 @@ class EDisGo:
     def import_ding0_grid(self, path):
         """
         Import ding0 topology data from csv files in the format as
-        `Ding0 <https://github.com/openego/ding0>`_ provides it via
-        csv files.
+        `Ding0 <https://github.com/openego/ding0>`_ provides it.
 
         Parameters
         -----------
-        path : :obj:'str`
+        path : str
             Path to directory containing csv files of network to be loaded.
 
         """
@@ -291,39 +282,22 @@ class EDisGo:
 
     def to_pypsa(self, **kwargs):
         """
-        PyPSA network representation
+        Convert to PyPSA network representation
 
         A network topology representation based on
-        :pandas:`pandas.DataFrame<dataframe>`. The overall container object of
+        :pandas:`pandas.DataFrame<DataFrame>`. The overall container object of
         this data model, the :pypsa:`pypsa.Network<network>`,
-        is assigned to this attribute.
+        is set up.
 
         Parameters
         ----------
-        **kwargs: dict
-            dict of optional parameters. These can be:
-            mode: can be 'mv', 'mvlv' to export only MV grid, 'lv' to export
-                only LV grid, None to export the whole topology. Defaults
-                to None.
-            timesteps: timesteps of format :pandas:`pandas.Timestamp<Timestamp>`
-                for which time dependant values should be exported to pypsa.
-                Defaults to None, then all timesteps defined in
-                :meth:`~.edisgo.timeseries.timeindex` are chosen.
-            aggregation specifications: only relevant when only exporting
-                MV grid, specifies the aggregation method for undelaying LV
-                grid components. See :meth:`~.io.pypsa_io.append_lv_components`
-                for the available specifications for the optional parameters
-                aggregate_loads, aggregate_generators and aggregate_storages.
-
+        kwargs :
+            See :func:`~.tools.pypsa_io.to_pypsa` for further information.
 
         Returns
         -------
         :pypsa:`pypsa.Network<network>`
-            PyPSA network representation. The attribute `edisgo_mode` is added
-            to specify if pypsa representation of the edisgo network
-            was created for the whole network topology (MV + LV), only MV or only
-            LV. See parameter `mode` in
-            :meth:`~.edisgo.EDisGo.analyze` for more information.
+            PyPSA network representation.
 
         """
         timesteps = kwargs.get("timesteps", None)
@@ -349,7 +323,6 @@ class EDisGo:
                     "For exporting lv grids, name of lv_grid has "
                     "to be provided."
                 )
-            # Todo: property grids in Topology?
             return pypsa_io.to_pypsa(
                 self.topology._grids[lv_grid_name],
                 mode=mode,
@@ -359,6 +332,17 @@ class EDisGo:
             raise ValueError("The entered mode is not a valid option.")
 
     def to_graph(self):
+        """
+        Returns graph representation of the grid.
+
+        Returns
+        -------
+        :networkx:`networkx.Graph<network.Graph>`
+            Graph representation of the grid as networkx Ordered Graph,
+            where lines are represented by edges in the graph, and buses and
+            transformers are represented by nodes.
+
+        """
 
         graph = tools.translate_df_to_graph(
             self.topology.buses_df,
@@ -387,7 +371,7 @@ class EDisGo:
         """Import generators
 
         For details see
-        :func:`edisgo.io.import_data.import_generators`
+        :func:`edisgo.io.generators_import.oedb`
 
         """
         if generator_scenario:
@@ -395,18 +379,15 @@ class EDisGo:
         import_generators_oedb(edisgo_object=self)
 
     def analyze(self, mode=None, timesteps=None):
-        """Analyzes the network by power flow analysis
+        """Conducts a static, non-linear power flow analysis
 
-        Analyze the network for violations of hosting capacity. Means, perform a
-        power flow analysis and obtain voltages at buses and active/reactive
-        power on lines.
-
-        A static `non-linear power flow analysis is performed using PyPSA
-        <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_.
-        The high-voltage to medium-voltage transformer are not included in the
-        analysis. The slack bus is defined at secondary side of these
-        transformers assuming an ideal tap changer. Hence, potential
-        overloading of the transformers is not studied here.
+        Conducts a static, non-linear power flow analysis using
+        `PyPSA <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_
+        and writes results (active, reactive and apparent power as well as
+        current on lines and voltages at buses) to
+        :class:`~.network.results.Results`
+        (e.g. :attr:`~.network.results.Results.v_res` for voltages).
+        See :func:`~.tools.pypsa_io.to_pypsa` for more information.
 
         Parameters
         ----------
@@ -419,25 +400,8 @@ class EDisGo:
             :pandas:`pandas.Timestamp<Timestamp>`
             Timesteps specifies for which time steps to conduct the power flow
             analysis. It defaults to None in which case the time steps in
-            timeseries.timeindex (see :class:`~.network.network.TimeSeries`) are
+            :attr:`~.network.timeseries.TimeSeries.timeindex` are
             used.
-
-        Notes
-        -----
-        The current implementation always translates the network topology
-        representation to the PyPSA format and stores it to
-        :attr:`self.topology.pypsa`.
-
-        ToDos
-        ------
-        * explain how power plants are modeled, if possible use a link
-        * explain where to find and adjust power flow analysis defining
-        parameters
-
-        See Also
-        --------
-        :func:`~.tools.pypsa_io.to_pypsa`
-            Translator to PyPSA data format
 
         """
         if timesteps is None:
@@ -448,13 +412,6 @@ class EDisGo:
 
         pypsa_network = self.to_pypsa(mode=mode, timesteps=timesteps)
 
-        # Todo: check if still needed, if so update to new structure, at this point not needed, maybe later
-        # check if all timesteps are in pypsa.snapshots, if not update time
-        # series
-        if False in [
-            True if _ in pypsa_network.snapshots else False for _ in timesteps
-        ]:
-            pypsa_io.update_pypsa_timeseries(self, timesteps=timesteps)
         # run power flow analysis
         pf_results = pypsa_network.pf(timesteps)
 
@@ -467,7 +424,8 @@ class EDisGo:
         """
         Reinforces the network and calculates network expansion costs.
 
-        See :meth:`edisgo.flex_opt.reinforce_grid` for more information.
+        See :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid` for more
+        information.
 
         """
         results = reinforce_grid(
@@ -494,7 +452,7 @@ class EDisGo:
         timesteps : list
             List of timesteps to perform OPF for.
         kwargs :
-            See :func:`edisgo.opf.run_mp_opf.run_mp_opf` for further
+            See :func:`~.opf.run_mp_opf.run_mp_opf` for further
             information.
 
         Returns
@@ -513,13 +471,13 @@ class EDisGo:
         Plots plain MV network topology and optionally nodes by technology type
         (e.g. station or generator).
 
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
         Parameters
         ----------
         technologies : :obj:`Boolean`
-            If True plots stations, generators, etc. in the topology in different
-            colors. If False does not plot any nodes. Default: False.
-
-        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+            If True plots stations, generators, etc. in the topology in
+            different colors. If False does not plot any nodes. Default: False.
 
         """
 
@@ -618,7 +576,7 @@ class EDisGo:
 
     def plot_mv_grid_expansion_costs(self, **kwargs):
         """
-        Plots costs per MV line.
+        Plots grid expansion costs per MV line.
 
         For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
 
@@ -664,15 +622,10 @@ class EDisGo:
         plots.mv_grid_topology(
             self, node_color="storage_integration", **kwargs
         )
-        # filename=kwargs.get('filename', None),
-        # grid_district_geom=kwargs.get('grid_district_geom', True),
-        # background_map=kwargs.get('background_map', True),
-        # xlim=kwargs.get('xlim', None), ylim=kwargs.get('ylim', None),
-        # title=kwargs.get('title', ''))
 
     def plot_mv_grid(self, **kwargs):
         """
-        General plotting function giving all options function
+        General plotting function giving all options of function
         :func:`edisgo.tools.plots.mv_grid_topology`.
 
         """
@@ -814,8 +767,8 @@ class EDisGo:
     ):
         """
         Saves edisgo_obj parameters to csv. It can be chosen if results,
-        topology and timeseries should be save respectively. For each one a
-        seperate folder is created.
+        topology and timeseries should be saved, respectively. For each one, a
+        separate folder is created.
 
         Parameters
         ----------
@@ -828,6 +781,7 @@ class EDisGo:
             indicates whether to save self.topology
         save_timeseries: bool
             indicates whether to save self.timeseries
+
         """
         os.makedirs(directory, exist_ok=True)
         if save_results:
@@ -856,7 +810,7 @@ class EDisGo:
             Type of added component. Can be 'Bus', 'Line', 'Load', 'Generator',
             'StorageUnit', 'Transformer'
         add_ts: Boolean
-            Indicator if timeseries for component are added as well
+            Indicator if time series for component are added as well
         ts_active_power : pd.Series
             Active power time series of added component.
         ts_reactive_power : pd.Series
@@ -864,7 +818,7 @@ class EDisGo:
         **kwargs: dict
             Attributes of added component. See respective functions for required
             entries. For 'Load', 'Generator' and 'StorageUnit' the boolean
-            add_ts determines whether a timeseries is created for the new
+            add_ts determines whether a time series is created for the new
             component or not.
 
         Todo: change into add_components to allow adding of several components
