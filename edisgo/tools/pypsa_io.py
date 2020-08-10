@@ -57,8 +57,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
 
     Parameters
     ----------
-    grid_object: :class:`~.network.topology.Topology`
-        eDisGo topology container
+    grid_object: :class:`~.EDisGo` or :class:`~.network.grids.Grid`
+        EDisGo or grid object
     mode : str
         Determines network levels that are translated to
         `PyPSA network representation
