@@ -27,6 +27,9 @@ the jupyter notebook examples, we provide installation with extra packages:
 You may also consider installing a developer version as detailed in
 :ref:`dev-notes`.
 
+Requirements for edisgoOPF package
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 To use the multiperiod optimal power flow that is provided in the julia package
 edisgoOPF in eDisGo you additionally need to install julia version 1.1.1.
 Download julia from
@@ -57,6 +60,82 @@ And finally instantiate it:
     (SomeProject) pkg> instantiate
 
 .. _prerequisites:
+
+Additional linear solver
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+As with the default linear solver in Ipopt (local solver used in the OPF)
+the limit for prolem sizes is reached quite quickly, you may want to instead use
+the solver HSL_MA97.
+The steps required to set up HSL  are also described in the
+`Ipopt Documentation <https://coin-or.github.io/Ipopt/INSTALL.html#DOWNLOAD_HSL>`_.
+Here is a short version for reference:
+
+First, you need to obtain an academic license for HSL Solvers.
+Under http://www.hsl.rl.ac.uk/ipopt/ download the sources for Coin-HSL Full (Stable).
+You will need to provide an institutional e-mail to gain access.
+
+Unpack the tar.gz:
+
+.. code-block:: bash
+
+    tar -xvzf coinhsl-2014.01.10.tar.gz
+
+To install the solver, clone the Ipopt Third Party HSL tools:
+
+.. code-block:: bash
+
+    git clone https://github.com/coin-or-tools/ThirdParty-HSL.git
+    cd ThirdParty-HSL
+
+
+Under `ThirdParty-HSL`, create a folder for the HSL sources named `coinhsl` and
+copy the contents of the HSL archive into it.
+Under Ubuntu, you'll need BLAS, LAPACK and GCC for Fortran. If you don't have them, install them via:
+
+.. code-block:: bash
+
+    sudo apt-get install libblas-dev liblapack-dev gfortran
+
+You can then configure and install your HSL Solvers:
+
+.. code-block:: bash
+
+    ./configure
+    make
+    sudo make install
+
+To make Ipopt pick up the solver, you need to add it to your path.
+During install, there will be an output that tells you where the libraries have
+been put. Usually like this:
+
+.. code-block:: bash
+
+    Libraries have been installed in:
+        /usr/local/lib
+
+
+Add this path to the variable `LD_LIBRARY_PATH`:
+
+.. code-block:: bash
+
+    export LD_LIBRARY="/usr/local/bin":$LD_LIBRARY_PATH
+
+You might also want to add this to your .bashrc to make it persistent.
+
+For some reason, Ipopt looks for a library named `libhsl.so`, which is not what
+the file is named, so we'll also need to provide a symlink:
+
+.. code-block:: bash
+
+    cd /usr/local/lib
+    ln -s libcoinhsl.so libhsl.so
+
+MA97 should now work and can be called from Julia with:
+
+.. code-block:: julia
+
+    JuMP.setsolver(pm.model,IpoptSolver(linear_solver="ma97"))
 
 Prerequisites
 -------------
