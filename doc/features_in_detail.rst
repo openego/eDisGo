@@ -10,12 +10,12 @@ In order to analyse voltages and line loadings a non-linear power flow analysis 
 All loads and generators are modelled as PQ nodes; the slack is modelled as a PV node with a set voltage of 1\,p.u.
 and positioned at the substation's secondary side.
 
-.. _grid_expansion_methodology:
-
 Multi period optimal power flow
 ---------------------------------
 
 .. todo:: Add
+
+.. _grid_expansion_methodology:
 
 Grid expansion
 -------------------------
