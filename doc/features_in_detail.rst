@@ -187,6 +187,8 @@ The population density is calculated by the population and area of the grid dist
 Costs for lines of aggregated loads and generators are not considered in the costs calculation since grids of
 aggregated areas are not modeled but aggregated loads and generators are directly connected to the MV busbar.
 
+.. _curtailment_in_detail-label:
+
 Curtailment
 -----------
 
