@@ -7,14 +7,13 @@ from edisgo.tools.tools import translate_df_to_graph
 
 class Grid(ABC):
     """
-    Defines a basic network in eDisGo
+    Defines a basic grid in eDisGo.
 
     Parameters
     -----------
-    _id : str or int
+    edisgo_obj : :class:`~.EDisGo`
+    id : str or int, optional
         Identifier
-    _network : :class:`~.network.topology.Topology`
-        Topology container.
 
     # ToDo add annual_consumption property?
 
@@ -65,6 +64,17 @@ class Grid(ABC):
 
     @property
     def graph(self):
+        """
+        Graph representation of the grid.
+
+        Returns
+        -------
+        :networkx:`networkx.Graph<network.Graph>`
+            Graph representation of the grid as networkx Ordered Graph,
+            where lines are represented by edges in the graph, and buses and
+            transformers are represented by nodes.
+
+        """
         return translate_df_to_graph(self.buses_df, self.lines_df)
 
     @property
