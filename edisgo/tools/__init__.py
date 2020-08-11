@@ -2,7 +2,7 @@ from egoio.tools.db import connection
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 
-Session = sessionmaker(bind=connection(readonly=True))
+#Session = sessionmaker(bind=connection(readonly=True))
 
 
 @contextmanager
