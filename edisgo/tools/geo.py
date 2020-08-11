@@ -4,7 +4,7 @@ from geopy.distance import vincenty
 
 import os
 
-if not "READTHEDOCS" in os.environ:
+if "READTHEDOCS" not in os.environ:
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
 

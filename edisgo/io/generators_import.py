@@ -5,7 +5,6 @@ from sqlalchemy import func
 import random
 import logging
 
-from egoio.db_tables import model_draft, supply
 from edisgo.tools import session_scope
 from edisgo.tools.geo import (
     calc_geo_dist_vincenty,
@@ -17,6 +16,7 @@ from edisgo.tools.geo import (
 logger = logging.getLogger("edisgo")
 
 if "READTHEDOCS" not in os.environ:
+    from egoio.db_tables import model_draft, supply
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads

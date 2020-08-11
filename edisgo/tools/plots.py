@@ -8,12 +8,13 @@ from pypsa import Network as PyPSANetwork
 from geoalchemy2 import shape
 from pyproj import Proj, transform
 import matplotlib
-from egoio.db_tables.grid import EgoDpMvGriddistrict
-from egoio.db_tables.model_draft import EgoGridMvGriddistrict
 
 from edisgo.tools import tools, session_scope
 
-if not "READTHEDOCS" in os.environ:
+if "READTHEDOCS" not in os.environ:
+
+    from egoio.db_tables.grid import EgoDpMvGriddistrict
+    from egoio.db_tables.model_draft import EgoGridMvGriddistrict
 
     geopandas = True
     try:

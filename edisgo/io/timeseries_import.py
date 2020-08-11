@@ -1,7 +1,9 @@
+import os
 import pandas as pd
-from egoio.db_tables import model_draft, supply
-
 from edisgo.tools import session_scope
+
+if "READTHEDOCS" not in os.environ:
+    from egoio.db_tables import model_draft, supply
 
 
 def import_feedin_timeseries(config_data, weather_cell_ids, timeindex):

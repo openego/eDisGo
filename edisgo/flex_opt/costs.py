@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import numpy as np
 
-if not "READTHEDOCS" in os.environ:
+if "READTHEDOCS" not in os.environ:
     from shapely.ops import transform
 
 from edisgo.tools.geo import proj2equidistant

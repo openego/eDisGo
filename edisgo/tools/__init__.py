@@ -1,8 +1,11 @@
-from egoio.tools.db import connection
+import os
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 
-#Session = sessionmaker(bind=connection(readonly=True))
+if "READTHEDOCS" not in os.environ:
+    from egoio.tools.db import connection
+
+Session = sessionmaker(bind=connection(readonly=True))
 
 
 @contextmanager
