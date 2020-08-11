@@ -5,7 +5,7 @@ from contextlib import contextmanager
 if "READTHEDOCS" not in os.environ:
     from egoio.tools.db import connection
 
-Session = sessionmaker(bind=connection(readonly=True))
+    Session = sessionmaker(bind=connection(readonly=True))
 
 
 @contextmanager
