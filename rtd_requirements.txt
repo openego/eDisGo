@@ -8,6 +8,5 @@ geopy >=1.11.0, <=1.11.0
 pyomo >= 5.5.0
 multiprocess
 workalendar
-egoio >=0.4.7
 matplotlib
 pypower

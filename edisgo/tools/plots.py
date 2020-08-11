@@ -5,7 +5,6 @@ import logging
 from matplotlib import pyplot as plt
 from pypsa import Network as PyPSANetwork
 
-from geoalchemy2 import shape
 from pyproj import Proj, transform
 import matplotlib
 
@@ -15,6 +14,7 @@ if "READTHEDOCS" not in os.environ:
 
     from egoio.db_tables.grid import EgoDpMvGriddistrict
     from egoio.db_tables.model_draft import EgoGridMvGriddistrict
+    from geoalchemy2 import shape
 
     geopandas = True
     try:
