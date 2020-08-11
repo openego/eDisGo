@@ -29,7 +29,7 @@ setup(
     packages=find_packages(),
     url='https://github.com/openego/eDisGo',
     license='GNU Affero General Public License v3.0',
-    author='gplssm, nesnoj, birgits, boltbeard, AnyaHe',
+    author='birgits, AnyaHe, gplssm, nesnoj, jaappedersen, Elias, boltbeard',
     author_email='anya.heider@rl-institut.de',
     description='A python package for distribution network analysis and optimization',
     long_description=read('README.md'),

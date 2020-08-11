@@ -1,12 +1,13 @@
 sphinx_rtd_theme
-networkx >= 2.0
-pandas >=0.20.3, <=0.20.3
-pypsa >=0.11.0, <=0.11.0
-pyproj >=1.9.5.1, <=1.9.5.1
-matplotlib >=1.5.3, <=1.5.3
-geopy >=1.11.0, <=1.11.0
-geoalchemy2 >= 0.2.6, <= 0.4.1
-egoio >=0.4.5
-workalendar
 demandlib
-oedialect
+networkx >= 2.0
+pandas >=0.24.0, <=0.24.0
+pypsa >=0.15.0
+pyproj >=1.9.5.1, <=1.9.5.1
+geopy >=1.11.0, <=1.11.0
+pyomo >= 5.5.0
+multiprocess
+workalendar
+egoio >=0.4.7
+matplotlib
+pypower
