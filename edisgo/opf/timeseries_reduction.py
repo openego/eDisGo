@@ -60,12 +60,21 @@ def _scored_critical_overvoltage(edisgo_obj, grid):
 
 def get_steps_curtailment(edisgo_obj, percentage=0.5):
     """
-    Get the time steps with the most critical violations for curtailment optimization
-    :param edisgo_obj: The eDisGo API object
-    :type edisgo_obj: :class:`~.network.network.EDisGo`
-    :param percentage: The percentage of most critical time steps to select
-    :type percentage: float
-    :returns: `pandas.DatetimeIndex` -- the reduced time index for modeling curtailment
+    Get the time steps with the most critical violations for curtailment
+    optimization.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+        The eDisGo API object
+    percentage : float
+        The percentage of most critical time steps to select
+
+    Returns
+    --------
+    `pandas.DatetimeIndex`
+        the reduced time index for modeling curtailment
+
     """
 
     # Run power flow if not available
@@ -101,12 +110,21 @@ def get_steps_curtailment(edisgo_obj, percentage=0.5):
 
 def get_steps_storage(edisgo_obj, window=5):
     """
-    Get the most critical time steps from series for storage problems
-    :param edisgo_obj: The eDisGo API object
-    :type name: :class:`~.network.network.EDisGo`
-    :param window: The additional hours to include before and after each critical time step
-    :type window: int
-    :returns:  `pandas.DatetimeIndex` -- the reduced time index for modeling storage
+    Get the most critical time steps from series for storage problems.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+        The eDisGo API object
+    window : int
+        The additional hours to include before and after each critical time
+        step.
+
+    Returns
+    -------
+    `pandas.DatetimeIndex`
+        the reduced time index for modeling storage
+
     """
     # Run power flow if not available
     if edisgo_obj.results.i_res is None:
@@ -158,16 +176,22 @@ def get_linked_steps(cluster_params, num_steps=24, keep_steps=[]):
     Use provided data to identify representative time steps and create mapping
     Dict that can be passed to optimization
 
-    :param cluster_params: Time series containing the parameters to be
-    considered for distance between points
-    :type cluster_params: :pandas:`pandas.DataFrame<DataFrame>`
-    :param num_steps: The number of representative time steps to be selected
-    :type num_steps: int
-    :param keep_steps: Time steps to retain with full resolution, regardless of
-    clustering result
-    :type keep_steps: Iterable of the same type as cluster_params.index
-    :returns: Dict -- Dict where each represented time step is a key and its
-    representative time step is a value
+    Parameters
+    -----------
+    cluster_params : :pandas:`pandas.DataFrame<DataFrame>`
+        Time series containing the parameters to be considered for distance
+        between points.
+    num_steps : int
+        The number of representative time steps to be selected.
+    keep_steps : Iterable of the same type as cluster_params.index
+        Time steps to retain with full resolution, regardless of
+        clustering result.
+
+    Returns
+    -------
+    dict
+        Dictionary where each represented time step is a key and its
+        representative time step is a value.
 
     """
 

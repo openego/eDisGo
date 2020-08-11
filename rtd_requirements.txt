@@ -11,3 +11,4 @@ workalendar
 egoio >= 0.4.7
 matplotlib
 pypower
+sklearn

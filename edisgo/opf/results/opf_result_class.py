@@ -10,18 +10,24 @@ from edisgo.tools.preprocess_pypsa_opf_structure import (
 logger = logging.getLogger("edisgo")
 
 
-"""
-:param edisgo_obj:  An edisgo object with the same network topology
-                    that the optimization was run on
-:path:              Path of the optimization result JSON file
-:mode:              voltage level, currently only supports "mv"
-
-This reads the optimization results directly from a JSON result file
-without carrying out the optimization process
-"""
-
-
 def read_from_json(edisgo_obj, path, mode="mv"):
+    """
+    Read optimization results from json file.
+
+    This reads the optimization results directly from a JSON result file
+    without carrying out the optimization process.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+        An edisgo object with the same topology that the optimization was run
+        on.
+    path : str
+        Path to the optimization result JSON file.
+    mode : str
+        Voltage level, currently only supports "mv"
+
+    """
     pypsa_net = edisgo_obj.to_pypsa(
         mode=mode, timesteps=edisgo_obj.timeseries.timeindex
     )
@@ -249,7 +255,3 @@ class OPFResults:
             self.storage_units_t.soc = soc_t
             self.storage_units_t.uc = uc_t
             self.storage_units_t.ud = ud_t
-
-
-# opf_results = OPFResults()
-# opf_results.read_solution("solution_name.json")

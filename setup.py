@@ -47,7 +47,8 @@ setup(
         'workalendar',
         'egoio >= 0.4.7',
         'matplotlib',
-        'pypower'
+        'pypower',
+        'sklearn'
     ],
     extras_require={
         'geoplot': ['geopandas', 'contextily'],

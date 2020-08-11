@@ -32,14 +32,23 @@ def convert(o):
 
 def bus_names_to_ints(pypsa_network, bus_names):
     """
-    :param pypsa_network:
-    :param bus_names: List of bus names to be remapped to indices
-    :return bus_indices: List of one-based bus indices
-
     This remaps a list of eDisGo bus names from Strings to Integers.
+
     Integer indices are needed for the optimization.
     The result uses one-based indexing, as it gets passed on to Julia
     directly.
+
+    Parameters
+    -----------
+    pypsa_network :
+    bus_names : list(str)
+        List of bus names to be remapped to indices.
+
+    Returns
+    --------
+    list(int)
+        List of one-based bus indices.
+
     """
 
     # map bus name to its integer index
@@ -55,9 +64,12 @@ def bus_names_to_ints(pypsa_network, bus_names):
 
 def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
     """
-    :param edisgo_network:
-    :param timesteps: `pandas.DatetimeIndex<DatetimeIndex>` or `pandas.Timestamp<Timestamp>`
-    :param **kwargs:
+
+    Parameters
+    ----------
+    edisgo_network :
+    timesteps: `pandas.DatetimeIndex<DatetimeIndex>` or `pandas.Timestamp<Timestamp>`
+    **kwargs :
         "scenario" : "nep"
         # objective function
         "objective": "nep",
@@ -89,7 +101,7 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
         "curtailment_total": "3percent",
         "results_path": "opf_solutions"
         # path to where OPF results are stored
-    :return:
+
     """
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     julia_env_dir = os.path.join(opf_dir, "edisgoOPF")
