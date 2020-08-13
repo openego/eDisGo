@@ -126,7 +126,7 @@ def histogram(data, **kwargs):
 
     plt.figure(figsize=fig_size)
     ax = plot_data.hist(
-        normed=normed, color=color, alpha=alpha, bins=bins, grid=True
+        density=normed, color=color, alpha=alpha, bins=bins, grid=True
     )
     plt.minorticks_on()
 
@@ -157,7 +157,7 @@ def add_basemap(ax, zoom=12):
     url = ctx.sources.ST_TONER_LITE
     xmin, xmax, ymin, ymax = ax.axis()
     basemap, extent = ctx.bounds2img(
-        xmin, ymin, xmax, ymax, zoom=zoom, url=url
+        xmin, ymin, xmax, ymax, zoom=zoom, source=url
     )
     ax.imshow(basemap, extent=extent, interpolation="bilinear")
     # restore original x/y limits
@@ -398,14 +398,14 @@ def mv_grid_topology(
             "else": "orange",
         }
         sizes_dict = {
-            "BranchTee": 10,
-            "GeneratorFluctuating": 100,
-            "Generator": 100,
-            "LVStation": 50,
-            "MVStation": 120,
-            "Storage": 100,
-            "DisconnectingPoint": 75,
-            "else": 200,
+            "BranchTee": 10000,
+            "GeneratorFluctuating": 100000,
+            "Generator": 100000,
+            "LVStation": 50000,
+            "MVStation": 120000,
+            "Storage": 100000,
+            "DisconnectingPoint": 75000,
+            "else": 200000,
         }
         for bus in buses:
             connected_components = edisgo_obj.topology.get_connected_components_from_bus(
@@ -421,7 +421,7 @@ def mv_grid_topology(
         bus_colors = {}
         positions = []
         colors_dict = {"ChargingPark": "r", "else": "black"}
-        sizes_dict = {"ChargingPark": 100, "else": 10}
+        sizes_dict = {"ChargingPark": 100000, "else": 10000}
         for bus in edisgo_obj.topology.loads_df.index:
             if "charging_park" in bus:
                 position = str(bus).rsplit("_")[-1]
@@ -454,7 +454,7 @@ def mv_grid_topology(
                 }
             )
 
-        bus_sizes_dict.update({bus: 50 for bus in buses})
+        bus_sizes_dict.update({bus: 100000^2 for bus in buses})
         return bus_sizes_dict, bus_colors_dict
 
     def nodes_storage_integration(buses, edisgo_obj):
@@ -679,14 +679,13 @@ def mv_grid_topology(
     )
 
     # color bar line loading
-    # ToDo this does not really work as colorbar is already set in pypsa plot
-    # and needs to be overridden here somehow
     if line_color == "loading":
         if limits_cb_lines is None:
             limits_cb_lines = (min(line_colors), max(line_colors))
         v = np.linspace(limits_cb_lines[0], limits_cb_lines[1], 101)
         cb = plt.colorbar(ll[1], boundaries=v, ticks=v[0:101:10])
-        cb.set_clim(vmin=limits_cb_lines[0], vmax=limits_cb_lines[1])
+        cb.norm.vmin = limits_cb_lines[0]
+        cb.norm.vmax = limits_cb_lines[1]
         cb.set_label("Line loading in p.u.")
     # color bar network expansion costs
     elif line_color == "expansion_costs":
@@ -697,7 +696,8 @@ def mv_grid_topology(
             )
         v = np.linspace(limits_cb_lines[0], limits_cb_lines[1], 101)
         cb = plt.colorbar(ll[1], boundaries=v, ticks=v[0:101:10])
-        cb.set_clim(vmin=limits_cb_lines[0], vmax=limits_cb_lines[1])
+        cb.norm.vmin = limits_cb_lines[0]
+        cb.norm.vmax = limits_cb_lines[1]
         cb.set_label("Grid expansion costs in kEUR")
 
     # color bar voltage
@@ -711,7 +711,8 @@ def mv_grid_topology(
         cb_voltage = plt.colorbar(
             ll[0], boundaries=v_voltage, ticks=v_voltage[0:101:10]
         )
-        cb_voltage.set_clim(vmin=limits_cb_nodes[0], vmax=limits_cb_nodes[1])
+        cb_voltage.norm.vmin = limits_cb_nodes[0]
+        cb_voltage.norm.vmax = limits_cb_nodes[1]
         cb_voltage.set_label("Voltage deviation in %")
 
     # storage_units
