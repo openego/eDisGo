@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
-from networkx import OrderedGraph
 
 from edisgo.network.components import Generator, Load, Switch
-from edisgo.tools.tools import translate_df_to_graph
+from edisgo.tools.networkx_helper import translate_df_to_graph
 
 
 class Grid(ABC):
@@ -14,8 +13,6 @@ class Grid(ABC):
     edisgo_obj : :class:`~.EDisGo`
     id : str or int, optional
         Identifier
-
-    # ToDo add annual_consumption property?
 
     """
 

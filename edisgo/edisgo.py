@@ -2,16 +2,14 @@ import os
 import logging
 import pandas as pd
 
-import edisgo
 from edisgo.network.topology import Topology
 from edisgo.network.results import Results
 from edisgo.network import timeseries
-from edisgo.tools import pypsa_io, plots, tools
+from edisgo.tools import pypsa_io, plots, tools, networkx_helper
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.tools.config import Config
-from edisgo.flex_opt.curtailment import CurtailmentControl
 from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.opf.results.opf_result_class import OPFResults
 
@@ -344,7 +342,7 @@ class EDisGo:
 
         """
 
-        graph = tools.translate_df_to_graph(
+        graph = networkx_helper.translate_df_to_graph(
             self.topology.buses_df,
             self.topology.lines_df,
             self.topology.transformers_df,
