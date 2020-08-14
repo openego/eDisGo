@@ -115,8 +115,8 @@ the whole topology and the MV grid:
     # Access all buses in that LV grid
     lv_grid.buses_df
 
-    # Access all generators in that LV grid
-    lv_grid.generators_df
+    # Access all loads in that LV grid
+    lv_grid.loads_df
 
 A single grid's generators, loads, storage units and switches can also be
 retrieved as :class:`~.network.components.Generator`,
@@ -125,13 +125,13 @@ retrieved as :class:`~.network.components.Generator`,
 
 .. code-block:: python
 
-    # Get all loads in MV grid as Load objects
+    # Get all switch disconnectors in MV grid as Switch objects
     # (Note that objects are returned as a python generator object that must
-    #  first be converted to a list in order to view the Load objects)
-    edisgo.topology.mv_grid.loads
+    #  first be converted to a list in order to view the Switch objects)
+    list(edisgo.topology.mv_grid.switch_disconnectors)
 
     # Get all generators in LV grid as Generator objects
-    lv_grid.generators
+    list(lv_grid.generators)
 
 For some applications it is helpful to get a graph representation of the grid,
 e.g. to find the path from the station to a generator. The graph representation
@@ -140,7 +140,7 @@ of the whole topology or each single grid can be retrieved as follows:
 .. code-block:: python
 
     # Get graph representation of whole topology
-    edisgo.to_graph
+    edisgo.to_graph()
 
     # Get graph representation for MV grid
     edisgo.topology.mv_grid.graph
@@ -148,7 +148,7 @@ of the whole topology or each single grid can be retrieved as follows:
     # Get graph representation for LV grid
     lv_grid.graph
 
-The returned graph :networkx:`networkx.Graph<network.Graph>`, where lines are represented
+The returned graph is a :networkx:`networkx.Graph<network.Graph>`, where lines are represented
 by edges in the graph, and buses and transformers are represented by nodes.
 
 Identify grid issues
