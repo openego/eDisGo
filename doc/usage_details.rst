@@ -326,7 +326,7 @@ Results
 ----------------
 
 Results such as voltages at nodes and line loading from the power flow analysis as well as
-grid extension costs are provided through the :class:`~.network.results.Results` class
+grid expansion costs are provided through the :class:`~.network.results.Results` class
 and can be accessed the following way:
 
 .. code-block:: python
@@ -337,7 +337,7 @@ Get voltages at nodes from :meth:`~.network.results.Results.v_res`
 and line loading from :meth:`~.network.results.Results.s_res` or
 :attr:`~.network.results.Results.i_res`.
 :attr:`~.network.results.Results.equipment_changes` holds details about measures
-performed during grid extension. Associated costs can be obtained through
+performed during grid expansion. Associated costs can be obtained through
 :attr:`~.network.results.Results.grid_expansion_costs`.
 Flexibility measures may not entirely resolve all issues.
 These unresolved issues are listed in :attr:`~.network.results.Results.unresolved_issues`.
