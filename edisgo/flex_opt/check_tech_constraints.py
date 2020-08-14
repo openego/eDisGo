@@ -154,6 +154,26 @@ def lines_allowed_load(edisgo_obj, voltage_level):
     return i_lines_allowed
 
 
+def lines_relative_load(edisgo_obj, lines_allowed_load):
+    """
+    Calculates relative line load based on specified allowed line load.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    lines_allowed_load : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing the maximum allowed current per line and time step
+        in kA. Index of the dataframe are time steps of type
+        :pandas:`pandas.Timestamp<Timestamp>` and columns are line names.
+
+    """
+    # get line load from power flow analysis
+    i_lines_pfa = edisgo_obj.results.i_res.loc[lines_allowed_load.index,
+                                               lines_allowed_load.columns]
+
+    return i_lines_pfa / lines_allowed_load
+
+
 def _line_load(edisgo_obj, voltage_level):
     """
     Checks for over-loading issues of lines.
@@ -188,11 +208,9 @@ def _line_load(edisgo_obj, voltage_level):
     # get allowed line load
     i_lines_allowed = lines_allowed_load(edisgo_obj, voltage_level)
 
-    # get line load from power flow analysis
-    i_lines_pfa = edisgo_obj.results.i_res[i_lines_allowed.columns]
-
     # calculate relative line load and keep maximum over-load of each line
-    relative_i_res = i_lines_pfa / i_lines_allowed
+    relative_i_res = lines_relative_load(edisgo_obj, i_lines_allowed)
+
     crit_lines_relative_load = (
         relative_i_res[relative_i_res > 1].max().dropna()
     )
