@@ -65,7 +65,7 @@ class TestTools:
     def test_check_line_for_removal(self):
         parent_dirname = os.path.dirname(os.path.dirname(__file__))
         test_network_directory = os.path.join(
-            parent_dirname, 'ding0_test_network')
+            parent_dirname, 'ding0_test_network_1')
         self.topology = Topology()
         ding0_import.import_ding0_grid(test_network_directory, self)
 

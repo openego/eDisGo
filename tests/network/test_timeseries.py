@@ -28,7 +28,7 @@ class Testget_component_timeseries:
         #create edisgo obj to compare
         parent_dirname = os.path.dirname(os.path.dirname(__file__))
         test_network_directory = os.path.join(
-            parent_dirname, 'ding0_test_network')
+            parent_dirname, 'ding0_test_network_1')
         edisgo = pd.DataFrame()
         edisgo.topology = Topology()
         edisgo.timeseries = timeseries.TimeSeries()

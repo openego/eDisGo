@@ -222,7 +222,7 @@ class TestEDisGo:
 
     def test_edisgo_timeseries_analysis(self):
         dirname = os.path.dirname(__file__)
-        test_network_directory = os.path.join(dirname, 'ding0_test_network')
+        test_network_directory = os.path.join(dirname, 'ding0_test_network_1')
         timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
         ts_gen_dispatchable = pd.DataFrame({'other': [0.775] * 8760},
                                            index=timeindex)
