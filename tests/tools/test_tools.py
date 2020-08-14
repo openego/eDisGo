@@ -2,12 +2,58 @@ import os
 import numpy as np
 from numpy.testing import assert_allclose, assert_array_equal
 import pytest
+from math import sqrt
 
+from edisgo import EDisGo
 from edisgo.tools import tools
 from edisgo.network.topology import Topology
 from edisgo.io import ding0_import
 
+
 class TestTools:
+
+    @classmethod
+    def setup_class(self):
+        self.edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_path,
+            worst_case_analysis="worst-case"
+        )
+        self.timesteps = self.edisgo.timeseries.timeindex
+        self.edisgo.analyze()
+
+    def test_calculate_relative_line_load(self):
+        # test without providing lines and time steps
+        rel_line_load = tools.calculate_relative_line_load(
+            self.edisgo)
+        assert rel_line_load.shape == (2, 198)
+
+        # test with providing lines
+        rel_line_load = tools.calculate_relative_line_load(
+            self.edisgo,
+            lines=["Line_10005", "Line_50000002", "Line_90000025"])
+        assert rel_line_load.shape == (2, 3)
+        assert np.isclose(
+            rel_line_load.at[self.timesteps[0], "Line_10005"],
+            self.edisgo.results.i_res.at[self.timesteps[0], "Line_10005"]
+            / (7.274613391789284 / 20 / sqrt(3))
+        )
+        assert np.isclose(
+            rel_line_load.at[self.timesteps[1], "Line_50000002"],
+            self.edisgo.results.i_res.at[self.timesteps[1], "Line_50000002"]
+            / (0.08521689973238901 / 0.4 / sqrt(3)),
+        )
+
+        # test with providing lines and timesteps
+        rel_line_load = tools.calculate_relative_line_load(
+            self.edisgo,
+            lines=["Line_10005"],
+            timesteps=self.timesteps[0])
+        assert rel_line_load.shape == (1, 1)
+        assert np.isclose(
+            rel_line_load.at[self.timesteps[0], "Line_10005"],
+            self.edisgo.results.i_res.at[self.timesteps[0], "Line_10005"]
+            / (7.274613391789284 / 20 / sqrt(3))
+        )
 
     def test_calculate_line_reactance(self):
         data = tools.calculate_line_reactance(2, 3)
