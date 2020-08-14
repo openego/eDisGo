@@ -722,18 +722,17 @@ class EDisGo:
             return
 
         if voltage_level == "mv":
-            lines = self.topology.lines_df.loc[
-                self.topology.lines_df.v_nom > 1
-            ]
+            lines = self.topology.mv_grid.lines_df
         elif voltage_level == "lv":
-            lines = self.topology.lines_df.loc[
-                self.topology.lines_df.v_nom < 1
+            lines = self.topology.lines_df[
+                ~self.topology.lines_df.index.isin(
+                    self.topology.mv_grid.lines_df.index)
             ]
         else:
             lines = self.topology.lines_df
 
         rel_line_loading = tools.calculate_relative_line_load(
-            self, self.results.i_res, lines.index, timestep
+            self, lines.index, timestep
         )
 
         if timestep is None:
