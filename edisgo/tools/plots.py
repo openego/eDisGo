@@ -265,8 +265,13 @@ def mv_grid_topology(
           Node color as well as size is set according to type of node
           (generator, MV station, etc.).
         * 'voltage'
+          Node color is set according to maximum voltage at each node.
+          Voltages of nodes in MV network must be provided by parameter
+          `voltage`.
+        * 'voltage_deviation'
           Node color is set according to voltage deviation from 1 p.u..
-          Voltages of nodes in MV network must be provided by parameter `voltage`.
+          Voltages of nodes in MV network must be provided by parameter
+          `voltage`.
         * 'storage_integration'
           Only storage units are plotted. Size of node corresponds to size of
           storage.
@@ -436,13 +441,36 @@ def mv_grid_topology(
         return bus_sizes, bus_colors
 
     def nodes_by_voltage(buses, voltages):
+        # ToDo: Right now maximum voltage is used. Check if this should be
+        #  changed
+        bus_colors_dict = {}
+        bus_sizes_dict = {}
+        if timestep is not None:
+            bus_colors_dict.update(
+                {
+                    bus: voltages.loc[timestep, bus]
+                    for bus in buses
+                }
+            )
+        else:
+            bus_colors_dict.update(
+                {
+                    bus: max(voltages.loc[:, bus])
+                    for bus in buses
+                }
+            )
+
+        bus_sizes_dict.update({bus: 100000^2 for bus in buses})
+        return bus_sizes_dict, bus_colors_dict
+
+    def nodes_by_voltage_deviation(buses, voltages):
         bus_colors_dict = {}
         bus_sizes_dict = {}
         if timestep is not None:
             bus_colors_dict.update(
                 {
                     bus: 100
-                    * max(abs(1 - voltages.loc[timestep, bus]))
+                    * abs(1 - voltages.loc[timestep, bus])
                     for bus in buses
                 }
             )
@@ -564,7 +592,7 @@ def mv_grid_topology(
     # line colors
     if line_color == "loading":
         line_colors = tools.calculate_relative_line_load(
-            edisgo_obj, line_load, pypsa_plot.lines.index, timestep
+            edisgo_obj, pypsa_plot.lines.index, timestep
         ).max()
     elif line_color == "expansion_costs":
         node_color = "expansion_costs"
@@ -583,6 +611,11 @@ def mv_grid_topology(
         bus_cmap = None
     elif node_color == "voltage":
         bus_sizes, bus_colors = nodes_by_voltage(
+            pypsa_plot.buses.index, voltage
+        )
+        bus_cmap = plt.cm.Blues
+    elif node_color == "voltage_deviation":
+        bus_sizes, bus_colors = nodes_by_voltage_deviation(
             pypsa_plot.buses.index, voltage
         )
         bus_cmap = plt.cm.Blues
@@ -701,7 +734,7 @@ def mv_grid_topology(
         cb.set_label("Grid expansion costs in kEUR")
 
     # color bar voltage
-    if node_color == "voltage":
+    if node_color == "voltage" or node_color == "voltage_deviation":
         if limits_cb_nodes is None:
             limits_cb_nodes = (
                 min(bus_colors.values()),
@@ -716,7 +749,10 @@ def mv_grid_topology(
         )
         cb_voltage.norm.vmin = limits_cb_nodes[0]
         cb_voltage.norm.vmax = limits_cb_nodes[1]
-        cb_voltage.set_label("Voltage deviation in %")
+        if node_color == "voltage":
+            cb_voltage.set_label("Maximum voltage in p.u.")
+        else:
+            cb_voltage.set_label("Voltage deviation in %")
 
     # storage_units
     if node_color == "expansion_costs":
