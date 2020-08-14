@@ -1,0 +1,2 @@
+name,bus_closed,bus_open,branch,type_info
+circuit_breaker_1,BusBar_mvgd_2761_lvgd_196761_MV,virtual_BusBar_mvgd_2761_lvgd_196761_MV,Branch_LVStation_mvgd_2761_lvgd_196761_LVStation_mvgd_2761_lvgd_196762,Switch Disconnector

@@ -1,0 +1,17 @@
+name,bus0,bus1,s_nom,r,x,type,type_info
+Transformer_lv_grid_196758_1,BusBar_mvgd_2761_lvgd_196758_MV,BusBar_mvgd_2761_lvgd_196758_LV,0.1,0.0175,0.035968736424845396,,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_196759_1,BusBar_mvgd_2761_lvgd_196759_MV,BusBar_mvgd_2761_lvgd_196759_LV,0.4,0.0115,0.03831122550898105,,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_196760_1,BusBar_mvgd_2761_lvgd_196760_MV,BusBar_mvgd_2761_lvgd_196760_LV,0.1,0.0175,0.035968736424845396,,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_196761_1,BusBar_mvgd_2761_lvgd_196761_MV,BusBar_mvgd_2761_lvgd_196761_LV,0.4,0.0115,0.03831122550898105,,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_196762_1,BusBar_mvgd_2761_lvgd_196762_MV,BusBar_mvgd_2761_lvgd_196762_LV,0.25,0.013,0.037828560638755476,,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_509384_1,BusBar_mvgd_2761_lvgd_509384_MV,BusBar_mvgd_2761_lvgd_509384_LV,0.25,0.013,0.037828560638755476,,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_509385_1,BusBar_mvgd_2761_lvgd_509385_MV,BusBar_mvgd_2761_lvgd_509385_LV,0.1,0.0175,0.035968736424845396,,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_509386_1,BusBar_mvgd_2761_lvgd_509386_MV,BusBar_mvgd_2761_lvgd_509386_LV,0.1,0.0175,0.035968736424845396,,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_449723_1,BusBar_mvgd_2761_lvgd_449723_MV,BusBar_mvgd_2761_lvgd_449723_LV,0.1,0.0175,0.035968736424845396,,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_198601_1,BusBar_mvgd_2761_lvgd_198601_MV,BusBar_mvgd_2761_lvgd_198601_LV,0.8,0.0105,0.059074106002545645,,0.8 MVA 10/0.4 kV
+Transformer_lv_grid_198602_1,BusBar_mvgd_2761_lvgd_198602_MV,BusBar_mvgd_2761_lvgd_198602_LV,0.8,0.0105,0.059074106002545645,,0.8 MVA 10/0.4 kV
+Transformer_lv_grid_198682_1,BusBar_mvgd_2761_lvgd_198682_MV,BusBar_mvgd_2761_lvgd_198682_LV,0.63,0.010317460317460317,0.03864647477581405,,0.63 MVA 10/0.4 kV
+Transformer_lv_grid_198683_1,BusBar_mvgd_2761_lvgd_198683_MV,BusBar_mvgd_2761_lvgd_198683_LV,0.1,0.0175,0.035968736424845396,,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_198684_1,BusBar_mvgd_2761_lvgd_198684_MV,BusBar_mvgd_2761_lvgd_198684_LV,0.1,0.0175,0.035968736424845396,,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_198685_1,BusBar_mvgd_2761_lvgd_198685_MV,BusBar_mvgd_2761_lvgd_198685_LV,0.1,0.0175,0.035968736424845396,,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_449894_1,BusBar_mvgd_2761_lvgd_449894_MV,BusBar_mvgd_2761_lvgd_449894_LV,0.1,0.0175,0.035968736424845396,,0.1 MVA 10/0.4 kV
