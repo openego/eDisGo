@@ -708,6 +708,9 @@ def mv_grid_topology(
                 max(bus_colors.values()),
             )
         v_voltage = np.linspace(limits_cb_nodes[0], limits_cb_nodes[1], 101)
+        # for some reason, the cmap given to pypsa plot is overwritten and
+        # needs to be set again
+        ll[0].set(cmap='Blues')
         cb_voltage = plt.colorbar(
             ll[0], boundaries=v_voltage, ticks=v_voltage[0:101:10]
         )
