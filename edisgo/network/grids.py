@@ -207,7 +207,7 @@ class Grid(ABC):
 
         """
         for s in self.switch_disconnectors_df.index:
-            yield Switch(id=s)
+            yield Switch(id=s, edisgo_obj=self.edisgo_obj)
 
     @property
     def lines_df(self):
