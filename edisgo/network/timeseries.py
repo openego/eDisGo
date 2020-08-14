@@ -344,14 +344,16 @@ class TimeSeries:
         """
         Contains residual load and information on feed-in and load case.
 
-        Residual load is calculated from total (load - generation) in the network.
-        Grid losses are not considered.
+        Residual load is calculated from total (generation - load) in the
+        network. Grid losses are not considered.
 
         Feed-in and load case are identified based on the
-        generation and load time series and defined as follows:
+        generation, load and storage time series and defined as follows:
 
-        1. Load case: positive (load - generation) at HV/MV substation
-        2. Feed-in case: negative (load - generation) at HV/MV substation
+        1. Load case: negative (generation + storage - load) at HV/MV
+           substation
+        2. Feed-in case: positive (generation + storage - load) at HV/MV
+           substation
 
         Returns
         -------
