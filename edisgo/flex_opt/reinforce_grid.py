@@ -251,7 +251,7 @@ def reinforce_grid(
             "{}".format(crit_lines)
         )
     else:
-        logger.debug(
+        logger.info(
             "==> Load issues were solved in {} iteration "
             "step(s).".format(while_counter)
         )
