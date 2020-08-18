@@ -54,7 +54,7 @@ setup(
         'geoplot': ['geopandas <= 0.6.3', 'contextily', 'descartes'],
         'examples': ['jupyter'],
         'dev': ['pytest', 'sphinx_rtd_theme'],
-        'full': ['geopandas', 'contextily', 'descartes', 'jupyter', 'pytest',
+        'full': ['geopandas <= 0.6.3', 'contextily', 'descartes', 'jupyter', 'pytest',
                  'sphinx_rtd_theme']
     },
     package_data={
