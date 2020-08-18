@@ -5,15 +5,4 @@ channels:
 dependencies:
   - shapely >=1.5.12, <=1.6.3 
   - pandas
-  - pip:
-    - demandlib
-    - networkx >= 2.0
-    - pypsa>=0.15.0
-    - pyproj>=1.9.5.1,<=1.9.5.1
-    - geopy>=1.11.0,<=1.11.0
-    - pyomo>=5.5.0
-    - multiprocess
-    - workalendar
-    - egoio>=0.4.7
-    - matplotlib
 

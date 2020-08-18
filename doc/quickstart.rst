@@ -6,8 +6,10 @@ Getting started
 Installation
 ------------
 
+.. warning:: Make sure to use python 3.5 or 3.6, as eDisGo currently does not work with higher python versions!
+
 Install latest eDisGo version through pip. Therefore, we highly recommend using
-a virtual environment and use its pip.
+a virtual environment and its pip.
 
 .. code-block:: bash
 
@@ -24,8 +26,30 @@ the jupyter notebook examples, we provide installation with extra packages:
     pip3 install edisgo[dev]  # developer packages
     pip3 install edisgo[full]  # combines all of the extras above
 
+
 You may also consider installing a developer version as detailed in
 :ref:`dev-notes`.
+
+Installation under Windows
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For Windows users we recommend using Anaconda and to install the python package shapely
+using the conda-forge channel prior to installing eDisGo. You may use the provided
+`eDisGo_env.yml file <https://github.com/openego/eDisGo/blob/features/refactoring/eDisGo_env.yml>`_
+to do so. Download the file and create a virtual environment with:
+
+.. code-block:: bash
+
+    conda env create -f path/to/eDisGo_env.yml
+
+Activate the newly created environment with:
+
+.. code-block:: bash
+
+    conda activate eDisGo_env
+
+You can now install eDisGo using pip as described above, with or without extra
+packages.
 
 Requirements for edisgoOPF package
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
