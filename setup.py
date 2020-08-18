@@ -51,10 +51,10 @@ setup(
         'sklearn'
     ],
     extras_require={
-        'geoplot': ['geopandas <= 0.6.3', 'contextily'],
+        'geoplot': ['geopandas <= 0.6.3', 'contextily', 'descartes'],
         'examples': ['jupyter'],
         'dev': ['pytest', 'sphinx_rtd_theme'],
-        'full': ['geopandas', 'contextily', 'jupyter', 'pytest',
+        'full': ['geopandas', 'contextily', 'descartes', 'jupyter', 'pytest',
                  'sphinx_rtd_theme']
     },
     package_data={
