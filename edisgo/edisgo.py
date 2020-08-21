@@ -870,6 +870,84 @@ class EDisGo:
             raise ValueError("Component type is not correct.")
         return comp_name
 
+    def integrate_component(
+        self,
+        comp_type,
+        geolocation,
+        voltage_level=None,
+        mode="mv",
+        add_ts=True,
+        ts_active_power=None,
+        ts_reactive_power=None,
+        **kwargs
+    ):
+        """
+        Adds single component to topology based on geolocation.
+
+        This function integrates a new generator or charging point into the
+        grid.
+
+        Parameters
+        ----------
+        comp_type: str
+            Type of added component. Can be 'Generator' or 'ChargingPoint'.
+        geolocation : tuple or shapely Point
+            Geolocation of the new component. In case of tuple, the geolocation
+            must be given in the form (longitude, latitude).
+        voltage_level : int
+            Specifies the voltage level the new component is integrated in.
+            Possible options are 4 (MV busbar), 5 (MV grid), 6 (LV busbar) or
+            7 (LV grid). If no voltage level is provided the voltage level
+            is determined based on the nominal power `p_nom` (given as kwarg)
+            as follows:
+
+            * voltage level 4 (MV busbar): nominal power between 4.5 MW and
+              17.5 MW
+            * voltage level 5 (MV grid) : nominal power between 0.3 MW and
+              4.5 MW
+            * voltage level 6 (LV busbar): nominal power between 4.5 MW and
+              17.5 MW
+            * voltage level 7 (LV grid): nominal power between 4.5 MW and
+              17.5 MW
+
+        mode : str
+            So far, only mode "mv" is implemented. In that case, components
+            in the low voltage will be connected to the closest substation's
+            secondary side.
+        add_ts: Boolean
+            Indicator if time series for component are added as well
+        ts_active_power : pd.Series
+            Active power time series of added component.
+        ts_reactive_power : pd.Series
+            Reactive power time series of added component.
+        **kwargs: dict
+            Attributes of added component. See respective functions for required
+            entries.
+
+        """
+
+        # determine voltage level (is either given or determined based in
+        # nominal power
+
+        # check if geolocation is given as shapely Point, otherwise transform
+        # to shapely Point
+
+        # for MV component "add_and_connect_mv_generator" function can be used
+        # (also for charging point) and maybe needs to be adapted slightly
+        # (nice to have: it could be checked if a bus is already close by
+        # before a new one is created => see TODO in function)
+
+        # for LV component write new function that finds closest substation
+        # vincenty function can be used (returns distance, here in km)
+        # distance = vincenty(
+        #     (geolocation.y, geolocation.x),
+        #     (bus_lv_station_secondary.y,
+        #      bus_lv_station_secondary.x)
+        # ).km
+        # when closest substation is found, "add_component" function can be
+        # used ("add_component" needs to be extended to integrate charging
+        # station)
+
     def remove_component(self, comp_type, comp_name, drop_ts=True):
         """
         Removes single component from respective DataFrame. If drop_ts is set
