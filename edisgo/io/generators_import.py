@@ -436,7 +436,7 @@ def add_and_connect_mv_generator(edisgo_object, generator):
         )
 
         # connect
-        # go through the stack (from nearest to most far connection target
+        # go through the stack (from nearest to farthest connection target
         # object)
         generator_connected = False
         for dist_min_obj in conn_objects_min_stack:
