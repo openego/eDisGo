@@ -438,6 +438,50 @@ class Topology:
     def storage_units_df(self, storage_units_df):
         self._storage_units_df = storage_units_df
 
+    @property
+    def charging_points_df(self):
+        """
+        Dataframe with all charging points in MV grid and underlying LV grids.
+
+        Parameters
+        ----------
+        charging_points_df : :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with all charging points in MV grid and underlying LV
+            grids.
+            Index of the dataframe are charging point names. Columns of the
+            dataframe are:
+
+            * bus (str)
+
+              Bus name of bus, charging point is connected to.
+
+            * p_nom (float)
+
+              Maximum charging power in MW.
+
+            * use_case (str), optional
+
+              Specifies if charging point is e.g. for charging at
+              home, at work, in public, or public fast charging.
+
+            * polygon (shapely Polygon), optional
+
+              Polygon of the area, the charging point is located in, as
+              provided by 'simbev' tool.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with all charging points in MV network and underlying LV
+            grids.
+
+        """
+        return self._charging_points_df
+
+    @charging_points_df.setter
+    def charging_points_df(self, charging_points_df):
+        self._charging_points_df = charging_points_df
+
     # TODO: fix instantiation of Generator and Load objects (they require
     # edisgo_obj that topology does have as a parameter)
     # @property

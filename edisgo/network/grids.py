@@ -168,6 +168,25 @@ class Grid(ABC):
         ]
 
     @property
+    def charging_points_df(self):
+        """
+        Connected charging points within the network.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with all charging points in topology. For more
+            information on the dataframe see
+            :attr:`~.network.topology.Topology.charging_points_df`.
+
+        """
+        return self.edisgo_obj.topology.charging_points_df[
+            self.edisgo_obj.topology.charging_points_df.bus.isin(
+                self.buses_df.index
+            )
+        ]
+
+    @property
     def switch_disconnectors_df(self):
         """
         Switch disconnectors in network.
