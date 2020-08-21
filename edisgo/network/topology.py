@@ -791,6 +791,30 @@ class Topology:
                 )
             )
 
+    def remove_charging_point(self, name):
+        """
+        Removes charging point with given name from topology.
+
+        Parameters
+        ----------
+        name : str
+            Name of charging point as specified in index of `storage_units_df`.
+
+        """
+        # get bus to check if other elements are connected to it
+        bus = self.charging_points_df.at[name, "bus"]
+        # remove charging point
+        self._charging_points_df.drop(name, inplace=True)
+        # if no other elements are connected, remove line and bus as well
+        if check_bus_for_removal(self, bus_name=bus):
+            line_name = self.get_connected_lines_from_bus(bus).index[0]
+            self.remove_line(line_name)
+            logger.debug(
+                "Line {} removed together with charging point {}.".format(
+                    line_name, name
+                )
+            )
+
     def remove_line(self, name):
         """
         Removes line with given name from topology.
@@ -1005,6 +1029,62 @@ class Topology:
         )
         self.storage_units_df = self._storage_units_df.append(new_storage_df)
         return storage_name
+
+    def add_charging_point(self, bus, p_nom, use_case=None, polygon=None):
+        """
+        Adds charging point to topology.
+
+        Charging point identifier is generated automatically.
+
+        Parameters
+        ----------
+        bus : str
+            Identifier of bus charging point is connected to.
+        p_nom : float
+            Nominal power in MW
+        use_case : str (optional)
+            Specifies if charging point is e.g. used for charging at
+            home, at work, in public, or public fast charging.
+        polygon : shapely Polygon (optional)
+            Polygon of the area, the charging point is located in, as
+            provided by 'simbev' tool.
+
+        """
+        try:
+            bus_df = self.buses_df.loc[bus]
+        except KeyError:
+            raise ValueError(
+                "Specified bus {} is not valid as it is not defined in "
+                "buses_df.".format(bus)
+            )
+
+        # generate charging point identifier and check uniqueness
+        if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
+            grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
+        else:
+            grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
+        id = len(self._grids[grid_name].charging_points_df)
+        name = "ChargingPoint_{}_{}".format(grid_name, id)
+        if name in self.charging_points_df.index:
+            name = "ChargingPoint_{}_{}".format(
+                grid_name, id + 1
+            )
+            while name in self.charging_points_df.index:
+                name = "ChargingPoint_{}_{}".format(
+                    grid_name, random.randint(10 ** 8, 10 ** 9)
+                )
+
+        new_df = pd.DataFrame(
+            data={
+                "bus": bus,
+                "p_nom": p_nom,
+                "use_case": use_case,
+                "polygon": polygon
+            },
+            index=[name],
+        )
+        self.charging_points_df = self._charging_points_df.append(new_df)
+        return name
 
     def add_bus(self, bus_name, v_nom, **kwargs):
         """
