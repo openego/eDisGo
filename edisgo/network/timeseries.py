@@ -96,6 +96,12 @@ class TimeSeries:
         self._storage_units_reactive_power = kwargs.get(
             "storage_units_reactive_power", pd.DataFrame(index=self.timeindex)
         )
+        self._charging_points_active_power = kwargs.get(
+            "charging_points_active_power", pd.DataFrame(index=self.timeindex)
+        )
+        self._charging_points_reactive_power = kwargs.get(
+            "charging_points_reactive_power", pd.DataFrame(index=self.timeindex)
+        )
         self._curtailment = kwargs.get(
             "curtailment", pd.DataFrame(index=self.timeindex)
         )
@@ -220,7 +226,7 @@ class TimeSeries:
     @property
     def storage_units_reactive_power(self):
         """
-        Reactive power timeseries of storage_units in MVA.
+        Reactive power timeseries of storage units in MVA.
 
         Returns
         -------
@@ -237,12 +243,66 @@ class TimeSeries:
                 ]
             except:
                 return self._storage_units_reactive_power.loc[
-                    self.timeindex, :
-                ]
+                       self.timeindex, :
+                       ]
 
     @storage_units_reactive_power.setter
     def storage_units_reactive_power(self, storage_units_reactive_power_ts):
         self._storage_units_reactive_power = storage_units_reactive_power_ts
+
+    @property
+    def charging_points_active_power(self):
+        """
+        Active power timeseries of charging points in MW.
+
+        Returns
+        -------
+        dict or :pandas:`pandas.DataFrame<DataFrame>`
+            See class definition for details.
+
+        """
+        if self._charging_points_active_power.empty:
+            return self._charging_points_active_power
+        else:
+            try:
+                return self._charging_points_active_power.loc[
+                       [self.timeindex], :
+                       ]
+            except:
+                return self._charging_points_active_power.loc[
+                       self.timeindex, :]
+
+    @charging_points_active_power.setter
+    def charging_points_active_power(self, charging_points_active_power_ts):
+        self._charging_points_active_power = charging_points_active_power_ts
+
+    @property
+    def charging_points_reactive_power(self):
+        """
+        Reactive power timeseries of charging points in MVA.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            See class definition for details.
+
+        """
+        if self._charging_points_reactive_power.empty:
+            return self._charging_points_reactive_power
+        else:
+            try:
+                return self._charging_points_reactive_power.loc[
+                    [self.timeindex],
+                ]
+            except:
+                return self._charging_points_reactive_power.loc[
+                       self.timeindex, :
+                       ]
+
+    @charging_points_reactive_power.setter
+    def charging_points_reactive_power(self,
+                                       charging_points_reactive_power_ts):
+        self._charging_points_reactive_power = charging_points_reactive_power_ts
 
     @property
     def timeindex(self):
