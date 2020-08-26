@@ -11,6 +11,7 @@ from edisgo.tools.geo import (
     calc_geo_lines_in_buffer,
     proj2equidistant,
     proj2equidistant_reverse,
+    find_nearest_bus,
 )
 
 logger = logging.getLogger("edisgo")
@@ -371,20 +372,27 @@ def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"
         ]
     ]
 
-    # ToDo only necessary if next bus is too far away?
-    # add generator/charging point bus
-    if comp_type == "Generator":
-        gen_bus = "Bus_Generator_{}".format(generator.name)
-    else:
-        gen_bus = "Bus_ChargingPoint_{}".format(len(edisgo_object.topology.charging_points_df))
+    # TODO: Make this a meaningful value
+    DISTANCE_THRESHOLD = 0.5
 
+    # Check if we can connect to nearest bus
     geom = wkt_loads(generator.geom)
-    edisgo_object.topology.add_bus(
-        bus_name=gen_bus,
-        v_nom=edisgo_object.topology.mv_grid.nominal_voltage,
-        x=geom.x,
-        y=geom.y,
-    )
+    nearest_bus, distance = find_nearest_bus(geom, edisgo_object.topology.mv_grid.buses_df)
+    if distance < DISTANCE_THRESHOLD:
+        gen_bus = nearest_bus
+    else:
+        # Too far away, so we create a new bus
+        if comp_type == "Generator":
+            gen_bus = "Bus_Generator_{}".format(generator.name)
+        else:
+            gen_bus = "Bus_ChargingPoint_{}".format(len(edisgo_object.topology.charging_points_df))
+
+        edisgo_object.topology.add_bus(
+            bus_name=gen_bus,
+            v_nom=edisgo_object.topology.mv_grid.nominal_voltage,
+            x=geom.x,
+            y=geom.y,
+        )
 
     # add generator
     if comp_type == "Generator":
