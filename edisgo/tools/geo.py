@@ -192,3 +192,26 @@ def calc_geo_dist_vincenty(edisgo_object, bus_source, bus_target):
     # ===================================================================
 
     return branch_length / 1e3
+
+def find_nearest_bus(point, bus_target):
+    """
+    Finds the nearest bus in `bus_target` from a given point
+
+    Parameters
+    ----------
+    bus_source : shapely.geometry.Point
+        Point to calculate distance from
+    bus_target : pandas DataFrame
+        List of candidate nodes with positions given as 'x' and 'y' columns
+
+    Returns
+    -------
+    :tuple: (`str`, `float`)
+        Tuple that contains the name of the nearest node in the list and its distance
+    """
+
+    bus_target["dist"] = [
+        vincenty((point.y, point.x), (y, x)).km
+        for (x, y) in zip(bus_target["x"], bus_target["y"])
+    ]
+    return bus_target["dist"].idxmin(), bus_target["dist"].min()
