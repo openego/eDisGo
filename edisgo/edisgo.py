@@ -2,14 +2,18 @@ import os
 import logging
 import pandas as pd
 
+# TODO: Really needed here?
+import shapely
+
 from edisgo.network.topology import Topology
 from edisgo.network.results import Results
 from edisgo.network import timeseries
 from edisgo.tools import pypsa_io, plots, tools, networkx_helper
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io.ding0_import import import_ding0_grid
-from edisgo.io.generators_import import oedb as import_generators_oedb
+from edisgo.io.generators_import import oedb as import_generators_oedb, add_and_connect_mv_generator
 from edisgo.tools.config import Config
+from edisgo.tools.geo import find_nearest_bus
 from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.opf.results.opf_result_class import OPFResults
 
@@ -882,6 +886,7 @@ class EDisGo:
         self,
         comp_type,
         geolocation,
+        properties,
         voltage_level=None,
         mode="mv",
         add_ts=True,
@@ -902,6 +907,8 @@ class EDisGo:
         geolocation : tuple or shapely Point
             Geolocation of the new component. In case of tuple, the geolocation
             must be given in the form (longitude, latitude).
+        properties: pd.Series
+            Pandas series with component information
         voltage_level : int
             Specifies the voltage level the new component is integrated in.
             Possible options are 4 (MV busbar), 5 (MV grid), 6 (LV busbar) or
@@ -934,27 +941,49 @@ class EDisGo:
 
         """
 
-        # determine voltage level (is either given or determined based in
-        # nominal power
+        supported_voltage_levels = [4,5,6,7]
+        if not voltage_level in supported_voltage_levels:
+            if not 'p_nom' in kwargs:
+                raise ValueError("Neither appropriate voltage level nor nominal power were supplied.")
+            # Calculate voltage level manually from nominal power:
+            # MV busbar
+            if kwargs['p_nom'] > 4.5e6 and kwargs['p_nom'] <= 17.5e6:
+                voltage_level = 4
+            # MV grid
+            elif kwargs['p_nom'] > 0.3e6 and kwargs['p_nom'] <= 4.5e6:
+                voltage_level = 5
+            else:
+                # TODO: Find out how to distinguish LV voltage levels and implement
+                raise ValueError("Unsupported voltage level")
+        properties['voltage_level'] = voltage_level
 
         # check if geolocation is given as shapely Point, otherwise transform
         # to shapely Point
+        if not type(geolocation) is shapely.geometry.point.Point:
+            geolocation = shapely.geometry.Point(geolocation)
+        # TODO: add_and_connect expects str, not Shapely point
+        properties['geom'] = str(geolocation)
 
-        # for MV component "add_and_connect_mv_generator" function can be used
-        # (also for charging point) and maybe needs to be adapted slightly
-        # (nice to have: it could be checked if a bus is already close by
-        # before a new one is created => see TODO in function)
-
-        # for LV component write new function that finds closest substation
-        # vincenty function can be used (returns distance, here in km)
-        # distance = vincenty(
-        #     (geolocation.y, geolocation.x),
-        #     (bus_lv_station_secondary.y,
-        #      bus_lv_station_secondary.x)
-        # ).km
-        # when closest substation is found, "add_component" function can be
-        # used ("add_component" needs to be extended to integrate charging
-        # station)
+        if voltage_level == 4 or voltage_level == 5:
+            # for MV component "add_and_connect_mv_generator" function can be used
+            # (also for charging point) and maybe needs to be adapted slightly
+            # (nice to have: it could be checked if a bus is already close by
+            # before a new one is created => see TODO in function)
+            add_and_connect_mv_generator(self, properties, comp_type)
+        else:
+            # for LV component write new function that finds closest substation
+            # vincenty function can be used (returns distance, here in km)
+            # distance = vincenty(
+            #     (geolocation.y, geolocation.x),
+            #     (bus_lv_station_secondary.y,
+            #      bus_lv_station_secondary.x)
+            # ).km
+            # when closest substation is found, "add_component" function can be
+            # used ("add_component" needs to be extended to integrate charging
+            # station)
+            substations = self.topology.buses_df.loc[self.topology.transformers_df.bus1]
+            nearest_substation, _ = find_nearest_bus(geolocation, substations)
+            self.add_component(comp_type, bus=nearest_substation, **kwargs)
 
     def remove_component(self, comp_type, comp_name, drop_ts=True):
         """
