@@ -1341,6 +1341,10 @@ def add_generators_timeseries(edisgo_obj, generator_names, **kwargs):
         )
 
 
+def add_charging_points_timeseries(edisgo_obj, charging_point_names, **kwargs):
+    # TODO: Implement
+    pass
+
 def add_storage_units_timeseries(edisgo_obj, storage_unit_names, **kwargs):
     """
     Define storage unit time series for active and reactive power. For more
