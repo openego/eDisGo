@@ -846,6 +846,14 @@ class EDisGo:
                 timeseries.add_generators_timeseries(
                     edisgo_obj=self, generator_names=comp_name, **kwargs
                 )
+
+        elif comp_type == "ChargingPoint":
+            comp_name = self.topology.add_charging_point(**kwargs)
+            if add_ts:
+                timeseries.add_charging_points_timeseries(
+                    edisgo_obj=self, charging_point_names=comp_name, **kwargs
+                )
+
         elif comp_type == "StorageUnit":
             comp_name = self.topology.add_storage_unit(
                 **kwargs,
