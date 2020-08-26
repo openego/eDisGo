@@ -338,7 +338,8 @@ def oedb(edisgo_object):
     _validate_generation()
 
 
-def add_and_connect_mv_generator(edisgo_object, generator):
+#TODO Maybe rename this to 'component'!?
+def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"):
     """
     Add and connect new MV generator to existing grid.
 
@@ -363,7 +364,6 @@ def add_and_connect_mv_generator(edisgo_object, generator):
     """
 
     # ToDo use select_cable instead of standard line?
-
     # get standard equipment
     std_line_type = edisgo_object.topology.equipment_data["mv_cables"].loc[
         edisgo_object.config["grid_expansion_standard_equipment"][
@@ -372,8 +372,12 @@ def add_and_connect_mv_generator(edisgo_object, generator):
     ]
 
     # ToDo only necessary if next bus is too far away?
-    # add generator bus
-    gen_bus = "Bus_Generator_{}".format(generator.name)
+    # add generator/charging point bus
+    if comp_type == "Generator":
+        gen_bus = "Bus_Generator_{}".format(generator.name)
+    else:
+        gen_bus = "Bus_ChargingPoint_{}".format(len(edisgo_object.topology.charging_points_df))
+
     geom = wkt_loads(generator.geom)
     edisgo_object.topology.add_bus(
         bus_name=gen_bus,
@@ -383,14 +387,21 @@ def add_and_connect_mv_generator(edisgo_object, generator):
     )
 
     # add generator
-    edisgo_object.topology.add_generator(
-        generator_id=generator.name,
-        bus=gen_bus,
-        p_nom=generator.electrical_capacity,
-        generator_type=generator.generation_type,
-        subtype=generator.generation_subtype,
-        weather_cell_id=generator.w_id,
-    )
+    if comp_type == "Generator":
+        edisgo_object.topology.add_generator(
+            generator_id=generator.name,
+            bus=gen_bus,
+            p_nom=generator.electrical_capacity,
+            generator_type=generator.generation_type,
+            subtype=generator.generation_subtype,
+            weather_cell_id=generator.w_id,
+        )
+    # add charging point
+    else:
+        edisgo_object.topology.add_charging_point(
+            bus=gen_bus,
+            p_nom=generator.electrical_capacity,
+        )
 
     # ===== voltage level 4: generator is connected to MV station =====
     if generator.voltage_level == 4:
