@@ -389,7 +389,7 @@ def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"
         # Too far away, so we create a new bus
         if comp_type == "Generator":
             # FIXME: Needs to be passed as 'name' here, but is referred to as 'generator_id' by add_generator function. Should be unified across function calls.
-            gen_bus = "Bus_Generator_{}".format(generator['name'])
+            gen_bus = "Bus_Generator_{}".format(generator.name)
         else:
             gen_bus = "Bus_ChargingPoint_{}".format(
                 len(edisgo_object.topology.charging_points_df))
@@ -404,13 +404,13 @@ def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"
     # add generator
     if comp_type == "Generator":
         comp_name = edisgo_object.topology.add_generator(
-            generator_id=generator['name'],
+            generator_id=generator.name,
             bus=gen_bus,
-            p_nom=generator['electrical_capacity'],
+            p_nom=generator["electrical_capacity"],
             # FIXME: Needs to be passed as 'generation_type' here, but is referred to as 'generator_type' by add_generator function. Should be unified across function calls.
-            generator_type=generator['generation_type'],
+            generator_type=generator["generation_type"],
             # FIXME: Needs to be passed as 'generation_subtype' here, but is referred to as 'subtype' by add_generator function. Should be unified across function calls.
-            subtype=generator['generation_subtype'],
+            subtype=generator["generation_subtype"],
             # FIXME: Needs to be passed as 'w_id' here, but is referred to as 'weather_cell_id' by add_generator function. Should be unified across function calls.
             weather_cell_id=generator.w_id,
         )

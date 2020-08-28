@@ -983,7 +983,7 @@ class EDisGo:
             properties['voltage_level'] = voltage_level
             properties['geom'] = str(geolocation)
             properties['electrical_capacity'] = p_nom
-            properties['name'] = kwargs.get('generator_id', None)
+            properties.name = kwargs.get('generator_id', None)
             properties['generation_type'] = kwargs.get('generator_type', None)
             properties['generation_subtype'] = kwargs.get(
                 'generator_subtype', None)
