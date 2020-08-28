@@ -847,16 +847,32 @@ class EDisGo:
         elif comp_type == "Generator":
             comp_name = self.topology.add_generator(**kwargs)
             if add_ts:
-                timeseries.add_generators_timeseries(
-                    edisgo_obj=self, generator_names=comp_name, **kwargs
-                )
+                if ts_active_power is not None and ts_reactive_power is not None:
+                    timeseries.add_timeseries_unchecked(
+                        self, "generators_active_power", ts_active_power, comp_name)
+                    timeseries.add_timeseries_unchecked(
+                        self, "generators_reactive_power", ts_reactive_power, comp_name)
+                else:
+                    # TODO: Not working
+                    # timeseries.add_generators_timeseries(
+                    #     edisgo_obj=self, generator_names=comp_name, **kwargs
+                    # )
+                    pass
 
         elif comp_type == "ChargingPoint":
             comp_name = self.topology.add_charging_point(**kwargs)
             if add_ts:
-                timeseries.add_charging_points_timeseries(
-                    edisgo_obj=self, charging_point_names=comp_name, **kwargs
-                )
+                if ts_active_power is not None and ts_reactive_power is not None:
+                    timeseries.add_timeseries_unchecked(
+                        self, "charging_points_active_power", ts_active_power, comp_name)
+                    timeseries.add_timeseries_unchecked(
+                        self, "charging_points_reactive_power", ts_reactive_power, comp_name)
+                else:
+                    # TODO: Not working
+                    # timeseries.add_charging_points_timeseries(
+                    #     edisgo_obj=self, charging_point_names=comp_name, **kwargs
+                    # )
+                    pass
 
         elif comp_type == "StorageUnit":
             comp_name = self.topology.add_storage_unit(
@@ -886,7 +902,6 @@ class EDisGo:
         self,
         comp_type,
         geolocation,
-        properties,
         voltage_level=None,
         mode="mv",
         add_ts=True,
@@ -907,8 +922,6 @@ class EDisGo:
         geolocation : tuple or shapely Point
             Geolocation of the new component. In case of tuple, the geolocation
             must be given in the form (longitude, latitude).
-        properties: pd.Series
-            Pandas series with component information
         voltage_level : int
             Specifies the voltage level the new component is integrated in.
             Possible options are 4 (MV busbar), 5 (MV grid), 6 (LV busbar) or
@@ -920,10 +933,9 @@ class EDisGo:
               17.5 MW
             * voltage level 5 (MV grid) : nominal power between 0.3 MW and
               4.5 MW
-            * voltage level 6 (LV busbar): nominal power between 4.5 MW and
-              17.5 MW
-            * voltage level 7 (LV grid): nominal power between 4.5 MW and
-              17.5 MW
+            * voltage level 6 (LV busbar): nominal power between 0.1 MW and
+              0.3 MW
+            * voltage level 7 (LV grid): nominal power below 0.1 MW
 
         mode : str
             So far, only mode "mv" is implemented. In that case, components
@@ -941,49 +953,61 @@ class EDisGo:
 
         """
 
-        supported_voltage_levels = [4,5,6,7]
+        supported_voltage_levels = set([4, 5, 6, 7])
+        p_nom = kwargs.get('p_nom', None)
         if not voltage_level in supported_voltage_levels:
-            if not 'p_nom' in kwargs:
-                raise ValueError("Neither appropriate voltage level nor nominal power were supplied.")
+            if p_nom is None:
+                raise ValueError(
+                    "Neither appropriate voltage level nor nominal power were supplied.")
             # Calculate voltage level manually from nominal power:
-            # MV busbar
-            if kwargs['p_nom'] > 4.5e6 and kwargs['p_nom'] <= 17.5e6:
+            if p_nom > 4.5e6 and p_nom <= 17.5e6:
                 voltage_level = 4
-            # MV grid
-            elif kwargs['p_nom'] > 0.3e6 and kwargs['p_nom'] <= 4.5e6:
+            elif p_nom > 0.3e6 and p_nom <= 4.5e6:
                 voltage_level = 5
+            elif p_nom > 0.1e6 and p_nom <= 0.3e6:
+                voltage_level = 6
+            elif p_nom > 0 and p_nom <= 0.1e6:
+                voltage_level = 7
             else:
-                # TODO: Find out how to distinguish LV voltage levels and implement
                 raise ValueError("Unsupported voltage level")
-        properties['voltage_level'] = voltage_level
 
         # check if geolocation is given as shapely Point, otherwise transform
         # to shapely Point
         if not type(geolocation) is shapely.geometry.point.Point:
             geolocation = shapely.geometry.Point(geolocation)
-        # TODO: add_and_connect expects str, not Shapely point
-        properties['geom'] = str(geolocation)
 
+        # Connect MV component
         if voltage_level == 4 or voltage_level == 5:
-            # for MV component "add_and_connect_mv_generator" function can be used
-            # (also for charging point) and maybe needs to be adapted slightly
-            # (nice to have: it could be checked if a bus is already close by
-            # before a new one is created => see TODO in function)
-            add_and_connect_mv_generator(self, properties, comp_type)
+            # Create common properties for Generator and Charging Point
+            properties = pd.Series()
+            properties['voltage_level'] = voltage_level
+            properties['geom'] = str(geolocation)
+            properties['electrical_capacity'] = p_nom
+            properties['name'] = kwargs.get('generator_id', None)
+            properties['generation_type'] = kwargs.get('generator_type', None)
+            properties['generation_subtype'] = kwargs.get(
+                'generator_subtype', None)
+            properties['w_id'] = kwargs.get('weather_cell_id', None)
+            comp_name = add_and_connect_mv_generator(
+                self, properties, comp_type)
+
+            if add_ts and comp_type == 'Generator':
+                timeseries.add_timeseries_unchecked(
+                    self, "generators_active_power", ts_active_power, comp_name)
+                timeseries.add_timeseries_unchecked(
+                    self, "generators_reactive_power", ts_reactive_power, comp_name)
+            elif add_ts and comp_type == 'ChargingPoint':
+                timeseries.add_timeseries_unchecked(
+                    self, "charging_points_active_power", ts_active_power, comp_name)
+                timeseries.add_timeseries_unchecked(
+                    self, "charging_points_reactive_power", ts_reactive_power, comp_name)
+        # Connect LV component
         else:
-            # for LV component write new function that finds closest substation
-            # vincenty function can be used (returns distance, here in km)
-            # distance = vincenty(
-            #     (geolocation.y, geolocation.x),
-            #     (bus_lv_station_secondary.y,
-            #      bus_lv_station_secondary.x)
-            # ).km
-            # when closest substation is found, "add_component" function can be
-            # used ("add_component" needs to be extended to integrate charging
-            # station)
             substations = self.topology.buses_df.loc[self.topology.transformers_df.bus1]
             nearest_substation, _ = find_nearest_bus(geolocation, substations)
-            self.add_component(comp_type, bus=nearest_substation, **kwargs)
+            self.add_component(comp_type, bus=nearest_substation, add_ts=add_ts,
+                               ts_active_power=ts_active_power,
+                               ts_reactive_power=ts_reactive_power, **kwargs)
 
     def remove_component(self, comp_type, comp_name, drop_ts=True):
         """

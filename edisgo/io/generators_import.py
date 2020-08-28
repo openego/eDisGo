@@ -339,7 +339,6 @@ def oedb(edisgo_object):
     _validate_generation()
 
 
-#TODO Maybe rename this to 'component'!?
 def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"):
     """
     Add and connect new MV generator to existing grid.
@@ -362,6 +361,11 @@ def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"
         in MW and generation_type. (name, electrical_capacity, generation_type,
         generation_subtype, w_id)
 
+    Returns
+    -------
+    comp_name: `str`
+        The name of the newly connected generator
+
     """
 
     # ToDo use select_cable instead of standard line?
@@ -377,15 +381,18 @@ def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"
 
     # Check if we can connect to nearest bus
     geom = wkt_loads(generator.geom)
-    nearest_bus, distance = find_nearest_bus(geom, edisgo_object.topology.mv_grid.buses_df)
+    nearest_bus, distance = find_nearest_bus(
+        geom, edisgo_object.topology.mv_grid.buses_df)
     if distance < DISTANCE_THRESHOLD:
         gen_bus = nearest_bus
     else:
         # Too far away, so we create a new bus
         if comp_type == "Generator":
-            gen_bus = "Bus_Generator_{}".format(generator.name)
+            # FIXME: Needs to be passed as 'name' here, but is referred to as 'generator_id' by add_generator function. Should be unified across function calls.
+            gen_bus = "Bus_Generator_{}".format(generator['name'])
         else:
-            gen_bus = "Bus_ChargingPoint_{}".format(len(edisgo_object.topology.charging_points_df))
+            gen_bus = "Bus_ChargingPoint_{}".format(
+                len(edisgo_object.topology.charging_points_df))
 
         edisgo_object.topology.add_bus(
             bus_name=gen_bus,
@@ -396,17 +403,20 @@ def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"
 
     # add generator
     if comp_type == "Generator":
-        edisgo_object.topology.add_generator(
-            generator_id=generator.name,
+        comp_name = edisgo_object.topology.add_generator(
+            generator_id=generator['name'],
             bus=gen_bus,
-            p_nom=generator.electrical_capacity,
-            generator_type=generator.generation_type,
-            subtype=generator.generation_subtype,
+            p_nom=generator['electrical_capacity'],
+            # FIXME: Needs to be passed as 'generation_type' here, but is referred to as 'generator_type' by add_generator function. Should be unified across function calls.
+            generator_type=generator['generation_type'],
+            # FIXME: Needs to be passed as 'generation_subtype' here, but is referred to as 'subtype' by add_generator function. Should be unified across function calls.
+            subtype=generator['generation_subtype'],
+            # FIXME: Needs to be passed as 'w_id' here, but is referred to as 'weather_cell_id' by add_generator function. Should be unified across function calls.
             weather_cell_id=generator.w_id,
         )
     # add charging point
     else:
-        edisgo_object.topology.add_charging_point(
+        comp_name = edisgo_object.topology.add_charging_point(
             bus=gen_bus,
             p_nom=generator.electrical_capacity,
         )
@@ -474,8 +484,9 @@ def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"
                 "Generator {} could not be connected, try to "
                 "increase the parameter `conn_buffer_radius` in "
                 "config file `config_grid.cfg` to gain more possible "
-                "connection points.".format(generator.name)
+                "connection points.".format(comp_name)
             )
+    return comp_name
 
 
 def add_and_connect_lv_generator(
