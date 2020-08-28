@@ -22,6 +22,7 @@ COLUMNS = {
         "subtype",
         "weather_cell_id",
     ],
+    "charging_points_df": ["bus"],
     "loads_df": ["bus", "peak_load", "sector", "annual_consumption"],
     "transformers_df": ["bus0", "bus1", "x_pu", "r_pu", "s_nom", "type_info"],
     "lines_df": [
@@ -103,6 +104,8 @@ def import_ding0_grid(path, edisgo_obj):
     edisgo_obj.topology.generators_df = grid.generators[
         COLUMNS["generators_df"]
     ]
+    edisgo_obj.topology.charging_points_df = pd.DataFrame(
+        columns=COLUMNS["charging_points_df"])
     edisgo_obj.topology.loads_df = grid.loads[COLUMNS["loads_df"]]
     edisgo_obj.topology.transformers_df = sort_transformer_buses(
         grid.transformers.drop(labels=["x_pu", "r_pu"], axis=1).rename(
