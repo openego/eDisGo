@@ -1171,6 +1171,13 @@ def _check_timeindex(edisgo_obj):
         logging.error(message)
         raise KeyError(message)
 
+# Preliminiary helper function to add a time series without any further checks
+# TODO: Remove this and use appropriate `add_xxx_timeseries()` functions once
+# they have been refactored
+def add_timeseries_unchecked(edisgo_obj, dataframe, ts, name):
+    df = getattr(edisgo_obj.timeseries, dataframe)
+    df.insert(len(df.columns), name, ts)
+    setattr(edisgo_obj.timeseries, dataframe, df)
 
 def add_loads_timeseries(edisgo_obj, load_names, **kwargs):
     """
