@@ -1707,7 +1707,7 @@ def _get_q_sign_load(reactive_power_mode):
         )
 
 
-def _fixed_cosphi(active_power, q_sign, power_factor):
+def fixed_cosphi(active_power, q_sign, power_factor):
     """
     Calculates reactive power for a fixed cosphi operation.
 
@@ -1812,7 +1812,7 @@ def _set_reactive_power_time_series_for_fixed_cosphi_using_config(
     reactive_power_df = pd.concat(
         [getattr(edisgo_obj.timeseries,
                  component_type + "_reactive_power"),
-         _fixed_cosphi(
+         fixed_cosphi(
              getattr(edisgo_obj.timeseries,
                      component_type + "_active_power").loc[:, df.index],
              q_sign,
