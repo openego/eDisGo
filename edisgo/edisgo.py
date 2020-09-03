@@ -328,7 +328,7 @@ class EDisGo:
             return pypsa_io.to_pypsa(
                 self.topology._grids[lv_grid_name],
                 mode=mode,
-                timesteps=timesteps,
+                timesteps=timesteps
             )
         else:
             raise ValueError("The entered mode is not a valid option.")
@@ -1055,6 +1055,14 @@ class EDisGo:
                     edisgo_obj=self,
                     comp_type="storage_units",
                     comp_names=comp_name,
+                )
+        elif comp_type == "ChargingPoint":
+            self.topology.remove_charging_point(comp_name)
+            if drop_ts:
+                timeseries._drop_existing_component_timeseries(
+                    edisgo_obj=self,
+                    comp_type="charging_points",
+                    comp_names=comp_name
                 )
         else:
             raise ValueError("Component type is not correct.")
