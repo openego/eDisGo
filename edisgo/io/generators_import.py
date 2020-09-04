@@ -23,7 +23,7 @@ if "READTHEDOCS" not in os.environ:
     from shapely.wkt import loads as wkt_loads
 
 
-def oedb(edisgo_object):
+def oedb(edisgo_object, p_target=None):
     """Import generator data from the Open Energy Database (OEDB).
 
     The importer uses SQLAlchemy ORM objects.
@@ -34,6 +34,9 @@ def oedb(edisgo_object):
     ----------
     edisgo_object: :class:`~.EDisGo`
         The eDisGo container object
+    p_target : int or None
+        if set, Generators will only be imported until an installed
+        generation of p_target is reached
 
     Notes
     ------
@@ -202,6 +205,9 @@ def oedb(edisgo_object):
                 + generators_res_lv["electrical_capacity"].sum()
         )  + generators_conv_mv['electrical_capacity'].sum()
 
+        if p_target is not None:
+            capacity_imported = p_target
+
         capacity_grid = edisgo_object.topology.generators_df.p_nom.sum()
 
         logger.debug(
@@ -333,6 +339,7 @@ def oedb(edisgo_object):
         # generators_mv=generators_mv,
         imported_generators_mv=generators_mv,
         imported_generators_lv=generators_res_lv,
+        p_target=p_target
     )
 
     _validate_generation()
@@ -776,6 +783,7 @@ def update_grids(
     imported_generators_mv,
     imported_generators_lv,
     remove_missing=True,
+    p_target=None,
 ):
     """
     Update network according to new generator dataset.
@@ -945,6 +953,38 @@ def update_grids(
     ]
     number_new_gens = len(new_gens_mv)
 
+    new_gens_lv = imported_generators_lv[
+        ~imported_generators_lv.index.isin(list(existing_gens.id))
+    ]
+
+    if p_target is not None:
+        # Which part of overall expansion is assigned to MV and LV grid
+        p_mv_percent = (
+            new_gens_mv.electrical_capacity.sum() /
+            (new_gens_mv.electrical_capacity.sum() +
+            new_gens_lv.electrical_capacity.sum())
+        )
+        p_lv_percent = 1 - p_mv_percent
+
+        # Calculate amount of required expansion in terms of generation
+        p_mv_total = (p_target - existing_gens.p_nom.sum()) * p_mv_percent
+        p_lv_total = (p_target - existing_gens.p_nom.sum()) * p_lv_percent
+
+        # Throw away units until we are below expansion threshold
+        while new_gens_mv.electrical_capacity.sum() > p_mv_total:
+            new_gens_mv.drop(random.choice(new_gens_mv.index), inplace=True)
+        # Split resulting error between all remaining units
+        if len(new_gens_mv) > 0:
+            new_gens_mv.electrical_capacity *= p_mv_total / \
+                new_gens_mv.electrical_capacity.sum()
+
+        # Do the same for LV expansion
+        while new_gens_lv.electrical_capacity.sum() > p_lv_total:
+            new_gens_lv.drop(random.choice(new_gens_lv.index), inplace=True)
+        if len(new_gens_lv) > 0:
+            new_gens_lv.electrical_capacity *= p_lv_total / \
+                new_gens_lv.electrical_capacity.sum()
+
     # iterate over new generators and create them
     for id in new_gens_mv.index:
         # check if geom is available, skip otherwise
@@ -973,9 +1013,6 @@ def update_grids(
     # Step 4: Add new LV generators
     # ===============================
 
-    new_gens_lv = imported_generators_lv[
-        ~imported_generators_lv.index.isin(list(existing_gens.id))
-    ]
 
     # check if new generators can be allocated to an existing LV grid
     grid_ids = [_.id for _ in edisgo_object.topology._grids.values()]

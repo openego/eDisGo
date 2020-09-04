@@ -685,6 +685,20 @@ def get_component_timeseries(edisgo_obj, **kwargs):
 
 
 def _load_from_timeseries(edisgo_obj, load_names=None):
+    """
+    Set active and reactive load time series for specified loads by sector.
+
+    If loads are not specified, sets time series of all existing loads.
+    In case reactive power time series are not provided, a fixed power factor
+    as specified in config file 'config_timeseries' in section
+    'reactive_power_factor' is assumed.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    load_names : list(str)
+
+    """
     # get all requested loads and drop existing timeseries
     if load_names is None:
         load_names = edisgo_obj.topology.loads_df.index
@@ -1244,7 +1258,7 @@ def add_loads_timeseries(edisgo_obj, load_names, **kwargs):
             )
     else:
         # create load active and reactive power timeseries
-        _set_timeseries_of_loads_by_sector(
+        _load_from_timeseries(
             edisgo_obj=edisgo_obj, load_names=load_names)
 
 

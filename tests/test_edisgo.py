@@ -214,6 +214,55 @@ class TestEDisGo:
         with pytest.raises(ValueError, match=msg):
             self.edisgo.to_pypsa(mode='lv')
 
+    def test_mv_lv_to_pypsa_with_charging_points(self):
+
+        # add charging points to LVGrid
+        cp1 = self.edisgo.add_component(
+            "ChargingPoint", bus='Bus_secondary_LVStation_2', p_nom=0.005,
+            ts_active_power=pd.Series(data=np.array([0.01, 0.02]),
+                                      index=self.timesteps),
+            ts_reactive_power=pd.Series(data=np.array([0.04, 0.03]),
+                                    index=self.timesteps)
+        )
+        cp2 = self.edisgo.add_component(
+            "ChargingPoint", bus='Bus_secondary_LVStation_2', p_nom=0.005,
+            ts_active_power=pd.Series(data=np.array([0.05, 0.06]),
+                                      index=self.timesteps),
+            ts_reactive_power=pd.Series(data=np.array([0.08, 0.07]),
+                                    index=self.timesteps))
+        # set charging points timeseries
+        # Todo: Check timeseries (has to be moved to add component)
+        # active_power = pd.DataFrame(data=np.array([[1, 2], [4, 3]]),
+        #                             index=self.timesteps,
+        #                             columns=['ChargingPoint_LVGrid_2_0',
+        #                                      'ChargingPoint_LVGrid_2_1'])
+        # reactive_power = pd.DataFrame(data=np.array([[6, 8], [7, 9]]),
+        #                               index=self.timesteps,
+        #                               columns=['ChargingPoint_LVGrid_2_0',
+        #                                        'ChargingPoint_LVGrid_2_1'])
+        # test lv to pypsa
+        pypsa_network = self.edisgo.to_pypsa(
+            mode='lv', lv_grid_name='LVGrid_2')
+        pf_results = pypsa_network.pf(self.timesteps[0])
+        # check if pf converged
+        if all(pf_results['converged']['0'].tolist()):
+            print('lv converged')
+        else:
+            raise ValueError("Power flow analysis did not converge.")
+        # test lv to pypsa aggregate
+        pypsa_network = self.edisgo.to_pypsa(
+            mode='mvlv',
+            aggregate_generators='curtailable', aggregate_loads='sectoral')
+        pf_results = pypsa_network.pf(self.timesteps[0])
+        # check if pf converged
+        if all(pf_results['converged']['0'].tolist()):
+            print('lv converged')
+        else:
+            raise ValueError("Power flow analysis did not converge.")
+
+        self.edisgo.remove_component('ChargingPoint', cp1)
+        self.edisgo.remove_component('ChargingPoint', cp2)
+
     def test_to_graph(self):
         graph = self.edisgo.to_graph()
         assert len(graph.nodes) == len(self.edisgo.topology.buses_df)
