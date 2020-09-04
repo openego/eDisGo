@@ -62,20 +62,20 @@ def oedb(edisgo_object):
                 orm_conv_generators.columns.id,
                 orm_conv_generators.columns.subst_id,
                 orm_conv_generators.columns.la_id,
-                orm_conv_generators.columns.capacity,
+                (orm_conv_generators.columns.capacity).label("electrical_capacity"),
                 orm_conv_generators.columns.type,
                 orm_conv_generators.columns.voltage_level,
-                orm_conv_generators.columns.fuel,
+                (orm_conv_generators.columns.fuel).label("generation_type"),
                 func.ST_AsText(
                     func.ST_Transform(orm_conv_generators.columns.geom, srid)
-                ),
+                ).label("geom"),
             )
                 .filter(
                 orm_conv_generators.columns.subst_id
                 == edisgo_object.topology.mv_grid.id
             )
                 .filter(
-                orm_conv_generators.columns.voltage_level.in_([4, 5, 6, 7])
+                orm_conv_generators.columns.voltage_level.in_([4, 5])
             )
                 .filter(orm_conv_generators_version)
         )
@@ -139,7 +139,7 @@ def oedb(edisgo_object):
                 == edisgo_object.topology.mv_grid.id
             )
                 .filter(orm_re_generators_version)
-                .filter(types_filter)
+                #.filter(types_filter)
         )
 
         # extend basic query for MV generators and read data from db
@@ -200,8 +200,7 @@ def oedb(edisgo_object):
         capacity_imported = (
                 generators_res_mv["electrical_capacity"].sum()
                 + generators_res_lv["electrical_capacity"].sum()
-        )  # + \
-        # generators_conv_mv['capacity'].sum()
+        )  + generators_conv_mv['electrical_capacity'].sum()
 
         capacity_grid = edisgo_object.topology.generators_df.p_nom.sum()
 
@@ -321,10 +320,10 @@ def oedb(edisgo_object):
 
     # get conventional and renewable generators
     with session_scope() as session:
-        # generators_conv_mv = _import_conv_generators(session)
+        generators_conv_mv = _import_conv_generators(session)
         generators_res_mv, generators_res_lv = _import_res_generators(session)
 
-    # generators_mv = generators_conv_mv.append(generators_res_mv)
+    generators_mv = generators_conv_mv.append(generators_res_mv)
 
     # validate that imported generators are located inside the grid district
     _validate_sample_geno_location()
@@ -332,7 +331,7 @@ def oedb(edisgo_object):
     update_grids(
         edisgo_object=edisgo_object,
         # generators_mv=generators_mv,
-        imported_generators_mv=generators_res_mv,
+        imported_generators_mv=generators_mv,
         imported_generators_lv=generators_res_lv,
     )
 
