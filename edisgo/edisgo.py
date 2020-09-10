@@ -853,11 +853,9 @@ class EDisGo:
                     timeseries.add_timeseries_unchecked(
                         self, "generators_reactive_power", ts_reactive_power, comp_name)
                 else:
-                    # TODO: Not working
-                    # timeseries.add_generators_timeseries(
-                    #     edisgo_obj=self, generator_names=comp_name, **kwargs
-                    # )
-                    pass
+                    timeseries.add_generators_timeseries(
+                        edisgo_obj=self, generator_names=comp_name, **kwargs
+                    )
 
         elif comp_type == "ChargingPoint":
             comp_name = self.topology.add_charging_point(**kwargs)
@@ -868,10 +866,7 @@ class EDisGo:
                     timeseries.add_timeseries_unchecked(
                         self, "charging_points_reactive_power", ts_reactive_power, comp_name)
                 else:
-                    # TODO: Not working
-                    # timeseries.add_charging_points_timeseries(
-                    #     edisgo_obj=self, charging_point_names=comp_name, **kwargs
-                    # )
+                    # TODO: Nothing to generate Charging Point time series from...
                     pass
 
         elif comp_type == "StorageUnit":
