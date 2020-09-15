@@ -5,6 +5,7 @@ from sqlalchemy import func
 import random
 import logging
 
+from edisgo.network.grids import LVGrid
 from edisgo.tools import session_scope
 from edisgo.tools.geo import (
     calc_geo_dist_vincenty,
@@ -390,7 +391,7 @@ def add_and_connect_mv_generator(edisgo_object, generator,
 
         if comp_type == "Generator":
             # FIXME: Needs to be passed as 'name' here, but is referred to as 'generator_id' by add_generator function. Should be unified across function calls.
-            gen_bus = "Bus_Generator_{}".format(generator["name"])
+            gen_bus = "Bus_Generator_{}".format(generator.name)
         else:
             gen_bus = "Bus_ChargingPoint_{}".format(
                 len(edisgo_object.topology.charging_points_df))
@@ -405,7 +406,7 @@ def add_and_connect_mv_generator(edisgo_object, generator,
     # add component
     if comp_type == "Generator":
         comp_name = edisgo_object.topology.add_generator(
-            generator_id=generator["name"],
+            generator_id=generator.name,
             bus=gen_bus,
             p_nom=generator["electrical_capacity"],
             # FIXME: Needs to be passed as 'generation_type' here, but is referred to as 'generator_type' by add_generator function. Should be unified across function calls.
@@ -541,7 +542,7 @@ def add_and_connect_lv_generator(
     lv_grid_ids = [_.id for _ in edisgo_object.topology.mv_grid.lv_grids]
 
     add_generator_data = {
-        "generator_id": generator["name"],
+        "generator_id": generator.name,
         "p_nom": generator.electrical_capacity,
         "generator_type": generator.generation_type,
         "subtype": generator.generation_subtype,
@@ -592,7 +593,7 @@ def add_and_connect_lv_generator(
     # if no MV-LV substation ID is given, choose random LV grid and connect
     # to station
     else:
-        random.seed(a=generator["name"])
+        random.seed(a=generator.name)
         lv_grid_id = random.choice(lv_grid_ids)
         lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=edisgo_object)
         comp_name = edisgo_object.topology.add_generator(
@@ -601,7 +602,7 @@ def add_and_connect_lv_generator(
         logger.warning(
             "Generator {} has no mvlv_subst_id. It is therefore allocated to "
             "a random LV Grid ({}); geom was set to stations' geom.".format(
-                generator["name"], lv_grid_id
+                generator.name, lv_grid_id
             )
         )
         return comp_name
@@ -609,7 +610,7 @@ def add_and_connect_lv_generator(
     # generator is of v_level 6 -> connect to grid's LV station
     if generator.voltage_level == 6:
 
-        gen_bus = "Bus_Generator_{}".format(generator["name"])
+        gen_bus = "Bus_Generator_{}".format(generator.name)
         geom = wkt_loads(generator.geom)
         edisgo_object.topology.add_bus(
             bus_name=gen_bus,
@@ -677,7 +678,7 @@ def add_and_connect_lv_generator(
 
         # generate random list (unique elements) of possible target loads
         # to connect generators to
-        random.seed(a=int(generator["name"]))
+        random.seed(a=int(generator.name))
         if len(target_loads) > 0:
             lv_loads_rnd = random.sample(
                 sorted(list(target_loads.index)),
@@ -738,7 +739,7 @@ def add_and_connect_lv_generator(
 
             station_bus = lv_grid.station.index[0]
 
-            gen_bus = "Bus_Generator_{}".format(generator["name"])
+            gen_bus = "Bus_Generator_{}".format(generator.name)
             lv_conn_target = gen_bus
             geom = wkt_loads(generator.geom)
             edisgo_object.topology.add_bus(
