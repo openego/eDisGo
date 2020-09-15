@@ -327,9 +327,10 @@ def oedb(edisgo_object):
     _validate_generation()
 
     # update time series if they were already set
-    add_generators_timeseries(
-        edisgo_obj=edisgo_object,
-        generator_names=edisgo_object.topology.generators_df.index)
+    if not edisgo_object.timeseries.generators_active_power.empty:
+        add_generators_timeseries(
+            edisgo_obj=edisgo_object,
+            generator_names=edisgo_object.topology.generators_df.index)
 
 
 def add_and_connect_mv_generator(edisgo_object, generator,
