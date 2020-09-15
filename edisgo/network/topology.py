@@ -282,8 +282,8 @@ class Topology:
             Dataframe with all transformers.
             Index of the dataframe are transformer names. Columns of the
             dataframe are:
-            bus0
-            bus1
+            bus0 - primary side
+            bus1 - secondary side
             x_pu
             r_pu
             s_nom
@@ -732,6 +732,7 @@ class Topology:
         bus = self.generators_df.at[name, "bus"]
         # remove generator
         self._generators_df.drop(name, inplace=True)
+        # ToDo drop timeseries
         # if no other elements are connected to same bus, remove line and bus
         if check_bus_for_removal(self, bus_name=bus):
             line_name = self.get_connected_lines_from_bus(bus).index[0]

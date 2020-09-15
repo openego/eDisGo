@@ -193,9 +193,10 @@ def calc_geo_dist_vincenty(edisgo_object, bus_source, bus_target):
 
     return branch_length / 1e3
 
+
 def find_nearest_bus(point, bus_target):
     """
-    Finds the nearest bus in `bus_target` from a given point
+    Finds the nearest bus in `bus_target` from a given point.
 
     Parameters
     ----------
