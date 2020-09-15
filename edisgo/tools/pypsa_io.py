@@ -991,22 +991,22 @@ def _check_integrity_of_pypsa(pypsa_network):
     # check consistency of topology and time series data
     generators_ts_p_missing = pypsa_network.generators.loc[
         ~pypsa_network.generators.index.isin(
-            pypsa_network.generators_t["p_set"].columns.tolist()
+            pypsa_network.generators_t["p_set"].dropna(axis=1).columns.tolist()
         )
     ]
     generators_ts_q_missing = pypsa_network.generators.loc[
         ~pypsa_network.generators.index.isin(
-            pypsa_network.generators_t["q_set"].columns.tolist()
+            pypsa_network.generators_t["q_set"].dropna(axis=1).columns.tolist()
         )
     ]
     loads_ts_p_missing = pypsa_network.loads.loc[
         ~pypsa_network.loads.index.isin(
-            pypsa_network.loads_t["p_set"].columns.tolist()
+            pypsa_network.loads_t["p_set"].dropna(axis=1).columns.tolist()
         )
     ]
     loads_ts_q_missing = pypsa_network.loads.loc[
         ~pypsa_network.loads.index.isin(
-            pypsa_network.loads_t["q_set"].columns.tolist()
+            pypsa_network.loads_t["q_set"].dropna(axis=1).columns.tolist()
         )
     ]
     bus_v_set_missing = pypsa_network.buses.loc[
