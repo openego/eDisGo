@@ -377,7 +377,7 @@ def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"
     ]
 
     # TODO: Make this a meaningful value
-    DISTANCE_THRESHOLD = 0.5
+    DISTANCE_THRESHOLD = 0.01
 
     # Check if we can connect to nearest bus
     geom = wkt_loads(generator.geom)
