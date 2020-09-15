@@ -31,14 +31,14 @@ class TestGeneratorsImportWithoutTimeSeries:
             "Bus_GeneratorFluctuating_2", "y"]
         geom = Point((x, y))
         test_gen = pd.Series(
-            {"name": 12345,
-             "electrical_capacity": 2.5,
+            {"electrical_capacity": 2.5,
              "geom": str(geom),
              "generation_type": "solar",
              "generation_subtype": "roof",
              "w_id": self.edisgo.topology.generators_df.at[
                  "GeneratorFluctuating_2", "weather_cell_id"],
-             "voltage_level": 4}
+             "voltage_level": 4},
+            name=12345
         )
 
         comp_name = generators_import.add_and_connect_mv_generator(
@@ -75,14 +75,14 @@ class TestGeneratorsImportWithoutTimeSeries:
             "Bus_GeneratorFluctuating_6", "y"]
         geom = Point((x, y))
         test_gen = pd.Series(
-            {"name": 123456,
-             "electrical_capacity": 2.5,
+            {"electrical_capacity": 2.5,
              "geom": str(geom),
              "generation_type": "solar",
              "generation_subtype": "roof",
              "w_id": self.edisgo.topology.generators_df.at[
                  "GeneratorFluctuating_2", "weather_cell_id"],
-             "voltage_level": 5}
+             "voltage_level": 5},
+            name=123456
         )
 
         comp_name = generators_import.add_and_connect_mv_generator(
@@ -122,14 +122,14 @@ class TestGeneratorsImportWithoutTimeSeries:
             "Bus_GeneratorFluctuating_6", "y"]
         geom = Point((x, y))
         test_gen = pd.Series(
-            {"name": 123456,
-             "electrical_capacity": 2.5,
+            {"electrical_capacity": 2.5,
              "geom": str(geom),
              "generation_type": "solar",
              "generation_subtype": "roof",
              "w_id": self.edisgo.topology.generators_df.at[
                  "GeneratorFluctuating_2", "weather_cell_id"],
-             "voltage_level": 5}
+             "voltage_level": 5},
+            name=123456
         )
 
         comp_name = generators_import.add_and_connect_mv_generator(
@@ -158,14 +158,14 @@ class TestGeneratorsImportWithoutTimeSeries:
 
         # add generator
         test_gen = pd.Series(
-            {"name": 23456,
-             "electrical_capacity": 0.3,
+            {"electrical_capacity": 0.3,
              "generation_type": "solar",
              "generation_subtype": "roof",
              "w_id": self.edisgo.topology.generators_df.at[
                  "GeneratorFluctuating_2", "weather_cell_id"],
              "voltage_level": 6,
-             "mvlv_subst_id": 10}
+             "mvlv_subst_id": 10},
+            name=23456
         )
 
         comp_name = generators_import.add_and_connect_lv_generator(
@@ -191,14 +191,14 @@ class TestGeneratorsImportWithoutTimeSeries:
 
         # add generator
         test_gen = pd.Series(
-            {"name": 23456,
-             "electrical_capacity": 0.3,
+            {"electrical_capacity": 0.3,
              "generation_type": "solar",
              "generation_subtype": "roof",
              "w_id": self.edisgo.topology.generators_df.at[
                  "GeneratorFluctuating_2", "weather_cell_id"],
              "voltage_level": 6,
-             "mvlv_subst_id": None}
+             "mvlv_subst_id": None},
+            name=23456
         )
 
         comp_name = generators_import.add_and_connect_lv_generator(
@@ -235,15 +235,15 @@ class TestGeneratorsImportWithoutTimeSeries:
             "Bus_GeneratorFluctuating_6", "y"]
         geom = Point((x, y))
         test_gen = pd.Series(
-            {"name": 3456,
-             "electrical_capacity": 0.3,
+            {"electrical_capacity": 0.3,
              "geom": str(geom),
              "generation_type": "solar",
              "generation_subtype": "roof",
              "w_id": self.edisgo.topology.generators_df.at[
                  "GeneratorFluctuating_2", "weather_cell_id"],
              "voltage_level": 6,
-             "mvlv_subst_id": 6}
+             "mvlv_subst_id": 6},
+            name=3456
         )
 
         comp_name = generators_import.add_and_connect_lv_generator(
@@ -282,15 +282,15 @@ class TestGeneratorsImportWithoutTimeSeries:
 
         # add generator
         test_gen = pd.Series(
-            {"name": 3456,
-             "electrical_capacity": 0.03,
+            {"electrical_capacity": 0.03,
              "geom": str(geom),
              "generation_type": "solar",
              "generation_subtype": "roof",
              "w_id": self.edisgo.topology.generators_df.at[
                  "GeneratorFluctuating_2", "weather_cell_id"],
              "voltage_level": 7,
-             "mvlv_subst_id": 1}
+             "mvlv_subst_id": 1},
+            name=3456
         )
 
         comp_name = generators_import.add_and_connect_lv_generator(
@@ -314,3 +314,80 @@ class TestGeneratorsImportWithoutTimeSeries:
                    comp_name, "p_nom"] == 0.03
 
         # ToDo test other options when connected to voltage level 7
+
+    def test_update_grids(self):
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        generators_before = self.edisgo.topology.generators_df
+
+        # mv generators
+        x = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_6", "x"]
+        y = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_6", "y"]
+        geom_gen_new = Point((x, y))
+        generators_mv = pd.DataFrame(
+            data={
+                "geom": [None, None, str(geom_gen_new)],
+                "electrical_capacity": [3.0, 2.67, 2.5],
+                "generation_type": ["wind", "solar", "solar"],
+                "generation_subtype": ["wind", "solar", "solar"],
+                "w_id": [1122074, 1122075, 1122074],
+                "voltage_level": [4, 4, 4]
+            },
+            index=[2, 3, 345]
+        )
+        generators_lv = pd.DataFrame(
+            data={
+                "geom": [None, None, str(geom_gen_new)],
+                "electrical_capacity": [0.027, 0.005, 0.3],
+                "generation_type": ["solar", "solar", "solar"],
+                "generation_subtype": ["solar", "solar", "roof"],
+                "w_id": [1122075, 1122075, 1122074],
+                "voltage_level": [6, 6, 6],
+                "mvlv_subst_id": [None, None, 6]
+            },
+            index=[13, 14, 456]
+        )
+
+        generators_import.update_grids(
+            self.edisgo, generators_mv, generators_lv)
+
+        # check number of generators
+        assert len(self.edisgo.topology.generators_df) == 6
+        assert len(self.edisgo.topology.mv_grid.generators_df) == 3
+
+        # check removed generators
+        assert "Generator_1" not in self.edisgo.topology.generators_df.index
+        assert "GeneratorFluctuating_12" not in self.edisgo.topology.generators_df.index
+
+        # check updated generators
+        assert self.edisgo.topology.generators_df.at[
+                   "GeneratorFluctuating_2", "p_nom"] == 3
+        assert self.edisgo.topology.generators_df.at[
+                   "GeneratorFluctuating_2", "subtype"] == "wind_wind_onshore"
+        assert self.edisgo.topology.generators_df.at[
+                   "GeneratorFluctuating_13", "p_nom"] == 0.027
+        assert self.edisgo.topology.generators_df.at[
+                   "GeneratorFluctuating_13", "subtype"] == "solar_solar_roof_mounted"
+
+        # check generators that stayed the same
+        assert self.edisgo.topology.generators_df.at[
+                   "GeneratorFluctuating_3", "p_nom"] == 2.67
+        assert self.edisgo.topology.generators_df.at[
+                   "GeneratorFluctuating_3", "subtype"] == "solar_solar_ground_mounted"
+        assert self.edisgo.topology.generators_df.at[
+                   "GeneratorFluctuating_14", "p_nom"] == 0.005
+        assert self.edisgo.topology.generators_df.at[
+                   "GeneratorFluctuating_14", "subtype"] == "solar_solar_roof_mounted"
+
+        # check new generators
+        assert self.edisgo.topology.generators_df.at[
+                   "Generator_solar_MVGrid_1_345", "p_nom"] == 2.5
+        assert self.edisgo.topology.generators_df.at[
+                   "Generator_solar_MVGrid_1_345", "type"] == "solar"
+        assert self.edisgo.topology.generators_df.at[
+                   "Generator_solar_LVGrid_6_456", "p_nom"] == 0.3
+        assert self.edisgo.topology.generators_df.at[
+                   "Generator_solar_LVGrid_6_456", "type"] == "solar"
