@@ -183,7 +183,10 @@ class EDisGo:
         and 'ego100'.
 
         .. ToDo: Add link to explanation of scenarios.
-
+    p_target : None or int
+        Generators from the imported scenario will be discarded until this value
+        is reached. The error is then assigned proprotionally to all remaing units
+        Should be lower than the overall generation after expansion
     timeindex : None or :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
         Can be used to select time ranges of the feed-in and load time series
         that will be used in the power flow analysis. Also defines the year
@@ -218,7 +221,7 @@ class EDisGo:
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
-            self.import_generators(kwargs.get("generator_scenario"))
+            self.import_generators(kwargs.get("generator_scenario"), p_target=kwargs.get("p_target", None))
 
         # set up time series for feed-in and load
         # worst-case time series
@@ -328,7 +331,7 @@ class EDisGo:
             return pypsa_io.to_pypsa(
                 self.topology._grids[lv_grid_name],
                 mode=mode,
-                timesteps=timesteps,
+                timesteps=timesteps
             )
         else:
             raise ValueError("The entered mode is not a valid option.")
@@ -369,7 +372,7 @@ class EDisGo:
         #                    curtailment_timeseries=curtailment_timeseries,
         #                    mode=kwargs.pop('mode', None), **kwargs)
 
-    def import_generators(self, generator_scenario=None):
+    def import_generators(self, generator_scenario=None, p_target=None):
         """Import generators
 
         For details see
@@ -378,7 +381,7 @@ class EDisGo:
         """
         if generator_scenario:
             self.topology.generator_scenario = generator_scenario
-        import_generators_oedb(edisgo_object=self)
+        import_generators_oedb(edisgo_object=self, p_target=p_target)
 
     def analyze(self, mode=None, timesteps=None):
         """Conducts a static, non-linear power flow analysis
@@ -1055,6 +1058,14 @@ class EDisGo:
                     edisgo_obj=self,
                     comp_type="storage_units",
                     comp_names=comp_name,
+                )
+        elif comp_type == "ChargingPoint":
+            self.topology.remove_charging_point(comp_name)
+            if drop_ts:
+                timeseries._drop_existing_component_timeseries(
+                    edisgo_obj=self,
+                    comp_type="charging_points",
+                    comp_names=comp_name
                 )
         else:
             raise ValueError("Component type is not correct.")
