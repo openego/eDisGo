@@ -317,11 +317,6 @@ class TestGeneratorsImportWithoutTimeSeries:
 
     def test_update_grids(self):
 
-        lines_before = self.edisgo.topology.lines_df
-        buses_before = self.edisgo.topology.buses_df
-        generators_before = self.edisgo.topology.generators_df
-
-        # mv generators
         x = self.edisgo.topology.buses_df.at[
             "Bus_GeneratorFluctuating_6", "x"]
         y = self.edisgo.topology.buses_df.at[
@@ -391,3 +386,22 @@ class TestGeneratorsImportWithoutTimeSeries:
                    "Generator_solar_LVGrid_6_456", "p_nom"] == 0.3
         assert self.edisgo.topology.generators_df.at[
                    "Generator_solar_LVGrid_6_456", "type"] == "solar"
+
+
+class TestGeneratorsImportOEDB:
+
+    @classmethod
+    def setup_class(self):
+        self.edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_2_path,
+            worst_case_analysis="worst-case"
+        )
+
+    def test_oedb(self):
+        self.edisgo.import_generators("nep2035")
+
+        # check number of generators
+        assert len(self.edisgo.topology.generators_df) == 22+93
+        # check total installed capacity
+        assert np.isclose(self.edisgo.topology.generators_df.p_nom.sum(),
+                          31.29129+0.95446)
