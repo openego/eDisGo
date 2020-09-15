@@ -343,6 +343,9 @@ def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"
     """
     Add and connect new MV generator to existing grid.
 
+    ToDo: Change name to add_and_connect_mv_component and move to some other
+     module.
+
     This function connects
 
         * generators of voltage level 4
@@ -1013,7 +1016,7 @@ def update_grids(
                 lv_grid.generators_df.bus != lv_grid.station.index[0]
             ]
         )
-        # warn if there're more generators than loads in LV grid
+        # warn if there are more generators than loads in LV grid
         if lv_gens_voltage_level_7 > lv_loads * 2:
             logger.debug(
                 "There are {} generators (voltage level 7) but only {} "
