@@ -1109,6 +1109,7 @@ class Topology:
             indicator if bus is inside a building
 
         """
+        # ToDo make sure bus_name is unique!
         x = kwargs.get("x", None)
         y = kwargs.get("y", None)
         lv_grid_id = kwargs.get("lv_grid_id", None)
