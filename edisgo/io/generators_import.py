@@ -107,11 +107,6 @@ def oedb(edisgo_object):
 
         """
 
-        # Create filter for generation technologies
-        # ToDo: This needs to be removed when all generators can be imported
-        types_filter = orm_re_generators.columns.generation_type.in_(
-            ["solar", "wind"]
-        )
 
         # build basic query
         generators_sqla = (
@@ -139,7 +134,6 @@ def oedb(edisgo_object):
                 == edisgo_object.topology.mv_grid.id
             )
                 .filter(orm_re_generators_version)
-                #.filter(types_filter)
         )
 
         # extend basic query for MV generators and read data from db
@@ -179,11 +173,6 @@ def oedb(edisgo_object):
         )
 
         return generators_mv, generators_lv
-
-    logging.warning(
-        "Right now only solar and wind generators can be "
-        "imported from the oedb."
-    )
 
     def _validate_generation():
         """
