@@ -7,7 +7,7 @@ GeneratorFluctuating_5,Bus_GeneratorFluctuating_5,PQ,2.3,wind,1122075,wind_wind_
 GeneratorFluctuating_6,Bus_GeneratorFluctuating_6,PQ,3.05,wind,1122075,wind_wind_onshore
 GeneratorFluctuating_7,Bus_GeneratorFluctuating_7,PQ,3,wind,1122075,wind_wind_onshore
 GeneratorFluctuating_8,Bus_GeneratorFluctuating_8,PQ,3,wind,1122075,wind_wind_onshore
-GeneratorFluctuating_agg-1,Bus_GeneratorFluctuating_agg-1,PQ,3.05,wind,1122075,wind_wind_onshore
+GeneratorFluctuating_agg_28,Bus_GeneratorFluctuating_agg-1,PQ,3.05,wind,1122075,wind_wind_onshore
 GeneratorFluctuating_9,Bus_GeneratorFluctuating_9,PQ,0.005,solar,1122075,solar_solar_roof_mounted
 GeneratorFluctuating_10,Bus_GeneratorFluctuating_10,PQ,0.002,solar,1122075,solar_solar_roof_mounted
 GeneratorFluctuating_11,Bus_GeneratorFluctuating_11,PQ,0.005,solar,1122075,solar_solar_roof_mounted
