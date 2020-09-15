@@ -6,6 +6,7 @@ import random
 import logging
 
 from edisgo.network.grids import LVGrid
+from edisgo.network.timeseries import add_generators_timeseries
 from edisgo.tools import session_scope
 from edisgo.tools.geo import (
     calc_geo_dist_vincenty,
@@ -182,7 +183,6 @@ def oedb(edisgo_object):
         The validation uses the cumulative capacity of all generators.
 
         """
-        # ToDo: Validate conv. genos too!
 
         # set capacity difference threshold
         cap_diff_threshold = 10 ** -1
@@ -190,7 +190,7 @@ def oedb(edisgo_object):
         capacity_imported = (
                 generators_res_mv["electrical_capacity"].sum()
                 + generators_res_lv["electrical_capacity"].sum()
-        )  + generators_conv_mv['electrical_capacity'].sum()
+        ) + generators_conv_mv['electrical_capacity'].sum()
 
         capacity_grid = edisgo_object.topology.generators_df.p_nom.sum()
 
@@ -320,7 +320,6 @@ def oedb(edisgo_object):
 
     update_grids(
         edisgo_object=edisgo_object,
-        # generators_mv=generators_mv,
         imported_generators_mv=generators_mv,
         imported_generators_lv=generators_res_lv,
     )
