@@ -2,9 +2,6 @@ import os
 import logging
 import pandas as pd
 
-# TODO: Really needed here?
-import shapely
-
 from edisgo.network.topology import Topology
 from edisgo.network.results import Results
 from edisgo.network import timeseries
@@ -16,6 +13,9 @@ from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
 from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.opf.results.opf_result_class import OPFResults
+
+if "READTHEDOCS" not in os.environ:
+    from shapely.geometry import Point
 
 logger = logging.getLogger("edisgo")
 
@@ -969,8 +969,8 @@ class EDisGo:
 
         # check if geolocation is given as shapely Point, otherwise transform
         # to shapely Point
-        if not type(geolocation) is shapely.geometry.point.Point:
-            geolocation = shapely.geometry.Point(geolocation)
+        if not type(geolocation) is Point:
+            geolocation = Point(geolocation)
 
         # Connect MV component
         if voltage_level == 4 or voltage_level == 5:
