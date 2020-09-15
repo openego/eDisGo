@@ -953,15 +953,16 @@ class EDisGo:
         if not voltage_level in supported_voltage_levels:
             if p_nom is None:
                 raise ValueError(
-                    "Neither appropriate voltage level nor nominal power were supplied.")
+                    "Neither appropriate voltage level nor nominal power "
+                    "were supplied.")
             # Calculate voltage level manually from nominal power:
-            if p_nom > 4.5e6 and p_nom <= 17.5e6:
+            if p_nom > 4.5 and p_nom <= 17.5:
                 voltage_level = 4
-            elif p_nom > 0.3e6 and p_nom <= 4.5e6:
+            elif p_nom > 0.3 and p_nom <= 4.5:
                 voltage_level = 5
-            elif p_nom > 0.1e6 and p_nom <= 0.3e6:
+            elif p_nom > 0.1 and p_nom <= 0.3:
                 voltage_level = 6
-            elif p_nom > 0 and p_nom <= 0.1e6:
+            elif p_nom > 0 and p_nom <= 0.1:
                 voltage_level = 7
             else:
                 raise ValueError("Unsupported voltage level")
@@ -998,7 +999,8 @@ class EDisGo:
                     self, "charging_points_reactive_power", ts_reactive_power, comp_name)
         # Connect LV component
         else:
-            substations = self.topology.buses_df.loc[self.topology.transformers_df.bus1]
+            substations = self.topology.buses_df.loc[
+                self.topology.transformers_df.bus1]
             nearest_substation, _ = find_nearest_bus(geolocation, substations)
             self.add_component(comp_type, bus=nearest_substation, add_ts=add_ts,
                                ts_active_power=ts_active_power,
