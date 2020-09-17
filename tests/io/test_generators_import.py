@@ -8,7 +8,13 @@ from edisgo.network.grids import LVGrid
 from edisgo.io import generators_import
 
 
-class TestGeneratorsImportWithoutTimeSeries:
+class TestGeneratorsImport:
+    """
+    Tests all functions in generators_import.py except where test grid
+    can be used. oedb function is tested separately as a real ding0 grid
+    needs to be used.
+
+    """
 
     @classmethod
     def setup_class(self):
@@ -389,19 +395,233 @@ class TestGeneratorsImportWithoutTimeSeries:
 
 
 class TestGeneratorsImportOEDB:
+    """
+    Tests in here are marked as slow, as the used test grid is quite large
+    and should at some point be changed.
 
-    @classmethod
-    def setup_class(self):
-        self.edisgo = EDisGo(
+    """
+
+    @pytest.mark.slow
+    def test_oedb_without_timeseries(self):
+
+        edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_2_path,
+            worst_case_analysis="worst-case",
+            generator_scenario="nep2035"
+        )
+
+        # check number of generators
+        assert len(edisgo.topology.generators_df) == 18+1618
+        # check total installed capacity
+        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(),
+                          54.52844+19.8241)
+
+    @pytest.mark.slow
+    def test_oedb_with_worst_case_timeseries(self):
+
+        edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_2_path,
             worst_case_analysis="worst-case"
         )
 
-    def test_oedb(self):
-        self.edisgo.import_generators("nep2035")
+        gens_before = edisgo.topology.generators_df.copy()
+        gens_ts_active_before = edisgo.timeseries.generators_active_power.copy()
+        gens_ts_reactive_before = edisgo.timeseries.generators_reactive_power.copy()
+
+        edisgo.import_generators("nep2035")
 
         # check number of generators
-        assert len(self.edisgo.topology.generators_df) == 22+93
+        assert len(edisgo.topology.generators_df) == 18+1618
         # check total installed capacity
-        assert np.isclose(self.edisgo.topology.generators_df.p_nom.sum(),
-                          31.29129+0.95446)
+        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(),
+                          54.52844+19.8241)
+
+        gens_new = edisgo.topology.generators_df[
+            ~edisgo.topology.generators_df.index.isin(gens_before.index)]
+        # check solar generator (same weather cell ID and in same voltage
+        # level, wherefore p_nom is set to be below 300 kW)
+        old_solar_gen = gens_before[
+                        (gens_before.type=="solar") &
+                        (gens_before.p_nom<=0.3)].iloc[0, :]
+        new_solar_gen = gens_new[
+            (gens_new.type=="solar") &
+            (gens_new.weather_cell_id==old_solar_gen.weather_cell_id) &
+            (gens_new.p_nom<=0.3)].iloc[0, :]
+        # check if time series of old gen is the same as before
+        assert np.isclose(gens_ts_active_before.loc[:, old_solar_gen.name],
+                          edisgo.timeseries.generators_active_power.loc[
+                          :, old_solar_gen.name]).all()
+        assert np.isclose(gens_ts_reactive_before.loc[:, old_solar_gen.name],
+                          edisgo.timeseries.generators_reactive_power.loc[
+                          :, old_solar_gen.name]).all()
+        # check if normalized time series of new gen is the same as normalized
+        # time series of old gen
+        assert np.isclose(
+            gens_ts_active_before.loc[:,
+            old_solar_gen.name] / old_solar_gen.p_nom,
+            edisgo.timeseries.generators_active_power.loc[
+            :, new_solar_gen.name] / new_solar_gen.p_nom).all()
+        assert np.isclose(
+            edisgo.timeseries.generators_reactive_power.loc[
+            :, new_solar_gen.name],
+            edisgo.timeseries.generators_active_power.loc[
+            :, new_solar_gen.name]  * -np.tan(np.arccos(0.95))
+        ).all()
+        #ToDo following test currently does fail sometimes as lv generators
+        # connected to MV bus bar are handled as MV generators and therefore
+        # assigned other cosphi
+        # assert np.isclose(
+        #     gens_ts_reactive_before.loc[:,
+        #     old_solar_gen.name] / old_solar_gen.p_nom,
+        #     edisgo.timeseries.generators_reactive_power.loc[
+        #     :, new_solar_gen.name] / new_solar_gen.p_nom).all()
+
+        # check wind generator
+        old_wind_gen = gens_before[gens_before.type == "wind"].iloc[0, :]
+        new_wind_gen = gens_new[
+                            (gens_new.type == "wind") &
+                            (gens_new.weather_cell_id == old_wind_gen.weather_cell_id)].iloc[
+                        0, :]
+        # check if time series of old gen is the same as before
+        assert np.isclose(gens_ts_active_before.loc[:, old_wind_gen.name],
+                          edisgo.timeseries.generators_active_power.loc[
+                          :, old_wind_gen.name]).all()
+        assert np.isclose(gens_ts_reactive_before.loc[:, old_wind_gen.name],
+                          edisgo.timeseries.generators_reactive_power.loc[
+                          :, old_wind_gen.name]).all()
+        # check if normalized time series of new gen is the same as normalized
+        # time series of old gen
+        assert np.isclose(
+            gens_ts_active_before.loc[:,
+            old_wind_gen.name] / old_wind_gen.p_nom,
+            edisgo.timeseries.generators_active_power.loc[
+            :, new_wind_gen.name] / new_wind_gen.p_nom).all()
+        assert np.isclose(
+            gens_ts_reactive_before.loc[:,
+            old_wind_gen.name] / old_wind_gen.p_nom,
+            edisgo.timeseries.generators_reactive_power.loc[
+            :, new_wind_gen.name] / new_wind_gen.p_nom).all()
+
+        # check other generator
+        new_gen = gens_new[gens_new.type == "gas"].iloc[0, :]
+
+        # check if normalized time series of new gen is the same as normalized
+        # time series of old gen
+        assert np.isclose(
+            edisgo.timeseries.generators_active_power.loc[
+            :, new_gen.name] / new_gen.p_nom,
+            [1, 0]).all()
+        assert np.isclose(
+            edisgo.timeseries.generators_reactive_power.loc[
+            :, new_gen.name] / new_gen.p_nom,
+            [-np.tan(np.arccos(0.95)), 0]).all()
+
+    @pytest.mark.slow
+    def test_oedb_with_timeseries_by_technology(self):
+
+        timeindex = pd.date_range('1/1/2012', periods=3, freq='H')
+        ts_gen_dispatchable = pd.DataFrame(
+            {'other': [0.775] * 3,
+             'gas': [0.9] * 3},
+            index=timeindex)
+        ts_gen_fluctuating = pd.DataFrame(
+            {'wind': [0.1, 0.2, 0.15],
+             'solar': [0.4, 0.5, 0.45]},
+            index=timeindex)
+
+        edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_2_path,
+            timeseries_generation_dispatchable=ts_gen_dispatchable,
+            timeseries_generation_fluctuating=ts_gen_fluctuating,
+            timeseries_load="demandlib"
+        )
+
+        gens_before = edisgo.topology.generators_df.copy()
+        gens_ts_active_before = edisgo.timeseries.generators_active_power.copy()
+        gens_ts_reactive_before = edisgo.timeseries.generators_reactive_power.copy()
+
+        edisgo.import_generators("nep2035")
+
+        # check number of generators
+        assert len(edisgo.topology.generators_df) == 18+1618
+        # check total installed capacity
+        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(),
+                          54.52844+19.8241)
+
+        gens_new = edisgo.topology.generators_df[
+            ~edisgo.topology.generators_df.index.isin(gens_before.index)]
+        # check solar generator (same voltage level, wherefore p_nom is set
+        # to be below 300 kW)
+        old_solar_gen = gens_before[
+                        (gens_before.type=="solar") &
+                        (gens_before.p_nom<=0.3)].iloc[0, :]
+        new_solar_gen = gens_new[
+            (gens_new.type=="solar") &
+            (gens_new.p_nom<=0.3)].iloc[0, :]
+        # check if time series of old gen is the same as before
+        assert np.isclose(gens_ts_active_before.loc[:, old_solar_gen.name],
+                          edisgo.timeseries.generators_active_power.loc[
+                          :, old_solar_gen.name]).all()
+        assert np.isclose(gens_ts_reactive_before.loc[:, old_solar_gen.name],
+                          edisgo.timeseries.generators_reactive_power.loc[
+                          :, old_solar_gen.name]).all()
+        # check if normalized time series of new gen is the same as normalized
+        # time series of old gen
+        assert np.isclose(
+            gens_ts_active_before.loc[:,
+            old_solar_gen.name] / old_solar_gen.p_nom,
+            edisgo.timeseries.generators_active_power.loc[
+            :, new_solar_gen.name] / new_solar_gen.p_nom).all()
+        assert np.isclose(
+            edisgo.timeseries.generators_reactive_power.loc[
+            :, new_solar_gen.name],
+            edisgo.timeseries.generators_active_power.loc[
+            :, new_solar_gen.name]  * -np.tan(np.arccos(0.95))
+        ).all()
+        #ToDo following test currently does fail sometimes as lv generators
+        # connected to MV bus bar are handled as MV generators and therefore
+        # assigned other cosphi
+        # assert np.isclose(
+        #     gens_ts_reactive_before.loc[:,
+        #     old_solar_gen.name] / old_solar_gen.p_nom,
+        #     edisgo.timeseries.generators_reactive_power.loc[
+        #     :, new_solar_gen.name] / new_solar_gen.p_nom).all()
+
+        # check wind generator
+        old_wind_gen = gens_before[gens_before.type == "wind"].iloc[0, :]
+        new_wind_gen = gens_new[gens_new.type == "wind"].iloc[0, :]
+        # check if time series of old gen is the same as before
+        assert np.isclose(gens_ts_active_before.loc[:, old_wind_gen.name],
+                          edisgo.timeseries.generators_active_power.loc[
+                          :, old_wind_gen.name]).all()
+        assert np.isclose(gens_ts_reactive_before.loc[:, old_wind_gen.name],
+                          edisgo.timeseries.generators_reactive_power.loc[
+                          :, old_wind_gen.name]).all()
+        # check if normalized time series of new gen is the same as normalized
+        # time series of old gen
+        assert np.isclose(
+            gens_ts_active_before.loc[:,
+            old_wind_gen.name] / old_wind_gen.p_nom,
+            edisgo.timeseries.generators_active_power.loc[
+            :, new_wind_gen.name] / new_wind_gen.p_nom).all()
+        assert np.isclose(
+            gens_ts_reactive_before.loc[:,
+            old_wind_gen.name] / old_wind_gen.p_nom,
+            edisgo.timeseries.generators_reactive_power.loc[
+            :, new_wind_gen.name] / new_wind_gen.p_nom).all()
+
+        # check other generator
+        new_gen = gens_new[
+                      (gens_new.type == "gas") &
+                      (gens_new.bus != edisgo.topology.mv_grid.station.index[0])].iloc[0, :]
+
+        # check if normalized time series of new gen is the same as normalized
+        # time series of old gen
+        assert np.isclose(
+            edisgo.timeseries.generators_active_power.loc[
+            :, new_gen.name] / new_gen.p_nom,
+            [0.9] * 3).all()
+        assert np.isclose(
+            edisgo.timeseries.generators_reactive_power.loc[
+            :, new_gen.name] / (new_gen.p_nom * 0.9),
+            [-np.tan(np.arccos(0.95))] * 3).all()
