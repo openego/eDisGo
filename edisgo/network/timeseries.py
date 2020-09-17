@@ -488,6 +488,8 @@ def get_component_timeseries(edisgo_obj, **kwargs):
         'worst-case' (both feed-in and load case), 'worst-case-feedin' (only
         feed-in case) or 'worst-case-load' (only load case). All other
         parameters except of `config-data` will be ignored. Default: None.
+        Mode can also be set to manual in order to give standard timeseries,
+        that are not obtained from oedb or demandlib.
     timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
         Parameter used to obtain time series for active power feed-in of
         fluctuating renewables wind and solar.
@@ -710,15 +712,22 @@ def _load_from_timeseries(edisgo_obj, load_names=None):
     edisgo_obj.timeseries.loads_active_power = edisgo_obj.timeseries.loads_active_power.T.append(
         loads.apply(
             lambda x: edisgo_obj.timeseries.load[x.sector]
+            * x.annual_consumption
+            if x.sector in edisgo_obj.timeseries.load.columns
+            else edisgo_obj.timeseries.load['other']
             * x.annual_consumption,
             axis=1,
         )
     ).T
+
     # if reactive power is given as attribute set with inserted timeseries
     if hasattr(edisgo_obj.timeseries, "load_reactive_power"):
         edisgo_obj.timeseries.loads_reactive_power = edisgo_obj.timeseries.loads_reactive_power.T.append(
             loads.apply(
                 lambda x: edisgo_obj.timeseries.load_reactive_power[x.sector]
+                * x.annual_consumption
+                if x.sector in edisgo_obj.timeseries.load_reactive_power.columns
+                else edisgo_obj.timeseries.load_reactive_power['other']
                 * x.annual_consumption,
                 axis=1,
             )
