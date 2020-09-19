@@ -592,7 +592,7 @@ def add_and_connect_lv_generator(
             )
             logger.debug(
                 "Generator {} has no geom entry and will be connected to "
-                "grid's LV stations.".format(generator.id)
+                "grid's LV stations.".format(generator.name)
             )
             return comp_name
 

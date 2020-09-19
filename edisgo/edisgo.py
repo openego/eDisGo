@@ -788,8 +788,9 @@ class EDisGo:
         """
         os.makedirs(directory, exist_ok=True)
         if save_results:
-            os.makedirs(os.path.join(directory, "results"), exist_ok=True)
-            self.results.save(os.path.join(directory, "results"))
+            results_dir = os.path.join(directory, "results")
+            os.makedirs(results_dir, exist_ok=True)
+            self.results.save(results_dir)
         if save_topology:
             topology_dir = os.path.join(directory, "topology")
             #os.makedirs(topology_dir, exist_ok=True)
