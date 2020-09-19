@@ -5,7 +5,7 @@ from shapely.geometry import Point
 
 from edisgo import EDisGo
 from edisgo.network.grids import LVGrid
-from edisgo.io import generators_import
+from edisgo.io import generators_import as generators_import
 
 
 class TestGeneratorsImport:
@@ -16,7 +16,7 @@ class TestGeneratorsImport:
 
     """
 
-    @classmethod
+    @pytest.yield_fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_path,
@@ -393,6 +393,98 @@ class TestGeneratorsImport:
         assert self.edisgo.topology.generators_df.at[
                    "Generator_solar_LVGrid_6_456", "type"] == "solar"
 
+    def test_update_grids_target_capacity(self):
+
+        x = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_6", "x"]
+        y = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_6", "y"]
+        geom_gen_new = Point((x, y))
+        generators_mv = pd.DataFrame(
+            data={
+                "geom": [str(geom_gen_new), str(geom_gen_new), str(geom_gen_new)],
+                "electrical_capacity": [3.0, 2.67, 2.5],
+                "generation_type": ["wind", "solar", "solar"],
+                "generation_subtype": ["wind", "solar", "solar"],
+                "w_id": [1122074, 1122075, 1122074],
+                "voltage_level": [4, 4, 4]
+            },
+            index=[321, 3456, 345]
+        )
+        generators_lv = pd.DataFrame(
+            data={
+                "geom": [None, None, str(geom_gen_new), None],
+                "electrical_capacity": [0.027, 0.005, 0.3, 0.3],
+                "generation_type": ["solar", "solar", "run_of_river", "wind"],
+                "generation_subtype": ["solar", "solar", "hydro", "wind"],
+                "w_id": [1122075, 1122075, 1122074, 1122074],
+                "voltage_level": [6, 6, 6, 7],
+                "mvlv_subst_id": [None, None, 6, 2]
+            },
+            index=[13, 145, 456, 654]
+        )
+
+        gens_before = self.edisgo.topology.generators_df
+        p_wind_before = gens_before[gens_before["type"] == "wind"].p_nom.sum()
+        p_pv_before = gens_before[gens_before["type"] == "solar"].p_nom.sum()
+        p_gas_before = gens_before[gens_before["type"] == "gas"].p_nom.sum()
+        p_target = {
+            "wind": p_wind_before + 6,
+            "solar": p_pv_before + 3,
+            "gas": p_gas_before + 1.5
+        }
+
+        generators_import.update_grids(
+            self.edisgo, generators_mv, generators_lv,
+            p_target=p_target, remove_missing=False, update_existing=False)
+
+        # check that all old generators still exist
+        assert gens_before.index.isin(
+            self.edisgo.topology.generators_df.index).all()
+
+        # check that types for which no target capacity is specified are
+        # not expanded
+        assert ("run_of_river" not in
+                self.edisgo.topology.generators_df["type"].unique())
+
+        # check that target capacity for specified types is met
+        # wind - target capacity higher than existing capacity plus new
+        # capacity (all new generators are integrated and capacity is scaled
+        # up)
+        assert (self.edisgo.topology.generators_df[
+                    self.edisgo.topology.generators_df[
+                        'type'] == 'wind'].p_nom.sum() ==
+                p_wind_before + 6)
+        assert (len(self.edisgo.topology.generators_df[
+                        self.edisgo.topology.generators_df[
+                            'type'] == 'wind']) ==
+                len(gens_before[gens_before["type"] == "wind"]) + 2)
+        assert self.edisgo.topology.generators_df.at[
+                   "Generator_wind_MVGrid_1_321", "p_nom"] >= 3.0
+
+        # solar - target capacity lower than existing capacity plus new
+        # capacity (not all new generators are integrated)
+        assert np.isclose(self.edisgo.topology.generators_df[
+                    self.edisgo.topology.generators_df[
+                        'type'] == 'solar'].p_nom.sum(),
+                p_pv_before + 3)
+        assert (len(self.edisgo.topology.generators_df[
+                        self.edisgo.topology.generators_df[
+                            'type'] == 'solar']) <=
+                len(gens_before[gens_before["type"] == "solar"]) + 4)
+
+        # gas - no new generator, existing one is scaled
+        assert (self.edisgo.topology.generators_df[
+                    self.edisgo.topology.generators_df[
+                        'type'] == 'gas'].p_nom.sum() ==
+                p_gas_before + 1.5)
+        assert (len(self.edisgo.topology.generators_df[
+                        self.edisgo.topology.generators_df[
+                            'type'] == 'gas']) ==
+                len(gens_before[gens_before["type"] == "gas"]))
+        assert self.edisgo.topology.generators_df.at[
+                   "Generator_1", "p_nom"] == 0.775 + 1.5
+
 
 class TestGeneratorsImportOEDB:
     """
@@ -625,3 +717,51 @@ class TestGeneratorsImportOEDB:
             edisgo.timeseries.generators_reactive_power.loc[
             :, new_gen.name] / (new_gen.p_nom * 0.9),
             [-np.tan(np.arccos(0.95))] * 3).all()
+
+    @pytest.mark.slow
+    def test_target_capacity(self):
+
+        edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_2_path,
+            worst_case_analysis="worst-case"
+        )
+
+        gens_before = edisgo.topology.generators_df.copy()
+        p_wind_before = edisgo.topology.generators_df[
+            edisgo.topology.generators_df['type']=='wind'].p_nom.sum()
+        p_biomass_before = edisgo.topology.generators_df[
+            edisgo.topology.generators_df['type'] == 'biomass'].p_nom.sum()
+
+        p_target = {'wind': p_wind_before * 1.6,
+                    'biomass': p_biomass_before * 1.0}
+
+        edisgo.import_generators(
+            generator_scenario="nep2035",
+            p_target=p_target,
+            remove_missing=False,
+            update_existing=False
+        )
+
+        # check that all old generators still exist
+        assert gens_before.index.isin(
+            edisgo.topology.generators_df.index).all()
+
+        # check that installed capacity of types, for which no target capacity
+        # was specified, remained the same
+        assert (gens_before[gens_before["type"] == "solar"].p_nom.sum() ==
+                edisgo.topology.generators_df[
+                    edisgo.topology.generators_df["type"] == "solar"].p_nom.sum())
+        assert (gens_before[gens_before["type"] == "run_of_river"].p_nom.sum() ==
+                edisgo.topology.generators_df[
+                    edisgo.topology.generators_df[
+                        "type"] == "run_of_river"].p_nom.sum())
+
+        # check that installed capacity of types, for which a target capacity
+        # was specified, is met
+        assert (edisgo.topology.generators_df[
+            edisgo.topology.generators_df['type']=='wind'].p_nom.sum() ==
+                p_wind_before * 1.6)
+        assert (edisgo.topology.generators_df[
+                    edisgo.topology.generators_df[
+                        'type'] == 'biomass'].p_nom.sum() ==
+                p_biomass_before * 1.0)

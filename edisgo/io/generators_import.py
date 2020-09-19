@@ -322,10 +322,12 @@ def oedb(edisgo_object, **kwargs):
         edisgo_object=edisgo_object,
         imported_generators_mv=generators_mv,
         imported_generators_lv=generators_res_lv,
+        p_target=kwargs.get("p_target", None),
         remove_missing=kwargs.get("remove_missing", True),
+        update_existing=kwargs.get("update_existing", True)
     )
 
-    _validate_generation()
+    #_validate_generation()
 
     # update time series if they were already set
     if not edisgo_object.timeseries.generators_active_power.empty:
@@ -796,6 +798,8 @@ def update_grids(
     imported_generators_mv,
     imported_generators_lv,
     remove_missing=True,
+    update_existing=True,
+    p_target=None
 ):
     """
     Update network according to new generator dataset.
@@ -904,36 +908,37 @@ def update_grids(
     # Step 1: Update existing MV and LV generators
     # =============================================
 
-    # filter for generators that need to be updated (i.e. that
-    # appear in the imported and existing generators dataframes)
-    gens_to_update = existing_gens[
-        existing_gens.id.isin(imported_gens.index.values)
-    ]
+    if update_existing:
+        # filter for generators that need to be updated (i.e. that
+        # appear in the imported and existing generators dataframes)
+        gens_to_update = existing_gens[
+            existing_gens.id.isin(imported_gens.index.values)
+        ]
 
-    # calculate capacity difference between existing and imported
-    # generators
-    gens_to_update["cap_diff"] = (
-        imported_gens.loc[gens_to_update.id, "electrical_capacity"].values
-        - gens_to_update.p_nom
-    )
-    # in case there are generators whose capacity does not match, update
-    # their capacity
-    gens_to_update_cap = gens_to_update[
-        abs(gens_to_update.cap_diff) > cap_diff_threshold
-    ]
-
-    for id, row in gens_to_update_cap.iterrows():
-        edisgo_object.topology._generators_df.loc[
-            id, "p_nom"
-        ] = imported_gens.loc[row["id"], "electrical_capacity"]
-
-    log_geno_count = len(gens_to_update_cap)
-    log_geno_cap = gens_to_update_cap["cap_diff"].sum()
-    logger.debug(
-        "Capacities of {} of {} existing generators updated ({} MW).".format(
-            log_geno_count, len(gens_to_update), round(log_geno_cap, 1)
+        # calculate capacity difference between existing and imported
+        # generators
+        gens_to_update["cap_diff"] = (
+            imported_gens.loc[gens_to_update.id, "electrical_capacity"].values
+            - gens_to_update.p_nom
         )
-    )
+        # in case there are generators whose capacity does not match, update
+        # their capacity
+        gens_to_update_cap = gens_to_update[
+            abs(gens_to_update.cap_diff) > cap_diff_threshold
+        ]
+
+        for id, row in gens_to_update_cap.iterrows():
+            edisgo_object.topology._generators_df.loc[
+                id, "p_nom"
+            ] = imported_gens.loc[row["id"], "electrical_capacity"]
+
+        log_geno_count = len(gens_to_update_cap)
+        log_geno_cap = gens_to_update_cap["cap_diff"].sum()
+        logger.debug(
+            "Capacities of {} of {} existing generators updated ({} MW).".format(
+                log_geno_count, len(gens_to_update), round(log_geno_cap, 1)
+            )
+        )
 
     # ==================================================
     # Step 2: Remove decommissioned MV and LV generators
@@ -963,9 +968,74 @@ def update_grids(
     new_gens_mv = imported_generators_mv[
         ~imported_generators_mv.index.isin(list(existing_gens.id))
     ]
-    number_new_gens = len(new_gens_mv)
+
+    new_gens_lv = imported_generators_lv[
+        ~imported_generators_lv.index.isin(list(existing_gens.id))
+    ]
+
+    if p_target is not None:
+        def update_imported_gens(layer, imported_gens):
+            def drop_generators(generator_list, gen_type, total_capacity):
+                random.seed(42)
+                while (generator_list[
+                           generator_list['generation_type'] == gen_type].electrical_capacity.sum() > total_capacity and
+                       len(generator_list[generator_list['generation_type'] == gen_type]) > 0):
+                    generator_list.drop(
+                        random.choice(
+                            generator_list[
+                                generator_list['generation_type'] == gen_type].index),
+                        inplace=True)
+
+            for gen_type in p_target.keys():
+                # Currently installed capacity
+                existing_capacity = existing_gens[
+                    existing_gens.index.isin(layer) &
+                    (existing_gens['type'] == gen_type).values].p_nom.sum()
+                # installed capacity in scenario
+                expanded_capacity = existing_capacity + imported_gens[
+                    imported_gens[
+                        'generation_type'] == gen_type].electrical_capacity.sum()
+                # Total capacity in 2030 scenario as described by expansion factor
+                target_capacity = p_target[gen_type]
+                # Amount of required expansion
+                required_expansion = (
+                            target_capacity - existing_capacity)
+
+                # No generators to be expanded
+                if imported_gens[
+                    imported_gens['generation_type'] == gen_type].electrical_capacity.sum() == 0:
+                    continue
+                # Reduction in capacity over status quo, so skip all expansion
+                if required_expansion <= 0:
+                    imported_gens.drop(
+                        imported_gens[imported_gens['generation_type'] == gen_type].index,
+                        inplace=True)
+                    continue
+                # More expansion than in NEP2035 required, keep all generators
+                # and scale them up later
+                if p_target[gen_type] >= expanded_capacity:
+                    continue
+
+                # Reduced expansion, remove some generators from expansion
+                drop_generators(imported_gens, gen_type, required_expansion)
+
+        new_gens = pd.concat([new_gens_lv, new_gens_mv])
+        update_imported_gens(
+            edisgo_object.topology.generators_df.index,
+            new_gens)
+
+        # drop types not in p_target from new_gens
+        for gen_type in new_gens.generation_type.unique():
+            if not gen_type in p_target.keys():
+                new_gens.drop(
+                    new_gens[new_gens['generation_type'] == gen_type].index,
+                    inplace=True)
+
+        new_gens_lv = new_gens[new_gens.voltage_level.isin([6, 7])]
+        new_gens_mv = new_gens[new_gens.voltage_level.isin([4, 5])]
 
     # iterate over new generators and create them
+    number_new_gens = len(new_gens_mv)
     for id in new_gens_mv.index:
         # check if geom is available, skip otherwise
         geom = check_mv_generator_geom(new_gens_mv.loc[id, :])
@@ -993,10 +1063,6 @@ def update_grids(
     # Step 4: Add new LV generators
     # ===============================
 
-    new_gens_lv = imported_generators_lv[
-        ~imported_generators_lv.index.isin(list(existing_gens.id))
-    ]
-
     # check if new generators can be allocated to an existing LV grid
     grid_ids = [_.id for _ in edisgo_object.topology._grids.values()]
     if not any(
@@ -1016,6 +1082,16 @@ def update_grids(
         add_and_connect_lv_generator(
             edisgo_object, new_gens_lv.loc[id, :]
         )
+
+    def scale_generators(gen_type, total_capacity):
+        idx = edisgo_object.topology.generators_df['type'] == gen_type
+        current_capacity = edisgo_object.topology.generators_df[idx].p_nom.sum()
+        if current_capacity != 0:
+            edisgo_object.topology.generators_df.loc[idx, 'p_nom'] *= total_capacity/current_capacity
+
+    if p_target is not None:
+        for gen_type, target_cap in p_target.items():
+            scale_generators(gen_type, target_cap)
 
     log_geno_count = len(new_gens_lv)
     log_geno_cap = new_gens_lv["electrical_capacity"].sum()
