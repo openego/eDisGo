@@ -1198,19 +1198,19 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     # get P and Q of lines and transformers in MW and Mvar
     q0 = pd.concat(
         [np.abs(pypsa.lines_t["q0"]), np.abs(pypsa.transformers_t["q0"])],
-        axis=1,
+        axis=1, sort=False
     ).loc[timesteps, :]
     q1 = pd.concat(
         [np.abs(pypsa.lines_t["q1"]), np.abs(pypsa.transformers_t["q1"])],
-        axis=1,
+        axis=1, sort=False
     ).loc[timesteps, :]
     p0 = pd.concat(
         [np.abs(pypsa.lines_t["p0"]), np.abs(pypsa.transformers_t["p0"])],
-        axis=1,
+        axis=1, sort=False
     ).loc[timesteps, :]
     p1 = pd.concat(
         [np.abs(pypsa.lines_t["p1"]), np.abs(pypsa.transformers_t["p1"])],
-        axis=1,
+        axis=1, sort=False
     ).loc[timesteps, :]
     # determine apparent power at line endings/transformer sides
     s0 = np.hypot(p0, q0)

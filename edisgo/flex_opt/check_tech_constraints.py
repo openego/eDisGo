@@ -166,6 +166,13 @@ def lines_relative_load(edisgo_obj, lines_allowed_load):
         in kA. Index of the dataframe are time steps of type
         :pandas:`pandas.Timestamp<Timestamp>` and columns are line names.
 
+    Returns
+    --------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing the relative line load per line and time step.
+        Index and columns of the dataframe are the same as those of parameter
+        `lines_allowed_load`.
+
     """
     # get line load from power flow analysis
     i_lines_pfa = edisgo_obj.results.i_res.loc[lines_allowed_load.index,
@@ -222,6 +229,7 @@ def _line_load(edisgo_obj, voltage_level):
             ],
             axis=1,
             keys=["max_rel_overload", "time_index"],
+            sort=True
         )
         crit_lines.loc[:, "voltage_level"] = voltage_level
     else:

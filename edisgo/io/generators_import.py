@@ -868,7 +868,8 @@ def update_grids(
 
     # get all imported generators
     imported_gens = pd.concat(
-        [imported_generators_lv, imported_generators_mv]
+        [imported_generators_lv, imported_generators_mv],
+        sort=True
     )
 
     logger.debug("{} generators imported.".format(len(imported_gens)))
@@ -1019,7 +1020,7 @@ def update_grids(
                 # Reduced expansion, remove some generators from expansion
                 drop_generators(imported_gens, gen_type, required_expansion)
 
-        new_gens = pd.concat([new_gens_lv, new_gens_mv])
+        new_gens = pd.concat([new_gens_lv, new_gens_mv], sort=True)
         update_imported_gens(
             edisgo_object.topology.generators_df.index,
             new_gens)
@@ -1064,18 +1065,19 @@ def update_grids(
     # ===============================
 
     # check if new generators can be allocated to an existing LV grid
-    grid_ids = [_.id for _ in edisgo_object.topology._grids.values()]
-    if not any(
-        [
-            _ in grid_ids
-            for _ in list(imported_generators_lv["mvlv_subst_id"])
-        ]
-    ):
-        logger.warning(
-            "None of the imported LV generators can be allocated "
-            "to an existing LV grid. Check compatibility of grid "
-            "and generator datasets."
-        )
+    if not imported_generators_lv.empty:
+        grid_ids = [_.id for _ in edisgo_object.topology._grids.values()]
+        if not any(
+            [
+                _ in grid_ids
+                for _ in list(imported_generators_lv["mvlv_subst_id"])
+            ]
+        ):
+            logger.warning(
+                "None of the imported LV generators can be allocated "
+                "to an existing LV grid. Check compatibility of grid "
+                "and generator datasets."
+            )
 
     # iterate over new generators and create them
     for id in new_gens_lv.index:
