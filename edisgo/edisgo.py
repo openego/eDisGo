@@ -789,7 +789,9 @@ class EDisGo:
             os.makedirs(os.path.join(directory, "results"), exist_ok=True)
             self.results.save(os.path.join(directory, "results"))
         if save_topology:
-            self.topology.to_csv(directory)
+            topology_dir = os.path.join(directory, "topology")
+            #os.makedirs(topology_dir, exist_ok=True)
+            self.topology.to_csv(topology_dir)
         if save_timeseries:
             self.timeseries.to_csv(directory)
 

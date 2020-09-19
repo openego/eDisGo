@@ -1371,7 +1371,7 @@ class Topology:
             np.sqrt(3) * data_new_line.U_n * data_new_line.I_max_th
         )
 
-    def to_csv(self, directory):
+    def to_csv(self, topology_dir):
         """
         Exports topology to csv files with names buses, generators, lines,
         loads, switches, transformers, transformers_hvmv, network. Files are
@@ -1380,11 +1380,10 @@ class Topology:
 
         Parameters
         ----------
-        directory: str
+        topology_dir: str
             path to save topology to
+
         """
-        topology_dir = os.path.join(directory, "topology")
-        os.makedirs(directory, exist_ok=True)
         os.makedirs(topology_dir, exist_ok=True)
         self._buses_df.to_csv(os.path.join(topology_dir, "buses.csv"))
         self._generators_df.append(self.slack_df).to_csv(

@@ -17,11 +17,10 @@ class TestTopology:
 
     def test_to_csv(self):
         """Test for method to_csv"""
-        dir = os.getcwd()
-        self.topology.to_csv(dir)
+        self.topology.to_csv("topology")
         edisgo = pd.DataFrame()
         edisgo.topology = Topology()
-        ding0_import.import_ding0_grid(os.path.join(dir, "topology"), edisgo)
+        ding0_import.import_ding0_grid("topology", edisgo)
         assert_frame_equal(self.topology.buses_df, edisgo.topology.buses_df)
         assert_frame_equal(
             self.topology.generators_df, edisgo.topology.generators_df
@@ -46,7 +45,7 @@ class TestTopology:
             pd.DataFrame([edisgo.topology.grid_district]),
         )
         # Todo: check files before rmtree?
-        shutil.rmtree(os.path.join(dir, "topology"), ignore_errors=True)
+        shutil.rmtree("topology", ignore_errors=True)
 
     def test_add_line(self):
         """Test add_line method"""
