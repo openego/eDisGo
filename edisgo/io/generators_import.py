@@ -25,7 +25,7 @@ if "READTHEDOCS" not in os.environ:
     from shapely.wkt import loads as wkt_loads
 
 
-def oedb(edisgo_object):
+def oedb(edisgo_object, **kwargs):
     """Import generator data from the Open Energy Database (OEDB).
 
     The importer uses SQLAlchemy ORM objects.
@@ -322,6 +322,7 @@ def oedb(edisgo_object):
         edisgo_object=edisgo_object,
         imported_generators_mv=generators_mv,
         imported_generators_lv=generators_res_lv,
+        remove_missing=kwargs.get("remove_missing", True),
     )
 
     _validate_generation()

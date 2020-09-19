@@ -369,7 +369,8 @@ class EDisGo:
         #                    curtailment_timeseries=curtailment_timeseries,
         #                    mode=kwargs.pop('mode', None), **kwargs)
 
-    def import_generators(self, generator_scenario=None):
+    def import_generators(self, generator_scenario=None,
+                          **kwargs):
         """Import generators
 
         For details see
@@ -378,7 +379,8 @@ class EDisGo:
         """
         if generator_scenario:
             self.topology.generator_scenario = generator_scenario
-        import_generators_oedb(edisgo_object=self)
+        import_generators_oedb(edisgo_object=self,
+                               **kwargs)
 
     def analyze(self, mode=None, timesteps=None):
         """Conducts a static, non-linear power flow analysis
