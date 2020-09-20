@@ -566,9 +566,10 @@ def get_component_timeseries(edisgo_obj, **kwargs):
     """
 
     mode = kwargs.get("mode", None)
+    timeindex = kwargs.get("timeindex", edisgo_obj.timeseries.timeindex)
     # reset TimeSeries
     edisgo_obj.timeseries = TimeSeries(
-        timeindex=edisgo_obj.timeseries.timeindex)
+        timeindex=timeindex)
     edisgo_obj.timeseries.mode = mode
     if mode:
         if "worst-case" in mode:
