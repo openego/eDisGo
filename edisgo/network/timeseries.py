@@ -1188,13 +1188,6 @@ def _check_timeindex(edisgo_obj):
         logging.error(message)
         raise KeyError(message)
 
-# Preliminiary helper function to add a time series without any further checks
-# TODO: Remove this and use appropriate `add_xxx_timeseries()` functions once
-# they have been refactored
-def add_timeseries_unchecked(edisgo_obj, dataframe, ts, name):
-    df = getattr(edisgo_obj.timeseries, dataframe)
-    df.insert(len(df.columns), name, ts)
-    setattr(edisgo_obj.timeseries, dataframe, df)
 
 def add_loads_timeseries(edisgo_obj, load_names, **kwargs):
     """
@@ -1366,8 +1359,39 @@ def add_generators_timeseries(edisgo_obj, generator_names, **kwargs):
 
 
 def add_charging_points_timeseries(edisgo_obj, charging_point_names, **kwargs):
-    # TODO: Implement
-    pass
+    # TODO: only provision of time series is implemented, worst_case etc.
+    #  is missing
+    ts_active_power = kwargs.get(
+        "ts_active_power", None
+    )
+    if ts_active_power is not None:
+        check_timeseries_for_index_and_cols(
+            edisgo_obj, ts_active_power, charging_point_names
+        )
+    ts_reactive_power = kwargs.get(
+        "ts_reactive_power", None
+    )
+    if ts_reactive_power is not None:
+        check_timeseries_for_index_and_cols(
+            edisgo_obj,
+            ts_reactive_power,
+            charging_point_names,
+        )
+    _drop_existing_component_timeseries(
+        edisgo_obj, "charging_points", charging_point_names
+    )
+    # add new timeseries
+    edisgo_obj.timeseries.charging_points_active_power = \
+        pd.concat([edisgo_obj.timeseries.charging_points_active_power,
+                   ts_active_power],
+                  axis=1, sort=False
+                  )
+    edisgo_obj.timeseries.charging_points_reactive_power = \
+        pd.concat([edisgo_obj.timeseries.charging_points_reactive_power,
+                   ts_reactive_power],
+                  axis=1, sort=False
+                  )
+
 
 def add_storage_units_timeseries(edisgo_obj, storage_unit_names, **kwargs):
     """
