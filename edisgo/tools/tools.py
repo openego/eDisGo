@@ -92,7 +92,7 @@ def calculate_relative_line_load(
         edisgo_obj, "lv")
     lines_allowed_load = pd.concat(
         [mv_lines_allowed_load, lv_lines_allowed_load],
-        axis=1).loc[timesteps, line_indices]
+        axis=1, sort=False).loc[timesteps, line_indices]
 
     return check_tech_constraints.lines_relative_load(
         edisgo_obj, lines_allowed_load)

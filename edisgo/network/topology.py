@@ -282,8 +282,8 @@ class Topology:
             Dataframe with all transformers.
             Index of the dataframe are transformer names. Columns of the
             dataframe are:
-            bus0
-            bus1
+            bus0 - primary side
+            bus1 - secondary side
             x_pu
             r_pu
             s_nom
@@ -732,6 +732,7 @@ class Topology:
         bus = self.generators_df.at[name, "bus"]
         # remove generator
         self._generators_df.drop(name, inplace=True)
+        # ToDo drop timeseries
         # if no other elements are connected to same bus, remove line and bus
         if check_bus_for_removal(self, bus_name=bus):
             line_name = self.get_connected_lines_from_bus(bus).index[0]
@@ -1108,6 +1109,7 @@ class Topology:
             indicator if bus is inside a building
 
         """
+        # ToDo make sure bus_name is unique!
         x = kwargs.get("x", None)
         y = kwargs.get("y", None)
         lv_grid_id = kwargs.get("lv_grid_id", None)
@@ -1369,7 +1371,7 @@ class Topology:
             np.sqrt(3) * data_new_line.U_n * data_new_line.I_max_th
         )
 
-    def to_csv(self, directory):
+    def to_csv(self, topology_dir):
         """
         Exports topology to csv files with names buses, generators, lines,
         loads, switches, transformers, transformers_hvmv, network. Files are
@@ -1378,11 +1380,10 @@ class Topology:
 
         Parameters
         ----------
-        directory: str
+        topology_dir: str
             path to save topology to
+
         """
-        topology_dir = os.path.join(directory, "topology")
-        os.makedirs(directory, exist_ok=True)
         os.makedirs(topology_dir, exist_ok=True)
         self._buses_df.to_csv(os.path.join(topology_dir, "buses.csv"))
         self._generators_df.append(self.slack_df).to_csv(

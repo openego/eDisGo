@@ -2,9 +2,6 @@ import os
 import logging
 import pandas as pd
 
-# TODO: Really needed here?
-import shapely
-
 from edisgo.network.topology import Topology
 from edisgo.network.results import Results
 from edisgo.network import timeseries
@@ -16,6 +13,9 @@ from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
 from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.opf.results.opf_result_class import OPFResults
+
+if "READTHEDOCS" not in os.environ:
+    from shapely.geometry import Point
 
 logger = logging.getLogger("edisgo")
 
@@ -369,7 +369,8 @@ class EDisGo:
         #                    curtailment_timeseries=curtailment_timeseries,
         #                    mode=kwargs.pop('mode', None), **kwargs)
 
-    def import_generators(self, generator_scenario=None):
+    def import_generators(self, generator_scenario=None,
+                          **kwargs):
         """Import generators
 
         For details see
@@ -378,7 +379,8 @@ class EDisGo:
         """
         if generator_scenario:
             self.topology.generator_scenario = generator_scenario
-        import_generators_oedb(edisgo_object=self)
+        import_generators_oedb(edisgo_object=self,
+                               **kwargs)
 
     def analyze(self, mode=None, timesteps=None):
         """Conducts a static, non-linear power flow analysis
@@ -786,10 +788,12 @@ class EDisGo:
         """
         os.makedirs(directory, exist_ok=True)
         if save_results:
-            os.makedirs(os.path.join(directory, "results"), exist_ok=True)
-            self.results.save(os.path.join(directory, "results"))
+            results_dir = os.path.join(directory, "results")
+            os.makedirs(results_dir, exist_ok=True)
+            self.results.save(results_dir)
         if save_topology:
-            self.topology.to_csv(directory)
+            topology_dir = os.path.join(directory, "topology")
+            self.topology.to_csv(topology_dir)
         if save_timeseries:
             self.timeseries.to_csv(directory)
 
@@ -953,23 +957,24 @@ class EDisGo:
         if not voltage_level in supported_voltage_levels:
             if p_nom is None:
                 raise ValueError(
-                    "Neither appropriate voltage level nor nominal power were supplied.")
+                    "Neither appropriate voltage level nor nominal power "
+                    "were supplied.")
             # Calculate voltage level manually from nominal power:
-            if p_nom > 4.5e6 and p_nom <= 17.5e6:
+            if p_nom > 4.5 and p_nom <= 17.5:
                 voltage_level = 4
-            elif p_nom > 0.3e6 and p_nom <= 4.5e6:
+            elif p_nom > 0.3 and p_nom <= 4.5:
                 voltage_level = 5
-            elif p_nom > 0.1e6 and p_nom <= 0.3e6:
+            elif p_nom > 0.1 and p_nom <= 0.3:
                 voltage_level = 6
-            elif p_nom > 0 and p_nom <= 0.1e6:
+            elif p_nom > 0 and p_nom <= 0.1:
                 voltage_level = 7
             else:
                 raise ValueError("Unsupported voltage level")
 
         # check if geolocation is given as shapely Point, otherwise transform
         # to shapely Point
-        if not type(geolocation) is shapely.geometry.point.Point:
-            geolocation = shapely.geometry.Point(geolocation)
+        if not type(geolocation) is Point:
+            geolocation = Point(geolocation)
 
         # Connect MV component
         if voltage_level == 4 or voltage_level == 5:
@@ -998,7 +1003,8 @@ class EDisGo:
                     self, "charging_points_reactive_power", ts_reactive_power, comp_name)
         # Connect LV component
         else:
-            substations = self.topology.buses_df.loc[self.topology.transformers_df.bus1]
+            substations = self.topology.buses_df.loc[
+                self.topology.transformers_df.bus1]
             nearest_substation, _ = find_nearest_bus(geolocation, substations)
             self.add_component(comp_type, bus=nearest_substation, add_ts=add_ts,
                                ts_active_power=ts_active_power,

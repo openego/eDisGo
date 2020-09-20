@@ -991,22 +991,22 @@ def _check_integrity_of_pypsa(pypsa_network):
     # check consistency of topology and time series data
     generators_ts_p_missing = pypsa_network.generators.loc[
         ~pypsa_network.generators.index.isin(
-            pypsa_network.generators_t["p_set"].columns.tolist()
+            pypsa_network.generators_t["p_set"].dropna(axis=1).columns.tolist()
         )
     ]
     generators_ts_q_missing = pypsa_network.generators.loc[
         ~pypsa_network.generators.index.isin(
-            pypsa_network.generators_t["q_set"].columns.tolist()
+            pypsa_network.generators_t["q_set"].dropna(axis=1).columns.tolist()
         )
     ]
     loads_ts_p_missing = pypsa_network.loads.loc[
         ~pypsa_network.loads.index.isin(
-            pypsa_network.loads_t["p_set"].columns.tolist()
+            pypsa_network.loads_t["p_set"].dropna(axis=1).columns.tolist()
         )
     ]
     loads_ts_q_missing = pypsa_network.loads.loc[
         ~pypsa_network.loads.index.isin(
-            pypsa_network.loads_t["q_set"].columns.tolist()
+            pypsa_network.loads_t["q_set"].dropna(axis=1).columns.tolist()
         )
     ]
     bus_v_set_missing = pypsa_network.buses.loc[
@@ -1198,19 +1198,19 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     # get P and Q of lines and transformers in MW and Mvar
     q0 = pd.concat(
         [np.abs(pypsa.lines_t["q0"]), np.abs(pypsa.transformers_t["q0"])],
-        axis=1,
+        axis=1, sort=False
     ).loc[timesteps, :]
     q1 = pd.concat(
         [np.abs(pypsa.lines_t["q1"]), np.abs(pypsa.transformers_t["q1"])],
-        axis=1,
+        axis=1, sort=False
     ).loc[timesteps, :]
     p0 = pd.concat(
         [np.abs(pypsa.lines_t["p0"]), np.abs(pypsa.transformers_t["p0"])],
-        axis=1,
+        axis=1, sort=False
     ).loc[timesteps, :]
     p1 = pd.concat(
         [np.abs(pypsa.lines_t["p1"]), np.abs(pypsa.transformers_t["p1"])],
-        axis=1,
+        axis=1, sort=False
     ).loc[timesteps, :]
     # determine apparent power at line endings/transformer sides
     s0 = np.hypot(p0, q0)

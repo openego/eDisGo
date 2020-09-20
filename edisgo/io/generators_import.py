@@ -5,6 +5,8 @@ from sqlalchemy import func
 import random
 import logging
 
+from edisgo.network.grids import LVGrid
+from edisgo.network.timeseries import add_generators_timeseries
 from edisgo.tools import session_scope
 from edisgo.tools.geo import (
     calc_geo_dist_vincenty,
@@ -23,7 +25,7 @@ if "READTHEDOCS" not in os.environ:
     from shapely.wkt import loads as wkt_loads
 
 
-def oedb(edisgo_object):
+def oedb(edisgo_object, **kwargs):
     """Import generator data from the Open Energy Database (OEDB).
 
     The importer uses SQLAlchemy ORM objects.
@@ -181,7 +183,6 @@ def oedb(edisgo_object):
         The validation uses the cumulative capacity of all generators.
 
         """
-        # ToDo: Validate conv. genos too!
 
         # set capacity difference threshold
         cap_diff_threshold = 10 ** -1
@@ -189,7 +190,7 @@ def oedb(edisgo_object):
         capacity_imported = (
                 generators_res_mv["electrical_capacity"].sum()
                 + generators_res_lv["electrical_capacity"].sum()
-        )  + generators_conv_mv['electrical_capacity'].sum()
+        ) + generators_conv_mv['electrical_capacity'].sum()
 
         capacity_grid = edisgo_object.topology.generators_df.p_nom.sum()
 
@@ -319,17 +320,29 @@ def oedb(edisgo_object):
 
     update_grids(
         edisgo_object=edisgo_object,
-        # generators_mv=generators_mv,
         imported_generators_mv=generators_mv,
         imported_generators_lv=generators_res_lv,
+        p_target=kwargs.get("p_target", None),
+        remove_missing=kwargs.get("remove_missing", True),
+        update_existing=kwargs.get("update_existing", True)
     )
 
-    _validate_generation()
+    #_validate_generation()
+
+    # update time series if they were already set
+    if not edisgo_object.timeseries.generators_active_power.empty:
+        add_generators_timeseries(
+            edisgo_obj=edisgo_object,
+            generator_names=edisgo_object.topology.generators_df.index)
 
 
-def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"):
+def add_and_connect_mv_generator(edisgo_object, generator,
+                                 comp_type="Generator"):
     """
     Add and connect new MV generator to existing grid.
+
+    ToDo: Change name to add_and_connect_mv_component and move to some other
+     module.
 
     This function connects
 
@@ -347,7 +360,8 @@ def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"
     generator : pd.Series
         Pandas series with generator information such as electrical_capacity
         in MW and generation_type. (name, electrical_capacity, generation_type,
-        generation_subtype, w_id)
+        generation_subtype, w_id, geom, voltage_level). Geom is expected as
+        string.
 
     Returns
     -------
@@ -364,17 +378,25 @@ def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"
         ]
     ]
 
-    # TODO: Make this a meaningful value
-    DISTANCE_THRESHOLD = 0.5
-
-    # Check if we can connect to nearest bus
     geom = wkt_loads(generator.geom)
-    nearest_bus, distance = find_nearest_bus(
-        geom, edisgo_object.topology.mv_grid.buses_df)
-    if distance < DISTANCE_THRESHOLD:
-        gen_bus = nearest_bus
-    else:
-        # Too far away, so we create a new bus
+
+    # create new bus for new generator
+    gen_bus = False
+    if generator.voltage_level == 5:
+        # in case of voltage_level 5 check if an existing bus can be used
+        # to connect generator to
+
+        # TODO: Make this a meaningful value
+        DISTANCE_THRESHOLD = 0.01
+
+        # Check if we can connect to nearest bus
+        nearest_bus, distance = find_nearest_bus(
+            geom, edisgo_object.topology.mv_grid.buses_df)
+        if distance < DISTANCE_THRESHOLD:
+            gen_bus = nearest_bus
+
+    if not gen_bus:
+
         if comp_type == "Generator":
             # FIXME: Needs to be passed as 'name' here, but is referred to as 'generator_id' by add_generator function. Should be unified across function calls.
             gen_bus = "Bus_Generator_{}".format(generator.name)
@@ -389,7 +411,7 @@ def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"
             y=geom.y,
         )
 
-    # add generator
+    # add component
     if comp_type == "Generator":
         comp_name = edisgo_object.topology.add_generator(
             generator_id=generator.name,
@@ -436,44 +458,48 @@ def add_and_connect_mv_generator(edisgo_object, generator, comp_type="Generator"
 
     # == voltage level 5: generator is connected to MV grid (next-neighbor) ==
     elif generator.voltage_level == 5:
-
-        # get branches within a the predefined radius `generator_buffer_radius`
-        # get params from config
-        lines = calc_geo_lines_in_buffer(
-            edisgo_object=edisgo_object,
-            bus=edisgo_object.topology.buses_df.loc[gen_bus, :],
-            grid=edisgo_object.topology.mv_grid,
-        )
-
-        # calc distance between generator and grid's lines -> find nearest line
-        conn_objects_min_stack = find_nearest_conn_objects(
-            edisgo_object=edisgo_object,
-            bus=edisgo_object.topology.buses_df.loc[gen_bus, :],
-            lines=lines,
-        )
-
-        # connect
-        # go through the stack (from nearest to farthest connection target
-        # object)
-        generator_connected = False
-        for dist_min_obj in conn_objects_min_stack:
-            target_obj_result = connect_mv_node(
+        # in case generator was connected to existing bus, it's bus does
+        # not need to be connected anymore
+        if distance >= DISTANCE_THRESHOLD:
+            # get branches within the predefined radius `generator_buffer_radius`
+            # get params from config
+            lines = calc_geo_lines_in_buffer(
                 edisgo_object=edisgo_object,
                 bus=edisgo_object.topology.buses_df.loc[gen_bus, :],
-                target_obj=dist_min_obj,
+                grid=edisgo_object.topology.mv_grid,
             )
 
-            if target_obj_result is not None:
-                generator_connected = True
-                break
-
-        if not generator_connected:
-            logger.debug(
-                "Generator {} could not be connected, try to "
-                "increase the parameter `conn_buffer_radius` in "
-                "config file `config_grid.cfg` to gain more possible "
-                "connection points.".format(comp_name)
+            # calc distance between generator and grid's lines -> find nearest line
+            conn_objects_min_stack = find_nearest_conn_objects(
+                edisgo_object=edisgo_object,
+                bus=edisgo_object.topology.buses_df.loc[gen_bus, :],
+                lines=lines,
             )
+
+            # connect
+            # go through the stack (from nearest to farthest connection target
+            # object)
+            # ToDo: line connecting a generator in voltage level 4 to the MV
+            #  station should be discarded as a valid connection object
+            generator_connected = False
+            for dist_min_obj in conn_objects_min_stack:
+                target_obj_result = connect_mv_node(
+                    edisgo_object=edisgo_object,
+                    bus=edisgo_object.topology.buses_df.loc[gen_bus, :],
+                    target_obj=dist_min_obj,
+                )
+
+                if target_obj_result is not None:
+                    generator_connected = True
+                    break
+
+            if not generator_connected:
+                logger.debug(
+                    "Generator {} could not be connected, try to "
+                    "increase the parameter `conn_buffer_radius` in "
+                    "config file `config_grid.cfg` to gain more possible "
+                    "connection points.".format(comp_name)
+                )
     return comp_name
 
 
@@ -508,6 +534,11 @@ def add_and_connect_lv_generator(
     allow_multiple_genos_per_load : :obj:`bool`
         If True, more than one generator can be connected to one load.
 
+    Returns
+    -------
+    str
+        Representative of new component.
+
     Notes
     -----
     For the allocation, loads are selected randomly (sector-wise) using a
@@ -536,11 +567,11 @@ def add_and_connect_lv_generator(
         and generator.mvlv_subst_id not in lv_grid_ids
     ):
         # add generator
-        edisgo_object.topology.add_generator(
+        comp_name = edisgo_object.topology.add_generator(
             bus=edisgo_object.topology.mv_grid.station.index[0],
             **add_generator_data
         )
-        return
+        return comp_name
 
     # if substation ID (= LV grid ID) is given and it matches an existing LV
     # grid ID (i.e. it is not an aggregated LV grid), set grid to connect
@@ -558,30 +589,31 @@ def add_and_connect_lv_generator(
         # if no geom is given, connect to LV grid's station
         if not generator.geom:
             # add generator
-            edisgo_object.topology.add_generator(
+            comp_name = edisgo_object.topology.add_generator(
                 bus=lv_grid.station.index[0], **add_generator_data
             )
             logger.debug(
                 "Generator {} has no geom entry and will be connected to "
-                "grid's LV stations.".format(generator.id)
+                "grid's LV stations.".format(generator.name)
             )
-            return
+            return comp_name
 
     # if no MV-LV substation ID is given, choose random LV grid and connect
     # to station
     else:
         random.seed(a=generator.name)
-        lv_grid = random.choice(lv_grid_ids)
-        edisgo_object.topology.add_generator(
+        lv_grid_id = random.choice(lv_grid_ids)
+        lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=edisgo_object)
+        comp_name = edisgo_object.topology.add_generator(
             bus=lv_grid.station.index[0], **add_generator_data
         )
         logger.warning(
             "Generator {} has no mvlv_subst_id. It is therefore allocated to "
             "a random LV Grid ({}); geom was set to stations' geom.".format(
-                generator.id, lv_grid.id
+                generator.name, lv_grid_id
             )
         )
-        return
+        return comp_name
 
     # generator is of v_level 6 -> connect to grid's LV station
     if generator.voltage_level == 6:
@@ -625,9 +657,10 @@ def add_and_connect_lv_generator(
         )
 
         # add generator
-        edisgo_object.topology.add_generator(
+        comp_name = edisgo_object.topology.add_generator(
             bus=gen_bus, **add_generator_data
         )
+        return comp_name
 
     # generator is of v_level 7 -> assign generator to load
     # generators with P <= 30kW are connected to residential loads, if
@@ -653,11 +686,11 @@ def add_and_connect_lv_generator(
 
         # generate random list (unique elements) of possible target loads
         # to connect generators to
-        random.seed(a=generator.name)
+        random.seed(a=int(generator.name))
         if len(target_loads) > 0:
-            lv_loads_rnd = set(
-                random.sample(list(target_loads.index), len(target_loads))
-            )
+            lv_loads_rnd = random.sample(
+                sorted(list(target_loads.index)),
+                len(target_loads))
         else:
             logger.debug(
                 "No load to connect LV generator to. The "
@@ -667,10 +700,10 @@ def add_and_connect_lv_generator(
                 lv_grid.buses_df[~lv_grid.buses_df.in_building].index
             )
             # add generator
-            edisgo_object.topology.add_generator(
+            comp_name = edisgo_object.topology.add_generator(
                 bus=gen_bus, **add_generator_data
             )
-            return
+            return comp_name
 
         # search through list of loads for load with less
         # than two generators
@@ -754,10 +787,10 @@ def add_and_connect_lv_generator(
             )
 
         # add generator
-        edisgo_object.topology.add_generator(
+        comp_name = edisgo_object.topology.add_generator(
             bus=lv_conn_target, **add_generator_data
         )
-        return
+        return comp_name
 
 
 def update_grids(
@@ -765,6 +798,8 @@ def update_grids(
     imported_generators_mv,
     imported_generators_lv,
     remove_missing=True,
+    update_existing=True,
+    p_target=None
 ):
     """
     Update network according to new generator dataset.
@@ -833,7 +868,8 @@ def update_grids(
 
     # get all imported generators
     imported_gens = pd.concat(
-        [imported_generators_lv, imported_generators_mv]
+        [imported_generators_lv, imported_generators_mv],
+        sort=True
     )
 
     logger.debug("{} generators imported.".format(len(imported_gens)))
@@ -873,36 +909,37 @@ def update_grids(
     # Step 1: Update existing MV and LV generators
     # =============================================
 
-    # filter for generators that need to be updated (i.e. that
-    # appear in the imported and existing generators dataframes)
-    gens_to_update = existing_gens[
-        existing_gens.id.isin(imported_gens.index.values)
-    ]
+    if update_existing:
+        # filter for generators that need to be updated (i.e. that
+        # appear in the imported and existing generators dataframes)
+        gens_to_update = existing_gens[
+            existing_gens.id.isin(imported_gens.index.values)
+        ]
 
-    # calculate capacity difference between existing and imported
-    # generators
-    gens_to_update["cap_diff"] = (
-        imported_gens.loc[gens_to_update.id, "electrical_capacity"].values
-        - gens_to_update.p_nom
-    )
-    # in case there are generators whose capacity does not match, update
-    # their capacity
-    gens_to_update_cap = gens_to_update[
-        abs(gens_to_update.cap_diff) > cap_diff_threshold
-    ]
-
-    for id, row in gens_to_update_cap.iterrows():
-        edisgo_object.topology._generators_df.loc[
-            id, "p_nom"
-        ] = imported_gens.loc[row["id"], "electrical_capacity"]
-
-    log_geno_count = len(gens_to_update_cap)
-    log_geno_cap = gens_to_update_cap["cap_diff"].sum()
-    logger.debug(
-        "Capacities of {} of {} existing generators updated ({} MW).".format(
-            log_geno_count, len(gens_to_update), round(log_geno_cap, 1)
+        # calculate capacity difference between existing and imported
+        # generators
+        gens_to_update["cap_diff"] = (
+            imported_gens.loc[gens_to_update.id, "electrical_capacity"].values
+            - gens_to_update.p_nom
         )
-    )
+        # in case there are generators whose capacity does not match, update
+        # their capacity
+        gens_to_update_cap = gens_to_update[
+            abs(gens_to_update.cap_diff) > cap_diff_threshold
+        ]
+
+        for id, row in gens_to_update_cap.iterrows():
+            edisgo_object.topology._generators_df.loc[
+                id, "p_nom"
+            ] = imported_gens.loc[row["id"], "electrical_capacity"]
+
+        log_geno_count = len(gens_to_update_cap)
+        log_geno_cap = gens_to_update_cap["cap_diff"].sum()
+        logger.debug(
+            "Capacities of {} of {} existing generators updated ({} MW).".format(
+                log_geno_count, len(gens_to_update), round(log_geno_cap, 1)
+            )
+        )
 
     # ==================================================
     # Step 2: Remove decommissioned MV and LV generators
@@ -932,9 +969,74 @@ def update_grids(
     new_gens_mv = imported_generators_mv[
         ~imported_generators_mv.index.isin(list(existing_gens.id))
     ]
-    number_new_gens = len(new_gens_mv)
+
+    new_gens_lv = imported_generators_lv[
+        ~imported_generators_lv.index.isin(list(existing_gens.id))
+    ]
+
+    if p_target is not None:
+        def update_imported_gens(layer, imported_gens):
+            def drop_generators(generator_list, gen_type, total_capacity):
+                random.seed(42)
+                while (generator_list[
+                           generator_list['generation_type'] == gen_type].electrical_capacity.sum() > total_capacity and
+                       len(generator_list[generator_list['generation_type'] == gen_type]) > 0):
+                    generator_list.drop(
+                        random.choice(
+                            generator_list[
+                                generator_list['generation_type'] == gen_type].index),
+                        inplace=True)
+
+            for gen_type in p_target.keys():
+                # Currently installed capacity
+                existing_capacity = existing_gens[
+                    existing_gens.index.isin(layer) &
+                    (existing_gens['type'] == gen_type).values].p_nom.sum()
+                # installed capacity in scenario
+                expanded_capacity = existing_capacity + imported_gens[
+                    imported_gens[
+                        'generation_type'] == gen_type].electrical_capacity.sum()
+                # Total capacity in 2030 scenario as described by expansion factor
+                target_capacity = p_target[gen_type]
+                # Amount of required expansion
+                required_expansion = (
+                            target_capacity - existing_capacity)
+
+                # No generators to be expanded
+                if imported_gens[
+                    imported_gens['generation_type'] == gen_type].electrical_capacity.sum() == 0:
+                    continue
+                # Reduction in capacity over status quo, so skip all expansion
+                if required_expansion <= 0:
+                    imported_gens.drop(
+                        imported_gens[imported_gens['generation_type'] == gen_type].index,
+                        inplace=True)
+                    continue
+                # More expansion than in NEP2035 required, keep all generators
+                # and scale them up later
+                if p_target[gen_type] >= expanded_capacity:
+                    continue
+
+                # Reduced expansion, remove some generators from expansion
+                drop_generators(imported_gens, gen_type, required_expansion)
+
+        new_gens = pd.concat([new_gens_lv, new_gens_mv], sort=True)
+        update_imported_gens(
+            edisgo_object.topology.generators_df.index,
+            new_gens)
+
+        # drop types not in p_target from new_gens
+        for gen_type in new_gens.generation_type.unique():
+            if not gen_type in p_target.keys():
+                new_gens.drop(
+                    new_gens[new_gens['generation_type'] == gen_type].index,
+                    inplace=True)
+
+        new_gens_lv = new_gens[new_gens.voltage_level.isin([6, 7])]
+        new_gens_mv = new_gens[new_gens.voltage_level.isin([4, 5])]
 
     # iterate over new generators and create them
+    number_new_gens = len(new_gens_mv)
     for id in new_gens_mv.index:
         # check if geom is available, skip otherwise
         geom = check_mv_generator_geom(new_gens_mv.loc[id, :])
@@ -962,29 +1064,36 @@ def update_grids(
     # Step 4: Add new LV generators
     # ===============================
 
-    new_gens_lv = imported_generators_lv[
-        ~imported_generators_lv.index.isin(list(existing_gens.id))
-    ]
-
     # check if new generators can be allocated to an existing LV grid
-    grid_ids = [_.id for _ in edisgo_object.topology._grids.values()]
-    if not any(
-        [
-            _ in grid_ids
-            for _ in list(imported_generators_lv["mvlv_subst_id"])
-        ]
-    ):
-        logger.warning(
-            "None of the imported LV generators can be allocated "
-            "to an existing LV grid. Check compatibility of grid "
-            "and generator datasets."
-        )
+    if not imported_generators_lv.empty:
+        grid_ids = [_.id for _ in edisgo_object.topology._grids.values()]
+        if not any(
+            [
+                _ in grid_ids
+                for _ in list(imported_generators_lv["mvlv_subst_id"])
+            ]
+        ):
+            logger.warning(
+                "None of the imported LV generators can be allocated "
+                "to an existing LV grid. Check compatibility of grid "
+                "and generator datasets."
+            )
 
     # iterate over new generators and create them
     for id in new_gens_lv.index:
         add_and_connect_lv_generator(
             edisgo_object, new_gens_lv.loc[id, :]
         )
+
+    def scale_generators(gen_type, total_capacity):
+        idx = edisgo_object.topology.generators_df['type'] == gen_type
+        current_capacity = edisgo_object.topology.generators_df[idx].p_nom.sum()
+        if current_capacity != 0:
+            edisgo_object.topology.generators_df.loc[idx, 'p_nom'] *= total_capacity/current_capacity
+
+    if p_target is not None:
+        for gen_type, target_cap in p_target.items():
+            scale_generators(gen_type, target_cap)
 
     log_geno_count = len(new_gens_lv)
     log_geno_cap = new_gens_lv["electrical_capacity"].sum()
@@ -1001,7 +1110,7 @@ def update_grids(
                 lv_grid.generators_df.bus != lv_grid.station.index[0]
             ]
         )
-        # warn if there're more generators than loads in LV grid
+        # warn if there are more generators than loads in LV grid
         if lv_gens_voltage_level_7 > lv_loads * 2:
             logger.debug(
                 "There are {} generators (voltage level 7) but only {} "

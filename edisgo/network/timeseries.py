@@ -793,6 +793,7 @@ def _generation_from_timeseries(edisgo_obj, generator_names=None):
                 _timeseries_dispatchable(),
             ],
             axis=1,
+            sort=False
         )
     if not gens_fluctuating.empty:
         edisgo_obj.timeseries.generators_active_power = pd.concat(
@@ -801,6 +802,7 @@ def _generation_from_timeseries(edisgo_obj, generator_names=None):
                 _timeseries_fluctuating(),
             ],
             axis=1,
+            sort=False
         )
 
     # set reactive power if given as attribute
@@ -975,13 +977,13 @@ def _worst_case_generation(edisgo_obj, modes, generator_names=None):
     cols = gen_ts[gens_df.index[gens_df.type == "solar"]].columns
     if len(cols) > 0:
         gen_ts[cols] = pd.concat(
-            [worst_case_ts.loc[:, ["solar"]]] * len(cols), axis=1
+            [worst_case_ts.loc[:, ["solar"]]] * len(cols), axis=1, sort=True
         )
     # assign normalized active power time series to other generators
     cols = gen_ts[gens_df.index[gens_df.type != "solar"]].columns
     if len(cols) > 0:
         gen_ts[cols] = pd.concat(
-            [worst_case_ts.loc[:, ["other"]]] * len(cols), axis=1
+            [worst_case_ts.loc[:, ["other"]]] * len(cols), axis=1, sort=True
         )
 
     # drop existing timeseries
@@ -1848,7 +1850,8 @@ def _set_reactive_power_time_series_for_fixed_cosphi_using_config(
              q_sign,
              power_factor
          )],
-        axis=1
+        axis=1,
+        sort=False
       )
 
     setattr(
