@@ -974,7 +974,13 @@ class EDisGo:
             geolocation = Point(geolocation)
 
         # Connect MV component
-        if voltage_level == 4 or voltage_level == 5:
+        if voltage_level == 4:
+            self.add_component(comp_type,
+                               bus=self.topology.mv_grid.station.index[0],
+                               add_ts=add_ts,
+                               ts_active_power=ts_active_power,
+                               ts_reactive_power=ts_reactive_power, **kwargs)
+        elif voltage_level == 5:
             # Create common properties for Generator and Charging Point
             properties = pd.Series()
             properties['voltage_level'] = voltage_level
