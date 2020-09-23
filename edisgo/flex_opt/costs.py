@@ -185,23 +185,24 @@ def grid_expansion_costs(
         lines_added["length"] = edisgo_obj.topology.lines_df.loc[
             lines_added.index, "length"
         ]
-        line_costs = _get_line_costs(lines_added)
-        costs = costs.append(
-            pd.DataFrame(
-                {
-                    "type": edisgo_obj.topology.lines_df.loc[
-                        lines_added.index, "type_info"
-                    ].values,
-                    "total_costs": line_costs.costs.values,
-                    "length": (
-                        lines_added.quantity * lines_added.length
-                    ).values,
-                    "quantity": lines_added.quantity.values,
-                    "voltage_level": line_costs.voltage_level.values,
-                },
-                index=lines_added.index,
+        if not lines_added.empty:
+            line_costs = _get_line_costs(lines_added)
+            costs = costs.append(
+                pd.DataFrame(
+                    {
+                        "type": edisgo_obj.topology.lines_df.loc[
+                            lines_added.index, "type_info"
+                        ].values,
+                        "total_costs": line_costs.costs.values,
+                        "length": (
+                            lines_added.quantity * lines_added.length
+                        ).values,
+                        "quantity": lines_added.quantity.values,
+                        "voltage_level": line_costs.voltage_level.values,
+                    },
+                    index=lines_added.index,
+                )
             )
-        )
 
     # if no costs incurred write zero costs to DataFrame
     if costs.empty:
