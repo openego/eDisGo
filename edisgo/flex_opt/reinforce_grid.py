@@ -509,7 +509,7 @@ def reinforce_grid(
 
     # calculate topology expansion costs
     edisgo_reinforce.results.grid_expansion_costs = grid_expansion_costs(
-        edisgo_reinforce, mode=mode
+        edisgo_reinforce
     )
 
     return edisgo_reinforce.results
