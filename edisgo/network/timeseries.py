@@ -456,6 +456,14 @@ class TimeSeries:
             self.loads_reactive_power.to_csv(
                 os.path.join(ts_dir, "loads_reactive_power.csv")
             )
+        if self.charging_points_active_power is not None:
+            self.charging_points_active_power.to_csv(
+                os.path.join(ts_dir, "charging_points_active_power.csv")
+            )
+        if self.charging_points_reactive_power is not None:
+            self.charging_points_reactive_power.to_csv(
+                os.path.join(ts_dir, "charging_points_reactive_power.csv")
+            )
         if self.generators_active_power is not None:
             self.generators_active_power.to_csv(
                 os.path.join(ts_dir, "generators_active_power.csv")

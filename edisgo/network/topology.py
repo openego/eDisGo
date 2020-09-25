@@ -1391,6 +1391,8 @@ class Topology:
         )
         self._lines_df.to_csv(os.path.join(topology_dir, "lines.csv"))
         self._loads_df.to_csv(os.path.join(topology_dir, "loads.csv"))
+        self._charging_points_df.to_csv(
+            os.path.join(topology_dir, "charging_points.csv"))
         self._storage_units_df.to_csv(
             os.path.join(topology_dir, "storage_units.csv")
         )

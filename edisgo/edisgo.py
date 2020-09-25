@@ -767,6 +767,7 @@ class EDisGo:
         save_results=True,
         save_topology=True,
         save_timeseries=True,
+        **kwargs
     ):
         """
         Saves edisgo_obj parameters to csv. It can be chosen if results,
@@ -790,6 +791,7 @@ class EDisGo:
         if save_results:
             results_dir = os.path.join(directory, "results")
             os.makedirs(results_dir, exist_ok=True)
+            kwargs.get("parameters", "all")
             self.results.save(results_dir)
         if save_topology:
             topology_dir = os.path.join(directory, "topology")
