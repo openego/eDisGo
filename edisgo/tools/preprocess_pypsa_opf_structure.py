@@ -177,13 +177,7 @@ def aggregate_fluct_generators(psa_network):
                             0
                         ],
                         "marginal_cost": gens_to_aggr["marginal_cost"].iloc[0],
-                        "fluctuating": [
-                            True
-                            if gens_to_aggr.fluctuating.all()
-                            else False
-                            if ~gens_to_aggr.fluctuating.any()
-                            else "Mixed"
-                        ],
+                        "fluctuating": [True],
                     },
                     index=[gen_name],
                 )

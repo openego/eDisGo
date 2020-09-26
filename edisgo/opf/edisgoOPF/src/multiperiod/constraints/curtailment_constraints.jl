@@ -19,8 +19,8 @@ function constraint_curtailment_single(pm;nw::Int=pm.cnw)
     end
     # get requirement for curtailment in timestep nw
     # P_curtail = ref(pm,nw,:curtailment)
-    P_curtail = pm.data["curtailment_requirement_series"][nw]
-    @constraint(pm.model, sum(getupperbound(pg[i]) - pg[i] for i in RES)==P_curtail)
+    #P_curtail = pm.data["curtailment_requirement_series"][nw]
+    #@constraint(pm.model, sum(getupperbound(pg[i]) - pg[i] for i in RES)==P_curtail)
 end
 
 """

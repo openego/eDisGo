@@ -129,17 +129,9 @@ function read_data(network_name::String)
         for (nw,gens) in gen_data
             for (i,gen_i) in gens
                 data["nw"][nw]["gen"][i]["pmax"] = gen_i["pg"]
-
-                if data["nw"][nw]["gen"][i]["fluctuating"] == 1
-                    data["nw"][nw]["gen"][i]["pmin"] = gen_i["pg"]
-                    data["nw"][nw]["gen"][i]["qmax"] = gen_i["qg"]
-                    data["nw"][nw]["gen"][i]["qmin"] = gen_i["qg"]
-                else
-                    data["nw"][nw]["gen"][i]["qmax"] = gen_i["qg"]< 0 ? 0 : gen_i["qg"]
-                    data["nw"][nw]["gen"][i]["qmin"] = gen_i["qg"]> 0 ? 0 : gen_i["qg"]
-                end
-
-
+                data["nw"][nw]["gen"][i]["pmin"] = gen_i["pg"]
+                data["nw"][nw]["gen"][i]["qmax"] = gen_i["qg"]
+                data["nw"][nw]["gen"][i]["qmin"] = gen_i["qg"]
             end
         end
     else
@@ -168,14 +160,9 @@ function read_data(
     for (nw,gens) in gen_data
         for (i,gen_i) in gens
             data["nw"][nw]["gen"][i]["pmax"] = gen_i["pg"]
-            if data["nw"][nw]["gen"][i]["fluctuating"] == 1
-                data["nw"][nw]["gen"][i]["pmin"] = gen_i["pg"]
-                data["nw"][nw]["gen"][i]["qmax"] = gen_i["qg"]
-                data["nw"][nw]["gen"][i]["qmin"] = gen_i["qg"]
-            else
-                data["nw"][nw]["gen"][i]["qmax"] = gen_i["qg"]< 0 ? 0 : gen_i["qg"]
-                data["nw"][nw]["gen"][i]["qmin"] = gen_i["qg"]> 0 ? 0 : gen_i["qg"]
-            end
+            data["nw"][nw]["gen"][i]["pmin"] = gen_i["pg"]
+            data["nw"][nw]["gen"][i]["qmax"] = gen_i["qg"]
+            data["nw"][nw]["gen"][i]["qmin"] = gen_i["qg"]
         end
     end
     return data

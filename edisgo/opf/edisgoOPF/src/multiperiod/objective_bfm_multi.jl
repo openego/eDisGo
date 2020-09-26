@@ -87,7 +87,7 @@ function add_objective_linear(pm;ismultinetwork::Bool=true,cost_factor=1,scenari
     end
 end 
 
-function add_objective_nep(pm)
+function add_objective_nep(pm, cost_factor=0.01)
     branch_cost = Dict()
     I_max = var(pm,:I_max)
     for (i,branch) in ref(pm,:branch)
@@ -99,5 +99,14 @@ function add_objective_nep(pm)
             println("no costs for branch $i: $(branch["cost"])")
         end
     end
-    @objective(pm.model,Min,sum(branch_cost[i] for (i,br) in ref(pm,:branch)))
+
+    RES = ids(pm,:fluct_gen)
+    sum_curtail = 0
+    for (nw,net) in nws(pm)
+        pg = var(pm,nw,:pg)
+        sum_curtail += sum(getupperbound(pg[i]) - pg[i] for i in RES)
+    end
+
+    @objective(pm.model,Min, ((sum(branch_cost[i] for (i,br) in ref(pm,:branch))+cost_factor*sum_curtail)))
+    #@objective(pm.model,Min, sum((getupperbound(pg[i]) - pg[i])*0.01 for i in RES))
 end
