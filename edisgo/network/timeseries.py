@@ -397,6 +397,7 @@ class TimeSeries:
             self.generators_active_power.sum(axis=1)
             + self.storage_units_active_power.sum(axis=1)
             - self.loads_active_power.sum(axis=1)
+            - self.charging_points_active_power.sum(axis=1)
         ).loc[self.timeindex]
 
     @property
