@@ -767,6 +767,7 @@ class EDisGo:
         save_results=True,
         save_topology=True,
         save_timeseries=True,
+        **kwargs
     ):
         """
         Saves edisgo_obj parameters to csv. It can be chosen if results,
@@ -790,6 +791,7 @@ class EDisGo:
         if save_results:
             results_dir = os.path.join(directory, "results")
             os.makedirs(results_dir, exist_ok=True)
+            kwargs.get("parameters", "all")
             self.results.save(results_dir)
         if save_topology:
             topology_dir = os.path.join(directory, "topology")
@@ -851,27 +853,24 @@ class EDisGo:
         elif comp_type == "Generator":
             comp_name = self.topology.add_generator(**kwargs)
             if add_ts:
-                if ts_active_power is not None and ts_reactive_power is not None:
-                    timeseries.add_timeseries_unchecked(
-                        self, "generators_active_power", ts_active_power, comp_name)
-                    timeseries.add_timeseries_unchecked(
-                        self, "generators_reactive_power", ts_reactive_power, comp_name)
-                else:
-                    timeseries.add_generators_timeseries(
-                        edisgo_obj=self, generator_names=comp_name, **kwargs
-                    )
+                timeseries.add_generators_timeseries(
+                    edisgo_obj=self, generator_names=comp_name, **kwargs
+                )
 
         elif comp_type == "ChargingPoint":
             comp_name = self.topology.add_charging_point(**kwargs)
             if add_ts:
                 if ts_active_power is not None and ts_reactive_power is not None:
-                    timeseries.add_timeseries_unchecked(
-                        self, "charging_points_active_power", ts_active_power, comp_name)
-                    timeseries.add_timeseries_unchecked(
-                        self, "charging_points_reactive_power", ts_reactive_power, comp_name)
+                    timeseries.add_charging_points_timeseries(
+                        self, [comp_name],
+                        ts_active_power=pd.DataFrame({
+                            comp_name: ts_active_power}),
+                        ts_reactive_power=pd.DataFrame({
+                            comp_name: ts_reactive_power})
+                    )
                 else:
-                    # TODO: Nothing to generate Charging Point time series from...
-                    pass
+                    raise ValueError("Time series for charging points need "
+                                     "to be provided.")
 
         elif comp_type == "StorageUnit":
             comp_name = self.topology.add_storage_unit(
@@ -977,7 +976,13 @@ class EDisGo:
             geolocation = Point(geolocation)
 
         # Connect MV component
-        if voltage_level == 4 or voltage_level == 5:
+        if voltage_level == 4:
+            self.add_component(comp_type,
+                               bus=self.topology.mv_grid.station.index[0],
+                               add_ts=add_ts,
+                               ts_active_power=ts_active_power,
+                               ts_reactive_power=ts_reactive_power, **kwargs)
+        elif voltage_level == 5:
             # Create common properties for Generator and Charging Point
             properties = pd.Series()
             properties['voltage_level'] = voltage_level
@@ -992,21 +997,26 @@ class EDisGo:
                 self, properties, comp_type)
 
             if add_ts and comp_type == 'Generator':
-                timeseries.add_timeseries_unchecked(
-                    self, "generators_active_power", ts_active_power, comp_name)
-                timeseries.add_timeseries_unchecked(
-                    self, "generators_reactive_power", ts_reactive_power, comp_name)
+                timeseries.add_generators_timeseries(
+                    edisgo_obj=self, generator_names=comp_name, **kwargs
+                )
             elif add_ts and comp_type == 'ChargingPoint':
-                timeseries.add_timeseries_unchecked(
-                    self, "charging_points_active_power", ts_active_power, comp_name)
-                timeseries.add_timeseries_unchecked(
-                    self, "charging_points_reactive_power", ts_reactive_power, comp_name)
+                timeseries.add_charging_points_timeseries(
+                    self, [comp_name],
+                    ts_active_power=pd.DataFrame({
+                        comp_name: ts_active_power}),
+                    ts_reactive_power=pd.DataFrame({
+                        comp_name: ts_reactive_power})
+                )
+
         # Connect LV component
         else:
             substations = self.topology.buses_df.loc[
                 self.topology.transformers_df.bus1]
             nearest_substation, _ = find_nearest_bus(geolocation, substations)
-            self.add_component(comp_type, bus=nearest_substation, add_ts=add_ts,
+            self.add_component(comp_type,
+                               bus=nearest_substation,
+                               add_ts=add_ts,
                                ts_active_power=ts_active_power,
                                ts_reactive_power=ts_reactive_power, **kwargs)
 

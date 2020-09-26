@@ -9,7 +9,7 @@ from edisgo.tools.geo import proj2equidistant
 
 
 def grid_expansion_costs(
-    edisgo_obj, without_generator_import=False, mode=None
+    edisgo_obj, without_generator_import=False
 ):
     """
     Calculates topology expansion costs for each reinforced transformer and line
@@ -109,23 +109,6 @@ def grid_expansion_costs(
         ]
     else:
         equipment_changes = edisgo_obj.results.equipment_changes
-        if mode is "mv":
-            # Todo: remove, once reinforce only mv is possible
-            # filter equipment changes in LV network level, e.g. from connection
-            # of new generators
-            mv_components = []
-            for comp in edisgo_obj.results.equipment_changes.index:
-                if not (
-                    comp in edisgo_obj.topology.lines_df.index
-                    and not np.isnan(
-                        edisgo_obj.topology.buses_df.at[
-                            edisgo_obj.topology.lines_df.at[comp, "bus0"],
-                            "lv_grid_id",
-                        ]
-                    )
-                ):
-                    mv_components.append(comp)
-            equipment_changes = equipment_changes.loc[mv_components, :]
 
     # costs for transformers
     if not equipment_changes.empty:
@@ -185,23 +168,24 @@ def grid_expansion_costs(
         lines_added["length"] = edisgo_obj.topology.lines_df.loc[
             lines_added.index, "length"
         ]
-        line_costs = _get_line_costs(lines_added)
-        costs = costs.append(
-            pd.DataFrame(
-                {
-                    "type": edisgo_obj.topology.lines_df.loc[
-                        lines_added.index, "type_info"
-                    ].values,
-                    "total_costs": line_costs.costs.values,
-                    "length": (
-                        lines_added.quantity * lines_added.length
-                    ).values,
-                    "quantity": lines_added.quantity.values,
-                    "voltage_level": line_costs.voltage_level.values,
-                },
-                index=lines_added.index,
+        if not lines_added.empty:
+            line_costs = _get_line_costs(lines_added)
+            costs = costs.append(
+                pd.DataFrame(
+                    {
+                        "type": edisgo_obj.topology.lines_df.loc[
+                            lines_added.index, "type_info"
+                        ].values,
+                        "total_costs": line_costs.costs.values,
+                        "length": (
+                            lines_added.quantity * lines_added.length
+                        ).values,
+                        "quantity": lines_added.quantity.values,
+                        "voltage_level": line_costs.voltage_level.values,
+                    },
+                    index=lines_added.index,
+                )
             )
-        )
 
     # if no costs incurred write zero costs to DataFrame
     if costs.empty:

@@ -68,7 +68,11 @@ def reinforce_grid(
         Determines network levels reinforcement is conducted for. Specify
 
         * None to reinforce MV and LV network levels. None is the default.
-        * 'mv' to reinforce MV network level only, including MV/LV stations, and
+        * 'mv' to reinforce MV network level only, neglecting MV/LV stations, and
+          LV network topology. LV load and generation is aggregated per
+          LV network and directly connected to the primary side of the
+          respective MV/LV station.
+        * 'mvlv' to reinforce MV network level only, including MV/LV stations, and
           neglecting LV network topology. LV load and generation is aggregated per
           LV network and directly connected to the secondary side of the
           respective MV/LV station.
@@ -118,8 +122,8 @@ def reinforce_grid(
             )
 
     # check if provided mode is valid
-    if mode and mode is not "mv":
-        raise ValueError("Provided mode {} is not a valid mode.")
+    if mode and mode not in ["mv", "mvlv"]:
+        raise ValueError("Provided mode {} is not a valid mode.".format(mode))
 
     # assign MV feeder to every generator, LV station, load, and branch tee
     # to assign network expansion costs to an MV feeder
@@ -170,10 +174,10 @@ def reinforce_grid(
 
     logger.debug("==> Check station load.")
     overloaded_mv_station = checks.hv_mv_station_load(edisgo_reinforce)
-    if not mode:
-        overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce)
-    else:
+    if mode is "mv":
         overloaded_lv_stations = pd.DataFrame()
+    else:
+        overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce)
     logger.debug("==> Check line load.")
     crit_lines = checks.mv_line_load(edisgo_reinforce)
     if not mode:
@@ -218,7 +222,7 @@ def reinforce_grid(
         edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = checks.hv_mv_station_load(edisgo_reinforce)
-        if not mode:
+        if mode is not "mv":
             overloaded_lv_stations = checks.mv_lv_station_load(
                 edisgo_reinforce
             )
@@ -312,7 +316,7 @@ def reinforce_grid(
         )
 
     # solve voltage problems at secondary side of LV stations
-    if not mode:
+    if mode is not "mv":
         logger.debug("==> Check voltage at secondary side of LV stations.")
         if combined_analysis:
             voltage_levels = "mv_lv"
@@ -418,10 +422,10 @@ def reinforce_grid(
     # RECHECK FOR OVERLOADED TRANSFORMERS AND LINES
     logger.debug("==> Recheck station load.")
     overloaded_mv_station = checks.hv_mv_station_load(edisgo_reinforce)
-    if not mode:
-        overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce)
-    else:
+    if mode is "mv":
         overloaded_lv_stations = pd.DataFrame()
+    else:
+        overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce)
     logger.debug("==> Recheck line load.")
     crit_lines = checks.mv_line_load(edisgo_reinforce)
     if not mode:
@@ -466,7 +470,7 @@ def reinforce_grid(
         edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = checks.hv_mv_station_load(edisgo_reinforce)
-        if not mode:
+        if mode is not "mv":
             overloaded_lv_stations = checks.mv_lv_station_load(
                 edisgo_reinforce
             )
@@ -509,7 +513,7 @@ def reinforce_grid(
 
     # calculate topology expansion costs
     edisgo_reinforce.results.grid_expansion_costs = grid_expansion_costs(
-        edisgo_reinforce, mode=mode
+        edisgo_reinforce
     )
 
     return edisgo_reinforce.results
