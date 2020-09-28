@@ -1,6 +1,7 @@
 import os
 import logging
 import pandas as pd
+import pickle
 
 from edisgo.network.topology import Topology
 from edisgo.network.results import Results
@@ -1077,3 +1078,17 @@ class EDisGo:
                 )
         else:
             raise ValueError("Component type is not correct.")
+
+    def save_edisgo_to_pickle(self, path='', filename=None):
+        abs_path = os.path.abspath(path)
+        if filename is None:
+            filename = "edisgo_object_{ext}.pkl".format(
+                ext=self.topology.mv_grid.id)
+        pickle.dump(self, open(os.path.join(abs_path, filename), "wb"))
+
+
+def import_edisgo_from_pickle(filename, path=''):
+    abs_path = os.path.abspath(path)
+    return pickle.load(open(os.path.join(abs_path, filename), "rb"))
+
+
