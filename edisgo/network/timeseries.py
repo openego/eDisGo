@@ -393,11 +393,21 @@ class TimeSeries:
             Series with residual load in MW.
 
         """
-        return (
-            self.generators_active_power.sum(axis=1)
-            + self.storage_units_active_power.sum(axis=1)
-            - self.loads_active_power.sum(axis=1)
-        ).loc[self.timeindex]
+        #ToDo remove if statement once charging point time series are handled
+        # correctly
+        if self.charging_points_active_power.empty:
+            return (
+                self.generators_active_power.sum(axis=1)
+                + self.storage_units_active_power.sum(axis=1)
+                - self.loads_active_power.sum(axis=1)
+            ).loc[self.timeindex]
+        else:
+            return (
+                    self.generators_active_power.sum(axis=1)
+                    + self.storage_units_active_power.sum(axis=1)
+                    - self.loads_active_power.sum(axis=1)
+                    - self.charging_points_active_power.sum(axis=1)
+            ).loc[self.timeindex]
 
     @property
     def timesteps_load_feedin_case(self):
@@ -1111,7 +1121,7 @@ def _worst_case_storage(edisgo_obj, modes, storage_names=None):
     modes : list
         List with worst-cases to generate time series for. Can be
         'feedin_case', 'load_case' or both.
-    storage_namess: str or list of str
+    storage_names: str or list of str
         Names of storage units to add timeseries for. Default None,
         timeseries for all storage units of edisgo_obj are set then.
 

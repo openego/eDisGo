@@ -423,7 +423,10 @@ class EDisGo:
         if all(pf_results["converged"]["0"].tolist()):
             pypsa_io.process_pfa_results(self, pypsa_network, timesteps)
         else:
-            raise ValueError("Power flow analysis did not converge.")
+            raise ValueError("Power flow analysis did not converge for the"
+                             "following time steps: {}.".format(
+                timesteps[~pf_results["converged"]["0"]].tolist())
+            )
 
     def reinforce(self, **kwargs):
         """
