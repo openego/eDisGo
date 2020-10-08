@@ -6,6 +6,7 @@ import os
 import warnings
 
 import edisgo
+from edisgo.network.grids import MVGrid, LVGrid
 from edisgo.network.components import Generator, Load
 from edisgo.tools.tools import (
     calculate_line_resistance,
@@ -14,6 +15,7 @@ from edisgo.tools.tools import (
     check_bus_for_removal,
     check_line_for_removal,
 )
+from edisgo.io.ding0_import import _validate_ding0_grid_import
 
 logger = logging.getLogger("edisgo")
 
@@ -1413,6 +1415,105 @@ class Topology:
             axis=1,
         ).to_csv(os.path.join(topology_dir, "network.csv"))
         logger.debug("Topology exported.")
+
+    def from_csv(self, topology_dir, edisgo_obj):
+        """
+        # Todo: when done with project, reset_index in save function and remove renaming here
+        # Todo: should this
+        Exports topology to csv files with names buses, generators, lines,
+        loads, switches, transformers, transformers_hvmv, network. Files are
+        designed in a way that they can be directly imported to pypsa. A sub-
+        folder named "topology" is added to the provided directory.
+
+        Parameters
+        ----------
+        topology_dir: str
+            path to save topology to
+
+        """
+        # import buses and lines
+        self.buses_df = pd.read_csv(os.path.join(topology_dir, "buses.csv")).\
+            rename(columns={'Unnamed: 0': 'name'}).set_index('name')
+        self.lines_df = pd.read_csv(os.path.join(topology_dir, "lines.csv")).\
+            rename(columns={'Unnamed: 0': 'name'}).set_index('name')
+        # import mvlv transformers
+        if os.path.exists(os.path.join(topology_dir, "transformers.csv")):
+            self.transformers_df = \
+                pd.read_csv(os.path.join(topology_dir, "transformers.csv")). \
+                    rename(columns={'Unnamed: 0': 'name', "x": "x_pu",
+                                    "r": "r_pu"}).set_index('name')
+        # import hvmv transformers
+        if os.path.exists(os.path.join(topology_dir, "transformers_hvmv.csv")):
+            self.transformers_hvmv_df = \
+                pd.read_csv(
+                    os.path.join(topology_dir, "transformers_hvmv.csv")). \
+                    rename(columns={'Unnamed: 0': 'name', "x": "x_pu",
+                                    "r": "r_pu"}).set_index('name')
+        # import generators
+        if os.path.exists(os.path.join(topology_dir, "generators.csv")):
+            all_generators_df =\
+                pd.read_csv(os.path.join(topology_dir, "generators.csv")).\
+                rename(columns={'Unnamed: 0': 'name'}).set_index('name')
+            if hasattr(self, '_transformers_hvmv_df'):
+                # remove slack
+                self.generators_df = all_generators_df.drop(
+                    all_generators_df.loc[all_generators_df.control == 'Slack'].
+                        index)
+            else:
+                self.generators_df = all_generators_df
+            # self._slack_df = all_generators_df.loc[
+            #     all_generators_df.index.str.contains('slack')]
+            # if len(self.slack_df) != 1:
+            #     logging.warning('Slack could not be imported. '
+            #                     'Please set one manually.')
+            self.generators_df = all_generators_df.drop(self.slack_df.index)
+        # import loads
+        if os.path.exists(os.path.join(topology_dir, "loads.csv")):
+            self.loads_df = \
+                pd.read_csv(os.path.join(topology_dir, "loads.csv")).\
+                rename(columns={'Unnamed: 0': 'name'}).set_index('name')
+        # import charging points
+        if os.path.exists(os.path.join(topology_dir, "charging_points.csv")):
+            self.charging_points_df = \
+                pd.read_csv(os.path.join(topology_dir, "charging_points.csv")). \
+                rename(columns={'Unnamed: 0': 'name'}).set_index('name')
+        # import storage units
+        if os.path.exists(os.path.join(topology_dir, "storage_units.csv")):
+            self.storage_units_df = \
+                pd.read_csv(os.path.join(topology_dir, "storage_units.csv")). \
+                rename(columns={'Unnamed: 0': 'name'}).set_index('name')
+        # import switches
+        if os.path.exists(os.path.join(topology_dir, "switches.csv")):
+            self.switches_df = \
+                pd.read_csv(os.path.join(topology_dir, "switches.csv")). \
+                rename(columns={'Unnamed: 0': 'name'}).set_index('name')
+
+        # import network data
+        network = pd.read_csv(os.path.join(topology_dir, "network.csv")).\
+            rename(columns={
+                "mv_grid_district_geom": "geom",
+                "mv_grid_district_population": "population",
+            })
+        self.mv_grid = MVGrid(edisgo_obj=edisgo_obj, id=network['name'].values[0])
+        # set up medium voltage grid
+        self._grids = {}
+        self._grids[
+            str(self.mv_grid)
+        ] = self.mv_grid
+
+        # set up low voltage grids
+        lv_grid_ids = set(self.buses_df.lv_grid_id.dropna())
+        for lv_grid_id in lv_grid_ids:
+            lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=edisgo_obj)
+            self.mv_grid._lv_grids.append(lv_grid)
+            self._grids[str(lv_grid)] = lv_grid
+
+        # Check data integrity
+        _validate_ding0_grid_import(edisgo_obj.topology)
+        # set grid district
+
+        self.grid_district = network.loc[0].drop('name').to_dict()
+        logger.debug("Topology imported.")
 
     def __repr__(self):
         return "Network topology " + str(self.id)

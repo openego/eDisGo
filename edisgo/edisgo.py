@@ -1,6 +1,7 @@
 import os
 import logging
 import pandas as pd
+import pickle
 
 from edisgo.network.topology import Topology
 from edisgo.network.results import Results
@@ -222,34 +223,35 @@ class EDisGo:
 
         # set up time series for feed-in and load
         # worst-case time series
-        if kwargs.get("worst_case_analysis", None):
-            timeseries.get_component_timeseries(
-                edisgo_obj=self, mode=kwargs.get("worst_case_analysis", None)
-            )
-        else:
-            timeseries.get_component_timeseries(
-                edisgo_obj=self,
-                timeseries_generation_fluctuating=kwargs.get(
-                    "timeseries_generation_fluctuating", None
-                ),
-                timeseries_generation_dispatchable=kwargs.get(
-                    "timeseries_generation_dispatchable", None
-                ),
-                timeseries_generation_reactive_power=kwargs.get(
-                    "timeseries_generation_reactive_power", None
-                ),
-                timeseries_load=kwargs.get("timeseries_load", None),
-                timeseries_load_reactive_power=kwargs.get(
-                    "timeseries_load_reactive_power", None
-                ),
-                timeseries_storage_units=kwargs.get(
-                    "timeseries_storage_units", None
-                ),
-                timeseries_storage_units_reactive_power=kwargs.get(
-                    "timeseries_storage_units_reactive_power", None
-                ),
-                timeindex=kwargs.get("timeindex", None),
-            )
+        if kwargs.get("import_timeseries", True):
+            if kwargs.get("worst_case_analysis", None):
+                timeseries.get_component_timeseries(
+                    edisgo_obj=self, mode=kwargs.get("worst_case_analysis", None)
+                )
+            else:
+                timeseries.get_component_timeseries(
+                    edisgo_obj=self,
+                    timeseries_generation_fluctuating=kwargs.get(
+                        "timeseries_generation_fluctuating", None
+                    ),
+                    timeseries_generation_dispatchable=kwargs.get(
+                        "timeseries_generation_dispatchable", None
+                    ),
+                    timeseries_generation_reactive_power=kwargs.get(
+                        "timeseries_generation_reactive_power", None
+                    ),
+                    timeseries_load=kwargs.get("timeseries_load", None),
+                    timeseries_load_reactive_power=kwargs.get(
+                        "timeseries_load_reactive_power", None
+                    ),
+                    timeseries_storage_units=kwargs.get(
+                        "timeseries_storage_units", None
+                    ),
+                    timeseries_storage_units_reactive_power=kwargs.get(
+                        "timeseries_storage_units_reactive_power", None
+                    ),
+                    timeindex=kwargs.get("timeindex", None),
+                )
 
     @property
     def config(self):
@@ -1080,3 +1082,43 @@ class EDisGo:
                 )
         else:
             raise ValueError("Component type is not correct.")
+
+    def save_edisgo_to_pickle(self, path='', filename=None):
+        # Todo: integrate in save method?
+        abs_path = os.path.abspath(path)
+        if filename is None:
+            filename = "edisgo_object_{ext}.pkl".format(
+                ext=self.topology.mv_grid.id)
+        pickle.dump(self, open(os.path.join(abs_path, filename), "wb"))
+
+
+def import_edisgo_from_pickle(filename, path=''):
+    abs_path = os.path.abspath(path)
+    return pickle.load(open(os.path.join(abs_path, filename), "rb"))
+
+
+def import_edisgo_from_files(directory, import_topology=True,
+                             import_timeseries=False, import_results=False,
+                             **kwargs):
+    edisgo_obj = EDisGo(import_timeseries=False)
+    if import_topology:
+        if os.path.exists(os.path.join(directory, "topology")):
+            edisgo_obj.topology.from_csv(os.path.join(directory, "topology"),
+                                        edisgo_obj)
+        else:
+            logging.warning(
+                'No topology directory found. Topology not imported.')
+    if import_timeseries:
+        if os.path.exists(os.path.join(directory, "timeseries")):
+            edisgo_obj.timeseries.from_csv(os.path.join(directory, "timeseries"))
+        else:
+            logging.warning(
+                'No timeseries directory found. Timeseries not imported.')
+    if import_results:
+        parameters = kwargs.get('parameters', 'all')
+        if os.path.exists(os.path.join(directory, "results")):
+            edisgo_obj.results.from_csv(os.path.join(directory, "results"),
+                                        parameters)
+        else:
+            logging.warning('No results directory found. Results not imported.')
+    return edisgo_obj
