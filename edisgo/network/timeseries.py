@@ -970,6 +970,10 @@ def _worst_case_generation(edisgo_obj, modes, generator_names=None):
                 worst_case_scale_factors["{}_feedin_pv".format(mode)]
                 for mode in modes
             ],
+            "wind": [
+                worst_case_scale_factors["{}_feedin_wind".format(mode)]
+                for mode in modes
+            ],
             "other": [
                 worst_case_scale_factors["{}_feedin_other".format(mode)]
                 for mode in modes
@@ -984,13 +988,20 @@ def _worst_case_generation(edisgo_obj, modes, generator_names=None):
         dtype="float64",
     )
     # assign normalized active power time series to solar generators
-    cols = gen_ts[gens_df.index[gens_df.type == "solar"]].columns
-    if len(cols) > 0:
-        gen_ts[cols] = pd.concat(
-            [worst_case_ts.loc[:, ["solar"]]] * len(cols), axis=1, sort=True
+    cols_pv = gen_ts[gens_df.index[gens_df.type == "solar"]].columns
+    if len(cols_pv) > 0:
+        gen_ts[cols_pv] = pd.concat(
+            [worst_case_ts.loc[:, ["solar"]]] * len(cols_pv), axis=1, sort=True
+        )
+    # assign normalized active power time series to wind generators
+    cols_wind = gen_ts[gens_df.index[gens_df.type == "wind"]].columns
+    if len(cols_wind) > 0:
+        gen_ts[cols_wind] = pd.concat(
+            [worst_case_ts.loc[:, ["wind"]]] * len(cols_wind), axis=1,
+            sort=True
         )
     # assign normalized active power time series to other generators
-    cols = gen_ts[gens_df.index[gens_df.type != "solar"]].columns
+    cols = gen_ts.columns[~gen_ts.columns.isin(cols_pv.append(cols_wind))]
     if len(cols) > 0:
         gen_ts[cols] = pd.concat(
             [worst_case_ts.loc[:, ["other"]]] * len(cols), axis=1, sort=True
