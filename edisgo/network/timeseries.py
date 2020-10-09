@@ -105,6 +105,9 @@ class TimeSeries:
         self._curtailment = kwargs.get(
             "curtailment", pd.DataFrame(index=self.timeindex)
         )
+        self._residual_load = kwargs.get(
+            "residual_load", pd.DataFrame(index=self.timeindex)
+        )
 
     @property
     def generators_active_power(self):
@@ -395,19 +398,22 @@ class TimeSeries:
         """
         #ToDo remove if statement once charging point time series are handled
         # correctly
-        if self.charging_points_active_power.empty:
-            return (
-                self.generators_active_power.sum(axis=1)
-                + self.storage_units_active_power.sum(axis=1)
-                - self.loads_active_power.sum(axis=1)
-            ).loc[self.timeindex]
-        else:
-            return (
+        if self._residual_load.empty:
+            if self.charging_points_active_power.empty:
+                return (
                     self.generators_active_power.sum(axis=1)
                     + self.storage_units_active_power.sum(axis=1)
                     - self.loads_active_power.sum(axis=1)
-                    - self.charging_points_active_power.sum(axis=1)
-            ).loc[self.timeindex]
+                ).loc[self.timeindex]
+            else:
+                return (
+                        self.generators_active_power.sum(axis=1)
+                        + self.storage_units_active_power.sum(axis=1)
+                        - self.loads_active_power.sum(axis=1)
+                        - self.charging_points_active_power.sum(axis=1)
+                ).loc[self.timeindex]
+        else:
+            return self._residual_load
 
     @property
     def timesteps_load_feedin_case(self):
@@ -1684,6 +1690,7 @@ def import_load_timeseries(config_data, data_source, year=2018):
         Get normalized sectoral load time series
 
         Time series are normalized to 1 kWh consumption per year
+        # Todo: Check if this is still true or if unit is MWh
 
         Parameters
         ----------

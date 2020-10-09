@@ -813,9 +813,10 @@ class Results:
 
     def from_csv(self, results_path, parameters):
         # measures
-        measures_df = pd.read_csv(os.path.join(results_path, 'measures.csv'),
-                                  index_col=0)
-        self.measures = list(measures_df.measure.values)
+        if os.path.exists(os.path.join(results_path, "measures.csv")):
+            measures_df = pd.read_csv(os.path.join(results_path, 'measures.csv'),
+                                      index_col=0)
+            self.measures = list(measures_df.measure.values)
 
         # if string is given convert to list
         if isinstance(parameters, str):
@@ -830,40 +831,54 @@ class Results:
         if 'powerflow_results' in parameters and os.path.isdir(os.path.join(
                 results_path, 'powerflow_results')):
             # line loading
-            self.i_res = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'currents.csv'),
-                index_col=0, parse_dates=True)
+            if os.path.exists(os.path.join(
+                    results_path, 'powerflow_results', 'currents.csv')):
+                self.i_res = pd.read_csv(
+                    os.path.join(
+                        results_path, 'powerflow_results', 'currents.csv'),
+                    index_col=0, parse_dates=True)
             # voltage
-            self.pfa_v_mag_pu = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'voltages_pu.csv'),
-                index_col=0, parse_dates=True, header=[0, 1])
+            if os.path.exists(os.path.join(
+                    results_path, 'powerflow_results', 'voltages_pu.csv')):
+                self.pfa_v_mag_pu = pd.read_csv(
+                    os.path.join(
+                        results_path, 'powerflow_results', 'voltages_pu.csv'),
+                    index_col=0, parse_dates=True, header=[0, 1])
             # active power
-            self.pfa_p = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'active_powers.csv'),
-                index_col=0, parse_dates=True)
+            if os.path.exists(os.path.join(
+                    results_path, 'powerflow_results', 'active_powers.csv')):
+                self.pfa_p = pd.read_csv(
+                    os.path.join(
+                        results_path, 'powerflow_results', 'active_powers.csv'),
+                    index_col=0, parse_dates=True)
             # reactive power
-            self.pfa_q = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'reactive_powers.csv'),
-                index_col=0, parse_dates=True)
+            if os.path.exists(os.path.join(
+                    results_path, 'powerflow_results', 'reactive_powers.csv')):
+                self.pfa_q = pd.read_csv(
+                    os.path.join(
+                        results_path, 'powerflow_results', 'reactive_powers.csv'),
+                    index_col=0, parse_dates=True)
             # apparent power
-            self.apparent_power = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'apparent_powers.csv'),
-                index_col=0, parse_dates=True)
+            if os.path.exists(os.path.join(
+                    results_path, 'powerflow_results', 'apparent_powers.csv')):
+                self.apparent_power = pd.read_csv(
+                    os.path.join(
+                        results_path, 'powerflow_results', 'apparent_powers.csv'),
+                    index_col=0, parse_dates=True)
             # network losses
-            self.grid_losses = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'grid_losses.csv'),
-                index_col=0, parse_dates=True)
+            if os.path.exists(os.path.join(
+                    results_path, 'powerflow_results', 'grid_losses.csv')):
+                self.grid_losses = pd.read_csv(
+                    os.path.join(
+                        results_path, 'powerflow_results', 'grid_losses.csv'),
+                    index_col=0, parse_dates=True)
             # network exchanges
-            self.hv_mv_exchanges = pd.read_csv(
-                os.path.join(
-                    results_path, 'powerflow_results', 'hv_mv_exchanges.csv'),
-                index_col=0, parse_dates=True)
+            if os.path.exists(os.path.join(
+                    results_path, 'powerflow_results', 'hv_mv_exchanges.csv')):
+                self.hv_mv_exchanges = pd.read_csv(
+                    os.path.join(
+                        results_path, 'powerflow_results', 'hv_mv_exchanges.csv'),
+                    index_col=0, parse_dates=True)
         else:
             self.i_res = None
             self.pfa_v_mag_pu = None

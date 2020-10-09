@@ -1121,4 +1121,12 @@ def import_edisgo_from_files(directory, import_topology=True,
                                         parameters)
         else:
             logging.warning('No results directory found. Results not imported.')
+    if kwargs.get('import_residual_load', False):
+        if os.path.exists(
+                os.path.join(directory, 'time_series_sums.csv')):
+            residual_load = pd.read_csv(
+                os.path.join(directory, 'time_series_sums.csv')).rename(
+                columns={'Unnamed: 0': 'timeindex'}).set_index('timeindex')['residual_load']
+            residual_load.index = pd.to_datetime(residual_load.index)
+            edisgo_obj.timeseries._residual_load = residual_load
     return edisgo_obj
