@@ -13,49 +13,19 @@ end
 
 function post_method_edisgo(pm)
     ## Preprocessing generated powermodel
-    if pm.data["curtailment_requirement"] || pm.data["curtailment_allowance"]
-        # Add key :fluct_gen to ref() containing generators which are fluctuating, i.e. RES
-        nws_data = nws(pm)
-        for (n, nw_data) in nws_data
-            ref = nws_data[n]
-            fluct_gen = Dict()
-            for (k,g) in ref[:gen]
-                if haskey(g,"fluctuating") && g["fluctuating"] == 1
-                    fluct_gen[k] = g
-                end
-            end
-            pm.ref[:nw][n][:fluct_gen] = fluct_gen
-        end
-    else
-        println("let fluctuating generators be negative load, such that no variables are created")
-        for (nw,net) in nws(pm)
-            for (id,gen) in net[:gen]
-                # if fluctuating, generator non-dispatchable and let generator be a negative load
-                if gen["fluctuating"]==1
-                    gen_bus = gen["gen_bus"]
-                    gen_id = gen["index"]
-                    if isempty(net[:bus_loads][gen_bus])
-                        # if generator at bus without a load, create new load ID and add load to net[:load] dictionary
-                        load_id = length(net[:load])+1
-                        push!(net[:bus_loads][gen_bus],load_id)
-                        net[:load][load_id] = Dict{String,Any}("load_bus"=>gen_bus,
-                            "status"=>true, "index"=>load_id, "qd"=>-gen["qmax"],"pd"=> -gen["pmax"])
-                    else
-                        # subtract current value of generator to existing load
-                        load_id = net[:bus_loads][gen_bus][1]
-                        net[:load][load_id]["qd"] -= gen["qmax"]
-                        net[:load][load_id]["pd"] -= gen["pmax"]
-                    end
-                    # delete generator from net[:gen] dictionary
-                    delete!(net[:gen],gen_id)
-                    # remove generator id from net[:bus_gens][gen_bus]
-                    filter!(e->e!=gen_id,net[:bus_gens][gen_bus])
-                end
+
+    # allow curtailment of all generators
+    nws_data = nws(pm)
+    for (n, nw_data) in nws_data
+        ref = nws_data[n]
+        fluct_gen = Dict()
+        for (k,g) in ref[:gen]
+            if haskey(g,"fluctuating") && g["fluctuating"] == 1
+                fluct_gen[k] = g
             end
         end
+        pm.ref[:nw][n][:fluct_gen] = fluct_gen
     end
-
-
 
     ## Build model
     ## ==========================
@@ -187,15 +157,8 @@ function post_method_edisgo(pm)
         end
     end
     #### Curtailment constraints
-    # TODO check if requirement and allowance do not disagree, e.g. sum(curtailment_requirement)>curtailment_allowance
-    if pm.data["curtailment_requirement"]
-        if length(pm.data["curtailment_requirement_series"])!=pm.data["time_horizon"]
-            println("length of curtailment requirement does not match considered time horizon")
-        else
-            for (t,network) in nws(pm)
-                constraint_curtailment_single(pm,nw=t)
-            end
-        end
+    for (t,network) in nws(pm)
+        constraint_curtailment_single(pm,nw=t)
     end
     
     if pm.data["curtailment_allowance"]

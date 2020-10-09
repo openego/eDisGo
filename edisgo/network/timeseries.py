@@ -503,69 +503,69 @@ class TimeSeries:
         # Todo: overthink if setting timeindex can be handled in a nicer way
         timeindex = None
         if os.path.exists(os.path.join(ts_dir, "loads_active_power.csv")):
-            loads_active_power = \
-                pd.read_csv(os.path.join(ts_dir, "loads_active_power.csv")).\
-                    rename(columns={'Unnamed: 0': 'timeindex'}).\
-                    set_index('timeindex')#
-            self.loads_active_power = loads_active_power
+            self.loads_active_power = pd.read_csv(
+                os.path.join(ts_dir, "loads_active_power.csv"),
+                index_col=[0],
+                parse_dates=True)
             if timeindex is None:
-                timeindex = loads_active_power.index
+                timeindex = self._loads_active_power.index
         if os.path.exists(os.path.join(ts_dir, "loads_reactive_power.csv")):
-            loads_reactive_power = \
-                pd.read_csv(os.path.join(ts_dir, "loads_reactive_power.csv")).\
-                    rename(columns={'Unnamed: 0': 'timeindex'}).\
-                    set_index('timeindex')
-            self.loads_reactive_power = loads_reactive_power
+            self.loads_reactive_power = pd.read_csv(
+                os.path.join(ts_dir, "loads_reactive_power.csv"),
+                index_col=[0],
+                parse_dates=True)
             if timeindex is None:
-                timeindex = loads_reactive_power.index
-        if os.path.exists(os.path.join(ts_dir, "charging_points_active_power.csv")):
-            charging_points_active_power = \
-                pd.read_csv(os.path.join(ts_dir, "charging_points_active_power.csv")).\
-                    rename(columns={'Unnamed: 0': 'timeindex'}).\
-                    set_index('timeindex')
-            self.charging_points_active_power = charging_points_active_power
+                timeindex = self._loads_reactive_power.index
+
+        if os.path.exists(
+                os.path.join(ts_dir, "charging_points_active_power.csv")):
+            self.charging_points_active_power = pd.read_csv(
+                os.path.join(ts_dir, "charging_points_active_power.csv"),
+                index_col=[0],
+                parse_dates=True)
             if timeindex is None:
-                timeindex = charging_points_active_power.index
-        if os.path.exists(os.path.join(ts_dir, "charging_points_reactive_power.csv")):
-            charging_points_reactive_power = \
-                pd.read_csv(os.path.join(ts_dir, "charging_points_reactive_power.csv")).\
-                    rename(columns={'Unnamed: 0': 'timeindex'}).\
-                    set_index('timeindex')
-            self.charging_points_reactive_power = charging_points_reactive_power
+                timeindex = self._charging_points_active_power.index
+        if os.path.exists(
+                os.path.join(ts_dir, "charging_points_reactive_power.csv")):
+            self.charging_points_reactive_power = pd.read_csv(
+                os.path.join(ts_dir, "charging_points_reactive_power.csv"),
+                index_col=[0],
+                parse_dates=True)
             if timeindex is None:
-                timeindex = charging_points_reactive_power.index
-        if os.path.exists(os.path.join(ts_dir, "generators_active_power.csv")):
-            generators_active_power = \
-                pd.read_csv(os.path.join(ts_dir, "generators_active_power.csv")).\
-                    rename(columns={'Unnamed: 0': 'timeindex'}).\
-                    set_index('timeindex')
-            self.generators_active_power = generators_active_power
+                timeindex = self._charging_points_reactive_power.index
+
+        if os.path.exists(
+                os.path.join(ts_dir, "generators_active_power.csv")):
+            self.generators_active_power = pd.read_csv(
+                os.path.join(ts_dir, "generators_active_power.csv"),
+                index_col=[0],
+                parse_dates=True)
             if timeindex is None:
-                timeindex = generators_active_power.index
+                timeindex = self._generators_active_power.index
         if os.path.exists(os.path.join(ts_dir, "generators_reactive_power.csv")):
-            generators_reactive_power = \
-                pd.read_csv(os.path.join(ts_dir, "generators_reactive_power.csv")).\
-                    rename(columns={'Unnamed: 0': 'timeindex'}).\
-                    set_index('timeindex')
-            self.generators_reactive_power = generators_reactive_power
+            self.generators_reactive_power = pd.read_csv(
+                os.path.join(ts_dir, "generators_reactive_power.csv"),
+                index_col=[0],
+                parse_dates=True)
             if timeindex is None:
-                timeindex = generators_reactive_power.index
-        if os.path.exists(os.path.join(ts_dir, "storage_units_active_power.csv")):
-            storage_units_active_power = \
-                pd.read_csv(os.path.join(ts_dir, "storage_units_active_power.csv")).\
-                    rename(columns={'Unnamed: 0': 'timeindex'}).\
-                    set_index('timeindex')
-            self.storage_units_active_power = storage_units_active_power
+                timeindex = self._generators_reactive_power.index
+
+        if os.path.exists(
+                os.path.join(ts_dir, "storage_units_active_power.csv")):
+            self.storage_units_active_power = pd.read_csv(
+                os.path.join(ts_dir, "storage_units_active_power.csv"),
+                index_col=[0],
+                parse_dates=True)
             if timeindex is None:
-                timeindex = storage_units_active_power.index
-        if os.path.exists(os.path.join(ts_dir, "storage_units_reactive_power.csv")):
-            storage_units_reactive_power = \
-                pd.read_csv(os.path.join(ts_dir, "storage_units_reactive_power.csv")).\
-                    rename(columns={'Unnamed: 0': 'timeindex'}).\
-                    set_index('timeindex')
-            self.storage_units_reactive_power = storage_units_reactive_power
+                timeindex = self._storage_units_active_power.index
+        if os.path.exists(
+                os.path.join(ts_dir, "storage_units_reactive_power.csv")):
+            self.storage_units_reactive_power = pd.read_csv(
+                os.path.join(ts_dir, "storage_units_reactive_power.csv"),
+                index_col=[0],
+                parse_dates=True)
             if timeindex is None:
-                timeindex = storage_units_reactive_power.index
+                timeindex = self._storage_units_reactive_power.index
         self.timeindex = timeindex
 
 
@@ -1055,6 +1055,10 @@ def _worst_case_generation(edisgo_obj, modes, generator_names=None):
                 worst_case_scale_factors["{}_feedin_pv".format(mode)]
                 for mode in modes
             ],
+            "wind": [
+                worst_case_scale_factors["{}_feedin_wind".format(mode)]
+                for mode in modes
+            ],
             "other": [
                 worst_case_scale_factors["{}_feedin_other".format(mode)]
                 for mode in modes
@@ -1069,13 +1073,20 @@ def _worst_case_generation(edisgo_obj, modes, generator_names=None):
         dtype="float64",
     )
     # assign normalized active power time series to solar generators
-    cols = gen_ts[gens_df.index[gens_df.type == "solar"]].columns
-    if len(cols) > 0:
-        gen_ts[cols] = pd.concat(
-            [worst_case_ts.loc[:, ["solar"]]] * len(cols), axis=1, sort=True
+    cols_pv = gen_ts[gens_df.index[gens_df.type == "solar"]].columns
+    if len(cols_pv) > 0:
+        gen_ts[cols_pv] = pd.concat(
+            [worst_case_ts.loc[:, ["solar"]]] * len(cols_pv), axis=1, sort=True
+        )
+    # assign normalized active power time series to wind generators
+    cols_wind = gen_ts[gens_df.index[gens_df.type == "wind"]].columns
+    if len(cols_wind) > 0:
+        gen_ts[cols_wind] = pd.concat(
+            [worst_case_ts.loc[:, ["wind"]]] * len(cols_wind), axis=1,
+            sort=True
         )
     # assign normalized active power time series to other generators
-    cols = gen_ts[gens_df.index[gens_df.type != "solar"]].columns
+    cols = gen_ts.columns[~gen_ts.columns.isin(cols_pv.append(cols_wind))]
     if len(cols) > 0:
         gen_ts[cols] = pd.concat(
             [worst_case_ts.loc[:, ["other"]]] * len(cols), axis=1, sort=True

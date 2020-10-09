@@ -7,7 +7,6 @@ import warnings
 
 import edisgo
 from edisgo.network.grids import MVGrid, LVGrid
-from edisgo.network.components import Generator, Load
 from edisgo.tools.tools import (
     calculate_line_resistance,
     calculate_line_reactance,
@@ -16,6 +15,9 @@ from edisgo.tools.tools import (
     check_line_for_removal,
 )
 from edisgo.io.ding0_import import _validate_ding0_grid_import
+
+if "READTHEDOCS" not in os.environ:
+    from shapely.wkt import loads as wkt_loads
 
 logger = logging.getLogger("edisgo")
 
@@ -1494,6 +1496,12 @@ class Topology:
                 "mv_grid_district_geom": "geom",
                 "mv_grid_district_population": "population",
             })
+        self.grid_district = {
+            "population": network.population[0],
+            "geom": wkt_loads(network.geom[0]),
+            "srid": network.srid[0],
+        }
+
         self.mv_grid = MVGrid(edisgo_obj=edisgo_obj, id=network['name'].values[0])
         # set up medium voltage grid
         self._grids = {}
@@ -1512,7 +1520,7 @@ class Topology:
         _validate_ding0_grid_import(edisgo_obj.topology)
         # set grid district
 
-        self.grid_district = network.loc[0].drop('name').to_dict()
+        #self.grid_district = network.loc[0].drop('name').to_dict()
         logger.debug("Topology imported.")
 
     def __repr__(self):
