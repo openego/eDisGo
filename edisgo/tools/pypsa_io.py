@@ -193,6 +193,9 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             elif mode is "mvlv":
                 # get secondary side of station to append loads and generators
                 # to
+                if len(lv_grid.transformers_df.bus1.unique())>1:
+                    raise Exception('More than one station for lv grid {} '
+                                    'found. Please check.'.format(lv_grid.id))
                 station_bus = lv_grid.buses_df.loc[
                     [lv_grid.transformers_df.bus1.unique()[0]]
                 ]
