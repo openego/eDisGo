@@ -1,12 +1,11 @@
 import pandas as pd
 from pathlib import Path
-from edisgo import flex_opt
-from edisgo import network
-from edisgo import tools
 from edisgo import EDisGo
 from edisgo.network.grids import MVGrid, LVGrid
 from edisgo.network.timeseries import get_component_timeseries
 from edisgo.io.ding0_import import _validate_ding0_grid_import
+from edisgo.edisgo import import_edisgo_from_pickle
+
 
 
 def search_str_df(df,col,search_str,invert=False):
@@ -51,7 +50,7 @@ def import_sb_network(simbench_dict):
         if "MV" in name:
             return
         elif "LV" in name:
-            return name[name.find(".")+1:]
+            return name
 
     buses_col_location = [
         'name',
@@ -83,6 +82,7 @@ def import_sb_network(simbench_dict):
 
     # get the HV grid to adopt the mv grid id
     hv_index = buses_df.index[buses_df['name'].str.contains('HV')]
+    #todo: is this not unnecessary if bus is dropped afterwards?
     mv_grid_id = buses_df[buses_df['name'].str.contains('MV')]['mv_grid_id'].iloc[0]
     buses_df.loc[hv_index,'mv_grid_id'] = mv_grid_id 
     # Dropping High Voltage Bus
@@ -95,9 +95,9 @@ def import_sb_network(simbench_dict):
     # creating transformer_df
 
     trans_rename_dict = {
-        'id':'name',
-        'nodeHV':'bus0',
-        'nodeLV':'bus1',
+        'id': 'name',
+        'nodeHV': 'bus0',
+        'nodeLV': 'bus1',
     }
 
     trans_col_location = [
@@ -105,8 +105,8 @@ def import_sb_network(simbench_dict):
         'bus0',
         'bus1',
         's_nom',
-        'r',
-        'x',
+        'r_pu',
+        'x_pu',
         'type_info'
     ]
 
@@ -115,11 +115,13 @@ def import_sb_network(simbench_dict):
     sb_trans_df = sb_trans_df.rename(columns=trans_rename_dict)
     sb_trans_type_df = sb_trans_type_df.set_index('id')
     sb_trans_df['s_nom'] = sb_trans_df['type'].apply(lambda x: sb_trans_type_df.loc[x,'sR'] )
-    sb_trans_df['r'] = ''
-    sb_trans_df['x'] = ''
+    # Todo: replace with real values
+    sb_trans_df['r_pu'] = 0.037205877811845804
+    sb_trans_df['x_pu'] = 0.0146875
     sb_trans_df['type_info'] = sb_trans_df['type']
     sb_trans_df = sb_trans_df[trans_col_location]
 
+    #Todo: first line is not used
     transformers_hvmv_df = sb_trans_df[sb_trans_df['bus0'].str.contains('HV')]
     transformers_hvmv_df = sb_trans_df[sb_trans_df['bus1'].str.contains('MV')]
     transformers_hvmv_df = transformers_hvmv_df.set_index('name')
@@ -127,6 +129,7 @@ def import_sb_network(simbench_dict):
     hvmv_bus_row = transformers_hvmv_df['bus1'][0]
     transformers_hvmv_df = transformers_hvmv_df.reset_index()
 
+    # Todo: first line is not used
     transformers_df = sb_trans_df[sb_trans_df['bus0'].str.contains('MV')]
     transformers_df = sb_trans_df[sb_trans_df['bus1'].str.contains('LV')]
 
@@ -154,6 +157,7 @@ def import_sb_network(simbench_dict):
         'profile':'weather_cell_id',
         'calc_type':'control'
     }
+    #Todo: change weather_cell_id?
 
     slack_rename_dict = {
         'id':'name',
@@ -358,6 +362,7 @@ def import_sb_network(simbench_dict):
     print(edisgo_obj.topology)
     print ('Alles Gut')
 
+    # Todo: make this optional
     # importing timeseries
     load_profile_df = simbench_dict['LoadProfile']
     res_profile_df = simbench_dict['RESProfile']
@@ -401,6 +406,7 @@ def import_sb_network(simbench_dict):
     loads_active_power = pd.DataFrame(index=timeindex)
     loads_reactive_power = pd.DataFrame(index=timeindex)
 
+    #Todo: Is there a way not to loop over all loads?
     for load_dict in load_list:
         loads_active_power[load_dict['name']] = load_profile_df.loc[timestamp_list,load_dict['sector']+'_pload']*load_dict['pLoad']
         loads_reactive_power[load_dict['name']] = load_profile_df.loc[timestamp_list,load_dict['sector']+'_qload']*load_dict['qLoad']
@@ -436,4 +442,5 @@ if __name__ == "__main__":
     edisgo_obj = import_sb_network(simbench_dict)
     edisgo_obj.analyze()
     # edisgo_obj.save_edisgo_to_pickle(parent_dir)
+    # edisgo_obj.analyze()
     print('done for now')
