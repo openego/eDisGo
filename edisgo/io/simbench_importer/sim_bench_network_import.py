@@ -49,7 +49,7 @@ def import_sb_network(simbench_dict):
 
     def label_lv_grid_id(name):
         if "MV" in name:
-            return ""
+            return
         elif "LV" in name:
             return name[name.find(".")+1:]
 
@@ -74,6 +74,12 @@ def import_sb_network(simbench_dict):
 
     buses_df['mv_grid_id'] =  buses_df['name'].apply(label_mv_grid_id)
     buses_df['lv_grid_id'] =  buses_df['subnet'].apply(label_lv_grid_id)
+    mv_grid_ids = buses_df['mv_grid_id'].unique()
+    mv_grid_ids = [i for i in mv_grid_ids if i is not None and len(i) > 0]
+    if len(mv_grid_ids) > 1:
+        raise Exception("There is more than one MV grid present, please check.")
+    else:
+        buses_df['mv_grid_id'] = mv_grid_ids[0]
 
     # get the HV grid to adopt the mv grid id
     hv_index = buses_df.index[buses_df['name'].str.contains('HV')]
@@ -414,11 +420,13 @@ def import_sb_network(simbench_dict):
     return edisgo_obj
 
 
-
-
-
-
 if __name__ == "__main__":
+    curr_path = Path.cwd()
+    parent_dir = curr_path.parents[2]
+    # edisgo_obj = \
+    #     import_edisgo_from_pickle('edisgo_object_MV4.101.pkl', path=parent_dir)
+    # # Todo: handle charging points
+    # edisgo_obj.analyze()
     import time
     start_time = time.time()
     simbench_dict = create_sb_dict()
@@ -427,4 +435,5 @@ if __name__ == "__main__":
     start_time = elapsed_time
     edisgo_obj = import_sb_network(simbench_dict)
     edisgo_obj.analyze()
+    # edisgo_obj.save_edisgo_to_pickle(parent_dir)
     print('done for now')
