@@ -1,11 +1,25 @@
 import pandas as pd
-from pathlib import Path
+import pathlib as pl
 from edisgo import EDisGo
 from edisgo.network.grids import MVGrid, LVGrid
 from edisgo.network.timeseries import get_component_timeseries
 from edisgo.io.ding0_import import _validate_ding0_grid_import
-from edisgo.edisgo import import_edisgo_from_pickle
 
+
+def pickle_df(pickle_path,df_dict):
+    for df_name in df_dict:
+        df_path = str(pickle_path) + '/' + df_name + '.pkl'
+        df_dict[df_name].to_pickle(df_path)
+        print ('pickled '+df_name)
+
+def unpickle_df(pickle_dir,df_name_list):
+    df_dict = {}
+    for df_name in df_name_list:
+        pickle_path = str(pickle_dir) +'/' + df_name + '.pkl'
+        if pl.Path(pickle_path).is_file():
+            print ('took ' + df_name + ' from pickle')
+            df_dict[df_name] = pd.read_pickle(pickle_path)
+    return df_dict
 
 
 def search_str_df(df,col,search_str,invert=False):
@@ -15,28 +29,17 @@ def search_str_df(df,col,search_str,invert=False):
         return df.loc[~df[col].str.contains(search_str)]
 
 
-def create_sb_dict():
-    grid_name = '1-MVLV-comm-all-0-no_sw'
-    # grid_name = '1-MVLV-semiurb-3.202-1-no_sw'
-
-    curr_path = Path.cwd()
-    print ("curr_path: "+ str(curr_path))
-    parent_dir = curr_path.parents[3]
-    print ("parent_dir: "+ str(parent_dir))
-    # simbench_grids_dir = parent_dir / 'simbench'
-    grid_dir = parent_dir / grid_name
-    print ("grid_dir: " + str(grid_dir))
-
+def create_sb_dict(grid_dir):
     # import the csv files into a dict og dataframes
     file_list = [i for i in grid_dir.iterdir()]
     simbench_dict = {i.name[:-4]:pd.read_csv(i,delimiter=";") for i in file_list}
     return simbench_dict
 
-def import_sb_network(simbench_dict):
-    # for i in simbench_dict.keys(): print (i)
-    sb_ding0_dict = {}
 
-    # import busses_df
+def create_buses_df(simbench_dict,pickle_dir=False):
+    df_dict = unpickle_df(pickle_dir,['buses_df'])
+    if len(df_dict) is not 0:
+        return df_dict['buses_df']
 
     def label_mv_grid_id(name):
         if "LV" in name:
@@ -86,16 +89,34 @@ def import_sb_network(simbench_dict):
     # Dropping High Voltage Bus
     buses_df = buses_df.drop(hv_index)
     buses_df = buses_df[buses_col_location]
+    
+    print ('Converted buses_df')
+    if pickle_dir != False:
+        pickle_df(pickle_dir,{'buses_df':buses_df})
 
-    sb_ding0_dict['buses_df'] = buses_df
+
+    return buses_df
 
 
-    # creating transformer_df
 
+
+def create_transformer_dfs(simbench_dict,pickle_dir=False):
+    """
+    Takes the simbench_dict and creates transformers_df and transformers_hvmv_df
+
+    outout the two dataframes as a dict with the keys:
+    transformers_df
+    transformers_hvmv_df
+
+    """
+    df_dict = unpickle_df(pickle_dir,["transformers_df","transformers_hvmv_df"])
+    if len(df_dict) is not 0:
+        return df_dict
+    
     trans_rename_dict = {
         'id': 'name',
         'nodeHV': 'bus0',
-        'nodeLV': 'bus1',
+        'nodeLV': 'bus1'
     }
 
     trans_col_location = [
@@ -113,28 +134,43 @@ def import_sb_network(simbench_dict):
     sb_trans_df = sb_trans_df.rename(columns=trans_rename_dict)
     sb_trans_type_df = sb_trans_type_df.set_index('id')
     sb_trans_df['s_nom'] = sb_trans_df['type'].apply(lambda x: sb_trans_type_df.loc[x,'sR'] )
-    # Todo: replace with real values
-    sb_trans_df['r_pu'] = 0.037205877811845804
-    sb_trans_df['x_pu'] = 0.0146875
+    sb_trans_df['pCu'] = sb_trans_df['type'].apply(lambda x: sb_trans_type_df.loc[x,'pCu'] )
+    sb_trans_df['vmImp'] = sb_trans_df['type'].apply(lambda x: sb_trans_type_df.loc[x,'vmImp']/100 )
+
+    sb_trans_df['r_pu'] = (sb_trans_df['pCu']/1000)/sb_trans_df['s_nom']
+    sb_trans_df['x_pu'] = (sb_trans_df['vmImp']**2-sb_trans_df['r_pu']**2)**0.5
+  
     sb_trans_df['type_info'] = sb_trans_df['type']
     sb_trans_df = sb_trans_df[trans_col_location]
 
     #Todo: first line is not used
-    transformers_hvmv_df = sb_trans_df[sb_trans_df['bus0'].str.contains('HV')]
+    # transformers_hvmv_df = sb_trans_df[sb_trans_df['bus0'].str.contains('HV')]
     transformers_hvmv_df = sb_trans_df[sb_trans_df['bus1'].str.contains('MV')]
     transformers_hvmv_df = transformers_hvmv_df.set_index('name')
 
-    hvmv_bus_row = transformers_hvmv_df['bus1'][0]
+    # hvmv_bus_row = transformers_hvmv_df['bus1'][0]
     transformers_hvmv_df = transformers_hvmv_df.reset_index()
 
     # Todo: first line is not used
-    transformers_df = sb_trans_df[sb_trans_df['bus0'].str.contains('MV')]
+    # transformers_df = sb_trans_df[sb_trans_df['bus0'].str.contains('MV')]
     transformers_df = sb_trans_df[sb_trans_df['bus1'].str.contains('LV')]
 
-    sb_ding0_dict['transformers_hvmv_df'] = transformers_hvmv_df
-    sb_ding0_dict['transformers_df'] = transformers_df
+    trans_df_dict = {
+        "transformers_df":transformers_df,
+        "transformers_hvmv_df":transformers_hvmv_df
+    }
 
-    # Creating generators df
+    print ('Converted both transformers_df')
+    if pickle_dir != False:
+        pickle_df(pickle_dir,trans_df_dict)
+
+    return trans_df_dict
+
+
+def create_generators_df(simbench_dict,pickle_dir=False):
+    df_dict = unpickle_df(pickle_dir,["generators_df"])
+    if len(df_dict) is not 0:
+        return df_dict['generators_df']
 
     gen_col_location = [
         'name',
@@ -157,25 +193,6 @@ def import_sb_network(simbench_dict):
     }
     #Todo: change weather_cell_id?
 
-    slack_rename_dict = {
-        'id':'name',
-        'node':'bus',
-        'calc_type':'control'
-    }
-
-
-    def add_slack_terms(gen_df):
-        add_gen_dict = {
-            'p_nom':0.0,
-            'q_nom':0.0,
-            'type':'station',
-            'weather_cell_id':"",
-            'subtype':'mv_station'
-        }
-        for key in add_gen_dict:
-            gen_df[key] = gen_df['control'].apply(lambda x: add_gen_dict[key] if x == 'Slack' else x)
-        return gen_df
-
     generators_df = simbench_dict['RES']
     generators_df['calc_type'] = generators_df['calc_type'].apply(lambda x: x.upper())
     generators_df = generators_df.rename(columns=gen_rename_dict)
@@ -183,21 +200,17 @@ def import_sb_network(simbench_dict):
     generators_df['subtype'] = generators_df['type']
     generators_df = generators_df[gen_col_location]
 
+    print ('Converted the generators_df')
+    if pickle_dir != False:
+        pickle_df(pickle_dir,{'generators_df':generators_df})
+    return generators_df
 
-    # including the slack bus
-    slack_df = simbench_dict['ExternalNet']
-    slack_df = slack_df.rename(columns=slack_rename_dict)
-    # slack_df = slack_df.drop(slack_col_to_drop,axis=1)
-    slack_df['control'] = slack_df['control'].apply(lambda x: 'Slack' if x == 'vavm' else x)
-    slack_df['name'] = slack_df['name'].apply(lambda x: x+'_slack')
-    slack_df = add_slack_terms(slack_df)
-    slack_df = slack_df[gen_col_location] 
-    slack_df['bus'] = hvmv_bus_row
-    # generators_df = pd.concat([slack_df,generators_df] ,ignore_index=True)
 
-    sb_ding0_dict['generators_df'] = generators_df
+def create_lines_df(simbench_dict,buses_df,pickle_dir=False):
+    df_dict = unpickle_df(pickle_dir,["lines_df"])
+    if len(df_dict) is not 0:
+        return df_dict['lines_df']
 
-    #  creating line df
     lines_col_location = [
         'name',
         'bus0',
@@ -251,9 +264,19 @@ def import_sb_network(simbench_dict):
     lines_df['s_nom'] = lines_df.apply(cal_s_nom,axis=1)
     lines_df = lines_df[lines_col_location]
 
-    sb_ding0_dict['lines_df'] = lines_df
+    print ('Converted lines_df')
+    if pickle_dir != False:
+        pickle_df(pickle_dir,{'lines_df':lines_df})
+    return lines_df
 
-    # creating loads df
+
+
+
+def create_loads_df(simbench_dict,pickle_dir=False):
+    df_dict = unpickle_df(pickle_dir,["loads_df"])
+    if len(df_dict) is not 0:
+        return df_dict['loads_df']
+    
     loads_rename_dict = {
         'id':'name',
         'node':'bus',
@@ -290,10 +313,17 @@ def import_sb_network(simbench_dict):
     loads_df['annual_consumption'] = loads_df.apply(cal_annual_consumption,axis=1)
     loads_df = loads_df[loads_cols_location]
 
-    sb_ding0_dict['loads_df'] = loads_df
+    print ('Converted loads_df')
+    if pickle_dir != False:
+        pickle_df(pickle_dir,{'loads_df':loads_df})
 
-    # Creating switches df
+    return loads_df
 
+
+def create_switches_df(simbench_dict,pickle_dir=False):
+    df_dict = unpickle_df(pickle_dir,["switches_df"])
+    if len(df_dict) is not 0:
+        return df_dict['switches_df']
     switch_rename_dict = {
         'id':'name',
         'nodeA':'bus_closed',
@@ -313,11 +343,18 @@ def import_sb_network(simbench_dict):
     switches_df = simbench_dict['Switch']
     switches_df = switches_df.rename(columns=switch_rename_dict)
     switches_df = switches_df[switch_col_location]
-    # switches_df = switches_df.set_index('name')
 
-    sb_ding0_dict['switches_df'] = switches_df
+    print ('Converted switches_df')
+    if pickle_dir != False:
+        pickle_df(pickle_dir,{'switches_df':switches_df})
 
-    # creating empty storage_df
+    return switches_df
+
+
+def create_storage_units_df(simbench_dict,pickle_dir=False):
+    df_dict = unpickle_df(pickle_dir,["storage_units_df"])
+    if len(df_dict) is not 0:
+        return df_dict['storage_units_df']
     storage_col_dict = {
         'name': pd.Series([],dtype='str'),
         'bus': pd.Series([],dtype='str'),
@@ -329,9 +366,32 @@ def import_sb_network(simbench_dict):
     }
 
     storage_units_df = pd.DataFrame(storage_col_dict)
-    sb_ding0_dict['storage_units_df'] = storage_units_df
 
-    #  creating the edisgo obj
+    print ('Converted storage_units_df')
+    if pickle_dir != False:
+        pickle_df(pickle_dir,{'storage_units_df':storage_units_df})
+
+    return storage_units_df
+
+
+
+def import_sb_topology(sb_dict,pickle_dir=False):
+    if pickle_dir is not False:
+        if not pickle_dir.exists():
+            pickle_dir.mkdir()
+
+    buses_df = create_buses_df(sb_dict,pickle_dir=pickle_dir)
+    transformer_df_dict = create_transformer_dfs(sb_dict,pickle_dir=pickle_dir)
+    transformers_df = transformer_df_dict['transformers_df']
+    transformers_hvmv_df = transformer_df_dict['transformers_hvmv_df']
+    generators_df = create_generators_df(sb_dict,pickle_dir=pickle_dir)
+    lines_df = create_lines_df(sb_dict,buses_df,pickle_dir=pickle_dir)
+    loads_df = create_loads_df(sb_dict,pickle_dir=pickle_dir)
+    switches_df = create_switches_df(sb_dict,pickle_dir=pickle_dir)
+    storage_units_df = create_storage_units_df(sb_dict,pickle_dir=pickle_dir)
+
+    # Get mv grid id
+    mv_grid_id = buses_df[buses_df['name'].str.contains('MV')]['mv_grid_id'].iloc[0]
 
     edisgo_obj = EDisGo(import_timeseries=False)
     edisgo_obj.topology.buses_df = buses_df.set_index('name')
@@ -342,6 +402,7 @@ def import_sb_network(simbench_dict):
     edisgo_obj.topology.transformers_hvmv_df = transformers_hvmv_df.set_index('name')
     edisgo_obj.topology.transformers_df = transformers_df.set_index('name')
     edisgo_obj.topology.storage_units_df = storage_units_df.set_index('name')
+    
 
     edisgo_obj.topology.mv_grid = MVGrid(id=mv_grid_id, edisgo_obj=edisgo_obj)
     edisgo_obj.topology._grids = {}
@@ -357,21 +418,40 @@ def import_sb_network(simbench_dict):
 
     _validate_ding0_grid_import(edisgo_obj.topology)
 
-    print(edisgo_obj.topology)
-    print ('Alles Gut')
+    print('created edisgo topology')
 
-    # Todo: make this optional
-    # importing timeseries
-    load_profile_df = simbench_dict['LoadProfile']
-    res_profile_df = simbench_dict['RESProfile']
-    # Importing _timeindex
-    timestamp_list = list(load_profile_df['time'][519:521])
+    return edisgo_obj
+
+def create_timeindex(edisgo_obj,sb_dict,start,end):
+    load_profile_df = sb_dict['LoadProfile']
+    timestamp_list = list(load_profile_df['time'][start:end])
+    print(timestamp_list)
+    # timestamp_list = list(load_profile_df['time'][519:521])
     timeindex = pd.to_datetime(timestamp_list)
     edisgo_obj.timeseries._timeindex = timeindex
-    load_profile_df = load_profile_df.set_index('time')
-    res_profile_df = res_profile_df.set_index('time')
+    edisgo_obj.timeseries._timestamp = {
+        'timestamp_list': timestamp_list
+    }
     print('imported time index')
+    return edisgo_obj
 
+def create_sb_gen_timeseries(edisgo_obj,sb_dict,pickle_dir=False):
+    # Importing _timeindex
+    timeindex = edisgo_obj.timeseries._timeindex
+    df_dict = unpickle_df(pickle_dir,["generators_active_power_df","generators_reactive_power_df"])
+    if len(df_dict) is not 0:
+        if timeindex.equals(df_dict['generators_active_power_df'].index) and timeindex.equals(df_dict['generators_active_power_df'].index):
+            return df_dict
+        else:
+            print('new timestamp')
+    # Todo: Implement pickling option
+    # Todo: make this optional
+    # importing timeseries
+    res_profile_df = sb_dict['RESProfile']
+    timestamp_list = edisgo_obj.timeseries._timestamp['timestamp_list']
+    res_profile_df = res_profile_df.set_index('time')
+    generators_df = edisgo_obj.topology.generators_df.reset_index()
+    
     # getting generator time series
     def get_gen_meta_data(gen_name):
         gen_df = search_str_df(generators_df,'name',gen_name,invert=False)
@@ -383,15 +463,33 @@ def import_sb_network(simbench_dict):
         }
 
     gen_list = [ get_gen_meta_data(gen_name)  for gen_name in generators_df['name']]
-    generators_active_power = pd.DataFrame(index=timeindex)
-    generators_reactive_power = pd.DataFrame(index=timeindex)
+    generators_active_power_df = pd.DataFrame(index=timeindex)
+    generators_reactive_power_df = pd.DataFrame(index=timeindex)
 
     for gen_dict in gen_list:
         if 'slack' not in gen_dict['name']:
-            generators_active_power[gen_dict['name']] = res_profile_df.loc[timestamp_list,gen_dict['wcid']]*gen_dict['p_nom']
-            generators_reactive_power[gen_dict['name']] = res_profile_df.loc[timestamp_list,gen_dict['wcid']]*gen_dict['q_nom']
+            generators_active_power_df[gen_dict['name']] = res_profile_df.loc[timestamp_list,gen_dict['wcid']]*gen_dict['p_nom']
+            generators_reactive_power_df[gen_dict['name']] = res_profile_df.loc[timestamp_list,gen_dict['wcid']]*gen_dict['q_nom']
     print ('created generator time series DataFrames')
 
+    gen_timeseries_dict = {
+        "generators_active_power_df":generators_active_power_df,
+        "generators_reactive_power_df":generators_reactive_power_df
+    }
+
+    if pickle_dir != False:
+        pickle_df(pickle_dir,gen_timeseries_dict)
+
+    return gen_timeseries_dict
+
+def create_sb_loads_timeseries(edisgo_obj,sb_dict,pickle_dir=False):
+    timeindex = edisgo_obj.timeseries._timeindex
+    df_dict = unpickle_df(pickle_dir,["loads_active_power_df","loads_reactive_power_df"])
+    if len(df_dict) is not 0:
+        if timeindex.equals(df_dict['loads_active_power_df'].index) and timeindex.equals(df_dict['loads_reactive_power_df'].index):
+            return df_dict
+        else:
+            print('new timestamp')
     def get_load_meta_data(load_name):
         load_df = search_str_df(loads_df,'name',load_name,invert=False)
         return {
@@ -400,45 +498,46 @@ def import_sb_network(simbench_dict):
             'qLoad':load_df['qLoad'].values[0],
             'sector':load_df['sector'].values[0],
         }
+    timestamp_list = edisgo_obj.timeseries._timestamp['timestamp_list']
+    load_profile_df = sb_dict['LoadProfile']
+    load_profile_df = load_profile_df.set_index('time')
+    loads_df = edisgo_obj.topology.loads_df.reset_index()
     load_list = [get_load_meta_data(load_name) for load_name in loads_df['name']]
-    loads_active_power = pd.DataFrame(index=timeindex)
-    loads_reactive_power = pd.DataFrame(index=timeindex)
+    loads_active_power_df = pd.DataFrame(index=timeindex)
+    loads_reactive_power_df = pd.DataFrame(index=timeindex)
 
     #Todo: Is there a way not to loop over all loads?
     for load_dict in load_list:
-        loads_active_power[load_dict['name']] = load_profile_df.loc[timestamp_list,load_dict['sector']+'_pload']*load_dict['pLoad']
-        loads_reactive_power[load_dict['name']] = load_profile_df.loc[timestamp_list,load_dict['sector']+'_qload']*load_dict['qLoad']
+        loads_active_power_df[load_dict['name']] = load_profile_df.loc[timestamp_list,load_dict['sector']+'_pload']*load_dict['pLoad']
+        loads_reactive_power_df[load_dict['name']] = load_profile_df.loc[timestamp_list,load_dict['sector']+'_qload']*load_dict['qLoad']
     print ('created load time series DataFrames')
 
+    loads_timeseries_dict = {
+        "loads_active_power_df":loads_active_power_df,
+        "loads_reactive_power_df":loads_reactive_power_df
+    }
+
+    if pickle_dir != False:
+        pickle_df(pickle_dir,loads_timeseries_dict)
+
+    return loads_timeseries_dict
+
+def import_sb_timeseries(edisgo_obj,sb_dict,pickle_dir=False):
+
+    timeindex = edisgo_obj.timeseries._timeindex
+    gen_timeseries_dict = create_sb_gen_timeseries(edisgo_obj,sb_dict,pickle_dir=pickle_dir)
+    loads_timeseries_dict = create_sb_loads_timeseries(edisgo_obj,sb_dict,pickle_dir=pickle_dir)
     get_component_timeseries(
         edisgo_obj=edisgo_obj,
         mode='manual',
         timeindex=timeindex,
-        generators_active_power=generators_active_power,
-        generators_reactive_power=generators_reactive_power,
-        loads_active_power=loads_active_power,
-        loads_reactive_power=loads_reactive_power
+        generators_active_power=gen_timeseries_dict['generators_active_power_df'],
+        generators_reactive_power=gen_timeseries_dict['generators_reactive_power_df'],
+        loads_active_power=loads_timeseries_dict['loads_active_power_df'],
+        loads_reactive_power=loads_timeseries_dict['loads_reactive_power_df']
     )
     print('loaded timeseries into edisgo_obj')
 
     return edisgo_obj
 
 
-if __name__ == "__main__":
-    curr_path = Path.cwd()
-    parent_dir = curr_path.parents[2]
-    # edisgo_obj = \
-    #     import_edisgo_from_pickle('edisgo_object_MV4.101.pkl', path=parent_dir)
-    # # Todo: handle charging points
-    # edisgo_obj.analyze()
-    import time
-    start_time = time.time()
-    simbench_dict = create_sb_dict()
-    elapsed_time = time.time() - start_time
-    print ("elapsed_time-create_sb_dict: " + str(elapsed_time))
-    start_time = elapsed_time
-    edisgo_obj = import_sb_network(simbench_dict)
-    edisgo_obj.analyze()
-    # edisgo_obj.save_edisgo_to_pickle(parent_dir)
-    # edisgo_obj.analyze()
-    print('done for now')
