@@ -840,10 +840,10 @@ class Results:
             # voltage
             if os.path.exists(os.path.join(
                     results_path, 'powerflow_results', 'voltages_pu.csv')):
-                self.pfa_v_mag_pu = pd.read_csv(
+                self.v_res = pd.read_csv(
                     os.path.join(
                         results_path, 'powerflow_results', 'voltages_pu.csv'),
-                    index_col=0, parse_dates=True, header=[0, 1])
+                    index_col=0, parse_dates=True)
             # active power
             if os.path.exists(os.path.join(
                     results_path, 'powerflow_results', 'active_powers.csv')):
