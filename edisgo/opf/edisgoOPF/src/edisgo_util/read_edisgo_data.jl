@@ -90,6 +90,12 @@ function add_load_timeseries(data,load_data)
             load_id = look_up_load_ids[load_i["load_bus"]]
             data["nw"][nw]["load"][load_id]["pd"] += load_i["pd"]
             data["nw"][nw]["load"][load_id]["qd"] += load_i["qd"]
+
+            data["nw"][nw]["load"][load_id]["pmax"] = data["nw"][nw]["load"][load_id]["pd"]
+            data["nw"][nw]["load"][load_id]["pmin"] = 0 #load_i["pd"]
+            data["nw"][nw]["load"][load_id]["qmax"] = data["nw"][nw]["load"][load_id]["qd"]
+            data["nw"][nw]["load"][load_id]["qmin"] = data["nw"][nw]["load"][load_id]["qd"]
+
         end
     end
 end
@@ -117,6 +123,15 @@ function read_data(network_name::String)
     # write timeseries on replicated data
     if isloads
         add_load_timeseries(data,load_data)
+        for (nw,loads) in load_data
+            for (i,load_i) in loads
+                data["nw"][nw]["load"][i]["pmax"] = load_i["pd"]
+                data["nw"][nw]["load"][i]["pmin"] = load_i["pd"]
+                data["nw"][nw]["load"][i]["qmax"] = load_i["qd"]
+                data["nw"][nw]["load"][i]["qmin"] = load_i["qd"]
+                println(data["nw"][nw]["load"][i]["pmin"])
+            end
+        end
     else
         println("no loads given")
     end

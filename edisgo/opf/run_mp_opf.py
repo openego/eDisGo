@@ -139,6 +139,9 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
         # aggregate_generators="all",
         timesteps=timesteps,
     )
+    # adapt allowed s_nom for load case
+    if kwargs.get("load_case", False):
+        pypsa_mv.lines.loc[:, "s_nom"] = pypsa_mv.lines.loc[:, "s_nom"] * 0.5
     timehorizon = len(pypsa_mv.snapshots)
     # set name of pypsa network
     pypsa_mv.name = "ding0_{}_t_{}".format(

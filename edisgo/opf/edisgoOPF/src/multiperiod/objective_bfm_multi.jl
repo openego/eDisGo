@@ -87,7 +87,7 @@ function add_objective_linear(pm;ismultinetwork::Bool=true,cost_factor=1,scenari
     end
 end 
 
-function add_objective_nep(pm, cost_factor=0.01)
+function add_objective_nep(pm, cost_factor=0.001)
     branch_cost = Dict()
     I_max = var(pm,:I_max)
     for (i,branch) in ref(pm,:branch)
@@ -107,6 +107,19 @@ function add_objective_nep(pm, cost_factor=0.01)
         sum_curtail += sum(getupperbound(pg[i]) - pg[i] for i in RES)
     end
 
-    @objective(pm.model,Min, ((sum(branch_cost[i] for (i,br) in ref(pm,:branch))+cost_factor*sum_curtail)))
+    sum_curtail_load = 0
+    for (nw,nw_ref) in nws(pm)
+
+        look_up_load_ids = Dict()
+        for (load_ids, val) in nw_ref[:load]
+           look_up_load_ids[val["load_bus"]] = load_ids
+        end
+        loads = Set(values(look_up_load_ids))
+
+        pd = var(pm,nw,:pd)
+        sum_curtail_load += sum(getupperbound(pd[i]) - pd[i] for i in loads)
+    end
+
+    @objective(pm.model,Min, ((sum(branch_cost[i] for (i,br) in ref(pm,:branch))+cost_factor*sum_curtail+cost_factor*sum_curtail_load)))
     #@objective(pm.model,Min, sum((getupperbound(pg[i]) - pg[i])*0.01 for i in RES))
 end

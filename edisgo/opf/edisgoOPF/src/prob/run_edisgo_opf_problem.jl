@@ -56,6 +56,7 @@ function post_method_edisgo(pm)
         end
         add_var_sqr_voltage(pm,t)
         add_var_power_gen(pm,t)
+        add_var_power_load(pm,t)
         add_var_power_flow(pm,t)
         add_var_sqr_current_magnitude(pm,t)
         # unbound power injection variables for slack bus

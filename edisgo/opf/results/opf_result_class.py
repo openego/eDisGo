@@ -58,6 +58,12 @@ class GeneratorVariables:
         self.qg = None
 
 
+class LoadVariables:
+    def __init__(self):
+        self.pd = None
+        self.qd = None
+
+
 class StorageVariables:
     def __init__(self):
         self.ud = None
@@ -79,6 +85,7 @@ class OPFResults:
         self.lines_t = LineVariables()
         self.buses_t = BusVariables()
         self.generators_t = GeneratorVariables()
+        self.loads_t = LoadVariables()
         self.storage_units = None
         self.storage_units_t = StorageVariables()
 
@@ -112,6 +119,7 @@ class OPFResults:
         # Generator Variables
         # TODO Adjust for case that generators are fixed and no variables are returned from julia
         self.set_gen_variables(pypsa_net)
+        self.set_load_variables(pypsa_net)
         # Storage Variables
         self.set_strg_variables(pypsa_net)
 
@@ -128,7 +136,7 @@ class OPFResults:
         self.lines = br_statics
 
         # time dependent variables: cm: squared current magnitude, p: active power flow, q: reactive power flow
-        ts = pypsa_net.snapshots
+        ts = pypsa_net.snapshots.sort_values()
         cm_t = pd.DataFrame(index=ts, columns=pypsa_net.lines.index)
         p_t = pd.DataFrame(index=ts, columns=pypsa_net.lines.index)
         q_t = pd.DataFrame(index=ts, columns=pypsa_net.lines.index)
@@ -148,7 +156,7 @@ class OPFResults:
 
     def set_bus_variables(self, pypsa_net):
         solution_data = self.solution_data
-        ts = pypsa_net.snapshots
+        ts = pypsa_net.snapshots.sort_values()
         w_t = pd.DataFrame(index=ts, columns=pypsa_net.buses.index)
         for (t, date_idx) in enumerate(ts):
             bus_t = pd.DataFrame(solution_data["bus"]["nw"][str(t + 1)])
@@ -162,7 +170,7 @@ class OPFResults:
     def set_gen_variables(self, pypsa_net):
         # ToDo disaggregate aggregated generators?
         gen_solution_data = self.solution_data["gen"]["nw"]
-        ts = pypsa_net.snapshots
+        ts = pypsa_net.snapshots.sort_values()
 
         # in case no curtailment requirement was given, all generators are
         # made to fixed loads and Slack is the only remaining generator
@@ -212,6 +220,39 @@ class OPFResults:
                     "Error in writing OPF solutions for generator time "
                     "series."
                 )
+
+    def set_load_variables(self, pypsa_net):
+
+        load_solution_data = self.solution_data["load"]["nw"]
+        ts = pypsa_net.snapshots.sort_values()
+
+        pd_t = pd.DataFrame(
+            index=ts,
+            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()]
+        )
+        qd_t = pd.DataFrame(
+            index=ts,
+            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()]
+        )
+        for (t, date_idx) in enumerate(ts):
+            load_t = pd.DataFrame(load_solution_data[str(t + 1)])
+            load_t.index = load_t.index.astype(int)
+            pd_t.loc[date_idx] = load_t.pd
+            qd_t.loc[date_idx] = load_t.qd
+
+        load_buses = self.pypsa.loads.bus.unique()
+        load_bus_df = pd.DataFrame(
+            columns=["bus_loc"],
+            index=[load_buses])
+        for b in load_buses:
+            load_bus_df.at[
+                b, "bus_loc"] = self.pypsa.buses.index.get_loc(b)
+        load_bus_df = load_bus_df.sort_values(by="bus_loc").reset_index()
+        load_bus_df.index = load_bus_df.index + 1
+        pd_t = pd_t.rename(columns=load_bus_df.level_0.to_dict())
+        qd_t = qd_t.rename(columns=load_bus_df.level_0.to_dict())
+        self.loads_t.pd = pd_t
+        self.loads_t.qd = qd_t
 
     def set_strg_variables(self, pypsa_net):
         solution_data = self.solution_data
