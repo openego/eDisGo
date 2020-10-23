@@ -13,9 +13,11 @@ function constraint_curtailment_single(pm;nw::Int=pm.cnw)
     # get collection of fluctuating generators
     RES = ids(pm,:fluct_gen)
     pg = var(pm,nw,:pg)
+    qg = var(pm,nw,:pg)
     # make RES controllable
     for i in RES
         setlowerbound(pg[i],0)
+        @constraint(pm.model, qg[i] == pg[i] * getupperbound(qg[i]) / getupperbound(pg[i]))
     end
     # get requirement for curtailment in timestep nw
     # P_curtail = ref(pm,nw,:curtailment)

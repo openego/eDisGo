@@ -60,7 +60,6 @@ function add_var_power_load(pm, nw::Int=pm.cnw, cnd::Int=pm.ccnd, bounded::Bool=
         pm:: GenericPowerModel
 
     """
-    println(cnd)
     if bounded
 
         var(pm, nw)[:pd] = @variable(pm.model,

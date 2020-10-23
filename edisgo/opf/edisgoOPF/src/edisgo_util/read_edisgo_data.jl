@@ -67,6 +67,7 @@ end
 function look_up_dicts(data,load_data)
     look_up_load_ids = Dict()
     for (load_ids, val) in data["nw"]["1"]["load"]
+        #println(val["load_bus"])
         look_up_load_ids[val["load_bus"]] = load_ids
     end
     return look_up_load_ids
@@ -175,8 +176,8 @@ function read_data(
     for (nw,gens) in gen_data
         for (i,gen_i) in gens
             data["nw"][nw]["gen"][i]["pmax"] = gen_i["pg"]
-            data["nw"][nw]["gen"][i]["pmin"] = gen_i["pg"]
-            data["nw"][nw]["gen"][i]["qmax"] = gen_i["qg"]
+            data["nw"][nw]["gen"][i]["pmin"] = 0
+            data["nw"][nw]["gen"][i]["qmax"] = 0
             data["nw"][nw]["gen"][i]["qmin"] = gen_i["qg"]
         end
     end
