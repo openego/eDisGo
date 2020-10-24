@@ -362,31 +362,50 @@ def integrate_curtailment_as_load(edisgo, curtailment_per_node):
     :param curtailment_per_node:
     :return:
     """
-    active_power_ts = curtailment_per_node.apply(pd.to_numeric)
+    active_power_ts = pd.DataFrame(
+        data=0,
+        columns=curtailment_per_node.columns,
+        index=edisgo.timeseries.timeindex)
+    active_power_ts.loc[curtailment_per_node.index,
+        :] = curtailment_per_node.apply(pd.to_numeric)
     # drop all zeros
     active_power_ts = active_power_ts.loc[:, ~(active_power_ts == 0.0).all()]
     reactive_power_ts = pd.DataFrame(
-        0.0, columns=active_power_ts.columns, index=active_power_ts.index
+        data=0,
+        columns=active_power_ts.columns,
+        index=edisgo.timeseries.timeindex
     )
 
-    for n in active_power_ts.columns:
-        # add load component
-        load = edisgo.topology.add_load(
-            load_id=1,
-            bus=n,
-            peak_load=curtailment_per_node.loc[:, n].max(),
-            annual_consumption=0.0,
-            sector="curtailment",
-        )
+    curtailment_loads = edisgo.topology.loads_df[
+        edisgo.topology.loads_df.sector == "curtailment"]
 
-        # add time series
-        ts_active = active_power_ts.loc[:, [n]].rename(columns={n: load})
-        ts_reactive = reactive_power_ts.loc[:, [n]].rename(columns={n: load})
-        edisgo.timeseries.loads_active_power = pd.concat(
-            [edisgo.timeseries.loads_active_power, ts_active],
-            axis=1, sort=False
-        )
-        edisgo.timeseries.loads_reactive_power = pd.concat(
-            [edisgo.timeseries.loads_reactive_power, ts_reactive],
-            axis=1, sort=False
-        )
+    for n in active_power_ts.columns:
+
+        if not n in curtailment_loads.bus:
+            # add load component
+            load = edisgo.topology.add_load(
+                load_id=1,
+                bus=n,
+                peak_load=curtailment_per_node.loc[:, n].max(),
+                annual_consumption=0.0,
+                sector="curtailment",
+            )
+
+            # add time series
+            ts_active = active_power_ts.loc[:, [n]].rename(columns={n: load})
+            ts_reactive = reactive_power_ts.loc[:, [n]].rename(
+                columns={n: load})
+            edisgo.timeseries.loads_active_power = pd.concat(
+                [edisgo.timeseries.loads_active_power, ts_active],
+                axis=1, sort=False
+            )
+            edisgo.timeseries.loads_reactive_power = pd.concat(
+                [edisgo.timeseries.loads_reactive_power, ts_reactive],
+                axis=1, sort=False
+            )
+        else:
+            # add to existing load
+            load = curtailment_loads[curtailment_loads.bus == n].index
+            edisgo.timeseries._loads_active_power.loc[:, load] = \
+                edisgo.timeseries._loads_active_power.loc[:,
+                load] + active_power_ts.loc[:, n].rename(columns={n: load})
