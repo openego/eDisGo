@@ -95,7 +95,7 @@ function add_load_timeseries(data,load_data)
             data["nw"][nw]["load"][load_id]["pmax"] = data["nw"][nw]["load"][load_id]["pd"]
             data["nw"][nw]["load"][load_id]["pmin"] = 0 #load_i["pd"]
             data["nw"][nw]["load"][load_id]["qmax"] = data["nw"][nw]["load"][load_id]["qd"]
-            data["nw"][nw]["load"][load_id]["qmin"] = data["nw"][nw]["load"][load_id]["qd"]
+            data["nw"][nw]["load"][load_id]["qmin"] = 0
 
         end
     end
