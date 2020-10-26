@@ -20,17 +20,15 @@ function constraint_curtailment_single(pm;nw::Int=pm.cnw)
         @constraint(pm.model, qg[i] == pg[i] * getupperbound(qg[i]) / getupperbound(pg[i]))
     end
 
-    look_up_load_ids = Dict()
-    for (load_ids, val) in nw_ref[:load]
-       look_up_load_ids[val["load_bus"]] = load_ids
-    end
-    loads = Set(values(look_up_load_ids))
-
-    pd = var(pm,nw,:pd)
-    qd = var(pm,nw,:qd)
-    for i in loads
-        @constraint(pm.model, qd[i] == pd[i] * getupperbound(qd[i]) / getupperbound(pd[i]))
-    end
+#     pd = var(pm,nw,:pd)
+#     qd = var(pm,nw,:qd)
+#     for i in ids(pm, nw, :load)
+#         try
+#             @constraint(pm.model, qd[i] == pd[i] * getupperbound(qd[i]) / getupperbound(pd[i]))
+#         catch e
+#             println
+#         end
+#     end
 
     # get requirement for curtailment in timestep nw
     # P_curtail = ref(pm,nw,:curtailment)
