@@ -1,10 +1,10 @@
 import pandas as pd
 import networkx as nx
-
 from math import pi, sqrt
 
 from edisgo.flex_opt import exceptions
 from edisgo.flex_opt import check_tech_constraints
+from edisgo.network.grids import LVGrid
 
 
 def select_worstcase_snapshots(edisgo_obj):
@@ -356,90 +356,94 @@ def select_cable(edisgo_obj, level, apparent_power):
     return cable_type, cable_count
 
 
-def assign_mv_feeder_to_nodes(mv_grid):
+def assign_mv_feeder_to_buses_and_lines(edisgo_obj):
     """
-    Assigns an MV feeder to every generator, LV station, load, and branch tee
+    Assigns MV feeder to each bus and line.
 
-    ToDo: adapt to refactored code!
+    The feeder name is written to a new column `mv_feeder` in `buses_df`
+    dataframe and `lines_df` dataframe of :class:`~.network.topology.Topology`
+    class. The MV feeder name corresponds to the name of the first bus in the
+    respective feeder.
 
     Parameters
     -----------
-    mv_grid : :class:`~.network.grids.MVGrid`
+    edisgo_obj : :class:`~.EDisGo`
 
     """
-    raise NotImplementedError
+    graph = edisgo_obj.topology.mv_grid.graph
+    mv_station = edisgo_obj.topology.mv_grid.station.index[0]
+    # get all nodes in MV network and remove MV station to get separate
+    # subgraphs
+    mv_graph_nodes = list(graph.nodes())
+    mv_graph_nodes.remove(mv_station)
+    subgraph = graph.subgraph(mv_graph_nodes)
 
-    mv_station_neighbors = list(mv_grid.graph.neighbors(mv_grid.station))
-    # get all nodes in MV network and remove MV station to get separate subgraphs
-    mv_graph_nodes = list(mv_grid.graph.nodes())
-    mv_graph_nodes.remove(mv_grid.station)
-    subgraph = mv_grid.graph.subgraph(mv_graph_nodes)
-
-    for neighbor in mv_station_neighbors:
-        # determine feeder
-        mv_feeder = mv_grid.graph.line_from_nodes(mv_grid.station, neighbor)
+    for neighbor in graph.neighbors(mv_station):
         # get all nodes in that feeder by doing a DFS in the disconnected
         # subgraph starting from the node adjacent to the MVStation `neighbor`
         subgraph_neighbor = nx.dfs_tree(subgraph, source=neighbor)
         for node in subgraph_neighbor.nodes():
             # in case of an LV station assign feeder to all nodes in that LV
             # network
-            if isinstance(node, LVStation):
-                for lv_node in node.grid.graph.nodes():
-                    lv_node.mv_feeder = mv_feeder
+            if node.split("_")[0] == "BusBar" and node.split("_")[-1] == "MV":
+                lvgrid = LVGrid(
+                    id=int(node.split("_")[-2]),
+                    edisgo_obj=edisgo_obj)
+                edisgo_obj.topology.buses_df.loc[
+                    lvgrid.buses_df.index, "mv_feeder"] = neighbor
             else:
-                node.mv_feeder = mv_feeder
+                edisgo_obj.topology.buses_df.at[node, "mv_feeder"] = neighbor
+
+    # add feeder info to lines
+    edisgo_obj.topology.lines_df.loc[
+        :, "mv_feeder"] = edisgo_obj.topology.lines_df.apply(
+            lambda _: edisgo_obj.topology.buses_df.at[_.bus0, "mv_feeder"],
+            axis=1)
+    lines_nan = edisgo_obj.topology.lines_df[
+        edisgo_obj.topology.lines_df.mv_feeder.isna()].index
+    edisgo_obj.topology.lines_df.loc[lines_nan, "mv_feeder"] = \
+        edisgo_obj.topology.lines_df.loc[lines_nan].apply(
+            lambda _: edisgo_obj.topology.buses_df.at[_.bus1, "mv_feeder"],
+            axis=1)
 
 
-def get_mv_feeder_from_line(line):
+def get_path_length_to_station(edisgo_obj):
     """
-    Determines MV feeder the given line is in.
+    Determines path length from each bus to HV-MV station.
 
-    ToDo: adapt to refactored code!
-
-    MV feeders are identified by the first line segment of the half-ring.
+    The path length is written to a new column `path_length_to_station` in
+    `buses_df` dataframe of :class:`~.network.topology.Topology` class.
 
     Parameters
-    ----------
-    line : :class:`~.network.components.Line`
-        Line to find the MV feeder for.
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
 
     Returns
     -------
-    :class:`~.network.components.Line`
-        MV feeder identifier (representative of the first line segment
-        of the half-ring)
+    :pandas:`pandas.Series<Series>`
+        Series with bus name in index and path length to station as value.
 
     """
-    raise NotImplementedError
-    try:
-        # get nodes of line
-        nodes = line.grid.graph.nodes_from_line(line)
+    graph = edisgo_obj.topology.mv_grid.graph
+    mv_station = edisgo_obj.topology.mv_grid.station.index[0]
 
-        # get feeders
-        feeders = {}
-        for node in nodes:
-            # if one of the nodes is an MV station the line is an MV feeder
-            # itself
-            if isinstance(node, MVStation):
-                feeders[repr(node)] = None
-            else:
-                feeders[repr(node)] = node.mv_feeder
+    for bus in edisgo_obj.topology.mv_grid.buses_df.index:
+        path = nx.shortest_path(graph, source=mv_station, target=bus)
+        edisgo_obj.topology.buses_df.at[
+            bus, "path_length_to_station"] = len(path) - 1
+        if bus.split("_")[0] == "BusBar" and bus.split("_")[-1] == "MV":
+            lvgrid = LVGrid(
+                id=int(bus.split("_")[-2]),
+                edisgo_obj=edisgo_obj)
+            lv_graph = lvgrid.graph
+            lv_station = lvgrid.station.index[0]
 
-        # return feeder that is not None
-        feeder_1 = feeders[repr(nodes[0])]
-        feeder_2 = feeders[repr(nodes[1])]
-        if not feeder_1 is None and not feeder_2 is None:
-            if feeder_1 == feeder_2:
-                return feeder_1
-            else:
-                logging.warning("Different feeders for line {}.".format(line))
-                return None
-        else:
-            return feeder_1 if feeder_1 is not None else feeder_2
-    except Exception as e:
-        logging.warning("Failed to get MV feeder: {}.".format(e))
-        return None
+            for bus in lvgrid.buses_df.index:
+                lv_path = nx.shortest_path(lv_graph, source=lv_station,
+                                        target=bus)
+                edisgo_obj.topology.buses_df.at[
+                    bus, "path_length_to_station"] = len(path) + len(lv_path)
+    return edisgo_obj.topology.buses_df.path_length_to_station
 
 
 def assign_voltage_level_to_component(edisgo_obj, df):
