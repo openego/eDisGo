@@ -13,6 +13,7 @@ function write_opf_solution(pm,status,sol_time,network_name="test_network")
     branch_vars_static =[:I_max,:r,:x,:ne]
     branch_vars = [:cm,:p,:q]
     gen_vars = [:pg,:qg]
+    load_vars = [:pd,:qd]
     strg_vars_static = [:emax]
     strg_vars = [:uc,:ud,:soc]
 
@@ -25,7 +26,8 @@ function write_opf_solution(pm,status,sol_time,network_name="test_network")
         "branch" => Dict("nw"=>Dict(),"static"=>Dict()),
         "bus" => Dict("nw"=>Dict()),
         "storage"=> Dict("nw"=>Dict(),"static"=>Dict()),
-        "gen" =>  Dict("nw"=>Dict())
+        "gen" =>  Dict("nw"=>Dict()),
+        "load" =>  Dict("nw"=>Dict())
     )
 
 
@@ -33,6 +35,7 @@ function write_opf_solution(pm,status,sol_time,network_name="test_network")
         sol["branch"]["nw"][nw] = Dict()
         sol["bus"]["nw"][nw] = Dict()
         sol["gen"]["nw"][nw] = Dict()
+        sol["load"]["nw"][nw] = Dict()
         sol["storage"]["nw"][nw] = Dict()
     end
 
@@ -56,6 +59,9 @@ function write_opf_solution(pm,status,sol_time,network_name="test_network")
         end
         for sym in gen_vars
             sol["gen"]["nw"][nw][string(sym)]=Dict()
+        end
+        for sym in load_vars
+            sol["load"]["nw"][nw][string(sym)]=Dict()
         end
     end
 
@@ -105,6 +111,12 @@ function write_opf_solution(pm,status,sol_time,network_name="test_network")
         for (i,g) in ref(pm,:gen)
             for sym in gen_vars
                 sol["gen"]["nw"][nw][string(sym)][i] = getvalue(var(pm,step,sym,i))
+            end
+        end
+
+        for (i,g) in ref(pm,:load)
+            for sym in load_vars
+                sol["load"]["nw"][nw][string(sym)][i] = getvalue(var(pm,step,sym,i))
             end
         end
 

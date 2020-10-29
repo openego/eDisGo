@@ -51,6 +51,39 @@ function add_var_power_gen(pm, nw::Int=pm.cnw, cnd::Int=pm.ccnd, bounded::Bool=t
     end
 end
 
+# Load
+"variable: active and reactive power injection `pg[i]`, `qg[i]` for `i` in `loads`'s"
+function add_var_power_load(pm, nw::Int=pm.cnw, cnd::Int=pm.ccnd, bounded::Bool=true)
+    """
+    adds variable of active and reactive power for all loads in power model to a power model
+    input:
+        pm:: GenericPowerModel
+
+    """
+    if bounded
+
+        var(pm, nw)[:pd] = @variable(pm.model,
+                [i in ids(pm, nw, :load)], basename="pd_$(nw)",
+                lowerbound = ref(pm, nw, :load, i, "pmin", cnd),
+                upperbound = ref(pm, nw, :load, i, "pmax", cnd)#,
+        #         start = PowerModels.getval(ref(pm, nw, :gen, i), "pg_start", cnd)
+            )
+        var(pm, nw)[:qd] = @variable(pm.model,
+            [i in ids(pm, nw, :load)], basename="qd_$(nw)",
+            lowerbound = ref(pm, nw, :load, i, "qmin", cnd),
+            upperbound = ref(pm, nw, :load, i, "qmax", cnd)#,
+        #     start = PowerModels.getval(ref(pm, nw, :gen, i), "qg_start", cnd)
+            )
+    else
+        var(pm, nw)[:pd] = @variable(pm.model,
+                [i in ids(pm, nw, :load)], basename="pd_$(nw)"
+            )
+        var(pm, nw)[:qd] = @variable(pm.model,
+            [i in ids(pm, nw, :load)], basename="qd_$(nw)"
+            )
+    end
+end
+
 # Power flow
 # flow_lb, flow_ub = PowerModels.calc_branch_flow_bounds(ref(pm, nw, :branch), ref(pm, nw, :bus), cnd)
 "variable: active and reactive power flow `pg[(l,i,j)]`, `q[(l,i,j)]` for `(l,i,j)` in `arcs`'s"
