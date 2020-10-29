@@ -2,6 +2,7 @@ import pandas as pd
 import logging
 from math import sqrt
 import numpy as np
+import itertools
 
 from edisgo.network.grids import LVGrid, MVGrid
 
@@ -140,14 +141,33 @@ def lines_allowed_load(edisgo_obj, voltage_level):
             "{}_feedin_case_line".format(voltage_level)
         ]
     )
+
+    # Todo: adapt i_lines_allowed_per_case["load_case"] for radial feeders
+    buses_in_cycles = list(
+        set(itertools.chain.from_iterable(edisgo_obj.topology.rings)))
+
+    # Find lines in cycles
+    lines_in_cycles = list(
+        lines_df.loc[lines_df[[
+            'bus0', 'bus1']].isin(buses_in_cycles).all(axis=1)].index.values)
+    lines_radial_feeders = list(
+        lines_df.loc[~lines_df.index.isin(lines_in_cycles)].index.values)
+
+    # lines in cycles have to be n-1 secure
     i_lines_allowed_per_case["load_case"] = (
-        lines_df.s_nom
+        lines_df.loc[lines_in_cycles].s_nom
         / sqrt(3)
         / nominal_voltage
         * edisgo_obj.config["grid_expansion_load_factors"][
             "{}_load_case_line".format(voltage_level)
         ]
     )
+
+    # lines in radial feeders are not n-1 secure anyways
+    i_lines_allowed_per_case["load_case"] = \
+        i_lines_allowed_per_case["load_case"].append(
+            lines_df.loc[lines_radial_feeders].s_nom / sqrt(3) / nominal_voltage)
+
     i_lines_allowed = edisgo_obj.timeseries.timesteps_load_feedin_case.loc[
         edisgo_obj.results.i_res.index
     ].apply(lambda _: i_lines_allowed_per_case[_])
