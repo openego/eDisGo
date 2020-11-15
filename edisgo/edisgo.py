@@ -419,7 +419,10 @@ class EDisGo:
         pypsa_network = self.to_pypsa(mode=mode, timesteps=timesteps)
 
         # run power flow analysis
+        # Hei Kern modification
         pf_results = pypsa_network.pf(timesteps)
+        # pypsa_network.lpf()
+        # pf_results = pypsa_network.pf(timesteps,use_seed=True)
 
         if all(pf_results["converged"]["0"].tolist()):
             pypsa_io.process_pfa_results(self, pypsa_network, timesteps)
