@@ -50,7 +50,8 @@ def create_sb_dict_OG(grid_dir):
 def create_sb_dict(grid_dir):
     # import the csv files into a dict og dataframes
     file_list = [i for i in grid_dir.iterdir()]
-    simbench_dict = {i.name[:-4]:pd.read_csv(i,delimiter=";") for i in file_list}
+    # simbench_dict = {i.name[:-4]:pd.read_csv(i,delimiter=";") for i in file_list}
+    simbench_dict = {i.name[:-4]:pd.read_csv(i,sep=";") for i in file_list}
     # remove dayight savings duplicates
     # def remove_daylight_saving(df):
     #     df = df.set_index('time')
