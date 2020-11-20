@@ -537,7 +537,7 @@ def create_timeindex_0_OG(edisgo_obj,sb_dict,start,end):
     print('imported time index')
     return edisgo_obj
 
-def create_timeindex_0(edisgo_obj,sb_dict,time_accuracy='1_hour'):
+def create_timeindex_0_OG_2(edisgo_obj,sb_dict,time_accuracy='1_hour'):
     print("create_timeindex_0")
     load_profile_df = sb_dict['LoadProfile']
     time_col = load_profile_df['time']
@@ -551,6 +551,21 @@ def create_timeindex_0(edisgo_obj,sb_dict,time_accuracy='1_hour'):
     }
     print('imported time index')
     return edisgo_obj
+
+def create_timeindex_0(edisgo_obj,sb_dict,time_accuracy='1_hour'):
+    print("create_timeindex_0")
+    load_profile_df = sb_dict['LoadProfile']
+    timestep_list = create_timestep_list(sb_dict)
+    load_profile_df_reduced = load_profile_df.iloc[timestep_list].set_index('time')
+    timeindex = load_profile_df_reduced.index
+    timestamp_list = list(timeindex)
+    edisgo_obj.timeseries._timeindex = timeindex
+    edisgo_obj.timeseries._timestamp = {
+        'timestamp_list': timestamp_list
+    }
+    return edisgo_obj
+
+
 
 def create_timeindex(edisgo_obj_ext,sb_dict,time_accuracy='1_hour'):
     edisgo_obj = copy.deepcopy(edisgo_obj_ext)
