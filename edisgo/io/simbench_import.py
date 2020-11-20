@@ -542,7 +542,7 @@ def create_timeindex_0(edisgo_obj,sb_dict,time_accuracy='1_hour'):
     load_profile_df = sb_dict['LoadProfile']
     time_col = load_profile_df['time']
     timestep_list = create_timestep_list(sb_dict,time_accuracy=time_accuracy)
-    timestamp_list =time_col.iloc[timestep_list]
+    timestamp_list = time_col.iloc[timestep_list]
     print("timestamp_list length"+str(len(timestamp_list)))
     timeindex = pd.to_datetime(timestamp_list)
     edisgo_obj.timeseries._timeindex = timeindex.index
@@ -559,11 +559,19 @@ def re_insert_time_index(edisgo_obj_ext,sb_dict,time_accuracy='1_hour'):
     timestep_list = create_timestep_list(sb_dict)
     load_profile_df_reduced = load_profile_df.iloc[timestep_list].set_index('time')
     timeindex = load_profile_df_reduced.index
-    timestamp_list = list(timeindex)
+    # timestamp_list = list(timeindex)
     edisgo_obj.timeseries._timeindex = timeindex
-    edisgo_obj.timeseries._timestamp = {
-        'timestamp_list': timestamp_list
-    }
+    edisgo_obj.timeseries._generators_active_power = edisgo_obj.timeseries._generators_active_power.set_index(timeindex)
+    edisgo_obj.timeseries._generators_reactive_power = edisgo_obj.timeseries._generators_reactive_power.set_index(timeindex) 
+    edisgo_obj.timeseries._loads_active_power = edisgo_obj.timeseries._loads_active_power.set_index(timeindex)
+    edisgo_obj.timeseries._loads_reactive_power = edisgo_obj.timeseries._loads_reactive_power.set_index(timeindex)
+    # edisgo_obj.timeseries._storage_units_active_power = edisgo_obj.timeseries._storage_units_active_power.set_index(timeindex)
+    # edisgo_obj.timeseries._storage_units_active_power = edisgo_obj.timeseries._storage_units_reactive_power.set_index(timeindex)
+    # edisgo_obj.timeseries._charging_points_active_power = edisgo_obj.timeseries._charging_points_active_power.set_index(timeindex)
+    # edisgo_obj.timeseries._charging_points_reactive_power = edisgo_obj.timeseries._charging_points_reactive_power.set_index(timeindex)
+    # edisgo_obj.timeseries._timestamp = {
+    #     'timestamp_list': timestamp_list
+    # }
     return edisgo_obj
 
 def create_timeindex(edisgo_obj_ext,sb_dict,time_accuracy='1_hour'):
@@ -872,11 +880,36 @@ def create_sb_loads_timeseries(edisgo_obj,sb_dict,time_accuracy='1_hour'):
     print ('created loads_timeseries_dict')
     return loads_timeseries_dict
 
-def import_sb_timeseries_0(edisgo_obj_ext,sb_dict,time_accuracy='1_hour'):
+def import_sb_timeseries_0_OG(edisgo_obj_ext,sb_dict,time_accuracy='1_hour'):
     edisgo_obj = copy.deepcopy(edisgo_obj_ext)
     timeindex = edisgo_obj.timeseries._timeindex
     gen_timeseries_dict = create_sb_gen_timeseries_0(edisgo_obj,sb_dict,pickle_dir=False)
     loads_timeseries_dict = create_sb_loads_timeseries_0(edisgo_obj,sb_dict,pickle_dir=False)
+    get_component_timeseries(
+        edisgo_obj=edisgo_obj,
+        mode='manual',
+        timeindex=timeindex,
+        generators_active_power=gen_timeseries_dict['generators_active_power_df'],
+        generators_reactive_power=gen_timeseries_dict['generators_reactive_power_df'],
+        loads_active_power=loads_timeseries_dict['loads_active_power_df'],
+        loads_reactive_power=loads_timeseries_dict['loads_reactive_power_df']
+    )
+    print('loaded timeseries into edisgo_obj')
+    return edisgo_obj
+
+def import_sb_timeseries_0(edisgo_obj_ext,sb_dict,time_accuracy='1_hour'):
+    edisgo_obj = copy.deepcopy(edisgo_obj_ext)
+    load_profile_df = sb_dict['LoadProfile']
+    timestep_list = create_timestep_list(sb_dict)
+    load_profile_df_reduced = load_profile_df.iloc[timestep_list].set_index('time')
+    timeindex = load_profile_df_reduced.index
+    edisgo_obj.timeseries._timeindex = timeindex
+    gen_timeseries_dict = create_sb_gen_timeseries_0(edisgo_obj,sb_dict,pickle_dir=False)
+    loads_timeseries_dict = create_sb_loads_timeseries_0(edisgo_obj,sb_dict,pickle_dir=False)
+    gen_timeseries_dict['generators_active_power_df'] = gen_timeseries_dict['generators_active_power_df'].set_index(timeindex)
+    gen_timeseries_dict['generators_reactive_power_df'] = gen_timeseries_dict['generators_reactive_power_df'].set_index(timeindex)
+    loads_timeseries_dict['loads_active_power_df'] = loads_timeseries_dict['loads_active_power_df'].set_index(timeindex)
+    loads_timeseries_dict['loads_reactive_power_df'] = loads_timeseries_dict['loads_reactive_power_df'].set_index(timeindex)
     get_component_timeseries(
         edisgo_obj=edisgo_obj,
         mode='manual',
