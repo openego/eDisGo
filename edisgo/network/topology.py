@@ -959,7 +959,7 @@ class Topology:
             )
 
         # generate load name and check uniqueness
-        if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
+        if bus_df.lv_grid_id is not None and not np.isnan(bus_df.lv_grid_id):
             grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
         else:
             grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
