@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import os
 import warnings
+import networkx as nx
 
 import edisgo
 from edisgo.network.grids import MVGrid, LVGrid
@@ -14,6 +15,7 @@ from edisgo.tools.tools import (
     check_bus_for_removal,
     check_line_for_removal,
 )
+from edisgo.tools import networkx_helper
 from edisgo.io.ding0_import import _validate_ding0_grid_import
 
 if "READTHEDOCS" not in os.environ:
@@ -174,6 +176,29 @@ class Topology:
 
         """
         return self._equipment_data
+
+    @property
+    def rings(self):
+        """
+        List of rings. One ring is represented by the names of buses
+        within that ring.
+
+        Returns
+        --------
+        list of list
+            List of rings (list of buses within that ring).
+        """
+        if hasattr(self, '_rings'):
+            return self._rings
+        else:
+            # Find rings in topology
+            graph = self.to_graph()
+            self.rings = nx.cycle_basis(graph)
+            return self.rings
+
+    @rings.setter
+    def rings(self, rings):
+        self._rings = rings
 
     @property
     def buses_df(self):
@@ -1374,6 +1399,25 @@ class Topology:
         self._lines_df.loc[lines, "s_nom"] = (
             np.sqrt(3) * data_new_line.U_n * data_new_line.I_max_th
         )
+
+    def to_graph(self):
+        """
+        Returns graph representation of the grid.
+
+        Returns
+        -------
+        :networkx:`networkx.Graph<network.Graph>`
+            Graph representation of the grid as networkx Ordered Graph,
+            where lines are represented by edges in the graph, and buses and
+            transformers are represented by nodes.
+
+        """
+        graph = networkx_helper.translate_df_to_graph(
+            self.buses_df,
+            self.lines_df,
+            self.transformers_df,
+        )
+        return graph
 
     def to_csv(self, topology_dir):
         """

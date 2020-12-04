@@ -6,7 +6,7 @@ import pickle
 from edisgo.network.topology import Topology
 from edisgo.network.results import Results
 from edisgo.network import timeseries
-from edisgo.tools import pypsa_io, plots, tools, networkx_helper
+from edisgo.tools import pypsa_io, plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.generators_import import oedb as import_generators_oedb, add_and_connect_mv_generator
@@ -348,13 +348,7 @@ class EDisGo:
 
         """
 
-        graph = networkx_helper.translate_df_to_graph(
-            self.topology.buses_df,
-            self.topology.lines_df,
-            self.topology.transformers_df,
-        )
-
-        return graph
+        return self.topology.to_graph()
 
     def curtail(self, methodology, curtailment_timeseries, **kwargs):
         """
