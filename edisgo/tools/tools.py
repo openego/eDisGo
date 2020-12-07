@@ -391,8 +391,7 @@ def assign_mv_feeder_to_buses_and_lines(edisgo_obj):
                     edisgo_obj=edisgo_obj)
                 edisgo_obj.topology.buses_df.loc[
                     lvgrid.buses_df.index, "mv_feeder"] = neighbor
-            else:
-                edisgo_obj.topology.buses_df.at[node, "mv_feeder"] = neighbor
+            edisgo_obj.topology.buses_df.at[node, "mv_feeder"] = neighbor
 
     # add feeder info to lines
     edisgo_obj.topology.lines_df.loc[

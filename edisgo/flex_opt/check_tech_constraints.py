@@ -142,7 +142,7 @@ def lines_allowed_load(edisgo_obj, voltage_level):
         ]
     )
 
-    # Todo: adapt i_lines_allowed_per_case["load_case"] for radial feeders
+    # adapt i_lines_allowed for radial feeders
     buses_in_cycles = list(
         set(itertools.chain.from_iterable(edisgo_obj.topology.rings)))
 
