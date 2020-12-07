@@ -1097,14 +1097,15 @@ def import_edisgo_from_pickle(filename, path=''):
     return pickle.load(open(os.path.join(abs_path, filename), "rb"))
 
 
-def import_edisgo_from_files(directory, import_topology=True,
+def import_edisgo_from_files(directory="", import_topology=True,
                              import_timeseries=False, import_results=False,
                              **kwargs):
     edisgo_obj = EDisGo(import_timeseries=False)
     if import_topology:
-        if os.path.exists(os.path.join(directory, "topology")):
-            edisgo_obj.topology.from_csv(os.path.join(directory, "topology"),
-                                        edisgo_obj)
+        topology_dir = kwargs.get("topology_directory",
+                                  os.path.join(directory, "topology"))
+        if os.path.exists(topology_dir):
+            edisgo_obj.topology.from_csv(topology_dir, edisgo_obj)
         else:
             logging.warning(
                 'No topology directory found. Topology not imported.')
