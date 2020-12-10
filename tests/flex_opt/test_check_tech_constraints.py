@@ -98,10 +98,14 @@ class TestCheckTechConstraints:
             df.at[self.timesteps[0], "Line_10005"],
             7.274613391789284 / 20 / sqrt(3),
         )
-        # check in load case
+        # check in load case (line in cycle as well as stub)
         assert np.isclose(
             df.at[self.timesteps[1], "Line_10005"],
             7.274613391789284 / 20 / sqrt(3) * 0.5,
+        )
+        assert np.isclose(
+            df.at[self.timesteps[1], "Line_10001"],
+            7.274613391789284 / 20 / sqrt(3),
         )
 
         # check for LV
