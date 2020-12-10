@@ -881,7 +881,7 @@ class Results:
                     index_col=0, parse_dates=True)
         else:
             self.i_res = None
-            self.pfa_v_mag_pu = None
+            self.v_res = None
             self.pfa_p = None
             self.pfa_q = None
             self.apparent_power = None
@@ -906,58 +906,6 @@ class Results:
         else:
             self.grid_expansion_costs = None
             self.equipment_changes = None
-
-    @property
-    def v_res(self, nodes=None, level=None):
-        """
-        Get resulting voltage level at node.
-
-        Parameters
-        ----------
-        nodes : :obj:`list`
-            List of string representatives of network topology components, e.g.
-            :class:`~.network.components.Generator`. If not provided defaults to
-            all nodes available in network level `level`.
-        level : :obj:`str`
-            Either 'mv' or 'lv' or None (default). Depending on which network
-            level results you are interested in. It is required to provide this
-            argument in order to distinguish voltage levels at primary and
-            secondary side of the transformer/LV station.
-            If not provided (respectively None) defaults to ['mv', 'lv'].
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Resulting voltage levels obtained from power flow analysis
-
-        """
-        # check if voltages are available:
-        if hasattr(self, 'pfa_v_mag_pu'):
-            self.pfa_v_mag_pu.sort_index(axis=1, inplace=True)
-            return self.pfa_v_mag_pu
-        elif hasattr(self, '_v_res'):
-            #Todo: Take care of this. Are we working with _v_res or pfa..?
-            self._v_res.sort_index(axis=1, inplace=True)
-            return self._v_res
-        else:
-            message = "No voltage results available."
-            raise AttributeError(message)
-        #
-        # if level is None:
-        #     level = ['mv', 'lv']
-        #
-        # if nodes is None:
-        #     return self.pfa_v_mag_pu.loc[:, (level, slice(None))]
-        # else:
-        #     not_included = [_ for _ in nodes
-        #                     if _ not in list(self.pfa_v_mag_pu[level].columns)]
-        #     labels_included = [_ for _ in nodes if _ not in not_included]
-        #
-        #     if not_included:
-        #         logging.warning("Voltage levels for {nodes} are not returned "
-        #                         "from PFA".format(nodes=not_included))
-        #     return self.pfa_v_mag_pu[level][labels_included]
-
 
         # # import curtailment results
         # if 'curtailment_results' in parameters and os.path.isdir(
@@ -1019,6 +967,3 @@ class Results:
         #     self.storages_costs_reduction = None
         #     self.storages_p = None
         #     self.storages_q = None
-
-
-
