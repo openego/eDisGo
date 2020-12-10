@@ -372,7 +372,8 @@ def mv_grid_topology(
             and connected_components["Generator"].empty
             and connected_components["StorageUnit"].empty
         ):
-            raise NotImplementedError
+            #raise NotImplementedError
+            return colors_dict["Load"], sizes_dict["Load"]
         elif not connected_components["Switch"].empty:
             return (
                 colors_dict["DisconnectingPoint"],
@@ -396,6 +397,7 @@ def mv_grid_topology(
             "BranchTee": "b",
             "GeneratorFluctuating": "g",
             "Generator": "k",
+            "Load": "m",
             "LVStation": "c",
             "MVStation": "r",
             "Storage": "y",
@@ -406,6 +408,7 @@ def mv_grid_topology(
             "BranchTee": 10000,
             "GeneratorFluctuating": 100000,
             "Generator": 100000,
+            "Load": 100000,
             "LVStation": 50000,
             "MVStation": 120000,
             "Storage": 100000,
