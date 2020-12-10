@@ -354,7 +354,7 @@ class TestEDisGo:
         plt.ion()
         # if not already done so, analyse grid
         try:
-            if self.results.pfa_v_mag_pu is None:
+            if self.results.v_res is None:
                 self.edisgo.analyze()
         except AttributeError:
             self.edisgo.analyze()
