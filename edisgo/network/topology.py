@@ -8,6 +8,7 @@ import networkx as nx
 
 import edisgo
 from edisgo.network.grids import MVGrid, LVGrid
+from edisgo.network.components import Switch
 from edisgo.tools.tools import (
     calculate_line_resistance,
     calculate_line_reactance,
@@ -191,9 +192,17 @@ class Topology:
         if hasattr(self, '_rings'):
             return self._rings
         else:
+            # close switches
+            switches = [Switch(id=_, topology=self)
+                        for _ in self.switches_df.index]
+            for switch in switches:
+                switch.close()
             # Find rings in topology
             graph = self.to_graph()
             self.rings = nx.cycle_basis(graph)
+            # repoen switches
+            for switch in switches:
+                switch.open()
             return self.rings
 
     @rings.setter
