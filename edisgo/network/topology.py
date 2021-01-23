@@ -903,22 +903,24 @@ class Topology:
         ----------
         generator_id : str
             Unique identifier of generator.
-        bus: str
-            Identifier of connected bus
-        control: str
-            Control type of generator. Defaults to 'PQ'.
-        p_nom: float
-            Nominal power [MW]
-        generator_type: str
-            Type of generator, e.g. 'solar' or 'gas'
-        weather_cell_id: int
+        bus : str
+            Identifier of connected bus.
+        p_nom : float
+            Nominal power in MW.
+        generator_type : str
+            Type of generator, e.g. 'solar' or 'gas'.
+
+        Other Parameters
+        ------------------
+        weather_cell_id : int
             ID of weather cell, required for fluctuating generators import from
             oedb.
-        subtype: str
-            Further specification of type, e.g. 'solar_roof_mounted'
+        subtype : str
+            Further specification of type, e.g. 'solar_roof_mounted'.
+        control : str
+            Control type of generator. Defaults to 'PQ'.
 
         """
-        # ToDo add test
         # check if bus exists
         try:
             bus_df = self.buses_df.loc[bus]
@@ -939,21 +941,21 @@ class Topology:
         )
         while generator_name in self.generators_df.index:
             random.seed(a=generator_name)
-            generator_name = "Generator_{}_{}".format(
-                generator_type, random.randint(10 ** 8, 10 ** 9)
+            generator_name = "Generator_{}_{}_{}".format(
+                generator_type, grid_name, random.randint(10 ** 8, 10 ** 9)
             )
 
         # unpack optional parameters
         weather_cell_id = kwargs.get("weather_cell_id", None)
         subtype = kwargs.get("subtype", None)
-        control = kwargs.get("control", None)
+        control = kwargs.get("control", "PQ")
 
         # create new generator dataframe
         new_gen_df = pd.DataFrame(
             data={
                 "bus": bus,
                 "p_nom": p_nom,
-                "control": control if control is not None else "PQ",
+                "control": control,
                 "type": generator_type,
                 "weather_cell_id": weather_cell_id,
                 "subtype": subtype,
