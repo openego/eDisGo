@@ -8,18 +8,76 @@ from edisgo.network.timeseries import get_component_timeseries
 from edisgo.io.ding0_import import _validate_ding0_grid_import
 
 def pickle_obj(file_path,obj_to_pickle):
+    """
+    pickles an object
+
+    Parameters
+    ----------
+    file_path: `path`
+        Path to pickle the object
+    obj_to_pickle: `obj`
+        The object to pickle
+
+    Returns
+    -------
+    Null
+    
+    """
     pickle.dump( obj_to_pickle, open( file_path, "wb" ) )
 
 def unpickle_obj(file_path):
+    """
+    unpickle an object
+
+    Parameters
+    ----------
+    file_path: `path`
+        path to pickled object
+    
+    Returns
+    -------
+    obj
+
+    """
+
     return pickle.load( open( file_path, "rb" ) )
 
 def pickle_df(pickle_path,df_dict):
+    """
+    pickles a dictionary that contains a dataframe
+
+    Parameters
+    ----------
+    pickle_path: `path`
+        Path to pickle the object
+    df_dict: `obj`
+        The object to pickle
+
+    Returns
+    -------
+    Null
+
+    """
     for df_name in df_dict:
         df_path = str(pickle_path) + '/' + df_name + '.pkl'
         df_dict[df_name].to_pickle(df_path)
         print ('pickled '+df_name)
 
 def unpickle_df(pickle_dir,df_name_list):
+    """
+    unpickle a dictionary that contains a dataframe
+
+    Parameters
+    ----------
+    pickle_dir: `path`
+        path to pickled object
+    df_name_list: `list`
+        list of strings that are names of the dataframes in the pickle obj
+
+    Returns
+    -------
+        a dictionary of dataframes
+    """
     df_dict = {}
     for df_name in df_name_list:
         pickle_path = str(pickle_dir) +'/' + df_name + '.pkl'
@@ -29,18 +87,80 @@ def unpickle_df(pickle_dir,df_name_list):
     return df_dict
 
 def search_str_df(df,col,search_str,invert=False):
+    """
+    Helper function to search for specific rows in a dataframe
+
+    Parameters
+    ----------
+    df: `Dataframe`
+        dataframe of interest
+    col: `str`
+        the column of interest within the data frame
+    search_str: `str`
+        the specific string of interest within the row
+
+    Returns
+    -------
+    `dataframe`:
+        a sub dataframe from the input dataframe that fufills the criteria
+
+    """
     if invert == False:
         return df.loc[df[col].str.contains(search_str)]
     else:
         return df.loc[~df[col].str.contains(search_str)]
 
 def set_time_index(df,timeindex):
-        df['timeindex'] = list(timeindex)
-        df = df.set_index('timeindex')
-        return df
+    """
+    set the index of the input df as the time index. 
+    
+    *** Note that the dataframe must have the same number of rows as the timeindex
+
+    Parameters
+    ----------
+    df: `dataframe`
+        data frame with a need to set time index
+    timeindex: `pandas timeindex object`
+
+    Returns
+    -------
+    `dataframe`
+        a dataframe with the index set as the time index
+    """
+    df['timeindex'] = list(timeindex)
+    df = df.set_index('timeindex')
+    return df
 
 def create_sb_dict(grid_dir):
-    # import the csv files into a dict og dataframes
+    """
+    import the csv files of the raw data into a dictionary of dataframes
+
+    Parameters
+    ----------
+    grid_dir: `str`
+        the file path to the "topology" folder of the simbench grid
+
+    Returns
+    -------
+    `dictionary`
+        a dictionary with the following dataframe as keys
+        Line
+        LoadProfile
+        RES
+        ExternalNet
+        TransformerType
+        StudyCases
+        Node
+        Switch
+        Measurement
+        Coordinates
+        NodePFResult
+        Substation
+        Transformer
+        Load
+        RESProfile
+        LineType
+    """
     file_list = [i for i in grid_dir.iterdir()]
     simbench_dict = {i.name[:-4]:pd.read_csv(i,sep=";") for i in file_list}
     def remove_daylight_saving(df_ext):
@@ -56,6 +176,21 @@ def create_sb_dict(grid_dir):
 
 
 def create_buses_df(simbench_dict,pickle_dir=False):
+    """
+    Creating the eDisGo compatible buses dataframe
+
+    Parameters
+    ----------
+    simbench_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    pickle_dir: `path` (default to False)
+        if path is provided, the function will pickle the result at the given path
+
+    Return
+    ------
+    `dataframe`
+        eDisGo compatible buses dataframe 
+    """
     df_dict = unpickle_df(pickle_dir,['buses_df'])
     if len(df_dict) is not 0:
         return df_dict['buses_df']
@@ -119,12 +254,21 @@ def create_buses_df(simbench_dict,pickle_dir=False):
 
 def create_transformer_dfs(simbench_dict,pickle_dir=False):
     """
-    Takes the simbench_dict and creates transformers_df and transformers_hvmv_df
+    Creating eDisGo compatible transformers dataframe and transformers_hvmv dataframe
 
-    outout the two dataframes as a dict with the keys:
-    transformers_df
-    transformers_hvmv_df
+    Parameters
+    ----------
+    simbench_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    pickle_dir: `path` (default to False)
+        if path is provided, the function will pickle the result at the given path
 
+    Return
+    ------
+    `dictionary`
+        contains the following dataframe
+            transformers_df
+            transformers_hvmv_df
     """
     df_dict = unpickle_df(pickle_dir,["transformers_df","transformers_hvmv_df"])
     if len(df_dict) is not 0:
@@ -185,6 +329,21 @@ def create_transformer_dfs(simbench_dict,pickle_dir=False):
 
 
 def create_generators_df(simbench_dict,pickle_dir=False):
+    """
+    Creating the eDisGo compatible generators dataframe
+
+    Parameters
+    ----------
+    simbench_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    pickle_dir: `path` (default to False)
+        if path is provided, the function will pickle the result at the given path
+
+    Return
+    ------
+    `dataframe`
+        eDisGo compatible generators dataframe 
+    """
     df_dict = unpickle_df(pickle_dir,["generators_df"])
     if len(df_dict) is not 0:
         return df_dict['generators_df']
@@ -224,6 +383,23 @@ def create_generators_df(simbench_dict,pickle_dir=False):
 
 
 def create_lines_df(simbench_dict,buses_df,pickle_dir=False):
+    """
+    Creating the eDisGo compatible lines dataframe
+
+    Parameters
+    ----------
+    simbench_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    buses_df: `dataframe`
+        dataframe created by function "create_buses_df"
+    pickle_dir: `path` (default to False)
+        if path is provided, the function will pickle the result at the given path
+
+    Return
+    ------
+    `dataframe`
+        eDisGo compatible lines dataframe 
+    """
     df_dict = unpickle_df(pickle_dir,["lines_df"])
     if len(df_dict) is not 0:
         return df_dict['lines_df']
@@ -288,6 +464,21 @@ def create_lines_df(simbench_dict,buses_df,pickle_dir=False):
 
 
 def create_loads_df(simbench_dict,pickle_dir=False):
+    """
+    Creating the eDisGo compatible loads dataframe
+
+    Parameters
+    ----------
+    simbench_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    pickle_dir: `path` (default to False)
+        if path is provided, the function will pickle the result at the given path
+
+    Return
+    ------
+    `dataframe`
+        eDisGo compatible loads dataframe 
+    """
     df_dict = unpickle_df(pickle_dir,["loads_df"])
     if len(df_dict) is not 0:
         return df_dict['loads_df']
@@ -336,6 +527,21 @@ def create_loads_df(simbench_dict,pickle_dir=False):
 
 
 def create_switches_df(simbench_dict,pickle_dir=False):
+    """
+    Creating the eDisGo compatible switches dataframe
+
+    Parameters
+    ----------
+    simbench_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    pickle_dir: `path` (default to False)
+        if path is provided, the function will pickle the result at the given path
+
+    Return
+    ------
+    `dataframe`
+        eDisGo compatible switches dataframe 
+    """
     df_dict = unpickle_df(pickle_dir,["switches_df"])
     if len(df_dict) is not 0:
         return df_dict['switches_df']
@@ -367,6 +573,21 @@ def create_switches_df(simbench_dict,pickle_dir=False):
 
 
 def create_storage_units_df(simbench_dict,pickle_dir=False):
+    """
+    Creating the eDisGo compatible storage_units dataframe
+
+    Parameters
+    ----------
+    simbench_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    pickle_dir: `path` (default to False)
+        if path is provided, the function will pickle the result at the given path
+
+    Return
+    ------
+    `dataframe`
+        eDisGo compatible storage_units dataframe 
+    """
     df_dict = unpickle_df(pickle_dir,["storage_units_df"])
     if len(df_dict) is not 0:
         return df_dict['storage_units_df']
@@ -391,6 +612,26 @@ def create_storage_units_df(simbench_dict,pickle_dir=False):
 
 # HK current
 def import_sb_topology(sb_dict,pickle_file_path=False):
+    """
+    Creating eDisGo object with topology data
+
+    Parameters
+    ----------
+    sb_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    pickle_file_path: `path` (default to False)
+        if path is provided, then the function will search for the pickle file. If the pickle file exist,
+        then the function will unpickle the file and return the object. If not, then the function will create
+        the object and pickle it into the file path
+
+        if path is not provided, the function will create the edisgo object. ( Not reccomended as it takes quite
+        a bit of time. pickling should be done if storage space is available)
+
+    Return
+    ------
+    `obj`
+        eDisGo object with imported topology
+    """
     if pickle_file_path is not False:
         if pickle_file_path.exists():
             edisgo_obj = unpickle_obj(pickle_file_path)
@@ -441,6 +682,22 @@ def import_sb_topology(sb_dict,pickle_file_path=False):
 
 # Hk Current
 def create_timestamp_list(sb_dict,time_accuracy='1_hour'):
+    """
+    Creating a list of timestamps for the given time sereies data from the simbench grid
+    according to the time_accuracy stated
+
+    Parameters
+    ----------
+    sb_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    time_accuracy: `str` (default '1_hour')
+        can be the following values:
+            {'1_hour','15_min'}
+    Return
+    ------
+    `list`
+        A list of the timestamps according to the time_accuracy stated in the input
+    """
     load_profile_df = sb_dict['LoadProfile']
     timestamp_list = list(load_profile_df['time'])
     if time_accuracy == '15_min':
@@ -454,6 +711,22 @@ def create_timestamp_list(sb_dict,time_accuracy='1_hour'):
 
 # Hk Current
 def create_timestep_list(sb_dict,time_accuracy='1_hour'):
+    """
+    Creating a list of timesteps for the given time sereies data from the simbench grid
+    according to the time_accuracy stated
+
+    Parameters
+    ----------
+    sb_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    time_accuracy: `str` (default '1_hour')
+        can be the following values:
+            {'1_hour','15_min'}
+    Return
+    ------
+    `list`
+        A list of the timesteps according to the time_accuracy stated in the input
+    """
     load_profile_df = sb_dict['LoadProfile']
     timestamp_list = list(load_profile_df['time'])
     if time_accuracy == '15_min':
@@ -467,6 +740,25 @@ def create_timestep_list(sb_dict,time_accuracy='1_hour'):
 
 # Hk Current
 def create_timeindex(edisgo_obj,sb_dict,time_accuracy='1_hour'):
+    """
+    Creating a list of timestamps for the given time sereies data from the simbench grid
+    according to the time_accuracy stated
+
+    Parameters
+    ----------
+    edisgo_obj: `obj`
+        edsigo_obj created by function "import_sb_topology"
+    sb_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    time_accuracy: `str` (default '1_hour')
+        can be the following values:
+            {'1_hour','15_min'}
+    Return
+    ------
+    `obj`
+        an eDisGo object with a timeseries index that reflects the time accuracy stated
+        in the input
+    """
     print("create_timeindex_0")
     load_profile_df = sb_dict['LoadProfile']
     time_col = load_profile_df['time']
@@ -482,6 +774,23 @@ def create_timeindex(edisgo_obj,sb_dict,time_accuracy='1_hour'):
     return edisgo_obj
 
 def create_sb_gen_timeseries(edisgo_obj,sb_dict,pickle_dir=False):
+    """
+    Create generator timeseries dictionary that is compatible with eDisGo
+
+    Parameters
+    ----------
+    edisgo_obj: `obj`
+        edsigo_obj created by function "create_timeindex"
+    sb_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    pickle_dir: `path` (default to False)
+        if path is provided, the function will pickle the result at the given path
+    
+    Return
+    ------
+    `dictionary`
+        generator timeseries dictionary that is compatible with eDisGo
+    """
     # Importing _timeindex
     timeindex = edisgo_obj.timeseries._timeindex
     res_profile_df = sb_dict['RESProfile']
@@ -526,6 +835,23 @@ def create_sb_gen_timeseries(edisgo_obj,sb_dict,pickle_dir=False):
 
 
 def create_sb_loads_timeseries(edisgo_obj,sb_dict,pickle_dir=False):
+    """
+    Create loads timeseries dictionary that is compatible with eDisGo
+
+    Parameters
+    ----------
+    edisgo_obj: `obj`
+        edsigo_obj created by function "create_timeindex"
+    sb_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    pickle_dir: `path` (default to False)
+        if path is provided, the function will pickle the result at the given path
+    
+    Return
+    ------
+    `dictionary`
+        loads timeseries dictionary that is compatible with eDisGo
+    """
     timeindex = edisgo_obj.timeseries._timeindex
     df_dict = unpickle_df(pickle_dir,["loads_active_power_df","loads_reactive_power_df"])
     if len(df_dict) is not 0:
@@ -573,6 +899,23 @@ def create_sb_loads_timeseries(edisgo_obj,sb_dict,pickle_dir=False):
 
 # HK Current
 def import_sb_timeseries(edisgo_obj_ext,sb_dict,time_accuracy='1_hour'):
+    """
+    Creating eDisGo object with timeseries of loads and generators
+
+    Parameters
+    ----------
+    edisgo_obj_ext: `obj`
+        edsigo_obj created by function "import_sb_topology"
+    sb_dict: `dictionary`
+        dictionary created by function "create_sb_dict"
+    time_accuracy: `str` (default '1_hour')
+        can be the following values:
+            {'1_hour','15_min'}
+    Return
+    ------
+    `obj`
+        an eDisGo object with timeseries of loads and generators
+    """
     edisgo_obj = copy.deepcopy(edisgo_obj_ext)
     load_profile_df = sb_dict['LoadProfile']
     timestep_list = create_timestep_list(sb_dict)
