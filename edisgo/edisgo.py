@@ -1000,9 +1000,8 @@ class EDisGo:
             substations = self.topology.buses_df.loc[
                 self.topology.transformers_df.bus1]
             nearest_substation, _ = find_nearest_bus(geolocation, substations)
-            # ToDo check what mvlv_subst_id is exactly
-            kwargs['geom'] = geolocation
             kwargs['mvlv_subst_id'] = int(nearest_substation.split("_")[-2])
+            kwargs['geom'] = geolocation
             kwargs['voltage_level'] = voltage_level
             comp_name = connect_to_lv(self, kwargs, comp_type)
 
