@@ -236,6 +236,11 @@ class Topology:
 
     @buses_df.setter
     def buses_df(self, buses_df):
+        # make sure in_building takes on only True or False (not numpy bools)
+        # needs to tested using `== True`, not `is True`
+        buses_in_building = buses_df[buses_df.in_building == True].index
+        buses_df.loc[buses_in_building, "in_building"] = True
+        buses_df.loc[~buses_df.index.isin(buses_in_building), "in_building"] = False
         self._buses_df = buses_df
 
     @property
