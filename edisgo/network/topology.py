@@ -1154,7 +1154,13 @@ class Topology:
             indicator if bus is inside a building
 
         """
-        # ToDo make sure bus_name is unique!
+        # check uniqueness of provided bus name and otherwise change bus name
+        while bus_name in self.buses_df.index:
+            random.seed(a=bus_name)
+            bus_name = "Bus_{}".format(
+                random.randint(10 ** 8, 10 ** 9)
+            )
+
         x = kwargs.get("x", None)
         y = kwargs.get("y", None)
         lv_grid_id = kwargs.get("lv_grid_id", None)
