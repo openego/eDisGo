@@ -9,7 +9,8 @@ from edisgo.network import timeseries
 from edisgo.tools import pypsa_io, plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io.ding0_import import import_ding0_grid
-from edisgo.io.generators_import import oedb as import_generators_oedb, add_and_connect_mv_generator
+from edisgo.io.generators_import import oedb as import_generators_oedb, \
+    connect_to_mv, connect_to_lv
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
 from edisgo.opf.run_mp_opf import run_mp_opf
@@ -367,10 +368,21 @@ class EDisGo:
 
     def import_generators(self, generator_scenario=None,
                           **kwargs):
-        """Import generators
+        """
+        Import generator data for specified scenario from oedb and integrate
+        into grid.
 
-        For details see
-        :func:`edisgo.io.generators_import.oedb`
+        For details see :func:`edisgo.io.generators_import.oedb`.
+
+        Parameters
+        ----------
+        generator_scenario : str
+            Scenario for which to retrieve generator data. Possible options
+            are 'nep2035' and 'ego100'.
+
+        Other Parameters
+        ----------------
+        See :func:`edisgo.io.generators_import.oedb`.
 
         """
         if generator_scenario:
@@ -807,20 +819,25 @@ class EDisGo:
         **kwargs
     ):
         """
-        Adds single component to topology and respective timeseries if add_ts
-        is set to True.
+        Adds single component to network topology.
 
         Parameters
         ----------
-        comp_type: str
+        comp_type : str
             Type of added component. Can be 'Bus', 'Line', 'Load', 'Generator',
-            'StorageUnit', 'Transformer'
-        add_ts: Boolean
-            Indicator if time series for component are added as well
-        ts_active_power : pd.Series
-            Active power time series of added component.
-        ts_reactive_power : pd.Series
-            Reactive power time series of added component.
+            'StorageUnit', 'Transformer' or 'ChargingPoint'.
+        add_ts : bool
+            Indicator if time series for component are added as well.
+        ts_active_power : :pandas:`pandas.Series<series>`
+            Active power time series of added component. Index of the series
+            must contain all time steps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex`.
+            Values are active power per time step in MW.
+        ts_reactive_power : :pandas:`pandas.Series<series>`
+            Reactive power time series of added component. Index of the series
+            must contain all time steps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex`.
+            Values are reactive power per time step in MVA.
         **kwargs: dict
             Attributes of added component. See respective functions for required
             entries. For 'Load', 'Generator' and 'StorageUnit' the boolean
@@ -837,13 +854,7 @@ class EDisGo:
         elif comp_type == "Line":
             comp_name = self.topology.add_line(**kwargs)
         elif comp_type == "Load" or comp_type == "charging_park":
-            comp_name = self.topology.add_load(
-                load_id=kwargs.get("load_id"),
-                bus=kwargs.get("bus"),
-                peak_load=kwargs.get("peak_load"),
-                annual_consumption=kwargs.get("annual_consumption"),
-                sector=kwargs.get("sector"),
-            )
+            comp_name = self.topology.add_load(**kwargs)
             if add_ts:
                 timeseries.add_loads_timeseries(
                     edisgo_obj=self, load_names=comp_name, **kwargs
@@ -900,7 +911,6 @@ class EDisGo:
         comp_type,
         geolocation,
         voltage_level=None,
-        mode="mv",
         add_ts=True,
         ts_active_power=None,
         ts_reactive_power=None,
@@ -909,14 +919,11 @@ class EDisGo:
         """
         Adds single component to topology based on geolocation.
 
-        This function integrates a new generator or charging point into the
-        grid.
-
         Parameters
         ----------
-        comp_type: str
+        comp_type : str
             Type of added component. Can be 'Generator' or 'ChargingPoint'.
-        geolocation : tuple or shapely Point
+        geolocation : :shapely:`shapely.Point<Point>` or tuple
             Geolocation of the new component. In case of tuple, the geolocation
             must be given in the form (longitude, latitude).
         voltage_level : int
@@ -934,37 +941,44 @@ class EDisGo:
               0.3 MW
             * voltage level 7 (LV grid): nominal power below 0.1 MW
 
-        mode : str
-            So far, only mode "mv" is implemented. In that case, components
-            in the low voltage will be connected to the closest substation's
-            secondary side.
-        add_ts: Boolean
-            Indicator if time series for component are added as well
-        ts_active_power : pd.Series
-            Active power time series of added component.
-        ts_reactive_power : pd.Series
-            Reactive power time series of added component.
-        **kwargs: dict
-            Attributes of added component. See respective functions for required
-            entries.
+        add_ts : bool
+            Indicator if time series for component are added as well.
+        ts_active_power : :pandas:`pandas.Series<series>`
+            Active power time series of added component. Index of the series
+            must contain all time steps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex`.
+            Values are active power per time step in MW.
+        ts_reactive_power : :pandas:`pandas.Series<series>`
+            Reactive power time series of added component. Index of the series
+            must contain all time steps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex`.
+            Values are reactive power per time step in MVA.
+
+        Other Parameters
+        ------------------
+        kwargs :
+            Attributes of added component.
+            See :attr:`~.network.topology.Topology.add_generator` respectively
+            :attr:`~.network.topology.Topology.add_charging_point` methods
+            for more information on required and optional parameters of
+            generators and charging points.
 
         """
-
-        supported_voltage_levels = set([4, 5, 6, 7])
+        supported_voltage_levels = {4, 5, 6, 7}
         p_nom = kwargs.get('p_nom', None)
-        if not voltage_level in supported_voltage_levels:
+        if voltage_level not in supported_voltage_levels:
             if p_nom is None:
                 raise ValueError(
                     "Neither appropriate voltage level nor nominal power "
                     "were supplied.")
-            # Calculate voltage level manually from nominal power:
-            if p_nom > 4.5 and p_nom <= 17.5:
+            # Determine voltage level manually from nominal power
+            if 4.5 < p_nom <= 17.5:
                 voltage_level = 4
-            elif p_nom > 0.3 and p_nom <= 4.5:
+            elif 0.3 < p_nom <= 4.5:
                 voltage_level = 5
-            elif p_nom > 0.1 and p_nom <= 0.3:
+            elif 0.1 < p_nom <= 0.3:
                 voltage_level = 6
-            elif p_nom > 0 and p_nom <= 0.1:
+            elif 0 < p_nom <= 0.1:
                 voltage_level = 7
             else:
                 raise ValueError("Unsupported voltage level")
@@ -974,50 +988,40 @@ class EDisGo:
         if not type(geolocation) is Point:
             geolocation = Point(geolocation)
 
-        # Connect MV component
-        if voltage_level == 4:
-            self.add_component(comp_type,
-                               bus=self.topology.mv_grid.station.index[0],
-                               add_ts=add_ts,
-                               ts_active_power=ts_active_power,
-                               ts_reactive_power=ts_reactive_power, **kwargs)
-        elif voltage_level == 5:
-            # Create common properties for Generator and Charging Point
-            properties = pd.Series()
-            properties['voltage_level'] = voltage_level
-            properties['geom'] = str(geolocation)
-            properties['electrical_capacity'] = p_nom
-            properties.name = kwargs.get('generator_id', None)
-            properties['generation_type'] = kwargs.get('generator_type', None)
-            properties['generation_subtype'] = kwargs.get(
-                'generator_subtype', None)
-            properties['w_id'] = kwargs.get('weather_cell_id', None)
-            comp_name = add_and_connect_mv_generator(
-                self, properties, comp_type)
+        # Connect in MV
+        if voltage_level in [4, 5]:
+            kwargs['voltage_level'] = voltage_level
+            kwargs['geom'] = geolocation
+            comp_name = connect_to_mv(
+                self, kwargs, comp_type)
 
-            if add_ts and comp_type == 'Generator':
-                timeseries.add_generators_timeseries(
-                    edisgo_obj=self, generator_names=comp_name, **kwargs
-                )
-            elif add_ts and comp_type == 'ChargingPoint':
-                timeseries.add_charging_points_timeseries(
-                    self, [comp_name],
-                    ts_active_power=pd.DataFrame({
-                        comp_name: ts_active_power}),
-                    ts_reactive_power=pd.DataFrame({
-                        comp_name: ts_reactive_power})
-                )
-
-        # Connect LV component
+        # Connect in LV
         else:
             substations = self.topology.buses_df.loc[
                 self.topology.transformers_df.bus1]
             nearest_substation, _ = find_nearest_bus(geolocation, substations)
-            self.add_component(comp_type,
-                               bus=nearest_substation,
-                               add_ts=add_ts,
-                               ts_active_power=ts_active_power,
-                               ts_reactive_power=ts_reactive_power, **kwargs)
+            # ToDo check what mvlv_subst_id is exactly
+            kwargs['geom'] = geolocation
+            kwargs['mvlv_subst_id'] = int(nearest_substation.split("_")[-2])
+            kwargs['voltage_level'] = voltage_level
+            comp_name = connect_to_lv(self, kwargs, comp_type)
+
+        if add_ts:
+            if comp_type == 'Generator':
+                # ToDo: Adding time series for generators manually does
+                #   currently not work
+                func = timeseries.add_generators_timeseries
+            else:
+                func = timeseries.add_charging_points_timeseries
+            func(
+                self, [comp_name],
+                ts_active_power=pd.DataFrame({
+                    comp_name: ts_active_power}),
+                ts_reactive_power=pd.DataFrame({
+                    comp_name: ts_reactive_power})
+            )
+
+        return comp_name
 
     def remove_component(self, comp_type, comp_name, drop_ts=True):
         """
