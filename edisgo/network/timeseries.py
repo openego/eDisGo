@@ -1386,8 +1386,14 @@ def add_generators_timeseries(edisgo_obj, generator_names, **kwargs):
     edisgo_obj: :class:`~.self.edisgo.EDisGo`
         The eDisGo model overall container
     generator_names: str or list of str
-        Names of generators to add timeseries for. Default None, timeseries
-        for all generators of edisgo_obj are set then.
+        Names of generators to add timeseries for.
+
+    Other Parameters
+    -----------------
+    generators_active_power: :pandas:`pandas.DataFrame<DataFrame>`
+        Active power time series in MW.
+    generators_reactive_power: :pandas:`pandas.DataFrame<DataFrame>`
+        Reactive power time series in MW.
 
     """
     # If timeseries have not been set yet, it is not
@@ -1473,6 +1479,24 @@ def add_generators_timeseries(edisgo_obj, generator_names, **kwargs):
 
 
 def add_charging_points_timeseries(edisgo_obj, charging_point_names, **kwargs):
+    """
+    Define generator time series for active and reactive power.
+
+    Parameters
+    ----------
+    edisgo_obj: :class:`~.self.edisgo.EDisGo`
+        The eDisGo model overall container
+    charging_point_names: str or list of str
+        Names of charging points to add timeseries for.
+
+    Other Parameters
+    -----------------
+    ts_active_power: :pandas:`pandas.DataFrame<DataFrame>`
+        Active power time series in MW.
+    ts_reactive_power: :pandas:`pandas.DataFrame<DataFrame>`
+        Reactive power time series in MW.
+
+    """
     # TODO: only provision of time series is implemented, worst_case etc.
     #  is missing
     ts_active_power = kwargs.get(
