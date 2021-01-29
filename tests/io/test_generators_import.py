@@ -488,8 +488,8 @@ class TestGeneratorsImport:
         assert self.edisgo.topology.charging_points_df.at[
                    comp_name, "number"] == 2
 
-        # test voltage level 7 - use case public (connected to agricultural
-        # load)
+        # test voltage level 7 - use case public (connected somewhere in the
+        # LV grid (to bus not in_building))
 
         lines_before = self.edisgo.topology.lines_df
         buses_before = self.edisgo.topology.buses_df
@@ -518,7 +518,7 @@ class TestGeneratorsImport:
 
         # check bus
         bus = self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
-        assert bus == "Bus_secondary_LVStation_3"
+        assert bus == "Bus_Load_residential_LVGrid_3_4"
         assert self.edisgo.topology.buses_df.at[
                    bus, "lv_grid_id"] == 3
         # check new charging point

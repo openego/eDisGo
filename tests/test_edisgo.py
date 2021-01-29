@@ -103,7 +103,7 @@ class TestEDisGo:
             atol=1e-5).all())
         assert(np.isclose(
             self.edisgo.results.v_res.loc[
-                self.timesteps, 'virtual_Bus_primary_LVStation_4'].values,
+                self.timesteps, 'virtual_BusBar_MVGrid_1_LVGrid_4_MV'].values,
             np.array([1.00630, 0.99929]),
             atol=1e-5).all())
         assert (np.isclose(
@@ -208,7 +208,7 @@ class TestEDisGo:
         slack_df = pypsa_network.generators[
             pypsa_network.generators.control == 'Slack']
         assert len(slack_df) == 1
-        assert slack_df.bus.values[0] == 'Bus_secondary_LVStation_2'
+        assert slack_df.bus.values[0] == 'BusBar_MVGrid_1_LVGrid_2_LV'
         # test exception
         msg = "For exporting lv grids, name of lv_grid has to be provided."
         with pytest.raises(ValueError, match=msg):
@@ -218,18 +218,25 @@ class TestEDisGo:
 
         # add charging points to LVGrid
         cp1 = self.edisgo.add_component(
-            "ChargingPoint", bus='Bus_secondary_LVStation_2', p_nom=0.005,
+            comp_type="ChargingPoint",
             ts_active_power=pd.Series(data=np.array([0.01, 0.02]),
                                       index=self.timesteps),
             ts_reactive_power=pd.Series(data=np.array([0.04, 0.03]),
-                                    index=self.timesteps)
+                                        index=self.timesteps),
+            bus='BusBar_MVGrid_1_LVGrid_2_LV',
+            p_nom=0.005,
+            use_case="work"
         )
         cp2 = self.edisgo.add_component(
-            "ChargingPoint", bus='Bus_secondary_LVStation_2', p_nom=0.005,
+            comp_type="ChargingPoint",
             ts_active_power=pd.Series(data=np.array([0.05, 0.06]),
                                       index=self.timesteps),
             ts_reactive_power=pd.Series(data=np.array([0.08, 0.07]),
-                                    index=self.timesteps))
+                                        index=self.timesteps),
+            bus='BusBar_MVGrid_1_LVGrid_2_LV',
+            p_nom=0.005,
+            use_case="work"
+        )
         # set charging points timeseries
         # Todo: Check timeseries (has to be moved to add component)
         # active_power = pd.DataFrame(data=np.array([[1, 2], [4, 3]]),

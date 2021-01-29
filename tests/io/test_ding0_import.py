@@ -63,7 +63,7 @@ class TestImportFromDing0:
 
     def test_validate_ding0_grid_import(self):
         """Test of validation of grids."""
-        comps_dict = {'buses': 'Bus_primary_LVStation_2',
+        comps_dict = {'buses': 'BusBar_MVGrid_1_LVGrid_2_MV',
                       'generators': 'GeneratorFluctuating_14',
                       'loads': 'Load_residential_LVGrid_3_2',
                       'transformers': 'LVStation_5_transformer_1',

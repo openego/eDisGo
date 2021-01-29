@@ -94,7 +94,7 @@ class TestTools:
                                         'Bus_Load_agricultural_LVGrid_1_1')
         assert not \
             tools.check_bus_for_removal(self.topology,
-                                        'Bus_primary_LVStation_7')
+                                        'BusBar_MVGrid_1_LVGrid_7_MV')
         assert not \
             tools.check_bus_for_removal(self.topology,
                                         'Bus_BranchTee_MVGrid_1_3')

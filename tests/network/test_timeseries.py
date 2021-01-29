@@ -700,7 +700,7 @@ class Testget_component_timeseries:
             bus='Bus_BranchTee_LVGrid_1_13', p_nom=p_nom2)
         p_nom3 = 3.12
         storage_name3 = self.topology.add_storage_unit(
-            bus='Bus_primary_LVStation_6', p_nom=p_nom3)
+            bus='BusBar_MVGrid_1_LVGrid_6_MV', p_nom=p_nom3)
         timeseries.add_storage_units_timeseries(self,
                                                 [storage_name2, storage_name3])
         assert (self.timeseries.storage_units_active_power.shape ==
@@ -764,7 +764,7 @@ class Testget_component_timeseries:
             bus='Bus_BranchTee_LVGrid_1_13', p_nom=p_nom2)
         p_nom3 = 3.12
         storage_name3 = self.topology.add_storage_unit(
-            bus='Bus_primary_LVStation_6', p_nom=p_nom3)
+            bus='BusBar_MVGrid_1_LVGrid_6_MV', p_nom=p_nom3)
 
         new_storages_active_power = pd.DataFrame(
             index=timeindex, columns=[storage_name2, storage_name3],
@@ -841,7 +841,7 @@ class Testget_component_timeseries:
             bus='Bus_BranchTee_LVGrid_1_13', p_nom=p_nom2)
         p_nom3 = 3.12
         storage_name3 = self.topology.add_storage_unit(
-            bus='Bus_primary_LVStation_6', p_nom=p_nom3)
+            bus='BusBar_MVGrid_1_LVGrid_6_MV', p_nom=p_nom3)
 
         timeseries.add_storage_units_timeseries(self,
             [storage_name2, storage_name3],
