@@ -8,8 +8,8 @@ from workalendar.europe import Germany
 from demandlib import bdew as bdew, particular_profiles as profiles
 
 from edisgo.io.timeseries_import import import_feedin_timeseries
-from edisgo.tools.tools import drop_duplicated_indices, \
-    assign_voltage_level_to_component
+from edisgo.tools.tools import assign_voltage_level_to_component,\
+    drop_duplicated_columns
 
 logger = logging.getLogger("edisgo")
 
@@ -804,29 +804,35 @@ def _load_from_timeseries(edisgo_obj, load_names=None):
         edisgo_obj=edisgo_obj, comp_type="loads", comp_names=load_names
     )
     # set active power
-    edisgo_obj.timeseries.loads_active_power = edisgo_obj.timeseries.loads_active_power.T.append(
-        loads.apply(
-            lambda x: edisgo_obj.timeseries.load[x.sector]
-            * x.annual_consumption
-            if x.sector in edisgo_obj.timeseries.load.columns
-            else edisgo_obj.timeseries.load['other']
-            * x.annual_consumption,
-            axis=1,
-        )
-    ).T
+    edisgo_obj.timeseries.loads_active_power = pd.concat(
+        [edisgo_obj.timeseries.loads_active_power,
+         loads.apply(
+             lambda x: edisgo_obj.timeseries.load[x.sector]
+             * x.annual_consumption
+             if x.sector in edisgo_obj.timeseries.load.columns
+             else edisgo_obj.timeseries.load['other']
+             * x.annual_consumption,
+             axis=1).T
+         ],
+        axis=1
+    )
 
     # if reactive power is given as attribute set with inserted timeseries
     if hasattr(edisgo_obj.timeseries, "load_reactive_power"):
-        edisgo_obj.timeseries.loads_reactive_power = edisgo_obj.timeseries.loads_reactive_power.T.append(
-            loads.apply(
-                lambda x: edisgo_obj.timeseries.load_reactive_power[x.sector]
-                * x.annual_consumption
-                if x.sector in edisgo_obj.timeseries.load_reactive_power.columns
-                else edisgo_obj.timeseries.load_reactive_power['other']
-                * x.annual_consumption,
-                axis=1,
-            )
-        ).T
+        edisgo_obj.timeseries.loads_reactive_power = pd.concat(
+            [edisgo_obj.timeseries.loads_reactive_power,
+             loads.apply(
+                 lambda x: edisgo_obj.timeseries.load_reactive_power[x.sector]
+                 * x.annual_consumption
+                 if x.sector in
+                    edisgo_obj.timeseries.load_reactive_power.columns
+                 else edisgo_obj.timeseries.load_reactive_power['other']
+                 * x.annual_consumption,
+                 axis=1
+             )
+             ],
+            axis=1
+        )
     # set default reactive load
     else:
         _set_reactive_power_time_series_for_fixed_cosphi_using_config(
@@ -859,10 +865,10 @@ def _generation_from_timeseries(edisgo_obj, generator_names=None):
 
     def _timeseries_dispatchable():
         return gens_dispatchable.apply(
-            lambda x: edisgo_obj.timeseries.generation_dispatchable[x.type].T
+            lambda x: edisgo_obj.timeseries.generation_dispatchable[x.type]
             * x.p_nom
             if x.type in edisgo_obj.timeseries.generation_dispatchable.columns
-            else edisgo_obj.timeseries.generation_dispatchable["other"].T
+            else edisgo_obj.timeseries.generation_dispatchable["other"]
             * x.p_nom,
             axis=1,
         ).T
@@ -908,11 +914,12 @@ def _generation_from_timeseries(edisgo_obj, generator_names=None):
         ).all()
     ):
 
-        edisgo_obj.timeseries.generators_reactive_power = edisgo_obj.timeseries.generators_reactive_power.T.append(
-            edisgo_obj.timeseries.generation_reactive_power.loc[
-                :, gens.index
-            ].T
-        ).T
+        edisgo_obj.timeseries.generators_reactive_power = pd.concat(
+            [edisgo_obj.timeseries.generators_reactive_power,
+             edisgo_obj.timeseries.generation_reactive_power.loc[:, gens.index]
+             ],
+            axis=1
+        )
     # set default reactive power by cos_phi
     else:
         logger.debug("Reactive power calculated by cos(phi).")
@@ -972,11 +979,14 @@ def _storage_from_timeseries(
             if (
                 ts_active_power.index == edisgo_obj.timeseries.timeindex
             ).all():
-                edisgo_obj.timeseries.storage_units_active_power = drop_duplicated_indices(
-                    edisgo_obj.timeseries.storage_units_active_power.T.append(
-                        ts_active_power.loc[:, name_storage_units].T
+                edisgo_obj.timeseries.storage_units_active_power = drop_duplicated_columns(
+                    pd.concat(
+                        [edisgo_obj.timeseries.storage_units_active_power,
+                         ts_active_power.loc[:, name_storage_units]
+                         ],
+                        axis=1
                     )
-                ).T
+                )
                 # check if reactive power is given
                 if (
                     ts_reactive_power is not None
@@ -985,11 +995,14 @@ def _storage_from_timeseries(
                         == edisgo_obj.timeseries.timeindex
                     ).all()
                 ):
-                    edisgo_obj.timeseries.storage_units_reactive_power = drop_duplicated_indices(
-                        edisgo_obj.timeseries.storage_units_reactive_power.T.append(
-                            ts_reactive_power.loc[:, name_storage_units].T
+                    edisgo_obj.timeseries.storage_units_reactive_power = drop_duplicated_columns(
+                        pd.concat(
+                            [edisgo_obj.timeseries.storage_units_reactive_power,
+                             ts_reactive_power.loc[:, name_storage_units]
+                             ],
+                            axis=1
                         )
-                    ).T
+                    )
                 else:
                     _set_reactive_power_time_series_for_fixed_cosphi_using_config(
                         edisgo_obj=edisgo_obj,
@@ -1098,9 +1111,11 @@ def _worst_case_generation(edisgo_obj, modes, generator_names=None):
     )
 
     # multiply normalized time series by nominal power of generator
-    edisgo_obj.timeseries.generators_active_power = edisgo_obj.timeseries.generators_active_power.T.append(
-        gen_ts.mul(gens_df.p_nom).T
-    ).T
+    edisgo_obj.timeseries.generators_active_power = pd.concat(
+        [edisgo_obj.timeseries.generators_active_power,
+         gen_ts.mul(gens_df.p_nom)],
+        axis=1
+    )
 
     # calculate reactive power
     _set_reactive_power_time_series_for_fixed_cosphi_using_config(
@@ -1186,9 +1201,12 @@ def _worst_case_load(edisgo_obj, modes, load_names=None):
     )
 
     # calculate active power of loads
-    edisgo_obj.timeseries.loads_active_power = edisgo_obj.timeseries.loads_active_power.T.append(
-        (power_scaling_df * loads_df.loc[:, "peak_load"]).T, sort=False
-    ).T
+    edisgo_obj.timeseries.loads_active_power = pd.concat(
+        [edisgo_obj.timeseries.loads_active_power,
+         (power_scaling_df * loads_df.loc[:, "peak_load"])
+         ],
+        axis=1
+    )
 
     _set_reactive_power_time_series_for_fixed_cosphi_using_config(
         edisgo_obj=edisgo_obj,
@@ -1255,13 +1273,16 @@ def _worst_case_storage(edisgo_obj, modes, storage_names=None):
             index=edisgo_obj.timeseries.timeindex,
             columns=storage_df.index,
         )
-
-        edisgo_obj.timeseries.storage_units_active_power = drop_duplicated_indices(
-            edisgo_obj.timeseries.storage_units_active_power.T.append(
-                (worst_case_ts * edisgo_obj.topology.storage_units_df.p_nom).T
+        # ToDo
+        edisgo_obj.timeseries.storage_units_active_power = drop_duplicated_columns(
+            pd.concat(
+                [edisgo_obj.timeseries.storage_units_active_power,
+                (worst_case_ts * storage_df.p_nom)
+                 ],
+                axis=1
             ),
             keep="last",
-        ).T
+        )
 
         _set_reactive_power_time_series_for_fixed_cosphi_using_config(
             edisgo_obj=edisgo_obj,
@@ -1356,12 +1377,18 @@ def add_loads_timeseries(edisgo_obj, load_names, **kwargs):
                 edisgo_obj=edisgo_obj, comp_type="loads", comp_names=load_names
             )
             # add new load timeseries
-            edisgo_obj.timeseries.loads_active_power = edisgo_obj.timeseries.loads_active_power.T.append(
-                loads_active_power.T.loc[load_names]
-            ).T
-            edisgo_obj.timeseries.loads_reactive_power = edisgo_obj.timeseries.loads_reactive_power.T.append(
-                loads_reactive_power.T.loc[load_names]
-            ).T
+            edisgo_obj.timeseries.loads_active_power = pd.concat(
+                [edisgo_obj.timeseries.loads_active_power,
+                 loads_active_power.loc[:, load_names]
+                 ],
+                axis=1
+            )
+            edisgo_obj.timeseries.loads_reactive_power = pd.concat(
+                [edisgo_obj.timeseries.loads_reactive_power,
+                 loads_reactive_power.loc[:, load_names]
+                 ],
+                axis=1
+            )
         else:
             raise ValueError(
                 "{} is not a valid mode.".format(edisgo_obj.timeseries.mode)
@@ -1434,12 +1461,18 @@ def add_generators_timeseries(edisgo_obj, generator_names, **kwargs):
                 edisgo_obj, "generators", generator_names
             )
             # add new timeseries
-            edisgo_obj.timeseries.generators_active_power = edisgo_obj.timeseries.generators_active_power.T.append(
-                gens_active_power.T.loc[generator_names]
-            ).T
-            edisgo_obj.timeseries.generators_reactive_power = edisgo_obj.timeseries.generators_reactive_power.T.append(
-                gens_reactive_power.T.loc[generator_names]
-            ).T
+            edisgo_obj.timeseries.generators_active_power = pd.concat(
+                [edisgo_obj.timeseries.generators_active_power,
+                 gens_active_power.loc[:, generator_names]
+                 ],
+                axis=1
+            )
+            edisgo_obj.timeseries.generators_reactive_power = pd.concat(
+                [edisgo_obj.timeseries.generators_reactive_power,
+                 gens_reactive_power.loc[:, generator_names]
+                 ],
+                axis=1
+            )
         else:
             raise ValueError(
                 "{} is not a valid mode.".format(edisgo_obj.timeseries.mode)
@@ -1450,24 +1483,30 @@ def add_generators_timeseries(edisgo_obj, generator_names, **kwargs):
         )
         if ts_dispatchable is not None:
             if hasattr(edisgo_obj.timeseries, "generation_dispatchable"):
-                edisgo_obj.timeseries.generation_dispatchable = drop_duplicated_indices(
-                    edisgo_obj.timeseries.generation_dispatchable.T.append(
-                        ts_dispatchable.T
+                edisgo_obj.timeseries.generation_dispatchable = drop_duplicated_columns(
+                    pd.concat(
+                        [edisgo_obj.timeseries.generation_dispatchable,
+                         ts_dispatchable
+                         ],
+                        axis=1
                     ),
                     keep="last",
-                ).T
+                )
             else:
                 edisgo_obj.timeseries.generation_dispatchable = ts_dispatchable
 
         ts_reactive_power = kwargs.get("generation_reactive_power", None)
         if ts_reactive_power is not None:
             if hasattr(edisgo_obj.timeseries, "generation_reactive_power"):
-                edisgo_obj.timeseries.generation_reactive_power = drop_duplicated_indices(
-                    edisgo_obj.timeseries.generation_reactive_power.T.append(
-                        ts_reactive_power.T
+                edisgo_obj.timeseries.generation_reactive_power = drop_duplicated_columns(
+                    pd.concat(
+                        [edisgo_obj.timeseries.generation_reactive_power,
+                         ts_reactive_power
+                         ],
+                        axis=1
                     ),
                     keep="last",
-                ).T
+                )
             else:
                 edisgo_obj.timeseries.generation_reactive_power = (
                     ts_reactive_power
@@ -1591,12 +1630,18 @@ def add_storage_units_timeseries(edisgo_obj, storage_unit_names, **kwargs):
                 edisgo_obj, "storage_units", storage_unit_names
             )
             # add new storage timeseries
-            edisgo_obj.timeseries.storage_units_active_power = edisgo_obj.timeseries.storage_units_active_power.T.append(
-                storage_units_active_power.T.loc[storage_unit_names]
-            ).T
-            edisgo_obj.timeseries.storage_units_reactive_power = edisgo_obj.timeseries.storage_units_reactive_power.T.append(
-                storage_units_reactive_power.T.loc[storage_unit_names]
-            ).T
+            edisgo_obj.timeseries.storage_units_active_power = pd.concat(
+                [edisgo_obj.timeseries.storage_units_active_power,
+                 storage_units_active_power.loc[:, storage_unit_names]
+                 ],
+                axis=1
+            )
+            edisgo_obj.timeseries.storage_units_reactive_power = pd.concat(
+                [edisgo_obj.timeseries.storage_units_reactive_power,
+                 storage_units_reactive_power.loc[:, storage_unit_names]
+                 ],
+                axis=1
+            )
         else:
             raise ValueError(
                 "{} is not a valid mode.".format(edisgo_obj.timeseries.mode)
@@ -1996,18 +2041,20 @@ def _set_reactive_power_time_series_for_fixed_cosphi_using_config(
             ]
 
     # calculate reactive power time series and append to TimeSeries object
-    reactive_power_df = pd.concat(
-        [getattr(edisgo_obj.timeseries,
-                 component_type + "_reactive_power"),
-         fixed_cosphi(
-             getattr(edisgo_obj.timeseries,
-                     component_type + "_active_power").loc[:, df.index],
-             q_sign,
-             power_factor
-         )],
-        axis=1,
-        sort=False
-      )
+    reactive_power_df = drop_duplicated_columns(
+        pd.concat(
+            [getattr(edisgo_obj.timeseries,
+                     component_type + "_reactive_power"),
+             fixed_cosphi(
+                 getattr(edisgo_obj.timeseries,
+                         component_type + "_active_power").loc[:, df.index],
+                 q_sign,
+                 power_factor
+             )],
+            axis=1
+        ),
+        keep="last"
+    )
 
     setattr(
         edisgo_obj.timeseries,

@@ -264,6 +264,24 @@ def drop_duplicated_indices(dataframe, keep="first"):
     return dataframe[~dataframe.index.duplicated(keep=keep)]
 
 
+def drop_duplicated_columns(df, keep="first"):
+    """
+    Drop columns of dataframe that appear more than once.
+
+    Parameters
+    ----------
+    df : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe of which columns are dropped.
+    keep : str
+        Indicator of whether to keep first ('first'), last ('last') or
+        none (False) of the duplicated columns.
+        See `drop_duplicates()` method of
+        :pandas:`pandas.DataFrame<DataFrame>`.
+
+    """
+    return df.loc[:, ~df.columns.duplicated(keep=keep)]
+
+
 def select_cable(edisgo_obj, level, apparent_power):
     """Selects an appropriate cable type and quantity using given apparent
     power.

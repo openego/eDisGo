@@ -314,14 +314,14 @@ def to_pypsa(grid_object, timesteps, **kwargs):
                 aggregated_lv_components["Load"],
             )
         else:
-            loads_timeseries_active = \
-                edisgo_obj.timeseries.loads_active_power.T.append(
-                    edisgo_obj.timeseries.charging_points_active_power.T).T.loc[
-                    timesteps, components["Load"].index]
-            loads_timeseries_reactive = \
-                edisgo_obj.timeseries.loads_reactive_power.T.append(
-                    edisgo_obj.timeseries.charging_points_reactive_power.T).T.loc[
-                    timesteps, components["Load"].index]
+            loads_timeseries_active = pd.concat(
+                [edisgo_obj.timeseries.loads_active_power,
+                 edisgo_obj.timeseries.charging_points_active_power
+                 ], axis=1).loc[timesteps, components["Load"].index]
+            loads_timeseries_reactive = pd.concat(
+                [edisgo_obj.timeseries.loads_reactive_power,
+                 edisgo_obj.timeseries.charging_points_reactive_power
+                 ], axis=1).loc[timesteps, components["Load"].index]
         import_series_from_dataframe(
             pypsa_network, loads_timeseries_active, "Load", "p_set"
         )
@@ -615,12 +615,14 @@ def _get_timeseries_with_aggregated_elements(
     elements_timeseries_active_all = pd.DataFrame()
     elements_timeseries_reactive_all = pd.DataFrame()
     for element_type in element_types:
-        elements_timeseries_active_all = elements_timeseries_active_all.T.append(
-            getattr(edisgo_obj.timeseries, element_type + "_active_power").T
-        ).T
-        elements_timeseries_reactive_all = elements_timeseries_reactive_all.T.append(
-            getattr(edisgo_obj.timeseries, element_type + "_reactive_power").T
-        ).T
+        elements_timeseries_active_all = pd.concat(
+            [elements_timeseries_active_all,
+             getattr(edisgo_obj.timeseries, element_type + "_active_power")],
+            axis=1)
+        elements_timeseries_reactive_all = pd.concat(
+            [elements_timeseries_reactive_all,
+             getattr(edisgo_obj.timeseries, element_type + "_reactive_power")],
+            axis=1)
     # handle not aggregated elements
     non_aggregated_elements = elements[~elements.isin(aggr_dict.keys())]
     # get timeseries for non aggregated elements
