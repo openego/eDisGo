@@ -1432,6 +1432,22 @@ def connect_mv_node(edisgo_object, bus, target_obj):
                     target_obj["repr"], :
                     ]
 
+        # if line that is split is connected to switch, the line name needs
+        # to be adapted in the switch information
+        if line_data.name in edisgo_object.topology.switches_df.branch.values:
+            # get switch
+            switch_data = edisgo_object.topology.switches_df[
+                edisgo_object.topology.switches_df.branch ==
+                line_data.name].iloc[0]
+            # get bus to which the new line will be connected
+            switch_bus = (switch_data.bus_open
+                          if switch_data.bus_open
+                             in line_data.loc[["bus0", "bus1"]].values
+                          else switch_data.bus_closed
+                          )
+        else:
+            switch_bus = None
+
         # find nearest point on MV line
         conn_point_shp = target_obj["shp"].interpolate(
             target_obj["shp"].project(bus_shp)
@@ -1462,6 +1478,11 @@ def connect_mv_node(edisgo_object, bus, target_obj):
             kind=line_data.kind,
             type_info=line_data.type_info,
         )
+        # if line connected to switch was split, write new line name to
+        # switch data
+        if switch_bus and switch_bus == line_data.bus0:
+            edisgo_object.topology.switches_df.loc[
+                switch_data.name, "branch"] = line_name_bus0
         # add line to equipment changes
         add_line_to_equipment_changes(
             edisgo_object=edisgo_object,
@@ -1481,6 +1502,11 @@ def connect_mv_node(edisgo_object, bus, target_obj):
             kind=line_data.kind,
             type_info=line_data.type_info,
         )
+        # if line connected to switch was split, write new line name to
+        # switch data
+        if switch_bus and switch_bus == line_data.bus1:
+            edisgo_object.topology.switches_df.loc[
+                switch_data.name, "branch"] = line_name_bus1
         # add line to equipment changes
         add_line_to_equipment_changes(
             edisgo_object=edisgo_object,
