@@ -193,9 +193,9 @@ def oedb(edisgo_object, **kwargs):
         cap_diff_threshold = 10 ** -1
 
         capacity_imported = (
-                generators_res_mv["p_nom"].sum()
-                + generators_res_lv["p_nom"].sum()
-        ) + generators_conv_mv['p_nom'].sum()
+                                    generators_res_mv["p_nom"].sum()
+                                    + generators_res_lv["p_nom"].sum()
+                            ) + generators_conv_mv['p_nom'].sum()
 
         capacity_grid = edisgo_object.topology.generators_df.p_nom.sum()
 
@@ -278,9 +278,9 @@ def oedb(edisgo_object, **kwargs):
                 "conv_generators_suffix"]
     )
     orm_re_generators_name = (
-        edisgo_object.config[oedb_data_source]["re_generators_prefix"]
-        + scenario
-        + edisgo_object.config[oedb_data_source]["re_generators_suffix"]
+            edisgo_object.config[oedb_data_source]["re_generators_prefix"]
+            + scenario
+            + edisgo_object.config[oedb_data_source]["re_generators_suffix"]
     )
 
     if oedb_data_source == "model_draft":
@@ -307,10 +307,10 @@ def oedb(edisgo_object, **kwargs):
 
         # set version condition
         orm_conv_generators_version = (
-            orm_conv_generators.columns.version == data_version
+                orm_conv_generators.columns.version == data_version
         )
         orm_re_generators_version = (
-            orm_re_generators.columns.version == data_version
+                orm_re_generators.columns.version == data_version
         )
 
     # get conventional and renewable generators
@@ -540,6 +540,7 @@ def connect_to_lv(edisgo_object, comp_data, comp_type="Generator",
     predefined seed to ensure reproducibility.
 
     """
+
     def _connect_to_station():
         """
         Connects new component to substation via an own bus.
@@ -774,9 +775,9 @@ def connect_to_lv(edisgo_object, comp_data, comp_type="Generator",
                     )
                     branch_tee_in_building = neighbours[0]
                     if len(neighbours) > 1 or np.logical_not(
-                        edisgo_object.topology.buses_df.at[
-                            branch_tee_in_building, "in_building"
-                        ]
+                            edisgo_object.topology.buses_df.at[
+                                branch_tee_in_building, "in_building"
+                            ]
                     ):
                         raise ValueError(
                             "Expected neighbour to be branch tee in building."
@@ -829,13 +830,13 @@ def connect_to_lv(edisgo_object, comp_data, comp_type="Generator",
 
 
 def update_grids(
-    edisgo_object,
-    imported_generators_mv,
-    imported_generators_lv,
-    remove_missing=True,
-    update_existing=True,
-    p_target=None,
-    allowed_number_of_comp_per_lv_bus=2
+        edisgo_object,
+        imported_generators_mv,
+        imported_generators_lv,
+        remove_missing=True,
+        update_existing=True,
+        p_target=None,
+        allowed_number_of_comp_per_lv_bus=2
 ):
     """
     Update network according to new generator dataset.
@@ -967,14 +968,14 @@ def update_grids(
         # calculate capacity difference between existing and imported
         # generators
         gens_to_update["cap_diff"] = (
-            imported_gens.loc[gens_to_update.id, "p_nom"].values
-            - gens_to_update.p_nom
+                imported_gens.loc[gens_to_update.id, "p_nom"].values
+                - gens_to_update.p_nom
         )
         # in case there are generators whose capacity does not match, update
         # their capacity
         gens_to_update_cap = gens_to_update[
             abs(gens_to_update.cap_diff) > cap_diff_threshold
-        ]
+            ]
 
         for id, row in gens_to_update_cap.iterrows():
             edisgo_object.topology._generators_df.loc[
@@ -1027,12 +1028,15 @@ def update_grids(
             def drop_generators(generator_list, gen_type, total_capacity):
                 random.seed(42)
                 while (generator_list[
-                           generator_list['generator_type'] == gen_type].p_nom.sum() > total_capacity and
-                       len(generator_list[generator_list['generator_type'] == gen_type]) > 0):
+                           generator_list[
+                               'generator_type'] == gen_type].p_nom.sum() > total_capacity and
+                       len(generator_list[generator_list[
+                                              'generator_type'] == gen_type]) > 0):
                     generator_list.drop(
                         random.choice(
                             generator_list[
-                                generator_list['generator_type'] == gen_type].index),
+                                generator_list[
+                                    'generator_type'] == gen_type].index),
                         inplace=True)
 
             for gen_type in p_target.keys():
@@ -1048,16 +1052,18 @@ def update_grids(
                 target_capacity = p_target[gen_type]
                 # Amount of required expansion
                 required_expansion = (
-                            target_capacity - existing_capacity)
+                        target_capacity - existing_capacity)
 
                 # No generators to be expanded
                 if imported_gens[
-                    imported_gens['generator_type'] == gen_type].p_nom.sum() == 0:
+                    imported_gens[
+                        'generator_type'] == gen_type].p_nom.sum() == 0:
                     continue
                 # Reduction in capacity over status quo, so skip all expansion
                 if required_expansion <= 0:
                     imported_gens.drop(
-                        imported_gens[imported_gens['generator_type'] == gen_type].index,
+                        imported_gens[
+                            imported_gens['generator_type'] == gen_type].index,
                         inplace=True)
                     continue
                 # More expansion than in NEP2035 required, keep all generators
@@ -1116,10 +1122,10 @@ def update_grids(
     if not imported_generators_lv.empty:
         grid_ids = [_.id for _ in edisgo_object.topology._grids.values()]
         if not any(
-            [
-                _ in grid_ids
-                for _ in list(imported_generators_lv["mvlv_subst_id"])
-            ]
+                [
+                    _ in grid_ids
+                    for _ in list(imported_generators_lv["mvlv_subst_id"])
+                ]
         ):
             logger.warning(
                 "None of the imported LV generators can be allocated "
@@ -1137,9 +1143,11 @@ def update_grids(
 
     def scale_generators(gen_type, total_capacity):
         idx = edisgo_object.topology.generators_df['type'] == gen_type
-        current_capacity = edisgo_object.topology.generators_df[idx].p_nom.sum()
+        current_capacity = edisgo_object.topology.generators_df[
+            idx].p_nom.sum()
         if current_capacity != 0:
-            edisgo_object.topology.generators_df.loc[idx, 'p_nom'] *= total_capacity/current_capacity
+            edisgo_object.topology.generators_df.loc[
+                idx, 'p_nom'] *= total_capacity / current_capacity
 
     if p_target is not None:
         for gen_type, target_cap in p_target.items():
@@ -1158,7 +1166,7 @@ def update_grids(
         lv_gens_voltage_level_7 = len(
             lv_grid.generators_df[
                 lv_grid.generators_df.bus != lv_grid.station.index[0]
-            ]
+                ]
         )
         # warn if there are more generators than loads in LV grid
         if lv_gens_voltage_level_7 > lv_loads * 2:
@@ -1340,22 +1348,22 @@ def find_nearest_conn_objects(edisgo_object, bus, lines):
         # close to the bus (necessary to assure that connection target is
         # reproducible)
         if (
-            abs(conn_objects["s1"]["dist"] - conn_objects["b"]["dist"])
-            < conn_diff_tolerance
-            or abs(conn_objects["s2"]["dist"] - conn_objects["b"]["dist"])
-            < conn_diff_tolerance
+                abs(conn_objects["s1"]["dist"] - conn_objects["b"]["dist"])
+                < conn_diff_tolerance
+                or abs(conn_objects["s2"]["dist"] - conn_objects["b"]["dist"])
+                < conn_diff_tolerance
         ):
             del conn_objects["b"]
 
         # remove MV station as possible connection point
         if (
-            conn_objects["s1"]["repr"]
-            == edisgo_object.topology.mv_grid.station.index[0]
+                conn_objects["s1"]["repr"]
+                == edisgo_object.topology.mv_grid.station.index[0]
         ):
             del conn_objects["s1"]
         elif (
-            conn_objects["s2"]["repr"]
-            == edisgo_object.topology.mv_grid.station.index[0]
+                conn_objects["s2"]["repr"]
+                == edisgo_object.topology.mv_grid.station.index[0]
         ):
             del conn_objects["s2"]
 
@@ -1421,8 +1429,8 @@ def connect_mv_node(edisgo_object, bus, target_obj):
     if isinstance(target_obj["shp"], LineString):
 
         line_data = edisgo_object.topology.lines_df.loc[
-            target_obj["repr"], :
-        ]
+                    target_obj["repr"], :
+                    ]
 
         # find nearest point on MV line
         conn_point_shp = target_obj["shp"].interpolate(
@@ -1447,7 +1455,6 @@ def connect_mv_node(edisgo_object, bus, target_obj):
             bus_source=line_data.bus0,
             bus_target=branch_tee_repr,
         )
-
         line_name_bus0 = edisgo_object.topology.add_line(
             bus0=branch_tee_repr,
             bus1=line_data.bus0,
@@ -1455,9 +1462,7 @@ def connect_mv_node(edisgo_object, bus, target_obj):
             kind=line_data.kind,
             type_info=line_data.type_info,
         )
-
         # add line to equipment changes
-        # ToDo @Anya?
         add_line_to_equipment_changes(
             edisgo_object=edisgo_object,
             line=edisgo_object.topology.lines_df.loc[line_name_bus0, :],
@@ -1469,7 +1474,6 @@ def connect_mv_node(edisgo_object, bus, target_obj):
             bus_source=line_data.bus1,
             bus_target=branch_tee_repr,
         )
-
         line_name_bus1 = edisgo_object.topology.add_line(
             bus0=branch_tee_repr,
             bus1=line_data.bus1,
@@ -1477,7 +1481,6 @@ def connect_mv_node(edisgo_object, bus, target_obj):
             kind=line_data.kind,
             type_info=line_data.type_info,
         )
-
         # add line to equipment changes
         add_line_to_equipment_changes(
             edisgo_object=edisgo_object,
@@ -1490,7 +1493,6 @@ def connect_mv_node(edisgo_object, bus, target_obj):
             bus_source=bus.name,
             bus_target=branch_tee_repr,
         )
-
         new_line_name = edisgo_object.topology.add_line(
             bus0=branch_tee_repr,
             bus1=bus.name,
@@ -1498,7 +1500,6 @@ def connect_mv_node(edisgo_object, bus, target_obj):
             kind=std_line_kind,
             type_info=std_line_type.name,
         )
-
         # add line to equipment changes
         add_line_to_equipment_changes(
             edisgo_object=edisgo_object,
@@ -1507,7 +1508,6 @@ def connect_mv_node(edisgo_object, bus, target_obj):
 
         # remove old line from topology and equipment changes
         edisgo_object.topology.remove_line(line_data.name)
-
         del_line_from_equipment_changes(
             edisgo_object=edisgo_object, line_repr=line_data.name
         )
@@ -1539,8 +1539,3 @@ def connect_mv_node(edisgo_object, bus, target_obj):
         )
 
         return target_obj["repr"]
-
-
-
-
-
