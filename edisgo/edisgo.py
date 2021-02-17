@@ -673,31 +673,36 @@ class EDisGo:
             self.topology.loads_df = loads_df_grouped.set_index("name")
             # set up new loads time series
             groups = loads_groupby.groups
+            ts_active = pd.concat([
+                self.timeseries.loads_active_power,
+                self.timeseries.charging_points_active_power],
+                axis=1)
+            ts_reactive = pd.concat([
+                self.timeseries.loads_reactive_power,
+                self.timeseries.charging_points_reactive_power],
+                axis=1)
             if isinstance(list(groups.keys())[0], tuple):
+
                 self.timeseries.loads_active_power = pd.concat(
                     [pd.DataFrame(
                         {naming.format("_".join(k)):
-                             self.timeseries.loads_active_power.loc[
-                             :, v].sum(axis=1)})
+                             ts_active.loc[:, v].sum(axis=1)})
                         for k, v in groups.items()], axis=1)
                 self.timeseries.loads_reactive_power = pd.concat(
                     [pd.DataFrame(
                         {naming.format("_".join(k)):
-                             self.timeseries.loads_reactive_power.loc[
-                             :, v].sum(axis=1)})
+                             ts_reactive.loc[:, v].sum(axis=1)})
                         for k, v in groups.items()], axis=1)
             else:
                 self.timeseries.loads_active_power = pd.concat(
                     [pd.DataFrame(
                         {naming.format(k):
-                             self.timeseries.loads_active_power.loc[
-                             :, v].sum(axis=1)})
+                             ts_active.loc[:, v].sum(axis=1)})
                         for k, v in groups.items()], axis=1)
                 self.timeseries.loads_reactive_power = pd.concat(
                     [pd.DataFrame(
                         {naming.format(k):
-                             self.timeseries.loads_reactive_power.loc[
-                             :, v].sum(axis=1)})
+                             ts_reactive.loc[:, v].sum(axis=1)})
                         for k, v in groups.items()], axis=1)
             # overwrite charging points
             self.topology.charging_points_df = pd.DataFrame(
