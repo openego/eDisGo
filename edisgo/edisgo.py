@@ -481,6 +481,232 @@ class EDisGo:
         )
         return status
 
+    def aggregate_components(self, mode="by_component_type",
+                             aggregate_generators_by_cols=["bus"],
+                             aggregate_loads_by_cols=["bus"],
+                             aggregate_charging_points_by_cols=["bus"]):
+        """
+        Aggregates generators, loads and charging points at the same bus.
+
+        There are several options how to aggregate. By default all components
+        of the same type are aggregated separately. You can specify further
+        columns to consider in the aggregation, such as the generator type
+        or the load sector.
+
+        Be aware that by aggregating components you lose some information
+        e.g. on load sector or charging point use case.
+
+        Parameters
+        -----------
+        mode : str
+            Valid options are 'by_component_type' and 'by_load_and_generation'.
+            In case of aggregation 'by_component_type' generators, loads and
+            charging points are aggregated separately, by the respectively
+            specified columns, given in `aggregate_generators_by_cols`,
+            `aggregate_loads_by_cols`, and `aggregate_charging_points_by_cols`.
+            In case of aggregation 'by_load_and_generation', all loads and
+            charging points at the same bus are aggregated. Input in
+            `aggregate_loads_by_cols` and `aggregate_charging_points_by_cols`
+            is ignored. Generators are aggregated by the columns specified in
+            `aggregate_generators_by_cols`.
+        aggregate_generators_by_cols : list(str)
+            List of columns to aggregate generators at the same bus by. Valid
+            columns are all columns in
+            :attr:`~.network.topology.Topology.generators_df`.
+        aggregate_loads_by_cols : list(str)
+            List of columns to aggregate loads at the same bus by. Valid
+            columns are all columns in
+            :attr:`~.network.topology.Topology.loads_df`.
+        aggregate_charging_points_by_cols : list(str)
+            List of columns to aggregate charging points at the same bus by.
+            Valid columns are all columns in
+            :attr:`~.network.topology.Topology.charging_points_df`.
+
+        """
+        # aggregate generators at the same bus
+        if mode is "by_component_type" or "by_load_and_generation":
+            if not self.topology.generators_df.empty:
+                gens_groupby = self.topology.generators_df.groupby(
+                    aggregate_generators_by_cols)
+                naming = "Generators_{}"
+                # set up new generators_df
+                gens_df_grouped = gens_groupby.sum().reset_index()
+                gens_df_grouped["name"] = gens_df_grouped.apply(
+                    lambda _: naming.format(
+                        "_".join(_.loc[aggregate_generators_by_cols])),
+                    axis=1)
+                gens_df_grouped["control"] = "PQ"
+                gens_df_grouped.drop(columns=["weather_cell_id"], inplace=True)
+                self.topology.generators_df = gens_df_grouped.set_index("name")
+                # set up new generator time series
+                groups = gens_groupby.groups
+                if isinstance(list(groups.keys())[0], tuple):
+                    self.timeseries.generators_active_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format("_".join(k)):
+                                 self.timeseries.generators_active_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                    self.timeseries.generators_reactive_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format("_".join(k)):
+                                 self.timeseries.generators_reactive_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                else:
+                    self.timeseries.generators_active_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format(k):
+                                 self.timeseries.generators_active_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                    self.timeseries.generators_reactive_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format(k):
+                                 self.timeseries.generators_reactive_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+
+        # aggregate conventional loads at the same bus and charging points
+        # at the same bus separately
+        if mode is "by_component_type":
+
+            # conventional loads
+            if not self.topology.loads_df.empty:
+                loads_groupby = self.topology.loads_df.groupby(
+                    aggregate_loads_by_cols)
+                naming = "Loads_{}"
+                # set up new loads_df
+                loads_df_grouped = loads_groupby.sum().reset_index()
+                loads_df_grouped["name"] = loads_df_grouped.apply(
+                    lambda _: naming.format(
+                        "_".join(_.loc[aggregate_loads_by_cols])),
+                    axis=1)
+                self.topology.loads_df = loads_df_grouped.set_index("name")
+                # set up new loads time series
+                groups = loads_groupby.groups
+                if isinstance(list(groups.keys())[0], tuple):
+                    self.timeseries.loads_active_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format("_".join(k)):
+                                 self.timeseries.loads_active_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                    self.timeseries.loads_reactive_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format("_".join(k)):
+                                 self.timeseries.loads_reactive_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                else:
+                    self.timeseries.loads_active_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format(k):
+                                 self.timeseries.loads_active_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                    self.timeseries.loads_reactive_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format(k):
+                                 self.timeseries.loads_reactive_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+
+            # charging points
+            if not self.topology.charging_points_df.empty:
+                loads_groupby = self.topology.charging_points_df.groupby(
+                    aggregate_charging_points_by_cols)
+                naming = "Charging_points_{}"
+                # set up new charging_points_df
+                loads_df_grouped = loads_groupby.sum().reset_index()
+                loads_df_grouped["name"] = loads_df_grouped.apply(
+                    lambda _: naming.format(
+                        "_".join(_.loc[aggregate_charging_points_by_cols])),
+                    axis=1)
+                self.topology.charging_points_df = loads_df_grouped.set_index(
+                    "name")
+                # set up new charging points time series
+                groups = loads_groupby.groups
+                if isinstance(list(groups.keys())[0], tuple):
+                    self.timeseries.charging_points_active_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format("_".join(k)):
+                                 self.timeseries.charging_points_active_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                    self.timeseries.charging_points_reactive_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format("_".join(k)):
+                                 self.timeseries.charging_points_reactive_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                else:
+                    self.timeseries.charging_points_active_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format(k):
+                                 self.timeseries.charging_points_active_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                    self.timeseries.charging_points_reactive_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format(k):
+                                 self.timeseries.charging_points_reactive_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+
+        # aggregate all loads (conventional loads and charging points) at the
+        # same bus
+        elif mode is "by_load_and_generation":
+            aggregate_loads_by_cols = ["bus"]
+            loads_groupby = pd.concat(
+                [self.topology.loads_df.loc[:, ["bus", "peak_load"]],
+                 self.topology.charging_points_df.loc[
+                 :, ["bus", "p_nom"]].rename(columns={"p_nom": "peak_load"})]
+            ).groupby(aggregate_loads_by_cols)
+            naming = "Loads_{}"
+            # set up new loads_df
+            loads_df_grouped = loads_groupby.sum().reset_index()
+            loads_df_grouped["name"] = loads_df_grouped.apply(
+                lambda _: naming.format(
+                    "_".join(_.loc[aggregate_loads_by_cols])),
+                axis=1)
+            self.topology.loads_df = loads_df_grouped.set_index("name")
+            # set up new loads time series
+            groups = loads_groupby.groups
+            if isinstance(list(groups.keys())[0], tuple):
+                self.timeseries.loads_active_power = pd.concat(
+                    [pd.DataFrame(
+                        {naming.format("_".join(k)):
+                             self.timeseries.loads_active_power.loc[
+                             :, v].sum(axis=1)})
+                        for k, v in groups.items()], axis=1)
+                self.timeseries.loads_reactive_power = pd.concat(
+                    [pd.DataFrame(
+                        {naming.format("_".join(k)):
+                             self.timeseries.loads_reactive_power.loc[
+                             :, v].sum(axis=1)})
+                        for k, v in groups.items()], axis=1)
+            else:
+                self.timeseries.loads_active_power = pd.concat(
+                    [pd.DataFrame(
+                        {naming.format(k):
+                             self.timeseries.loads_active_power.loc[
+                             :, v].sum(axis=1)})
+                        for k, v in groups.items()], axis=1)
+                self.timeseries.loads_reactive_power = pd.concat(
+                    [pd.DataFrame(
+                        {naming.format(k):
+                             self.timeseries.loads_reactive_power.loc[
+                             :, v].sum(axis=1)})
+                        for k, v in groups.items()], axis=1)
+            # overwrite charging points
+            self.topology.charging_points_df = pd.DataFrame(
+                columns=["bus"])
+            self.timeseries.charging_points_active_power = pd.DataFrame(
+                index=self.timeseries.timeindex)
+            self.timeseries.charging_points_reactive_power = pd.DataFrame(
+                index=self.timeseries.timeindex)
+
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
         Plots plain MV network topology and optionally nodes by technology type
