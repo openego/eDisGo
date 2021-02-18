@@ -476,3 +476,249 @@ class TestEDisGo:
         self.edisgo.remove_component('Load', load_name)
         self.edisgo.remove_component('Generator', gen_name)
         # Todo: check if components were removed
+    def test_aggregate_components(self):
+        """Test aggregate_components method"""
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path,
+                             worst_case_analysis='worst-case')
+
+        # ##### test mode "by_component_type"
+
+        gens_p_nom_before = self.edisgo.topology.generators_df.p_nom.sum()
+        loads_p_nom_before = self.edisgo.topology.loads_df.peak_load.sum()
+        gens_feedin_before = \
+            self.edisgo.timeseries.generators_active_power.sum().sum()
+        gens_feedin_reactive_before = \
+            self.edisgo.timeseries.generators_reactive_power.sum().sum()
+        loads_demand_before = \
+            self.edisgo.timeseries.loads_active_power.sum().sum()
+        loads_demand_reactive_before = \
+            self.edisgo.timeseries.loads_reactive_power.sum().sum()
+        num_gens_before = len(self.edisgo.topology.generators_df)
+        num_loads_before = len(self.edisgo.topology.loads_df)
+
+        # test without charging points and aggregation at the same bus
+
+        # manipulate grid so that more than one generator and load is connected
+        # at the same bus
+        self.edisgo.topology._generators_df.at[
+            "GeneratorFluctuating_3", "bus"] = "Bus_GeneratorFluctuating_2"
+        self.edisgo.topology._loads_df.at[
+            "Load_residential_LVGrid_1_4", "bus"] = \
+            "Bus_Load_residential_LVGrid_1_5"
+        feedin_before = self.edisgo.timeseries.generators_active_power.loc[
+                        :, ["GeneratorFluctuating_2",
+                            "GeneratorFluctuating_3"]].sum().sum()
+        load_before = self.edisgo.timeseries.loads_active_power.loc[
+            :, ["Load_residential_LVGrid_1_5",
+                "Load_residential_LVGrid_1_4"]
+        ].sum().sum()
+
+        self.edisgo.aggregate_components()
+        # test that total p_nom/peak_load and total feed-in/demand stayed
+        # the same
+        assert(np.isclose(
+            gens_p_nom_before,
+            self.edisgo.topology.generators_df.p_nom.sum()))
+        assert (np.isclose(
+            gens_feedin_before,
+            self.edisgo.timeseries.generators_active_power.sum().sum()))
+        assert (np.isclose(
+            gens_feedin_reactive_before,
+            self.edisgo.timeseries.generators_reactive_power.sum().sum()))
+        assert(np.isclose(
+            loads_p_nom_before,
+            self.edisgo.topology.loads_df.peak_load.sum()))
+        assert(np.isclose(
+            loads_demand_before,
+            self.edisgo.timeseries.loads_active_power.sum().sum()))
+        assert(np.isclose(
+            loads_demand_reactive_before,
+            self.edisgo.timeseries.loads_reactive_power.sum().sum()))
+        # test that two generators and two loads were aggregated
+        assert num_gens_before - 1 == len(self.edisgo.topology.generators_df)
+        assert self.edisgo.topology.generators_df.at[
+                   "Generators_Bus_GeneratorFluctuating_2", "p_nom"] == 4.97
+        assert self.edisgo.timeseries.generators_active_power.loc[
+               :, "Generators_Bus_GeneratorFluctuating_2"].sum() == \
+               feedin_before
+        assert num_loads_before - 1 == len(self.edisgo.topology.loads_df)
+        assert self.edisgo.topology.loads_df.at[
+                   "Loads_Bus_Load_residential_LVGrid_1_5", "peak_load"] == (
+                2 * 0.001397)
+        assert self.edisgo.timeseries.loads_active_power.loc[
+            :, "Loads_Bus_Load_residential_LVGrid_1_5"
+        ].sum() == load_before
+        # test that analyze does not fail
+        self.edisgo.analyze()
+
+        # test with charging points and aggregation by bus and type/sector
+
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path,
+                             worst_case_analysis='worst-case')
+        self.edisgo.add_component(
+            "ChargingPoint",
+            bus="Bus_Load_residential_LVGrid_1_5",
+            use_case="home",
+            p_nom=0.2,
+            ts_active_power=pd.Series(
+                data=[0.1, 0.2],
+                index=self.edisgo.timeseries.timeindex
+            ),
+            ts_reactive_power = pd.Series(
+                data=[0, 0],
+                index=self.edisgo.timeseries.timeindex
+            )
+        )
+        # manipulate grid so that more than one generator and load is connected
+        # at the same bus
+        self.edisgo.topology._generators_df.at[
+            "GeneratorFluctuating_3", "bus"] = "Bus_GeneratorFluctuating_2"
+        self.edisgo.topology._loads_df.at[
+            "Load_residential_LVGrid_1_4", "bus"] = \
+            "Bus_Load_residential_LVGrid_1_5"
+
+        self.edisgo.aggregate_components(
+            aggregate_loads_by_cols=["bus", "sector"],
+            aggregate_generators_by_cols=["bus", "type"]
+        )
+        # test that total p_nom/peak_load and total feed-in/demand stayed
+        # the same
+        assert (np.isclose(
+            gens_p_nom_before,
+            self.edisgo.topology.generators_df.p_nom.sum()))
+        assert (np.isclose(
+            gens_feedin_before,
+            self.edisgo.timeseries.generators_active_power.sum().sum()))
+        assert (np.isclose(
+            gens_feedin_reactive_before,
+            self.edisgo.timeseries.generators_reactive_power.sum().sum()))
+        assert (np.isclose(
+            loads_p_nom_before,
+            self.edisgo.topology.loads_df.peak_load.sum()))
+        assert (np.isclose(
+            loads_demand_before,
+            self.edisgo.timeseries.loads_active_power.sum().sum()))
+        assert (np.isclose(
+            loads_demand_reactive_before,
+            self.edisgo.timeseries.loads_reactive_power.sum().sum()))
+        assert (np.isclose(
+            0.2,
+            self.edisgo.topology.charging_points_df.p_nom.sum()))
+        assert (np.isclose(
+            0.3,
+            self.edisgo.timeseries.charging_points_active_power.sum().sum()))
+        assert (np.isclose(
+            0,
+            self.edisgo.timeseries.charging_points_reactive_power.sum().sum()))
+        # test that two generators were not aggregated
+        assert num_gens_before == len(self.edisgo.topology.generators_df)
+        # test that two loads were aggregated
+        assert num_loads_before - 1 == len(self.edisgo.topology.loads_df)
+        assert self.edisgo.topology.loads_df.at[
+                   "Loads_Bus_Load_residential_LVGrid_1_5_residential",
+                   "peak_load"] == (
+                       2 * 0.001397)
+        assert self.edisgo.timeseries.loads_active_power.loc[
+               :, "Loads_Bus_Load_residential_LVGrid_1_5_residential"
+               ].sum() == load_before
+        # test that charging point was not aggregated with load
+        assert 1 == len(self.edisgo.topology.charging_points_df)
+        # test that analyze does not fail
+        self.edisgo.analyze()
+
+        # #### test mode "by_load_and_generation"
+
+        # test with charging points
+        num_gens_before = len(self.edisgo.topology.generators_df)
+        num_loads_before = len(self.edisgo.topology.loads_df) + \
+                           len(self.edisgo.topology.charging_points_df)
+
+        self.edisgo.aggregate_components(mode="by_load_and_generation")
+        # test that total p_nom/peak_load and total feed-in/demand stayed
+        # the same
+        assert (np.isclose(
+            gens_p_nom_before,
+            self.edisgo.topology.generators_df.p_nom.sum()))
+        assert (np.isclose(
+            gens_feedin_before,
+            self.edisgo.timeseries.generators_active_power.sum().sum()))
+        assert (np.isclose(
+            gens_feedin_reactive_before,
+            self.edisgo.timeseries.generators_reactive_power.sum().sum()))
+        assert (np.isclose(
+            loads_p_nom_before + 0.2,
+            self.edisgo.topology.loads_df.peak_load.sum()))
+        assert (np.isclose(
+            loads_demand_before + 0.3,
+            self.edisgo.timeseries.loads_active_power.sum().sum()))
+        assert (np.isclose(
+            loads_demand_reactive_before,
+            self.edisgo.timeseries.loads_reactive_power.sum().sum()))
+        # test that generators at the same bus and load and
+        # charging point at same bus were aggregated
+        assert num_gens_before - 1 == len(self.edisgo.topology.generators_df)
+        assert num_loads_before - 1 == len(self.edisgo.topology.loads_df)
+        assert self.edisgo.topology.loads_df.at[
+                   "Loads_Bus_Load_residential_LVGrid_1_5", "peak_load"] == (
+                       2 * 0.001397 + 0.2)
+        assert self.edisgo.timeseries.loads_active_power.loc[
+               :, "Loads_Bus_Load_residential_LVGrid_1_5"
+               ].sum() == load_before + 0.3
+        # test that analyze does not fail
+        self.edisgo.analyze()
+
+        # test without charging points
+
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path,
+                             worst_case_analysis='worst-case')
+        num_gens_before = len(self.edisgo.topology.generators_df)
+        num_loads_before = len(self.edisgo.topology.loads_df) + \
+                           len(self.edisgo.topology.charging_points_df)
+
+        # manipulate grid so that more than one generator and load is connected
+        # at the same bus
+        self.edisgo.topology._generators_df.at[
+            "GeneratorFluctuating_3", "bus"] = "Bus_GeneratorFluctuating_2"
+        self.edisgo.topology._loads_df.at[
+            "Load_residential_LVGrid_1_4", "bus"] = \
+            "Bus_Load_residential_LVGrid_1_5"
+
+        self.edisgo.aggregate_components(mode="by_load_and_generation")
+        # test that total p_nom/peak_load and total feed-in/demand stayed
+        # the same
+        assert (np.isclose(
+            gens_p_nom_before,
+            self.edisgo.topology.generators_df.p_nom.sum()))
+        assert (np.isclose(
+            gens_feedin_before,
+            self.edisgo.timeseries.generators_active_power.sum().sum()))
+        assert (np.isclose(
+            gens_feedin_reactive_before,
+            self.edisgo.timeseries.generators_reactive_power.sum().sum()))
+        assert (np.isclose(
+            loads_p_nom_before,
+            self.edisgo.topology.loads_df.peak_load.sum()))
+        assert (np.isclose(
+            loads_demand_before,
+            self.edisgo.timeseries.loads_active_power.sum().sum()))
+        assert (np.isclose(
+            loads_demand_reactive_before,
+            self.edisgo.timeseries.loads_reactive_power.sum().sum()))
+        # test that two generators were aggregated
+        assert num_gens_before - 1 == len(self.edisgo.topology.generators_df)
+        assert self.edisgo.topology.generators_df.at[
+                   "Generators_Bus_GeneratorFluctuating_2", "p_nom"] == 4.97
+        assert self.edisgo.timeseries.generators_active_power.loc[
+               :, "Generators_Bus_GeneratorFluctuating_2"].sum() == \
+               feedin_before
+        # test that two loads were aggregated
+        assert num_loads_before - 1 == len(self.edisgo.topology.loads_df)
+        assert self.edisgo.topology.loads_df.at[
+                   "Loads_Bus_Load_residential_LVGrid_1_5",
+                   "peak_load"] == (
+                       2 * 0.001397)
+        assert self.edisgo.timeseries.loads_active_power.loc[
+               :, "Loads_Bus_Load_residential_LVGrid_1_5"
+               ].sum() == load_before
+        # test that analyze does not fail
+        self.edisgo.analyze()

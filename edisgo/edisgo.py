@@ -536,7 +536,9 @@ class EDisGo:
                         "_".join(_.loc[aggregate_generators_by_cols])),
                     axis=1)
                 gens_df_grouped["control"] = "PQ"
-                gens_df_grouped.drop(columns=["weather_cell_id"], inplace=True)
+                if "weather_cell_id" in gens_df_grouped.columns:
+                    gens_df_grouped.drop(
+                        columns=["weather_cell_id"], inplace=True)
                 self.topology.generators_df = gens_df_grouped.set_index("name")
                 # set up new generator time series
                 groups = gens_groupby.groups
