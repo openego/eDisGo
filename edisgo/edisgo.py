@@ -369,10 +369,31 @@ class EDisGo:
     def import_generators(self, generator_scenario=None,
                           **kwargs):
         """
-        Import generator data for specified scenario from oedb and integrate
-        into grid.
+        Gets generator park for specified scenario and integrates them into
+        the grid.
 
-        For details see :func:`edisgo.io.generators_import.oedb`.
+        Currently, the only supported data source is scenario data generated
+        in the research project
+        `open_eGo <https://openegoproject.wordpress.com/>`_. You can choose
+        between two scenarios: 'nep2035' and 'ego100'. You can get more
+        information on the scenarios in the
+        `final report <https://www.uni-flensburg.de/fileadmin/content/\
+        abteilungen/industrial/dokumente/downloads/veroeffentlichungen/\
+        forschungsergebnisse/20190426endbericht-openego-fkz0325881-final\
+        .pdf>`_.
+
+        The generator data is retrieved from the
+        `open energy platform <https://openenergy-platform.org/>`_
+        from tables for
+        `conventional power plants <https://openenergy-platform.org/dataedit/\
+        view/supply/ego_dp_conv_powerplant>`_ and
+        `renewable power plants <https://openenergy-platform.org/dataedit/\
+        view/supply/ego_dp_res_powerplant>`_.
+
+        After the generator park is changed there may be grid issues due to the
+        additional in-feed. These are not solved automatically. If you want to
+        have a stable grid without grid issues you can invoke the automatic
+        grid expansion through the function :attr:`~.EDisGo.reinforce`.
 
         Parameters
         ----------
@@ -382,7 +403,8 @@ class EDisGo:
 
         Other Parameters
         ----------------
-        See :func:`edisgo.io.generators_import.oedb`.
+        kwargs :
+            See :func:`edisgo.io.generators_import.oedb`.
 
         """
         if generator_scenario:

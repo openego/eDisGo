@@ -146,6 +146,17 @@ class TestEDisGo:
         with pytest.raises(ValueError, match=msg):
             self.edisgo.to_pypsa(mode='unknown')
 
+    def test_generator_import(self):
+        """This function just checks if API to import generators exists but
+        generator import for test grid will not work and raise an error."""
+
+        # test exception
+        msg = ("At least one imported generator is not located in the MV "
+               "grid area. Check compatibility of grid and generator "
+               "datasets.")
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo.import_generators("nep2035")
+
     def test_mv_to_pypsa(self):
         # test only mv
         pypsa_network = self.edisgo.to_pypsa(mode='mv')
