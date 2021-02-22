@@ -588,6 +588,58 @@ class Results:
     def unresolved_issues(self, issues):
         self._unresolved_issues = issues
 
+    def _add_line_to_equipment_changes(self, line):
+        """
+        Adds line to the equipment changes in results object.
+
+        All changes of equipment are stored in
+        :attr:`~.network.results.Results.equipment_changes`
+        which is used later on to determine network expansion costs.
+
+        Parameters
+        ----------
+        line : :pandas:`pandas.Series<Series>`
+            Series with data of line to add. Series has same rows as columns
+            of :attr:`~.network.topology.Topology.lines_df`, but must at least
+            contain `type_info`. Line representative is the series name.
+
+        """
+        self.equipment_changes = \
+            self.equipment_changes.append(
+                pd.DataFrame(
+                    {
+                        "iteration_step": [0],
+                        "change": ["added"],
+                        "equipment": [line.type_info],
+                        "quantity": [1],
+                    },
+                    index=[line.name],
+                )
+            )
+
+    def _del_line_from_equipment_changes(self, line_repr):
+        """
+        Deletes line from the equipment changes in results object if it exists.
+
+        This is needed when a line was already added to
+        :attr:`~.network.results.Results.equipment_changes` but another
+        component is later connected to this line. Therefore, the line needs
+        to be split which changes the representative of the line and the line
+        data.
+
+        Parameters
+        ----------
+        line_repr : str
+            Line representative as in index of
+            :attr:`~.network.topology.Topology.lines_df`.
+
+        """
+        if line_repr in self.equipment_changes.index:
+            self.equipment_changes = \
+                self.equipment_changes.drop(
+                    line_repr
+                )
+
     def save(self, directory, parameters="all"):
         """
         Saves results to disk.

@@ -390,6 +390,20 @@ class EDisGo:
         `renewable power plants <https://openenergy-platform.org/dataedit/\
         view/supply/ego_dp_res_powerplant>`_.
 
+        When the generator data is retrieved, the following steps are
+        conducted:
+
+            * Step 1: Update capacity of existing generators if `
+              update_existing` is True, which it is by default.
+            * Step 2: Remove decommissioned generators if
+              `remove_decommissioned` is True, which it is by default.
+            * Step 3: Integrate new MV generators.
+            * Step 4: Integrate new LV generators.
+
+        For more information on how generators are integrated, see
+        :attr:`~.network.topology.Topology.connect_to_mv` and
+        :attr:`~.network.topology.Topology.connect_to_lv`.
+
         After the generator park is changed there may be grid issues due to the
         additional in-feed. These are not solved automatically. If you want to
         have a stable grid without grid issues you can invoke the automatic
@@ -1247,7 +1261,7 @@ class EDisGo:
         if voltage_level in [4, 5]:
             kwargs['voltage_level'] = voltage_level
             kwargs['geom'] = geolocation
-            comp_name = connect_to_mv(
+            comp_name = self.topology.connect_to_mv(
                 self, kwargs, comp_type)
 
         # Connect in LV
@@ -1258,7 +1272,7 @@ class EDisGo:
             kwargs['mvlv_subst_id'] = int(nearest_substation.split("_")[-2])
             kwargs['geom'] = geolocation
             kwargs['voltage_level'] = voltage_level
-            comp_name = connect_to_lv(self, kwargs, comp_type)
+            comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
 
         if add_ts:
             if comp_type == 'Generator':

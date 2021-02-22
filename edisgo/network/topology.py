@@ -17,10 +17,13 @@ from edisgo.tools.tools import (
     check_line_for_removal,
 )
 from edisgo.tools import networkx_helper
+from edisgo.tools import geo
 from edisgo.io.ding0_import import _validate_ding0_grid_import
 
 if "READTHEDOCS" not in os.environ:
     from shapely.wkt import loads as wkt_loads
+    from shapely.geometry import Point, LineString
+    from shapely.ops import transform
 
 logger = logging.getLogger("edisgo")
 
@@ -1446,6 +1449,699 @@ class Topology:
             np.sqrt(3) * data_new_line.U_n * data_new_line.I_max_th
         )
 
+    def connect_to_mv(self, edisgo_object, comp_data, comp_type="Generator"):
+        """
+        Add and connect new generator or charging point to MV grid.
+
+        # ToDo Update docstring
+        This function connects
+
+            * components of voltage level 4
+                * to HV-MV station
+
+            * components of voltage level 5
+                * to nearest MV bus or line
+                * in case component is connected to a line, the line is split and
+                  a new branch tee is added to connect new components to
+
+        A new bus is created for new component.
+
+        Parameters
+        ----------
+        comp_data : dict
+            Dictionary with all information on component.
+            The dictionary must contain all required arguments
+            of method :attr:`~.network.topology.Topology.add_generator`
+            respectively
+            :attr:`~.network.topology.Topology.add_charging_point`, except the
+            `bus` that is assigned in this function, and may contain all other
+            parameters of those methods. Additionally the dictionary must contain
+            the voltage level to connect in and geometry.
+        comp_type : str
+            Type of added component. Can be 'Generator' or 'ChargingPoint'.
+            Default: 'Generator'.
+
+        Returns
+        -------
+        str
+            The identifier of the newly connected component.
+
+        """
+        # ToDo connect charging points via transformer?
+
+        # ToDo use select_cable instead of standard line?
+        # get standard equipment
+        std_line_type = self.equipment_data["mv_cables"].loc[
+            edisgo_object.config["grid_expansion_standard_equipment"][
+                "mv_line"
+            ]
+        ]
+
+        # create new bus for new component
+        if not type(comp_data["geom"]) is Point:
+            geom = wkt_loads(comp_data["geom"])
+        else:
+            geom = comp_data["geom"]
+
+        if comp_type == "Generator":
+            if comp_data["generator_id"] is not None:
+                bus = "Bus_Generator_{}".format(comp_data["generator_id"])
+            else:
+                bus = "Bus_Generator_{}".format(
+                    len(self.generators_df))
+        else:
+            bus = "Bus_ChargingPoint_{}".format(
+                len(self.charging_points_df))
+
+        self.add_bus(
+            bus_name=bus,
+            v_nom=self.mv_grid.nominal_voltage,
+            x=geom.x,
+            y=geom.y,
+        )
+
+        # add component to newly created bus
+        if comp_type == "Generator":
+            comp_name = self.add_generator(
+                bus=bus,
+                **comp_data
+            )
+        else:
+            comp_name = self.add_charging_point(
+                bus=bus,
+                **comp_data
+            )
+
+        # ===== voltage level 4: component is connected to MV station =====
+        if comp_data["voltage_level"] == 4:
+
+            # add line
+            line_length = geo.calc_geo_dist_vincenty(
+                grid_topology=self,
+                bus_source=bus,
+                bus_target=self.mv_grid.station.index[0],
+                branch_detour_factor=edisgo_object.config["grid_connection"][
+                    "branch_detour_factor"
+                ]
+            )
+
+            line_name = self.add_line(
+                bus0=self.mv_grid.station.index[0],
+                bus1=bus,
+                length=line_length,
+                kind="cable",
+                type_info=std_line_type.name,
+            )
+
+            # add line to equipment changes to track costs
+            edisgo_object.results._add_line_to_equipment_changes(
+                line=self.lines_df.loc[line_name],
+            )
+
+        # == voltage level 5: component is connected to MV grid
+        # (next-neighbor) ==
+        elif comp_data["voltage_level"] == 5:
+
+            # get branches within the predefined `connection_buffer_radius`
+            lines = geo.calc_geo_lines_in_buffer(
+                grid_topology=self,
+                bus=self.buses_df.loc[bus, :],
+                grid=self.mv_grid,
+                buffer_radius=int(
+                    edisgo_object.config["grid_connection"][
+                        "conn_buffer_radius"]),
+                buffer_radius_inc=int(
+                    edisgo_object.config["grid_connection"][
+                        "conn_buffer_radius_inc"])
+            )
+
+            # calc distance between component and grid's lines -> find nearest
+            # line
+            conn_objects_min_stack = geo.find_nearest_conn_objects(
+                grid_topology=self,
+                bus=self.buses_df.loc[bus, :],
+                lines=lines,
+                conn_diff_tolerance=edisgo_object.config[
+                    "grid_connection"]["conn_diff_tolerance"]
+            )
+
+            # connect
+            # go through the stack (from nearest to farthest connection target
+            # object)
+            comp_connected = False
+            for dist_min_obj in conn_objects_min_stack:
+                # do not allow connection to virtual busses
+                if "virtual" not in dist_min_obj["repr"]:
+                    target_obj_result = self.connect_mv_node(
+                        edisgo_object=edisgo_object,
+                        bus=self.buses_df.loc[bus, :],
+                        target_obj=dist_min_obj,
+                    )
+
+                    if target_obj_result is not None:
+                        comp_connected = True
+                        break
+
+            if not comp_connected:
+                logger.error(
+                    "Component {} could not be connected. Try to "
+                    "increase the parameter `conn_buffer_radius` in "
+                    "config file `config_grid.cfg` to gain more possible "
+                    "connection points.".format(comp_name)
+                )
+        return comp_name
+
+    def connect_to_lv(self, edisgo_object, comp_data, comp_type="Generator",
+                      allowed_number_of_comp_per_bus=2):
+        """
+        Add and connect new generator or charging point to LV grid.
+
+        It connects
+
+            * generators with no or an MV-LV station ID that does not exist (i.e.
+              generators in an aggregated load area)
+                * to HV-MV station
+
+            * generators of voltage level 6
+                * to MV-LV station
+
+            * generators of voltage level 7
+                * with a nom. capacity of <=30 kW to LV loads of type residential
+                * with a nom. capacity of >30 kW and <=100 kW to LV loads of type
+                  retail, industrial or agricultural
+                * to the MV-LV station if no appropriate load is available
+                  (fallback)
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        comp_data : dict
+            Dictionary with all information on component.
+            The dictionary must contain all required arguments
+            of method :attr:`~.network.topology.Topology.add_generator`
+            respectively
+            :attr:`~.network.topology.Topology.add_charging_point`, except the
+            `bus` that is assigned in this function, and may contain all other
+            parameters of those methods.
+        comp_type : str
+            Type of added component. Can be 'Generator' or 'ChargingPoint'.
+            Default: 'Generator'.
+        allowed_number_of_comp_per_bus : int
+            Specifies, how many generators respectively charging points are
+            at most allowed to be placed at the same bus. Default: 2.
+
+        Returns
+        -------
+        str
+            The identifier of the newly connected component.
+
+        Notes
+        -----
+        For the allocation, loads are selected randomly (sector-wise) using a
+        predefined seed to ensure reproducibility.
+
+        """
+
+        def _connect_to_station():
+            """
+            Connects new component to substation via an own bus.
+            """
+
+            # add bus for new component
+            if comp_type == "Generator":
+                if comp_data["generator_id"] is not None:
+                    bus = "Bus_Generator_{}".format(comp_data["generator_id"])
+                else:
+                    bus = "Bus_Generator_{}".format(
+                        len(self.generators_df))
+            else:
+                bus = "Bus_ChargingPoint_{}".format(
+                    len(self.charging_points_df))
+
+            if not type(comp_data["geom"]) is Point:
+                geom = wkt_loads(comp_data["geom"])
+            else:
+                geom = comp_data["geom"]
+
+            self.add_bus(
+                bus_name=bus,
+                v_nom=lv_grid.nominal_voltage,
+                x=geom.x,
+                y=geom.y,
+                lv_grid_id=lv_grid.id,
+            )
+
+            # add line to connect new component
+            station_bus = lv_grid.station.index[0]
+            line_length = geo.calc_geo_dist_vincenty(
+                grid_topology=self,
+                bus_source=bus,
+                bus_target=station_bus,
+                branch_detour_factor=edisgo_object.config["grid_connection"][
+                    "branch_detour_factor"
+                ]
+            )
+            # get standard equipment
+            std_line_type = self.equipment_data[
+                "lv_cables"
+            ].loc[
+                edisgo_object.config["grid_expansion_standard_equipment"][
+                    "lv_line"
+                ]
+            ]
+            line_name = self.add_line(
+                bus0=station_bus,
+                bus1=bus,
+                length=line_length,
+                kind="cable",
+                type_info=std_line_type.name,
+            )
+
+            # add line to equipment changes to track costs
+            edisgo_object.results._add_line_to_equipment_changes(
+                line=self.lines_df.loc[line_name],
+            )
+
+            # add new component
+            comp_name = add_func(
+                bus=bus, **comp_data
+            )
+            return comp_name
+
+        # get list of LV grid IDs
+        lv_grid_ids = [_.id for _ in self.mv_grid.lv_grids]
+
+        if comp_type == "Generator":
+            add_func = self.add_generator
+        elif comp_type == "ChargingPoint":
+            add_func = self.add_charging_point
+        else:
+            logger.error(
+                "Component type {} is not a valid option.".format(comp_type)
+            )
+
+        if comp_data["mvlv_subst_id"]:
+
+            # if substation ID (= LV grid ID) is given and it matches an
+            # existing LV grid ID (i.e. it is no aggregated LV grid), set grid
+            # to connect component to to specified grid (in case the component
+            # has no geometry it is connected to the grid's station)
+            if comp_data["mvlv_subst_id"] in lv_grid_ids:
+
+                # get LV grid
+                lv_grid = self._grids[
+                    "LVGrid_{}".format(int(comp_data["mvlv_subst_id"]))
+                ]
+
+                # if no geom is given, connect to LV grid's station
+                if not comp_data["geom"]:
+                    comp_name = add_func(
+                        bus=lv_grid.station.index[0], **comp_data
+                    )
+                    logger.debug(
+                        "Component {} has no geom entry and will be connected "
+                        "to grid's LV station.".format(comp_name)
+                    )
+                    return comp_name
+
+            # if substation ID (= LV grid ID) is given but it does not match an
+            # existing LV grid ID (i.e. it is an aggregated LV grid), connect
+            # component to HV-MV substation
+            # ToDo: Keep it like this?
+            else:
+                comp_name = add_func(
+                    bus=self.mv_grid.station.index[0],
+                    **comp_data
+                )
+                return comp_name
+
+        # if no MV-LV substation ID is given (and there is therefore also no
+        # geometry data), choose random LV grid and connect to station
+        else:
+            if comp_type == "Generator":
+                random.seed(a=comp_data["generator_id"])
+            else:
+                # ToDo: Seed shouldn't depend on number of charging points, but
+                #  there is currently no better solution
+                random.seed(a=len(self.charging_points_df))
+            lv_grid_id = random.choice(lv_grid_ids)
+            lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=edisgo_object)
+            comp_name = add_func(
+                bus=lv_grid.station.index[0], **comp_data
+            )
+            logger.warning(
+                "Component {} has no mvlv_subst_id. It is therefore allocated "
+                "to a random LV Grid ({}).".format(
+                    comp_name, lv_grid_id
+                )
+            )
+            return comp_name
+
+        # v_level 6 -> connect to grid's LV station
+        if comp_data["voltage_level"] == 6:
+            comp_name = _connect_to_station()
+            return comp_name
+
+        # v_level 7 -> assign generator to load
+        # Generators:
+        # Generators with P <= 30 kW are connected to residential loads, if
+        # available; generators with 30 kW <= P <= 100 kW are connected to
+        # retail, industrial, or agricultural loads, if available.
+        # Charging Points:
+        # Charging points with use case 'home' are connected to residential
+        # loads, if available; charging points with use case 'work' are
+        # connected to retail, industrial, or agricultural loads, if available;
+        # charging points with other use cases ('public' or 'fast') are
+        # connected somewhere in the grid.
+        # In case the above described criteria do not give a bus to connect to,
+        # the generator or charging point is connected to a random bus in the
+        # LV grid.
+        # If there are valid buses, the generator or charging point is
+        # connected to a bus out of the valid buses with less than or equal
+        # the allowed number of generators / charging points at one bus.
+        # If every one of the valid buses already has the allowed number of
+        # generators / charging points, the new component is directly
+        # connected to the substation.
+        elif comp_data["voltage_level"] == 7:
+
+            # get valid buses to connect new component to
+            lv_loads = lv_grid.loads_df
+            if comp_type == "Generator":
+                if comp_data["p_nom"] <= 0.030:
+                    tmp = lv_loads[lv_loads.sector == "residential"]
+                    target_buses = tmp.bus.values
+                else:
+                    tmp = lv_loads[
+                        lv_loads.sector.isin(
+                            ["industrial", "agricultural", "retail"]
+                        )
+                    ]
+                    target_buses = tmp.bus.values
+            else:
+                if comp_data["use_case"] is "home":
+                    tmp = lv_loads[lv_loads.sector == "residential"]
+                    target_buses = tmp.bus.values
+                elif comp_data["use_case"] is "work":
+                    tmp = lv_loads[
+                        lv_loads.sector.isin(
+                            ["industrial", "agricultural", "retail"]
+                        )
+                    ]
+                    target_buses = tmp.bus.values
+                else:
+                    target_buses = lv_grid.buses_df[
+                        ~lv_grid.buses_df.in_building].index
+
+            # generate random list (unique elements) of possible target buses
+            # to connect components to
+            if comp_type == "Generator":
+                random.seed(a=comp_data["generator_id"])
+            else:
+                random.seed(
+                    a="{}_{}".format(comp_data["use_case"],
+                                     comp_data["p_nom"]))
+
+            if len(target_buses) > 0:
+                lv_buses_rnd = random.sample(
+                    sorted(list(target_buses)),
+                    len(target_buses))
+            else:
+                logger.debug(
+                    "No valid bus to connect new LV component to. The "
+                    "component is therefore connected to random LV bus."
+                )
+                bus = random.choice(
+                    lv_grid.buses_df[~lv_grid.buses_df.in_building].index
+                )
+                comp_name = add_func(
+                    bus=bus, **comp_data
+                )
+                return comp_name
+
+            # search through list of target buses for bus with less
+            # than two generators / charging points
+            lv_conn_target = None
+
+            # ToDo: Once export in ding0 connects generators directly to bus
+            #  with load, the following distinction does not need to be made
+            #  anymore.
+            if comp_type == "Generator" or (
+                    comp_type == "ChargingPoint" and
+                    comp_data["use_case"] in ["home", "work"]):
+
+                while len(lv_buses_rnd) > 0 and lv_conn_target is None:
+
+                    lv_bus = lv_buses_rnd.pop()
+
+                    # determine number of generators / charging points at
+                    # LV bus
+                    if not lv_grid.buses_df.at[lv_bus, "in_building"]:
+                        neighbours = list(
+                            self.get_neighbours(lv_bus)
+                        )
+                        branch_tee_in_building = neighbours[0]
+                        if len(neighbours) > 1 or np.logical_not(
+                                self.buses_df.at[
+                                    branch_tee_in_building, "in_building"
+                                ]
+                        ):
+                            raise ValueError(
+                                "Expected neighbour to be branch tee in "
+                                "building."
+                            )
+                    else:
+                        branch_tee_in_building = lv_bus
+                    # ToDo: Do generators at loads exported from ding0 have own
+                    #  bus? If so, the following needs to be changed.
+                    if comp_type == "Generator":
+                        comps_at_load = self.generators_df[
+                            self.generators_df.bus.isin(
+                                [lv_bus, branch_tee_in_building]
+                            )
+                        ]
+                    else:
+                        comps_at_load = \
+                        self.charging_points_df[
+                            self.charging_points_df.bus.isin(
+                                [lv_bus, branch_tee_in_building]
+                            )
+                        ]
+                    if len(comps_at_load) <= allowed_number_of_comp_per_bus:
+                        lv_conn_target = branch_tee_in_building
+
+            else:
+
+                while len(lv_buses_rnd) > 0 and lv_conn_target is None:
+
+                    lv_bus = lv_buses_rnd.pop()
+
+                    # determine number of charging points at LV bus
+                    comps_at_load = self.charging_points_df[
+                        self.charging_points_df.bus == lv_bus]
+                    # ToDo: Increase number of generators/charging points
+                    #  allowed at one load in case all loads already have one
+                    #  generator/charging point
+                    if len(comps_at_load) <= allowed_number_of_comp_per_bus:
+                        lv_conn_target = lv_bus
+
+            if lv_conn_target is None:
+                logger.debug(
+                    "No valid connection target found for new component. "
+                    "Connected to LV station."
+                )
+                comp_name = _connect_to_station()
+            else:
+                comp_name = add_func(
+                    bus=lv_conn_target, **comp_data
+                )
+            return comp_name
+
+    def connect_mv_node(self, edisgo_object, bus, target_obj):
+        """
+        Connects MV generators to target object in MV network
+
+        If the target object is a bus, a new line is created to it.
+        If the target object is a line, the node is connected to a newly
+        created bus (using perpendicular projection) on this line.
+        New lines are created using standard equipment.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        bus : :pandas:`pandas.Series<Series>`
+            Data of bus to connect.
+            Series has same rows as columns of
+            :attr:`~.network.topology.Topology.buses_df`.
+        target_obj : :class:`~.network.components.Component`
+            Object that node shall be connected to
+
+        Returns
+        -------
+        :class:`~.network.components.Component` or None
+            Node that node was connected to
+
+        """
+
+        # get standard equipment
+        std_line_type = self.equipment_data["mv_cables"].loc[
+            edisgo_object.config["grid_expansion_standard_equipment"][
+                "mv_line"
+            ]
+        ]
+        std_line_kind = "cable"
+
+        srid = self.grid_district["srid"]
+        bus_shp = transform(geo.proj2equidistant(srid), Point(bus.x, bus.y))
+
+        # MV line is nearest connection point => split old line into 2 segments
+        # (delete old line and create 2 new ones)
+        if isinstance(target_obj["shp"], LineString):
+
+            line_data = self.lines_df.loc[
+                            target_obj["repr"], :
+                        ]
+
+            # if line that is split is connected to switch, the line name needs
+            # to be adapted in the switch information
+            if line_data.name in self.switches_df.branch.values:
+                # get switch
+                switch_data = self.switches_df[
+                    self.switches_df.branch ==
+                    line_data.name].iloc[0]
+                # get bus to which the new line will be connected
+                switch_bus = (switch_data.bus_open
+                              if switch_data.bus_open
+                                 in line_data.loc[["bus0", "bus1"]].values
+                              else switch_data.bus_closed
+                              )
+            else:
+                switch_bus = None
+
+            # find nearest point on MV line
+            conn_point_shp = target_obj["shp"].interpolate(
+                target_obj["shp"].project(bus_shp)
+            )
+            conn_point_shp = transform(
+                geo.proj2equidistant_reverse(srid), conn_point_shp
+            )
+
+            # create new branch tee bus
+            branch_tee_repr = "BranchTee_{}".format(target_obj["repr"])
+            self.add_bus(
+                bus_name=branch_tee_repr,
+                v_nom=self.mv_grid.nominal_voltage,
+                x=conn_point_shp.x,
+                y=conn_point_shp.y,
+            )
+
+            # add new line between newly created branch tee and line's bus0
+            line_length = geo.calc_geo_dist_vincenty(
+                grid_topology=self,
+                bus_source=line_data.bus0,
+                bus_target=branch_tee_repr,
+                branch_detour_factor=edisgo_object.config["grid_connection"][
+                    "branch_detour_factor"
+                ]
+            )
+            line_name_bus0 = self.add_line(
+                bus0=branch_tee_repr,
+                bus1=line_data.bus0,
+                length=line_length,
+                kind=line_data.kind,
+                type_info=line_data.type_info,
+            )
+            # if line connected to switch was split, write new line name to
+            # switch data
+            if switch_bus and switch_bus == line_data.bus0:
+                self.switches_df.loc[
+                    switch_data.name, "branch"] = line_name_bus0
+            # add line to equipment changes
+            edisgo_object.results._add_line_to_equipment_changes(
+                line=self.lines_df.loc[line_name_bus0, :],
+            )
+
+            # add new line between newly created branch tee and line's bus0
+            line_length = geo.calc_geo_dist_vincenty(
+                grid_topology=self,
+                bus_source=line_data.bus1,
+                bus_target=branch_tee_repr,
+                branch_detour_factor=edisgo_object.config["grid_connection"][
+                    "branch_detour_factor"
+                ]
+            )
+            line_name_bus1 = self.add_line(
+                bus0=branch_tee_repr,
+                bus1=line_data.bus1,
+                length=line_length,
+                kind=line_data.kind,
+                type_info=line_data.type_info,
+            )
+            # if line connected to switch was split, write new line name to
+            # switch data
+            if switch_bus and switch_bus == line_data.bus1:
+                self.switches_df.loc[
+                    switch_data.name, "branch"] = line_name_bus1
+            # add line to equipment changes
+            edisgo_object.results._add_line_to_equipment_changes(
+                line=self.lines_df.loc[line_name_bus1, :],
+            )
+
+            # add new line for new bus
+            line_length = geo.calc_geo_dist_vincenty(
+                grid_topology=self,
+                bus_source=bus.name,
+                bus_target=branch_tee_repr,
+                branch_detour_factor=edisgo_object.config["grid_connection"][
+                    "branch_detour_factor"
+                ]
+            )
+            new_line_name = self.add_line(
+                bus0=branch_tee_repr,
+                bus1=bus.name,
+                length=line_length,
+                kind=std_line_kind,
+                type_info=std_line_type.name,
+            )
+            # add line to equipment changes
+            edisgo_object.results._add_line_to_equipment_changes(
+                line=self.lines_df.loc[new_line_name, :],
+            )
+
+            # remove old line from topology and equipment changes
+            self.remove_line(line_data.name)
+            edisgo_object.results._del_line_from_equipment_changes(
+                line_repr=line_data.name
+            )
+
+            return branch_tee_repr
+
+        # node ist nearest connection point
+        else:
+
+            # add new branch for satellite (station to station)
+            line_length = geo.calc_geo_dist_vincenty(
+                grid_topology=self,
+                bus_source=bus.name,
+                bus_target=target_obj["repr"],
+                branch_detour_factor=edisgo_object.config["grid_connection"][
+                    "branch_detour_factor"
+                ]
+            )
+
+            new_line_name = self.add_line(
+                bus0=target_obj["repr"],
+                bus1=bus.name,
+                length=line_length,
+                kind=std_line_kind,
+                type_info=std_line_type.name,
+            )
+
+            # add line to equipment changes
+            edisgo_object.results._add_line_to_equipment_changes(
+                line=self.lines_df.loc[new_line_name, :],
+            )
+
+            return target_obj["repr"]
     def to_graph(self):
         """
         Returns graph representation of the grid.

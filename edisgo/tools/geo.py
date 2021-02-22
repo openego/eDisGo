@@ -216,3 +216,117 @@ def find_nearest_bus(point, bus_target):
         for (x, y) in zip(bus_target["x"], bus_target["y"])
     ]
     return bus_target["dist"].idxmin(), bus_target["dist"].min()
+
+
+def find_nearest_conn_objects(grid_topology, bus, lines,
+                              conn_diff_tolerance=0.0001):
+    """
+    Searches all lines for the nearest possible connection object per line.
+
+    It picks out 1 object out of 3 possible objects: 2 line-adjacent buses
+    and 1 potentially created branch tee on the line (using perpendicular
+    projection). The resulting stack (list) is sorted ascending by distance
+    from bus.
+
+    Parameters
+    ----------
+    grid_topology : :class:`~.network.topology.Topology`
+    bus : :pandas:`pandas.Series<Series>`
+        Data of bus to connect.
+        Series has same rows as columns of
+        :attr:`~.network.topology.Topology.buses_df`.
+    lines : list(str)
+        List of line representatives from index of
+        :attr:`~.network.topology.Topology.lines_df`.
+    conn_diff_tolerance : float, optional
+        Threshold which is used to determine if 2 objects are at the same
+        position. Default: 0.0001.
+
+    Returns
+    -------
+    list(dict)
+        List of connection objects. Each object is represented by dict with
+        representative, shapely object and distance to node.
+
+    """
+
+    conn_objects_min_stack = []
+
+    srid = grid_topology.grid_district["srid"]
+    bus_shp = transform(proj2equidistant(srid), Point(bus.x, bus.y))
+
+    for line in lines:
+
+        line_bus0 = grid_topology.buses_df.loc[
+            grid_topology.lines_df.loc[line, "bus0"]
+        ]
+        line_bus1 = grid_topology.buses_df.loc[
+            grid_topology.lines_df.loc[line, "bus1"]
+        ]
+
+        # create shapely objects for 2 buses and line between them,
+        # transform to equidistant CRS
+        line_bus0_shp = transform(
+            proj2equidistant(srid), Point(line_bus0.x, line_bus0.y)
+        )
+        line_bus1_shp = transform(
+            proj2equidistant(srid), Point(line_bus1.x, line_bus1.y)
+        )
+        line_shp = LineString([line_bus0_shp, line_bus1_shp])
+
+        # create dict with line & 2 adjacent buses and their shapely objects
+        # and distances
+        conn_objects = {
+            "s1": {
+                "repr": line_bus0.name,
+                "shp": line_bus0_shp,
+                "dist": bus_shp.distance(line_bus0_shp) * 0.999,
+            },
+            "s2": {
+                "repr": line_bus1.name,
+                "shp": line_bus1_shp,
+                "dist": bus_shp.distance(line_bus1_shp) * 0.999,
+            },
+            "b": {
+                "repr": line,
+                "shp": line_shp,
+                "dist": bus_shp.distance(line_shp),
+            },
+        }
+
+        # remove line from the dict of possible conn. objects if it is too
+        # close to the bus (necessary to assure that connection target is
+        # reproducible)
+        if (
+                abs(conn_objects["s1"]["dist"] - conn_objects["b"]["dist"])
+                < conn_diff_tolerance
+                or abs(conn_objects["s2"]["dist"] - conn_objects["b"]["dist"])
+                < conn_diff_tolerance
+        ):
+            del conn_objects["b"]
+
+        # remove MV station as possible connection point
+        if (
+                conn_objects["s1"]["repr"]
+                == grid_topology.mv_grid.station.index[0]
+        ):
+            del conn_objects["s1"]
+        elif (
+                conn_objects["s2"]["repr"]
+                == grid_topology.mv_grid.station.index[0]
+        ):
+            del conn_objects["s2"]
+
+        # find nearest connection point in conn_objects
+        conn_objects_min = min(
+            conn_objects.values(), key=lambda v: v["dist"]
+        )
+
+        conn_objects_min_stack.append(conn_objects_min)
+
+    # sort all objects by distance from node
+    conn_objects_min_stack = [
+        _ for _ in sorted(conn_objects_min_stack, key=lambda x: x["dist"])
+    ]
+
+    return conn_objects_min_stack
