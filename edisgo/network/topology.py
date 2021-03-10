@@ -1701,6 +1701,9 @@ class Topology:
                     "branch_detour_factor"
                 ]
             )
+            # avoid very short lines by limiting line length to at least 1m
+            if line_length < 0.001:
+                line_length = 0.001
             # get standard equipment
             std_line_type = self.equipment_data[
                 "lv_cables"
@@ -2043,6 +2046,9 @@ class Topology:
                     "branch_detour_factor"
                 ]
             )
+            # avoid very short lines by limiting line length to at least 1m
+            if line_length < 0.001:
+                line_length = 0.001
             line_name_bus0 = self.add_line(
                 bus0=branch_tee_repr,
                 bus1=line_data.bus0,
@@ -2069,6 +2075,9 @@ class Topology:
                     "branch_detour_factor"
                 ]
             )
+            # avoid very short lines by limiting line length to at least 1m
+            if line_length < 0.001:
+                line_length = 0.001
             line_name_bus1 = self.add_line(
                 bus0=branch_tee_repr,
                 bus1=line_data.bus1,
@@ -2095,6 +2104,9 @@ class Topology:
                     "branch_detour_factor"
                 ]
             )
+            # avoid very short lines by limiting line length to at least 1m
+            if line_length < 0.001:
+                line_length = 0.001
             new_line_name = self.add_line(
                 bus0=branch_tee_repr,
                 bus1=bus.name,
@@ -2127,6 +2139,9 @@ class Topology:
                     "branch_detour_factor"
                 ]
             )
+            # avoid very short lines by limiting line length to at least 1m
+            if line_length < 0.001:
+                line_length = 0.001
 
             new_line_name = self.add_line(
                 bus0=target_obj["repr"],
