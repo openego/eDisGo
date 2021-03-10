@@ -1544,6 +1544,9 @@ class Topology:
                     "branch_detour_factor"
                 ]
             )
+            # avoid very short lines by limiting line length to at least 1m
+            if line_length < 0.001:
+                line_length = 0.001
 
             line_name = self.add_line(
                 bus0=self.mv_grid.station.index[0],
@@ -1592,7 +1595,7 @@ class Topology:
             for dist_min_obj in conn_objects_min_stack:
                 # do not allow connection to virtual busses
                 if "virtual" not in dist_min_obj["repr"]:
-                    target_obj_result = self.connect_mv_node(
+                    target_obj_result = self._connect_mv_bus_to_target_object(
                         edisgo_object=edisgo_object,
                         bus=self.buses_df.loc[bus, :],
                         target_obj=dist_min_obj,
