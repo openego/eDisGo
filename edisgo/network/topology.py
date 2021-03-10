@@ -1670,12 +1670,12 @@ class Topology:
             # add bus for new component
             if comp_type == "Generator":
                 if comp_data["generator_id"] is not None:
-                    bus = "Bus_Generator_{}".format(comp_data["generator_id"])
+                    b = "Bus_Generator_{}".format(comp_data["generator_id"])
                 else:
-                    bus = "Bus_Generator_{}".format(
+                    b = "Bus_Generator_{}".format(
                         len(self.generators_df))
             else:
-                bus = "Bus_ChargingPoint_{}".format(
+                b = "Bus_ChargingPoint_{}".format(
                     len(self.charging_points_df))
 
             if not type(comp_data["geom"]) is Point:
@@ -1684,7 +1684,7 @@ class Topology:
                 geom = comp_data["geom"]
 
             self.add_bus(
-                bus_name=bus,
+                bus_name=b,
                 v_nom=lv_grid.nominal_voltage,
                 x=geom.x,
                 y=geom.y,
@@ -1695,7 +1695,7 @@ class Topology:
             station_bus = lv_grid.station.index[0]
             line_length = geo.calc_geo_dist_vincenty(
                 grid_topology=self,
-                bus_source=bus,
+                bus_source=b,
                 bus_target=station_bus,
                 branch_detour_factor=edisgo_object.config["grid_connection"][
                     "branch_detour_factor"
@@ -1714,7 +1714,7 @@ class Topology:
             ]
             line_name = self.add_line(
                 bus0=station_bus,
-                bus1=bus,
+                bus1=b,
                 length=line_length,
                 kind="cable",
                 type_info=std_line_type.name,
@@ -1726,10 +1726,9 @@ class Topology:
             )
 
             # add new component
-            comp_name = add_func(
-                bus=bus, **comp_data
+            return add_func(
+                bus=b, **comp_data
             )
-            return comp_name
 
         # get list of LV grid IDs
         lv_grid_ids = [_.id for _ in self.mv_grid.lv_grids]
@@ -1929,7 +1928,7 @@ class Topology:
                                 [lv_bus, branch_tee_in_building]
                             )
                         ]
-                    if len(comps_at_load) <= allowed_number_of_comp_per_bus:
+                    if len(comps_at_load) < allowed_number_of_comp_per_bus:
                         lv_conn_target = branch_tee_in_building
 
             else:
@@ -1959,7 +1958,7 @@ class Topology:
                 )
             return comp_name
 
-    def connect_mv_node(self, edisgo_object, bus, target_obj):
+    def _connect_mv_bus_to_target_object(self, edisgo_object, bus, target_obj):
         """
         Connects MV generators to target object in MV network
 

@@ -9,8 +9,7 @@ from edisgo.network import timeseries
 from edisgo.tools import pypsa_io, plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io.ding0_import import import_ding0_grid
-from edisgo.io.generators_import import oedb as import_generators_oedb, \
-    connect_to_mv, connect_to_lv
+from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
 from edisgo.opf.run_mp_opf import run_mp_opf
@@ -466,7 +465,7 @@ class EDisGo:
         if all(pf_results["converged"]["0"].tolist()):
             pypsa_io.process_pfa_results(self, pypsa_network, timesteps)
         else:
-            raise ValueError("Power flow analysis did not converge for the"
+            raise ValueError("Power flow analysis did not converge for the "
                              "following time steps: {}.".format(
                 timesteps[~pf_results["converged"]["0"]].tolist())
             )
@@ -572,6 +571,7 @@ class EDisGo:
                         "_".join(_.loc[aggregate_generators_by_cols])),
                     axis=1)
                 gens_df_grouped["control"] = "PQ"
+                gens_df_grouped["control"] = "misc"
                 if "weather_cell_id" in gens_df_grouped.columns:
                     gens_df_grouped.drop(
                         columns=["weather_cell_id"], inplace=True)
