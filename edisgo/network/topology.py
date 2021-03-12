@@ -198,14 +198,17 @@ class Topology:
             # close switches
             switches = [Switch(id=_, topology=self)
                         for _ in self.switches_df.index]
+            switch_status = {}
             for switch in switches:
+                switch_status[switch] = switch.state
                 switch.close()
             # Find rings in topology
             graph = self.to_graph()
             self.rings = nx.cycle_basis(graph)
-            # repoen switches
+            # reopen switches
             for switch in switches:
-                switch.open()
+                if switch_status[switch] == 'open':
+                    switch.open()
             return self.rings
 
     @rings.setter
