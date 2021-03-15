@@ -121,7 +121,10 @@ def lines_allowed_load(edisgo_obj, voltage_level):
         lines_df = edisgo_obj.topology.lines_df[
             ~edisgo_obj.topology.lines_df.index.isin(mv_grid.lines_df.index)
         ]
-        nominal_voltage = list(mv_grid.lv_grids)[0].nominal_voltage
+        if len(list(mv_grid.lv_grids)) > 0:
+            nominal_voltage = list(mv_grid.lv_grids)[0].nominal_voltage
+        else:
+            nominal_voltage = np.NaN
     elif voltage_level == "mv":
         lines_df = mv_grid.lines_df
         nominal_voltage = mv_grid.nominal_voltage
