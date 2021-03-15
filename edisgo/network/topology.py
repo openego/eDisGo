@@ -1451,23 +1451,21 @@ class Topology:
 
     def connect_to_mv(self, edisgo_object, comp_data, comp_type="Generator"):
         """
-        Add and connect new generator or charging point to MV grid.
+        Add and connect new generator or charging point to MV grid topology.
 
-        # ToDo Update docstring
-        This function connects
-
-            * components of voltage level 4
-                * to HV-MV station
-
-            * components of voltage level 5
-                * to nearest MV bus or line
-                * in case component is connected to a line, the line is split and
-                  a new branch tee is added to connect new components to
-
-        A new bus is created for new component.
+        This function creates a new bus the new component is connected to. The
+        new bus is then connected to the grid depending on the specified
+        voltage level (given in `comp_data` parameter).
+        Components of voltage level 4 are connected to the HV/MV station.
+        Components of voltage level 5 are connected to the nearest
+        MV bus or line. In case the component is connected to a line, the line
+        is split at the point closest to the new component (using perpendicular
+        projection) and a new branch tee is added to connect the new
+        component to.
 
         Parameters
         ----------
+        edisgo_object : :class:`~.EDisGo`
         comp_data : dict
             Dictionary with all information on component.
             The dictionary must contain all required arguments
@@ -1475,8 +1473,14 @@ class Topology:
             respectively
             :attr:`~.network.topology.Topology.add_charging_point`, except the
             `bus` that is assigned in this function, and may contain all other
-            parameters of those methods. Additionally the dictionary must contain
-            the voltage level to connect in and geometry.
+            parameters of those methods. Additionally, the dictionary must
+            contain the voltage level to connect in in key 'voltage_level' and
+            the geolocation in key 'geom'. The
+            voltage level must be provided as integer, with possible options
+            being 4 (component is connected directly to the HV/MV station)
+            or 5 (component is connected somewhere in the MV grid). The
+            geolocation must be provided as
+            :shapely:`Shapely Point object<points>`.
         comp_type : str
             Type of added component. Can be 'Generator' or 'ChargingPoint'.
             Default: 'Generator'.
@@ -1617,23 +1621,58 @@ class Topology:
     def connect_to_lv(self, edisgo_object, comp_data, comp_type="Generator",
                       allowed_number_of_comp_per_bus=2):
         """
-        Add and connect new generator or charging point to LV grid.
+        Add and connect new generator or charging point to LV grid topology.
 
+        This function connects the new component depending on the voltage
+        level, and information on the MV/LV substation ID and geometry, all
+        provided in the `comp_data` parameter.
         It connects
 
-            * generators with no or an MV-LV station ID that does not exist (i.e.
-              generators in an aggregated load area)
-                * to HV-MV station
+            * Components with no MV/LV substation ID
+                * directly to random MV/LV substation (will probably be
+                  changed to random LV grid or LV grid closest to component)
 
-            * generators of voltage level 6
-                * to MV-LV station
+            * Components with an MV/LV substation ID that does not exist (i.e.
+              components in an aggregated load area)
+                * directly to the HV/MV station (will probably be changed to
+                  random LV grid or LV grid closest to component)
 
-            * generators of voltage level 7
-                * with a nom. capacity of <=30 kW to LV loads of type residential
-                * with a nom. capacity of >30 kW and <=100 kW to LV loads of type
-                  retail, industrial or agricultural
-                * to the MV-LV station if no appropriate load is available
-                  (fallback)
+            * Components with an existing MV/LV substation ID but missing
+              geometry data
+                * directly to the MV/LV substation of the specified LV grid
+                  (will probably be changed to somewhere in the LV grid,
+                  depending on specified voltage level)
+
+            * Components with an existing MV/LV substation ID and geometry
+              data:
+
+                * with specified voltage level 6
+                    * to MV/LV substation (a new bus is created for
+                      the new component)
+
+                * Generators with specified voltage level 7
+                    * with a nominal capacity of <=30 kW to LV loads of type
+                      residential, if available
+                    * with a nominal capacity of >30 kW to LV loads of type
+                      retail, industrial or agricultural, if available
+                    * to random bus in the LV grid as fallback if no
+                      appropriate load is available
+
+                * Charging Points with specified voltage level 7
+                    * with use case home to LV loads of type
+                      residential, if available
+                    * with use case work to LV loads of type
+                      retail, industrial or agricultural, if available, otherwise
+                     * with use case public or fast to some bus in the grid that
+                       is not a house connection
+                     * to random bus in the LV grid that
+                       is not a house connection if no appropriate load is available
+                      (fallback)
+                * the number of generators or charging point connected at
+                  one load is restricted by the parameter
+                  `allowed_number_of_comp_per_bus`. If every possible load
+                  already has more than the allowed number then the new component
+                  is directly connected to the MV/LV substation.
 
         Parameters
         ----------
@@ -1646,6 +1685,15 @@ class Topology:
             :attr:`~.network.topology.Topology.add_charging_point`, except the
             `bus` that is assigned in this function, and may contain all other
             parameters of those methods.
+            Additionally, the dictionary must contain the voltage level to
+            connect in in key 'voltage_level' and may contain the geolocation
+            in key 'geom' and the LV grid ID to connect the component in in key
+            'mvlv_subst_id'. The voltage level must be provided as integer,
+            with possible options being 6 (component is connected directly to
+            the MV/LV substation) or 7 (component is connected somewhere in the
+            LV grid). The geolocation must be provided as
+            :shapely:`Shapely Point object<points>` and the LV grid ID as
+            interger.
         comp_type : str
             Type of added component. Can be 'Generator' or 'ChargingPoint'.
             Default: 'Generator'.
