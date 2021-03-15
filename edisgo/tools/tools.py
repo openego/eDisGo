@@ -283,93 +283,68 @@ def drop_duplicated_columns(df, keep="first"):
 
 
 def select_cable(edisgo_obj, level, apparent_power):
-    """Selects an appropriate cable type and quantity using given apparent
-    power.
+    """
+    Selects suitable cable type and quantity using given apparent power.
 
-    ToDo: adapt to refactored code!
-
-    Considers load factor.
+    Cable is selected to be able to carry the given `apparent_power`, no load
+    factor is considered. Overhead lines are not considered in choosing a
+    suitable cable.
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.network.topology.Topology`
-        The eDisGo container object
-    level : :obj:`str`
-        Grid level ('mv' or 'lv')
-    apparent_power : :obj:`float`
-        Apparent power the cable must carry in kVA
+    edisgo_obj : :class:`~.EDisGo`
+    level : str
+        Grid level to get suitable cable for. Possible options are 'mv' or
+        'lv'.
+    apparent_power : float
+        Apparent power the cable must carry in MVA.
 
     Returns
     -------
     :pandas:`pandas.Series<Series>`
-        Cable type
-    :obj:`ìnt`
-        Cable count
-
-    Notes
-    ------
-    Cable is selected to be able to carry the given `apparent_power`, no load
-    factor is considered.
+        Series with attributes of selected cable as in equipment data and
+        cable type as series name.
+    int
+        Number of necessary parallel cables.
 
     """
-    raise NotImplementedError
 
     cable_count = 1
 
     if level == "mv":
-
         cable_data = edisgo_obj.topology.equipment_data["mv_cables"]
         available_cables = cable_data[
-            cable_data["U_n"] == edisgo_obj.topology.mv_grid.voltage_nom
+            cable_data["U_n"] == edisgo_obj.topology.mv_grid.nominal_voltage
         ]
+    elif level == "lv":
+        available_cables = edisgo_obj.topology.equipment_data["lv_cables"]
+    else:
+        raise ValueError("Specified voltage level is not valid. Must "
+                         "either be 'mv' or 'lv'.")
 
+    suitable_cables = available_cables[
+        calculate_apparent_power(
+            available_cables["U_n"],
+            available_cables["I_max_th"])
+        > apparent_power
+    ]
+
+    # increase cable count until appropriate cable type is found
+    while suitable_cables.empty and cable_count < 7:
+        cable_count += 1
         suitable_cables = available_cables[
-            available_cables["I_max_th"]
-            * edisgo_obj.topology.mv_grid.voltage_nom
+            calculate_apparent_power(
+                available_cables["U_n"],
+                available_cables["I_max_th"]) * cable_count
             > apparent_power
         ]
+    if suitable_cables.empty:
+        raise exceptions.MaximumIterationError(
+            "Could not find a suitable cable for apparent power of "
+            "{} MVA.".format(apparent_power)
+        )
 
-        # increase cable count until appropriate cable type is found
-        while suitable_cables.empty and cable_count < 20:
-            cable_count += 1
-            suitable_cables = available_cables[
-                available_cables["I_max_th"]
-                * edisgo_obj.topology.mv_grid.voltage_nom
-                * cable_count
-                > apparent_power
-            ]
-        if suitable_cables.empty and cable_count == 20:
-            raise exceptions.MaximumIterationError(
-                "Could not find a suitable cable for apparent power of "
-                "{} kVA.".format(apparent_power)
-            )
-
-        cable_type = suitable_cables.ix[suitable_cables["I_max_th"].idxmin()]
-
-    elif level == "lv":
-
-        cable_data = edisgo_obj.topology.equipment_data["lv_cables"]
-        suitable_cables = cable_data[
-            cable_data["I_max_th"] * cable_data["U_n"] > apparent_power
-        ]
-
-        # increase cable count until appropriate cable type is found
-        while suitable_cables.empty and cable_count < 20:
-            cable_count += 1
-            suitable_cables = cable_data[
-                cable_data["I_max_th"] * cable_data["U_n"] * cable_count
-                > apparent_power
-            ]
-        if suitable_cables.empty and cable_count == 20:
-            raise exceptions.MaximumIterationError(
-                "Could not find a suitable cable for apparent power of "
-                "{} kVA.".format(apparent_power)
-            )
-
-        cable_type = suitable_cables.ix[suitable_cables["I_max_th"].idxmin()]
-
-    else:
-        raise ValueError("Please supply a level (either 'mv' or 'lv').")
+    cable_type = suitable_cables.ix[suitable_cables["I_max_th"].idxmin()]
 
     return cable_type, cable_count
 

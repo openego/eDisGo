@@ -139,6 +139,22 @@ class TestTools:
         assert tools.check_line_for_removal(self.topology, line_name)
         self.topology.remove_line(line_name)
 
+    def test_select_cable(self):
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo, 'mv', 5.1)
+        assert cable_data.name == "NA2XS2Y 3x1x150 RE/25"
+        assert num_parallel_cables == 1
+
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo, 'mv', 40)
+        assert cable_data.name == "NA2XS(FL)2Y 3x1x500 RM/35"
+        assert num_parallel_cables == 2
+
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo, 'lv', 0.18)
+        assert cable_data.name == "NAYY 4x1x150"
+        assert num_parallel_cables == 1
+
     def test_assign_feeder(self):
 
         # ######## test MV feeder mode ########
