@@ -1111,8 +1111,8 @@ class Topology:
 
         Other Parameters
         -----------------
-        number : int
-            Number of charging stations at charging point.
+        kwargs :
+            Kwargs may contain any further attributes you want to specify.
 
         """
         try:
@@ -1139,16 +1139,16 @@ class Topology:
                     grid_name, random.randint(10 ** 8, 10 ** 9)
                 )
 
-        number = kwargs.get("number", None)
-        new_df = pd.DataFrame(
-            data={
+        data = {
                 "bus": bus,
                 "p_nom": p_nom,
-                "use_case": use_case,
-                "number": number
-            },
-            index=[name],
-        )
+                "use_case": use_case
+            }
+        data.update(kwargs)
+        new_df = pd.Series(
+            data,
+            name=name,
+        ).to_frame().T
         self.charging_points_df = self._charging_points_df.append(new_df)
         return name
 
