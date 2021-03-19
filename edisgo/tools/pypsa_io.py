@@ -133,7 +133,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             "Load": grid_object.topology.loads_df.loc[
                 :, ["bus", "peak_load"]
             ].rename(columns={"peak_load": "p_set"}).append(
-                grid_object.topology.charging_points_df.loc[:, ['bus', 'p_nom']].rename(
+                grid_object.topology.charging_points_df.loc[
+                :, ['bus', 'p_nom']].rename(
                     columns={'p_nom': 'p_set'})),
             "Generator": grid_object.topology.generators_df.loc[
                 :, ["bus", "control", "p_nom"]

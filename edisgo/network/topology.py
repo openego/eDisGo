@@ -656,12 +656,13 @@ class Topology:
         Parameters
         ----------
         bus_name : str
-            name of bus
+            Name of bus to get connected lines for.
 
         Returns
         --------
         :pandas:`pandas.DataFrame<DataFrame>`
-            Dataframe of connected lines
+            Dataframe with connected lines with the same format as
+            :attr:`~.network.topology.Topology.lines_df`.
 
         """
         return self.lines_df.loc[self.lines_df.bus0 == bus_name].append(
@@ -2210,6 +2211,7 @@ class Topology:
             )
 
             return target_obj["repr"]
+
     def to_graph(self):
         """
         Returns graph representation of the grid.
