@@ -973,14 +973,18 @@ def _check_topology(components):
 
 def _check_integrity_of_pypsa(pypsa_network):
     """
-    Checks whether the provided pypsa network is calculable. Isolated nodes,
-    duplicate labels and completeness of buses and branch elements are checked.
+    Checks whether the provided pypsa network is calculable.
+
+    Isolated nodes,
+    duplicate labels, that every load, generator and storage unit has a
+    time series for active and reactive power, and completeness of buses and branch elements are checked.
 
     Parameters
     ----------
     pypsa_network: :pypsa:`pypsa.Network<network>`
         The `PyPSA network
         <https://www.pypsa.org/doc/components.html#network>`_ container.
+
     """
 
     # check for sub-networks
@@ -993,156 +997,75 @@ def _check_integrity_of_pypsa(pypsa_network):
     if len(subgraphs) > 1 or len(pypsa_network.sub_networks) > 1:
         raise ValueError("The pypsa graph has isolated nodes or edges.")
 
+    # check for duplicate labels of components
+    comps_dfs = [pypsa_network.buses,
+                 pypsa_network.generators,
+                 pypsa_network.loads,
+                 pypsa_network.storage_units,
+                 pypsa_network.transformers,
+                 pypsa_network.lines]
+    for comp_type in comps_dfs:
+        if any(comp_type.index.duplicated()):
+            raise ValueError(
+                "Pypsa network has duplicated entries: {}.".format(
+                    comp_type.index.duplicated())
+            )
+
     # check consistency of topology and time series data
-    generators_ts_p_missing = pypsa_network.generators.loc[
-        ~pypsa_network.generators.index.isin(
-            pypsa_network.generators_t["p_set"].dropna(axis=1).columns.tolist()
-        )
-    ]
-    generators_ts_q_missing = pypsa_network.generators.loc[
-        ~pypsa_network.generators.index.isin(
-            pypsa_network.generators_t["q_set"].dropna(axis=1).columns.tolist()
-        )
-    ]
-    loads_ts_p_missing = pypsa_network.loads.loc[
-        ~pypsa_network.loads.index.isin(
-            pypsa_network.loads_t["p_set"].dropna(axis=1).columns.tolist()
-        )
-    ]
-    loads_ts_q_missing = pypsa_network.loads.loc[
-        ~pypsa_network.loads.index.isin(
-            pypsa_network.loads_t["q_set"].dropna(axis=1).columns.tolist()
-        )
-    ]
-    bus_v_set_missing = pypsa_network.buses.loc[
+    comp_df_dict = {
+        # exclude Slack from check
+        "gens": pypsa_network.generators[
+            pypsa_network.generators.control != "Slack"],
+        "loads": pypsa_network.loads,
+        "storage_units": pypsa_network.storage_units}
+    comp_ts_dict = {
+        "gens": pypsa_network.generators_t,
+        "loads": pypsa_network.loads_t,
+        "storage_units": pypsa_network.storage_units_t}
+    for comp_type, ts in comp_ts_dict.items():
+        for i in ["p_set", "q_set"]:
+            missing = comp_df_dict[comp_type].loc[
+                ~comp_df_dict[comp_type].index.isin(
+                    ts[i].dropna(axis=1).columns
+                )
+            ]
+            if not missing.empty:
+                raise ValueError(
+                    "The following components have no `{}` time "
+                    "series.".format(
+                        missing.index, i)
+                )
+
+    missing = pypsa_network.buses.loc[
         ~pypsa_network.buses.index.isin(
             pypsa_network.buses_t["v_mag_pu_set"].columns.tolist()
         )
     ]
-
-    # Comparison of generators excludes slack generators (have no time series)
-    if not generators_ts_p_missing.empty and not all(
-        generators_ts_p_missing["control"] == "Slack"
-    ):
+    if not missing.empty:
         raise ValueError(
-            "Following generators have no `p_set` time series "
-            "{generators}".format(generators=generators_ts_p_missing)
+            "The following components have no `v_mag_pu_set` time "
+            "series.".format(
+                missing.index)
         )
 
-    if not generators_ts_q_missing.empty and not all(
-        generators_ts_q_missing["control"] == "Slack"
-    ):
-        raise ValueError(
-            "Following generators have no `q_set` time series "
-            "{generators}".format(generators=generators_ts_q_missing)
-        )
+    # check for duplicates in p_set and q_set
+    comp_ts = [
+        pypsa_network.loads_t,
+        pypsa_network.generators_t,
+        pypsa_network.storage_units_t
+    ]
+    for comp in comp_ts:
+        for i in ["p_set", "q_set"]:
+            if any(comp[i].columns.duplicated()):
+                raise ValueError(
+                    "Pypsa timeseries have duplicated entries: {}".format(
+                        comp[i].columns.duplicated())
+                )
 
-    if not loads_ts_p_missing.empty:
-        raise ValueError(
-            "Following loads have no `p_set` time series "
-            "{loads}".format(loads=loads_ts_p_missing)
-        )
-
-    if not loads_ts_q_missing.empty:
-        raise ValueError(
-            "Following loads have no `q_set` time series "
-            "{loads}".format(loads=loads_ts_q_missing)
-        )
-
-    if not bus_v_set_missing.empty:
-        raise ValueError(
-            "Following loads have no `v_mag_pu_set` time series "
-            "{buses}".format(buses=bus_v_set_missing)
-        )
-
-    # check for duplicate labels (of components)
-    duplicated_labels = []
-    if any(pypsa_network.buses.index.duplicated()):
-        duplicated_labels.append(
-            pypsa_network.buses.index[pypsa_network.buses.index.duplicated()]
-        )
-    if any(pypsa_network.generators.index.duplicated()):
-        duplicated_labels.append(
-            pypsa_network.generators.index[
-                pypsa_network.generators.index.duplicated()
-            ]
-        )
-    if any(pypsa_network.loads.index.duplicated()):
-        duplicated_labels.append(
-            pypsa_network.loads.index[pypsa_network.loads.index.duplicated()]
-        )
-    if any(pypsa_network.transformers.index.duplicated()):
-        duplicated_labels.append(
-            pypsa_network.transformers.index[
-                pypsa_network.transformers.index.duplicated()
-            ]
-        )
-    if any(pypsa_network.lines.index.duplicated()):
-        duplicated_labels.append(
-            pypsa_network.lines.index[pypsa_network.lines.index.duplicated()]
-        )
-    if duplicated_labels:
-        raise ValueError(
-            "{labels} have duplicate entry in "
-            "one of the components dataframes".format(labels=duplicated_labels)
-        )
-
-    # duplicate p_sets and q_set
-    duplicate_p_sets = []
-    duplicate_q_sets = []
-    if any(pypsa_network.loads_t["p_set"].columns.duplicated()):
-        duplicate_p_sets.append(
-            pypsa_network.loads_t["p_set"].columns[
-                pypsa_network.loads_t["p_set"].columns.duplicated()
-            ]
-        )
-    if any(pypsa_network.loads_t["q_set"].columns.duplicated()):
-        duplicate_q_sets.append(
-            pypsa_network.loads_t["q_set"].columns[
-                pypsa_network.loads_t["q_set"].columns.duplicated()
-            ]
-        )
-
-    if any(pypsa_network.generators_t["p_set"].columns.duplicated()):
-        duplicate_p_sets.append(
-            pypsa_network.generators_t["p_set"].columns[
-                pypsa_network.generators_t["p_set"].columns.duplicated()
-            ]
-        )
-    if any(pypsa_network.generators_t["q_set"].columns.duplicated()):
-        duplicate_q_sets.append(
-            pypsa_network.generators_t["q_set"].columns[
-                pypsa_network.generators_t["q_set"].columns.duplicated()
-            ]
-        )
-
-    if duplicate_p_sets:
-        raise ValueError(
-            "{labels} have duplicate entry in "
-            "generators_t['p_set']"
-            " or loads_t['p_set']".format(labels=duplicate_p_sets)
-        )
-    if duplicate_q_sets:
-        raise ValueError(
-            "{labels} have duplicate entry in "
-            "generators_t['q_set']"
-            " or loads_t['q_set']".format(labels=duplicate_q_sets)
-        )
-
-    # find duplicate v_mag_set entries
-    duplicate_v_mag_set = []
     if any(pypsa_network.buses_t["v_mag_pu_set"].columns.duplicated()):
-        duplicate_v_mag_set.append(
-            pypsa_network.buses_t["v_mag_pu_set"].columns[
-                pypsa_network.buses_t["v_mag_pu_set"].columns.duplicated()
-            ]
-        )
-
-    if duplicate_v_mag_set:
         raise ValueError(
-            "{labels} have duplicate entry in buses_t".format(
-                labels=duplicate_v_mag_set
-            )
+            "Pypsa timeseries have duplicated entries: {}".format(
+                pypsa_network.buses_t["v_mag_pu_set"].columns.duplicated())
         )
 
 
