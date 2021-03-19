@@ -4,10 +4,11 @@ import numpy as np
 import pytest
 import shutil
 from math import tan, acos
+from shapely.geometry import Point
+from matplotlib import pyplot as plt
 
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints as checks
-from matplotlib import pyplot as plt
 
 
 class TestEDisGo:
@@ -487,6 +488,120 @@ class TestEDisGo:
         self.edisgo.remove_component('Load', load_name)
         self.edisgo.remove_component('Generator', gen_name)
         # Todo: check if components were removed
+
+    def test_integrate_component(self):
+        """Test integrate_component method"""
+        num_gens = len(self.edisgo.topology.generators_df)
+
+        random_bus = self.edisgo.topology.buses_df.index[10]
+        x = self.edisgo.topology.buses_df.at[random_bus, "x"]
+        y = self.edisgo.topology.buses_df.at[random_bus, "y"]
+        geom = Point((x, y))
+
+        # ##### MV integration
+        # test generator integration by voltage level, geom as tuple, without
+        # time series
+        comp_data = {
+            "generator_id": 13,
+            "p_nom": 4,
+            "generator_type": "misc",
+            "subtype": "misc_sub"
+        }
+        comp_name = self.edisgo.integrate_component(
+            comp_type="Generator",
+            geolocation=(x, y),
+            voltage_level=4,
+            add_ts=False,
+            **comp_data
+        )
+
+        assert len(self.edisgo.topology.generators_df) == num_gens + 1
+        assert (self.edisgo.topology.generators_df.at[comp_name, "subtype"] ==
+                "misc_sub")
+        # check that generator is directly connected to HV/MV station
+        assert self.edisgo.topology.get_connected_lines_from_bus(
+            self.edisgo.topology.generators_df.at[comp_name, "bus"]
+        ).bus0[0] == "Bus_MVStation_1"
+
+        # test charging point integration by nominal power, geom as shapely
+        # Point, with time series
+        num_cps = len(self.edisgo.topology.charging_points_df)
+
+        comp_data = {
+            "p_nom": 4,
+            "use_case": "fast"
+        }
+        ts_active_power = pd.Series(
+            data=[1, 2],
+            index=self.edisgo.timeseries.timeindex
+        )
+        ts_reactive_power = pd.Series(
+            data=[0, 0],
+            index=self.edisgo.timeseries.timeindex
+        )
+        comp_name = self.edisgo.integrate_component(
+            comp_type="ChargingPoint",
+            geolocation=geom,
+            ts_active_power=ts_active_power,
+            ts_reactive_power=ts_reactive_power,
+            **comp_data
+        )
+
+        assert len(self.edisgo.topology.charging_points_df) == num_cps + 1
+        assert (self.edisgo.topology.charging_points_df.at[
+                    comp_name, "use_case"] == "fast")
+        # check voltage level
+        assert self.edisgo.topology.buses_df.at[
+            self.edisgo.topology.charging_points_df.at[comp_name, "bus"],
+            "v_nom"] == 20
+        # check that charging point is connected to the random bus chosen
+        # above
+        assert self.edisgo.topology.get_connected_lines_from_bus(
+            self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
+        ).bus0[0] == random_bus
+        # check time series
+        assert (self.edisgo.timeseries.charging_points_active_power.loc[
+                :, comp_name].values == [1, 2]).all()
+        assert (self.edisgo.timeseries.charging_points_reactive_power.loc[
+                :, comp_name].values == [0, 0]).all()
+
+        # ##### LV integration
+
+        # test charging point integration by nominal power, geom as shapely
+        # Point, with time series
+        comp_data = {
+            "number": 13,
+            "p_nom": 0.04,
+            "use_case": "fast"
+        }
+        ts_active_power = pd.Series(
+            data=[1, 2],
+            index=self.edisgo.timeseries.timeindex
+        )
+        ts_reactive_power = pd.Series(
+            data=[0, 0],
+            index=self.edisgo.timeseries.timeindex
+        )
+        comp_name = self.edisgo.integrate_component(
+            comp_type="ChargingPoint",
+            geolocation=geom,
+            ts_active_power=ts_active_power,
+            ts_reactive_power=ts_reactive_power,
+            **comp_data
+        )
+
+        assert len(self.edisgo.topology.charging_points_df) == num_cps + 2
+        assert (self.edisgo.topology.charging_points_df.at[
+                    comp_name, "number"] == 13)
+        # check bus
+        assert self.edisgo.topology.charging_points_df.at[
+                   comp_name, "bus"] == "BusBar_MVGrid_1_LVGrid_1_LV"
+        # check time series
+        assert (self.edisgo.timeseries.charging_points_active_power.loc[
+                :, comp_name].values == [1, 2]).all()
+        assert (self.edisgo.timeseries.charging_points_reactive_power.loc[
+                :, comp_name].values == [0, 0]).all()
+
     def test_aggregate_components(self):
         """Test aggregate_components method"""
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path,
