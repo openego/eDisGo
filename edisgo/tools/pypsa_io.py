@@ -471,7 +471,7 @@ def _append_lv_components(
             )
         elif aggregate_loads == "sectoral":
             comps_aggr = (
-                comps.groupby("sector")
+                comps.loc[:, ["peak_load", "sector"]].groupby("sector")
                 .sum()
                 .rename(columns={"peak_load": "p_set"})
                 .loc[:, ["p_set"]]
