@@ -253,6 +253,7 @@ def find_nearest_conn_objects(grid_topology, bus, lines,
     """
 
     conn_objects_min_stack = []
+    repr = []
 
     srid = grid_topology.grid_district["srid"]
     bus_shp = transform(proj2equidistant(srid), Point(bus.x, bus.y))
@@ -323,8 +324,10 @@ def find_nearest_conn_objects(grid_topology, bus, lines,
         conn_objects_min = min(
             conn_objects.values(), key=lambda v: v["dist"]
         )
-
-        conn_objects_min_stack.append(conn_objects_min)
+        # discard duplicates
+        if not conn_objects_min["repr"] in repr:
+            conn_objects_min_stack.append(conn_objects_min)
+            repr.append(conn_objects_min["repr"])
 
     # sort all objects by distance from node
     conn_objects_min_stack = [
