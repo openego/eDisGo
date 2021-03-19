@@ -15,6 +15,7 @@ from edisgo.tools.tools import (
     calculate_apparent_power,
     check_bus_for_removal,
     check_line_for_removal,
+    select_cable
 )
 from edisgo.tools import networkx_helper
 from edisgo.tools import geo
@@ -1497,14 +1498,6 @@ class Topology:
         """
         # ToDo connect charging points via transformer?
 
-        # ToDo use select_cable instead of standard line?
-        # get standard equipment
-        std_line_type = self.equipment_data["mv_cables"].loc[
-            edisgo_object.config["grid_expansion_standard_equipment"][
-                "mv_line"
-            ]
-        ]
-
         # create new bus for new component
         if not type(comp_data["geom"]) is Point:
             geom = wkt_loads(comp_data["geom"])
@@ -1556,12 +1549,16 @@ class Topology:
             if line_length < 0.001:
                 line_length = 0.001
 
+            line_type, num_parallel = select_cable(
+                edisgo_object, "mv", comp_data["p_nom"])
+
             line_name = self.add_line(
                 bus0=self.mv_grid.station.index[0],
                 bus1=bus,
                 length=line_length,
                 kind="cable",
-                type_info=std_line_type.name,
+                type_info=line_type.name,
+                num_parallel=num_parallel
             )
 
             # add line to equipment changes to track costs
@@ -1603,10 +1600,14 @@ class Topology:
             for dist_min_obj in conn_objects_min_stack:
                 # do not allow connection to virtual busses
                 if "virtual" not in dist_min_obj["repr"]:
+                    line_type, num_parallel = select_cable(
+                        edisgo_object, "mv", comp_data["p_nom"])
                     target_obj_result = self._connect_mv_bus_to_target_object(
                         edisgo_object=edisgo_object,
                         bus=self.buses_df.loc[bus, :],
                         target_obj=dist_min_obj,
+                        line_type=line_type.name,
+                        number_parallel_lines=num_parallel
                     )
 
                     if target_obj_result is not None:
@@ -1759,20 +1760,16 @@ class Topology:
             # avoid very short lines by limiting line length to at least 1m
             if line_length < 0.001:
                 line_length = 0.001
-            # get standard equipment
-            std_line_type = self.equipment_data[
-                "lv_cables"
-            ].loc[
-                edisgo_object.config["grid_expansion_standard_equipment"][
-                    "lv_line"
-                ]
-            ]
+            # get suitable line type
+            line_type, num_parallel = select_cable(
+                edisgo_object, "lv", comp_data["p_nom"])
             line_name = self.add_line(
                 bus0=station_bus,
                 bus1=b,
                 length=line_length,
                 kind="cable",
-                type_info=std_line_type.name,
+                type_info=line_type.name,
+                num_parallel=num_parallel
             )
 
             # add line to equipment changes to track costs
@@ -2039,14 +2036,6 @@ class Topology:
 
         """
 
-        # get standard equipment
-        std_line_type = self.equipment_data["mv_cables"].loc[
-            edisgo_object.config["grid_expansion_standard_equipment"][
-                "mv_line"
-            ]
-        ]
-        std_line_kind = "cable"
-
         srid = self.grid_district["srid"]
         bus_shp = transform(geo.proj2equidistant(srid), Point(bus.x, bus.y))
 
@@ -2165,8 +2154,9 @@ class Topology:
                 bus0=branch_tee_repr,
                 bus1=bus.name,
                 length=line_length,
-                kind=std_line_kind,
-                type_info=std_line_type.name,
+                kind="cable",
+                type_info=line_type,
+                num_parallel=number_parallel_lines
             )
             # add line to equipment changes
             edisgo_object.results._add_line_to_equipment_changes(
@@ -2201,8 +2191,9 @@ class Topology:
                 bus0=target_obj["repr"],
                 bus1=bus.name,
                 length=line_length,
-                kind=std_line_kind,
-                type_info=std_line_type.name,
+                kind="cable",
+                type_info=line_type,
+                num_parallel=number_parallel_lines
             )
 
             # add line to equipment changes
