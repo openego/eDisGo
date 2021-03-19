@@ -1983,14 +1983,18 @@ class Topology:
                 )
             return comp_name
 
-    def _connect_mv_bus_to_target_object(self, edisgo_object, bus, target_obj):
+    def _connect_mv_bus_to_target_object(self, edisgo_object, bus, target_obj,
+                                         line_type, number_parallel_lines):
         """
-        Connects MV generators to target object in MV network
+        Connects given MV bus to given target object (MV line or bus).
 
-        If the target object is a bus, a new line is created to it.
+        If the target object is a bus, a new line between the two buses is
+        created.
         If the target object is a line, the node is connected to a newly
         created bus (using perpendicular projection) on this line.
-        New lines are created using standard equipment.
+        New lines are created using the line type specified through parameter
+        `line_type` and using the number of parallel lines specified through
+        parameter `number_parallel_lines`.
 
         Parameters
         ----------
@@ -1999,13 +2003,25 @@ class Topology:
             Data of bus to connect.
             Series has same rows as columns of
             :attr:`~.network.topology.Topology.buses_df`.
-        target_obj : :class:`~.network.components.Component`
-            Object that node shall be connected to
+        target_obj : dict
+            Dictionary containing the following necessary target object
+            information:
+
+                * repr : str
+                    Name of line or bus to connect to.
+                * shp : :shapely:`Shapely Point object<points>` or \
+                :shapely:`Shapely Line object<lines>`
+                    Geometry of line or bus to connect to.
+
+        line_type : str
+            Line type to use to connect new component with.
+        number_parallel_lines : int
+            Number of parallel lines to connect new component with.
 
         Returns
         -------
-        :class:`~.network.components.Component` or None
-            Node that node was connected to
+        str
+            Name of the bus the given bus was connected to.
 
         """
 
