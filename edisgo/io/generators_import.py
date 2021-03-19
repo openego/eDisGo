@@ -629,7 +629,7 @@ def _update_grids(
 
     # iterate over new generators and create them
     number_new_gens = len(new_gens_mv)
-    for id in new_gens_mv.index:
+    for id in new_gens_mv.index.sort_values(ascending=True):
         # check if geom is available, skip otherwise
         geom = _check_mv_generator_geom(new_gens_mv.loc[id, :])
         if geom is None:
@@ -672,7 +672,7 @@ def _update_grids(
             )
 
     # iterate over new generators and create them
-    for id in new_gens_lv.index:
+    for id in new_gens_lv.index.sort_values(ascending=True):
         edisgo_object.topology.connect_to_lv(
             edisgo_object,
             dict(new_gens_lv.loc[id, :]),
