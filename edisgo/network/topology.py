@@ -1633,29 +1633,13 @@ class Topology:
         provided in the `comp_data` parameter.
         It connects
 
-            * Components with no MV/LV substation ID
-                * directly to random MV/LV substation (will probably be
-                  changed to random LV grid or LV grid closest to component)
+            * Components with specified voltage level 6
+                * to MV/LV substation (a new bus is created for
+                  the new component, unless no geometry data is available in
+                  which case the new component is connected directly to the
+                  substation)
 
-            * Components with an MV/LV substation ID that does not exist (i.e.
-              components in an aggregated load area)
-                * directly to the HV/MV station (will probably be changed to
-                  random LV grid or LV grid closest to component)
-
-            * Components with an existing MV/LV substation ID but missing
-              geometry data
-                * directly to the MV/LV substation of the specified LV grid
-                  (will probably be changed to somewhere in the LV grid,
-                  depending on specified voltage level)
-
-            * Components with an existing MV/LV substation ID and geometry
-              data:
-
-                * with specified voltage level 6
-                    * to MV/LV substation (a new bus is created for
-                      the new component)
-
-                * Generators with specified voltage level 7
+            * Generators with specified voltage level 7
                     * with a nominal capacity of <=30 kW to LV loads of type
                       residential, if available
                     * with a nominal capacity of >30 kW to LV loads of type
@@ -1663,21 +1647,28 @@ class Topology:
                     * to random bus in the LV grid as fallback if no
                       appropriate load is available
 
-                * Charging Points with specified voltage level 7
-                    * with use case home to LV loads of type
-                      residential, if available
-                    * with use case work to LV loads of type
-                      retail, industrial or agricultural, if available, otherwise
-                     * with use case public or fast to some bus in the grid that
-                       is not a house connection
-                     * to random bus in the LV grid that
-                       is not a house connection if no appropriate load is available
-                      (fallback)
-                * the number of generators or charging point connected at
-                  one load is restricted by the parameter
-                  `allowed_number_of_comp_per_bus`. If every possible load
-                  already has more than the allowed number then the new component
-                  is directly connected to the MV/LV substation.
+            * Charging Points with specified voltage level 7
+                * with use case home to LV loads of type
+                  residential, if available
+                * with use case work to LV loads of type
+                  retail, industrial or agricultural, if available, otherwise
+                * with use case public or fast to some bus in the grid that
+                  is not a house connection
+                * to random bus in the LV grid that
+                  is not a house connection if no appropriate load is available
+                 (fallback)
+            * the number of generators or charging point connected at
+              one load is restricted by the parameter
+              `allowed_number_of_comp_per_bus`. If every possible load
+              already has more than the allowed number then the new component
+              is directly connected to the MV/LV substation.
+
+        In case no MV/LV substation ID is provided a random LV grid is chosen.
+        In case the provided MV/LV substation ID does not exist (i.e. in case
+        of components in an aggregated load area), the new component is
+        directly connected to the HV/MV station. (Will be changed once
+        generators in aggregated areas are treated differently in
+        ding0.)
 
         Parameters
         ----------
@@ -1717,6 +1708,8 @@ class Topology:
         predefined seed to ensure reproducibility.
 
         """
+
+        global add_func
 
         def _connect_to_station():
             """
@@ -1807,21 +1800,11 @@ class Topology:
                     "LVGrid_{}".format(int(comp_data["mvlv_subst_id"]))
                 ]
 
-                # if no geom is given, connect to LV grid's station
-                if not comp_data["geom"]:
-                    comp_name = add_func(
-                        bus=lv_grid.station.index[0], **comp_data
-                    )
-                    logger.debug(
-                        "Component {} has no geom entry and will be connected "
-                        "to grid's LV station.".format(comp_name)
-                    )
-                    return comp_name
-
             # if substation ID (= LV grid ID) is given but it does not match an
             # existing LV grid ID (i.e. it is an aggregated LV grid), connect
             # component to HV-MV substation
-            # ToDo: Keep it like this?
+            # ToDo: Change once LV components in aggregated areas are handled
+            #  differently in ding0
             else:
                 comp_name = add_func(
                     bus=self.mv_grid.station.index[0],
@@ -1829,8 +1812,7 @@ class Topology:
                 )
                 return comp_name
 
-        # if no MV-LV substation ID is given (and there is therefore also no
-        # geometry data), choose random LV grid and connect to station
+        # if no MV/LV substation ID is given, choose random LV grid
         else:
             if comp_type == "Generator":
                 random.seed(a=comp_data["generator_id"])
@@ -1840,42 +1822,32 @@ class Topology:
                 random.seed(a=len(self.charging_points_df))
             lv_grid_id = random.choice(lv_grid_ids)
             lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=edisgo_object)
-            comp_name = add_func(
-                bus=lv_grid.station.index[0], **comp_data
-            )
             logger.warning(
-                "Component {} has no mvlv_subst_id. It is therefore allocated "
+                "Component has no mvlv_subst_id. It is therefore allocated "
                 "to a random LV Grid ({}).".format(
-                    comp_name, lv_grid_id
+                    lv_grid_id
                 )
             )
-            return comp_name
 
         # v_level 6 -> connect to grid's LV station
         if comp_data["voltage_level"] == 6:
-            comp_name = _connect_to_station()
+            # if no geom is given, connect directly to LV grid's station, as
+            # connecting via separate bus will otherwise throw an error (see
+            # _connect_to_station function)
+            if ("geom" not in comp_data.keys()) or \
+                    ("geom" in comp_data.keys() and not comp_data["geom"]):
+                comp_name = add_func(
+                    bus=lv_grid.station.index[0], **comp_data
+                )
+                logger.debug(
+                    "Component {} has no geom entry and will be connected "
+                    "to grid's LV station.".format(comp_name)
+                )
+            else:
+                comp_name = _connect_to_station()
             return comp_name
 
-        # v_level 7 -> assign generator to load
-        # Generators:
-        # Generators with P <= 30 kW are connected to residential loads, if
-        # available; generators with 30 kW <= P <= 100 kW are connected to
-        # retail, industrial, or agricultural loads, if available.
-        # Charging Points:
-        # Charging points with use case 'home' are connected to residential
-        # loads, if available; charging points with use case 'work' are
-        # connected to retail, industrial, or agricultural loads, if available;
-        # charging points with other use cases ('public' or 'fast') are
-        # connected somewhere in the grid.
-        # In case the above described criteria do not give a bus to connect to,
-        # the generator or charging point is connected to a random bus in the
-        # LV grid.
-        # If there are valid buses, the generator or charging point is
-        # connected to a bus out of the valid buses with less than or equal
-        # the allowed number of generators / charging points at one bus.
-        # If every one of the valid buses already has the allowed number of
-        # generators / charging points, the new component is directly
-        # connected to the substation.
+        # v_level 7 -> connect in LV grid
         elif comp_data["voltage_level"] == 7:
 
             # get valid buses to connect new component to
@@ -1933,7 +1905,8 @@ class Topology:
                 return comp_name
 
             # search through list of target buses for bus with less
-            # than two generators / charging points
+            # than or equal the allowed number of components of the same type
+            # already connected to it
             lv_conn_target = None
 
             # ToDo: Once export in ding0 connects generators directly to bus
