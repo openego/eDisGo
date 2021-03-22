@@ -372,37 +372,44 @@ class Results:
         self._grid_losses = pypsa_grid_losses
 
     @property
-    def hv_mv_exchanges(self):
+    def pfa_slack(self):
         """
-        Holds active and reactive power exchanged with the HV network.
+        Active and reactive power from slack in MW and MVA, respectively.
 
-        The exchanges are essentially the slack results. As the slack is placed
-        at the secondary side of the HV/MV station, this gives the energy
-        transferred to and taken from the HV network at the secondary side of
-        the HV/MV station.
+        In case the MV level is included in the power flow analysis, the slack
+        is placed at the secondary side of the HV/MV station and gives the
+        energy transferred to and taken from the HV network. In case a single
+        LV network is analysed, the slack is positioned at the respective
+        station's secondary, in which case this gives the energy transferred
+        to and taken from the overlying MV network.
 
         Parameters
         ----------
-        hv_mv_exchanges : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe holding active and reactive power exchanged with the HV
-            network in columns 'p' and 'q' and in kW and kvar, respectively.
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Results for active and reactive power from the slack in MW and
+            MVA, respectively. Dataframe has the columns 'p', holding the
+            active power results, and 'q', holding the reactive power results.
             Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+
+            Provide this if you want to set values. For retrieval of data do
+            not pass an argument.
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe holding active and reactive power exchanged with the HV
-            network in columns 'p' and 'q' and in kW and kvar, respectively.
-            Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Results for active and reactive power from the slack in MW and
+            MVA, respectively. For more information on the dataframe see
+            input parameter `df`.
 
         """
-        # ToDo: Instead of hv_mv_exchanges just use slack (is more general in
-        # case only LV grid was analyzed)
-        return self._hv_mv_exchanges
+        try:
+            return self._pfa_slack
+        except:
+            return pd.DataFrame()
 
-    @hv_mv_exchanges.setter
-    def hv_mv_exchanges(self, hv_mv_exchanges):
-        self._hv_mv_exchanges = hv_mv_exchanges
+    @pfa_slack.setter
+    def pfa_slack(self, df):
+        self._pfa_slack = df
 
     # @property
     # def curtailment(self):
@@ -640,9 +647,9 @@ class Results:
           * `grid_losses.csv`
 
             See :py:attr:`~grid_losses` for more information.
-          * `hv_mv_exchanges.csv`
+          * `pfa_slack.csv`
 
-            See :py:attr:`~hv_mv_exchanges` for more information.
+            See :py:attr:`~pfa_slack` for more information.
 
         * `grid_expansion_results` directory
 
@@ -718,8 +725,8 @@ class Results:
                 )
 
                 # network exchanges
-                self.hv_mv_exchanges.to_csv(
-                    os.path.join(target_dir, "hv_mv_exchanges.csv")
+                self.pfa_slack.to_csv(
+                    os.path.join(target_dir, "pfa_slack.csv")
                 )
 
         def _save_grid_expansion_results(target_dir):

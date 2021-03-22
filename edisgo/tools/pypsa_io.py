@@ -1114,14 +1114,12 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     }
     edisgo.results.grid_losses = pd.DataFrame(grid_losses).loc[timesteps, :]
 
-    # get slack results (HV/MV exchanges) in MW and Mvar
-    grid_exchanges = {
+    # get slack results in MW and Mvar
+    pfa_slack = {
         "p": (pypsa.generators_t["p"]["Generator_slack"]),
         "q": (pypsa.generators_t["q"]["Generator_slack"]),
     }
-    edisgo.results.hv_mv_exchanges = pd.DataFrame(grid_exchanges).loc[
-        timesteps, :
-    ]
+    edisgo.results.pfa_slack = pd.DataFrame(pfa_slack).loc[timesteps, :]
 
     # get P and Q of lines and transformers in MW and Mvar
     q0 = pd.concat(

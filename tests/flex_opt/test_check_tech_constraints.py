@@ -58,7 +58,7 @@ class TestCheckTechConstraints:
 
         # create over-load problem in both time steps with higher over-load
         # in load case
-        self.edisgo.results.hv_mv_exchanges = pd.DataFrame(
+        self.edisgo.results.pfa_slack = pd.DataFrame(
             data={"p": [30, 25], "q": [30, 25]}, index=self.timesteps
         )
 
