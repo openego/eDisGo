@@ -71,37 +71,43 @@ class TimeSeries:
 
     def __init__(self, **kwargs):
 
-        self._timeindex = kwargs.get("timeindex", None)
-        self._generators_active_power = kwargs.get(
-            "generators_active_power", pd.DataFrame(index=self.timeindex)
-        )
-        self._generators_reactive_power = kwargs.get(
-            "generators_reactive_power", pd.DataFrame(index=self.timeindex)
-        )
-        self._loads_active_power = kwargs.get(
-            "loads_active_power", pd.DataFrame(index=self.timeindex)
-        )
-        self._loads_reactive_power = kwargs.get(
-            "loads_reactive_power", pd.DataFrame(index=self.timeindex)
-        )
-        self._storage_units_active_power = kwargs.get(
-            "storage_units_active_power", pd.DataFrame(index=self.timeindex)
-        )
-        self._storage_units_reactive_power = kwargs.get(
-            "storage_units_reactive_power", pd.DataFrame(index=self.timeindex)
-        )
-        self._charging_points_active_power = kwargs.get(
-            "charging_points_active_power", pd.DataFrame(index=self.timeindex)
-        )
-        self._charging_points_reactive_power = kwargs.get(
-            "charging_points_reactive_power", pd.DataFrame(index=self.timeindex)
-        )
-        self._curtailment = kwargs.get(
-            "curtailment", pd.DataFrame(index=self.timeindex)
-        )
-        self._residual_load = kwargs.get(
-            "residual_load", pd.DataFrame(index=self.timeindex)
-        )
+        self._timeindex = kwargs.get("timeindex", pd.DatetimeIndex([]))
+
+    @property
+    def timeindex(self):
+        """
+        Defines analysed time steps.
+
+        Can be used to define a time range for which to obtain the provided
+        time series and run power flow analysis.
+
+        Parameters
+        -----------
+        ind : timestamp or list(timestamp)
+
+        Returns
+        -------
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+            See class definition for details.
+
+        """
+        return self._timeindex
+
+    @timeindex.setter
+    def timeindex(self, ind):
+        # make iterable
+        if not hasattr(ind, "__len__"):
+            ind = [ind]
+        # make datetime index
+        ind = pd.DatetimeIndex(ind)
+        if len(self._timeindex) > 0:
+            # check if new time index is subset of existing time index
+            if not ind.isin(self._timeindex).all():
+                logger.warning(
+                    "Not all time steps of new time index lie within existing "
+                    "time index. This may cause problems later on."
+                )
+        self._timeindex = ind
 
     @property
     def generators_active_power(self):
@@ -114,13 +120,10 @@ class TimeSeries:
             See class definition for details.
 
         """
-        if self._generators_active_power.empty:
-            return self._generators_active_power
-        else:
-            try:
-                return self._generators_active_power.loc[[self.timeindex], :]
-            except:
-                return self._generators_active_power.loc[self.timeindex, :]
+        try:
+            return self._generators_active_power.loc[self.timeindex, :]
+        except:
+            return pd.DataFrame(index=self.timeindex)
 
     @generators_active_power.setter
     def generators_active_power(self, generators_active_power_ts):
@@ -137,13 +140,10 @@ class TimeSeries:
             See class definition for details.
 
         """
-        if self._generators_reactive_power.empty:
-            return self._generators_reactive_power
-        else:
-            try:
-                return self._generators_reactive_power.loc[[self.timeindex], :]
-            except:
-                return self._generators_reactive_power.loc[self.timeindex, :]
+        try:
+            return self._generators_reactive_power.loc[self.timeindex, :]
+        except:
+            return pd.DataFrame(index=self.timeindex)
 
     @generators_reactive_power.setter
     def generators_reactive_power(self, generators_reactive_power_ts):
@@ -160,13 +160,10 @@ class TimeSeries:
             See class definition for details.
 
         """
-        if self._loads_active_power.empty:
-            return self._loads_active_power
-        else:
-            try:
-                return self._loads_active_power.loc[[self.timeindex], :]
-            except:
-                return self._loads_active_power.loc[self.timeindex, :]
+        try:
+            return self._loads_active_power.loc[self.timeindex, :]
+        except:
+            return pd.DataFrame(index=self.timeindex)
 
     @loads_active_power.setter
     def loads_active_power(self, loads_active_power_ts):
@@ -183,13 +180,10 @@ class TimeSeries:
             See class definition for details.
 
         """
-        if self._loads_reactive_power.empty:
-            return self._loads_reactive_power
-        else:
-            try:
-                return self._loads_reactive_power.loc[[self.timeindex], :]
-            except:
-                return self._loads_reactive_power.loc[self.timeindex, :]
+        try:
+            return self._loads_reactive_power.loc[self.timeindex, :]
+        except:
+            return pd.DataFrame(index=self.timeindex)
 
     @loads_reactive_power.setter
     def loads_reactive_power(self, loads_reactive_power_ts):
@@ -206,15 +200,10 @@ class TimeSeries:
             See class definition for details.
 
         """
-        if self._storage_units_active_power.empty:
-            return self._storage_units_active_power
-        else:
-            try:
-                return self._storage_units_active_power.loc[
-                    [self.timeindex], :
-                ]
-            except:
-                return self._storage_units_active_power.loc[self.timeindex, :]
+        try:
+            return self._storage_units_active_power.loc[self.timeindex, :]
+        except:
+            return pd.DataFrame(index=self.timeindex)
 
     @storage_units_active_power.setter
     def storage_units_active_power(self, storage_units_active_power_ts):
@@ -231,17 +220,10 @@ class TimeSeries:
             See class definition for details.
 
         """
-        if self._storage_units_reactive_power.empty:
-            return self._storage_units_reactive_power
-        else:
-            try:
-                return self._storage_units_reactive_power.loc[
-                    [self.timeindex],
-                ]
-            except:
-                return self._storage_units_reactive_power.loc[
-                       self.timeindex, :
-                       ]
+        try:
+            return self._storage_units_reactive_power.loc[self.timeindex, :]
+        except:
+            return pd.DataFrame(index=self.timeindex)
 
     @storage_units_reactive_power.setter
     def storage_units_reactive_power(self, storage_units_reactive_power_ts):
@@ -258,16 +240,10 @@ class TimeSeries:
             See class definition for details.
 
         """
-        if self._charging_points_active_power.empty:
-            return self._charging_points_active_power
-        else:
-            try:
-                return self._charging_points_active_power.loc[
-                       [self.timeindex], :
-                       ]
-            except:
-                return self._charging_points_active_power.loc[
-                       self.timeindex, :]
+        try:
+            return self._charging_points_active_power.loc[self.timeindex, :]
+        except:
+            return pd.DataFrame(index=self.timeindex)
 
     @charging_points_active_power.setter
     def charging_points_active_power(self, charging_points_active_power_ts):
@@ -284,17 +260,10 @@ class TimeSeries:
             See class definition for details.
 
         """
-        if self._charging_points_reactive_power.empty:
-            return self._charging_points_reactive_power
-        else:
-            try:
-                return self._charging_points_reactive_power.loc[
-                    [self.timeindex],
-                ]
-            except:
-                return self._charging_points_reactive_power.loc[
-                       self.timeindex, :
-                       ]
+        try:
+            return self._charging_points_reactive_power.loc[self.timeindex, :]
+        except:
+            return pd.DataFrame(index=self.timeindex)
 
     @charging_points_reactive_power.setter
     def charging_points_reactive_power(self,
@@ -366,24 +335,12 @@ class TimeSeries:
             Series with residual load in MW.
 
         """
-        #ToDo remove if statement once charging point time series are handled
-        # correctly
-        if self._residual_load.empty:
-            if self.charging_points_active_power.empty:
-                return (
-                    self.generators_active_power.sum(axis=1)
-                    + self.storage_units_active_power.sum(axis=1)
-                    - self.loads_active_power.sum(axis=1)
-                ).loc[self.timeindex]
-            else:
-                return (
-                        self.generators_active_power.sum(axis=1)
-                        + self.storage_units_active_power.sum(axis=1)
-                        - self.loads_active_power.sum(axis=1)
-                        - self.charging_points_active_power.sum(axis=1)
-                ).loc[self.timeindex]
-        else:
-            return self._residual_load
+        return (
+                self.generators_active_power.sum(axis=1) +
+                self.storage_units_active_power.sum(axis=1) -
+                self.loads_active_power.sum(axis=1) -
+                self.charging_points_active_power.sum(axis=1)
+        )
 
     @property
     def timesteps_load_feedin_case(self):
@@ -641,7 +598,7 @@ def get_component_timeseries(edisgo_obj, **kwargs):
         if "worst-case" in mode:
             modes = _get_worst_case_modes(mode)
             # set random timeindex
-            edisgo_obj.timeseries._timeindex = pd.date_range(
+            edisgo_obj.timeseries.timeindex = pd.date_range(
                 "1/1/1970", periods=len(modes), freq="H"
             )
             _worst_case_generation(edisgo_obj=edisgo_obj, modes=modes)
@@ -649,25 +606,33 @@ def get_component_timeseries(edisgo_obj, **kwargs):
             _worst_case_storage(edisgo_obj=edisgo_obj, modes=modes)
 
         elif mode == "manual":
-            edisgo_obj.timeseries._timeindex = kwargs.get("timeindex", None)
-            edisgo_obj.timeseries.loads_active_power = kwargs.get(
-                "loads_active_power", None
-            )
-            edisgo_obj.timeseries.loads_reactive_power = kwargs.get(
-                "loads_reactive_power", None
-            )
-            edisgo_obj.timeseries.generators_active_power = kwargs.get(
-                "generators_active_power", None
-            )
-            edisgo_obj.timeseries.generators_reactive_power = kwargs.get(
-                "generators_reactive_power", None
-            )
-            edisgo_obj.timeseries.storage_units_active_power = kwargs.get(
-                "storage_units_active_power", None
-            )
-            edisgo_obj.timeseries.storage_units_reactive_power = kwargs.get(
-                "storage_units_reactive_power", None
-            )
+            if kwargs.get("loads_active_power", None) is not None:
+                edisgo_obj.timeseries.loads_active_power = kwargs.get(
+                    "loads_active_power")
+            if kwargs.get("loads_reactive_power", None) is not None:
+                edisgo_obj.timeseries.loads_reactive_power = kwargs.get(
+                    "loads_reactive_power")
+
+            if kwargs.get("generators_active_power", None) is not None:
+                edisgo_obj.timeseries.generators_active_power = kwargs.get(
+                    "generators_active_power")
+            if kwargs.get("generators_reactive_power", None) is not None:
+                edisgo_obj.timeseries.generators_reactive_power = kwargs.get(
+                    "generators_reactive_power")
+
+            if kwargs.get("storage_units_active_power", None) is not None:
+                edisgo_obj.timeseries.storage_units_active_power = kwargs.get(
+                    "storage_units_active_power")
+            if kwargs.get("storage_units_reactive_power", None) is not None:
+                edisgo_obj.timeseries.storage_units_reactive_power = \
+                    kwargs.get("storage_units_reactive_power")
+
+            if kwargs.get("charging_points_active_power", None) is not None:
+                edisgo_obj.timeseries.charging_points_active_power = \
+                    kwargs.get("charging_points_active_power")
+            if kwargs.get("charging_points_reactive_power", None) is not None:
+                edisgo_obj.timeseries.charging_points_reactive_power = \
+                    kwargs.get("charging_points_reactive_power")
         else:
             raise ValueError("{} is not a valid mode.".format(mode))
     else:
@@ -708,9 +673,9 @@ def get_component_timeseries(edisgo_obj, **kwargs):
             edisgo_obj.timeseries.generation_reactive_power = ts
         # set time index
         if kwargs.get("timeindex", None) is not None:
-            edisgo_obj.timeseries._timeindex = kwargs.get("timeindex")
+            edisgo_obj.timeseries.timeindex = kwargs.get("timeindex")
         else:
-            edisgo_obj.timeseries._timeindex = (
+            edisgo_obj.timeseries.timeindex = (
                 edisgo_obj.timeseries.generation_fluctuating.index
             )
 

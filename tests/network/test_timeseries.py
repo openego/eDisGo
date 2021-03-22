@@ -12,6 +12,24 @@ from edisgo.network import timeseries
 from edisgo.io import ding0_import
 
 
+class TestTimeSeries:
+
+    def test_timeindex(self):
+        timeseries_obj = timeseries.TimeSeries()
+        # test single time step
+        ind = pd.Timestamp("1/1/1970")
+        timeseries_obj.timeindex = ind
+        assert timeseries_obj.timeindex == pd.DatetimeIndex([ind])
+        # test list of time steps
+        ind = ["1/1/1970", "1/2/1970"]
+        timeseries_obj.timeindex = ind
+        assert timeseries_obj.timeindex.equals(pd.DatetimeIndex(ind))
+        # test DatetimeIndex
+        ind = ["1/1/1970", "1/2/1970"]
+        timeseries_obj.timeindex = pd.DatetimeIndex(ind)
+        assert timeseries_obj.timeindex.equals(pd.DatetimeIndex(ind))
+
+
 class Testget_component_timeseries:
 
     @classmethod
@@ -23,40 +41,44 @@ class Testget_component_timeseries:
 
     def test_to_csv(self):
         cur_dir = os.getcwd()
+
         timeseries.get_component_timeseries(edisgo_obj=self, mode='worst-case')
         self.timeseries.to_csv(cur_dir)
-        #create edisgo obj to compare
-        parent_dirname = os.path.dirname(os.path.dirname(__file__))
-        test_network_directory = os.path.join(
-            parent_dirname, 'ding0_test_network_1')
+
+        # create edisgo obj to compare
         edisgo = pd.DataFrame()
         edisgo.topology = Topology()
         edisgo.timeseries = timeseries.TimeSeries()
         edisgo.config = Config()
-        ding0_import.import_ding0_grid(test_network_directory, edisgo)
+        ding0_import.import_ding0_grid(pytest.ding0_test_network_path, edisgo)
         timeseries.get_component_timeseries(
             edisgo, mode='manual',
             timeindex=pd.read_csv(
                 os.path.join(cur_dir, 'timeseries', 'loads_active_power.csv'),
-                index_col=0).index,
+                index_col=0, parse_dates=True).index,
             loads_active_power=pd.read_csv(
                 os.path.join(cur_dir, 'timeseries', 'loads_active_power.csv'),
-                index_col=0),
+                index_col=0, parse_dates=True),
             loads_reactive_power=pd.read_csv(
-                os.path.join(cur_dir, 'timeseries',
-                             'loads_reactive_power.csv'), index_col=0),
+                os.path.join(
+                    cur_dir, 'timeseries', 'loads_reactive_power.csv'),
+                index_col=0, parse_dates=True),
             generators_active_power=pd.read_csv(
-                os.path.join(cur_dir, 'timeseries',
-                             'generators_active_power.csv'), index_col=0),
+                os.path.join(
+                    cur_dir, 'timeseries', 'generators_active_power.csv'),
+                index_col=0, parse_dates=True),
             generators_reactive_power=pd.read_csv(
-                os.path.join(cur_dir, 'timeseries',
-                             'generators_reactive_power.csv'), index_col=0),
+                os.path.join(
+                    cur_dir, 'timeseries', 'generators_reactive_power.csv'),
+                index_col=0, parse_dates=True),
             storage_units_active_power=pd.read_csv(
-                os.path.join(cur_dir, 'timeseries',
-                             'storage_units_active_power.csv'), index_col=0),
+                os.path.join(
+                    cur_dir, 'timeseries', 'storage_units_active_power.csv'),
+                index_col=0, parse_dates=True),
             storage_units_reactive_power=pd.read_csv(
-                os.path.join(cur_dir, 'timeseries',
-                             'storage_units_reactive_power.csv'), index_col=0)
+                os.path.join(
+                    cur_dir, 'timeseries', 'storage_units_reactive_power.csv'),
+                index_col=0, parse_dates=True)
         )
         # check if timeseries are the same
         assert np.isclose(self.timeseries.loads_active_power,

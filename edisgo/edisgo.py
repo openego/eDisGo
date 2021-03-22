@@ -232,26 +232,7 @@ class EDisGo:
             else:
                 timeseries.get_component_timeseries(
                     edisgo_obj=self,
-                    timeseries_generation_fluctuating=kwargs.get(
-                        "timeseries_generation_fluctuating", None
-                    ),
-                    timeseries_generation_dispatchable=kwargs.get(
-                        "timeseries_generation_dispatchable", None
-                    ),
-                    timeseries_generation_reactive_power=kwargs.get(
-                        "timeseries_generation_reactive_power", None
-                    ),
-                    timeseries_load=kwargs.get("timeseries_load", None),
-                    timeseries_load_reactive_power=kwargs.get(
-                        "timeseries_load_reactive_power", None
-                    ),
-                    timeseries_storage_units=kwargs.get(
-                        "timeseries_storage_units", None
-                    ),
-                    timeseries_storage_units_reactive_power=kwargs.get(
-                        "timeseries_storage_units_reactive_power", None
-                    ),
-                    timeindex=kwargs.get("timeindex", None),
+                    **kwargs
                 )
 
     @property
