@@ -67,12 +67,6 @@ class TimeSeries:
     load_reactive_power. See description of meth:`get_component_timeseries` for
     format of these.
 
-    See also
-    --------
-    `timeseries` getter in :class:`~.network.components.Generator`,
-    :class:`~.network.components.GeneratorFluctuating` and
-    :class:`~.network.components.Load`.
-
     """
 
     def __init__(self, **kwargs):

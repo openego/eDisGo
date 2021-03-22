@@ -1656,7 +1656,7 @@ class Topology:
                   is not a house connection
                 * to random bus in the LV grid that
                   is not a house connection if no appropriate load is available
-                 (fallback)
+                  (fallback)
             * the number of generators or charging point connected at
               one load is restricted by the parameter
               `allowed_number_of_comp_per_bus`. If every possible load

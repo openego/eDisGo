@@ -226,7 +226,8 @@ class EDisGo:
         if kwargs.get("import_timeseries", True):
             if kwargs.get("worst_case_analysis", None):
                 timeseries.get_component_timeseries(
-                    edisgo_obj=self, mode=kwargs.get("worst_case_analysis", None)
+                    edisgo_obj=self,
+                    mode=kwargs.get("worst_case_analysis", None)
                 )
             else:
                 timeseries.get_component_timeseries(
@@ -1195,7 +1196,7 @@ class EDisGo:
         geolocation : :shapely:`shapely.Point<Point>` or tuple
             Geolocation of the new component. In case of tuple, the geolocation
             must be given in the form (longitude, latitude).
-        voltage_level : int
+        voltage_level : int, optional
             Specifies the voltage level the new component is integrated in.
             Possible options are 4 (MV busbar), 5 (MV grid), 6 (LV busbar) or
             7 (LV grid). If no voltage level is provided the voltage level
@@ -1210,7 +1211,7 @@ class EDisGo:
               0.3 MW
             * voltage level 7 (LV grid): nominal power below 0.1 MW
 
-        add_ts : bool
+        add_ts : bool, optional
             Indicator if time series for component are added as well.
         ts_active_power : :pandas:`pandas.Series<series>`
             Active power time series of added component. Index of the series
