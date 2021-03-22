@@ -404,148 +404,119 @@ class Results:
     def hv_mv_exchanges(self, hv_mv_exchanges):
         self._hv_mv_exchanges = hv_mv_exchanges
 
-    @property
-    def curtailment(self):
-        """
-        Holds curtailment assigned to each generator per curtailment target.
-
-        ToDo: adapt to refactored code!
-
-        Returns
-        -------
-        :obj:`dict` with :pandas:`pandas.DataFrame<dataframe>`
-            Keys of the dictionary are generator types (and weather cell ID)
-            curtailment targets were given for. E.g. if curtailment is provided
-            as a :pandas:`pandas.DataFrame<dataframe>` with
-            :pandas.`pandas.MultiIndex` columns with levels 'type' and
-            'weather cell ID' the dictionary key is a tuple of
-            ('type','weather_cell_id').
-            Values of the dictionary are dataframes with the curtailed power in
-            kW per generator and time step. Index of the dataframe is a
-            :pandas:`pandas.DatetimeIndex<DatetimeIndex>`. Columns are the
-            generators of type
-            :class:`edisgo.network.components.GeneratorFluctuating`.
-
-        """
-        raise NotImplementedError
-        if self._curtailment is not None:
-            result_dict = {}
-            for key, gen_list in self._curtailment.items():
-                curtailment_df = pd.DataFrame()
-                for gen in gen_list:
-                    curtailment_df[gen] = gen.curtailment
-                result_dict[key] = curtailment_df
-            return result_dict
-        else:
-            return None
-
-    @property
-    def storage_units(self):
-        """
-        Gathers relevant storage results.
-
-        ToDo: adapt to refactored code!
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-
-            Dataframe containing all storage units installed in the MV and
-            LV grids. Index of the dataframe are the storage representatives,
-            columns are the following:
-
-            nominal_power : :obj:`float`
-                Nominal power of the storage in kW.
-
-            voltage_level : :obj:`str`
-                Voltage level the storage is connected to. Can either be 'mv'
-                or 'lv'.
-
-        """
-        raise NotImplementedError
-
-        grids = [self.edisgo_object.topology.mv_grid] + list(
-            self.edisgo_object.topology.mv_grid.lv_grids
-        )
-        storage_results = {}
-        storage_results["storage_id"] = []
-        storage_results["nominal_power"] = []
-        storage_results["voltage_level"] = []
-        storage_results["grid_connection_point"] = []
-        for grid in grids:
-            for storage in grid.graph.nodes_by_attribute("storage"):
-                storage_results["storage_id"].append(repr(storage))
-                storage_results["nominal_power"].append(storage.nominal_power)
-                storage_results["voltage_level"].append(
-                    "mv" if isinstance(grid, MVGrid) else "lv"
-                )
-                storage_results["grid_connection_point"].append(
-                    list(grid.graph.neighbors(storage))[0]
-                )
-
-        return pd.DataFrame(storage_results).set_index("storage_id")
-
-    def storage_units_timeseries(self):
-        """
-        Returns a dataframe with storage time series.
-
-        ToDo: adapt to refactored code!
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-
-            Dataframe containing time series of all storage units installed in
-            the MV network and LV grids. Index of the dataframe is a
-            :pandas:`pandas.DatetimeIndex<DatetimeIndex>`. Columns are the
-            storage representatives.
-
-        """
-        raise NotImplementedError
-        storage_units_p = pd.DataFrame()
-        storage_units_q = pd.DataFrame()
-        grids = [self.edisgo_object.topology.mv_grid] + list(
-            self.edisgo_object.topology.mv_grid.lv_grids
-        )
-        for grid in grids:
-            for storage in grid.graph.nodes_by_attribute("storage"):
-                ts = storage.timeseries
-                storage_units_p[repr(storage)] = ts.p
-                storage_units_q[repr(storage)] = ts.q
-
-        return storage_units_p, storage_units_q
-
-    @property
-    def storage_units_costs_reduction(self):
-        """
-        Contains costs reduction due to storage integration.
-
-        ToDo: adapt to refactored code!
-
-        Parameters
-        ----------
-        costs_df : :pandas:`pandas.DataFrame<dataframe>`
-            Dataframe containing network expansion costs in kEUR before and after
-            storage integration in columns 'grid_expansion_costs_initial' and
-            'grid_expansion_costs_with_storage_units', respectively. Index of
-            the dataframe is the MV network id.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-
-            Dataframe containing network expansion costs in kEUR before and after
-            storage integration in columns 'grid_expansion_costs_initial' and
-            'grid_expansion_costs_with_storage_units', respectively. Index of
-            the dataframe is the MV network id.
-
-        """
-        raise NotImplementedError
-        return self._storage_units_costs_reduction
-
-    @storage_units_costs_reduction.setter
-    def storage_units_costs_reduction(self, costs_df):
-        self._storage_units_costs_reduction = costs_df
+    # @property
+    # def curtailment(self):
+    #     """
+    #     Holds curtailment assigned to each generator per curtailment target.
+    #
+    #     ToDo: adapt to refactored code!
+    #
+    #     Returns
+    #     -------
+    #     :obj:`dict` with :pandas:`pandas.DataFrame<dataframe>`
+    #         Keys of the dictionary are generator types (and weather cell ID)
+    #         curtailment targets were given for. E.g. if curtailment is provided
+    #         as a :pandas:`pandas.DataFrame<dataframe>` with
+    #         :pandas.`pandas.MultiIndex` columns with levels 'type' and
+    #         'weather cell ID' the dictionary key is a tuple of
+    #         ('type','weather_cell_id').
+    #         Values of the dictionary are dataframes with the curtailed power in
+    #         kW per generator and time step. Index of the dataframe is a
+    #         :pandas:`pandas.DatetimeIndex<DatetimeIndex>`. Columns are the
+    #         generators of type
+    #         :class:`edisgo.network.components.GeneratorFluctuating`.
+    #
+    #     """
+    #     raise NotImplementedError
+    #     if self._curtailment is not None:
+    #         result_dict = {}
+    #         for key, gen_list in self._curtailment.items():
+    #             curtailment_df = pd.DataFrame()
+    #             for gen in gen_list:
+    #                 curtailment_df[gen] = gen.curtailment
+    #             result_dict[key] = curtailment_df
+    #         return result_dict
+    #     else:
+    #         return None
+    #
+    # @property
+    # def storage_units(self):
+    #     """
+    #     Gathers relevant storage results.
+    #
+    #     ToDo: adapt to refactored code!
+    #
+    #     Returns
+    #     -------
+    #     :pandas:`pandas.DataFrame<dataframe>`
+    #
+    #         Dataframe containing all storage units installed in the MV and
+    #         LV grids. Index of the dataframe are the storage representatives,
+    #         columns are the following:
+    #
+    #         nominal_power : :obj:`float`
+    #             Nominal power of the storage in kW.
+    #
+    #         voltage_level : :obj:`str`
+    #             Voltage level the storage is connected to. Can either be 'mv'
+    #             or 'lv'.
+    #
+    #     """
+    #     raise NotImplementedError
+    #
+    #     grids = [self.edisgo_object.topology.mv_grid] + list(
+    #         self.edisgo_object.topology.mv_grid.lv_grids
+    #     )
+    #     storage_results = {}
+    #     storage_results["storage_id"] = []
+    #     storage_results["nominal_power"] = []
+    #     storage_results["voltage_level"] = []
+    #     storage_results["grid_connection_point"] = []
+    #     for grid in grids:
+    #         for storage in grid.graph.nodes_by_attribute("storage"):
+    #             storage_results["storage_id"].append(repr(storage))
+    #             storage_results["nominal_power"].append(storage.nominal_power)
+    #             storage_results["voltage_level"].append(
+    #                 "mv" if isinstance(grid, MVGrid) else "lv"
+    #             )
+    #             storage_results["grid_connection_point"].append(
+    #                 list(grid.graph.neighbors(storage))[0]
+    #             )
+    #
+    #     return pd.DataFrame(storage_results).set_index("storage_id")
+    #
+    #
+    # @property
+    # def storage_units_costs_reduction(self):
+    #     """
+    #     Contains costs reduction due to storage integration.
+    #
+    #     ToDo: adapt to refactored code!
+    #
+    #     Parameters
+    #     ----------
+    #     costs_df : :pandas:`pandas.DataFrame<dataframe>`
+    #         Dataframe containing network expansion costs in kEUR before and after
+    #         storage integration in columns 'grid_expansion_costs_initial' and
+    #         'grid_expansion_costs_with_storage_units', respectively. Index of
+    #         the dataframe is the MV network id.
+    #
+    #     Returns
+    #     -------
+    #     :pandas:`pandas.DataFrame<dataframe>`
+    #
+    #         Dataframe containing network expansion costs in kEUR before and after
+    #         storage integration in columns 'grid_expansion_costs_initial' and
+    #         'grid_expansion_costs_with_storage_units', respectively. Index of
+    #         the dataframe is the MV network id.
+    #
+    #     """
+    #     raise NotImplementedError
+    #     return self._storage_units_costs_reduction
+    #
+    # @storage_units_costs_reduction.setter
+    # def storage_units_costs_reduction(self, costs_df):
+    #     self._storage_units_costs_reduction = costs_df
 
     @property
     def unresolved_issues(self):

@@ -307,76 +307,52 @@ class TimeSeries:
                                        charging_points_reactive_power_ts):
         self._charging_points_reactive_power = charging_points_reactive_power_ts
 
-    @property
-    def timeindex(self):
-        """
-        Time range of power flow analysis
-
-        Returns
-        -------
-        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-            See class definition for details.
-
-        """
-        return self._timeindex
-
-    @timeindex.setter
-    def timeindex(self, new_index):
-        if self._timeindex is not None:
-            # check if new time index is subset of existing time index
-            if not new_index.isin(self.timeindex).all():
-                logger.warning(
-                    "Not all time steps of new time index lie within existing "
-                    "time index. This may cause problems later on."
-                )
-        self._timeindex = new_index
-
-    @property
-    def curtailment(self):
-        """
-        Get curtailment time series of dispatchable generators (only active
-        power)
-
-        Parameters
-        ----------
-        curtailment : list or :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            In the case curtailment is applied to all solar and wind generators
-            curtailment time series either aggregated by technology type or by
-            type and weather cell ID are returnded. In the first case columns
-            of the DataFrame are 'solar' and 'wind'; in the second case columns
-            need to be a :pandas:`pandas.MultiIndex<multiindex>` with the
-            first level containing the type and the second level the weather
-            cell ID.
-            In the case curtailment is only applied to specific generators,
-            curtailment time series of all curtailed generators, specified in
-            by the column name are returned.
-
-        """
-        if self._curtailment is not None:
-            if isinstance(self._curtailment, pd.DataFrame):
-                try:
-                    return self._curtailment.loc[[self.timeindex], :]
-                except:
-                    return self._curtailment.loc[self.timeindex, :]
-            elif isinstance(self._curtailment, list):
-                try:
-                    curtailment = pd.DataFrame()
-                    for gen in self._curtailment:
-                        curtailment[gen] = gen.curtailment
-                    return curtailment
-                except:
-                    raise
-        else:
-            return None
-
-    @curtailment.setter
-    def curtailment(self, curtailment):
-        self._curtailment = curtailment
+    # @property
+    # def curtailment(self):
+    #     """
+    #     Get curtailment time series of dispatchable generators (only active
+    #     power)
+    #
+    #     Parameters
+    #     ----------
+    #     curtailment : list or :pandas:`pandas.DataFrame<DataFrame>`
+    #         See class definition for details.
+    #
+    #     Returns
+    #     -------
+    #     :pandas:`pandas.DataFrame<dataframe>`
+    #         In the case curtailment is applied to all solar and wind generators
+    #         curtailment time series either aggregated by technology type or by
+    #         type and weather cell ID are returnded. In the first case columns
+    #         of the DataFrame are 'solar' and 'wind'; in the second case columns
+    #         need to be a :pandas:`pandas.MultiIndex<multiindex>` with the
+    #         first level containing the type and the second level the weather
+    #         cell ID.
+    #         In the case curtailment is only applied to specific generators,
+    #         curtailment time series of all curtailed generators, specified in
+    #         by the column name are returned.
+    #
+    #     """
+    #     if self._curtailment is not None:
+    #         if isinstance(self._curtailment, pd.DataFrame):
+    #             try:
+    #                 return self._curtailment.loc[[self.timeindex], :]
+    #             except:
+    #                 return self._curtailment.loc[self.timeindex, :]
+    #         elif isinstance(self._curtailment, list):
+    #             try:
+    #                 curtailment = pd.DataFrame()
+    #                 for gen in self._curtailment:
+    #                     curtailment[gen] = gen.curtailment
+    #                 return curtailment
+    #             except:
+    #                 raise
+    #     else:
+    #         return None
+    #
+    # @curtailment.setter
+    # def curtailment(self, curtailment):
+    #     self._curtailment = curtailment
 
     @property
     def residual_load(self):
