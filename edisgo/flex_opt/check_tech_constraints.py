@@ -229,7 +229,7 @@ def _line_load(edisgo_obj, voltage_level):
         the voltage level the line is in (either 'mv' or 'lv').
 
     """
-    if edisgo_obj.results.i_res is None:
+    if edisgo_obj.results.i_res.empty:
         raise Exception(
             "No power flow results to check over-load for. Please perform "
             "power flow analysis first."

@@ -1052,9 +1052,7 @@ class EDisGo:
         os.makedirs(directory, exist_ok=True)
         if save_results:
             results_dir = os.path.join(directory, "results")
-            os.makedirs(results_dir, exist_ok=True)
-            kwargs.get("parameters", "all")
-            self.results.save(results_dir)
+            self.results.to_csv(results_dir, **kwargs)
         if save_topology:
             topology_dir = os.path.join(directory, "topology")
             self.topology.to_csv(topology_dir)

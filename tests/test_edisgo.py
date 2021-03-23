@@ -85,16 +85,15 @@ class TestEDisGo:
             1.06230, atol=1e-5))
 
     def test_analyze(self):
-        if self.edisgo.results.grid_losses is None:
+        if self.edisgo.results.grid_losses.empty:
             self.edisgo.analyze()
         # check results
-        #ToDo negative grid losses?
         assert(np.isclose(
             self.edisgo.results.grid_losses.loc[self.timesteps].values,
-            np.array([[-0.19186, 0.40321], [0.41854, -0.17388]]),
+            np.array([[0.19186, 0.40321], [0.41854, 0.17388]]),
             atol=1e-5).all())
         assert(np.isclose(
-            self.edisgo.results.hv_mv_exchanges.loc[self.timesteps].values,
+            self.edisgo.results.pfa_slack.loc[self.timesteps].values,
             np.array([[-21.69377, 10.87843], [1.36392, 0.18510]]),
             atol=1e-5).all())
         assert(np.isclose(
@@ -336,7 +335,7 @@ class TestEDisGo:
         # if not already done so, analyse grid
         plt.ion()
         try:
-            if self.edisgo.results.i_res is None:
+            if self.edisgo.results.i_res.empty:
                 self.edisgo.analyze()
         except AttributeError:
             self.edisgo.analyze()
@@ -347,7 +346,7 @@ class TestEDisGo:
     def test_plot_mv_grid_expansion_costs(self):
         plt.ion()
         try:
-            if self.edisgo.results.grid_expansion_costs is None:
+            if self.edisgo.results.grid_expansion_costs.empty:
                 self.edisgo.reinforce()
         except AttributeError:
             self.edisgo.reinforce()
@@ -384,7 +383,7 @@ class TestEDisGo:
     def test_histogramm_relative_line_load(self):
         plt.ion()
         try:
-            if self.edisgo.results.i_res is None:
+            if self.edisgo.results.i_res.empty:
                 self.edisgo.analyze()
         except AttributeError:
             self.edisgo.analyze()

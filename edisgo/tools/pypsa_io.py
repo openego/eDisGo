@@ -1104,12 +1104,12 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     # subtracting total generation (including slack) from total load
     grid_losses = {
         "p": (
-            pypsa.generators_t["p"].sum(axis=1)
-            - pypsa.loads_t["p"].sum(axis=1)
+            abs(pypsa.generators_t["p"].sum(axis=1)
+                - pypsa.loads_t["p"].sum(axis=1))
         ),
         "q": (
-            pypsa.generators_t["q"].sum(axis=1)
-            - pypsa.loads_t["q"].sum(axis=1)
+            abs(pypsa.generators_t["q"].sum(axis=1)
+                - pypsa.loads_t["q"].sum(axis=1))
         ),
     }
     edisgo.results.grid_losses = pd.DataFrame(grid_losses).loc[timesteps, :]
