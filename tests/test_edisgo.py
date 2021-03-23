@@ -42,7 +42,7 @@ class TestEDisGo:
         # TODO: have checks of technical constraints not require edisgo
         # object and then move this test
         # calculate results if not already existing
-        if self.edisgo.results.pfa_p is None:
+        if self.edisgo.results.pfa_p.empty:
             self.edisgo.analyze()
         # check results
         overloaded_mv_station = checks.hv_mv_station_load(self.edisgo)
@@ -63,7 +63,7 @@ class TestEDisGo:
     def test_crit_lines(self):
         # TODO: have checks of technical constraints not require edisgo
         # object and then move this test
-        if self.edisgo.results.i_res is None:
+        if self.edisgo.results.i_res.empty:
             self.edisgo.analyze()
         mv_crit_lines = checks.mv_line_load(self.edisgo)
         lv_crit_lines = checks.lv_line_load(self.edisgo)
@@ -847,3 +847,50 @@ class TestEDisGo:
                ].sum() == load_before
         # test that analyze does not fail
         self.edisgo.analyze()
+
+    def test_reduce_memory(self):
+        """Test reduce_memory method"""
+        # check one time series attribute and one results attribute
+
+        mem_ts_before = self.edisgo.timeseries.generators_active_power.\
+            memory_usage(deep=True).sum()
+        mem_res_before = self.edisgo.results.pfa_p.\
+            memory_usage(deep=True).sum()
+
+        # check with default value
+        self.edisgo.reduce_memory()
+
+        mem_ts_with_default = self.edisgo.timeseries.generators_active_power.\
+            memory_usage(deep=True).sum()
+        mem_res_with_default = self.edisgo.results.pfa_p.\
+            memory_usage(deep=True).sum()
+
+        assert mem_ts_before > mem_ts_with_default
+        assert mem_res_before > mem_res_with_default
+
+        mem_ts_with_default_2 = self.edisgo.timeseries.loads_active_power.\
+            memory_usage(deep=True).sum()
+        mem_res_with_default_2 = self.edisgo.results.i_res.\
+            memory_usage(deep=True).sum()
+
+        # check passing kwargs
+        self.edisgo.reduce_memory(
+            to_type="float16",
+            results_attr_to_reduce=["pfa_p"],
+            timeseries_attr_to_reduce=["generators_active_power"]
+        )
+
+        assert mem_ts_with_default > self.edisgo.timeseries.\
+            generators_active_power.memory_usage(deep=True).sum()
+        assert mem_res_with_default > self.edisgo.results.\
+            pfa_p.memory_usage(deep=True).sum()
+        # check that i_res and loads_active_power were not reduced
+        assert np.isclose(
+            mem_ts_with_default_2,
+            self.edisgo.timeseries.loads_active_power.memory_usage(
+                deep=True).sum()
+        )
+        assert np.isclose(
+            mem_res_with_default_2,
+            self.edisgo.results.i_res.memory_usage(deep=True).sum()
+        )

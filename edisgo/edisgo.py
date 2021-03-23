@@ -1337,6 +1337,40 @@ class EDisGo:
                 ext=self.topology.mv_grid.id)
         pickle.dump(self, open(os.path.join(abs_path, filename), "wb"))
 
+    def reduce_memory(self, **kwargs):
+        """
+        Reduces size of dataframes containing time series to save memory.
+
+        Per default, float data is stored as float64. As this precision is
+        barely needed, this function can be used to convert time series data
+        to a data subtype with less memory usage, such as float32.
+
+        Other Parameters
+        -----------------
+        to_type : str, optional
+            Data type to convert time series data to. This is a tradeoff
+            between precision and memory. Default: "float32".
+        results_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.results.Results.reduce_memory` for more
+            information.
+        timeseries_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more
+            information.
+
+        """
+        # time series
+        self.timeseries.reduce_memory(
+            to_type=kwargs.get("to_type", "float32"),
+            attr_to_reduce=kwargs.get("timeseries_attr_to_reduce", None)
+        )
+        # results
+        self.results.reduce_memory(
+            to_type=kwargs.get("to_type", "float32"),
+            attr_to_reduce=kwargs.get("results_attr_to_reduce", None)
+        )
+
 
 def import_edisgo_from_pickle(filename, path=''):
     abs_path = os.path.abspath(path)

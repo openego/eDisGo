@@ -376,6 +376,41 @@ class TimeSeries:
             lambda _: "feedin_case" if _ > 0 else "load_case"
         )
 
+    def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
+        """
+        Reduces size of dataframes to save memory.
+
+        See :attr:`EDisGo.reduce_memory` for more information.
+
+        Parameters
+        -----------
+        attr_to_reduce : list(str), optional
+            List of attributes to reduce size for. Attributes need to be
+            dataframes containing only time series. Per default, all active
+            and reactive power time series of generators, loads, storage units
+            and charging points are reduced.
+        to_type : str, optional
+            Data type to convert time series data to. This is a tradeoff
+            between precision and memory. Default: "float32".
+
+        """
+        if attr_to_reduce is None:
+            attr_to_reduce = [
+                "generators_active_power", "generators_reactive_power",
+                "loads_active_power", "loads_reactive_power",
+                "charging_points_active_power",
+                "charging_points_reactive_power",
+                "storage_units_active_power", "storage_units_reactive_power"
+            ]
+        for attr in attr_to_reduce:
+            setattr(
+                self,
+                attr,
+                getattr(self, attr).apply(
+                    lambda _: _.astype(to_type)
+                )
+            )
+
     def to_csv(self, directory):
         """
         Exports topology to csv files with names loads_active_power,
