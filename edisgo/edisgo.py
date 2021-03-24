@@ -407,7 +407,7 @@ class EDisGo:
         import_generators_oedb(edisgo_object=self,
                                **kwargs)
 
-    def analyze(self, mode=None, timesteps=None):
+    def analyze(self, mode=None, timesteps=None, **kwargs):
         """Conducts a static, non-linear power flow analysis
 
         Conducts a static, non-linear power flow analysis using
@@ -439,10 +439,11 @@ class EDisGo:
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
 
-        pypsa_network = self.to_pypsa(mode=mode, timesteps=timesteps)
+        pypsa_network = self.to_pypsa(mode=mode, timesteps=timesteps, **kwargs)
 
         # run power flow analysis
-        pf_results = pypsa_network.pf(timesteps)
+        pf_results = pypsa_network.pf(
+            timesteps, use_seed=kwargs.get("use_seed", False))
 
         if all(pf_results["converged"]["0"].tolist()):
             pypsa_io.process_pfa_results(self, pypsa_network, timesteps)
