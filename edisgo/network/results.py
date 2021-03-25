@@ -270,7 +270,7 @@ class Results:
             and stations included in the power flow analysis.
 
         """
-        if self.pfa_p is None:
+        if self.pfa_p.empty or self.pfa_q.empty:
             return pd.DataFrame()
 
         return np.hypot(self.pfa_p, self.pfa_q)
@@ -800,28 +800,28 @@ class Results:
         """
 
         def _save_power_flow_results(target_dir, save_attributes):
-            if not self.v_res.empty:
-                # create directory
-                os.makedirs(target_dir, exist_ok=True)
+            # create directory
+            os.makedirs(target_dir, exist_ok=True)
 
-                if save_attributes is None:
-                    save_attributes = list(power_flow_results_dict.keys())
+            if save_attributes is None:
+                save_attributes = list(power_flow_results_dict.keys())
 
-                for attr in save_attributes:
+            for attr in save_attributes:
+                if not getattr(self, attr).empty:
                     getattr(self, attr).to_csv(
                         os.path.join(target_dir, "{}.csv".format(
                             power_flow_results_dict[attr]))
                     )
 
         def _save_grid_expansion_results(target_dir, save_attributes):
-            if not self.grid_expansion_costs.empty:
-                # create directory
-                os.makedirs(target_dir, exist_ok=True)
+            # create directory
+            os.makedirs(target_dir, exist_ok=True)
 
-                if save_attributes is None:
-                    save_attributes = list(grid_expansion_results_dict.keys())
+            if save_attributes is None:
+                save_attributes = list(grid_expansion_results_dict.keys())
 
-                for attr in save_attributes:
+            for attr in save_attributes:
+                if not getattr(self, attr).empty:
                     getattr(self, attr).to_csv(
                         os.path.join(target_dir, "{}.csv".format(
                             grid_expansion_results_dict[attr]
@@ -952,7 +952,7 @@ class Results:
             measures_df = pd.read_csv(
                 os.path.join(results_path, 'measures.csv'),
                 index_col=0)
-            self.measures = list(measures_df.measure.values)
+            self._measures = list(measures_df.measure.values)
 
         # get dictionaries matching attribute names and file names
         power_flow_results_dict, grid_expansion_results_dict = \
