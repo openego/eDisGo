@@ -607,36 +607,36 @@ class Results:
 
         Parameters
         ----------
-        issues : dict
+        df : :pandas:`pandas.DataFrame<DataFrame>`
 
-            Dictionary of critical lines/stations with relative overloading
-            and critical buses with voltage deviation in p.u.. Format:
-
-            .. code-block:: python
-
-                {crit_line_1: rel_overloading_1, ...,
-                 crit_line_n: rel_overloading_n,
-                 crit_bus_1: v_mag_pu_node_1, ...,
-                 crit_bus_n: v_mag_pu_node_n}
+            Dataframe containing remaining grid issues. Names of remaining
+            critical lines, stations and buses are in the index of the
+            dataframe. Columns depend on the equipment type. See
+            :func:`~.flex_opt.check_tech_constraints.mv_line_load` for format
+            of remaining overloading issues of lines,
+            :func:`~.flex_opt.check_tech_constraints.hv_mv_station_load`
+            for format of remaining overloading issues of transformers, and
+            :func:`~.flex_opt.check_tech_constraints.mv_voltage_deviation`
+            for format of remaining voltage issues.
 
             Provide this if you want to set unresolved_issues. For retrieval
             of data do not pass an argument.
 
         Returns
         -------
-        dict
-            Dictionary with remaining grid issues. For more information on the
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with remaining grid issues. For more information on the
             dataframe see input parameter `df`.
 
         """
         try:
             return self._unresolved_issues
         except:
-            return {}
+            return pd.DataFrame()
 
     @unresolved_issues.setter
-    def unresolved_issues(self, issues):
-        self._unresolved_issues = issues
+    def unresolved_issues(self, df):
+        self._unresolved_issues = df
 
     def _add_line_to_equipment_changes(self, line):
         """

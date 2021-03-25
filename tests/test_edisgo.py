@@ -122,7 +122,7 @@ class TestEDisGo:
 
     def test_reinforce(self):
         results = self.edisgo.reinforce(combined_analysis=True)
-        assert not results.unresolved_issues
+        assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 12
         assert len(results.equipment_changes) == 12
         #Todo: test other relevant values
