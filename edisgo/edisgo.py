@@ -1033,32 +1033,61 @@ class EDisGo:
         **kwargs
     ):
         """
-        Saves edisgo_obj parameters to csv. It can be chosen if results,
-        topology and timeseries should be saved, respectively. For each one, a
-        separate folder is created.
+        Saves EDisGo object to csv.
+
+        It can be chosen if results, topology and timeseries should be saved.
+        For each one, a separate directory is created.
 
         Parameters
         ----------
-        directory: str
-            directory to save edisgo_obj to. Subfolders for respective
-            parameters will be created.
-        save_results: bool
-            indicates whether to save self.results
-        save_topology: bool
-            indicates whether to save self.topology
-        save_timeseries: bool
-            indicates whether to save self.timeseries
+        directory : str
+            Main directory to save EDisGo object to.
+        save_results : bool, optional
+            Indicates whether to save :class:`~.network.results.Results`
+            object. Per default it is saved. See
+            :attr:`~.network.results.Results.to_csv` for more information.
+        save_topology : bool, optional
+            Indicates whether to save :class:`~.network.topology.Topology`.
+            Per default it is saved. See
+            :attr:`~.network.topology.Topology.to_csv` for more information.
+        save_timeseries : bool, optional
+            Indicates whether to save :class:`~.network.timeseries.Timeseries`.
+            Per default it is saved. See
+            :attr:`~.network.timeseries.Timeseries.to_csv` for more
+            information.
+
+        Other Parameters
+        ------------------
+        to_type : str, optional
+            Data type to convert time series data to. This is a tradeoff
+            between precision and memory. Default: "float32".
+        results_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.results.Results.reduce_memory` for more
+            information.
+        timeseries_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more
+            information.
 
         """
         os.makedirs(directory, exist_ok=True)
         if save_results:
-            results_dir = os.path.join(directory, "results")
-            self.results.to_csv(results_dir, **kwargs)
+            self.results.to_csv(
+                os.path.join(directory, "results"),
+                to_type=kwargs.get("to_type", "float32"),
+                attr_to_reduce=kwargs.get("results_attr_to_reduce", None)
+            )
         if save_topology:
-            topology_dir = os.path.join(directory, "topology")
-            self.topology.to_csv(topology_dir)
+            self.topology.to_csv(
+                os.path.join(directory, "topology")
+            )
         if save_timeseries:
-            self.timeseries.to_csv(directory)
+            self.timeseries.to_csv(
+                os.path.join(directory, "timeseries"),
+                to_type=kwargs.get("to_type", "float32"),
+                attr_to_reduce=kwargs.get("timeseries_attr_to_reduce", None)
+            )
 
     def add_component(
         self,

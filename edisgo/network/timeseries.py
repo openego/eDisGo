@@ -14,6 +14,27 @@ from edisgo.tools.tools import assign_voltage_level_to_component,\
 logger = logging.getLogger("edisgo")
 
 
+def _get_attributes_to_save():
+    """
+    Helper function to specify which TimeSeries attributes to save and restore.
+
+    Is used in functions :attr:`~.network.timeseries.TimeSeries.to_csv`
+    and :attr:`~.network.timeseries.TimeSeries.from_csv`.
+
+    Returns
+    -------
+    list
+        List of TimeSeries attributes to save and restore.
+
+    """
+    return [
+        "loads_active_power", "loads_reactive_power",
+        "generators_active_power", "generators_reactive_power",
+        "charging_points_active_power", "charging_points_reactive_power",
+        "storage_units_active_power", "storage_units_reactive_power"
+    ]
+
+
 class TimeSeries:
     """
     Defines time series for all loads, generators and storage units in network
@@ -411,124 +432,81 @@ class TimeSeries:
                 )
             )
 
-    def to_csv(self, directory):
+    def to_csv(self, directory, reduce_memory=False, **kwargs):
         """
-        Exports topology to csv files with names loads_active_power,
-        loads_reactive_power, generators_active_power, generators_reactive_power
-        storage_units_active_power, storage_units_reactive_power. A sub-
-        folder named "timeseries" is added to the provided directory.
+        Saves component time series to csv.
+
+        Saves the following time series to csv files with the same file name
+        (if the time series dataframe is not empty):
+
+        * loads_active_power and loads_reactive_power
+        * generators_active_power and generators_reactive_power
+        * charging_points_active_power and charging_points_reactive_power
+        * storage_units_active_power and  storage_units_reactive_power
 
         Parameters
         ----------
         directory: str
-            path to save timeseries to
+            Directory to save time series in.
+        reduce_memory : bool, optional
+            If True, size of dataframes is reduced using
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory`. Optional
+            parameters of :attr:`~.network.timeseries.TimeSeries.reduce_memory`
+            can be passed as kwargs to this function. Default: False.
+
+        Other Parameters
+        ------------------
+        kwargs :
+            Kwargs may contain optional arguments of
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory`.
+
         """
+        save_attributes = _get_attributes_to_save()
+
+        if reduce_memory is True:
+            self.reduce_memory(**kwargs)
+
         os.makedirs(directory, exist_ok=True)
-        ts_dir = os.path.join(directory, "timeseries")
-        os.makedirs(ts_dir, exist_ok=True)
-        if self.loads_active_power is not None:
-            self.loads_active_power.to_csv(
-                os.path.join(ts_dir, "loads_active_power.csv")
-            )
-        if self.loads_reactive_power is not None:
-            self.loads_reactive_power.to_csv(
-                os.path.join(ts_dir, "loads_reactive_power.csv")
-            )
-        if self.charging_points_active_power is not None:
-            self.charging_points_active_power.to_csv(
-                os.path.join(ts_dir, "charging_points_active_power.csv")
-            )
-        if self.charging_points_reactive_power is not None:
-            self.charging_points_reactive_power.to_csv(
-                os.path.join(ts_dir, "charging_points_reactive_power.csv")
-            )
-        if self.generators_active_power is not None:
-            self.generators_active_power.to_csv(
-                os.path.join(ts_dir, "generators_active_power.csv")
-            )
-        if self.generators_reactive_power is not None:
-            self.generators_reactive_power.to_csv(
-                os.path.join(ts_dir, "generators_reactive_power.csv")
-            )
-        if self.storage_units_active_power is not None:
-            self.storage_units_active_power.to_csv(
-                os.path.join(ts_dir, "storage_units_active_power.csv")
-            )
-        if self.storage_units_reactive_power is not None:
-            self.storage_units_reactive_power.to_csv(
-                os.path.join(ts_dir, "storage_units_reactive_power.csv")
-            )
-        logger.debug("Timeseries exported.")
 
-    def from_csv(self, ts_dir):
-        # Todo: change to_csv resetting index and removing rename part
-        # Todo: overthink if setting timeindex can be handled in a nicer way
+        for attr in save_attributes:
+            if not getattr(self, attr).empty:
+                getattr(self, attr).to_csv(
+                    os.path.join(directory, "{}.csv".format(attr))
+                )
+
+    def from_csv(self, directory):
+        """
+        Restores time series from csv files.
+
+        See :func:`~to_csv` for more information on which time series are
+        saved.
+
+        Parameters
+        ----------
+        directory : str
+            Directory time series are saved in.
+
+        """
         timeindex = None
-        if os.path.exists(os.path.join(ts_dir, "loads_active_power.csv")):
-            self.loads_active_power = pd.read_csv(
-                os.path.join(ts_dir, "loads_active_power.csv"),
-                index_col=[0],
-                parse_dates=True)
-            if timeindex is None:
-                timeindex = self._loads_active_power.index
-        if os.path.exists(os.path.join(ts_dir, "loads_reactive_power.csv")):
-            self.loads_reactive_power = pd.read_csv(
-                os.path.join(ts_dir, "loads_reactive_power.csv"),
-                index_col=[0],
-                parse_dates=True)
-            if timeindex is None:
-                timeindex = self._loads_reactive_power.index
-
-        if os.path.exists(
-                os.path.join(ts_dir, "charging_points_active_power.csv")):
-            self.charging_points_active_power = pd.read_csv(
-                os.path.join(ts_dir, "charging_points_active_power.csv"),
-                index_col=[0],
-                parse_dates=True)
-            if timeindex is None:
-                timeindex = self._charging_points_active_power.index
-        if os.path.exists(
-                os.path.join(ts_dir, "charging_points_reactive_power.csv")):
-            self.charging_points_reactive_power = pd.read_csv(
-                os.path.join(ts_dir, "charging_points_reactive_power.csv"),
-                index_col=[0],
-                parse_dates=True)
-            if timeindex is None:
-                timeindex = self._charging_points_reactive_power.index
-
-        if os.path.exists(
-                os.path.join(ts_dir, "generators_active_power.csv")):
-            self.generators_active_power = pd.read_csv(
-                os.path.join(ts_dir, "generators_active_power.csv"),
-                index_col=[0],
-                parse_dates=True)
-            if timeindex is None:
-                timeindex = self._generators_active_power.index
-        if os.path.exists(os.path.join(ts_dir, "generators_reactive_power.csv")):
-            self.generators_reactive_power = pd.read_csv(
-                os.path.join(ts_dir, "generators_reactive_power.csv"),
-                index_col=[0],
-                parse_dates=True)
-            if timeindex is None:
-                timeindex = self._generators_reactive_power.index
-
-        if os.path.exists(
-                os.path.join(ts_dir, "storage_units_active_power.csv")):
-            self.storage_units_active_power = pd.read_csv(
-                os.path.join(ts_dir, "storage_units_active_power.csv"),
-                index_col=[0],
-                parse_dates=True)
-            if timeindex is None:
-                timeindex = self._storage_units_active_power.index
-        if os.path.exists(
-                os.path.join(ts_dir, "storage_units_reactive_power.csv")):
-            self.storage_units_reactive_power = pd.read_csv(
-                os.path.join(ts_dir, "storage_units_reactive_power.csv"),
-                index_col=[0],
-                parse_dates=True)
-            if timeindex is None:
-                timeindex = self._storage_units_reactive_power.index
-        self.timeindex = timeindex
+        for attr in _get_attributes_to_save():
+            path = os.path.join(
+                directory,
+                '{}.csv'.format(attr)
+            )
+            if os.path.exists(path):
+                setattr(
+                    self,
+                    attr,
+                    pd.read_csv(path, index_col=0, parse_dates=True)
+                )
+                if timeindex is None:
+                    timeindex = getattr(
+                        self,
+                        "_{}".format(attr)
+                    ).index
+        if timeindex is None:
+            timeindex = pd.DatetimeIndex([])
+        self._timeindex = timeindex
 
 
 def get_component_timeseries(edisgo_obj, **kwargs):
