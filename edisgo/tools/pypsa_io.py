@@ -78,6 +78,16 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         Timesteps specifies which time steps to export to pypsa representation
         and use in power flow analysis.
 
+    Other Parameters
+    -----------------
+    use_seed : bool
+        Use a seed for the initial guess for the Newton-Raphson algorithm.
+        Only available when MV level is included in the power flow analysis.
+        If True, uses voltage magnitude results of previous power flow
+        analyses as initial guess in case of PQ buses. PV buses currently do
+        not occur and are therefore currently not supported.
+        Default: False.
+
     Returns
     -------
     :pypsa:`pypsa.Network<network>`
@@ -125,6 +135,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
     # define edisgo_obj, buses_df, slack_df and components for each use case
     if mode is None:
 
+        pypsa_network.mode = "mv"
+
         edisgo_obj = grid_object
         buses_df = grid_object.topology.buses_df.loc[:, ["v_nom"]]
         slack_df = _set_slack(edisgo_obj.topology.mv_grid)
@@ -152,6 +164,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         }
 
     elif "mv" in mode:
+
+        pypsa_network.mode = "mv"
 
         edisgo_obj = grid_object.edisgo_obj
         buses_df = grid_object.buses_df.loc[:, ["v_nom"]]
@@ -229,6 +243,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
                 components[key] = components[key].append(value)
 
     elif mode is "lv":
+
+        pypsa_network.mode = "lv"
 
         edisgo_obj = grid_object.edisgo_obj
         buses_df = grid_object.buses_df.loc[:, ["v_nom"]]
@@ -364,9 +380,106 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             "q_set",
         )
 
+    if kwargs.get("use_seed", False) and pypsa_network.mode == "mv":
+        set_seed(edisgo_obj, pypsa_network)
+
     _check_integrity_of_pypsa(pypsa_network)
 
     return pypsa_network
+
+
+def set_seed(edisgo_obj, pypsa_network):
+    """
+    Set initial guess for the Newton-Raphson algorithm.
+
+    In `PyPSA <https://pypsa.readthedocs.io/en/latest/index.html/>`_ an
+    initial guess for the Newton-Raphson algorithm used in the power flow
+    analysis can be provided to speed up calculations.
+    For PQ buses, which besides the slack bus, is the only bus type in
+    edisgo, voltage magnitude and angle need to be guessed. If the power
+    flow was already conducted for the required time steps and buses, the
+    voltage magnitude and angle results from previously conducted power
+    flows stored in :attr:`~.network.results.Results.pfa_v_mag_pu_seed` and
+    :attr:`~.network.results.Results.pfa_v_ang_seed` are used
+    as the initial guess. Always the latest power flow calculation is used
+    and only results from power flow analyses including the MV level are
+    considered, as analysing single LV grids is currently not in the focus
+    of edisgo and does not require as much speeding up, as analysing single
+    LV grids is usually already quite quick.
+    If for some buses or time steps no power flow results are available,
+    default values are used. For the voltage magnitude the default value is 1
+    and for the voltage angle 0.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    pypsa_network : :pypsa:`pypsa.Network<network>`
+        Pypsa network in which seed is set.
+
+    """
+
+    # get all PQ buses for which seed needs to be set
+    pq_buses = pypsa_network.buses[pypsa_network.buses.control == "PQ"].index
+
+    # get voltage magnitude and angle results from previous power flow analyses
+    pfa_v_mag_pu_seed = edisgo_obj.results.pfa_v_mag_pu_seed
+    pfa_v_ang_seed = edisgo_obj.results.pfa_v_ang_seed
+
+    # get busses seed cannot be set for from previous power flow analyses
+    # and add default values for those
+    buses_missing = [_ for _ in pq_buses if _ not in pfa_v_mag_pu_seed.columns]
+    if len(buses_missing) > 0:
+        pfa_v_mag_pu_seed = pd.concat(
+            [pfa_v_mag_pu_seed,
+             pd.DataFrame(
+                 data=1.,
+                 columns=buses_missing,
+                 index=pfa_v_ang_seed.index
+             )],
+            axis=1
+        )
+        pfa_v_ang_seed = pd.concat(
+            [pfa_v_ang_seed,
+             pd.DataFrame(
+                 data=0.,
+                 columns=buses_missing,
+                 index=pfa_v_ang_seed.index
+             )],
+            axis=1
+        )
+    # select only PQ buses
+    pfa_v_mag_pu_seed = pfa_v_mag_pu_seed.loc[:, pq_buses]
+    pfa_v_ang_seed = pfa_v_ang_seed.loc[:, pq_buses]
+
+    # get time steps seed cannot be set for from previous power flow analyses
+    # and add default values for those
+    ts_missing = [_ for _ in pypsa_network.snapshots
+                  if _ not in pfa_v_mag_pu_seed.index]
+    if len(ts_missing) > 0:
+        pfa_v_mag_pu_seed = pd.concat(
+            [pfa_v_mag_pu_seed,
+             pd.DataFrame(
+                 data=1.,
+                 columns=pq_buses,
+                 index=ts_missing
+             )],
+            axis=0
+        )
+        pfa_v_ang_seed = pd.concat(
+            [pfa_v_ang_seed,
+             pd.DataFrame(
+                 data=0.,
+                 columns=pq_buses,
+                 index=ts_missing
+             )],
+            axis=0
+        )
+    # select only snapshots
+    pfa_v_mag_pu_seed = pfa_v_mag_pu_seed.loc[pypsa_network.snapshots, :]
+    pfa_v_ang_seed = pfa_v_ang_seed.loc[pypsa_network.snapshots, :]
+
+    pypsa_network.buses_t.v_mag_pu = pfa_v_mag_pu_seed
+    pypsa_network.buses_t.v_ang = pfa_v_ang_seed
 
 
 def _get_grid_component_dict(grid_object):
@@ -1157,3 +1270,18 @@ def process_pfa_results(edisgo, pypsa, timesteps):
 
     # get voltage results in kV
     edisgo.results._v_res = pypsa.buses_t["v_mag_pu"]
+
+    # save seeds
+    edisgo.results.pfa_v_mag_pu_seed = pd.concat(
+        [edisgo.results.pfa_v_mag_pu_seed,
+         pypsa.buses_t["v_mag_pu"].loc[timesteps, :]
+         ]
+    ).reset_index().drop_duplicates(
+        subset='index', keep='last').set_index('index').fillna(1)
+
+    edisgo.results.pfa_v_ang_seed = pd.concat(
+        [edisgo.results.pfa_v_ang_seed,
+         pypsa.buses_t["v_ang"].loc[timesteps, :]
+         ]
+    ).reset_index().drop_duplicates(
+        subset='index', keep='last').set_index('index').fillna(0)

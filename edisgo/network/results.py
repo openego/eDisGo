@@ -32,6 +32,8 @@ def _get_matching_dict_of_attributes_and_file_names():
         "s_res": "apparent_powers",
         "grid_losses": "grid_losses",
         "pfa_slack": "slack_results",
+        "pfa_v_mag_pu_seed": "pfa_v_mag_pu_seed",
+        "pfa_v_ang_seed": "pfa_v_ang_seed",
     }
     grid_expansion_results_dict = {
         "grid_expansion_costs": "grid_expansion_costs",
@@ -481,6 +483,81 @@ class Results:
     def pfa_slack(self, df):
         self._pfa_slack = df
 
+    @property
+    def pfa_v_mag_pu_seed(self):
+        """
+        Voltages in p.u. from previous power flow analyses to be used as seed.
+
+        See :func:`~.tools.pypsa_io.set_seed` for more information.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Voltages at buses in p.u. from previous power flow analyses
+            including the MV level. Index of the dataframe is a
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>` indicating
+            the time steps previous power flow analyses were conducted
+            for; columns of the dataframe are the representatives of the buses
+            included in the power flow analyses.
+
+            Provide this if you want to set values. For retrieval of data do
+            not pass an argument.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Voltages at buses in p.u. from previous power flow analyses to be
+            opionally used as seed in following power flow analyses. For more
+            information on the dataframe see input parameter `df`.
+
+        """
+        try:
+            return self._pfa_v_mag_pu_seed
+        except:
+            return pd.DataFrame()
+
+    @pfa_v_mag_pu_seed.setter
+    def pfa_v_mag_pu_seed(self, df):
+        self._pfa_v_mag_pu_seed = df
+
+    @property
+    def pfa_v_ang_seed(self):
+        """
+        Voltages in p.u. from previous power flow analyses to be used as seed.
+
+        See :func:`~.tools.pypsa_io.set_seed` for more information.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Voltage angles at buses in radians from previous power flow
+            analyses including the MV level. Index of the dataframe is a
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>` indicating
+            the time steps previous power flow analyses were conducted
+            for; columns of the dataframe are the representatives of the buses
+            included in the power flow analyses.
+
+            Provide this if you want to set values. For retrieval of data do
+            not pass an argument.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Voltage angles at buses in radians from previous power flow
+            analyses to be opionally used as seed in following power flow
+            analyses. For more information on the dataframe see input
+            parameter `df`.
+
+        """
+        try:
+            return self._pfa_v_ang_seed
+        except:
+            return pd.DataFrame()
+
+    @pfa_v_ang_seed.setter
+    def pfa_v_ang_seed(self, df):
+        self._pfa_v_ang_seed = df
+
     # @property
     # def curtailment(self):
     #     """
@@ -700,11 +777,19 @@ class Results:
         -----------
         attr_to_reduce : list(str), optional
             List of attributes to reduce size for. Attributes need to be
-            dataframes containing only time series. Per default, all attributes
-            containing only time series are reduced.
+            dataframes containing only time series. Possible options are:
+            'pfa_p', 'pfa_q', 'v_res', 'i_res', and 'grid_losses'.
+            Per default, all these attributes are reduced.
         to_type : str, optional
             Data type to convert time series data to. This is a tradeoff
             between precision and memory. Default: "float32".
+
+        Notes
+        ------
+        Reducing the data type of the seeds for the power flow analysis,
+        :py:attr:`~pfa_v_mag_pu_seed` and :py:attr:`~pfa_v_ang_seed`, can lead
+        to non-convergence of the power flow analysis, wherefore memory
+        reduction is not provided for those attributes.
 
         """
         if attr_to_reduce is None:
@@ -723,7 +808,7 @@ class Results:
             )
 
     def to_csv(self, directory, parameters=None, reduce_memory=False,
-               **kwargs):
+               save_seed=False, **kwargs):
         """
         Saves results to csv.
 
@@ -748,6 +833,10 @@ class Results:
           `grid_losses.csv`.
         * 'pfa_slack' : Attribute :py:attr:`~pfa_slack` is saved to
           `pfa_slack.csv`.
+        * 'pfa_v_mag_pu_seed' : Attribute :py:attr:`~pfa_v_mag_pu_seed` is
+          saved to `pfa_v_mag_pu_seed.csv`, if `save_seed` is set to True.
+        * 'pfa_v_ang_seed' : Attribute :py:attr:`~pfa_v_ang_seed` is
+          saved to `pfa_v_ang_seed.csv`, if `save_seed` is set to True.
 
         Grid expansion results are saved to directory 'grid_expansion_results'
         and comprise the following, if not otherwise specified:
@@ -790,6 +879,11 @@ class Results:
             Optional parameters of
             :attr:`~.network.results.Results.reduce_memory` can be passed as
             kwargs to this function. Default: False.
+        save_seed : bool, optional
+            If True, :py:attr:`~pfa_v_mag_pu_seed` and
+            :py:attr:`~pfa_v_ang_seed` are as well saved as csv. As these are
+            only relevant if calculations are not final, the default is False,
+            in which case they are not saved.
 
         Other Parameters
         ------------------
@@ -890,6 +984,11 @@ class Results:
                 "grid_expansion_results": list(
                     grid_expansion_results_dict.keys())
             }
+            if not save_seed:
+                parameters["powerflow_results"] = [
+                    _ for _ in parameters["powerflow_results"]
+                    if not "seed" in _
+                ]
 
         if not isinstance(parameters, dict):
             raise ValueError(
