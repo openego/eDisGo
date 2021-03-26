@@ -421,11 +421,11 @@ class Results:
 
         .. math::
 
-            P_{loss} = \lvert \sum{feed-in} - \sum{load} + P_{slack} \lvert
+            P_{loss} = \lvert \sum{infeed} - \sum{load} + P_{slack} \lvert
 
         .. math::
 
-            Q_{loss} = \lvert \sum{feed-in} - \sum{load} + Q_{slack} \lvert
+            Q_{loss} = \lvert \sum{infeed} - \sum{load} + Q_{slack} \lvert
 
         As the slack is placed at the station's secondary side (if MV is
         included, it's positioned at the HV/MV station's secondary side and if
@@ -771,7 +771,7 @@ class Results:
         """
         Reduces size of dataframes containing time series to save memory.
 
-        See :attr:`EDisGo.reduce_memory` for more information.
+        See :attr:`~.EDisGo.reduce_memory` for more information.
 
         Parameters
         -----------
@@ -827,7 +827,7 @@ class Results:
           `active_powers.csv`.
         * 'pfa_q' : Attribute :py:attr:`~pfa_q` is saved to
           `reactive_powers.csv`.
-        * 's_res' : Attribute :func:`~s_res` is saved to
+        * 's_res' : Attribute :py:attr:`~s_res` is saved to
           `apparent_powers.csv`.
         * 'grid_losses' : Attribute :py:attr:`~grid_losses` is saved to
           `grid_losses.csv`.
@@ -1030,7 +1030,7 @@ class Results:
         Restores results from csv files.
 
         See :func:`~to_csv` for more information on which results can be saved
-        to and under which filename and directory they are stored.
+        and under which filename and directory they are stored.
 
         Parameters
         ----------
