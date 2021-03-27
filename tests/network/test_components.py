@@ -92,8 +92,8 @@ class TestComponents:
 
         # test getter
         assert switch.id == 'circuit_breaker_1'
-        assert switch.bus_closed == 'Bus_primary_LVStation_4'
-        assert switch.bus_open == 'virtual_Bus_primary_LVStation_4'
+        assert switch.bus_closed == 'BusBar_MVGrid_1_LVGrid_4_MV'
+        assert switch.bus_open == 'virtual_BusBar_MVGrid_1_LVGrid_4_MV'
         assert switch.branch == 'Line_10031'
         assert switch.type == 'Switch Disconnector'
         assert switch.state == 'open'

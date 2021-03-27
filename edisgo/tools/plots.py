@@ -372,7 +372,8 @@ def mv_grid_topology(
             and connected_components["Generator"].empty
             and connected_components["StorageUnit"].empty
         ):
-            raise NotImplementedError
+            #raise NotImplementedError
+            return colors_dict["Load"], sizes_dict["Load"]
         elif not connected_components["Switch"].empty:
             return (
                 colors_dict["DisconnectingPoint"],
@@ -396,6 +397,7 @@ def mv_grid_topology(
             "BranchTee": "b",
             "GeneratorFluctuating": "g",
             "Generator": "k",
+            "Load": "m",
             "LVStation": "c",
             "MVStation": "r",
             "Storage": "y",
@@ -406,6 +408,7 @@ def mv_grid_topology(
             "BranchTee": 10000,
             "GeneratorFluctuating": 100000,
             "Generator": 100000,
+            "Load": 100000,
             "LVStation": 50000,
             "MVStation": 120000,
             "Storage": 100000,
@@ -630,10 +633,6 @@ def mv_grid_topology(
             pypsa_plot.buses.index, grid_expansion_costs, edisgo_obj
         )
         bus_cmap = plt.cm.get_cmap(lines_cmap)
-    elif node_color is None:
-        bus_sizes = 0
-        bus_colors = "r"
-        bus_cmap = None
     elif node_color == "curtailment":
         bus_sizes = nodes_curtailment(pypsa_plot.buses.index, curtailment_df)
         bus_colors = "orangered"
@@ -643,13 +642,37 @@ def mv_grid_topology(
             pypsa_plot.buses.index, edisgo_obj
         )
         bus_cmap = None
-    else:
-        logging.warning(
-            "Choice for `node_color` is not valid. Default is " "used instead."
-        )
+    elif node_color is None:
         bus_sizes = 0
         bus_colors = "r"
         bus_cmap = None
+    else:
+        if kwargs.get("bus_colors", None):
+            bus_colors = pd.Series(kwargs.get("bus_colors")).loc[
+                pypsa_plot.buses]
+        else:
+            logging.warning(
+                "Choice for `node_color` is not valid. Default bus colors are "
+                "used instead."
+            )
+            bus_colors = "r"
+        if kwargs.get("bus_sizes", None):
+            bus_sizes = pd.Series(kwargs.get("bus_sizes")).loc[
+                pypsa_plot.buses]
+        else:
+            logging.warning(
+                "Choice for `node_color` is not valid. Default bus sizes are "
+                "used instead."
+            )
+            bus_sizes = 0
+        if kwargs.get("bus_cmap", None):
+            bus_cmap = kwargs.get("bus_cmap", None)
+        else:
+            logging.warning(
+                "Choice for `node_color` is not valid. Default bus colormap "
+                "is used instead."
+            )
+            bus_cmap = None
 
     # convert bus coordinates to Mercator
     if contextily and background_map:

@@ -64,8 +64,8 @@ class TestReinforceMeasures:
         trafo_copy = self.edisgo.topology.equipment_data[
             "lv_transformers"
         ].loc["630 kVA"]
-        assert trafo_new.bus0 == "Bus_primary_LVStation_1"
-        assert trafo_new.bus1 == "Bus_secondary_LVStation_1"
+        assert trafo_new.bus0 == "BusBar_MVGrid_1_LVGrid_1_MV"
+        assert trafo_new.bus1 == "BusBar_MVGrid_1_LVGrid_1_LV"
         assert trafo_new.r_pu == trafo_copy.r_pu
         assert trafo_new.x_pu == trafo_copy.x_pu
         assert trafo_new.s_nom == trafo_copy.S_nom
@@ -77,8 +77,8 @@ class TestReinforceMeasures:
         trafo_copy = self.edisgo.topology.transformers_df.loc[
             "LVStation_4_transformer_1"
         ]
-        assert trafo_new.bus0 == "Bus_primary_LVStation_4"
-        assert trafo_new.bus1 == "Bus_secondary_LVStation_4"
+        assert trafo_new.bus0 == "BusBar_MVGrid_1_LVGrid_4_MV"
+        assert trafo_new.bus1 == "BusBar_MVGrid_1_LVGrid_4_LV"
         assert trafo_new.r_pu == trafo_copy.r_pu
         assert trafo_new.x_pu == trafo_copy.x_pu
         assert trafo_new.s_nom == trafo_copy.s_nom
@@ -171,8 +171,8 @@ class TestReinforceMeasures:
         trafo_copy = self.edisgo.topology.equipment_data[
             "lv_transformers"
         ].loc["630 kVA"]
-        assert trafo_new.bus0 == "Bus_primary_LVStation_9"
-        assert trafo_new.bus1 == "Bus_secondary_LVStation_9"
+        assert trafo_new.bus0 == "BusBar_MVGrid_1_LVGrid_9_MV"
+        assert trafo_new.bus1 == "BusBar_MVGrid_1_LVGrid_9_LV"
         assert trafo_new.r_pu == trafo_copy.r_pu
         assert trafo_new.x_pu == trafo_copy.x_pu
         assert trafo_new.s_nom == trafo_copy.S_nom
@@ -207,7 +207,7 @@ class TestReinforceMeasures:
                 "Bus_BranchTee_MVGrid_1_10",
                 "Bus_BranchTee_MVGrid_1_11",
                 "Bus_BranchTee_MVGrid_1_2",
-                "Bus_primary_LVStation_7",
+                "BusBar_MVGrid_1_LVGrid_7_MV",
             ],
         )
 
@@ -248,13 +248,13 @@ class TestReinforceMeasures:
             ].values
         )
         assert (
-            "Bus_primary_LVStation_3"
+            "BusBar_MVGrid_1_LVGrid_3_MV"
             in self.edisgo.topology.lines_df.loc[
                 "Line_10023", ["bus0", "bus1"]
             ].values
         )
         assert (
-            "Bus_primary_LVStation_1"
+            "BusBar_MVGrid_1_LVGrid_1_MV"
             in self.edisgo.topology.lines_df.loc[
                 "Line_10007", ["bus0", "bus1"]
             ].values
@@ -318,13 +318,13 @@ class TestReinforceMeasures:
         assert "Line_50000009" in reinforced_lines
         # check that LV station is one of the buses
         assert (
-            "Bus_secondary_LVStation_5"
+            "BusBar_MVGrid_1_LVGrid_5_LV"
             in self.edisgo.topology.lines_df.loc[
                 "Line_50000003", ["bus0", "bus1"]
             ].values
         )
         assert (
-            "Bus_secondary_LVStation_5"
+            "BusBar_MVGrid_1_LVGrid_5_LV"
             in self.edisgo.topology.lines_df.loc[
                 "Line_50000009", ["bus0", "bus1"]
             ].values

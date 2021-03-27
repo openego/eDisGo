@@ -35,6 +35,8 @@ function constraint_power_balance(pm, i,nw::Int=pm.cnw, cnd::Int=pm.ccnd)
     cm = var(pm,nw,:cm)
     pg = var(pm, nw, :pg)
     qg = var(pm, nw, :qg)
+    pd = var(pm, nw, :pd)
+    qd = var(pm, nw, :qd)
 
     bus_gens = ref(pm,nw,:bus_gens,i)
     bus_loads = ref(pm,nw,:bus_loads,i)
@@ -72,13 +74,13 @@ function constraint_power_balance(pm, i,nw::Int=pm.cnw, cnd::Int=pm.ccnd)
         x = Dict(k => b["br_x"] for (k,b) in branch)
     end
 
-    @constraint(pm.model, sum(pg[g] for g in bus_gens)-sum(pd for pd in values(bus_pd)) + 
+    @constraint(pm.model, sum(pg[g] for g in bus_gens)-sum(pd[l] for l in bus_loads) +
                         sum(ud[s] - uc[s] for s in bus_storage) ==
                         sum(p[idx] for idx in outgoing_arcs)-
                         sum(p[idx]-r[idx[1]]*cm[idx[1]] for idx in incoming_arcs) +
                         sum(gs for gs in values(bus_gs))*w[i])
 
-    @constraint(pm.model, sum(qg[g] for g in bus_gens)-sum(qd for qd in values(bus_qd)) ==
+    @constraint(pm.model, sum(qg[g] for g in bus_gens)-sum(qd[l] for l in bus_loads) ==
                         sum(q[idx] for idx in outgoing_arcs)-
                         sum(q[idx]-x[idx[1]]*cm[idx[1]] for idx in incoming_arcs)-
                         sum(bs for bs in values(bus_bs))*w[i])

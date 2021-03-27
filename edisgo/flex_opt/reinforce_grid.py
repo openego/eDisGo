@@ -243,16 +243,17 @@ def reinforce_grid(
         or not overloaded_mv_station.empty
         or not overloaded_lv_stations.empty
     ):
-        edisgo_reinforce.results.unresolved_issues.update(crit_lines)
-        edisgo_reinforce.results.unresolved_issues.update(
-            overloaded_lv_stations
-        )
-        edisgo_reinforce.results.unresolved_issues.update(
-            overloaded_mv_station
-        )
+        edisgo_reinforce.results.unresolved_issues = \
+            pd.concat(
+                [edisgo_reinforce.results.unresolved_issues,
+                 crit_lines,
+                 overloaded_lv_stations,
+                 overloaded_mv_station
+                 ]
+            )
         raise exceptions.MaximumIterationError(
-            "Overloading issues for the following lines could not be solved:"
-            "{}".format(crit_lines)
+            "Overloading issues could not be solved after maximum allowed "
+            "iterations."
         )
     else:
         logger.info(
@@ -300,11 +301,12 @@ def reinforce_grid(
     # check if all voltage problems were solved after maximum number of
     # iterations allowed
     if while_counter == max_while_iterations and crit_nodes:
-        for k, v in crit_nodes.items():
-            for node in v.index:
-                edisgo_reinforce.results.unresolved_issues.update(
-                    {node: v.loc[node, "v_diff_max"]}
-                )
+        edisgo_reinforce.results.unresolved_issues = \
+            pd.concat(
+                [edisgo_reinforce.results.unresolved_issues,
+                 pd.concat([_ for _ in crit_nodes.values()])
+                 ]
+            )
         raise exceptions.MaximumIterationError(
             "Over-voltage issues for the following nodes in MV topology could "
             "not be solved: {}".format(crit_nodes)
@@ -354,11 +356,12 @@ def reinforce_grid(
         # check if all voltage problems were solved after maximum number of
         # iterations allowed
         if while_counter == max_while_iterations and crit_stations:
-            for k, v in crit_stations.items():
-                for node in v.index:
-                    edisgo_reinforce.results.unresolved_issues.update(
-                        {node: v.loc[node, "v_diff_max"]}
-                    )
+            edisgo_reinforce.results.unresolved_issues = \
+                pd.concat(
+                    [edisgo_reinforce.results.unresolved_issues,
+                     pd.concat([_ for _ in crit_stations.values()])
+                     ]
+                )
             raise exceptions.MaximumIterationError(
                 "Over-voltage issues at busbar could not be solved for the "
                 "following LV grids: {}".format(crit_stations)
@@ -404,11 +407,12 @@ def reinforce_grid(
         # check if all voltage problems were solved after maximum number of
         # iterations allowed
         if while_counter == max_while_iterations and crit_nodes:
-            for k, v in crit_nodes.items():
-                for node in v.index:
-                    edisgo_reinforce.results.unresolved_issues.update(
-                        {repr(node): v.loc[node, "v_diff_max"]}
-                    )
+            edisgo_reinforce.results.unresolved_issues = \
+                pd.concat(
+                    [edisgo_reinforce.results.unresolved_issues,
+                     pd.concat([_ for _ in crit_nodes.values()])
+                     ]
+                )
             raise exceptions.MaximumIterationError(
                 "Over-voltage issues for the following nodes in LV grids "
                 "could not be solved: {}".format(crit_nodes)
@@ -491,13 +495,14 @@ def reinforce_grid(
         or not overloaded_mv_station.empty
         or not overloaded_lv_stations.empty
     ):
-        edisgo_reinforce.results.unresolved_issues.update(crit_lines)
-        edisgo_reinforce.results.unresolved_issues.update(
-            overloaded_lv_stations
-        )
-        edisgo_reinforce.results.unresolved_issues.update(
-            overloaded_mv_station
-        )
+        edisgo_reinforce.results.unresolved_issues = \
+            pd.concat(
+                [edisgo_reinforce.results.unresolved_issues,
+                 crit_lines,
+                 overloaded_lv_stations,
+                 overloaded_mv_station
+                 ]
+            )
         raise exceptions.MaximumIterationError(
             "Overloading issues (after solving over-voltage issues) for the"
             "following lines could not be solved: {}".format(crit_lines)

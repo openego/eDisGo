@@ -6,10 +6,10 @@ import pickle
 from edisgo.network.topology import Topology
 from edisgo.network.results import Results
 from edisgo.network import timeseries
-from edisgo.tools import pypsa_io, plots, tools, networkx_helper
+from edisgo.tools import pypsa_io, plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io.ding0_import import import_ding0_grid
-from edisgo.io.generators_import import oedb as import_generators_oedb, add_and_connect_mv_generator
+from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
 from edisgo.opf.run_mp_opf import run_mp_opf
@@ -226,31 +226,13 @@ class EDisGo:
         if kwargs.get("import_timeseries", True):
             if kwargs.get("worst_case_analysis", None):
                 timeseries.get_component_timeseries(
-                    edisgo_obj=self, mode=kwargs.get("worst_case_analysis", None)
+                    edisgo_obj=self,
+                    mode=kwargs.get("worst_case_analysis", None)
                 )
             else:
                 timeseries.get_component_timeseries(
                     edisgo_obj=self,
-                    timeseries_generation_fluctuating=kwargs.get(
-                        "timeseries_generation_fluctuating", None
-                    ),
-                    timeseries_generation_dispatchable=kwargs.get(
-                        "timeseries_generation_dispatchable", None
-                    ),
-                    timeseries_generation_reactive_power=kwargs.get(
-                        "timeseries_generation_reactive_power", None
-                    ),
-                    timeseries_load=kwargs.get("timeseries_load", None),
-                    timeseries_load_reactive_power=kwargs.get(
-                        "timeseries_load_reactive_power", None
-                    ),
-                    timeseries_storage_units=kwargs.get(
-                        "timeseries_storage_units", None
-                    ),
-                    timeseries_storage_units_reactive_power=kwargs.get(
-                        "timeseries_storage_units_reactive_power", None
-                    ),
-                    timeindex=kwargs.get("timeindex", None),
+                    **kwargs
                 )
 
     @property
@@ -348,35 +330,76 @@ class EDisGo:
 
         """
 
-        graph = networkx_helper.translate_df_to_graph(
-            self.topology.buses_df,
-            self.topology.lines_df,
-            self.topology.transformers_df,
-        )
+        return self.topology.to_graph()
 
-        return graph
-
-    def curtail(self, methodology, curtailment_timeseries, **kwargs):
-        """
-        Sets up curtailment time series.
-
-        Curtailment time series are written into
-        :class:`~.network.network.TimeSeries`. See
-        :class:`~.network.network.CurtailmentControl` for more information on
-        parameters and methodologies.
-
-        """
-        raise NotImplementedError
-        # CurtailmentControl(edisgo=self, methodology=methodology,
-        #                    curtailment_timeseries=curtailment_timeseries,
-        #                    mode=kwargs.pop('mode', None), **kwargs)
+    # def curtail(self, methodology, curtailment_timeseries, **kwargs):
+    #     """
+    #     Sets up curtailment time series.
+    #
+    #     Curtailment time series are written into
+    #     :class:`~.network.network.TimeSeries`. See
+    #     :class:`~.network.network.CurtailmentControl` for more information on
+    #     parameters and methodologies.
+    #
+    #     # """
+    #     raise NotImplementedError
+    #     # CurtailmentControl(edisgo=self, methodology=methodology,
+    #     #                    curtailment_timeseries=curtailment_timeseries,
+    #     #                    mode=kwargs.pop('mode', None), **kwargs)
 
     def import_generators(self, generator_scenario=None,
                           **kwargs):
-        """Import generators
+        """
+        Gets generator park for specified scenario and integrates them into
+        the grid.
 
-        For details see
-        :func:`edisgo.io.generators_import.oedb`
+        Currently, the only supported data source is scenario data generated
+        in the research project
+        `open_eGo <https://openegoproject.wordpress.com/>`_. You can choose
+        between two scenarios: 'nep2035' and 'ego100'. You can get more
+        information on the scenarios in the
+        `final report <https://www.uni-flensburg.de/fileadmin/content/\
+        abteilungen/industrial/dokumente/downloads/veroeffentlichungen/\
+        forschungsergebnisse/20190426endbericht-openego-fkz0325881-final\
+        .pdf>`_.
+
+        The generator data is retrieved from the
+        `open energy platform <https://openenergy-platform.org/>`_
+        from tables for
+        `conventional power plants <https://openenergy-platform.org/dataedit/\
+        view/supply/ego_dp_conv_powerplant>`_ and
+        `renewable power plants <https://openenergy-platform.org/dataedit/\
+        view/supply/ego_dp_res_powerplant>`_.
+
+        When the generator data is retrieved, the following steps are
+        conducted:
+
+            * Step 1: Update capacity of existing generators if `
+              update_existing` is True, which it is by default.
+            * Step 2: Remove decommissioned generators if
+              `remove_decommissioned` is True, which it is by default.
+            * Step 3: Integrate new MV generators.
+            * Step 4: Integrate new LV generators.
+
+        For more information on how generators are integrated, see
+        :attr:`~.network.topology.Topology.connect_to_mv` and
+        :attr:`~.network.topology.Topology.connect_to_lv`.
+
+        After the generator park is changed there may be grid issues due to the
+        additional in-feed. These are not solved automatically. If you want to
+        have a stable grid without grid issues you can invoke the automatic
+        grid expansion through the function :attr:`~.EDisGo.reinforce`.
+
+        Parameters
+        ----------
+        generator_scenario : str
+            Scenario for which to retrieve generator data. Possible options
+            are 'nep2035' and 'ego100'.
+
+        Other Parameters
+        ----------------
+        kwargs :
+            See :func:`edisgo.io.generators_import.oedb`.
 
         """
         if generator_scenario:
@@ -384,7 +407,7 @@ class EDisGo:
         import_generators_oedb(edisgo_object=self,
                                **kwargs)
 
-    def analyze(self, mode=None, timesteps=None):
+    def analyze(self, mode=None, timesteps=None, **kwargs):
         """Conducts a static, non-linear power flow analysis
 
         Conducts a static, non-linear power flow analysis using
@@ -416,18 +439,16 @@ class EDisGo:
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
 
-        pypsa_network = self.to_pypsa(mode=mode, timesteps=timesteps)
+        pypsa_network = self.to_pypsa(mode=mode, timesteps=timesteps, **kwargs)
 
         # run power flow analysis
-        # Hei Kern modification
-        pf_results = pypsa_network.pf(timesteps)
-        # pypsa_network.lpf()
-        # pf_results = pypsa_network.pf(timesteps,use_seed=True)
+        pf_results = pypsa_network.pf(
+            timesteps, use_seed=kwargs.get("use_seed", False))
 
         if all(pf_results["converged"]["0"].tolist()):
             pypsa_io.process_pfa_results(self, pypsa_network, timesteps)
         else:
-            raise ValueError("Power flow analysis did not converge for the"
+            raise ValueError("Power flow analysis did not converge for the "
                              "following time steps: {}.".format(
                 timesteps[~pf_results["converged"]["0"]].tolist())
             )
@@ -477,6 +498,240 @@ class EDisGo:
             self, timesteps, storage_series=storage_series, **kwargs
         )
         return status
+
+    def aggregate_components(self, mode="by_component_type",
+                             aggregate_generators_by_cols=["bus"],
+                             aggregate_loads_by_cols=["bus"],
+                             aggregate_charging_points_by_cols=["bus"]):
+        """
+        Aggregates generators, loads and charging points at the same bus.
+
+        There are several options how to aggregate. By default all components
+        of the same type are aggregated separately. You can specify further
+        columns to consider in the aggregation, such as the generator type
+        or the load sector.
+
+        Be aware that by aggregating components you lose some information
+        e.g. on load sector or charging point use case.
+
+        Parameters
+        -----------
+        mode : str
+            Valid options are 'by_component_type' and 'by_load_and_generation'.
+            In case of aggregation 'by_component_type' generators, loads and
+            charging points are aggregated separately, by the respectively
+            specified columns, given in `aggregate_generators_by_cols`,
+            `aggregate_loads_by_cols`, and `aggregate_charging_points_by_cols`.
+            In case of aggregation 'by_load_and_generation', all loads and
+            charging points at the same bus are aggregated. Input in
+            `aggregate_loads_by_cols` and `aggregate_charging_points_by_cols`
+            is ignored. Generators are aggregated by the columns specified in
+            `aggregate_generators_by_cols`.
+        aggregate_generators_by_cols : list(str)
+            List of columns to aggregate generators at the same bus by. Valid
+            columns are all columns in
+            :attr:`~.network.topology.Topology.generators_df`.
+        aggregate_loads_by_cols : list(str)
+            List of columns to aggregate loads at the same bus by. Valid
+            columns are all columns in
+            :attr:`~.network.topology.Topology.loads_df`.
+        aggregate_charging_points_by_cols : list(str)
+            List of columns to aggregate charging points at the same bus by.
+            Valid columns are all columns in
+            :attr:`~.network.topology.Topology.charging_points_df`.
+
+        """
+        # aggregate generators at the same bus
+        if mode is "by_component_type" or "by_load_and_generation":
+            if not self.topology.generators_df.empty:
+                gens_groupby = self.topology.generators_df.groupby(
+                    aggregate_generators_by_cols)
+                naming = "Generators_{}"
+                # set up new generators_df
+                gens_df_grouped = gens_groupby.sum().reset_index()
+                gens_df_grouped["name"] = gens_df_grouped.apply(
+                    lambda _: naming.format(
+                        "_".join(_.loc[aggregate_generators_by_cols])),
+                    axis=1)
+                gens_df_grouped["control"] = "PQ"
+                gens_df_grouped["control"] = "misc"
+                if "weather_cell_id" in gens_df_grouped.columns:
+                    gens_df_grouped.drop(
+                        columns=["weather_cell_id"], inplace=True)
+                self.topology.generators_df = gens_df_grouped.set_index("name")
+                # set up new generator time series
+                groups = gens_groupby.groups
+                if isinstance(list(groups.keys())[0], tuple):
+                    self.timeseries.generators_active_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format("_".join(k)):
+                                 self.timeseries.generators_active_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                    self.timeseries.generators_reactive_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format("_".join(k)):
+                                 self.timeseries.generators_reactive_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                else:
+                    self.timeseries.generators_active_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format(k):
+                                 self.timeseries.generators_active_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                    self.timeseries.generators_reactive_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format(k):
+                                 self.timeseries.generators_reactive_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+
+        # aggregate conventional loads at the same bus and charging points
+        # at the same bus separately
+        if mode is "by_component_type":
+
+            # conventional loads
+            if not self.topology.loads_df.empty:
+                loads_groupby = self.topology.loads_df.groupby(
+                    aggregate_loads_by_cols)
+                naming = "Loads_{}"
+                # set up new loads_df
+                loads_df_grouped = loads_groupby.sum().reset_index()
+                loads_df_grouped["name"] = loads_df_grouped.apply(
+                    lambda _: naming.format(
+                        "_".join(_.loc[aggregate_loads_by_cols])),
+                    axis=1)
+                self.topology.loads_df = loads_df_grouped.set_index("name")
+                # set up new loads time series
+                groups = loads_groupby.groups
+                if isinstance(list(groups.keys())[0], tuple):
+                    self.timeseries.loads_active_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format("_".join(k)):
+                                 self.timeseries.loads_active_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                    self.timeseries.loads_reactive_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format("_".join(k)):
+                                 self.timeseries.loads_reactive_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                else:
+                    self.timeseries.loads_active_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format(k):
+                                 self.timeseries.loads_active_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                    self.timeseries.loads_reactive_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format(k):
+                                 self.timeseries.loads_reactive_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+
+            # charging points
+            if not self.topology.charging_points_df.empty:
+                loads_groupby = self.topology.charging_points_df.groupby(
+                    aggregate_charging_points_by_cols)
+                naming = "Charging_points_{}"
+                # set up new charging_points_df
+                loads_df_grouped = loads_groupby.sum().reset_index()
+                loads_df_grouped["name"] = loads_df_grouped.apply(
+                    lambda _: naming.format(
+                        "_".join(_.loc[aggregate_charging_points_by_cols])),
+                    axis=1)
+                self.topology.charging_points_df = loads_df_grouped.set_index(
+                    "name")
+                # set up new charging points time series
+                groups = loads_groupby.groups
+                if isinstance(list(groups.keys())[0], tuple):
+                    self.timeseries.charging_points_active_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format("_".join(k)):
+                                 self.timeseries.charging_points_active_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                    self.timeseries.charging_points_reactive_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format("_".join(k)):
+                                 self.timeseries.charging_points_reactive_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                else:
+                    self.timeseries.charging_points_active_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format(k):
+                                 self.timeseries.charging_points_active_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+                    self.timeseries.charging_points_reactive_power = pd.concat(
+                        [pd.DataFrame(
+                            {naming.format(k):
+                                 self.timeseries.charging_points_reactive_power.loc[
+                                 :, v].sum(axis=1)})
+                            for k, v in groups.items()], axis=1)
+
+        # aggregate all loads (conventional loads and charging points) at the
+        # same bus
+        elif mode is "by_load_and_generation":
+            aggregate_loads_by_cols = ["bus"]
+            loads_groupby = pd.concat(
+                [self.topology.loads_df.loc[:, ["bus", "peak_load"]],
+                 self.topology.charging_points_df.loc[
+                 :, ["bus", "p_nom"]].rename(columns={"p_nom": "peak_load"})]
+            ).groupby(aggregate_loads_by_cols)
+            naming = "Loads_{}"
+            # set up new loads_df
+            loads_df_grouped = loads_groupby.sum().reset_index()
+            loads_df_grouped["name"] = loads_df_grouped.apply(
+                lambda _: naming.format(
+                    "_".join(_.loc[aggregate_loads_by_cols])),
+                axis=1)
+            self.topology.loads_df = loads_df_grouped.set_index("name")
+            # set up new loads time series
+            groups = loads_groupby.groups
+            ts_active = pd.concat([
+                self.timeseries.loads_active_power,
+                self.timeseries.charging_points_active_power],
+                axis=1)
+            ts_reactive = pd.concat([
+                self.timeseries.loads_reactive_power,
+                self.timeseries.charging_points_reactive_power],
+                axis=1)
+            if isinstance(list(groups.keys())[0], tuple):
+
+                self.timeseries.loads_active_power = pd.concat(
+                    [pd.DataFrame(
+                        {naming.format("_".join(k)):
+                             ts_active.loc[:, v].sum(axis=1)})
+                        for k, v in groups.items()], axis=1)
+                self.timeseries.loads_reactive_power = pd.concat(
+                    [pd.DataFrame(
+                        {naming.format("_".join(k)):
+                             ts_reactive.loc[:, v].sum(axis=1)})
+                        for k, v in groups.items()], axis=1)
+            else:
+                self.timeseries.loads_active_power = pd.concat(
+                    [pd.DataFrame(
+                        {naming.format(k):
+                             ts_active.loc[:, v].sum(axis=1)})
+                        for k, v in groups.items()], axis=1)
+                self.timeseries.loads_reactive_power = pd.concat(
+                    [pd.DataFrame(
+                        {naming.format(k):
+                             ts_reactive.loc[:, v].sum(axis=1)})
+                        for k, v in groups.items()], axis=1)
+            # overwrite charging points
+            self.topology.charging_points_df = pd.DataFrame(
+                columns=["bus"])
+            self.timeseries.charging_points_active_power = pd.DataFrame(
+                index=self.timeseries.timeindex)
+            self.timeseries.charging_points_reactive_power = pd.DataFrame(
+                index=self.timeseries.timeindex)
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
@@ -778,34 +1033,61 @@ class EDisGo:
         **kwargs
     ):
         """
-        Saves edisgo_obj parameters to csv. It can be chosen if results,
-        topology and timeseries should be saved, respectively. For each one, a
-        separate folder is created.
+        Saves EDisGo object to csv.
+
+        It can be chosen if results, topology and timeseries should be saved.
+        For each one, a separate directory is created.
 
         Parameters
         ----------
-        directory: str
-            directory to save edisgo_obj to. Subfolders for respective
-            parameters will be created.
-        save_results: bool
-            indicates whether to save self.results
-        save_topology: bool
-            indicates whether to save self.topology
-        save_timeseries: bool
-            indicates whether to save self.timeseries
+        directory : str
+            Main directory to save EDisGo object to.
+        save_results : bool, optional
+            Indicates whether to save :class:`~.network.results.Results`
+            object. Per default it is saved. See
+            :attr:`~.network.results.Results.to_csv` for more information.
+        save_topology : bool, optional
+            Indicates whether to save :class:`~.network.topology.Topology`.
+            Per default it is saved. See
+            :attr:`~.network.topology.Topology.to_csv` for more information.
+        save_timeseries : bool, optional
+            Indicates whether to save :class:`~.network.timeseries.Timeseries`.
+            Per default it is saved. See
+            :attr:`~.network.timeseries.Timeseries.to_csv` for more
+            information.
+
+        Other Parameters
+        ------------------
+        to_type : str, optional
+            Data type to convert time series data to. This is a tradeoff
+            between precision and memory. Default: "float32".
+        results_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.results.Results.reduce_memory` for more
+            information.
+        timeseries_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more
+            information.
 
         """
         os.makedirs(directory, exist_ok=True)
         if save_results:
-            results_dir = os.path.join(directory, "results")
-            os.makedirs(results_dir, exist_ok=True)
-            kwargs.get("parameters", "all")
-            self.results.save(results_dir)
+            self.results.to_csv(
+                os.path.join(directory, "results"),
+                to_type=kwargs.get("to_type", "float32"),
+                attr_to_reduce=kwargs.get("results_attr_to_reduce", None)
+            )
         if save_topology:
-            topology_dir = os.path.join(directory, "topology")
-            self.topology.to_csv(topology_dir)
+            self.topology.to_csv(
+                os.path.join(directory, "topology")
+            )
         if save_timeseries:
-            self.timeseries.to_csv(directory)
+            self.timeseries.to_csv(
+                os.path.join(directory, "timeseries"),
+                to_type=kwargs.get("to_type", "float32"),
+                attr_to_reduce=kwargs.get("timeseries_attr_to_reduce", None)
+            )
 
     def add_component(
         self,
@@ -816,20 +1098,25 @@ class EDisGo:
         **kwargs
     ):
         """
-        Adds single component to topology and respective timeseries if add_ts
-        is set to True.
+        Adds single component to network topology.
 
         Parameters
         ----------
-        comp_type: str
+        comp_type : str
             Type of added component. Can be 'Bus', 'Line', 'Load', 'Generator',
-            'StorageUnit', 'Transformer'
-        add_ts: Boolean
-            Indicator if time series for component are added as well
-        ts_active_power : pd.Series
-            Active power time series of added component.
-        ts_reactive_power : pd.Series
-            Reactive power time series of added component.
+            'StorageUnit', 'Transformer' or 'ChargingPoint'.
+        add_ts : bool
+            Indicator if time series for component are added as well.
+        ts_active_power : :pandas:`pandas.Series<series>`
+            Active power time series of added component. Index of the series
+            must contain all time steps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex`.
+            Values are active power per time step in MW.
+        ts_reactive_power : :pandas:`pandas.Series<series>`
+            Reactive power time series of added component. Index of the series
+            must contain all time steps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex`.
+            Values are reactive power per time step in MVA.
         **kwargs: dict
             Attributes of added component. See respective functions for required
             entries. For 'Load', 'Generator' and 'StorageUnit' the boolean
@@ -846,13 +1133,7 @@ class EDisGo:
         elif comp_type == "Line":
             comp_name = self.topology.add_line(**kwargs)
         elif comp_type == "Load" or comp_type == "charging_park":
-            comp_name = self.topology.add_load(
-                load_id=kwargs.get("load_id"),
-                bus=kwargs.get("bus"),
-                peak_load=kwargs.get("peak_load"),
-                annual_consumption=kwargs.get("annual_consumption"),
-                sector=kwargs.get("sector"),
-            )
+            comp_name = self.topology.add_load(**kwargs)
             if add_ts:
                 timeseries.add_loads_timeseries(
                     edisgo_obj=self, load_names=comp_name, **kwargs
@@ -909,7 +1190,6 @@ class EDisGo:
         comp_type,
         geolocation,
         voltage_level=None,
-        mode="mv",
         add_ts=True,
         ts_active_power=None,
         ts_reactive_power=None,
@@ -918,17 +1198,14 @@ class EDisGo:
         """
         Adds single component to topology based on geolocation.
 
-        This function integrates a new generator or charging point into the
-        grid.
-
         Parameters
         ----------
-        comp_type: str
+        comp_type : str
             Type of added component. Can be 'Generator' or 'ChargingPoint'.
-        geolocation : tuple or shapely Point
+        geolocation : :shapely:`shapely.Point<Point>` or tuple
             Geolocation of the new component. In case of tuple, the geolocation
             must be given in the form (longitude, latitude).
-        voltage_level : int
+        voltage_level : int, optional
             Specifies the voltage level the new component is integrated in.
             Possible options are 4 (MV busbar), 5 (MV grid), 6 (LV busbar) or
             7 (LV grid). If no voltage level is provided the voltage level
@@ -943,37 +1220,44 @@ class EDisGo:
               0.3 MW
             * voltage level 7 (LV grid): nominal power below 0.1 MW
 
-        mode : str
-            So far, only mode "mv" is implemented. In that case, components
-            in the low voltage will be connected to the closest substation's
-            secondary side.
-        add_ts: Boolean
-            Indicator if time series for component are added as well
-        ts_active_power : pd.Series
-            Active power time series of added component.
-        ts_reactive_power : pd.Series
-            Reactive power time series of added component.
-        **kwargs: dict
-            Attributes of added component. See respective functions for required
-            entries.
+        add_ts : bool, optional
+            Indicator if time series for component are added as well.
+        ts_active_power : :pandas:`pandas.Series<series>`
+            Active power time series of added component. Index of the series
+            must contain all time steps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex`.
+            Values are active power per time step in MW.
+        ts_reactive_power : :pandas:`pandas.Series<series>`
+            Reactive power time series of added component. Index of the series
+            must contain all time steps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex`.
+            Values are reactive power per time step in MVA.
+
+        Other Parameters
+        ------------------
+        kwargs :
+            Attributes of added component.
+            See :attr:`~.network.topology.Topology.add_generator` respectively
+            :attr:`~.network.topology.Topology.add_charging_point` methods
+            for more information on required and optional parameters of
+            generators and charging points.
 
         """
-
-        supported_voltage_levels = set([4, 5, 6, 7])
+        supported_voltage_levels = {4, 5, 6, 7}
         p_nom = kwargs.get('p_nom', None)
-        if not voltage_level in supported_voltage_levels:
+        if voltage_level not in supported_voltage_levels:
             if p_nom is None:
                 raise ValueError(
                     "Neither appropriate voltage level nor nominal power "
                     "were supplied.")
-            # Calculate voltage level manually from nominal power:
-            if p_nom > 4.5 and p_nom <= 17.5:
+            # Determine voltage level manually from nominal power
+            if 4.5 < p_nom <= 17.5:
                 voltage_level = 4
-            elif p_nom > 0.3 and p_nom <= 4.5:
+            elif 0.3 < p_nom <= 4.5:
                 voltage_level = 5
-            elif p_nom > 0.1 and p_nom <= 0.3:
+            elif 0.1 < p_nom <= 0.3:
                 voltage_level = 6
-            elif p_nom > 0 and p_nom <= 0.1:
+            elif 0 < p_nom <= 0.1:
                 voltage_level = 7
             else:
                 raise ValueError("Unsupported voltage level")
@@ -983,50 +1267,39 @@ class EDisGo:
         if not type(geolocation) is Point:
             geolocation = Point(geolocation)
 
-        # Connect MV component
-        if voltage_level == 4:
-            self.add_component(comp_type,
-                               bus=self.topology.mv_grid.station.index[0],
-                               add_ts=add_ts,
-                               ts_active_power=ts_active_power,
-                               ts_reactive_power=ts_reactive_power, **kwargs)
-        elif voltage_level == 5:
-            # Create common properties for Generator and Charging Point
-            properties = pd.Series()
-            properties['voltage_level'] = voltage_level
-            properties['geom'] = str(geolocation)
-            properties['electrical_capacity'] = p_nom
-            properties.name = kwargs.get('generator_id', None)
-            properties['generation_type'] = kwargs.get('generator_type', None)
-            properties['generation_subtype'] = kwargs.get(
-                'generator_subtype', None)
-            properties['w_id'] = kwargs.get('weather_cell_id', None)
-            comp_name = add_and_connect_mv_generator(
-                self, properties, comp_type)
+        # Connect in MV
+        if voltage_level in [4, 5]:
+            kwargs['voltage_level'] = voltage_level
+            kwargs['geom'] = geolocation
+            comp_name = self.topology.connect_to_mv(
+                self, kwargs, comp_type)
 
-            if add_ts and comp_type == 'Generator':
-                timeseries.add_generators_timeseries(
-                    edisgo_obj=self, generator_names=comp_name, **kwargs
-                )
-            elif add_ts and comp_type == 'ChargingPoint':
-                timeseries.add_charging_points_timeseries(
-                    self, [comp_name],
-                    ts_active_power=pd.DataFrame({
-                        comp_name: ts_active_power}),
-                    ts_reactive_power=pd.DataFrame({
-                        comp_name: ts_reactive_power})
-                )
-
-        # Connect LV component
+        # Connect in LV
         else:
             substations = self.topology.buses_df.loc[
                 self.topology.transformers_df.bus1]
             nearest_substation, _ = find_nearest_bus(geolocation, substations)
-            self.add_component(comp_type,
-                               bus=nearest_substation,
-                               add_ts=add_ts,
-                               ts_active_power=ts_active_power,
-                               ts_reactive_power=ts_reactive_power, **kwargs)
+            kwargs['mvlv_subst_id'] = int(nearest_substation.split("_")[-2])
+            kwargs['geom'] = geolocation
+            kwargs['voltage_level'] = voltage_level
+            comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
+
+        if add_ts:
+            if comp_type == 'Generator':
+                # ToDo: Adding time series for generators manually does
+                #   currently not work
+                func = timeseries.add_generators_timeseries
+            else:
+                func = timeseries.add_charging_points_timeseries
+            func(
+                self, [comp_name],
+                ts_active_power=pd.DataFrame({
+                    comp_name: ts_active_power}),
+                ts_reactive_power=pd.DataFrame({
+                    comp_name: ts_reactive_power})
+            )
+
+        return comp_name
 
     def remove_component(self, comp_type, comp_name, drop_ts=True):
         """
@@ -1094,20 +1367,55 @@ class EDisGo:
                 ext=self.topology.mv_grid.id)
         pickle.dump(self, open(os.path.join(abs_path, filename), "wb"))
 
+    def reduce_memory(self, **kwargs):
+        """
+        Reduces size of dataframes containing time series to save memory.
+
+        Per default, float data is stored as float64. As this precision is
+        barely needed, this function can be used to convert time series data
+        to a data subtype with less memory usage, such as float32.
+
+        Other Parameters
+        -----------------
+        to_type : str, optional
+            Data type to convert time series data to. This is a tradeoff
+            between precision and memory. Default: "float32".
+        results_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.results.Results.reduce_memory` for more
+            information.
+        timeseries_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more
+            information.
+
+        """
+        # time series
+        self.timeseries.reduce_memory(
+            to_type=kwargs.get("to_type", "float32"),
+            attr_to_reduce=kwargs.get("timeseries_attr_to_reduce", None)
+        )
+        # results
+        self.results.reduce_memory(
+            to_type=kwargs.get("to_type", "float32"),
+            attr_to_reduce=kwargs.get("results_attr_to_reduce", None)
+        )
+
 
 def import_edisgo_from_pickle(filename, path=''):
     abs_path = os.path.abspath(path)
     return pickle.load(open(os.path.join(abs_path, filename), "rb"))
 
 
-def import_edisgo_from_files(directory, import_topology=True,
+def import_edisgo_from_files(directory="", import_topology=True,
                              import_timeseries=False, import_results=False,
                              **kwargs):
     edisgo_obj = EDisGo(import_timeseries=False)
     if import_topology:
-        if os.path.exists(os.path.join(directory, "topology")):
-            edisgo_obj.topology.from_csv(os.path.join(directory, "topology"),
-                                        edisgo_obj)
+        topology_dir = kwargs.get("topology_directory",
+                                  os.path.join(directory, "topology"))
+        if os.path.exists(topology_dir):
+            edisgo_obj.topology.from_csv(topology_dir, edisgo_obj)
         else:
             logging.warning(
                 'No topology directory found. Topology not imported.')
@@ -1124,4 +1432,12 @@ def import_edisgo_from_files(directory, import_topology=True,
                                         parameters)
         else:
             logging.warning('No results directory found. Results not imported.')
+    if kwargs.get('import_residual_load', False):
+        if os.path.exists(
+                os.path.join(directory, 'time_series_sums.csv')):
+            residual_load = pd.read_csv(
+                os.path.join(directory, 'time_series_sums.csv')).rename(
+                columns={'Unnamed: 0': 'timeindex'}).set_index('timeindex')['residual_load']
+            residual_load.index = pd.to_datetime(residual_load.index)
+            edisgo_obj.timeseries._residual_load = residual_load
     return edisgo_obj

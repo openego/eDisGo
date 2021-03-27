@@ -94,7 +94,7 @@ class TestTools:
                                         'Bus_Load_agricultural_LVGrid_1_1')
         assert not \
             tools.check_bus_for_removal(self.topology,
-                                        'Bus_primary_LVStation_7')
+                                        'BusBar_MVGrid_1_LVGrid_7_MV')
         assert not \
             tools.check_bus_for_removal(self.topology,
                                         'Bus_BranchTee_MVGrid_1_3')
@@ -139,3 +139,80 @@ class TestTools:
         assert tools.check_line_for_removal(self.topology, line_name)
         self.topology.remove_line(line_name)
 
+    def test_select_cable(self):
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo, 'mv', 5.1)
+        assert cable_data.name == "NA2XS2Y 3x1x150 RE/25"
+        assert num_parallel_cables == 1
+
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo, 'mv', 40)
+        assert cable_data.name == "NA2XS(FL)2Y 3x1x500 RM/35"
+        assert num_parallel_cables == 2
+
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo, 'lv', 0.18)
+        assert cable_data.name == "NAYY 4x1x150"
+        assert num_parallel_cables == 1
+
+    def test_assign_feeder(self):
+
+        # ######## test MV feeder mode ########
+        tools.assign_feeder(self.edisgo, mode="mv_feeder")
+
+        topo = self.edisgo.topology
+
+        # check that all lines and all buses (except MV station bus) have an
+        # MV feeder assigned
+        assert not topo.lines_df.mv_feeder.isna().any()
+        assert not topo.buses_df[
+            ~topo.buses_df.index.isin(
+                topo.mv_grid.station.index)].mv_feeder.isna().any()
+
+        # check specific buses
+        # MV and LV bus in feeder 1
+        assert (topo.buses_df.at[
+                   "Bus_GeneratorFluctuating_7", "mv_feeder"] ==
+                "Bus_BranchTee_MVGrid_1_6")
+        assert (topo.buses_df.at[
+                   "Bus_BranchTee_LVGrid_4_1", "mv_feeder"] ==
+                "Bus_BranchTee_MVGrid_1_5")
+        # MV bus in feeder 2
+        assert (topo.buses_df.at[
+                   "Bus_GeneratorFluctuating_3", "mv_feeder"] ==
+                "Bus_BranchTee_MVGrid_1_5")
+
+        # check specific lines
+        assert topo.lines_df.at[
+                   "Line_10003", "mv_feeder"] == "Bus_BranchTee_MVGrid_1_1"
+
+        # ######## test LV feeder mode ########
+        tools.assign_feeder(self.edisgo, mode="lv_feeder")
+
+        topo = self.edisgo.topology
+
+        # check that all buses (except LV station buses) and lines in LV have
+        # an LV feeder assigned
+        mv_lines = topo.mv_grid.lines_df.index
+        assert not topo.lines_df[
+                   ~topo.lines_df.index.isin(
+                       mv_lines)].lv_feeder.isna().any()
+        mv_buses = list(topo.mv_grid.buses_df.index)
+        mv_buses.extend(topo.transformers_df.bus1)
+        assert not topo.buses_df[
+                   ~topo.buses_df.index.isin(
+                       mv_buses)].lv_feeder.isna().any()
+
+        # check specific buses
+        assert (topo.buses_df.at[
+            "Bus_BranchTee_LVGrid_1_8", "lv_feeder"] ==
+                "Bus_BranchTee_LVGrid_1_7")
+        assert (topo.buses_df.at[
+            "Bus_Load_residential_LVGrid_2_2", "lv_feeder"] ==
+                "Bus_BranchTee_LVGrid_2_1")
+
+        # check specific lines
+        assert topo.lines_df.at[
+            "Line_30000005", "lv_feeder"] == "Bus_BranchTee_LVGrid_3_3"
+        assert topo.lines_df.at[
+            "Line_40000001", "lv_feeder"] == "Bus_GeneratorFluctuating_16"

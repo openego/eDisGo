@@ -278,35 +278,31 @@ def get_curtailment_per_node(edisgo, curtailment_ts=None, tolerance=1e-3):
     slack = edisgo.opf_results.pypsa.generators[
         edisgo.opf_results.pypsa.generators.control == "Slack"
     ].index[0]
+    # feed-in with curtailment
     opf_gen_results = edisgo.opf_results.generators_t.pg.loc[
         :, edisgo.opf_results.generators_t.pg.columns != slack
     ]
-
-    # feed-in per node without curtailment
+    # feed-in without curtailment
     pypsa_gen_ts = edisgo.opf_results.pypsa.generators_t.p_set.loc[
         :, edisgo.opf_results.pypsa.generators_t.p_set.columns != slack
     ]
-    tmp = pypsa_gen_ts.T
-    tmp.index = [
-        edisgo.opf_results.pypsa.generators.at[pypsa_gen_ts.columns[i], "bus"]
-        for i in range(0, len(pypsa_gen_ts.columns))
-    ]
-    feedin_per_node = tmp.groupby(tmp.index, axis=0).sum().T
 
-    # feed-in per node with curtailment
-    tmp = opf_gen_results.T
+    diff = pypsa_gen_ts.loc[:, opf_gen_results.columns] - opf_gen_results
+    # set very small differences to zero
+    tol = 1e-3
+    diff[abs(diff) < tol] = 0
+    # check
+    if diff[diff < 0].any().any():
+        raise ValueError("Generator feed-in higher than allowed feed-in.")
+    # drop columns with no curtailment
+    diff = diff[diff > 0].dropna(axis=1, how="all").fillna(0)
+    # group by node
+    tmp = diff.T.copy()
     tmp.index = [
-        edisgo.opf_results.pypsa.generators.at[pypsa_gen_ts.columns[i], "bus"]
-        for i in range(0, len(opf_gen_results.columns))
+        edisgo.opf_results.pypsa.generators.at[g, "bus"]
+        for g in diff.columns
     ]
-    feedin_curtailed = tmp.groupby(tmp.index, axis=0).sum().T
-
-    # curtailment per node
-    curtailment_per_node = feedin_per_node - feedin_curtailed
-    # aggregate nodes in case they appear more than once
-    curtailment_per_node = curtailment_per_node.groupby(
-        curtailment_per_node.columns.unique(), axis=1
-    ).sum(axis=1)
+    curtailment_per_node = (tmp.groupby(tmp.index).sum()).T
 
     if curtailment_ts is not None:
         if (
@@ -314,6 +310,45 @@ def get_curtailment_per_node(edisgo, curtailment_ts=None, tolerance=1e-3):
         ).any():
             logger.warning("Curtailment requirement not met through OPF.")
     return curtailment_per_node
+
+
+def get_load_curtailment_per_node(edisgo, tolerance=1e-3):
+    """
+    Gets curtailed load per node.
+
+    Parameters
+    -----------
+    edisgo : EDisGo object
+    tolerance : float
+        Tolerance for checking if curtailment requirement and curtailed
+        power are equal.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with curtailed power in MW per node. Column names correspond
+        to nodes and index to time steps calculated.
+
+    """
+    load_agg_at_bus = pd.DataFrame(
+        columns=edisgo.opf_results.pypsa.loads.bus.unique(),
+        index=edisgo.opf_results.pypsa.snapshots)
+    for b in edisgo.opf_results.pypsa.loads.bus.unique():
+        loads = edisgo.opf_results.pypsa.loads[
+            edisgo.opf_results.pypsa.loads.bus == b].index
+        load_agg_at_bus.loc[:, b] = edisgo.opf_results.pypsa.loads_t.p_set.loc[
+                                    :, loads].sum(axis=1)
+
+    diff = load_agg_at_bus - edisgo.opf_results.loads_t.pd
+    # set very small differences to zero
+    diff[abs(diff) < tolerance] = 0
+    # check
+    if diff[diff < 0].any().any():
+        raise ValueError("Dispatched load higher than given load.")
+    # drop columns with no curtailment
+    diff = diff[diff > 0].dropna(axis=1, how="all").fillna(0)
+
+    return diff
 
 
 def integrate_curtailment_as_load(edisgo, curtailment_per_node):
@@ -327,31 +362,50 @@ def integrate_curtailment_as_load(edisgo, curtailment_per_node):
     :param curtailment_per_node:
     :return:
     """
-    active_power_ts = curtailment_per_node.apply(pd.to_numeric)
+    active_power_ts = pd.DataFrame(
+        data=0,
+        columns=curtailment_per_node.columns,
+        index=edisgo.timeseries.timeindex)
+    active_power_ts.loc[curtailment_per_node.index,
+        :] = curtailment_per_node.apply(pd.to_numeric)
     # drop all zeros
     active_power_ts = active_power_ts.loc[:, ~(active_power_ts == 0.0).all()]
     reactive_power_ts = pd.DataFrame(
-        0.0, columns=active_power_ts.columns, index=active_power_ts.index
+        data=0,
+        columns=active_power_ts.columns,
+        index=edisgo.timeseries.timeindex
     )
 
-    for n in active_power_ts.columns:
-        # add load component
-        load = edisgo.topology.add_load(
-            load_id=1,
-            bus=n,
-            peak_load=curtailment_per_node.loc[:, n].max(),
-            annual_consumption=0.0,
-            sector="curtailment",
-        )
+    curtailment_loads = edisgo.topology.loads_df[
+        edisgo.topology.loads_df.sector == "curtailment"]
 
-        # add time series
-        ts_active = active_power_ts.loc[:, [n]].rename(columns={n: load})
-        ts_reactive = reactive_power_ts.loc[:, [n]].rename(columns={n: load})
-        edisgo.timeseries.loads_active_power = pd.concat(
-            [edisgo.timeseries.loads_active_power, ts_active],
-            axis=1, sort=False
-        )
-        edisgo.timeseries.loads_reactive_power = pd.concat(
-            [edisgo.timeseries.loads_reactive_power, ts_reactive],
-            axis=1, sort=False
-        )
+    for n in active_power_ts.columns:
+
+        if not n in curtailment_loads.bus:
+            # add load component
+            load = edisgo.topology.add_load(
+                load_id=1,
+                bus=n,
+                peak_load=curtailment_per_node.loc[:, n].max(),
+                annual_consumption=0.0,
+                sector="curtailment",
+            )
+
+            # add time series
+            ts_active = active_power_ts.loc[:, [n]].rename(columns={n: load})
+            ts_reactive = reactive_power_ts.loc[:, [n]].rename(
+                columns={n: load})
+            edisgo.timeseries.loads_active_power = pd.concat(
+                [edisgo.timeseries.loads_active_power, ts_active],
+                axis=1, sort=False
+            )
+            edisgo.timeseries.loads_reactive_power = pd.concat(
+                [edisgo.timeseries.loads_reactive_power, ts_reactive],
+                axis=1, sort=False
+            )
+        else:
+            # add to existing load
+            load = curtailment_loads[curtailment_loads.bus == n].index
+            edisgo.timeseries._loads_active_power.loc[:, load] = \
+                edisgo.timeseries._loads_active_power.loc[:,
+                load] + active_power_ts.loc[:, n].rename(columns={n: load})

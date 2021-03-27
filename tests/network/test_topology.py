@@ -1,15 +1,21 @@
-import os
 import pytest
 import shutil
 import pandas as pd
 import numpy as np
 from pandas.util.testing import assert_frame_equal
+from shapely.geometry import Point
 
 from edisgo.network.topology import Topology
 from edisgo.io import ding0_import
+from edisgo import EDisGo
+from edisgo.network.grids import LVGrid
 
 
 class TestTopology:
+    """
+    Tests Topology class, except methods that require an edisgo object.
+
+    """
     @classmethod
     def setup_class(self):
         self.topology = Topology()
@@ -493,3 +499,519 @@ class TestTopology:
             self.topology.lines_df.loc[[line_1, line_2], "s_nom"] ==
             np.sqrt(3) * 0.4 * 0.419
         ).all()
+
+
+class TestTopologyConnectMethods:
+    """
+    Tests connect methods in Topology that require edisgo object.
+
+    """
+
+    @pytest.yield_fixture(autouse=True)
+    def setup_class(self):
+        self.edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_path,
+            worst_case_analysis="worst-case"
+        )
+
+    def test_connect_to_mv(self):
+        # ToDo add tests for charging points
+
+        # ######### Generator #############
+        # test voltage level 4
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        generators_before = self.edisgo.topology.generators_df
+
+        # add generator
+        x = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_2", "x"]
+        y = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_2", "y"]
+        geom = Point((x, y))
+        test_gen = {
+            "generator_id": 12345,
+            "p_nom": 2.5,
+            "geom": geom,
+            "generator_type": "solar",
+            "subtype": "roof",
+            "weather_cell_id": self.edisgo.topology.generators_df.at[
+                "GeneratorFluctuating_2", "weather_cell_id"],
+            "voltage_level": 4
+        }
+
+        comp_name = self.edisgo.topology.connect_to_mv(
+            self.edisgo, test_gen)
+
+        # check if number of buses increased
+        assert len(buses_before) + 1 == len(self.edisgo.topology.buses_df)
+        # check if number of lines increased
+        assert len(lines_before) + 1 == len(self.edisgo.topology.lines_df)
+        # check if number of generators increased
+        assert len(generators_before) + 1 == len(
+            self.edisgo.topology.generators_df)
+
+        # check new bus
+        new_bus = self.edisgo.topology.generators_df.at[comp_name, "bus"]
+        assert self.edisgo.topology.buses_df.at[new_bus, "v_nom"] == 20
+        # check new line
+        new_line_df = self.edisgo.topology.get_connected_lines_from_bus(
+            new_bus)
+        assert len(new_line_df) == 1
+        # check that other bus of new line is the station
+        assert (self.edisgo.topology.mv_grid.station.index[0] ==
+                new_line_df.bus0.values[0])
+        # check new generator
+        assert self.edisgo.topology.generators_df.at[
+                   comp_name, "p_nom"] == test_gen["p_nom"]
+
+        # test voltage level 5 (line split)
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        generators_before = self.edisgo.topology.generators_df
+
+        # add generator
+        x = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_2", "x"]
+        y = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_6", "y"]
+        geom = Point((x, y))
+        test_gen = {
+            "generator_id": 123456,
+            "p_nom": 2.5,
+            "geom": geom,
+            "generator_type": "solar",
+            "subtype": "roof",
+            "weather_cell_id": self.edisgo.topology.generators_df.at[
+                "GeneratorFluctuating_2", "weather_cell_id"],
+            "voltage_level": 5
+        }
+
+        comp_name = self.edisgo.topology.connect_to_mv(
+            self.edisgo, test_gen)
+
+        # check if number of buses increased (by two because closest connection
+        # object is a line)
+        assert len(buses_before) + 2 == len(self.edisgo.topology.buses_df)
+        # check if number of lines increased
+        assert len(lines_before) + 2 == len(self.edisgo.topology.lines_df)
+        # check if number of generators increased
+        assert len(generators_before) + 1 == len(
+            self.edisgo.topology.generators_df)
+
+        # check new bus
+        new_bus = self.edisgo.topology.generators_df.at[comp_name, "bus"]
+        assert self.edisgo.topology.buses_df.at[new_bus, "v_nom"] == 20
+        # check new line
+        new_line_df = self.edisgo.topology.get_connected_lines_from_bus(
+            new_bus)
+        assert len(new_line_df) == 1
+        assert "Bus_Generator_123456" in list(
+            new_line_df.loc[new_line_df.index[0], ["bus0", "bus1"]])
+        # check new generator
+        assert self.edisgo.topology.generators_df.at[
+                   comp_name, "p_nom"] == test_gen["p_nom"]
+
+        # test voltage level 5 (connected to bus)
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        generators_before = self.edisgo.topology.generators_df
+
+        # add generator
+        x = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_6", "x"]
+        y = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_6", "y"]
+        geom = Point((x, y))
+        test_gen = {
+            "generator_id": 123456,
+            "p_nom": 2.5,
+            "geom": geom,
+            "generator_type": "solar",
+            "subtype": "roof",
+            "weather_cell_id": self.edisgo.topology.generators_df.at[
+                "GeneratorFluctuating_2", "weather_cell_id"],
+            "voltage_level": 5
+        }
+
+        comp_name = self.edisgo.topology.connect_to_mv(
+            self.edisgo, test_gen)
+
+        # check if number of buses increased (by one because closest connection
+        # object is a bus)
+        assert len(buses_before) + 1 == len(self.edisgo.topology.buses_df)
+        # check if number of lines increased
+        assert len(lines_before) +1  == len(self.edisgo.topology.lines_df)
+        # check if number of generators increased
+        assert len(generators_before) + 1 == len(
+            self.edisgo.topology.generators_df)
+
+        # check new generator
+        assert self.edisgo.topology.generators_df.at[
+                   comp_name, "p_nom"] == test_gen["p_nom"]
+
+        # ######### Charging Point #############
+        # method not different from generators, wherefore only one voltage
+        # level is tested
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        charging_points_before = self.edisgo.topology.charging_points_df
+
+        # add charging point
+        x = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_2", "x"]
+        y = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_2", "y"]
+        geom = Point((x, y))
+        test_gen = {
+            "geom": geom,
+            "p_nom": 2.5,
+            "use_case": "fast",
+            "number": 10,
+            "voltage_level": 4
+        }
+
+        comp_name = self.edisgo.topology.connect_to_mv(
+            self.edisgo, test_gen, comp_type="ChargingPoint")
+
+        # check if number of buses increased
+        assert len(buses_before) + 1 == len(self.edisgo.topology.buses_df)
+        # check if number of lines increased
+        assert len(lines_before) + 1 == len(self.edisgo.topology.lines_df)
+        # check if number of charging points increased
+        assert len(charging_points_before) + 1 == len(
+            self.edisgo.topology.charging_points_df)
+
+        # check new bus
+        new_bus = self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
+        assert self.edisgo.topology.buses_df.at[new_bus, "v_nom"] == 20
+        # check new line
+        new_line_df = self.edisgo.topology.get_connected_lines_from_bus(
+            new_bus)
+        assert len(new_line_df) == 1
+        # check that other bus of new line is the station
+        assert (self.edisgo.topology.mv_grid.station.index[0] ==
+                new_line_df.bus0.values[0])
+        # check new generator
+        assert self.edisgo.topology.charging_points_df.at[
+                   comp_name, "number"] == test_gen["number"]
+
+    def test_connect_to_lv(self):
+
+        # ######### Generator #############
+        # ToDo test other options when connected to voltage level 7
+
+        # test substation ID that does not exist in the grid
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        generators_before = self.edisgo.topology.generators_df
+
+        # add generator
+        test_gen = {
+            "generator_id": 23456,
+            "p_nom": 0.3,
+            "generator_type": "solar",
+            "subtype": "roof",
+            "weather_cell_id": self.edisgo.topology.generators_df.at[
+                "GeneratorFluctuating_2", "weather_cell_id"],
+            "voltage_level": 6,
+            "mvlv_subst_id": 10
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_gen)
+
+        # check if number of buses stayed the same
+        assert len(buses_before) == len(self.edisgo.topology.buses_df)
+        # check if number of lines stayed the same
+        assert len(lines_before) == len(self.edisgo.topology.lines_df)
+        # check if number of generators increased
+        assert len(generators_before) + 1 == len(
+            self.edisgo.topology.generators_df)
+
+        # check that new generator is connected to HV/MV station
+        assert self.edisgo.topology.generators_df.at[
+                   comp_name, "bus"] == "Bus_MVStation_1"
+
+        # test missing substation ID
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        generators_before = self.edisgo.topology.generators_df
+
+        # add generator
+        test_gen = {
+            "generator_id": 23456,
+            "p_nom": 0.3,
+            "generator_type": "solar",
+            "subtype": "roof",
+            "weather_cell_id": self.edisgo.topology.generators_df.at[
+                "GeneratorFluctuating_2", "weather_cell_id"],
+            "voltage_level": 6,
+            "mvlv_subst_id": None
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_gen)
+
+        # check if number of buses stayed the same
+        assert len(buses_before) == len(self.edisgo.topology.buses_df)
+        # check if number of lines stayed the same
+        assert len(lines_before) == len(self.edisgo.topology.lines_df)
+        # check if number of generators increased
+        assert len(generators_before) + 1 == len(
+            self.edisgo.topology.generators_df)
+
+        # check that new generator is connected to random substation
+        new_bus = self.edisgo.topology.generators_df.at[comp_name, "bus"]
+        assert self.edisgo.topology.buses_df.at[new_bus, "v_nom"] == 0.4
+        lv_grid_id = self.edisgo.topology.buses_df.at[new_bus, "lv_grid_id"]
+        lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=self.edisgo)
+        assert new_bus == lv_grid.station.index[0]
+        # check new generator
+        assert self.edisgo.topology.generators_df.at[
+                   comp_name, "p_nom"] == 0.3
+
+        # test existing substation ID (voltage level 6)
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        generators_before = self.edisgo.topology.generators_df
+
+        # add generator
+        x = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_6", "x"]
+        y = self.edisgo.topology.buses_df.at[
+            "Bus_GeneratorFluctuating_6", "y"]
+        geom = Point((x, y))
+        test_gen = {
+            "generator_id": 3456,
+            "p_nom": 0.3,
+            "geom": geom,
+            "generator_type": "solar",
+            "subtype": "roof",
+            "weather_cell_id": self.edisgo.topology.generators_df.at[
+                "GeneratorFluctuating_2", "weather_cell_id"],
+            "voltage_level": 6,
+            "mvlv_subst_id": 6
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_gen)
+
+        # check that number of buses increased
+        assert len(buses_before) + 1 == len(self.edisgo.topology.buses_df)
+        # check that number of lines increased
+        assert len(lines_before) + 1 == len(self.edisgo.topology.lines_df)
+        # check that number of generators increased
+        assert len(generators_before) + 1 == len(
+            self.edisgo.topology.generators_df)
+
+        # check new bus
+        new_bus = self.edisgo.topology.generators_df.at[comp_name, "bus"]
+        assert self.edisgo.topology.buses_df.at[new_bus, "v_nom"] == 0.4
+        # check new line
+        new_line_df = self.edisgo.topology.get_connected_lines_from_bus(
+            new_bus)
+        assert len(new_line_df) == 1
+        assert "Bus_Generator_3456" in list(
+            new_line_df.loc[new_line_df.index[0], ["bus0", "bus1"]])
+        lv_grid = LVGrid(id=6, edisgo_obj=self.edisgo)
+        assert lv_grid.station.index[0] in list(
+            new_line_df.loc[new_line_df.index[0], ["bus0", "bus1"]])
+        # check new generator
+        assert self.edisgo.topology.generators_df.at[
+                   comp_name, "p_nom"] == 0.3
+        assert comp_name in lv_grid.generators_df.index
+
+        # test existing substation ID (voltage level 7)
+        # generator can be connected to residential load
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        generators_before = self.edisgo.topology.generators_df
+
+        # add generator
+        test_gen = {
+            "generator_id": 3456,
+            "p_nom": 0.03,
+            "geom": geom,
+            "generator_type": "solar",
+            "subtype": "roof",
+            "weather_cell_id": self.edisgo.topology.generators_df.at[
+                "GeneratorFluctuating_2", "weather_cell_id"],
+            "voltage_level": 7,
+            "mvlv_subst_id": 1
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_gen)
+
+        # check that number of buses stayed the same
+        assert len(buses_before) == len(self.edisgo.topology.buses_df)
+        # check that number of lines stayed the same
+        assert len(lines_before) == len(self.edisgo.topology.lines_df)
+        # check that number of generators increased
+        assert len(generators_before) + 1 == len(
+            self.edisgo.topology.generators_df)
+
+        # check bus
+        gen_bus = self.edisgo.topology.generators_df.at[comp_name, "bus"]
+        assert gen_bus == "Bus_BranchTee_LVGrid_1_8"
+        assert self.edisgo.topology.buses_df.at[
+                   gen_bus, "lv_grid_id"] == 1
+        # check new generator
+        assert self.edisgo.topology.generators_df.at[
+                   comp_name, "p_nom"] == 0.03
+
+        # test existing substation ID (voltage level 7)
+        # there is no valid load wherefore generator is connected to random bus
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        generators_before = self.edisgo.topology.generators_df
+
+        # add generator
+        test_gen = {
+            "generator_id": 3456,
+            "p_nom": 0.04,
+            "geom": geom,
+            "generator_type": "solar",
+            "subtype": "roof",
+            "weather_cell_id": self.edisgo.topology.generators_df.at[
+                "GeneratorFluctuating_2", "weather_cell_id"],
+            "voltage_level": 7,
+            "mvlv_subst_id": 2
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_gen)
+
+        # check that number of buses stayed the same
+        assert len(buses_before) == len(self.edisgo.topology.buses_df)
+        # check that number of lines stayed the same
+        assert len(lines_before) == len(self.edisgo.topology.lines_df)
+        # check that number of generators increased
+        assert len(generators_before) + 1 == len(
+            self.edisgo.topology.generators_df)
+
+        # check bus
+        gen_bus = self.edisgo.topology.generators_df.at[comp_name, "bus"]
+        assert gen_bus == "Bus_Load_residential_LVGrid_2_1"
+        assert self.edisgo.topology.buses_df.at[
+                   gen_bus, "lv_grid_id"] == 2
+        # check new generator
+        assert self.edisgo.topology.generators_df.at[
+                   comp_name, "p_nom"] == 0.04
+
+        # ######### Charging Point #############
+
+        # test voltage level 7 - use case home (and there are residential
+        # loads to add charging point to)
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        cp_before = self.edisgo.topology.charging_points_df
+
+        # add charging point
+        test_cp = {
+            "p_nom": 0.01,
+            "geom": geom,
+            "use_case": "home",
+            "voltage_level": 7,
+            "mvlv_subst_id": 3
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_cp, comp_type="ChargingPoint")
+
+        # check that number of buses stayed the same
+        assert len(buses_before) == len(self.edisgo.topology.buses_df)
+        # check that number of lines stayed the same
+        assert len(lines_before) == len(self.edisgo.topology.lines_df)
+        # check that number of charging points increased
+        assert len(cp_before) + 1 == len(
+            self.edisgo.topology.charging_points_df)
+
+        # check bus
+        bus = self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
+        assert bus == "Bus_BranchTee_LVGrid_3_8"
+        assert self.edisgo.topology.buses_df.at[
+                   bus, "lv_grid_id"] == 3
+        # check new charging point
+        assert self.edisgo.topology.charging_points_df.at[
+                   comp_name, "p_nom"] == 0.01
+
+        # test voltage level 7 - use case work (connected to agricultural load)
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        cp_before = self.edisgo.topology.charging_points_df
+
+        # add charging point
+        test_cp = {
+            "p_nom": 0.02,
+            "number": 2,
+            "geom": geom,
+            "use_case": "work",
+            "voltage_level": 7,
+            "mvlv_subst_id": 3
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_cp, comp_type="ChargingPoint")
+
+        # check that number of buses stayed the same
+        assert len(buses_before) == len(self.edisgo.topology.buses_df)
+        # check that number of lines stayed the same
+        assert len(lines_before) == len(self.edisgo.topology.lines_df)
+        # check that number of charging points increased
+        assert len(cp_before) + 1 == len(
+            self.edisgo.topology.charging_points_df)
+
+        # check bus
+        bus = self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
+        assert bus == "Bus_BranchTee_LVGrid_3_2"
+        assert self.edisgo.topology.buses_df.at[
+                   bus, "lv_grid_id"] == 3
+        # check new charging point
+        assert self.edisgo.topology.charging_points_df.at[
+                   comp_name, "number"] == 2
+
+        # test voltage level 7 - use case public (connected somewhere in the
+        # LV grid (to bus not in_building))
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        cp_before = self.edisgo.topology.charging_points_df
+
+        # add charging point
+        test_cp = {
+            "p_nom": 0.02,
+            "number": 2,
+            "geom": geom,
+            "use_case": "public",
+            "voltage_level": 7,
+            "mvlv_subst_id": 3
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_cp, comp_type="ChargingPoint")
+
+        # check that number of buses stayed the same
+        assert len(buses_before) == len(self.edisgo.topology.buses_df)
+        # check that number of lines stayed the same
+        assert len(lines_before) == len(self.edisgo.topology.lines_df)
+        # check that number of charging points increased
+        assert len(cp_before) + 1 == len(
+            self.edisgo.topology.charging_points_df)
+
+        # check bus
+        bus = self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
+        assert bus == "Bus_Load_residential_LVGrid_3_4"
+        assert self.edisgo.topology.buses_df.at[
+                   bus, "lv_grid_id"] == 3
+        # check new charging point
+        assert self.edisgo.topology.charging_points_df.at[
+                   comp_name, "number"] == 2

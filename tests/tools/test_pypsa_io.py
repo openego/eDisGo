@@ -3,8 +3,10 @@ import pandas as pd
 from pandas.util.testing import assert_frame_equal
 import numpy as np
 
-from edisgo.tools.pypsa_io import _append_lv_components, \
-    _get_timeseries_with_aggregated_elements
+from edisgo.tools.pypsa_io import _append_lv_components, set_seed, \
+    process_pfa_results
+from edisgo import EDisGo
+from edisgo.network.results import Results
 
 
 class TestPypsaIO:
@@ -272,5 +274,100 @@ class TestPypsaIO:
         assert lv_components['StorageUnit'].index.values == 'TestGrid_storages'
 
     def test_get_generators_timeseries_with_aggregated_elements(self):
-        print()
-        # Todo: implement
+        pass
+
+    def test_set_seed(self):
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path,
+                             worst_case_analysis='worst-case')
+        timeindex = self.edisgo.timeseries.timeindex
+
+        # test with missing busses
+
+        # set up results for first time step and MV busses
+        self.edisgo.analyze(timesteps=timeindex[0], mode="mv")
+        # create pypsa network for first time step and all busses
+        pypsa_network = self.edisgo.to_pypsa(timesteps=timeindex[0])
+        set_seed(self.edisgo, pypsa_network)
+
+        # check that for LV busses default values are used and for MV busses
+        # results from previous power flow
+        lv_bus = "Bus_BranchTee_LVGrid_1_10"
+        mv_bus = "BusBar_MVGrid_1_LVGrid_3_MV"
+        assert pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], lv_bus] == 1.
+        assert pypsa_network.buses_t.v_ang.loc[timeindex[0], lv_bus] == 0.
+        assert (pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], mv_bus] ==
+                self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], mv_bus]
+                )
+        assert np.isclose(
+            pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], mv_bus],
+            1.00657
+        )
+        assert (pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus] ==
+                self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], mv_bus]
+                )
+        assert np.isclose(
+            pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus],
+            0.0195367
+        )
+        # run power flow to check if it converges
+        pypsa_network.pf(use_seed=True)
+        # write results to edisgo object
+        process_pfa_results(self.edisgo, pypsa_network, timeindex)
+
+        # test with missing time steps
+        pypsa_network = self.edisgo.to_pypsa()
+        set_seed(self.edisgo, pypsa_network)
+
+        # check that second time step default values are used and for first
+        # time steps results from previous power flow
+        assert (pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], lv_bus] ==
+                self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], lv_bus]
+                )
+        assert (pypsa_network.buses_t.v_ang.loc[timeindex[0], lv_bus] ==
+                self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], lv_bus]
+                )
+        assert (pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], mv_bus] ==
+                self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], mv_bus]
+                )
+        assert (pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus] ==
+                self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], mv_bus]
+                )
+        assert pypsa_network.buses_t.v_mag_pu.loc[timeindex[1], lv_bus] == 1.
+        assert pypsa_network.buses_t.v_ang.loc[timeindex[1], lv_bus] == 0.
+        assert pypsa_network.buses_t.v_mag_pu.loc[timeindex[1], mv_bus] == 1.
+        assert pypsa_network.buses_t.v_ang.loc[timeindex[1], mv_bus] == 0.
+        # run power flow to check if it converges
+        pypsa_network.pf(use_seed=True)
+
+        # test with seed for all busses and time steps available from previous
+        # power flow analyses (and at the same time check, if results from
+        # different power flow analyses are appended correctly)
+
+        # reset results
+        self.edisgo.results = Results(self.edisgo)
+        # run power flow separately for both time steps
+        self.edisgo.analyze(timesteps=timeindex[0])
+        self.edisgo.analyze(timesteps=timeindex[1])
+        pypsa_network = self.edisgo.to_pypsa()
+        set_seed(self.edisgo, pypsa_network)
+
+        # check that for both time steps results from previous power flow
+        # analyses are used
+        assert (pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], lv_bus] ==
+                self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], lv_bus]
+                )
+        assert (pypsa_network.buses_t.v_ang.loc[timeindex[1], lv_bus] ==
+                self.edisgo.results.pfa_v_ang_seed.loc[timeindex[1], lv_bus]
+                )
+        assert (pypsa_network.buses_t.v_mag_pu.loc[timeindex[1], mv_bus] ==
+                self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[1], mv_bus]
+                )
+        assert (pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus] ==
+                self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], mv_bus]
+                )
+        # run power flow to check if it converges
+        pypsa_network.pf(use_seed=True)
+
+    def test_process_pfa_results(self):
+        # test update of seed
+        pass

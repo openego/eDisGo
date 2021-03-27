@@ -2,6 +2,7 @@ import pandas as pd
 import logging
 from math import sqrt
 import numpy as np
+import itertools
 
 from edisgo.network.grids import LVGrid, MVGrid
 
@@ -120,7 +121,10 @@ def lines_allowed_load(edisgo_obj, voltage_level):
         lines_df = edisgo_obj.topology.lines_df[
             ~edisgo_obj.topology.lines_df.index.isin(mv_grid.lines_df.index)
         ]
-        nominal_voltage = list(mv_grid.lv_grids)[0].nominal_voltage
+        if len(list(mv_grid.lv_grids)) > 0:
+            nominal_voltage = list(mv_grid.lv_grids)[0].nominal_voltage
+        else:
+            nominal_voltage = np.NaN
     elif voltage_level == "mv":
         lines_df = mv_grid.lines_df
         nominal_voltage = mv_grid.nominal_voltage
@@ -140,14 +144,33 @@ def lines_allowed_load(edisgo_obj, voltage_level):
             "{}_feedin_case_line".format(voltage_level)
         ]
     )
+
+    # adapt i_lines_allowed for radial feeders
+    buses_in_cycles = list(
+        set(itertools.chain.from_iterable(edisgo_obj.topology.rings)))
+
+    # Find lines in cycles
+    lines_in_cycles = list(
+        lines_df.loc[lines_df[[
+            'bus0', 'bus1']].isin(buses_in_cycles).all(axis=1)].index.values)
+    lines_radial_feeders = list(
+        lines_df.loc[~lines_df.index.isin(lines_in_cycles)].index.values)
+
+    # lines in cycles have to be n-1 secure
     i_lines_allowed_per_case["load_case"] = (
-        lines_df.s_nom
+        lines_df.loc[lines_in_cycles].s_nom
         / sqrt(3)
         / nominal_voltage
         * edisgo_obj.config["grid_expansion_load_factors"][
             "{}_load_case_line".format(voltage_level)
         ]
     )
+
+    # lines in radial feeders are not n-1 secure anyways
+    i_lines_allowed_per_case["load_case"] = \
+        i_lines_allowed_per_case["load_case"].append(
+            lines_df.loc[lines_radial_feeders].s_nom / sqrt(3) / nominal_voltage)
+
     i_lines_allowed = edisgo_obj.timeseries.timesteps_load_feedin_case.loc[
         edisgo_obj.results.i_res.index
     ].apply(lambda _: i_lines_allowed_per_case[_])
@@ -206,7 +229,7 @@ def _line_load(edisgo_obj, voltage_level):
         the voltage level the line is in (either 'mv' or 'lv').
 
     """
-    if edisgo_obj.results.i_res is None:
+    if edisgo_obj.results.i_res.empty:
         raise Exception(
             "No power flow results to check over-load for. Please perform "
             "power flow analysis first."
@@ -348,9 +371,15 @@ def _station_load(edisgo_obj, grid):
     elif isinstance(grid, MVGrid):
         voltage_level = "mv"
         transformers_df = edisgo_obj.topology.transformers_hvmv_df
+        # ensure that power flow was conducted for MV
+        mv_lines = edisgo_obj.topology.mv_grid.lines_df.index
+        if not any(mv_lines.isin(edisgo_obj.results.i_res.columns)):
+            raise ValueError(
+                "MV was not included in power flow analysis, wherefore load "
+                "of HV/MV station cannot be calculated.")
         s_station_pfa = np.hypot(
-            edisgo_obj.results.hv_mv_exchanges.p,
-            edisgo_obj.results.hv_mv_exchanges.q,
+            edisgo_obj.results.pfa_slack.p,
+            edisgo_obj.results.pfa_slack.q,
         )
     else:
         raise ValueError("Inserted grid is invalid.")
