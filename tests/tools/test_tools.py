@@ -76,69 +76,6 @@ class TestTools:
                                               np.array([20, 30]))
         assert_allclose(data, np.array([1039.23, 1558.84]), rtol=1e-5)
 
-    def test_check_bus_for_removal(self):
-        self.topology = Topology()
-        ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
-
-        # check for assertion
-        msg = "Bus of name Test_bus_to_remove not in Topology. " \
-              "Cannot be checked to be removed."
-        with pytest.raises(ValueError, match=msg):
-            tools.check_bus_for_removal(self.topology, 'Test_bus_to_remove')
-
-        # check buses with connected elements
-        assert not \
-            tools.check_bus_for_removal(self.topology, 'Bus_Generator_1')
-        assert not \
-            tools.check_bus_for_removal(self.topology,
-                                        'Bus_Load_agricultural_LVGrid_1_1')
-        assert not \
-            tools.check_bus_for_removal(self.topology,
-                                        'BusBar_MVGrid_1_LVGrid_7_MV')
-        assert not \
-            tools.check_bus_for_removal(self.topology,
-                                        'Bus_BranchTee_MVGrid_1_3')
-
-        # add bus and line that could be removed
-        self.topology.add_bus(bus_name='Test_bus_to_remove', v_nom=20)
-        self.topology.add_line(bus0='Bus_MVStation_1',
-                               bus1='Test_bus_to_remove',
-                               length=1.0)
-        assert self.topology.lines_df.at[
-                   'Line_Bus_MVStation_1_Test_bus_to_remove', 'length'] == 1
-        assert tools.check_bus_for_removal(self.topology, 'Test_bus_to_remove')
-
-    def test_check_line_for_removal(self):
-        parent_dirname = os.path.dirname(os.path.dirname(__file__))
-        test_network_directory = os.path.join(
-            parent_dirname, 'ding0_test_network_1')
-        self.topology = Topology()
-        ding0_import.import_ding0_grid(test_network_directory, self)
-
-        # check for assertion
-        msg = "Line of name Test_line_to_remove not in Topology. " \
-              "Cannot be checked to be removed."
-        with pytest.raises(ValueError, match=msg):
-            tools.check_line_for_removal(self.topology, 'Test_line_to_remove')
-
-        # check lines with connected elements
-        # transformer
-        assert not tools.check_line_for_removal(self.topology, 'Line_10024')
-        # generator
-        assert not tools.check_line_for_removal(self.topology, 'Line_10032')
-        # load
-        assert not tools.check_line_for_removal(self.topology, 'Line_10000021')
-        # check for lines that could be removed
-        # Todo: this case would create subnetworks, still has to be implemented
-        assert tools.check_line_for_removal(self.topology, 'Line_10014')
-
-        # create line that can be removed safely
-        self.topology.add_bus(bus_name='testbus', v_nom=20)
-        self.topology.add_bus(bus_name='testbus2', v_nom=20)
-        line_name = self.topology.add_line(bus0='testbus', bus1='testbus2', length=2.3)
-        assert tools.check_line_for_removal(self.topology, line_name)
-        self.topology.remove_line(line_name)
-
     def test_select_cable(self):
         cable_data, num_parallel_cables = tools.select_cable(
             self.edisgo, 'mv', 5.1)
