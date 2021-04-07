@@ -515,7 +515,7 @@ def get_component_timeseries(edisgo_obj, **kwargs):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
         The eDisGo data container
     mode : :obj:`str`, optional
         Mode must be set in case of worst-case analyses and can either be
