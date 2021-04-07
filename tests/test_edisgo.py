@@ -364,15 +364,15 @@ class TestEDisGo:
             'Bus_BranchTee_MVGrid_1_10', 0.3)
         self.edisgo.plot_mv_storage_integration()
         plt.close('all')
-        self.edisgo.topology.remove_storage(storage_1)
-        self.edisgo.topology.remove_storage(storage_2)
-        self.edisgo.topology.remove_storage(storage_3)
+        self.edisgo.topology.remove_storage_unit(storage_1)
+        self.edisgo.topology.remove_storage_unit(storage_2)
+        self.edisgo.topology.remove_storage_unit(storage_3)
 
     def test_histogramm_voltage(self):
         plt.ion()
         # if not already done so, analyse grid
         try:
-            if self.results.v_res is None:
+            if self.edisgo.results.v_res.empty:
                 self.edisgo.analyze()
         except AttributeError:
             self.edisgo.analyze()
@@ -395,14 +395,18 @@ class TestEDisGo:
         """Test add_component method"""
         # Test add bus
         num_buses = len(self.edisgo.topology.buses_df)
-        bus_name = self.edisgo.add_component('Bus', name="Testbus", v_nom=20)
+        bus_name = self.edisgo.add_component(
+            comp_type='Bus',
+            bus_name="Testbus", v_nom=20)
         assert bus_name == "Testbus"
         assert len(self.edisgo.topology.buses_df) == num_buses+1
         assert self.edisgo.topology.buses_df.loc["Testbus", 'v_nom'] == 20
         # Test add line
         num_lines = len(self.edisgo.topology.lines_df)
-        line_name = self.edisgo.add_component('Line', bus0="Bus_MVStation_1",
-                                  bus1="Testbus", length=0.001)
+        line_name = self.edisgo.add_component(
+            comp_type='Line',
+            bus0="Bus_MVStation_1", bus1="Testbus", length=0.001,
+            type_info="NA2XS2Y 3x1x185 RM/25")
         assert line_name == "Line_Bus_MVStation_1_Testbus"
         assert len(self.edisgo.topology.lines_df) == num_lines+1
         assert self.edisgo.topology.lines_df.loc[line_name, 'bus0'] == \
@@ -412,11 +416,11 @@ class TestEDisGo:
         assert self.edisgo.topology.lines_df.loc[line_name, 'length'] == 0.001
         # Test add load
         num_loads = len(self.edisgo.topology.loads_df)
-        load_name = self.edisgo.add_component('Load', load_id=4, bus="Testbus",
-                                              peak_load=0.2,
-                                              annual_consumption=3.2,
-                                              sector='residential')
-        assert load_name == "Load_residential_MVGrid_1_4"
+        load_name = self.edisgo.add_component(
+            comp_type='Load',
+            load_id=4, bus="Testbus", peak_load=0.2, annual_consumption=3.2,
+            sector='residential')
+        assert load_name == "Load_MVGrid_1_residential_4"
         assert len(self.edisgo.topology.loads_df) == num_loads+1
         assert self.edisgo.topology.loads_df.loc[load_name, 'bus'] == "Testbus"
         assert self.edisgo.topology.loads_df.loc[load_name, 'peak_load'] == 0.2
@@ -439,7 +443,7 @@ class TestEDisGo:
         gen_name = self.edisgo.add_component('Generator', generator_id=5,
                                              bus="Testbus", p_nom=2.5,
                                              generator_type='solar')
-        assert gen_name == "Generator_solar_MVGrid_1_5"
+        assert gen_name == "Generator_MVGrid_1_solar_5"
         assert len(self.edisgo.topology.generators_df) == num_gens + 1
         assert self.edisgo.topology.generators_df.loc[gen_name, 'bus'] == \
                "Testbus"
@@ -476,13 +480,6 @@ class TestEDisGo:
                               index[1], storage_name], tan(acos(0.9))*3.1)
         # Todo: test other modes of timeseries (manual, None)
         # Remove test objects
-        msg = "Bus Testbus is not isolated. " \
-              "Remove all connected elements first to remove bus."
-        with pytest.raises(AssertionError, match=msg):
-            self.edisgo.remove_component('Bus', bus_name)
-        msg = "Removal of line {} would create isolated node.".format(line_name)
-        with pytest.raises(AssertionError, match=msg):
-            self.edisgo.remove_component('Line', line_name)
         self.edisgo.remove_component('StorageUnit', storage_name)
         self.edisgo.remove_component('Load', load_name)
         self.edisgo.remove_component('Generator', gen_name)

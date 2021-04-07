@@ -1129,8 +1129,7 @@ class EDisGo:
             lists of parameters can be inserted
         """
         if comp_type == "Bus":
-            self.topology.add_bus(bus_name=kwargs.get("name"), **kwargs)
-            comp_name = kwargs.get("name")
+            comp_name = self.topology.add_bus(**kwargs)
         elif comp_type == "Line":
             comp_name = self.topology.add_line(**kwargs)
         elif comp_type == "Load" or comp_type == "charging_park":
@@ -1342,7 +1341,7 @@ class EDisGo:
                     comp_names=comp_name,
                 )
         elif comp_type == "StorageUnit":
-            self.topology.remove_storage(comp_name)
+            self.topology.remove_storage_unit(comp_name)
             if drop_ts:
                 timeseries._drop_existing_component_timeseries(
                     edisgo_obj=self,

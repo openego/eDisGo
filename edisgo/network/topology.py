@@ -26,6 +26,23 @@ if "READTHEDOCS" not in os.environ:
 
 logger = logging.getLogger("edisgo")
 
+COLUMNS = {
+    "loads_df": [
+        "bus", "peak_load", "annual_consumption", "sector"],
+    "generators_df": [
+            "bus", "p_nom", "type", "control", "weather_cell_id", "subtype"],
+    "charging_points_df": ["bus", "p_nom", "use_case"],
+    "storage_units_df": ["bus", "control", "p_nom"],
+    "transformers_df": ["bus0", "bus1", "x_pu", "r_pu", "s_nom", "type_info"],
+    "lines_df": [
+        "bus0", "bus1", "length", "x", "r", "s_nom", "num_parallel",
+        "type_info", "kind",
+
+    ],
+    "buses_df": ["v_nom", "x", "y", "mv_grid_id", "lv_grid_id", "in_building"],
+    "switches_df": ["bus_open", "bus_closed", "branch", "type_info"]
+}
+
 
 class Topology:
     """
@@ -205,7 +222,7 @@ class Topology:
         try:
             return self._loads_df
         except:
-            return pd.DataFrame()
+            return pd.DataFrame(columns=COLUMNS["loads_df"])
 
     @loads_df.setter
     def loads_df(self, df):
@@ -261,7 +278,7 @@ class Topology:
         try:
             return self._generators_df
         except:
-            return pd.DataFrame()
+            return pd.DataFrame(columns=COLUMNS["generators_df"])
 
     @generators_df.setter
     def generators_df(self, df):
@@ -303,7 +320,7 @@ class Topology:
         try:
             return self._charging_points_df
         except:
-            return pd.DataFrame()
+            return pd.DataFrame(columns=COLUMNS["charging_points_df"])
 
     @charging_points_df.setter
     def charging_points_df(self, df):
@@ -342,7 +359,7 @@ class Topology:
         try:
             return self._storage_units_df
         except:
-            return pd.DataFrame()
+            return pd.DataFrame(columns=COLUMNS["storage_units_df"])
 
     @storage_units_df.setter
     def storage_units_df(self, df):
@@ -387,7 +404,7 @@ class Topology:
         try:
             return self._transformers_df
         except:
-            return pd.DataFrame()
+            return pd.DataFrame(columns=COLUMNS["transformers_df"])
 
     @transformers_df.setter
     def transformers_df(self, df):
@@ -414,7 +431,7 @@ class Topology:
         try:
             return self._transformers_hvmv_df
         except:
-            return pd.DataFrame()
+            return pd.DataFrame(columns=COLUMNS["transformers_df"])
 
     @transformers_hvmv_df.setter
     def transformers_hvmv_df(self, df):
@@ -474,7 +491,7 @@ class Topology:
         try:
             return self._lines_df
         except:
-            return pd.DataFrame()
+            return pd.DataFrame(columns=COLUMNS["lines_df"])
 
     @lines_df.setter
     def lines_df(self, df):
@@ -521,7 +538,7 @@ class Topology:
         try:
             return self._buses_df
         except:
-            return pd.DataFrame()
+            return pd.DataFrame(columns=COLUMNS["buses_df"])
 
     @buses_df.setter
     def buses_df(self, df):
@@ -575,7 +592,7 @@ class Topology:
         try:
             return self._switches_df
         except:
-            return pd.DataFrame()
+            return pd.DataFrame(columns=COLUMNS["switches_df"])
 
     @switches_df.setter
     def switches_df(self, df):
@@ -817,7 +834,7 @@ class Topology:
         """
         # check if bus is part of topology
         if bus_name not in self.buses_df.index:
-            logger.warning(
+            warnings.warn(
                 "Bus of name {} not in Topology. Cannot be "
                 "removed.".format(bus_name)
             )
@@ -860,7 +877,7 @@ class Topology:
         """
         # check if line is part of topology
         if line_name not in self.lines_df.index:
-            logger.warning(
+            warnings.warn(
                 "Line of name {} not in Topology. Cannot be "
                 "removed.".format(line_name)
             )
@@ -936,7 +953,7 @@ class Topology:
         load_name = "Load_{}".format(tmp)
         if load_name in self.loads_df.index:
             nr_loads = len(self._grids[grid_name].loads_df)
-            load_name = "Load_{}_{}".format(tmp, nr_loads + 1)
+            load_name = "Load_{}_{}".format(tmp, nr_loads)
             while load_name in self.loads_df.index:
                 load_name = "Load_{}_{}".format(
                     tmp, random.randint(10 ** 8, 10 ** 9)
@@ -953,7 +970,7 @@ class Topology:
             data,
             name=load_name,
         ).to_frame().T
-        self.loads_df = self.loads_df.append(new_df)
+        self._loads_df = self.loads_df.append(new_df)
         return load_name
 
     def add_generator(
@@ -1365,20 +1382,19 @@ class Topology:
             Identifier of load as specified in index of :py:attr:`~loads_df`.
 
         """
-        # remove load and time series
         if name in self.loads_df.index:
+            bus = self.loads_df.at[name, "bus"]
             self._loads_df.drop(name, inplace=True)
 
-        # if no other elements are connected, remove line and bus as well
-        bus = self.loads_df.at[name, "bus"]
-        if self._check_bus_for_removal(bus):
-            line_name = self.get_connected_lines_from_bus(bus).index[0]
-            self.remove_line(line_name)
-            logger.debug(
-                "Line {} removed together with load {}.".format(
-                    line_name, name
+            # if no other elements are connected, remove line and bus as well
+            if self._check_bus_for_removal(bus):
+                line_name = self.get_connected_lines_from_bus(bus).index[0]
+                self.remove_line(line_name)
+                logger.debug(
+                    "Line {} removed together with load {}.".format(
+                        line_name, name
+                    )
                 )
-            )
 
     def remove_generator(self, name):
         """
@@ -1391,20 +1407,20 @@ class Topology:
             :py:attr:`~generators_df`.
 
         """
-        # remove generator and time series
         if name in self.generators_df.index:
+            bus = self.generators_df.at[name, "bus"]
             self._generators_df.drop(name, inplace=True)
 
-        # if no other elements are connected to same bus, remove line and bus
-        bus = self.generators_df.at[name, "bus"]
-        if self._check_bus_for_removal(bus):
-            line_name = self.get_connected_lines_from_bus(bus).index[0]
-            self.remove_line(line_name)
-            logger.debug(
-                "Line {} removed together with generator {}.".format(
-                    line_name, name
+            # if no other elements are connected to same bus, remove line
+            # and bus
+            if self._check_bus_for_removal(bus):
+                line_name = self.get_connected_lines_from_bus(bus).index[0]
+                self.remove_line(line_name)
+                logger.debug(
+                    "Line {} removed together with generator {}.".format(
+                        line_name, name
+                    )
                 )
-            )
 
     def remove_charging_point(self, name):
         """
@@ -1417,20 +1433,19 @@ class Topology:
             :py:attr:`~charging_points_df`.
 
         """
-        # remove charging point
         if name in self.charging_points_df.index:
+            bus = self.charging_points_df.at[name, "bus"]
             self._charging_points_df.drop(name, inplace=True)
 
-        # if no other elements are connected, remove line and bus as well
-        bus = self.charging_points_df.at[name, "bus"]
-        if self._check_bus_for_removal(bus):
-            line_name = self.get_connected_lines_from_bus(bus).index[0]
-            self.remove_line(line_name)
-            logger.debug(
-                "Line {} removed together with charging point {}.".format(
-                    line_name, name
+            # if no other elements are connected, remove line and bus as well
+            if self._check_bus_for_removal(bus):
+                line_name = self.get_connected_lines_from_bus(bus).index[0]
+                self.remove_line(line_name)
+                logger.debug(
+                    "Line {} removed together with charging point {}.".format(
+                        line_name, name
+                    )
                 )
-            )
 
     def remove_storage_unit(self, name):
         """
@@ -1445,18 +1460,18 @@ class Topology:
         """
         # remove storage unit and time series
         if name in self.storage_units_df.index:
+            bus = self.storage_units_df.at[name, "bus"]
             self._storage_units_df.drop(name, inplace=True)
 
-        # if no other elements are connected, remove line and bus as well
-        bus = self.storage_units_df.at[name, "bus"]
-        if self._check_bus_for_removal(bus):
-            line_name = self.get_connected_lines_from_bus(bus).index[0]
-            self.remove_line(line_name)
-            logger.debug(
-                "Line {} removed together with storage unit {}.".format(
-                    line_name, name
+            # if no other elements are connected, remove line and bus as well
+            if self._check_bus_for_removal(bus):
+                line_name = self.get_connected_lines_from_bus(bus).index[0]
+                self.remove_line(line_name)
+                logger.debug(
+                    "Line {} removed together with storage unit {}.".format(
+                        line_name, name
+                    )
                 )
-            )
 
     def remove_line(self, name):
         """
@@ -1516,7 +1531,7 @@ class Topology:
         conn_comp = self.get_connected_components_from_bus(name)
         conn_comp_types = [k for k, v in conn_comp.items() if not v.empty]
         if len(conn_comp_types) > 0:
-            logger.warning(
+            warnings.warn(
                 "Bus {} is not isolated and therefore not removed. Remove all "
                 "connected elements ({}) first to remove bus.".format(
                     name, conn_comp_types)
@@ -1994,7 +2009,7 @@ class Topology:
                 random.seed(a=len(self.charging_points_df))
             lv_grid_id = random.choice(lv_grid_ids)
             lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=edisgo_object)
-            logger.warning(
+            warnings.warn(
                 "Component has no mvlv_subst_id. It is therefore allocated "
                 "to a random LV Grid ({}).".format(
                     lv_grid_id
@@ -2420,25 +2435,32 @@ class Topology:
 
         """
         os.makedirs(directory, exist_ok=True)
-        self.loads_df.to_csv(os.path.join(directory, "loads.csv"))
-        self.generators_df.to_csv(
-            os.path.join(directory, "generators.csv")
-        )
-        self.charging_points_df.to_csv(
-            os.path.join(directory, "charging_points.csv"))
-        self.storage_units_df.to_csv(
-            os.path.join(directory, "storage_units.csv")
-        )
-        self.transformers_df.rename(
-            {"x_pu": "x", "r_pu": "r"}, axis=1
-        ).to_csv(os.path.join(directory, "transformers.csv"))
-        self.transformers_hvmv_df.rename(
-            {"x_pu": "x", "r_pu": "r"}, axis=1
-        ).to_csv(os.path.join(directory, "transformers_hvmv.csv"))
+        if not self.loads_df.empty:
+            self.loads_df.to_csv(os.path.join(directory, "loads.csv"))
+        if not self.generators_df.empty:
+            self.generators_df.to_csv(
+                os.path.join(directory, "generators.csv")
+            )
+        if not self.charging_points_df.empty:
+            self.charging_points_df.to_csv(
+                os.path.join(directory, "charging_points.csv")
+            )
+        if not self.storage_units_df.empty:
+            self.storage_units_df.to_csv(
+                os.path.join(directory, "storage_units.csv")
+            )
+        if not self.transformers_df.empty:
+            self.transformers_df.rename(
+                {"x_pu": "x", "r_pu": "r"}, axis=1
+            ).to_csv(os.path.join(directory, "transformers.csv"))
+        if not self.transformers_hvmv_df.empty:
+            self.transformers_hvmv_df.rename(
+                {"x_pu": "x", "r_pu": "r"}, axis=1
+            ).to_csv(os.path.join(directory, "transformers_hvmv.csv"))
         self.lines_df.to_csv(os.path.join(directory, "lines.csv"))
         self.buses_df.to_csv(os.path.join(directory, "buses.csv"))
-
-        self._switches_df.to_csv(os.path.join(directory, "switches.csv"))
+        if not self.switches_df.empty:
+            self.switches_df.to_csv(os.path.join(directory, "switches.csv"))
 
         network = {"name": self.mv_grid.id}
         network.update(self._grid_district)
@@ -2452,12 +2474,7 @@ class Topology:
 
     def from_csv(self, directory, edisgo_obj):
         """
-        # Todo: when done with project, reset_index in save function and remove renaming here
-        # Todo: should this
-        Exports topology to csv files with names buses, generators, lines,
-        loads, switches, transformers, transformers_hvmv, network. Files are
-        designed in a way that they can be directly imported to pypsa. A sub-
-        folder named "topology" is added to the provided directory.
+        Restores topology from csv files.
 
         Parameters
         ----------
@@ -2473,6 +2490,30 @@ class Topology:
             os.path.join(directory, "lines.csv"),
             index_col=0
         )
+        if os.path.exists(os.path.join(directory, "loads.csv")):
+            self.loads_df = pd.read_csv(
+                os.path.join(directory, "loads.csv"),
+                index_col=0
+            )
+        if os.path.exists(os.path.join(directory, "generators.csv")):
+            generators_df = pd.read_csv(
+                os.path.join(directory, "generators.csv"),
+                index_col=0
+            )
+            # delete slack if it was included
+            slack = generators_df.loc[
+                generators_df.control == "Slack"].index
+            self.generators_df = generators_df.drop(slack)
+        if os.path.exists(os.path.join(directory, "charging_points.csv")):
+            self.charging_points_df = pd.read_csv(
+                os.path.join(directory, "charging_points.csv"),
+                index_col=0
+            )
+        if os.path.exists(os.path.join(directory, "storage_units.csv")):
+            self.storage_units_df = pd.read_csv(
+                os.path.join(directory, "storage_units.csv"),
+                index_col=0
+            )
         if os.path.exists(os.path.join(directory, "transformers.csv")):
             self.transformers_df = pd.read_csv(
                 os.path.join(directory, "transformers.csv"),
@@ -2488,30 +2529,6 @@ class Topology:
             ).rename(
                 columns={"x": "x_pu",
                          "r": "r_pu"}
-            )
-        if os.path.exists(os.path.join(directory, "generators.csv")):
-            generators_df = pd.read_csv(
-                os.path.join(directory, "generators.csv"),
-                index_col=0
-            )
-            # delete slack if it was included
-            slack = generators_df.loc[
-                generators_df.control == "Slack"].index
-            self.generators_df = generators_df.drop(slack)
-        if os.path.exists(os.path.join(directory, "loads.csv")):
-            self.loads_df = pd.read_csv(
-                os.path.join(directory, "loads.csv"),
-                index_col=0
-            )
-        if os.path.exists(os.path.join(directory, "charging_points.csv")):
-            self.charging_points_df = pd.read_csv(
-                os.path.join(directory, "charging_points.csv"),
-                index_col=0
-            )
-        if os.path.exists(os.path.join(directory, "storage_units.csv")):
-            self.storage_units_df = pd.read_csv(
-                os.path.join(directory, "storage_units.csv"),
-                index_col=0
             )
         if os.path.exists(os.path.join(directory, "switches.csv")):
             self.switches_df = pd.read_csv(
