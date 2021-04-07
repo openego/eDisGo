@@ -1057,25 +1057,27 @@ class EDisGo:
 
         Other Parameters
         ------------------
+        reduce_memory : bool, optional
+            If True, size of dataframes containing time series in
+            :class:`~.network.results.Results` and
+            :class:`~.network.timeseries.TimeSeries`
+            is reduced. See :attr:`~.network.results.Results.reduce_memory`
+            and :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more
+            information. Type to convert to can be specified by providing
+            `to_type` as keyword argument. Further parameters of reduce_memory
+            functions cannot be passed here. Call these functions directly to
+            make use of further options. Default: False.
         to_type : str, optional
             Data type to convert time series data to. This is a tradeoff
             between precision and memory. Default: "float32".
-        results_attr_to_reduce : list(str), optional
-            See `attr_to_reduce` parameter in
-            :attr:`~.network.results.Results.reduce_memory` for more
-            information.
-        timeseries_attr_to_reduce : list(str), optional
-            See `attr_to_reduce` parameter in
-            :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more
-            information.
 
         """
         os.makedirs(directory, exist_ok=True)
         if save_results:
             self.results.to_csv(
                 os.path.join(directory, "results"),
-                to_type=kwargs.get("to_type", "float32"),
-                attr_to_reduce=kwargs.get("results_attr_to_reduce", None)
+                reduce_memory=kwargs.get("reduce_memory", False),
+                to_type=kwargs.get("to_type", "float32")
             )
         if save_topology:
             self.topology.to_csv(
@@ -1084,8 +1086,8 @@ class EDisGo:
         if save_timeseries:
             self.timeseries.to_csv(
                 os.path.join(directory, "timeseries"),
-                to_type=kwargs.get("to_type", "float32"),
-                attr_to_reduce=kwargs.get("timeseries_attr_to_reduce", None)
+                reduce_memory=kwargs.get("reduce_memory", False),
+                to_type=kwargs.get("to_type", "float32")
             )
 
     def add_component(
