@@ -12,34 +12,6 @@ import logging
 
 logger = logging.getLogger("edisgo")
 
-COLUMNS = {
-    "buses_df": ["v_nom", "x", "y", "mv_grid_id", "lv_grid_id", "in_building"],
-    "generators_df": [
-        "bus",
-        "control",
-        "p_nom",
-        "type",
-        "subtype",
-        "weather_cell_id",
-    ],
-    "charging_points_df": ["bus"],
-    "loads_df": ["bus", "peak_load", "sector", "annual_consumption"],
-    "transformers_df": ["bus0", "bus1", "x_pu", "r_pu", "s_nom", "type_info"],
-    "lines_df": [
-        "bus0",
-        "bus1",
-        "length",
-        "x",
-        "r",
-        "s_nom",
-        "type_info",
-        "kind",
-        "num_parallel",
-    ],
-    "switches_df": ["bus_open", "bus_closed", "branch", "type_info"],
-    "storage_units_df": [],
-}
-
 
 def import_ding0_grid(path, edisgo_obj):
     """
@@ -52,10 +24,10 @@ def import_ding0_grid(path, edisgo_obj):
 
     Parameters
     ----------
-    path: :obj:`str`
-        path to ding0 network csv files
-    edisgo_obj: :class:`~.network.edisgo_obj.Network`
-        The eDisGo data container object
+    path : str
+        Path to ding0 network csv files.
+    edisgo_obj: :class:`~.EDisGo`
+        The eDisGo data container object.
 
     """
 
@@ -96,32 +68,39 @@ def import_ding0_grid(path, edisgo_obj):
     grid.import_from_csv_folder(path)
 
     # write dataframes to edisgo_obj
-    edisgo_obj.topology.buses_df = grid.buses[COLUMNS["buses_df"]]
-    # drop slack generator from generators
-    slack = [_ for _ in grid.generators.index if "slack" in _.lower()][0]
-    grid.generators.drop(index=[slack], inplace=True)
+    edisgo_obj.topology.buses_df = grid.buses[
+        edisgo_obj.topology.buses_df.columns]
+    edisgo_obj.topology.lines_df = grid.lines[
+        edisgo_obj.topology.lines_df.columns]
 
+    edisgo_obj.topology.loads_df = grid.loads[
+        edisgo_obj.topology.loads_df.columns]
+    # drop slack generator from generators
+    slack = grid.generators.loc[
+        grid.generators.control == "Slack"].index
+    grid.generators.drop(slack, inplace=True)
     edisgo_obj.topology.generators_df = grid.generators[
-        COLUMNS["generators_df"]
+        edisgo_obj.topology.generators_df.columns
     ]
-    edisgo_obj.topology.charging_points_df = pd.DataFrame(
-        columns=COLUMNS["charging_points_df"])
-    edisgo_obj.topology.loads_df = grid.loads[COLUMNS["loads_df"]]
+    edisgo_obj.topology.storage_units_df = grid.storage_units[
+        edisgo_obj.topology.storage_units_df.columns
+    ]
     edisgo_obj.topology.transformers_df = sort_transformer_buses(
-        grid.transformers.drop(labels=["x_pu", "r_pu"], axis=1).rename(
-            columns={"r": "r_pu", "x": "x_pu"}
-        )[COLUMNS["transformers_df"]]
+        grid.transformers.drop(
+            labels=["x_pu", "r_pu"], axis=1).rename(
+                columns={"r": "r_pu", "x": "x_pu"}
+        )[edisgo_obj.topology.transformers_df.columns]
     )
     edisgo_obj.topology.transformers_hvmv_df = sort_hvmv_transformer_buses(
         pd.read_csv(
-            os.path.join(path, "transformers_hvmv.csv"), index_col=[0]
+            os.path.join(path, "transformers_hvmv.csv"),
+            index_col=[0]
         ).rename(columns={"r": "r_pu", "x": "x_pu"})
     )
-    edisgo_obj.topology.lines_df = grid.lines[COLUMNS["lines_df"]]
     edisgo_obj.topology.switches_df = pd.read_csv(
         os.path.join(path, "switches.csv"), index_col=[0]
     )
-    edisgo_obj.topology.storage_units_df = grid.storage_units
+
     edisgo_obj.topology.grid_district = {
         "population": grid.mv_grid_district_population,
         "geom": wkt_loads(grid.mv_grid_district_geom),
