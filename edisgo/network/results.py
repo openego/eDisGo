@@ -1025,7 +1025,7 @@ class Results:
             ]
             writer.writerows(rows)
 
-    def from_csv(self, results_path, parameters=None):
+    def from_csv(self, directory, parameters=None):
         """
         Restores results from csv files.
 
@@ -1034,7 +1034,7 @@ class Results:
 
         Parameters
         ----------
-        results_path : str
+        directory : str
             Main directory results are saved in.
         parameters : None or dict, optional
             Specifies which results to restore. By default this is set to None,
@@ -1047,9 +1047,9 @@ class Results:
 
         """
         # restore measures
-        if os.path.exists(os.path.join(results_path, "measures.csv")):
+        if os.path.exists(os.path.join(directory, "measures.csv")):
             measures_df = pd.read_csv(
-                os.path.join(results_path, 'measures.csv'),
+                os.path.join(directory, 'measures.csv'),
                 index_col=0)
             self._measures = list(measures_df.measure.values)
 
@@ -1073,10 +1073,10 @@ class Results:
 
         # import power flow results
         if 'powerflow_results' in list(parameters.keys()) and \
-                os.path.isdir(os.path.join(results_path, 'powerflow_results')):
+                os.path.isdir(os.path.join(directory, 'powerflow_results')):
             for attr in parameters["powerflow_results"]:
                 path = os.path.join(
-                            results_path,
+                            directory,
                             'powerflow_results',
                             '{}.csv'.format(power_flow_results_dict[attr])
                         )
@@ -1090,10 +1090,10 @@ class Results:
         # import grid expansion results
         if 'grid_expansion_results' in list(parameters.keys()) and \
                 os.path.isdir(
-                    os.path.join(results_path, 'grid_expansion_results')):
+                    os.path.join(directory, 'grid_expansion_results')):
             for attr in parameters["grid_expansion_results"]:
                 path = os.path.join(
-                            results_path,
+                            directory,
                             'grid_expansion_results',
                             '{}.csv'.format(grid_expansion_results_dict[attr])
                         )
