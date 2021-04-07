@@ -105,7 +105,7 @@ class TestTimeSeries:
         shutil.rmtree(dir)
 
 
-class Testget_component_timeseries:
+class Test_get_component_timeseries:
 
     @classmethod
     def setup_class(self):
@@ -166,9 +166,9 @@ class Testget_component_timeseries:
         #Todo: test with inserted reactive generation and/or reactive load
 
         # remove storages
-        self.topology.remove_storage(storage_1)
-        self.topology.remove_storage(storage_2)
-        self.topology.remove_storage(storage_3)
+        self.topology.remove_storage_unit(storage_1)
+        self.topology.remove_storage_unit(storage_2)
+        self.topology.remove_storage_unit(storage_3)
 
     def test_import_load_timeseries(self):
         with pytest.raises(NotImplementedError):
@@ -329,9 +329,9 @@ class Testget_component_timeseries:
             exp * pf, check_exact=False, check_dtype=False)
 
         # remove storages
-        self.topology.remove_storage(storage_1)
-        #self.topology.remove_storage(storage_2)
-        self.topology.remove_storage(storage_3)
+        self.topology.remove_storage_unit(storage_1)
+        #self.topology.remove_storage_unit(storage_2)
+        self.topology.remove_storage_unit(storage_3)
 
         # test for only feed-in case
         timeseries.get_component_timeseries(edisgo_obj=self,
@@ -420,7 +420,7 @@ class Testget_component_timeseries:
         timeseries.add_loads_timeseries(self, load_name)
         active_power_new_load = \
             self.timeseries.loads_active_power.loc[:,
-                ['Load_retail_MVGrid_1_4']]
+                ['Load_MVGrid_1_retail_4']]
         timeindex = pd.date_range('1/1/1970', periods=2, freq='H')
         assert (self.timeseries.loads_active_power.shape == (2, num_loads+1))
         assert (self.timeseries.loads_reactive_power.shape ==
@@ -755,9 +755,9 @@ class Testget_component_timeseries:
             [[-tan(acos(0.95))*p_nom2, -tan(acos(0.9))*p_nom3],
              [tan(acos(0.95))*p_nom2, tan(acos(0.9))*p_nom3]]).all()
         # remove storages
-        self.topology.remove_storage(storage_name)
-        self.topology.remove_storage(storage_name2)
-        self.topology.remove_storage(storage_name3)
+        self.topology.remove_storage_unit(storage_name)
+        self.topology.remove_storage_unit(storage_name2)
+        self.topology.remove_storage_unit(storage_name3)
         # TEST MANUAL
         timeindex = pd.date_range('1/1/2018', periods=24, freq='H')
         generators_active_power, generators_reactive_power, \
@@ -830,9 +830,9 @@ class Testget_component_timeseries:
                 timeindex, [storage_name2, storage_name3]].values,
             [p_nom2 * 0.5, p_nom3 * 0.4]).all()
         # remove added generators
-        self.topology.remove_storage(storage_name)
-        self.topology.remove_storage(storage_name2)
-        self.topology.remove_storage(storage_name3)
+        self.topology.remove_storage_unit(storage_name)
+        self.topology.remove_storage_unit(storage_name2)
+        self.topology.remove_storage_unit(storage_name3)
         # TEST TIMESERIES IMPORT
         # test import timeseries from dbs
         timeindex = pd.date_range('1/1/2011', periods=24, freq='H')
@@ -918,9 +918,9 @@ class Testget_component_timeseries:
                 timeindex, [storage_name2, storage_name3]].values,
             [p_nom2 * 0.5, p_nom3 * 0.4]).all()
         # remove added generators
-        self.topology.remove_storage(storage_name)
-        self.topology.remove_storage(storage_name2)
-        self.topology.remove_storage(storage_name3)
+        self.topology.remove_storage_unit(storage_name)
+        self.topology.remove_storage_unit(storage_name2)
+        self.topology.remove_storage_unit(storage_name3)
 
     def test_check_timeseries_for_index_and_cols(self):
         """Test check_timeseries_for_index_and_cols method"""
@@ -1042,7 +1042,7 @@ class Testget_component_timeseries:
         with pytest.raises(KeyError):
             self.timeseries.storage_units_reactive_power.loc[
                 timeindex, storage_1]
-        self.topology.remove_storage(storage_1)
+        self.topology.remove_storage_unit(storage_1)
 
 
 class TestReactivePowerTimeSeriesFunctions:

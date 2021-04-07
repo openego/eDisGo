@@ -26,23 +26,6 @@ class TestImportFromDing0:
         assert self.topology.transformers_hvmv_df.shape[0] == 1
         assert self.topology.switches_df.shape[0] == 2
         assert self.topology.storage_units_df.shape[0] == 1
-        # check necessary columns
-        assert all([col in self.topology.buses_df.columns for col in
-                    ding0_import.COLUMNS['buses_df']])
-        assert all([col in self.topology.generators_df.columns
-                    for col in ding0_import.COLUMNS['generators_df']])
-        assert all([col in self.topology.loads_df.columns for col in
-                    ding0_import.COLUMNS['loads_df']])
-        assert all([col in self.topology.transformers_df.columns
-                    for col in ding0_import.COLUMNS['transformers_df']])
-        assert all([col in self.topology.transformers_hvmv_df.columns
-                    for col in ding0_import.COLUMNS['transformers_df']])
-        assert all([col in self.topology.lines_df.columns for col in
-                    ding0_import.COLUMNS['lines_df']])
-        assert all([col in self.topology.switches_df.columns for col in
-                    ding0_import.COLUMNS['switches_df']])
-        assert all([col in self.topology.storage_units_df.columns for col in
-                    ding0_import.COLUMNS['storage_units_df']])
 
         # grid district
         assert self.topology.grid_district['population'] == 23358

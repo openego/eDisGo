@@ -89,13 +89,13 @@ class TestGeneratorsImport:
 
         # check new generators
         assert self.edisgo.topology.generators_df.at[
-                   "Generator_solar_MVGrid_1_345", "p_nom"] == 2.5
+                   "Generator_MVGrid_1_solar_345", "p_nom"] == 2.5
         assert self.edisgo.topology.generators_df.at[
-                   "Generator_solar_MVGrid_1_345", "type"] == "solar"
+                   "Generator_MVGrid_1_solar_345", "type"] == "solar"
         assert self.edisgo.topology.generators_df.at[
-                   "Generator_solar_LVGrid_6_456", "p_nom"] == 0.3
+                   "Generator_LVGrid_6_solar_456", "p_nom"] == 0.3
         assert self.edisgo.topology.generators_df.at[
-                   "Generator_solar_LVGrid_6_456", "type"] == "solar"
+                   "Generator_LVGrid_6_solar_456", "type"] == "solar"
 
     def test_update_grids_target_capacity(self):
 
@@ -167,7 +167,7 @@ class TestGeneratorsImport:
                             'type'] == 'wind']) ==
                 len(gens_before[gens_before["type"] == "wind"]) + 2)
         assert self.edisgo.topology.generators_df.at[
-                   "Generator_wind_MVGrid_1_321", "p_nom"] >= 3.0
+                   "Generator_MVGrid_1_wind_321", "p_nom"] >= 3.0
 
         # solar - target capacity lower than existing capacity plus new
         # capacity (not all new generators are integrated)
@@ -465,10 +465,11 @@ class TestGeneratorsImportOEDB:
 
         # check that installed capacity of types, for which a target capacity
         # was specified, is met
-        assert (edisgo.topology.generators_df[
-            edisgo.topology.generators_df['type']=='wind'].p_nom.sum() ==
-                p_wind_before * 1.6)
-        assert (edisgo.topology.generators_df[
-                    edisgo.topology.generators_df[
-                        'type'] == 'biomass'].p_nom.sum() ==
-                p_biomass_before * 1.0)
+        assert np.isclose(edisgo.topology.generators_df[
+            edisgo.topology.generators_df['type']=='wind'].p_nom.sum(),
+            p_wind_before * 1.6)
+        assert np.isclose(
+            edisgo.topology.generators_df[
+                edisgo.topology.generators_df[
+                    'type'] == 'biomass'].p_nom.sum(),
+            p_biomass_before * 1.0)
