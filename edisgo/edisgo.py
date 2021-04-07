@@ -402,9 +402,8 @@ class EDisGo:
             See :func:`edisgo.io.generators_import.oedb`.
 
         """
-        if generator_scenario:
-            self.topology.generator_scenario = generator_scenario
         import_generators_oedb(edisgo_object=self,
+                               generator_scenario=generator_scenario,
                                **kwargs)
 
     def analyze(self, mode=None, timesteps=None, **kwargs):
