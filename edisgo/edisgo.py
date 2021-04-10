@@ -1077,7 +1077,8 @@ class EDisGo:
             self.results.to_csv(
                 os.path.join(directory, "results"),
                 reduce_memory=kwargs.get("reduce_memory", False),
-                to_type=kwargs.get("to_type", "float32")
+                to_type=kwargs.get("to_type", "float32"),
+                parameters=kwargs.get("parameters", None)
             )
         if save_topology:
             self.topology.to_csv(
