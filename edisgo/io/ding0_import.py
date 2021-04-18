@@ -192,7 +192,8 @@ def _validate_ding0_grid_import(topology):
     # check for isolated or not defined buses
     buses = []
 
-    for nodal_component in ["loads", "generators", "storage_units"]:
+    for nodal_component in [
+        "loads", "generators", "charging_points", "storage_units"]:
         df = getattr(topology, nodal_component + "_df")
         missing = df.index[~df.bus.isin(topology.buses_df.index)]
         buses.append(df.bus.values)
