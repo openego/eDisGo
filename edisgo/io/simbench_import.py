@@ -6,6 +6,7 @@ from edisgo import EDisGo
 from edisgo.network.grids import MVGrid, LVGrid
 from edisgo.network.timeseries import get_component_timeseries
 from edisgo.io.ding0_import import _validate_ding0_grid_import
+import os
 
 def pickle_obj(file_path,obj_to_pickle):
     """
@@ -161,8 +162,9 @@ def create_sb_dict(grid_dir):
         RESProfile
         LineType
     """
-    file_list = [i for i in grid_dir.iterdir()]
-    simbench_dict = {i.name[:-4]:pd.read_csv(i,sep=";") for i in file_list}
+    file_list = [i for i in os.listdir(grid_dir)]
+    simbench_dict = {i[:-4]:pd.read_csv(os.path.join(grid_dir, i),sep=";")
+                     for i in file_list}
     def remove_daylight_saving(df_ext):
         df = copy.deepcopy(df_ext)
         start = pd.to_datetime(df.iloc[0]['time'])
@@ -710,9 +712,9 @@ def create_timestamp_list(sb_dict,time_accuracy='1_hour'):
         return timestamp_list_hour
 
 # Hk Current
-def create_timestep_list(sb_dict,time_accuracy='1_hour'):
+def create_timestep_list(sb_dict, time_accuracy):
     """
-    Creating a list of timesteps for the given time sereies data from the simbench grid
+    Creating a list of timesteps for the given time series data from the simbench grid
     according to the time_accuracy stated
 
     Parameters
@@ -732,14 +734,16 @@ def create_timestep_list(sb_dict,time_accuracy='1_hour'):
     if time_accuracy == '15_min':
         return timestamp_list
     else:
+        # Todo: adapt and take mean
         timestep_list_hour = []
         for i in range(len(timestamp_list)):
             if i%4==0:
                 timestep_list_hour.append(i)
         return timestep_list_hour
 
+
 # Hk Current
-def create_timeindex(edisgo_obj,sb_dict,time_accuracy='1_hour'):
+def create_timeindex(edisgo_obj,sb_dict,time_accuracy):
     """
     Creating a list of timestamps for the given time sereies data from the simbench grid
     according to the time_accuracy stated
@@ -761,14 +765,13 @@ def create_timeindex(edisgo_obj,sb_dict,time_accuracy='1_hour'):
     """
     print("create_timeindex_0")
     load_profile_df = sb_dict['LoadProfile']
-    time_col = load_profile_df['time']
     timestep_list = create_timestep_list(sb_dict,time_accuracy=time_accuracy)
-    timestamp_list = time_col.iloc[timestep_list]
-    print("timestamp_list length"+str(len(timestamp_list)))
-    timeindex = pd.to_datetime(timestamp_list)
-    edisgo_obj.timeseries._timeindex = timeindex.index
+    print("timestamp_list length"+str(len(timestep_list)))
+    timeindex = pd.to_datetime(timestep_list)
+    edisgo_obj.timeseries._timeindex = timeindex
+    # Todo: check where this is used
     edisgo_obj.timeseries._timestamp = {
-        'timestamp_list': timestamp_list
+        'timestamp_list': timestep_list
     }
     print('imported time index')
     return edisgo_obj
@@ -898,7 +901,7 @@ def create_sb_loads_timeseries(edisgo_obj,sb_dict,pickle_dir=False):
 
 
 # HK Current
-def import_sb_timeseries(edisgo_obj_ext,sb_dict,time_accuracy='1_hour'):
+def import_sb_timeseries(edisgo_obj_ext, sb_dict):
     """
     Creating eDisGo object with timeseries of loads and generators
 
@@ -908,26 +911,26 @@ def import_sb_timeseries(edisgo_obj_ext,sb_dict,time_accuracy='1_hour'):
         edsigo_obj created by function "import_sb_topology"
     sb_dict: `dictionary`
         dictionary created by function "create_sb_dict"
-    time_accuracy: `str` (default '1_hour')
-        can be the following values:
-            {'1_hour','15_min'}
     Return
     ------
     `obj`
         an eDisGo object with timeseries of loads and generators
     """
     edisgo_obj = copy.deepcopy(edisgo_obj_ext)
-    load_profile_df = sb_dict['LoadProfile']
-    timestep_list = create_timestep_list(sb_dict)
-    load_profile_df_reduced = load_profile_df.iloc[timestep_list].set_index('time')
-    timeindex = load_profile_df_reduced.index
-    edisgo_obj.timeseries._timeindex = timeindex
-    gen_timeseries_dict = create_sb_gen_timeseries(edisgo_obj,sb_dict,pickle_dir=False)
-    loads_timeseries_dict = create_sb_loads_timeseries(edisgo_obj,sb_dict,pickle_dir=False)
-    gen_timeseries_dict['generators_active_power_df'] = gen_timeseries_dict['generators_active_power_df'].set_index(timeindex)
-    gen_timeseries_dict['generators_reactive_power_df'] = gen_timeseries_dict['generators_reactive_power_df'].set_index(timeindex)
-    loads_timeseries_dict['loads_active_power_df'] = loads_timeseries_dict['loads_active_power_df'].set_index(timeindex)
-    loads_timeseries_dict['loads_reactive_power_df'] = loads_timeseries_dict['loads_reactive_power_df'].set_index(timeindex)
+    load_profile_df = sb_dict['LoadProfile'].set_index('time')
+    timeindex = edisgo_obj.timeseries.timeindex
+    gen_timeseries_dict = create_sb_gen_timeseries(edisgo_obj, sb_dict,
+                                                   pickle_dir=False)
+    loads_timeseries_dict = create_sb_loads_timeseries(edisgo_obj, sb_dict,
+                                                       pickle_dir=False)
+    gen_timeseries_dict['generators_active_power_df'] = \
+        gen_timeseries_dict['generators_active_power_df'].set_index(timeindex)
+    gen_timeseries_dict['generators_reactive_power_df'] = \
+        gen_timeseries_dict['generators_reactive_power_df'].set_index(timeindex)
+    loads_timeseries_dict['loads_active_power_df'] = \
+        loads_timeseries_dict['loads_active_power_df'].set_index(timeindex)
+    loads_timeseries_dict['loads_reactive_power_df'] = \
+        loads_timeseries_dict['loads_reactive_power_df'].set_index(timeindex)
     get_component_timeseries(
         edisgo_obj=edisgo_obj,
         mode='manual',
@@ -940,5 +943,16 @@ def import_sb_timeseries(edisgo_obj_ext,sb_dict,time_accuracy='1_hour'):
     print('loaded timeseries into edisgo_obj')
     return edisgo_obj
 
+
+def import_from_simbench(data_folder,pickle_folder=False, import_timeseries=True,
+                         **kwargs):
+    time_accuracy = kwargs.get('time_accuracy', '15_min')
+    sb_dict = create_sb_dict(data_folder)
+    edisgo_obj = import_sb_topology(sb_dict, pickle_file_path=pickle_folder)
+    if import_timeseries:
+        print('adding timeseries')
+        edisgo_obj = create_timeindex(edisgo_obj,sb_dict, time_accuracy)
+        edisgo_obj = import_sb_timeseries(edisgo_obj,  sb_dict)
+    return edisgo_obj
 
 
