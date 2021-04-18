@@ -2071,8 +2071,12 @@ class Topology:
                 random.seed(a=comp_data["generator_id"])
             else:
                 random.seed(
-                    a="{}_{}".format(comp_data["use_case"],
-                                     comp_data["p_nom"]))
+                    a="{}_{}_{}".format(
+                        comp_data["use_case"],
+                        comp_data["p_nom"],
+                        len(lv_grid.charging_points_df)
+                    )
+                )
 
             if len(target_buses) > 0:
                 lv_buses_rnd = random.sample(
