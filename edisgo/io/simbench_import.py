@@ -7,6 +7,7 @@ from edisgo.network.grids import MVGrid, LVGrid
 from edisgo.network.timeseries import get_component_timeseries
 from edisgo.io.ding0_import import _validate_ding0_grid_import
 import os
+import numpy as np
 
 def pickle_obj(file_path,obj_to_pickle):
     """
@@ -164,7 +165,7 @@ def create_sb_dict(grid_dir):
     """
     file_list = [i for i in os.listdir(grid_dir)]
     simbench_dict = {i[:-4]:pd.read_csv(os.path.join(grid_dir, i),sep=";")
-                     for i in file_list}
+                     for i in file_list if os.path.isfile(os.path.join(grid_dir, i))}
     def remove_daylight_saving(df_ext):
         df = copy.deepcopy(df_ext)
         start = pd.to_datetime(df.iloc[0]['time'])
@@ -366,16 +367,15 @@ def create_generators_df(simbench_dict,pickle_dir=False):
         'node':'bus',
         'pRES':'p_nom',
         'qRES':'q_nom',
-        'profile':'weather_cell_id',
+        'type':'subtype',
+        'profile':'type',
         'calc_type':'control'
     }
-    #Todo: change weather_cell_id?
 
     generators_df = simbench_dict['RES']
     generators_df['calc_type'] = generators_df['calc_type'].apply(lambda x: x.upper())
     generators_df = generators_df.rename(columns=gen_rename_dict)
-    generators_df['type'] = generators_df['type'].apply(lambda x: 'solar' if x == 'PV' else x.lower())
-    generators_df['subtype'] = generators_df['type']
+    generators_df['weather_cell_id'] = np.NaN
     generators_df = generators_df[gen_col_location]
 
     print ('Converted the generators_df')
@@ -427,17 +427,8 @@ def create_lines_df(simbench_dict,buses_df,pickle_dir=False):
             'kind':'type'
         }
         for key in char_dict:
-            lines_df[key] = lines_df['type_info'].apply(lambda x: line_type_df.loc[x,char_dict[key]])
+            lines_df[key] = line_type_df.loc[lines_df['type_info'],char_dict[key]].values
         return lines_df
-
-    def cal_s_nom(row):
-        i = row['iMax']
-        bus0 = row['bus0']
-        bus1 = row['bus1']
-        bus0_v_nom = search_str_df(buses_df,'name',bus0,invert=False)['v_nom'].values[0]
-        bus1_v_nom = search_str_df(buses_df,'name',bus1,invert=False)['v_nom'].values[0]
-        bus_v_nom = (bus0_v_nom+bus1_v_nom)/2 
-        return 3**0.5*bus_v_nom*i*10**(-3)
 
     lines_df = simbench_dict['Line']
     line_type_df = simbench_dict['LineType']
@@ -452,11 +443,14 @@ def create_lines_df(simbench_dict,buses_df,pickle_dir=False):
 
     lines_df = lines_df.rename(columns=lines_rename_dict)
     lines_df = get_line_char(lines_df,line_type_df)
-    lines_df['kind'] = lines_df['kind'].apply(lambda x : 'line' if x =='ohl' else x)
+    lines_df['kind'] = lines_df['kind'].replace({'ohl':'line'})
     lines_df['num_parallel'] = 1
-    lines_df['r'] = lines_df.apply(lambda name: name['r']*name['length'],axis=1)
-    lines_df['x'] = lines_df.apply(lambda name: name['x']*name['length'],axis=1)
-    lines_df['s_nom'] = lines_df.apply(cal_s_nom,axis=1)
+    lines_df['r'] = lines_df['r']*lines_df['length']
+    lines_df['x'] = lines_df['x']*lines_df['length']
+    buses_df_tmp = buses_df.set_index('name')
+    lines_df['s_nom'] = \
+        np.sqrt(3)*buses_df_tmp.loc[lines_df.bus0, 'v_nom'].values*\
+        lines_df['iMax']/1e3
     lines_df = lines_df[lines_col_location]
 
     print ('Converted lines_df')
@@ -481,7 +475,7 @@ def create_loads_df(simbench_dict,pickle_dir=False):
     `dataframe`
         eDisGo compatible loads dataframe 
     """
-    df_dict = unpickle_df(pickle_dir,["loads_df"])
+    df_dict = unpickle_df(pickle_dir, ["loads_df"])
     if len(df_dict) is not 0:
         return df_dict['loads_df']
     
@@ -497,28 +491,31 @@ def create_loads_df(simbench_dict,pickle_dir=False):
         'peak_load',
         'annual_consumption',
         'sector',
-        'pLoad',
-        'qLoad'
+        'pLoad', #necessary?
+        'qLoad' #necessary?
     ]
-
-    def cal_annual_consumption(name):
-        sR = name['sR']
-        sector = name['sector']
-        loads_profile[sector+'_sload'] = (loads_profile[ sector + '_pload']**2+loads_profile[sector + '_qload']**2)**0.5
-        annual_consumption = loads_profile[sector+'_sload'].sum()*sR
-        return annual_consumption
-
-    def cal_peak_load(name):
-        sR = name['sR']
-        sector = name['sector']
-        peak_load = loads_profile[sector+'_pload'].max()*sR
-        return peak_load
 
     loads_profile = simbench_dict['LoadProfile']
     loads_df = simbench_dict['Load']
     loads_df = loads_df.rename(columns=loads_rename_dict)
-    loads_df['peak_load'] = loads_df.apply(cal_peak_load,axis=1)
-    loads_df['annual_consumption'] = loads_df.apply(cal_annual_consumption,axis=1)
+    # get s_nom timeseries
+    sectors = loads_df.sector.unique()
+    sectoral_loads_data = pd.DataFrame(index=sectors, columns=[
+        'rated_annual_consumption', 'rated_s_max'])
+    for sector in sectors:
+        loads_profile[sector] = \
+            np.sqrt(np.square(loads_profile[ sector + '_pload'])+
+                    np.square(loads_profile[sector + '_qload']))
+        sectoral_loads_data.loc[sector, 'rated_annual_consumption'] = \
+            loads_profile[sector].sum()
+        sectoral_loads_data.loc[sector, 'rated_s_max'] = \
+            loads_profile[sector].max()
+    loads_df['peak_load'] = \
+        loads_df['sR'] * sectoral_loads_data.loc[loads_df.sector,
+                                                 'rated_s_max'].values
+    loads_df['annual_consumption'] = \
+        loads_df['sR'] * sectoral_loads_data.loc[
+            loads_df.sector, 'rated_annual_consumption'].values
     loads_df = loads_df[loads_cols_location]
 
     print ('Converted loads_df')
@@ -776,131 +773,7 @@ def create_timeindex(edisgo_obj,sb_dict,time_accuracy):
     print('imported time index')
     return edisgo_obj
 
-def create_sb_gen_timeseries(edisgo_obj,sb_dict,pickle_dir=False):
-    """
-    Create generator timeseries dictionary that is compatible with eDisGo
 
-    Parameters
-    ----------
-    edisgo_obj: `obj`
-        edsigo_obj created by function "create_timeindex"
-    sb_dict: `dictionary`
-        dictionary created by function "create_sb_dict"
-    pickle_dir: `path` (default to False)
-        if path is provided, the function will pickle the result at the given path
-    
-    Return
-    ------
-    `dictionary`
-        generator timeseries dictionary that is compatible with eDisGo
-    """
-    # Importing _timeindex
-    timeindex = edisgo_obj.timeseries._timeindex
-    res_profile_df = sb_dict['RESProfile']
-    timestamp_list = edisgo_obj.timeseries._timestamp['timestamp_list']
-    res_profile_df = res_profile_df.set_index('time')
-    generators_df = edisgo_obj.topology.generators_df.reset_index()
-    
-    # getting generator time series
-    def get_gen_meta_data(gen_name):
-        gen_df = search_str_df(generators_df,'name',gen_name,invert=False)
-        return {
-            'name':gen_name,
-            'p_nom':gen_df['p_nom'].values[0],
-            'q_nom':gen_df['q_nom'].values[0],
-            'wcid':gen_df['weather_cell_id'].values[0]
-        }
-
-    gen_list = [ get_gen_meta_data(gen_name)  for gen_name in generators_df['name']]
-    # generators_active_power_df = pd.DataFrame(index=timeindex)
-    # generators_reactive_power_df = pd.DataFrame(index=timeindex)
-    generators_active_power_df = pd.DataFrame()
-    generators_reactive_power_df = pd.DataFrame()
-
-    for gen_dict in gen_list:
-        if 'slack' not in gen_dict['name']:
-            generators_active_power_df[gen_dict['name']] = res_profile_df.loc[timestamp_list,gen_dict['wcid']]*gen_dict['p_nom']
-            generators_reactive_power_df[gen_dict['name']] = res_profile_df.loc[timestamp_list,gen_dict['wcid']]*gen_dict['q_nom']
-    print ('created generator time series DataFrames')
-    
-    # Set the time index right
-    generators_active_power_df = set_time_index(generators_active_power_df,timeindex)
-    generators_reactive_power_df = set_time_index(generators_reactive_power_df,timeindex)
-    gen_timeseries_dict = {
-        "generators_active_power_df":generators_active_power_df,
-        "generators_reactive_power_df":generators_reactive_power_df
-    }
-
-    if pickle_dir != False:
-        pickle_df(pickle_dir,gen_timeseries_dict)
-
-    return gen_timeseries_dict
-
-
-def create_sb_loads_timeseries(edisgo_obj,sb_dict,pickle_dir=False):
-    """
-    Create loads timeseries dictionary that is compatible with eDisGo
-
-    Parameters
-    ----------
-    edisgo_obj: `obj`
-        edsigo_obj created by function "create_timeindex"
-    sb_dict: `dictionary`
-        dictionary created by function "create_sb_dict"
-    pickle_dir: `path` (default to False)
-        if path is provided, the function will pickle the result at the given path
-    
-    Return
-    ------
-    `dictionary`
-        loads timeseries dictionary that is compatible with eDisGo
-    """
-    timeindex = edisgo_obj.timeseries._timeindex
-    df_dict = unpickle_df(pickle_dir,["loads_active_power_df","loads_reactive_power_df"])
-    if len(df_dict) is not 0:
-        if timeindex.equals(df_dict['loads_active_power_df'].index) and timeindex.equals(df_dict['loads_reactive_power_df'].index):
-            return df_dict
-        else:
-            print('new timestamp')
-    def get_load_meta_data(load_name):
-        load_df = search_str_df(loads_df,'name',load_name,invert=False)
-        return {
-            'name':load_name,
-            'pLoad':load_df['pLoad'].values[0],
-            'qLoad':load_df['qLoad'].values[0],
-            'sector':load_df['sector'].values[0],
-        }
-    timestamp_list = edisgo_obj.timeseries._timestamp['timestamp_list']
-    load_profile_df = sb_dict['LoadProfile']
-    load_profile_df = load_profile_df.set_index('time')
-    loads_df = edisgo_obj.topology.loads_df.reset_index()
-    load_list = [get_load_meta_data(load_name) for load_name in loads_df['name']]
-    # loads_active_power_df = pd.DataFrame(index=timeindex)
-    # loads_reactive_power_df = pd.DataFrame(index=timeindex)
-    loads_active_power_df = pd.DataFrame()
-    loads_reactive_power_df = pd.DataFrame()
-
-    #Todo: Is there a way not to loop over all loads?
-    for load_dict in load_list:
-        loads_active_power_df[load_dict['name']] = load_profile_df.loc[timestamp_list,load_dict['sector']+'_pload']*load_dict['pLoad']
-        loads_reactive_power_df[load_dict['name']] = load_profile_df.loc[timestamp_list,load_dict['sector']+'_qload']*load_dict['qLoad']
-    print ('created load time series DataFrames')
-
-    loads_active_power_df = set_time_index(loads_active_power_df,timeindex)
-    loads_reactive_power_df = set_time_index(loads_reactive_power_df,timeindex)
-
-    loads_timeseries_dict = {
-        "loads_active_power_df":loads_active_power_df,
-        "loads_reactive_power_df":loads_reactive_power_df
-    }
-
-    if pickle_dir != False:
-        pickle_df(pickle_dir,loads_timeseries_dict)
-
-    return loads_timeseries_dict
-
-
-# HK Current
 def import_sb_timeseries(edisgo_obj_ext, sb_dict):
     """
     Creating eDisGo object with timeseries of loads and generators
@@ -917,34 +790,35 @@ def import_sb_timeseries(edisgo_obj_ext, sb_dict):
         an eDisGo object with timeseries of loads and generators
     """
     edisgo_obj = copy.deepcopy(edisgo_obj_ext)
-    load_profile_df = sb_dict['LoadProfile'].set_index('time')
     timeindex = edisgo_obj.timeseries.timeindex
-    gen_timeseries_dict = create_sb_gen_timeseries(edisgo_obj, sb_dict,
-                                                   pickle_dir=False)
-    loads_timeseries_dict = create_sb_loads_timeseries(edisgo_obj, sb_dict,
-                                                       pickle_dir=False)
-    gen_timeseries_dict['generators_active_power_df'] = \
-        gen_timeseries_dict['generators_active_power_df'].set_index(timeindex)
-    gen_timeseries_dict['generators_reactive_power_df'] = \
-        gen_timeseries_dict['generators_reactive_power_df'].set_index(timeindex)
-    loads_timeseries_dict['loads_active_power_df'] = \
-        loads_timeseries_dict['loads_active_power_df'].set_index(timeindex)
-    loads_timeseries_dict['loads_reactive_power_df'] = \
-        loads_timeseries_dict['loads_reactive_power_df'].set_index(timeindex)
+    gens = edisgo_obj.topology.generators_df
+    generation_active_power = pd.DataFrame(index=timeindex, columns=gens.index)
+    generation_active_power.loc[timeindex, gens.index] = \
+        gens.p_nom.values*sb_dict['RESProfile'][gens.type].values
+    generation_reactive_power = pd.DataFrame(index=timeindex, columns=gens.index)
+    generation_reactive_power.loc[timeindex, gens.index] = \
+        gens.q_nom.values * sb_dict['RESProfile'][gens.type].values
+    loads = edisgo_obj.topology.loads_df
+    load_active_power = pd.DataFrame(index=timeindex, columns=loads.index)
+    load_active_power.loc[timeindex, loads.index] = \
+        loads.pLoad.values * sb_dict['LoadProfile'][loads.sector+'_pload'].values
+    load_reactive_power = pd.DataFrame(index=timeindex, columns=loads.index)
+    load_reactive_power.loc[timeindex, loads.index] = \
+        loads.qLoad.values * sb_dict['LoadProfile'][
+            loads.sector + '_qload'].values
     get_component_timeseries(
         edisgo_obj=edisgo_obj,
-        mode='manual',
         timeindex=timeindex,
-        generators_active_power=gen_timeseries_dict['generators_active_power_df'],
-        generators_reactive_power=gen_timeseries_dict['generators_reactive_power_df'],
-        loads_active_power=loads_timeseries_dict['loads_active_power_df'],
-        loads_reactive_power=loads_timeseries_dict['loads_reactive_power_df']
+        generators_active_power=generation_active_power,
+        generators_reactive_power=generation_reactive_power,
+        loads_active_power=load_active_power,
+        loads_reactive_power=load_reactive_power
     )
     print('loaded timeseries into edisgo_obj')
     return edisgo_obj
 
 
-def import_from_simbench(data_folder,pickle_folder=False, import_timeseries=True,
+def import_from_simbench(data_folder, pickle_folder=False, import_timeseries=True,
                          **kwargs):
     time_accuracy = kwargs.get('time_accuracy', '15_min')
     sb_dict = create_sb_dict(data_folder)
