@@ -6,6 +6,7 @@ from edisgo import EDisGo
 from edisgo.network.grids import MVGrid, LVGrid
 from edisgo.network.timeseries import get_component_timeseries
 from edisgo.io.ding0_import import _validate_ding0_grid_import
+from edisgo.tools.tools import get_grid_district_polygon
 import os
 import numpy as np
 
@@ -658,7 +659,16 @@ def import_sb_topology(sb_dict,pickle_file_path=False):
     edisgo_obj.topology.transformers_hvmv_df = transformers_hvmv_df.set_index('name')
     edisgo_obj.topology.transformers_df = transformers_df.set_index('name')
     edisgo_obj.topology.storage_units_df = storage_units_df.set_index('name')
-    
+    edisgo_obj.topology.charging_points_df = pd.DataFrame(columns=['bus'])
+
+    # setup grid district and grids
+    polygon = get_grid_district_polygon(buses_df)
+
+    edisgo_obj.topology.grid_district = {
+        "population": 0,
+        "geom": polygon,
+        "srid": 4326,
+    }
 
     edisgo_obj.topology.mv_grid = MVGrid(id=mv_grid_id, edisgo_obj=edisgo_obj)
     edisgo_obj.topology._grids = {}
@@ -792,27 +802,32 @@ def import_sb_timeseries(edisgo_obj_ext, sb_dict):
     edisgo_obj = copy.deepcopy(edisgo_obj_ext)
     timeindex = edisgo_obj.timeseries.timeindex
     gens = edisgo_obj.topology.generators_df
-    generation_active_power = pd.DataFrame(index=timeindex, columns=gens.index)
-    generation_active_power.loc[timeindex, gens.index] = \
-        gens.p_nom.values*sb_dict['RESProfile'][gens.type].values
-    generation_reactive_power = pd.DataFrame(index=timeindex, columns=gens.index)
-    generation_reactive_power.loc[timeindex, gens.index] = \
-        gens.q_nom.values * sb_dict['RESProfile'][gens.type].values
+    generator_types = gens.type.unique()
+    generation_active_power = sb_dict['RESProfile'][generator_types]
+    generation_active_power.index = timeindex
+    if not gens.q_nom.unique() == [0]:
+        raise Exception("Reactive power of generators different from 0. "
+                        "This is not accounted for in import function. "
+                        "Please check and adapt function.")
+    else:
+        generation_reactive_power = generation_active_power*0
     loads = edisgo_obj.topology.loads_df
-    load_active_power = pd.DataFrame(index=timeindex, columns=loads.index)
-    load_active_power.loc[timeindex, loads.index] = \
-        loads.pLoad.values * sb_dict['LoadProfile'][loads.sector+'_pload'].values
-    load_reactive_power = pd.DataFrame(index=timeindex, columns=loads.index)
-    load_reactive_power.loc[timeindex, loads.index] = \
-        loads.qLoad.values * sb_dict['LoadProfile'][
-            loads.sector + '_qload'].values
+    load_types = loads.sector.unique()
+    rename_dict_active_power = {load_type+'_pload':load_type
+                                for load_type in load_types}
+    rename_dict_reactive_power = {load_type + '_qload': load_type
+                                  for load_type in load_types}
+    load_active_power = sb_dict['LoadProfile'][loads.sector+'_pload'].\
+        rename(columns=rename_dict_active_power).set_index(timeindex)
+    load_reactive_power = sb_dict['LoadProfile'][loads.sector + '_qload'].\
+        rename(columns=rename_dict_reactive_power).set_index(timeindex)
     get_component_timeseries(
         edisgo_obj=edisgo_obj,
         timeindex=timeindex,
-        generators_active_power=generation_active_power,
-        generators_reactive_power=generation_reactive_power,
-        loads_active_power=load_active_power,
-        loads_reactive_power=load_reactive_power
+        timeseries_generation_dispatchable=generation_active_power,
+        timeseries_generation_reactive_power=generation_reactive_power,
+        timeseries_load=load_active_power,
+        timeseries_load_reactive_power=load_reactive_power
     )
     print('loaded timeseries into edisgo_obj')
     return edisgo_obj

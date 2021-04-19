@@ -1,6 +1,7 @@
 import pandas as pd
 import networkx as nx
 from math import pi, sqrt
+from shapely.geometry import Point, MultiPoint
 
 from edisgo.flex_opt import exceptions
 from edisgo.flex_opt import check_tech_constraints
@@ -496,3 +497,20 @@ def assign_voltage_level_to_component(edisgo_obj, df):
         axis=1,
     )
     return df
+
+
+def get_grid_district_polygon(buses_df):
+    """
+    Created on Mon Dec 28 14:09:45 2020
+
+    @author: Sebastian.Tews
+    """
+    def import_point_list():
+        geo_list = [Point(xy) for xy in zip(buses_df['x'], buses_df['y'])]
+        return geo_list
+
+    point_list = import_point_list()
+
+    # Get hull of Geopoints
+    hull = MultiPoint(point_list).convex_hull
+    return hull

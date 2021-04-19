@@ -662,11 +662,12 @@ def get_component_timeseries(edisgo_obj, **kwargs):
                 config_data, weather_cell_ids, kwargs.get("timeindex", None)
             )
         else:
-            raise ValueError(
-                "Your input for "
-                '"timeseries_generation_fluctuating" is not '
-                "valid.".format(mode)
-            )
+            if (edisgo_obj.topology.generators_df.type.isin(["solar", "wind"])).any():
+                raise ValueError(
+                    "Your input for "
+                    '"timeseries_generation_fluctuating" is not '
+                    "valid.".format(mode)
+                )
         # feed-in time series for dispatchable generators
         ts = kwargs.get("timeseries_generation_dispatchable", None)
         if isinstance(ts, pd.DataFrame):
