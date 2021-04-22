@@ -752,6 +752,7 @@ def _load_from_timeseries(edisgo_obj, load_names=None):
     _drop_existing_component_timeseries(
         edisgo_obj=edisgo_obj, comp_type="loads", comp_names=load_names
     )
+    # Todo: make this more performant!
     # set active power
     edisgo_obj.timeseries.loads_active_power = pd.concat(
         [edisgo_obj.timeseries.loads_active_power,
@@ -777,8 +778,7 @@ def _load_from_timeseries(edisgo_obj, load_names=None):
                     edisgo_obj.timeseries.load_reactive_power.columns
                  else edisgo_obj.timeseries.load_reactive_power['other']
                  * x.annual_consumption,
-                 axis=1
-             )
+                 axis=1).T
              ],
             axis=1
         )
