@@ -48,7 +48,8 @@ setup(
         'egoio >= 0.4.7',
         'matplotlib',
         'pypower',
-        'sklearn'
+        'sklearn',
+        'sqlalchemy <= 1.3.24'
     ],
     extras_require={
         'geoplot': ['geopandas <= 0.6.3', 'contextily', 'descartes'],
