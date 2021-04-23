@@ -1426,7 +1426,7 @@ def import_edisgo_from_files(directory="", import_topology=True,
             logging.warning(
                 'No timeseries directory found. Timeseries not imported.')
     if import_results:
-        parameters = kwargs.get('parameters', 'all')
+        parameters = kwargs.get('parameters', None)
         if os.path.exists(os.path.join(directory, "results")):
             edisgo_obj.results.from_csv(os.path.join(directory, "results"),
                                         parameters)
