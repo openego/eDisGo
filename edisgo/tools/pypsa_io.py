@@ -1264,12 +1264,14 @@ def process_pfa_results(edisgo, pypsa, timesteps):
         pypsa.buses_t["v_mag_pu"].T.loc[list(lines_bus0.values()), :].copy()
     )
     bus0_v_mag_pu.index = list(lines_bus0.keys())
-    edisgo.results._i_res = np.hypot(
+    current = np.hypot(
         pypsa.lines_t["p0"], pypsa.lines_t["q0"]
-    ).truediv(pypsa.lines["v_nom"] * bus0_v_mag_pu.T, axis="columns") / sqrt(3)
+    ).truediv(pypsa.lines["v_nom"] * bus0_v_mag_pu.T,
+              axis="columns") / sqrt(3)
+    edisgo.results._i_res = current.loc[timesteps, :]
 
     # get voltage results in kV
-    edisgo.results._v_res = pypsa.buses_t["v_mag_pu"]
+    edisgo.results._v_res = pypsa.buses_t["v_mag_pu"].loc[timesteps, :]
 
     # save seeds
     edisgo.results.pfa_v_mag_pu_seed = pd.concat(
