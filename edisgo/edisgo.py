@@ -4,11 +4,13 @@ import pandas as pd
 import pickle
 
 from edisgo.network.topology import Topology
+from edisgo.network.electromobility import Electromobility
 from edisgo.network.results import Results
 from edisgo.network import timeseries
 from edisgo.tools import pypsa_io, plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io.ding0_import import import_ding0_grid
+from edisgo.io.electromobility_import import import_simbev_electromobility
 from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
@@ -212,6 +214,10 @@ class EDisGo:
         self.topology = Topology(config=self.config)
         self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
 
+        # instantiate electromobility object and load charging processes and sites
+        self.electromobility = Electromobility()
+        self.import_simbev_electromobility(path=kwargs.get("simbev_data", None))
+
         # set up results and time series container
         self.results = Results(self)
         self.opf_results = OPFResults()
@@ -265,6 +271,11 @@ class EDisGo:
         """
         if path is not None:
             import_ding0_grid(path, self)
+
+    def import_simbev_electromobility(self, path):
+
+        if path is not None:
+            import_simbev_electromobility(path, self)
 
     def to_pypsa(self, **kwargs):
         """
