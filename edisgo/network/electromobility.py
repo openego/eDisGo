@@ -13,7 +13,8 @@ COLUMNS = {
         "location", "use_case", "netto_charging_capacity", "chargingdemand", "charge_start",
         "charge_end", "grid_connection_point_id", "charging_point_id"
     ],
-    "simbev_config": ["value"]
+    "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
+    "simbev_config_df": ["value"]
 }
 
 
@@ -34,35 +35,46 @@ class Electromobility:
         self._charging_processes_df = df
 
     @property
-    def simbev_config(self):
+    def grid_connections_gdf(self):
         try:
-            return self._simbev_config
+            return self._grid_connections_gdf
         except:
-            return pd.DataFrame(columns=COLUMNS["simbev_config"])
+            return pd.DataFrame(columns=COLUMNS["grid_connections_gdf"])
 
-    @simbev_config.setter
-    def simbev_config(self, df):
-        self._simbev_config = df
+    @grid_connections_gdf.setter
+    def grid_connections_gdf(self, df):
+        self._grid_connections_gdf = df
+
+    @property
+    def simbev_config_df(self):
+        try:
+            return self._simbev_config_df
+        except:
+            return pd.DataFrame(columns=COLUMNS["simbev_config_df"])
+
+    @simbev_config_df.setter
+    def simbev_config_df(self, df):
+        self._simbev_config_df = df
 
     @property
     def stepsize(self):
         try:
-            return int(self.simbev_config.at["stepsize", "value"])
+            return int(self.simbev_config_df.at["stepsize", "value"])
         except:
-            return np.nan
+            return None
 
     @property
     def simulated_days(self):
         try:
-            return int(self.simbev_config.at["days", "value"])
+            return int(self.simbev_config_df.at["days", "value"])
         except:
-            return np.nan
+            return None
 
     @property
     def eta_charging_points(self):
         try:
-            return float(self.simbev_config.at["eta_CP", "value"])
+            return float(self.simbev_config_df.at["eta_CP", "value"])
         except:
-            return np.nan
+            return None
 
 

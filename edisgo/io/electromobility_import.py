@@ -2,7 +2,9 @@ import logging
 import os
 import numpy as np
 import pandas as pd
+import geopandas as gpd
 
+from sklearn import preprocessing
 from pathlib import Path
 
 logger = logging.getLogger("edisgo")
@@ -12,7 +14,8 @@ COLUMNS = {
         "location", "use_case", "netto_charging_capacity", "chargingdemand", "charge_start", "charge_end"
     ],
     "matching_demand_and_location": ["grid_connection_point_id", "charging_point_id"],
-    "simbev_config": ["value"],
+    "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
+    "simbev_config_df": ["value"],
 }
 
 DTYPES = {
@@ -30,12 +33,19 @@ DTYPES = {
     }
 }
 
+USECASES = {
+    "uc1": "fast",
+    "uc2": "slow",
+    "uc3": "home",
+    "uc4": "work",
+}
+
 
 def import_simbev_electromobility(path, edisgo_obj, **kwargs):
     # TODO: SimBEV is in development and this import will need constant updating for now
-    def read_csvs_charging_processes(path, mode, dir="standing_times_looped"):
-
-        path = os.path.join(path, dir)
+    def read_csvs_charging_processes(path, mode=None, dir=None):
+        if dir is not None:
+            path = os.path.join(path, dir)
 
         files = []
 
@@ -77,16 +87,83 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
         return charging_processes_df
 
-    def read_csv_simbev_config(path, config_file):
+    def read_csv_simbev_config(path, simbev_config_file=None):
         try:
-            return pd.read_csv(
-                os.path.join(path, config_file), index_col=[0], header=0, names=COLUMNS["simbev_config"])
+            if simbev_config_file is not None:
+                return pd.read_csv(
+                    os.path.join(path, simbev_config_file), index_col=[0], header=0, names=COLUMNS["simbev_config_df"])
         except:
-            return pd.DataFrame(columns=COLUMNS["simbev_config"])
+            return pd.DataFrame(columns=COLUMNS["simbev_config_df"])
 
+    def read_geojsons_grid_connections(path, dir=None):
+
+        if dir is not None:
+            path = os.path.join(path, dir)
+
+        files = [f for f in os.listdir(path) if f.endswith(".geojson")]
+
+        grid_connections_gdf = gpd.GeoDataFrame(
+            pd.DataFrame(columns=COLUMNS["grid_connections_gdf"]), crs={"init":"epsg:3857"})
+
+        for f in files:
+            gdf = gpd.read_file(os.path.join(path, f)).to_crs(epsg=3857)
+
+            if len(gdf) > 0:
+                if "name" in gdf.columns:
+                    gdf = gdf.drop(["name"], axis="columns")
+
+                if "landuse" in gdf.columns:
+                    gdf = gdf.drop(["landuse"], axis="columns")
+
+                if "area" in gdf.columns:
+                    gdf = gdf.drop(["area"], axis="columns")
+
+                if len(gdf.columns) == 2:
+                    for col in [col for col in gdf.columns if col is not "geometry"]:
+                        gdf = gdf.rename(columns={col: "user_centric_weight"})
+
+                elif len(gdf.columns) == 1:
+                    gdf = gdf.assign(user_centric_weight=0)
+
+                else:
+                    raise ValueError(
+                        "GEOJSON {} contains unknown properties.".format(f)
+                    )
+
+                gdf = gdf.assign(use_case=USECASES[f[:3]], id=np.nan)
+
+                gdf = gdf[COLUMNS["grid_connections_gdf"]]
+
+                grid_connections_gdf = grid_connections_gdf.append(
+                    gdf, ignore_index=True,
+                )
+
+        grid_connections_gdf = grid_connections_gdf.sort_values(
+            by=["use_case", "user_centric_weight"], ascending=[True, False]).reset_index(drop=True)
+
+        min_max_scaler = preprocessing.MinMaxScaler()
+
+        normalized_weight = []
+
+        for use_case in grid_connections_gdf.use_case.unique():
+            use_case_weights = grid_connections_gdf.loc[
+                grid_connections_gdf.use_case == use_case].user_centric_weight.values.reshape(-1,1)
+
+            normalized_weight.extend(
+                min_max_scaler.fit_transform(use_case_weights).reshape(1,-1).tolist()[0])
+
+        grid_connections_gdf = grid_connections_gdf.assign(
+            user_centric_weight=normalized_weight, id=grid_connections_gdf.index.tolist())
+
+        return grid_connections_gdf
 
     edisgo_obj.electromobility.charging_processes_df = read_csvs_charging_processes(
-        path, mode=kwargs.get("mode_standing_times", "frugal"))
+        path, mode=kwargs.get("mode_standing_times", "frugal"),
+        dir=kwargs.get("charging_processes_dir", "standing_times_looped")
+    )
 
-    edisgo_obj.electromobility.simbev_config = read_csv_simbev_config(
-        path, config_file=kwargs.get("config_file", "config_data.csv"))
+    edisgo_obj.electromobility.simbev_config_df = read_csv_simbev_config(
+        path, simbev_config_file=kwargs.get("simbev_config_file", "config_data.csv"))
+
+    edisgo_obj.electromobility.grid_connections_gdf = read_geojsons_grid_connections(
+        path, dir=kwargs.get("grid_connections_dir", "grid_connections"))
