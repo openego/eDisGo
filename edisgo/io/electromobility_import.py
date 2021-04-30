@@ -12,28 +12,27 @@ logger = logging.getLogger("edisgo")
 
 COLUMNS = {
     "charging_processes_df": [
-        "ags", "car_id", "location", "use_case", "netto_charging_capacity",
+        "ags", "car_id", "destination", "use_case", "netto_charging_capacity",
         "chargingdemand", "charge_start", "charge_end"
     ],
     "matching_demand_and_location": ["grid_connection_point_id", "charging_point_id"],
-    "grid_connections_gdf": ["id", "ags", "use_case", "user_centric_weight", "geometry"],
+    "grid_connections_gdf": ["ags", "use_case", "user_centric_weight", "geometry"],
     "simbev_config_df": ["value"],
 }
 
 DTYPES = {
     "charging_processes_df": {
-        "ags": np.int32,
-        "car_id": np.int32,
-        "location": str,
+        "ags": np.uint32,
+        "car_id": np.uint32,
+        "destination": str,
         "use_case": str,
         "netto_charging_capacity": np.float64,
         "chargingdemand": np.float64,
-        "charge_start": np.int32,
-        "charge_end": np.int32,
+        "charge_start": np.uint16,
+        "charge_end": np.uint16,
     },
     "grid_connections_gdf": {
-        "id": np.int32,
-        "ags": np.int32,
+        "ags": np.uint32,
         "use_case": str,
         "user_centric_weight": np.float64,
     },
@@ -70,6 +69,8 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
         for car_id, f in enumerate(files):
             df = pd.read_csv(f, index_col=[0])
+
+            df = df.rename(columns={"location": "destination"})
 
             df = df.assign(ags=int(f.parts[-2]), car_id=car_id)
 
@@ -138,7 +139,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
                         "GEOJSON {} contains unknown properties.".format(f)
                     )
 
-                gdf = gdf.assign(use_case=USECASES[f[:3]], id=0, ags=int(f.split("_")[-2]))
+                gdf = gdf.assign(use_case=USECASES[f[:3]], ags=int(f.split("_")[-2]))
 
                 gdf = gdf[COLUMNS["grid_connections_gdf"]].astype(DTYPES["grid_connections_gdf"])
 
@@ -161,7 +162,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
                 min_max_scaler.fit_transform(use_case_weights).reshape(1,-1).tolist()[0])
 
         grid_connections_gdf = grid_connections_gdf.assign(
-            user_centric_weight=normalized_weight, id=grid_connections_gdf.index.tolist())
+            user_centric_weight=normalized_weight)
 
         return grid_connections_gdf
 

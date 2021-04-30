@@ -215,7 +215,7 @@ class EDisGo:
         self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
 
         # instantiate electromobility object and load charging processes and sites
-        self.electromobility = Electromobility()
+        self.electromobility = Electromobility(edisgo_obj=self)
         self.import_simbev_electromobility(path=kwargs.get("simbev_data", None))
 
         # set up results and time series container

@@ -1152,3 +1152,57 @@ class Switch(BasicComponent):
 #     @quantity.setter
 #     def quantity(self, new_quantity):
 #         self._quantity = new_quantity
+
+class ChargingPark:
+
+    def __init__(self, **kwargs):
+        self._id = kwargs.get("id", None)
+        self._edisgo_obj = kwargs.get("edisgo_obj", None)
+        self._topology = kwargs.get("topology", None)
+        if self._topology is None and self._edisgo_obj is not None:
+            self._topology = self._edisgo_obj.topology
+
+    def __repr__(self):
+        return "_".join([self.__class__.__name__, str(self._id)])
+
+    @property
+    def id(self):
+        """
+        Unique identifier of component as used in component dataframes in
+        :class:`~.network.topology.Topology`.
+
+        Returns
+        --------
+        :obj:`str`
+            Unique identifier of component.
+
+        """
+        return self._id
+
+    @property
+    def edisgo_obj(self):
+        """
+        EDisGo container
+
+        Returns
+        --------
+        :class:`~.EDisGo`
+
+        """
+        return self._edisgo_obj
+
+    @property
+    def ags(self):
+        return self._edisgo_obj.electromobility.grid_connections_gdf.at[self._id, "ags"]
+
+    @property
+    def use_case(self):
+        return self._edisgo_obj.electromobility.grid_connections_gdf.at[self._id, "use_case"]
+
+    @property
+    def user_centric_weight(self):
+        return self._edisgo_obj.electromobility.grid_connections_gdf.at[self._id, "user_centric_weight"]
+
+    @property
+    def geometry(self):
+        return self._edisgo_obj.electromobility.grid_connections_gdf.at[self._id, "geometry"]

@@ -1,10 +1,7 @@
 import logging
-import os
-import numpy as np
 import pandas as pd
 
-import edisgo
-
+from edisgo.network.components import ChargingPark
 
 logger = logging.getLogger("edisgo")
 
@@ -21,7 +18,7 @@ COLUMNS = {
 class Electromobility:
 
     def __init__(self, **kwargs):
-        pass
+        self._edisgo_obj = kwargs.get("edisgo_obj", None)
 
     @property
     def charging_processes_df(self):
@@ -44,6 +41,11 @@ class Electromobility:
     @grid_connections_gdf.setter
     def grid_connections_gdf(self, df):
         self._grid_connections_gdf = df
+
+    @property
+    def charging_parks(self):
+        for cp in self.grid_connections_gdf.index:
+            yield ChargingPark(id=cp, edisgo_obj=self._edisgo_obj)
 
     @property
     def simbev_config_df(self):
