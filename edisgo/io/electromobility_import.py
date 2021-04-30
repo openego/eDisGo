@@ -7,19 +7,23 @@ import geopandas as gpd
 from sklearn import preprocessing
 from pathlib import Path
 
+
 logger = logging.getLogger("edisgo")
 
 COLUMNS = {
     "charging_processes_df": [
-        "location", "use_case", "netto_charging_capacity", "chargingdemand", "charge_start", "charge_end"
+        "ags", "car_id", "location", "use_case", "netto_charging_capacity",
+        "chargingdemand", "charge_start", "charge_end"
     ],
     "matching_demand_and_location": ["grid_connection_point_id", "charging_point_id"],
-    "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
+    "grid_connections_gdf": ["id", "ags", "use_case", "user_centric_weight", "geometry"],
     "simbev_config_df": ["value"],
 }
 
 DTYPES = {
     "charging_processes_df": {
+        "ags": np.int32,
+        "car_id": np.int32,
         "location": str,
         "use_case": str,
         "netto_charging_capacity": np.float64,
@@ -27,15 +31,17 @@ DTYPES = {
         "charge_start": np.int32,
         "charge_end": np.int32,
     },
-    "matching_demand_and_location": {
-        "grid_connection_point_id": np.int32,
-        "charging_point_id": np.int32,
-    }
+    "grid_connections_gdf": {
+        "id": np.int32,
+        "ags": np.int32,
+        "use_case": str,
+        "user_centric_weight": np.float64,
+    },
 }
 
 USECASES = {
     "uc1": "fast",
-    "uc2": "slow",
+    "uc2": "public",
     "uc3": "home",
     "uc4": "work",
 }
@@ -51,7 +57,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
         for dirpath, dirnames, filenames in os.walk(path):
             for filename in [f for f in filenames if f.endswith(".csv")]:
-                files.append(os.path.join(dirpath, filename))
+                files.append(Path(os.path.join(dirpath, filename)))
 
         if len(files) == 0:
             raise ValueError(
@@ -62,8 +68,10 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
         charging_processes_df = charging_processes_df.astype(DTYPES["charging_processes_df"])
 
-        for f in files:
+        for car_id, f in enumerate(files):
             df = pd.read_csv(f, index_col=[0])
+
+            df = df.assign(ags=int(f.parts[-2]), car_id=car_id)
 
             df = df[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
 
@@ -78,8 +86,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
         charging_processes_df = pd.merge(
             charging_processes_df,
-            pd.DataFrame(columns=COLUMNS["matching_demand_and_location"]).astype(
-                DTYPES["matching_demand_and_location"]),
+            pd.DataFrame(columns=COLUMNS["matching_demand_and_location"]),
             how="outer",
             left_index=True,
             right_index=True
@@ -103,7 +110,8 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
         files = [f for f in os.listdir(path) if f.endswith(".geojson")]
 
         grid_connections_gdf = gpd.GeoDataFrame(
-            pd.DataFrame(columns=COLUMNS["grid_connections_gdf"]), crs={"init":"epsg:3857"})
+            pd.DataFrame(columns=COLUMNS["grid_connections_gdf"]), crs={"init":"epsg:3857"}
+        ).astype(DTYPES["grid_connections_gdf"])
 
         for f in files:
             gdf = gpd.read_file(os.path.join(path, f)).to_crs(epsg=3857)
@@ -130,16 +138,16 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
                         "GEOJSON {} contains unknown properties.".format(f)
                     )
 
-                gdf = gdf.assign(use_case=USECASES[f[:3]], id=np.nan)
+                gdf = gdf.assign(use_case=USECASES[f[:3]], id=0, ags=int(f.split("_")[-2]))
 
-                gdf = gdf[COLUMNS["grid_connections_gdf"]]
+                gdf = gdf[COLUMNS["grid_connections_gdf"]].astype(DTYPES["grid_connections_gdf"])
 
                 grid_connections_gdf = grid_connections_gdf.append(
                     gdf, ignore_index=True,
                 )
 
         grid_connections_gdf = grid_connections_gdf.sort_values(
-            by=["use_case", "user_centric_weight"], ascending=[True, False]).reset_index(drop=True)
+            by=["use_case", "ags", "user_centric_weight"], ascending=[True, True, False]).reset_index(drop=True)
 
         min_max_scaler = preprocessing.MinMaxScaler()
 
