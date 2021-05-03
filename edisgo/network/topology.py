@@ -5,6 +5,7 @@ import numpy as np
 import os
 import warnings
 import networkx as nx
+from sklearn import preprocessing
 
 import edisgo
 from edisgo.network.grids import MVGrid, LVGrid
@@ -40,7 +41,9 @@ COLUMNS = {
 
     ],
     "buses_df": ["v_nom", "x", "y", "mv_grid_id", "lv_grid_id", "in_building"],
-    "switches_df": ["bus_open", "bus_closed", "branch", "type_info"]
+    "switches_df": ["bus_open", "bus_closed", "branch", "type_info"],
+    "lv_grids_df": ["peak_generation_capacity", "peak_load",
+                    "substation_capacity", "generators_weight", "loads_weight"],
 }
 
 
@@ -638,6 +641,34 @@ class Topology:
     @mv_grid.setter
     def mv_grid(self, mv_grid):
         self._mv_grid = mv_grid
+
+    @property
+    def lv_grids_df(self):
+        lv_grids_df = pd.DataFrame(index=[_._id for _ in self.mv_grid.lv_grids], columns=COLUMNS["lv_grids_df"])
+
+        lv_grids = list(self.mv_grid.lv_grids)
+
+        lv_grids_df.peak_generation_capacity = [_.peak_generation_capacity for _ in lv_grids]
+
+        lv_grids_df.peak_load = [_.peak_load for _ in lv_grids]
+
+        lv_grids_df.substation_capacity = [_.transformers_df.s_nom.sum() for _ in lv_grids]
+
+        min_max_scaler = preprocessing.MinMaxScaler()
+
+        lv_grids_df.generators_weight = lv_grids_df.peak_generation_capacity.divide(
+            lv_grids_df.substation_capacity)
+
+        lv_grids_df.generators_weight = min_max_scaler.fit_transform(
+            lv_grids_df.generators_weight.values.reshape(-1, 1))
+
+        lv_grids_df.loads_weight = 1 / lv_grids_df.peak_load.divide(
+            lv_grids_df.substation_capacity)
+
+        lv_grids_df.loads_weight = min_max_scaler.fit_transform(
+            lv_grids_df.loads_weight.values.reshape(-1, 1))
+
+        return lv_grids_df
 
     @property
     def grid_district(self):

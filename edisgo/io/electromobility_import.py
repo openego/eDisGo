@@ -110,12 +110,14 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
         files = [f for f in os.listdir(path) if f.endswith(".geojson")]
 
+        epsg = edisgo_obj.topology.grid_district["srid"]
+
         grid_connections_gdf = gpd.GeoDataFrame(
-            pd.DataFrame(columns=COLUMNS["grid_connections_gdf"]), crs={"init":"epsg:3857"}
+            pd.DataFrame(columns=COLUMNS["grid_connections_gdf"]), crs={"init": f"epsg:{epsg}"}
         ).astype(DTYPES["grid_connections_gdf"])
 
         for f in files:
-            gdf = gpd.read_file(os.path.join(path, f)).to_crs(epsg=3857)
+            gdf = gpd.read_file(os.path.join(path, f))
 
             if len(gdf) > 0:
                 if "name" in gdf.columns:
@@ -156,10 +158,10 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
         for use_case in grid_connections_gdf.use_case.unique():
             use_case_weights = grid_connections_gdf.loc[
-                grid_connections_gdf.use_case == use_case].user_centric_weight.values.reshape(-1,1)
+                grid_connections_gdf.use_case == use_case].user_centric_weight.values.reshape(-1, 1)
 
             normalized_weight.extend(
-                min_max_scaler.fit_transform(use_case_weights).reshape(1,-1).tolist()[0])
+                min_max_scaler.fit_transform(use_case_weights).reshape(1, -1).tolist()[0])
 
         grid_connections_gdf = grid_connections_gdf.assign(
             user_centric_weight=normalized_weight)

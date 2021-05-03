@@ -4,6 +4,8 @@ import logging
 from math import acos, tan
 from abc import ABC, abstractmethod
 
+from edisgo.tools.geo import find_nearest_bus
+
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
 
@@ -1153,7 +1155,7 @@ class Switch(BasicComponent):
 #     def quantity(self, new_quantity):
 #         self._quantity = new_quantity
 
-class ChargingPark:
+class ChargingParkGridConnection:
 
     def __init__(self, **kwargs):
         self._id = kwargs.get("id", None)
@@ -1206,3 +1208,40 @@ class ChargingPark:
     @property
     def geometry(self):
         return self._edisgo_obj.electromobility.grid_connections_gdf.at[self._id, "geometry"]
+
+    @property
+    def nearest_substation(self):
+        substations = self._topology.buses_df.loc[
+            self._topology.transformers_df.bus1]
+
+        nearest_substation, distance = find_nearest_bus(self.geometry, substations)
+
+        lv_grid_id = int(self._topology.buses_df.at[nearest_substation, "lv_grid_id"])
+
+        return {"lv_grid_id": lv_grid_id, "nearest_substation": nearest_substation, "distance": distance}
+
+    @property
+    def grid_centric_weight(self, **kwargs):
+        distance_weight_factor = kwargs.get("distance_weight_factor", 1/4)
+        generators_weight_factor = kwargs.get("generators_weight_factor", 1/4)
+        loads_weight_factor = kwargs.get("loads_weight_factor", 1/4)
+        charging_park_weight_factor = kwargs.get("weight_charging_park_capacity_factor", 1/4)
+
+        weights = (distance_weight_factor, generators_weight_factor,
+                   loads_weight_factor, charging_park_weight_factor)
+
+        if not round(sum(weights), 3) == 1:
+            f = 1 / sum(weights)
+            distance_weight_factor *= f
+            generators_weight_factor *= f
+            loads_weight_factor *= f
+            charging_park_weight_factor *= f
+
+        generators_weight_value = self._topology.lv_grids_df.at[
+            self.nearest_substation["lv_grid_id"], "generators_weight"]
+
+        loads_weight_value = self._topology.lv_grids_df.at[
+            self.nearest_substation["lv_grid_id"], "loads_weight"]
+
+        return generators_weight_value * generators_weight_factor + loads_weight_value * loads_weight_factor
+
