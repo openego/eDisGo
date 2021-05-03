@@ -1,4 +1,4 @@
-name: coverall_github_actions
+name: coveralls_github_actions
 
 on:
   push:
@@ -19,13 +19,13 @@ jobs:
       matrix:
         test-name:
           - test1
-          - test2
+#         - test2
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Test
-        run: ./run_tests.sh ${{ matrix.test-name }}
+#     - name: Test
+#       run: ./run_tests.sh ${{ matrix.test-name }}
       - name: Upload coverage data to coveralls.io
         run: coveralls
         env:
