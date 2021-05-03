@@ -1,0 +1,46 @@
+name: coverall_github_actions
+
+on:
+  push:
+    branches: 
+    - dev
+    - features/*
+    - master
+  pull_request:
+    branches:
+    - dev
+    - features/*
+    - master
+  workflow_dispatch:
+  
+jobs:
+  test:
+    strategy:
+      matrix:
+        test-name:
+          - test1
+          - test2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Test
+        run: ./run_tests.sh ${{ matrix.test-name }}
+      - name: Upload coverage data to coveralls.io
+        run: coveralls
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
+          COVERALLS_PARALLEL: true
+  coveralls:
+    name: Indicate completion to coveralls.io
+    needs: test
+    runs-on: ubuntu-latest
+    container: python:3-slim
+    steps:
+    - name: Finished
+      run: |
+        pip3 install --upgrade coveralls
+        coveralls --finish
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
