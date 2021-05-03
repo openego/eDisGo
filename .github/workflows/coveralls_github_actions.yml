@@ -34,13 +34,13 @@ jobs:
           COVERALLS_PARALLEL: true
   coveralls:
     name: Indicate completion to coveralls.io
-    needs: test
+#   needs: test
     runs-on: ubuntu-latest
     container: python:3-slim
     steps:
     - name: Finished
       run: |
         pip3 install --upgrade coveralls
-        coveralls --finish
+        coveralls
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
