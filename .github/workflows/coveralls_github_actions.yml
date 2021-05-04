@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
   
 jobs:
-  build-linux:
+  Coveralls:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -28,6 +28,7 @@ jobs:
       run: |
         pip3 install -e $GITHUB_WORKSPACE[full]
         pip3 install --upgrade coveralls
+        pytest
         coveralls
       env:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
