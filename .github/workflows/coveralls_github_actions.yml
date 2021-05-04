@@ -34,6 +34,7 @@ jobs:
           conda create --name edisgo_env python=3.6
     - name: Activate conda env
       run: |
+          conda init bash
           conda activate edisgo_env
     - name: Install dependencies
       run: |
