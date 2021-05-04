@@ -223,6 +223,7 @@ You can run a worst-case scenario as follows:
     costs = edisgo.results.grid_expansion_costs
 
 
+
 Instead of conducting a worst-case analysis you can also provide specific
 time series:
 
@@ -236,6 +237,7 @@ time series:
     # timeindex specifies which time steps to consider in power flow
     timeindex = pd.date_range('1/1/2011', periods=4, freq='H')
     # load time series (scaled by annual demand)
+
     timeseries_load = pd.DataFrame(
         {'residential': [0.0001] * len(timeindex),
          'retail': [0.0002] * len(timeindex),
@@ -243,6 +245,7 @@ time series:
          'agricultural': [0.00005] * len(timeindex)
          },
         index=timeindex)
+
     # feed-in time series of fluctuating generators (scaled by nominal power)
     timeseries_generation_fluctuating = pd.DataFrame(
         {'solar': [0.2] * len(timeindex),
@@ -311,6 +314,8 @@ Parallelization
 
 Try :func:`~.edisgo.tools.edisgo_run.run_edisgo_pool_flexible` for
 parallelization of your custom function.
+
+
 
 LICENSE
 -------
