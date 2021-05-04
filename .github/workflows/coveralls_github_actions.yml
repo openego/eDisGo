@@ -29,9 +29,11 @@ jobs:
       run: |
         pip3 install -e $GITHUB_WORKSPACE[full]
         pip3 install --upgrade coveralls
+        pip3 install pytest-cov
     - name: Run coverage
       run: |  
-        coverage run -m pytest
+        #coverage run -m pytest
+        pytest --cov=tests tests/
     - name: Run coveralls
       run: |
         coveralls
