@@ -1,0 +1,3 @@
+name,bus0,bus1,s_nom,r,x,type,type_info
+Transformer_mv_grid_460_1,Busbar_mvgd_460_HV,Busbar_mvgd_460_MV,63.0,,,63 MVA 110/20 kV,63 MVA 110/20 kV
+Transformer_mv_grid_460_2,Busbar_mvgd_460_HV,Busbar_mvgd_460_MV,63.0,,,63 MVA 110/20 kV,63 MVA 110/20 kV

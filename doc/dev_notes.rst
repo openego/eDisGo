@@ -9,7 +9,7 @@ Installation
 Clone repository from `GitHub <https://github.com/openego/edisgo>`_ and install
 in developer mode::
 
-    pip3 install -e <path-to-repo>
+    pip3 install -e <path-to-repo>[full]
 
 
 Code style

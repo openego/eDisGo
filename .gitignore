@@ -29,3 +29,7 @@ eDisGo.egg-info/
 # exclude check scripts
 /edisgo/examples/compare_graphs.py
 /edisgo/examples/compare_pypsa_network.py
+
+# exclude .json files in opf
+/edisgo/opf/edisgo_scenario_data/*.json
+/edisgo/opf/opf_solutions/*.json

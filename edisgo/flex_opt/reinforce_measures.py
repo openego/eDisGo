@@ -1,18 +1,19 @@
-import copy
 import math
 import networkx as nx
-from networkx.algorithms.shortest_paths.weighted import _dijkstra as \
-    dijkstra_shortest_path_length
+from networkx.algorithms.shortest_paths.weighted import (
+    _dijkstra as dijkstra_shortest_path_length,
+)
+import pandas as pd
+import numpy as np
 
-from edisgo.grid.components import Transformer, BranchTee, Generator, Load, \
-    LVStation
-from edisgo.grid.grids import LVGrid
+from edisgo.network.grids import LVGrid, MVGrid
 
 import logging
-logger = logging.getLogger('edisgo')
+
+logger = logging.getLogger("edisgo")
 
 
-def extend_distribution_substation_overloading(network, critical_stations):
+def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):
     """
     Reinforce MV/LV substations due to overloading issues.
 
@@ -22,161 +23,43 @@ def extend_distribution_substation_overloading(network, critical_stations):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
-    critical_stations : :pandas:`pandas.DataFrame<dataframe>`
-        Dataframe containing over-loaded MV/LV stations, their apparent power
-        at maximal over-loading and the corresponding time step.
-        Index of the dataframe are the over-loaded stations of type
-        :class:`~.grid.components.LVStation`. Columns are 's_pfa'
-        containing the apparent power at maximal over-loading as float and
-        'time_index' containing the corresponding time step the over-loading
-        occured in as :pandas:`pandas.Timestamp<timestamp>`. See
-        :func:`~.flex_opt.check_tech_constraints.mv_lv_station_load` for more
-        information.
+    edisgo_obj : :class:`~.EDisGo`
+    critical_stations : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing over-loaded MV/LV stations, their missing apparent
+        power at maximal over-loading and the corresponding time step.
+        Index of the dataframe are the representatives of the grids with
+        over-loaded stations. Columns are 's_missing' containing the missing
+        apparent power at maximal over-loading in MVA as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
     Returns
     -------
     dict
-        Dictionary with lists of added and removed transformers.
+        Dictionary with added and removed transformers in the form::
+
+        {'added': {'Grid_1': ['transformer_reinforced_1',
+                              ...,
+                              'transformer_reinforced_x'],
+                   'Grid_10': ['transformer_reinforced_10']
+                   },
+         'removed': {'Grid_1': ['transformer_1']}
+        }
 
     """
+    transformers_changes = _station_overloading(
+        edisgo_obj, critical_stations, voltage_level="lv")
 
-    # get parameters for standard transformer
-    try:
-        standard_transformer = network.equipment_data['lv_trafos'].loc[
-            network.config['grid_expansion_standard_equipment'][
-                'mv_lv_transformer']]
-    except KeyError:
-        print('Standard MV/LV transformer is not in equipment list.')
-
-    transformers_changes = {'added': {}, 'removed': {}}
-    for station in critical_stations.index:
-
-        # list of maximum power of each transformer in the station
-        s_max_per_trafo = [_.type.S_nom for _ in station.transformers]
-
-        # maximum station load from power flow analysis
-        s_station_pfa = critical_stations.s_pfa[station]
-
-        # determine missing transformer power to solve overloading issue
-        case = network.timeseries.timesteps_load_feedin_case.case[
-            critical_stations.time_index[station]]
-        load_factor = network.config['grid_expansion_load_factors'][
-            'lv_{}_transformer'.format(case)]
-        s_trafo_missing = s_station_pfa - (sum(s_max_per_trafo) * load_factor)
-
-        # check if second transformer of the same kind is sufficient
-        # if true install second transformer, otherwise install as many
-        # standard transformers as needed
-        if max(s_max_per_trafo) >= s_trafo_missing:
-            # if station has more than one transformer install a new
-            # transformer of the same kind as the transformer that best
-            # meets the missing power demand
-            duplicated_transformer = min(
-                [_ for _ in station.transformers
-                 if _.type.S_nom > s_trafo_missing],
-                key=lambda j: j.type.S_nom - s_trafo_missing)
-
-            new_transformer = Transformer(
-                id='LVStation_{}_transformer_{}'.format(
-                    str(station.id), str(len(station.transformers) + 1)),
-                geom=duplicated_transformer.geom,
-                mv_grid=duplicated_transformer.mv_grid,
-                grid=duplicated_transformer.grid,
-                voltage_op=duplicated_transformer.voltage_op,
-                type=copy.deepcopy(duplicated_transformer.type))
-
-            # add transformer to station and return value
-            station.add_transformer(new_transformer)
-            transformers_changes['added'][station] = [new_transformer]
-
-        else:
-            # get any transformer to get attributes for new transformer from
-            station_transformer = station.transformers[0]
-
-            # calculate how many parallel standard transformers are needed
-            number_transformers = math.ceil(
-                s_station_pfa / standard_transformer.S_nom)
-
-            # add transformer to station
-            new_transformers = []
-            for i in range(number_transformers):
-                new_transformer = Transformer(
-                    id='LVStation_{}_transformer_{}'.format(
-                        str(station.id), str(i + 1)),
-                    geom=station_transformer.geom,
-                    mv_grid=station_transformer.mv_grid,
-                    grid=station_transformer.grid,
-                    voltage_op=station_transformer.voltage_op,
-                    type=copy.deepcopy(standard_transformer))
-                new_transformers.append(new_transformer)
-            transformers_changes['added'][station] = new_transformers
-            transformers_changes['removed'][station] = station.transformers
-            station.transformers = new_transformers
-    return transformers_changes
-
-
-def extend_distribution_substation_overvoltage(network, critical_stations):
-    """
-    Reinforce MV/LV substations due to voltage issues.
-
-    A parallel standard transformer is installed.
-
-    Parameters
-    ----------
-    network : :class:`~.grid.network.Network`
-    critical_stations : :obj:`dict`
-        Dictionary with :class:`~.grid.grids.LVGrid` as key and a
-        :pandas:`pandas.DataFrame<dataframe>` with its critical station and
-        maximum voltage deviation as value.
-        Index of the dataframe is the :class:`~.grid.components.LVStation`
-        with over-voltage issues. Columns are 'v_mag_pu' containing the
-        maximum voltage deviation as float and 'time_index' containing the
-        corresponding time step the over-voltage occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
-
-    Returns
-    -------
-    Dictionary with lists of added transformers.
-
-    """
-
-    # get parameters for standard transformer
-    try:
-        standard_transformer = network.equipment_data['lv_trafos'].loc[
-            network.config['grid_expansion_standard_equipment'][
-                'mv_lv_transformer']]
-    except KeyError:
-        print('Standard MV/LV transformer is not in equipment list.')
-
-    transformers_changes = {'added': {}}
-    for grid in critical_stations.keys():
-
-        # get any transformer to get attributes for new transformer from
-        station_transformer = grid.station.transformers[0]
-
-        new_transformer = Transformer(
-            id='LVStation_{}_transformer_{}'.format(
-                str(grid.station.id), str(len(grid.station.transformers) + 1)),
-            geom=station_transformer.geom,
-            mv_grid=station_transformer.mv_grid,
-            grid=station_transformer.grid,
-            voltage_op=station_transformer.voltage_op,
-            type=copy.deepcopy(standard_transformer))
-
-        # add standard transformer to station and return value
-        grid.station.add_transformer(new_transformer)
-        transformers_changes['added'][grid.station] = [new_transformer]
-
-    if transformers_changes['added']:
-        logger.debug("==> {} LV station(s) has/have been reinforced ".format(
-            str(len(transformers_changes['added']))) +
-                    "due to overloading issues.")
+    if transformers_changes["added"]:
+        logger.debug(
+            "==> {} LV station(s) has/have been reinforced due to "
+            "overloading issues.".format(
+                str(len(transformers_changes["added"]))))
 
     return transformers_changes
 
 
-def extend_substation_overloading(network, critical_stations):
+def reinforce_hv_mv_station_overloading(edisgo_obj, critical_stations):
     """
     Reinforce HV/MV station due to overloading issues.
 
@@ -186,47 +69,116 @@ def extend_substation_overloading(network, critical_stations):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
-    critical_stations : pandas:`pandas.DataFrame<dataframe>`
-        Dataframe containing over-loaded HV/MV stations, their apparent power
-        at maximal over-loading and the corresponding time step.
-        Index of the dataframe are the over-loaded stations of type
-        :class:`~.grid.components.MVStation`. Columns are 's_pfa'
-        containing the apparent power at maximal over-loading as float and
-        'time_index' containing the corresponding time step the over-loading
-        occured in as :pandas:`pandas.Timestamp<timestamp>`. See
-        :func:`~.flex_opt.check_tech_constraints.hv_mv_station_load` for more
-        information.
+    edisgo_obj : :class:`~.EDisGo`
+    critical_stations : pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing over-loaded HV/MV stations, their missing apparent
+        power at maximal over-loading and the corresponding time step.
+        Index of the dataframe are the representatives of the grids with
+        over-loaded stations. Columns are 's_missing' containing the missing
+        apparent power at maximal over-loading in MVA as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
     Returns
     -------
-    Dictionary with lists of added and removed transformers.
+    dict
+        Dictionary with added and removed transformers in the form::
+
+        {'added': {'Grid_1': ['transformer_reinforced_1',
+                              ...,
+                              'transformer_reinforced_x'],
+                   'Grid_10': ['transformer_reinforced_10']
+                   },
+         'removed': {'Grid_1': ['transformer_1']}
+        }
 
     """
+    transformers_changes = _station_overloading(
+        edisgo_obj, critical_stations, voltage_level="mv")
 
-    # get parameters for standard transformer
-    try:
-        standard_transformer = network.equipment_data['mv_trafos'].loc[
-            network.config['grid_expansion_standard_equipment'][
-                'hv_mv_transformer']]
-    except KeyError:
-        print('Standard HV/MV transformer is not in equipment list.')
+    if transformers_changes["added"]:
+        logger.debug(
+            "==> MV station has been reinforced due to overloading issues."
+        )
 
-    transformers_changes = {'added': {}, 'removed': {}}
-    for station in critical_stations.index:
+    return transformers_changes
 
+
+def _station_overloading(edisgo_obj, critical_stations, voltage_level):
+    """
+    Reinforce stations due to overloading issues.
+
+    In a first step a parallel transformer of the same kind is installed.
+    If this is not sufficient as many standard transformers as needed are
+    installed.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    critical_stations : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing over-loaded MV/LV stations, their missing apparent
+        power at maximal over-loading and the corresponding time step.
+        Index of the dataframe are the representatives of the grids with
+        over-loaded stations. Columns are 's_missing' containing the missing
+        apparent power at maximal over-loading in MVA as float and 'time_index'
+        containing the corresponding time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`.
+    voltage_level : str
+        Voltage level, over-loading is handled for. Possible options are
+        "mv" or "lv".
+
+    Returns
+    -------
+    dict
+        Dictionary with added and removed transformers in the form::
+
+        {'added': {'Grid_1': ['transformer_reinforced_1',
+                              ...,
+                              'transformer_reinforced_x'],
+                   'Grid_10': ['transformer_reinforced_10']
+                   },
+         'removed': {'Grid_1': ['transformer_1']}
+        }
+
+    """
+    if voltage_level == "lv":
+        try:
+            standard_transformer = edisgo_obj.topology.equipment_data[
+                "lv_transformers"
+            ].loc[
+                edisgo_obj.config["grid_expansion_standard_equipment"][
+                    "mv_lv_transformer"
+                ]
+            ]
+        except KeyError:
+            raise KeyError(
+                "Standard MV/LV transformer is not in equipment list.")
+    elif voltage_level == "mv":
+        try:
+            standard_transformer = edisgo_obj.topology.equipment_data[
+                "mv_transformers"
+            ].loc[
+                edisgo_obj.config["grid_expansion_standard_equipment"][
+                    "hv_mv_transformer"
+                ]
+            ]
+        except KeyError:
+            raise KeyError(
+                "Standard HV/MV transformer is not in equipment list.")
+    else:
+        raise ValueError(
+            "{} is not a valid option for input variable 'voltage_level' in "
+            "function _station_overloading. Try 'mv' or "
+            "'lv'.".format(voltage_level)
+        )
+
+    transformers_changes = {"added": {}, "removed": {}}
+    for grid_name in critical_stations.index:
+        grid = edisgo_obj.topology._grids[grid_name]
         # list of maximum power of each transformer in the station
-        s_max_per_trafo = [_.type.S_nom for _ in station.transformers]
-
-        # maximum station load from power flow analysis
-        s_station_pfa = critical_stations.s_pfa[station]
-
-        # determine missing transformer power to solve overloading issue
-        case = network.timeseries.timesteps_load_feedin_case.case[
-            critical_stations.time_index[station]]
-        load_factor = network.config['grid_expansion_load_factors'][
-            'mv_{}_transformer'.format(case)]
-        s_trafo_missing = s_station_pfa - (sum(s_max_per_trafo) * load_factor)
+        s_max_per_trafo = grid.transformers_df.s_nom
+        # missing capacity
+        s_trafo_missing = critical_stations.at[grid_name, "s_missing"]
 
         # check if second transformer of the same kind is sufficient
         # if true install second transformer, otherwise install as many
@@ -235,74 +187,178 @@ def extend_substation_overloading(network, critical_stations):
             # if station has more than one transformer install a new
             # transformer of the same kind as the transformer that best
             # meets the missing power demand
-            duplicated_transformer = min(
-                [_ for _ in station.transformers
-                 if _.type.S_nom > s_trafo_missing],
-                key=lambda j: j.type.S_nom - s_trafo_missing)
+            new_transformers = grid.transformers_df.loc[
+                grid.transformers_df[s_max_per_trafo >= s_trafo_missing][
+                    "s_nom"
+                ].idxmin()
+            ]
+            name = new_transformers.name.split("_")
+            name.insert(-1, "reinforced")
+            name[-1] = len(grid.transformers_df) + 1
+            new_transformers.name = "_".join([str(_) for _ in name])
 
-            new_transformer = Transformer(
-                id='MVStation_{}_transformer_{}'.format(
-                    str(station.id), str(len(station.transformers) + 1)),
-                geom=duplicated_transformer.geom,
-                grid=duplicated_transformer.grid,
-                voltage_op=duplicated_transformer.voltage_op,
-                type=copy.deepcopy(duplicated_transformer.type))
-
-            # add transformer to station and return value
-            station.add_transformer(new_transformer)
-            transformers_changes['added'][station] = [new_transformer]
-
+            # add new transformer to list of added transformers
+            transformers_changes["added"][grid_name] = [
+                new_transformers.name
+            ]
         else:
             # get any transformer to get attributes for new transformer from
-            station_transformer = station.transformers[0]
+            duplicated_transformer = grid.transformers_df.iloc[0]
+            name = duplicated_transformer.name.split("_")
+            name.insert(-1, "reinforced")
+            duplicated_transformer.s_nom = standard_transformer.S_nom
+            duplicated_transformer.type_info = standard_transformer.name
+            if voltage_level == "lv":
+                duplicated_transformer.r_pu = standard_transformer.r_pu
+                duplicated_transformer.x_pu = standard_transformer.x_pu
 
-            # calculate how many parallel standard transformers are needed
+            # set up as many new transformers as needed
             number_transformers = math.ceil(
-                s_station_pfa / standard_transformer.S_nom)
-
-            # add transformer to station
-            new_transformers = []
+                (s_trafo_missing + s_max_per_trafo.sum()) / standard_transformer.S_nom
+            )
+            new_transformers = pd.DataFrame()
             for i in range(number_transformers):
-                new_transformer = Transformer(
-                    id='MVStation_{}_transformer_{}'.format(
-                        str(station.id), str(i + 1)),
-                    geom=station_transformer.geom,
-                    grid=station_transformer.grid,
-                    voltage_op=station_transformer.voltage_op,
-                    type=copy.deepcopy(standard_transformer))
-                new_transformers.append(new_transformer)
-            transformers_changes['added'][station] = new_transformers
-            transformers_changes['removed'][station] = station.transformers
-            station.transformers = new_transformers
+                name[-1] = i + 1
+                duplicated_transformer.name = "_".join([str(_) for _ in name])
+                new_transformers = new_transformers.append(
+                    duplicated_transformer
+                )
 
-    if transformers_changes['added']:
-        logger.debug("==> MV station has been reinforced due to overloading "
-                     "issues.")
+            # add new transformer to list of added transformers
+            transformers_changes["added"][
+                grid_name
+            ] = new_transformers.index.values
+            # add previous transformers to list of removed transformers
+            transformers_changes["removed"][
+                grid_name
+            ] = grid.transformers_df.index.values
+            # remove previous transformers from topology
+            if voltage_level == "lv":
+                edisgo_obj.topology.transformers_df.drop(
+                    grid.transformers_df.index.values, inplace=True
+                )
+            else:
+                edisgo_obj.topology.transformers_hvmv_df.drop(
+                    grid.transformers_df.index.values, inplace=True
+                )
+
+        # add new transformers to topology
+        if voltage_level == "lv":
+            edisgo_obj.topology.transformers_df = (
+                edisgo_obj.topology.transformers_df.append(
+                    new_transformers
+                )
+            )
+        else:
+            edisgo_obj.topology.transformers_hvmv_df = (
+                edisgo_obj.topology.transformers_hvmv_df.append(
+                    new_transformers
+                )
+            )
+    return transformers_changes
+
+
+def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
+    """
+    Reinforce MV/LV substations due to voltage issues.
+
+    A parallel standard transformer is installed.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    critical_stations : :obj:`dict`
+        Dictionary with representative of :class:`~.network.grids.LVGrid` as
+        key and a :pandas:`pandas.DataFrame<DataFrame>` with station's voltage
+        deviation from allowed lower or upper voltage limit as value.
+        Index of the dataframe is the station with voltage issues.
+        Columns are 'v_diff_max' containing the maximum voltage deviation as
+        float and 'time_index' containing the corresponding time step the
+        voltage issue occured in as :pandas:`pandas.Timestamp<Timestamp>`.
+
+    Returns
+    -------
+    :obj:`dict`
+        Dictionary with added transformers in the form::
+
+            {'added': {'Grid_1': ['transformer_reinforced_1',
+                                  ...,
+                                  'transformer_reinforced_x'],
+                       'Grid_10': ['transformer_reinforced_10']
+                       }
+            }
+
+    """
+
+    # get parameters for standard transformer
+    try:
+        standard_transformer = edisgo_obj.topology.equipment_data[
+            "lv_transformers"
+        ].loc[
+            edisgo_obj.config["grid_expansion_standard_equipment"][
+                "mv_lv_transformer"
+            ]
+        ]
+    except KeyError:
+        raise KeyError("Standard MV/LV transformer is not in equipment list.")
+
+    transformers_changes = {"added": {}}
+    for grid_repr in critical_stations.keys():
+        grid = edisgo_obj.topology._grids[grid_repr]
+        # get any transformer to get attributes for new transformer from
+        duplicated_transformer = grid.transformers_df.iloc[0]
+        # change transformer parameters
+        name = duplicated_transformer.name.split("_")
+        name.insert(-1, "reinforced")
+        name[-1] = len(grid.transformers_df) + 1
+        duplicated_transformer.name = "_".join([str(_) for _ in name])
+        duplicated_transformer.s_nom = standard_transformer.S_nom
+        duplicated_transformer.r_pu = standard_transformer.r_pu
+        duplicated_transformer.x_pu = standard_transformer.x_pu
+        duplicated_transformer.type_info = standard_transformer.name
+        # add new transformer to topology
+        edisgo_obj.topology.transformers_df = edisgo_obj.topology.transformers_df.append(
+            duplicated_transformer
+        )
+        transformers_changes["added"][grid_repr] = [
+            duplicated_transformer.name
+        ]
+
+    if transformers_changes["added"]:
+        logger.debug(
+            "==> {} LV station(s) has/have been reinforced due to voltage "
+            "issues.".format(
+                len(transformers_changes["added"])
+            )
+        )
 
     return transformers_changes
 
 
-def reinforce_branches_overvoltage(network, grid, crit_nodes):
+def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
     """
-    Reinforce MV and LV grid due to voltage issues.
+    Reinforce lines in MV and LV topology due to voltage issues.
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
-    grid : :class:`~.grid.grids.MVGrid` or :class:`~.grid.grids.LVGrid`
-    crit_nodes : :pandas:`pandas.DataFrame<dataframe>`
-        Dataframe with critical nodes, sorted descending by voltage deviation.
-        Index of the dataframe are nodes (of type
-        :class:`~.grid.components.Generator`, :class:`~.grid.components.Load`,
-        etc.) with over-voltage issues. Columns are 'v_mag_pu' containing the
-        maximum voltage deviation as float and 'time_index' containing the
-        corresponding time step the over-voltage occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+    edisgo_obj : :class:`~.EDisGo`
+    grid : :class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
+    crit_nodes : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with all nodes with voltage issues in the grid and
+        their maximal deviations from allowed lower or upper voltage limits
+        sorted descending from highest to lowest voltage deviation
+        (it is not distinguished between over- or undervoltage).
+        Columns of the dataframe are 'v_diff_max' containing the maximum
+        absolute voltage deviation as float and 'time_index' containing the
+        corresponding time step the voltage issue occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`. Index of the dataframe are the
+        names of all buses with voltage issues.
 
     Returns
     -------
-    Dictionary with :class:`~.grid.components.Line` and the number of lines
-    added.
+    dict
+        Dictionary with name of lines as keys and the corresponding number of
+        lines added as values.
 
     Notes
     -----
@@ -315,7 +371,7 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
     In LV grids only lines outside buildings are reinforced; loads and
     generators in buildings cannot be directly connected to the MV/LV station.
 
-    In MV grids lines can only be disconnected at LVStations because they
+    In MV grids lines can only be disconnected at LV stations because they
     have switch disconnectors needed to operate the lines as half rings (loads
     in MV would be suitable as well because they have a switch bay (Schaltfeld)
     but loads in dingo are only connected to MV busbar). If there is no
@@ -327,173 +383,180 @@ def reinforce_branches_overvoltage(network, grid, crit_nodes):
 
     # load standard line data
     if isinstance(grid, LVGrid):
-        try:
-            standard_line = network.equipment_data['lv_cables'].loc[
-                network.config['grid_expansion_standard_equipment']['lv_line']]
-        except KeyError:
-            print('Chosen standard LV line is not in equipment list.')
+        standard_line = edisgo_obj.config[
+            "grid_expansion_standard_equipment"]["lv_line"]
+    elif isinstance(grid, MVGrid):
+        standard_line = edisgo_obj.config[
+            "grid_expansion_standard_equipment"]["mv_line"]
     else:
-        try:
-            standard_line = network.equipment_data['mv_cables'].loc[
-                network.config['grid_expansion_standard_equipment']['mv_line']]
-        except KeyError:
-            print('Chosen standard MV line is not in equipment list.')
+        raise ValueError("Inserted grid is invalid.")
 
-    # find first nodes of every main line as representatives
-    rep_main_line = list(
-        nx.predecessor(grid.graph, grid.station, cutoff=1).keys())
-    # list containing all representatives of main lines that have already been
-    # reinforced
-    main_line_reinforced = []
-
-    lines_changes = {}
+    # find path to each node in order to find node with voltage issues farthest
+    # away from station in each feeder
+    station_node = grid.transformers_df.bus1.iloc[0]
+    graph = grid.graph
+    paths = {}
+    nodes_feeder = {}
     for node in crit_nodes.index:
-        path = nx.shortest_path(grid.graph, grid.station, node)
+        path = nx.shortest_path(graph, station_node, node)
+        paths[node] = path
         # raise exception if voltage issue occurs at station's secondary side
         # because voltage issues should have been solved during extension of
         # distribution substations due to overvoltage issues.
         if len(path) == 1:
-            logging.error("Voltage issues at busbar in LV grid {} should have "
-                          "been solved in previous steps.".format(grid))
+            logging.error(
+                "Voltage issues at busbar in LV network {} should have "
+                "been solved in previous steps.".format(grid)
+            )
+        nodes_feeder.setdefault(path[1], []).append(node)
+
+    lines_changes = {}
+    for repr_node in nodes_feeder.keys():
+
+        # find node farthest away
+        get_weight = lambda u, v, data: data["length"]
+        path_length = 0
+        for n in nodes_feeder[repr_node]:
+            path_length_dict_tmp = dijkstra_shortest_path_length(
+                graph, station_node, get_weight, target=n
+            )
+            if path_length_dict_tmp[n] > path_length:
+                node = n
+                path_length = path_length_dict_tmp[n]
+                path_length_dict = path_length_dict_tmp
+        path = paths[node]
+
+        # find first node in path that exceeds 2/3 of the line length
+        # from station to critical node farthest away from the station
+        node_2_3 = next(
+            j
+            for j in path
+            if path_length_dict[j] >= path_length_dict[node] * 2 / 3
+        )
+
+        # if LVGrid: check if node_2_3 is outside of a house
+        # and if not find next BranchTee outside the house
+        if isinstance(grid, LVGrid):
+            while (
+                ~np.isnan(grid.buses_df.loc[node_2_3].in_building)
+                and grid.buses_df.loc[node_2_3].in_building
+            ):
+                node_2_3 = path[path.index(node_2_3) - 1]
+                # break if node is station
+                if node_2_3 is path[0]:
+                    logger.error("Could not reinforce voltage issue.")
+                    break
+
+        # if MVGrid: check if node_2_3 is LV station and if not find
+        # next LV station
         else:
-            # check if representative of line is already in list
-            # main_line_reinforced; if it is, the main line the critical node
-            # is connected to has already been reinforced in this iteration
-            # step
-            if not path[1] in main_line_reinforced:
+            while (
+                node_2_3
+                not in edisgo_obj.topology.transformers_df.bus0.values
+            ):
+                try:
+                    # try to find LVStation behind node_2_3
+                    node_2_3 = path[path.index(node_2_3) + 1]
+                except IndexError:
+                    # if no LVStation between node_2_3 and node with
+                    # voltage problem, connect node directly to
+                    # MVStation
+                    node_2_3 = node
+                    break
 
-                main_line_reinforced.append(path[1])
-                # get path length from station to critical node
-                get_weight = lambda u, v, data: data['line'].length
-                path_length = dijkstra_shortest_path_length(
-                    grid.graph, grid.station, get_weight, target=node)
-                # find first node in path that exceeds 2/3 of the line length
-                # from station to critical node farthest away from the station
-                node_2_3 = next(j for j in path if
-                                path_length[j] >= path_length[node] * 2 / 3)
+        # if node_2_3 is a representative (meaning it is already
+        # directly connected to the station), line cannot be
+        # disconnected and must therefore be reinforced
+        if node_2_3 in nodes_feeder.keys():
+            crit_line_name = graph.get_edge_data(
+                station_node, node_2_3
+            )["branch_name"]
+            crit_line = grid.lines_df.loc[crit_line_name]
 
-                # if LVGrid: check if node_2_3 is outside of a house
-                # and if not find next BranchTee outside the house
-                if isinstance(grid, LVGrid):
-                    if isinstance(node_2_3, BranchTee):
-                        if node_2_3.in_building:
-                            # ToDo more generic (new function)
-                            try:
-                                node_2_3 = path[path.index(node_2_3) - 1]
-                            except IndexError:
-                                print('BranchTee outside of building is not ' +
-                                      'in path.')
-                    elif (isinstance(node_2_3, Generator) or
-                              isinstance(node_2_3, Load)):
-                        pred_node = path[path.index(node_2_3) - 1]
-                        if isinstance(pred_node, BranchTee):
-                            if pred_node.in_building:
-                                # ToDo more generic (new function)
-                                try:
-                                    node_2_3 = path[path.index(node_2_3) - 2]
-                                except IndexError:
-                                    print('BranchTee outside of building is ' +
-                                          'not in path.')
-                    else:
-                        logging.error("Not implemented for {}.".format(
-                            str(type(node_2_3))))
-                # if MVGrid: check if node_2_3 is LV station and if not find
-                # next LV station
-                else:
-                    if not isinstance(node_2_3, LVStation):
-                        next_index = path.index(node_2_3) + 1
-                        try:
-                            # try to find LVStation behind node_2_3
-                            while not isinstance(node_2_3, LVStation):
-                                node_2_3 = path[next_index]
-                                next_index += 1
-                        except IndexError:
-                            # if no LVStation between node_2_3 and node with
-                            # voltage problem, connect node directly to
-                            # MVStation
-                            node_2_3 = node
+            # if critical line is already a standard line install one
+            # more parallel line
+            if crit_line.type_info == standard_line:
+                edisgo_obj.topology.update_number_of_parallel_lines(
+                    pd.Series(index=[crit_line_name],
+                              data=[edisgo_obj.topology._lines_df.at[
+                                        crit_line_name, "num_parallel"] + 1]
+                              )
+                )
+                lines_changes[crit_line_name] = 1
 
-                # if node_2_3 is a representative (meaning it is already
-                # directly connected to the station), line cannot be
-                # disconnected and must therefore be reinforced
-                if node_2_3 in rep_main_line:
-                    crit_line = grid.graph.get_edge_data(
-                        grid.station, node_2_3)['line']
-
-                    # if critical line is already a standard line install one
-                    # more parallel line
-                    if crit_line.type.name == standard_line.name:
-                        crit_line.quantity += 1
-                        lines_changes[crit_line] = 1
-
-                    # if critical line is not yet a standard line replace old
-                    # line by a standard line
-                    else:
-                        # number of parallel standard lines could be calculated
-                        # following [2] p.103; for now number of parallel
-                        # standard lines is iterated
-                        crit_line.type = standard_line.copy()
-                        crit_line.quantity = 1
-                        crit_line.kind = 'cable'
-                        lines_changes[crit_line] = 1
-
-                # if node_2_3 is not a representative, disconnect line
-                else:
-                    # get line between node_2_3 and predecessor node (that is
-                    # closer to the station)
-                    pred_node = path[path.index(node_2_3) - 1]
-                    crit_line = grid.graph.get_edge_data(
-                        node_2_3, pred_node)['line']
-                    # add new edge between node_2_3 and station
-                    new_line_data = {'line': crit_line,
-                                     'type': 'line'}
-                    grid.graph.add_edge(grid.station,node_2_3, **new_line_data)
-                    # remove old edge
-                    grid.graph.remove_edge(pred_node, node_2_3)
-                    # change line length and type
-                    crit_line.length = path_length[node_2_3]
-                    crit_line.type = standard_line.copy()
-                    crit_line.kind = 'cable'
-                    crit_line.quantity = 1
-                    lines_changes[crit_line] = 1
-                    # add node_2_3 to representatives list to not further
-                    # reinforce this part off the grid in this iteration step
-                    rep_main_line.append(node_2_3)
-                    main_line_reinforced.append(node_2_3)
-
+            # if critical line is not yet a standard line replace old
+            # line by a standard line
             else:
-                logger.debug(
-                    '==> Main line of node {} in grid {} '.format(
-                        repr(node), str(grid)) +
-                    'has already been reinforced.')
+                # number of parallel standard lines could be calculated
+                # following [2] p.103; for now number of parallel
+                # standard lines is iterated
+                edisgo_obj.topology.change_line_type([crit_line_name],
+                                                     standard_line)
+                lines_changes[crit_line_name] = 1
 
-    if main_line_reinforced:
-        logger.debug('==> {} branche(s) was/were reinforced '.format(
-            str(len(lines_changes))) + 'due to over-voltage issues.')
+        # if node_2_3 is not a representative, disconnect line
+        else:
+            # get line between node_2_3 and predecessor node (that is
+            # closer to the station)
+            pred_node = path[path.index(node_2_3) - 1]
+            crit_line_name = graph.get_edge_data(node_2_3, pred_node)[
+                "branch_name"
+            ]
+            if grid.lines_df.at[crit_line_name, "bus0"] == pred_node:
+                edisgo_obj.topology._lines_df.at[
+                    crit_line_name, "bus0"
+                ] = station_node
+            elif grid.lines_df.at[crit_line_name, "bus1"] == pred_node:
+                edisgo_obj.topology._lines_df.at[
+                    crit_line_name, "bus1"
+                ] = station_node
+            else:
+                raise ValueError(
+                    "Bus not in line buses. " "Please check."
+                )
+            # change line length and type
+            edisgo_obj.topology._lines_df.at[
+                crit_line_name, "length"
+            ] = path_length_dict[node_2_3]
+            edisgo_obj.topology.change_line_type(
+                [crit_line_name],
+                standard_line)
+            lines_changes[crit_line_name] = 1
+
+    if not lines_changes:
+        logger.debug(
+            "==> {} line(s) was/were reinforced due to voltage "
+            "issues.".format(
+                len(lines_changes)
+            )
+        )
 
     return lines_changes
 
 
-def reinforce_branches_overloading(network, crit_lines):
+def reinforce_lines_overloading(edisgo_obj, crit_lines):
     """
-    Reinforce MV or LV grid due to overloading.
+    Reinforce lines in MV and LV topology due to overloading.
     
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
-    crit_lines : :pandas:`pandas.DataFrame<dataframe>`
+    edisgo_obj : :class:`~.EDisGo`
+    crit_lines : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded lines, their maximum relative
-        over-loading and the corresponding time step.
-        Index of the dataframe are the over-loaded lines of type
-        :class:`~.grid.components.Line`. Columns are 'max_rel_overload'
-        containing the maximum relative over-loading as float and 'time_index'
-        containing the corresponding time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<timestamp>`.
+        over-loading (maximum calculated current over allowed current) and the
+        corresponding time step.
+        Index of the dataframe are the names of the over-loaded lines.
+        Columns are 'max_rel_overload' containing the maximum relative
+        over-loading as float, 'time_index' containing the corresponding
+        time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
+        the voltage level the line is in (either 'mv' or 'lv').
 
     Returns
     -------
-    Dictionary with :class:`~.grid.components.Line` and the number of Lines
-    added.
+    dict
+        Dictionary with name of lines as keys and the corresponding number of
+        lines added as values.
         
     Notes
     -----
@@ -507,51 +570,179 @@ def reinforce_branches_overloading(network, crit_lines):
 
     """
 
-    # load standard line data
-    try:
-        standard_line_lv = network.equipment_data['lv_cables'].loc[
-            network.config['grid_expansion_standard_equipment']['lv_line']]
-    except KeyError:
-        print('Chosen standard LV line is not in equipment list.')
-    try:
-        standard_line_mv = network.equipment_data['mv_cables'].loc[
-            network.config['grid_expansion_standard_equipment']['mv_line']]
-    except KeyError:
-        print('Chosen standard MV line is not in equipment list.')
-
     lines_changes = {}
-    for crit_line in crit_lines.index:
-        rel_overload = crit_lines.max_rel_overload[crit_line]
-        # check if line is in LV or MV and set standard line accordingly
-        if isinstance(crit_line.grid, LVGrid):
-            standard_line = standard_line_lv
-        else:
-            standard_line = standard_line_mv
-
-        if crit_line.type.name == standard_line.name:
-            # check how many parallel standard lines are needed
-            number_parallel_lines = math.ceil(
-                rel_overload * crit_line.quantity)
-            lines_changes[crit_line] = (number_parallel_lines -
-                                        crit_line.quantity)
-            crit_line.quantity = number_parallel_lines
-        else:
-            # check if parallel line of the same kind is sufficient
-            if (crit_line.quantity == 1 and rel_overload <= 2
-                    and crit_line.kind == 'cable'):
-                crit_line.quantity = 2
-                lines_changes[crit_line] = 1
-            else:
-                number_parallel_lines = math.ceil(
-                    crit_line.type['I_max_th'] * rel_overload /
-                    standard_line['I_max_th'])
-                lines_changes[crit_line] = number_parallel_lines
-                crit_line.type = standard_line.copy()
-                crit_line.quantity = number_parallel_lines
-                crit_line.kind = 'cable'
+    # reinforce mv lines
+    lines_changes.update(_reinforce_lines_overloading_per_grid_level(
+        edisgo_obj, "mv", crit_lines
+    ))
+    # reinforce lv lines
+    lines_changes.update(_reinforce_lines_overloading_per_grid_level(
+        edisgo_obj, "lv", crit_lines
+    ))
 
     if not crit_lines.empty:
-        logger.debug('==> {} branche(s) was/were reinforced '.format(
-            crit_lines.shape[0]) + 'due to over-loading issues.')
+        logger.debug(
+            "==> {} line(s) was/were reinforced due to over-loading "
+            "issues.".format(
+                crit_lines.shape[0]
+            )
+        )
+
+    return lines_changes
+
+
+def _reinforce_lines_overloading_per_grid_level(
+    edisgo_obj, voltage_level, crit_lines
+):
+    """
+    Reinforce lines in MV or LV topology due to overloading.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    voltage_level : str
+        Voltage level, over-loading is handled for. Possible options are
+        "mv" or "lv".
+    crit_lines : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing over-loaded lines, their maximum relative
+        over-loading (maximum calculated current over allowed current) and the
+        corresponding time step.
+        Index of the dataframe are the names of the over-loaded lines.
+        Columns are 'max_rel_overload' containing the maximum relative
+        over-loading as float, 'time_index' containing the corresponding
+        time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
+        the voltage level the line is in (either 'mv' or 'lv').
+
+    Returns
+    -------
+    dict
+        Dictionary with name of lines as keys and the corresponding number of
+        lines added as values.
+
+    """
+    def _add_parallel_standard_lines(lines):
+        """
+        Adds as many parallel standard lines as needed so solve overloading.
+
+        Adds number of added lines to `lines_changes` dictionary.
+
+        Parameters
+        ----------
+        lines : list(str)
+            List of line names to add parallel standard lines for.
+
+        """
+        # calculate necessary number of parallel lines
+        number_parallel_lines = np.ceil(
+            crit_lines.max_rel_overload[lines] *
+            edisgo_obj.topology.lines_df.loc[lines, "num_parallel"]
+        )
+
+        # add number of added lines to lines_changes
+        number_parallel_lines_pre = edisgo_obj.topology.lines_df.loc[
+            lines, "num_parallel"
+        ]
+        lines_changes.update(
+            (number_parallel_lines - number_parallel_lines_pre).to_dict()
+        )
+
+        # update number of parallel lines and line accordingly attributes
+        edisgo_obj.topology.update_number_of_parallel_lines(
+            number_parallel_lines)
+
+    def _add_one_parallel_line_of_same_type(lines):
+        """
+        Adds one parallel line of same type.
+
+        Adds number of added lines to `lines_changes` dictionary.
+
+        Parameters
+        ----------
+        lines : list(str)
+            List of line names to add parallel line of same type for.
+
+        """
+        # add number of added lines to lines_changes
+        lines_changes.update(
+            pd.Series(index=lines,
+                      data=[1] * len(lines)).to_dict()
+        )
+
+        # update number of lines and accordingly line attributes
+        edisgo_obj.topology.update_number_of_parallel_lines(
+            pd.Series(index=lines,
+                      data=[2] * len(lines)))
+
+    def _replace_by_parallel_standard_lines(lines):
+        """
+        Replaces existing line with as many parallel standard lines as needed.
+
+        Adds number of added lines to `lines_changes` dictionary.
+
+        Parameters
+        ----------
+        lines : list(str)
+            List of line names to replace by parallel standard lines.
+
+        """
+        # save old nominal power to calculate number of parallel standard lines
+        s_nom_old = edisgo_obj.topology.lines_df.loc[lines, "s_nom"]
+
+        # change line type to standard line
+        edisgo_obj.topology.change_line_type(
+            lines,
+            standard_line_type)
+
+        # calculate and update number of parallel lines
+        number_parallel_lines = np.ceil(
+            s_nom_old * crit_lines.loc[lines, "max_rel_overload"]
+            / edisgo_obj.topology.lines_df.loc[lines, "s_nom"]
+        )
+        edisgo_obj.topology.update_number_of_parallel_lines(
+            number_parallel_lines)
+
+        lines_changes.update(number_parallel_lines.to_dict())
+
+    standard_line_type = \
+        edisgo_obj.config["grid_expansion_standard_equipment"][
+            "{}_line".format(voltage_level)
+        ]
+
+    lines_changes = {}
+
+    # chose lines of right grid level
+    relevant_lines = edisgo_obj.topology.lines_df.loc[
+        crit_lines[crit_lines.voltage_level == voltage_level].index
+    ]
+
+    # handling of standard lines
+    lines_standard = relevant_lines.loc[
+        relevant_lines.type_info == standard_line_type
+        ]
+    if not lines_standard.empty:
+        _add_parallel_standard_lines(lines_standard.index)
+
+    # get lines that have not been updated yet (i.e. that are not standard
+    # lines)
+    relevant_lines = relevant_lines.loc[
+        ~relevant_lines.index.isin(lines_standard.index)
+    ]
+    # handling of cables where adding one cable is sufficient
+    lines_single = (
+        relevant_lines.loc[relevant_lines.num_parallel == 1]
+            .loc[relevant_lines.kind == "cable"]
+            .loc[crit_lines.max_rel_overload < 2]
+    )
+    if not lines_single.empty:
+        _add_one_parallel_line_of_same_type(lines_single.index)
+
+    # handle rest of lines (replace by as many parallel standard lines as
+    # needed)
+    relevant_lines = relevant_lines.loc[
+        ~relevant_lines.index.isin(lines_single.index)
+    ]
+    if not relevant_lines.empty:
+        _replace_by_parallel_standard_lines(relevant_lines.index)
 
     return lines_changes
