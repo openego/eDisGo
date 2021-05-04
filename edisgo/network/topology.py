@@ -42,8 +42,9 @@ COLUMNS = {
     ],
     "buses_df": ["v_nom", "x", "y", "mv_grid_id", "lv_grid_id", "in_building"],
     "switches_df": ["bus_open", "bus_closed", "branch", "type_info"],
-    "lv_grids_df": ["peak_generation_capacity", "peak_load",
-                    "substation_capacity", "generators_weight", "loads_weight"],
+    "lv_grids_df": ["peak_generation_capacity", "peak_load", "installed_charging_point_capacity",
+                    "substation_capacity", "generators_weight", "loads_weight",
+                    "installed_charging_point_weight"],
 }
 
 
@@ -652,6 +653,8 @@ class Topology:
 
         lv_grids_df.peak_load = [_.peak_load for _ in lv_grids]
 
+        lv_grids_df.installed_charging_point_capacity = [_.charging_points_df.p_nom.sum() for _ in lv_grids]
+
         lv_grids_df.substation_capacity = [_.transformers_df.s_nom.sum() for _ in lv_grids]
 
         min_max_scaler = preprocessing.MinMaxScaler()
@@ -662,11 +665,17 @@ class Topology:
         lv_grids_df.generators_weight = min_max_scaler.fit_transform(
             lv_grids_df.generators_weight.values.reshape(-1, 1))
 
-        lv_grids_df.loads_weight = 1 / lv_grids_df.peak_load.divide(
+        lv_grids_df.loads_weight = lv_grids_df.peak_load.divide(
             lv_grids_df.substation_capacity)
 
-        lv_grids_df.loads_weight = min_max_scaler.fit_transform(
+        lv_grids_df.loads_weight = 1 - min_max_scaler.fit_transform(
             lv_grids_df.loads_weight.values.reshape(-1, 1))
+
+        lv_grids_df.installed_charging_point_weight = lv_grids_df.installed_charging_point_capacity.divide(
+            lv_grids_df.substation_capacity)
+
+        lv_grids_df.installed_charging_point_weight = 1 - min_max_scaler.fit_transform(
+            lv_grids_df.installed_charging_point_weight.values.reshape(-1, 1))
 
         return lv_grids_df
 

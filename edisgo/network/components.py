@@ -1155,7 +1155,7 @@ class Switch(BasicComponent):
 #     def quantity(self, new_quantity):
 #         self._quantity = new_quantity
 
-class ChargingParkGridConnection:
+class PotentialChargingParkGridConnection:
 
     def __init__(self, **kwargs):
         self._id = kwargs.get("id", None)
@@ -1202,6 +1202,11 @@ class ChargingParkGridConnection:
         return self._edisgo_obj.electromobility.grid_connections_gdf.at[self._id, "use_case"]
 
     @property
+    def designated_charging_point_capacity(self):
+        # TODO
+        return 0
+
+    @property
     def user_centric_weight(self):
         return self._edisgo_obj.electromobility.grid_connections_gdf.at[self._id, "user_centric_weight"]
 
@@ -1243,5 +1248,9 @@ class ChargingParkGridConnection:
         loads_weight_value = self._topology.lv_grids_df.at[
             self.nearest_substation["lv_grid_id"], "loads_weight"]
 
-        return generators_weight_value * generators_weight_factor + loads_weight_value * loads_weight_factor
+        distance_weight_value = self._edisgo_obj.electromobility.potential_charging_points_df.at[
+            self._id, "distance_weight"]
+
+        return (distance_weight_value * distance_weight_factor + generators_weight_value * generators_weight_factor
+                + loads_weight_value * loads_weight_factor)
 

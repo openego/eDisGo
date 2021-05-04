@@ -1,7 +1,9 @@
 import logging
 import pandas as pd
 
-from edisgo.network.components import ChargingParkGridConnection
+from sklearn import preprocessing
+
+from edisgo.network.components import PotentialChargingParkGridConnection
 
 logger = logging.getLogger("edisgo")
 
@@ -11,7 +13,9 @@ COLUMNS = {
         "charge_end", "grid_connection_point_id", "charging_point_id"
     ],
     "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
-    "simbev_config_df": ["value"]
+    "simbev_config_df": ["value"],
+    "potential_charging_points_df": ["lv_grid_id", "distance_to_nearest_substation", "distance_weight",
+                                     "charging_point_capacity", "charging_point_weight"]
 }
 
 
@@ -43,11 +47,43 @@ class Electromobility:
         self._grid_connections_gdf = df
 
     @property
-    def charging_park_grid_connections(self):
-        return {use_case: {cp_id: ChargingParkGridConnection(id=cp_id, edisgo_obj=self._edisgo_obj)
-                for cp_id in self.grid_connections_gdf.loc[
-                    self.grid_connections_gdf.use_case == use_case
-                    ].index} for use_case in self.grid_connections_gdf.use_case.sort_values().unique()}
+    def potential_charging_points_df(self):
+        try:
+            potential_charging_points_df = pd.DataFrame(columns=COLUMNS["potential_charging_points_df"])
+
+            potential_charging_points = list(self.potential_charging_points)
+
+            potential_charging_points_df.lv_grid_id = [
+                _.nearest_substation["lv_grid_id"]
+                for _ in potential_charging_points
+            ]
+
+            potential_charging_points_df.distance_to_nearest_substation = [
+                _.nearest_substation["distance"]
+                for _ in potential_charging_points
+            ]
+
+            min_max_scaler = preprocessing.MinMaxScaler()
+
+            potential_charging_points_df.distance_weight = 1 - min_max_scaler.fit_transform(
+                potential_charging_points_df.distance_to_nearest_substation.values.reshape(-1, 1))
+
+            potential_charging_points_df.charging_point_capacity = [
+                _.designated_charging_point_capacity
+                for _ in potential_charging_points
+            ]
+
+            potential_charging_points_df.charging_point_weight = 1 - min_max_scaler.fit_transform(
+                potential_charging_points_df.charging_point_capacity.values.reshape(-1, 1))
+
+            return potential_charging_points_df
+        except:
+            return pd.DataFrame(columns=COLUMNS["potential_charging_points_df"])
+
+    @property
+    def potential_charging_points(self):
+        for cp_id in self.grid_connections_gdf.index:
+            yield PotentialChargingParkGridConnection(id=cp_id, edisgo_obj=self._edisgo_obj)
 
     @property
     def simbev_config_df(self):
