@@ -28,7 +28,7 @@ jobs:
       run: |
         pip3 install -e $GITHUB_WORKSPACE[full]
         pip3 install --upgrade coveralls
-        #coverage run -m pytest
+        coverage run -m pytest
         coveralls
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
