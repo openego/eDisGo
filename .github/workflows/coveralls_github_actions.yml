@@ -25,6 +25,14 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: 3.6
+    - name: Add conda to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH
+    - name: Activate conda env
+      run: |
+          conda create --name edisgo_env python=3.6
+          conda activate edisgo_env
     - name: Install dependencies
       run: |
         pip3 install -e $GITHUB_WORKSPACE[full]
