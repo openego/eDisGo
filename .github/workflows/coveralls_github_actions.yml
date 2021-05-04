@@ -29,9 +29,11 @@ jobs:
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
-    - name: Activate conda env
+    - name: Create conda env
       run: |
           conda create --name edisgo_env python=3.6
+    - name: Activate conda env
+      run: |
           conda activate edisgo_env
     - name: Install dependencies
       run: |
