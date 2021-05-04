@@ -19,7 +19,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
       with:
-        ref: features/emob_integration
+        ref: fix/#172_AtributeError
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
@@ -27,7 +27,7 @@ jobs:
     - name: Testing
       run: |
         pip3 install -e $GITHUB_WORKSPACE[full]
-        pip3 install coveralls
+        pip3 install --upgrade coveralls
         coveralls
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
