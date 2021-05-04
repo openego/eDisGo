@@ -19,8 +19,8 @@ jobs:
     steps:
     - name: Checkout repo
       uses: actions/checkout@v2
-      with:
-        ref: fix/#172_AtributeError
+      #with:
+      #  ref: fix/#172_AtributeError
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
