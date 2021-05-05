@@ -34,7 +34,7 @@ jobs:
     - name: Run coverage
       run: |  
         coverage run --source=edisgo -m pytest -vv
-      continue-on-error: true
+    Coveralls:
     - name: Run coveralls
       run: |
         coveralls
