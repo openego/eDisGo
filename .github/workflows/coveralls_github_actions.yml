@@ -1,4 +1,4 @@
-name: coveralls_github_actions
+name: Tests with pytest
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
   
 jobs:
-  Coveralls:
+  Tests:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repo
@@ -28,13 +28,13 @@ jobs:
     - name: Install dependencies
       run: |
         pip3 install -e $GITHUB_WORKSPACE[full]
-        pip3 install --upgrade coveralls
+        pip3 install coveralls
         pip3 install sqlalchemy==1.3.24
-        pip3 install pytest-cov
+        pip3 install pytest
     - name: Run coverage
       run: |  
-        #coverage run -m pytest
-        pytest --cov=tests tests/
+        coverage run --source=edisgo -m pytest -vv
+      continue-on-error: true
     - name: Run coveralls
       run: |
         coveralls
