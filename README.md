@@ -3,7 +3,8 @@
 Overview
 ========
 
-[![Coverage Status](https://coveralls.io/repos/github/openego/eDisGo/badge.svg?branch=features/emob_integration)](https://coveralls.io/github/openego/eDisGo?branch=features/emob_integration)
+[![Coverage Status](https://coveralls.io/repos/github/openego/eDisGo/badge.svg?branch=features/coveralls)](https://coveralls.io/github/openego/eDisGo?branch=features/coveralls)
+[![Tests](https://github.com/openego/eDisGo/actions/workflows/coveralls_github_actions.yml/badge.svg?branch=features%2Fcoveralls)](https://github.com/openego/eDisGo/actions/workflows/coveralls_github_actions.yml)
 
 # eDisGo
 The python package eDisGo serves as a toolbox to evaluate flexibility measures
