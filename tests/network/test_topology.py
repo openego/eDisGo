@@ -67,7 +67,9 @@ class TestTopology:
         assert "Line_10020" in connected_lines.index
         assert "Line_10021" in connected_lines.index
         # test if the selected Bus is connected to the found lines
-        assert "Bus_BranchTee_MVGrid_1_8" in connected_lines["bus0"].values
+        assert "Bus_BranchTee_MVGrid_1_8" in connected_lines.loc["Line_10019"].values.tolist()
+        assert "Bus_BranchTee_MVGrid_1_8" in connected_lines.loc["Line_10020"].values.tolist()
+        assert "Bus_BranchTee_MVGrid_1_8" in connected_lines.loc["Line_10021"].values.tolist()
 
     def test_get_connected_components_from_bus(self):
         """Test get_connected_components_from_bus method."""
@@ -79,12 +81,26 @@ class TestTopology:
         assert "Load_residential_LVGrid_3_3" in components["loads"].index
         assert "Line_30000010" in components["lines"].index
 
+        assert components["generators"].empty
+        assert components["charging_points"].empty
+        assert components["storage_units"].empty
+        assert components["transformers"].empty
+        assert components["transformers_hvmv"].empty
+        assert components["switches"].empty
+
         # test if generators and lines are found at the bus
         components = self.topology.get_connected_components_from_bus(
             "Bus_GeneratorFluctuating_9"
         )
         assert "GeneratorFluctuating_9" in components["generators"].index
         assert "Line_10000002" in components["lines"].index
+
+        assert components["loads"].empty
+        assert components["charging_points"].empty
+        assert components["storage_units"].empty
+        assert components["transformers"].empty
+        assert components["transformers_hvmv"].empty
+        assert components["switches"].empty
 
         # test if lines, storages and hvmv transformer are found at the bus
         components = self.topology.get_connected_components_from_bus(
@@ -99,7 +115,11 @@ class TestTopology:
         assert "Line_10006" in components["lines"].index
         assert "MVStation_1_transformer_1" in components["transformers_hvmv"].index
 
-
+        assert components["generators"].empty
+        assert components["loads"].empty
+        assert components["charging_points"].empty
+        assert components["transformers"].empty
+        assert components["switches"].empty
 
         # test if lines, transformers and switches are found at the bus for a closed switch
         switch = Switch(id="circuit_breaker_1", topology=self.topology)
@@ -115,6 +135,12 @@ class TestTopology:
         assert "LVStation_4_transformer_2" in components["transformers"].index
         assert "circuit_breaker_1" in components["switches"].index
 
+        assert components["generators"].empty
+        assert components["loads"].empty
+        assert components["charging_points"].empty
+        assert components["storage_units"].empty
+        assert components["transformers_hvmv"].empty
+
         # test if lines, transformers and switches are found at the bus for an open switch
         switch.open()
         components = self.topology.get_connected_components_from_bus(
@@ -125,6 +151,12 @@ class TestTopology:
         assert "LVStation_4_transformer_1" in components["transformers"].index
         assert "LVStation_4_transformer_2" in components["transformers"].index
         assert "circuit_breaker_1" in components["switches"].index
+
+        assert components["generators"].empty
+        assert components["loads"].empty
+        assert components["charging_points"].empty
+        assert components["storage_units"].empty
+        assert components["transformers_hvmv"].empty
 
         # findet bei ungeändert code den  switch
         # test if switches are found at the bus
