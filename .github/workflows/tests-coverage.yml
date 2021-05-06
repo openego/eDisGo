@@ -1,20 +1,11 @@
-name: Tests
+# Tests with pytest the package and monitors the covarage and sends it to coveralls.io
+# Coverage is only send to coveralls.io when no pytest tests fail
+name: "Tests & coverage"
 
-on:
-  push:
-    branches: 
-    - dev
-    - features/*
-    - master
-  pull_request:
-    branches:
-    - dev
-    - features/*
-    - master
-  workflow_dispatch:
+on: [push]
   
 jobs:
-  Tests:
+  build:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repo
@@ -27,12 +18,10 @@ jobs:
       run: |
         pip3 install -e $GITHUB_WORKSPACE[full]
         pip3 install coveralls
-        pip3 install sqlalchemy==1.3.24
-        pip3 install pytest
     - name: Run coverage
       run: |  
         coverage run --source=edisgo -m pytest -vv
-      continue-on-error: true
+      #continue-on-error: true
     - name: Run coveralls
       run: |
         coveralls
