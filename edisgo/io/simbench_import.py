@@ -1,6 +1,4 @@
 import pandas as pd
-import pathlib as pl
-import pickle
 import copy
 from edisgo import EDisGo
 from edisgo.network.grids import MVGrid, LVGrid
@@ -220,16 +218,12 @@ def create_transformer_dfs(simbench_dict):
     sb_trans_df['type_info'] = sb_trans_df['type']
     sb_trans_df = sb_trans_df[trans_col_location]
 
-    #Todo: first line is not used
-    # transformers_hvmv_df = sb_trans_df[sb_trans_df['bus0'].str.contains('HV')]
+
     transformers_hvmv_df = sb_trans_df[sb_trans_df['bus1'].str.contains('MV')]
     transformers_hvmv_df = transformers_hvmv_df.set_index('name')
 
-    # hvmv_bus_row = transformers_hvmv_df['bus1'][0]
     transformers_hvmv_df = transformers_hvmv_df.reset_index()
 
-    # Todo: first line is not used
-    # transformers_df = sb_trans_df[sb_trans_df['bus0'].str.contains('MV')]
     transformers_df = sb_trans_df[sb_trans_df['bus1'].str.contains('LV')]
 
     trans_df_dict = {
@@ -392,14 +386,15 @@ def create_loads_df(simbench_dict):
     sectors = loads_df.sector.unique()
     sectoral_loads_data = pd.DataFrame(index=sectors, columns=[
         'rated_annual_consumption', 'rated_s_max'])
+    # Todo: check with birgit if we use s or p
     for sector in sectors:
         loads_profile[sector] = \
             np.sqrt(np.square(loads_profile[ sector + '_pload'])+
                     np.square(loads_profile[sector + '_qload']))
         sectoral_loads_data.loc[sector, 'rated_annual_consumption'] = \
-            loads_profile[sector].sum()
+            loads_profile[sector].sum()/1e3
         sectoral_loads_data.loc[sector, 'rated_s_max'] = \
-            loads_profile[sector].max()
+            loads_profile[sector].max()/1e3
     loads_df['peak_load'] = \
         loads_df['sR'] * sectoral_loads_data.loc[loads_df.sector,
                                                  'rated_s_max'].values
@@ -617,7 +612,10 @@ def import_sb_timeseries(edisgo_obj_ext, sb_dict, **kwargs):
     gens = edisgo_obj.topology.generators_df
     generator_types = gens.type.unique()
     generator_profiles = sb_dict['RESProfile'].set_index('time')[generator_types]
-    generation_active_power = generator_profiles.resample(time_accuracy).mean().loc[timeindex]
+    generator_profiles = generator_profiles.resample(time_accuracy).mean().loc[timeindex]
+    generation_active_power = pd.DataFrame(index=timeindex, columns=gens.index)
+    generation_active_power.loc[timeindex, gens.index] = \
+        gens.p_nom.values * generator_profiles[gens.type].values
     if not gens.q_nom.unique() == [0]:
         raise Exception("Reactive power of generators different from 0. "
                         "This is not accounted for in import function. "
@@ -627,26 +625,29 @@ def import_sb_timeseries(edisgo_obj_ext, sb_dict, **kwargs):
     print('Generator timeseries imported.')
     loads = edisgo_obj.topology.loads_df
     load_types = loads.sector.unique()
-    rename_dict_active_power = {load_type+'_pload':load_type
-                                for load_type in load_types}
-    rename_dict_reactive_power = {load_type + '_qload': load_type
-                                  for load_type in load_types}
-    load_profiles = sb_dict['LoadProfile'].set_index('time')[load_types+'_pload'].\
-        rename(columns=rename_dict_active_power)
-    load_active_power = load_profiles.resample(time_accuracy).mean().loc[
+    load_profiles = sb_dict['LoadProfile'].set_index('time')[
+        load_types + '_pload']
+    load_profiles = load_profiles.resample(time_accuracy).mean().loc[
         timeindex]
-    load_profiles = sb_dict['LoadProfile'].set_index('time')[load_types + '_qload'].\
-        rename(columns=rename_dict_reactive_power)
-    load_reactive_power = load_profiles.resample(time_accuracy).mean().loc[
+    load_active_power = pd.DataFrame(index=timeindex, columns=loads.index)
+    load_active_power.loc[timeindex, loads.index] = \
+        loads.pLoad.values * load_profiles[loads.sector + '_pload'].values
+    load_profiles = sb_dict['LoadProfile'].set_index('time')[
+        load_types + '_qload']
+    load_profiles = load_profiles.resample(time_accuracy).mean().loc[
         timeindex]
+    load_reactive_power = pd.DataFrame(index=timeindex, columns=loads.index)
+    load_reactive_power.loc[timeindex, loads.index] = \
+        loads.qLoad.values * load_profiles[loads.sector + '_qload'].values
     print('Load timeseries imported.')
     get_component_timeseries(
+        mode='manual',
         edisgo_obj=edisgo_obj,
         timeindex=timeindex,
-        timeseries_generation_dispatchable=generation_active_power,
-        timeseries_generation_reactive_power=generation_reactive_power,
-        timeseries_load=load_active_power,
-        timeseries_load_reactive_power=load_reactive_power
+        generators_active_power=generation_active_power,
+        generators_reactive_power=generation_reactive_power,
+        loads_active_power=load_active_power,
+        loads_reactive_power=load_reactive_power
     )
     print('Loaded timeseries into edisgo_obj')
     return edisgo_obj
