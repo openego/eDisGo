@@ -1,5 +1,5 @@
 from pyproj import Transformer
-from geopy.distance import vincenty
+from geopy.distance import geodesic
 
 import os
 
@@ -158,7 +158,7 @@ def calc_geo_dist_vincenty(grid_topology, bus_source, bus_target,
     # notice: vincenty takes (lat,lon)
     branch_length = (
         branch_detour_factor
-        * vincenty(
+        * geodesic(
             (bus_source.y, bus_source.x), (bus_target.y, bus_target.x)
         ).m
     )
@@ -200,7 +200,7 @@ def find_nearest_bus(point, bus_target):
     """
 
     bus_target["dist"] = [
-        vincenty((point.y, point.x), (y, x)).km
+        geodesic((point.y, point.x), (y, x)).km
         for (x, y) in zip(bus_target["x"], bus_target["y"])
     ]
     return bus_target["dist"].idxmin(), bus_target["dist"].min()
