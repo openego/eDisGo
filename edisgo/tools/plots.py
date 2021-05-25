@@ -5,7 +5,8 @@ import logging
 from matplotlib import pyplot as plt
 from pypsa import Network as PyPSANetwork
 
-from pyproj import Proj, transform
+from pyproj import Proj
+from pyproj import Transformer
 import matplotlib
 
 from edisgo.tools import tools, session_scope
@@ -678,13 +679,10 @@ def mv_grid_topology(
 
     # convert bus coordinates to Mercator
     if contextily and background_map:
-        inProj = Proj(init="epsg:4326")
-        outProj = Proj(init="epsg:3857")
-        x2, y2 = transform(
-            inProj,
-            outProj,
+        transformer = Transformer.from_crs("epsg:4326", "epsg:3857", always_xy=True)
+        x2, y2 = transformer.transform(
             list(pypsa_plot.buses.loc[:, "x"]),
-            list(pypsa_plot.buses.loc[:, "y"]),
+            list(pypsa_plot.buses.loc[:, "y"])
         )
         pypsa_plot.buses.loc[:, "x"] = x2
         pypsa_plot.buses.loc[:, "y"] = y2
@@ -804,7 +802,7 @@ def mv_grid_topology(
             [],
             c="orangered",
             s=200,
-            label="$\equiv$ 10% share of curtailment",
+            label="$\\equiv$ 10% share of curtailment",
         )
     else:
         scatter_handle = None
