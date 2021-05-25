@@ -725,7 +725,7 @@ class EDisGo:
                         for k, v in groups.items()], axis=1)
             # overwrite charging points
             self.topology.charging_points_df = pd.DataFrame(
-                columns=["bus"])
+                columns=["bus", "p_nom"])
             self.timeseries.charging_points_active_power = pd.DataFrame(
                 index=self.timeseries.timeindex)
             self.timeseries.charging_points_reactive_power = pd.DataFrame(

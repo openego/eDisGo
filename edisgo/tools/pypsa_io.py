@@ -159,7 +159,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
                 ["bus0", "bus1", "x", "r", "s_nom", "num_parallel", "length"],
             ],
             "Transformer": grid_object.topology.transformers_df.loc[
-                :, ["bus0", "bus1", "x_pu", "r_pu", "type", "s_nom"]
+                :, ["bus0", "bus1", "x_pu", "r_pu", "type_info", "s_nom"]
             ].rename(columns={"r_pu": "r", "x_pu": "x"}),
         }
 
