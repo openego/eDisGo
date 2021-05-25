@@ -184,7 +184,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             mv_components[
                 "Transformer"
             ] = edisgo_obj.topology.transformers_df.loc[
-                :, ["bus0", "bus1", "x_pu", "r_pu", "type", "s_nom"]
+                :, ["bus0", "bus1", "x_pu", "r_pu", "type_info", "s_nom"]
             ].rename(
                 columns={"r_pu": "r", "x_pu": "x"}
             )
