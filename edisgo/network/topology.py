@@ -2063,7 +2063,7 @@ class Topology:
                     target_buses = tmp.bus.values
                 else:
                     target_buses = lv_grid.buses_df[
-                        ~lv_grid.buses_df.in_building].index
+                        ~lv_grid.buses_df.in_building.astype(bool)].index
 
             # generate random list (unique elements) of possible target buses
             # to connect components to
