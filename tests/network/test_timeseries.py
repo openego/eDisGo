@@ -522,7 +522,7 @@ class Test_get_component_timeseries:
         assert (self.timeseries.generators_active_power.loc[
             timeindex, gen_name].values == [0.85*p_nom, 0]).all()
         assert np.isclose(self.timeseries.generators_reactive_power.loc[
-            timeindex, gen_name], [-tan(acos(0.95))*0.85*p_nom, 0]).all()
+            timeindex, gen_name].to_list(), [-tan(acos(0.95))*0.85*p_nom, 0]).all()
         # add multiple generators and check
         p_nom2 = 1.3
         gen_name2 = self.topology.add_generator(generator_id=2, p_nom=p_nom2,
@@ -539,11 +539,11 @@ class Test_get_component_timeseries:
             2, num_gens + 3)
         assert np.isclose(
             self.timeseries.generators_active_power.loc[
-                timeindex, [gen_name2, gen_name3]].values,
+                timeindex, [gen_name2, gen_name3]].values.tolist(),
             [[p_nom2, p_nom3], [0, 0]]).all()
         assert np.isclose(
             self.timeseries.generators_reactive_power.loc[
-                timeindex, [gen_name2, gen_name3]].values,
+                timeindex, [gen_name2, gen_name3]].values.tolist(),
             [[-p_nom2*tan(acos(0.9)), -p_nom3*tan(acos(0.95))], [0, 0]]).all()
         # remove added generators
         self.topology.remove_generator(gen_name)
@@ -725,7 +725,7 @@ class Test_get_component_timeseries:
         assert (self.timeseries.storage_units_active_power.loc[
                     timeindex, storage_name].values == [p_nom, -p_nom]).all()
         assert (np.isclose(self.timeseries.storage_units_reactive_power.loc[
-                    timeindex, storage_name].values,
+                    timeindex, storage_name].values.tolist(),
                     [-p_nom*tan(acos(0.9)), p_nom*tan(acos(0.9))])).all()
         # add two storage units
         p_nom2 = 1.3
@@ -742,11 +742,11 @@ class Test_get_component_timeseries:
                 (len(timeindex), num_storage_units + 3))
         assert np.isclose(
             self.timeseries.storage_units_active_power.loc[
-                timeindex, [storage_name2, storage_name3]].values,
+                timeindex, [storage_name2, storage_name3]].values.tolist(),
             [[p_nom2, p_nom3], [-p_nom2, -p_nom3]]).all()
         assert np.isclose(
             self.timeseries.storage_units_reactive_power.loc[
-                timeindex, [storage_name2, storage_name3]].values,
+                timeindex, [storage_name2, storage_name3]].values.tolist(),
             [[-tan(acos(0.95))*p_nom2, -tan(acos(0.9))*p_nom3],
              [tan(acos(0.95))*p_nom2, tan(acos(0.9))*p_nom3]]).all()
         # remove storages
