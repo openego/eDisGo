@@ -95,12 +95,8 @@ class TestTimeSeries:
 
         timeseries_obj.from_csv(dir)
 
-        pd.testing.assert_frame_equal(
-            timeseries_obj.loads_active_power, loads_active_power
-        )
-        pd.testing.assert_frame_equal(
-            timeseries_obj.generators_reactive_power, generators_reactive_power
-        )
+        assert timeseries_obj.loads_active_power.to_string() == loads_active_power.to_string()
+        assert timeseries_obj.generators_reactive_power.to_string() == generators_reactive_power.to_string()
 
         shutil.rmtree(dir)
 

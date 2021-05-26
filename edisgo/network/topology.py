@@ -2088,7 +2088,7 @@ class Topology:
                     "component is therefore connected to random LV bus."
                 )
                 bus = random.choice(
-                    lv_grid.buses_df[~lv_grid.buses_df.in_building].index
+                    lv_grid.buses_df[~lv_grid.buses_df.in_building.astype(bool)].index
                 )
                 comp_name = add_func(
                     bus=bus, **comp_data
