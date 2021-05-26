@@ -5,6 +5,7 @@ from sklearn import preprocessing
 
 from edisgo.network.components import PotentialChargingParkGridConnection
 
+
 logger = logging.getLogger("edisgo")
 
 COLUMNS = {

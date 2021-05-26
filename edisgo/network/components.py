@@ -1155,43 +1155,52 @@ class Switch(BasicComponent):
 #     def quantity(self, new_quantity):
 #         self._quantity = new_quantity
 
-class PotentialChargingParkGridConnection:
+class PotentialChargingParkGridConnection(BasicComponent):
 
     def __init__(self, **kwargs):
-        self._id = kwargs.get("id", None)
-        self._edisgo_obj = kwargs.get("edisgo_obj", None)
-        self._topology = kwargs.get("topology", None)
-        if self._topology is None and self._edisgo_obj is not None:
-            self._topology = self._edisgo_obj.topology
-
-    def __repr__(self):
-        return "_".join([self.__class__.__name__, str(self._id)])
+        super().__init__(**kwargs)
 
     @property
-    def id(self):
+    def voltage_level(self):
         """
-        Unique identifier of component as used in component dataframes in
-        :class:`~.network.topology.Topology`.
+        Voltage level the component is connected to ('mv' or 'lv').
 
         Returns
         --------
         :obj:`str`
-            Unique identifier of component.
+            Voltage level. Returns 'lv' if component connected to the low
+            voltage and 'mv' if component is connected to the medium voltage.
 
         """
-        return self._id
+        try:
+            return "lv" if self.grid.nominal_voltage < 1 else "mv"
+        except:
+            return None
 
     @property
-    def edisgo_obj(self):
+    def grid(self):
         """
-        EDisGo container
+        Grid component is in.
 
         Returns
         --------
-        :class:`~.EDisGo`
+        :class:`~.network.components.Grid`
+            Grid component is in.
 
         """
-        return self._edisgo_obj
+        try:
+            grid = self.topology.buses_df.loc[
+                self._network_component_df.loc[self.id, "bus"],
+                ["mv_grid_id", "lv_grid_id"],
+            ]
+            if math.isnan(grid.lv_grid_id):
+                return self.topology.mv_grid
+            else:
+                return self.topology._grids[
+                    "LVGrid_{}".format(int(grid.lv_grid_id))
+                ]
+        except:
+            return None
 
     @property
     def ags(self):
@@ -1203,8 +1212,10 @@ class PotentialChargingParkGridConnection:
 
     @property
     def designated_charging_point_capacity(self):
-        # TODO
-        return 0
+        return round(self._edisgo_obj.electromobility.charging_processes_df.loc[
+            self._edisgo_obj.electromobility.charging_processes_df.grid_connection_point_id == self._id
+        ].drop_duplicates(subset=["car_id"]).netto_charging_capacity.sum() /\
+               self._edisgo_obj.electromobility.eta_charging_points, 1)
 
     @property
     def user_centric_weight(self):
@@ -1253,4 +1264,10 @@ class PotentialChargingParkGridConnection:
 
         return (distance_weight_value * distance_weight_factor + generators_weight_value * generators_weight_factor
                 + loads_weight_value * loads_weight_factor)
+
+    @property
+    def charging_processes_df(self):
+        return self._edisgo_obj.electromobility.charging_processes_df.loc[
+            self._edisgo_obj.electromobility.charging_processes_df.grid_connection_point_id == self._id
+        ]
 

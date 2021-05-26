@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+import random
 
 from sklearn import preprocessing
 from pathlib import Path
@@ -39,10 +40,15 @@ DTYPES = {
 }
 
 USECASES = {
-    "uc1": "fast",
+    "uc1": "hpc",
     "uc2": "public",
     "uc3": "home",
     "uc4": "work",
+}
+
+PRIVATE_DESTINATIONS = {
+    "0_work": "work",
+    "6_home": "home",
 }
 
 
@@ -62,6 +68,8 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
             raise ValueError(
                 "Couldn't find any CSVs in path {}.".format(path)
             )
+
+        files.sort()
 
         charging_processes_df = pd.DataFrame(columns=COLUMNS["charging_processes_df"])
 
@@ -91,7 +99,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
             how="outer",
             left_index=True,
             right_index=True
-            )
+        )
 
         return charging_processes_df
 
@@ -178,3 +186,56 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
     edisgo_obj.electromobility.grid_connections_gdf = read_geojsons_grid_connections(
         path, dir=kwargs.get("grid_connections_dir", "grid_connections"))
+
+
+def distribute_charging_demand(edisgo_obj, **kwargs):
+    def distribute_private_charging_demand(edisgo_obj):
+        private_charging_df = edisgo_obj.electromobility.charging_processes_df.loc[
+            edisgo_obj.electromobility.charging_processes_df.use_case == "private"
+        ]
+
+        charging_point_id = 0
+
+        for destination in private_charging_df.destination.unique():
+            private_charging_destination_df = private_charging_df.loc[
+                private_charging_df.destination == destination
+            ]
+
+            use_case = PRIVATE_DESTINATIONS[destination]
+
+            grid_connections_indices = edisgo_obj.electromobility.grid_connections_gdf.loc[
+                edisgo_obj.electromobility.grid_connections_gdf.use_case == use_case
+            ].index
+
+            # TODO: Replace this with numpy.random.Generator.choice when numpy is update to a higher version
+            # https://numpy.org/doc/stable/reference/random/generated/numpy.random.Generator.choice.html
+            random.seed(edisgo_obj.topology.id)
+
+            for car_id in private_charging_destination_df.car_id.unique():
+                weights = [
+                    _.user_centric_weight for _ in edisgo_obj.electromobility.potential_charging_points
+                    if _._id in grid_connections_indices
+                ]
+
+                grid_connection_point_id = random.choices(
+                    population=grid_connections_indices,
+                    weights=weights,
+                    k=1,
+                )[0]
+
+                edisgo_obj.electromobility.charging_processes_df.loc[
+                    (edisgo_obj.electromobility.charging_processes_df.car_id == car_id) &
+                    (edisgo_obj.electromobility.charging_processes_df.destination == destination)
+                ] = edisgo_obj.electromobility.charging_processes_df.loc[
+                    (edisgo_obj.electromobility.charging_processes_df.car_id == car_id) &
+                    (edisgo_obj.electromobility.charging_processes_df.destination == destination)
+                ].assign(
+                    grid_connection_point_id=grid_connection_point_id,
+                    charging_point_id=charging_point_id,
+                )
+
+                charging_point_id += 1
+
+    distribute_private_charging_demand(edisgo_obj)
+
+
