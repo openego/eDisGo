@@ -611,9 +611,7 @@ def _append_lv_components(
             comps_aggr = comps.loc[:, ["bus", "control", "p_nom"]]
             comps_aggr["fluctuating"] = comps.type.isin(flucts)
         elif aggregate_generators == "type":
-            comps_aggr = (
-                comps.groupby("type").sum().loc[:, ["bus", "control", "p_nom"]]
-            )
+            comps_aggr = comps.groupby("type").sum().reindex(columns=["bus", "control", "p_nom"])
             comps_aggr.bus = bus
             comps_aggr.control = "PQ"
             comps_aggr["fluctuating"] = comps_aggr.index.isin(flucts)
