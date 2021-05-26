@@ -154,7 +154,7 @@ class TestImportFromDing0:
         self.topology.transformers_df.loc[
             'LVStation_7_transformer_1', 'bus1'] = 'Bus_primary_LVStation_7'
         with pytest.raises(AssertionError):
-            assert ((self.topology.buses_df.loc[
-                     self.topology.transformers_df.bus1].v_nom.values <
-                 self.topology.buses_df.loc[
-                     self.topology.transformers_df.bus0].v_nom.values).all())
+            assert ((self.topology.buses_df.reindex(
+                     index=self.topology.transformers_df.bus1).v_nom.values <
+                 self.topology.buses_df.reindex(
+                     index=self.topology.transformers_df.bus0).v_nom.values).all())
