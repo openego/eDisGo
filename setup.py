@@ -36,12 +36,13 @@ setup(
     long_description_content_type='text/x-rst',
     install_requires=[
         'demandlib',
-        'networkx >= 2.0',
-        'shapely >= 1.5.12, <= 1.6.3',
-        'pandas >=0.24.0, <=0.24.0',
-        'pypsa >= 0.15.0',
-        'pyproj >= 1.9.5.1, <= 1.9.5.1',
-        'geopy >= 1.11.0, <= 1.11.0',
+        'networkx == 2.5.1',
+        'geopy == 2.1.0',
+        'pandas == 1.2.4',
+        'pyproj == 3.0.1',
+        'sqlalchemy == 1.3.24',
+        'shapely == 1.7.1',
+        'pypsa == 0.17.1',
         'pyomo >= 5.5.0',
         'multiprocess',
         'workalendar',
@@ -54,7 +55,7 @@ setup(
         'geoplot': ['geopandas <= 0.6.3', 'contextily', 'descartes'],
         'examples': ['jupyter'],
         'dev': ['pytest', 'sphinx_rtd_theme'],
-        'full': ['geopandas <= 0.6.3', 'contextily', 'descartes', 'jupyter', 'pytest',
+        'full': ['geopandas == 0.9.0', 'contextily', 'descartes', 'jupyter', 'pytest',
                  'sphinx_rtd_theme']
     },
     package_data={
