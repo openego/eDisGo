@@ -455,7 +455,7 @@ class TestGeneratorsImportOEDB:
 
         # check that installed capacity of types, for which no target capacity
         # was specified, remained the same
-        assert (gens_before[gens_before["type"] == "solar"].p_nom.sum() ==
+        assert np.isclose(gens_before[gens_before["type"] == "solar"].p_nom.sum(),
                 edisgo.topology.generators_df[
                     edisgo.topology.generators_df["type"] == "solar"].p_nom.sum())
         assert (gens_before[gens_before["type"] == "run_of_river"].p_nom.sum() ==
