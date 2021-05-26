@@ -420,7 +420,7 @@ class TestTopology:
         assert (
                 name == "Line_Bus_BranchTee_MVGrid_1_8_Bus_GeneratorFluctuating_9"
         )
-        assert self.topology.lines_df.at[name, "s_nom"] == 6.1834213830208915
+        assert self.topology.lines_df.at[name, "s_nom"] == 6.183421383020891
         assert self.topology.lines_df.at[name, "x"] == 0.38
 
         # test no creation of new line when line between buses already exists
