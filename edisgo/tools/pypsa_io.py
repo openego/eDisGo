@@ -1223,32 +1223,32 @@ def process_pfa_results(edisgo, pypsa, timesteps):
                 - pypsa.loads_t["q"].sum(axis=1))
         ),
     }
-    edisgo.results.grid_losses = pd.DataFrame(grid_losses).loc[timesteps, :]
+    edisgo.results.grid_losses = pd.DataFrame(grid_losses).reindex(index=timesteps)
 
     # get slack results in MW and Mvar
     pfa_slack = {
         "p": (pypsa.generators_t["p"]["Generator_slack"]),
         "q": (pypsa.generators_t["q"]["Generator_slack"]),
     }
-    edisgo.results.pfa_slack = pd.DataFrame(pfa_slack).loc[timesteps, :]
+    edisgo.results.pfa_slack = pd.DataFrame(pfa_slack).reindex(index=timesteps)
 
     # get P and Q of lines and transformers in MW and Mvar
     q0 = pd.concat(
         [np.abs(pypsa.lines_t["q0"]), np.abs(pypsa.transformers_t["q0"])],
         axis=1, sort=False
-    ).loc[timesteps, :]
+    ).reindex(index=timesteps)
     q1 = pd.concat(
         [np.abs(pypsa.lines_t["q1"]), np.abs(pypsa.transformers_t["q1"])],
         axis=1, sort=False
-    ).loc[timesteps, :]
+    ).reindex(index=timesteps)
     p0 = pd.concat(
         [np.abs(pypsa.lines_t["p0"]), np.abs(pypsa.transformers_t["p0"])],
         axis=1, sort=False
-    ).loc[timesteps, :]
+    ).reindex(index=timesteps)
     p1 = pd.concat(
         [np.abs(pypsa.lines_t["p1"]), np.abs(pypsa.transformers_t["p1"])],
         axis=1, sort=False
-    ).loc[timesteps, :]
+    ).reindex(index=timesteps)
     # determine apparent power at line endings/transformer sides
     s0 = np.hypot(p0, q0)
     s1 = np.hypot(p1, q1)
@@ -1266,22 +1266,22 @@ def process_pfa_results(edisgo, pypsa, timesteps):
         pypsa.lines_t["p0"], pypsa.lines_t["q0"]
     ).truediv(pypsa.lines["v_nom"] * bus0_v_mag_pu.T,
               axis="columns") / sqrt(3)
-    edisgo.results._i_res = current.loc[timesteps, :]
+    edisgo.results._i_res = current.reindex(index=timesteps)
 
     # get voltage results in kV
-    edisgo.results._v_res = pypsa.buses_t["v_mag_pu"].loc[timesteps, :]
+    edisgo.results._v_res = pypsa.buses_t["v_mag_pu"].reindex(index=timesteps)
 
     # save seeds
     edisgo.results.pfa_v_mag_pu_seed = pd.concat(
         [edisgo.results.pfa_v_mag_pu_seed,
-         pypsa.buses_t["v_mag_pu"].loc[timesteps, :]
+         pypsa.buses_t["v_mag_pu"].reindex(index=timesteps)
          ]
     ).reset_index().drop_duplicates(
         subset='index', keep='last').set_index('index').fillna(1)
 
     edisgo.results.pfa_v_ang_seed = pd.concat(
         [edisgo.results.pfa_v_ang_seed,
-         pypsa.buses_t["v_ang"].loc[timesteps, :]
+         pypsa.buses_t["v_ang"].reindex(index=timesteps)
          ]
     ).reset_index().drop_duplicates(
         subset='index', keep='last').set_index('index').fillna(0)
