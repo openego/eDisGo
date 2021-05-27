@@ -43,7 +43,7 @@ setup(
         'sqlalchemy == 1.3.24',
         'shapely == 1.7.1',
         'pypsa == 0.17.1',
-        'pyomo >= 5.5.0',
+        'pyomo >= 6.0',
         'multiprocess',
         'workalendar',
         'egoio >= 0.4.7',
@@ -52,7 +52,7 @@ setup(
         'sklearn'
     ],
     extras_require={
-        'geoplot': ['geopandas <= 0.6.3', 'contextily', 'descartes'],
+        'geoplot': ['geopandas == 0.9.0', 'contextily', 'descartes'],
         'examples': ['jupyter'],
         'dev': ['pytest', 'sphinx_rtd_theme'],
         'full': ['geopandas == 0.9.0', 'contextily', 'descartes', 'jupyter', 'pytest',
