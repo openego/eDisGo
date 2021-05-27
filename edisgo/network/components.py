@@ -1271,3 +1271,9 @@ class PotentialChargingParkGridConnection(BasicComponent):
             self._edisgo_obj.electromobility.charging_processes_df.grid_connection_point_id == self._id
         ]
 
+    @property
+    def last_charging_process_and_netto_charging_capacity_per_charging_point(self):
+        return self.charging_processes_df[
+            ["charging_point_id", "charge_end", "netto_charging_capacity"]
+        ].groupby(by="charging_point_id").max()
+

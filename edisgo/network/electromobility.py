@@ -16,7 +16,8 @@ COLUMNS = {
     "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
     "simbev_config_df": ["value"],
     "potential_charging_points_df": ["lv_grid_id", "distance_to_nearest_substation", "distance_weight",
-                                     "charging_point_capacity", "charging_point_weight"]
+                                     "charging_point_capacity", "charging_point_weight"],
+    "designated_charging_points_df": ["charge_end", "netto_charging_capacity", "grid_connection_id"]
 }
 
 
@@ -92,6 +93,24 @@ class Electromobility:
             return self._simbev_config_df
         except:
             return pd.DataFrame(columns=COLUMNS["simbev_config_df"])
+
+    @property
+    def designated_charging_points_df(self):
+        try:
+            designated_charging_points_df = pd.DataFrame(columns=COLUMNS["designated_charging_points_df"])
+
+            for potential_charging_point in list(self.potential_charging_points):
+                df = potential_charging_point.\
+                    last_charging_process_and_netto_charging_capacity_per_charging_point.copy()
+
+                df = df.assign(grid_connection_id=potential_charging_point.id)
+
+                designated_charging_points_df = designated_charging_points_df.append(df)
+
+            return designated_charging_points_df
+
+        except:
+            return pd.DataFrame(columns=COLUMNS["designated_charging_points_df"])
 
     @simbev_config_df.setter
     def simbev_config_df(self, df):
