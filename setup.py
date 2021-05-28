@@ -1,8 +1,16 @@
 from setuptools import find_packages, setup
 from setuptools.command.install import install
 import os
+import sys
 
 BASEPATH = '.eDisGo'
+
+if sys.version_info[:2] < (3, 7):
+    error = (
+        "eDisGo requires Python 3.7 or later (%d.%d detected)." % sys.version_info[:2]
+    )
+    sys.stderr.write(error + "\n")
+    sys.exit(1)
 
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
