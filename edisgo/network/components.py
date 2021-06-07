@@ -1155,7 +1155,7 @@ class Switch(BasicComponent):
 #     def quantity(self, new_quantity):
 #         self._quantity = new_quantity
 
-class PotentialChargingParkGridConnection(BasicComponent):
+class PotentialChargingParks(BasicComponent):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1204,14 +1204,44 @@ class PotentialChargingParkGridConnection(BasicComponent):
 
     @property
     def ags(self):
+        """
+            8-digit AGS (Amtlicher Gemeindeschlüssel, eng. Community Identification Number)
+            number the potential charging park is in. Number is given as :obj:`int` and
+            leading zeros are therefore missing.
+
+            Returns
+            --------
+            :obj:`int`
+                AGS number
+
+        """
         return self._edisgo_obj.electromobility.grid_connections_gdf.at[self._id, "ags"]
 
     @property
     def use_case(self):
+        """
+            Charging use case (home, work, public or hpc) of the potential charging park.
+
+            Returns
+            --------
+            :obj:`str`
+                Charging use case
+
+        """
         return self._edisgo_obj.electromobility.grid_connections_gdf.at[self._id, "use_case"]
 
     @property
     def designated_charging_point_capacity(self):
+        """
+            Total gross designated charging park capacity.
+            This is not necessarily equal to the connection rating.
+
+            Returns
+            --------
+            :obj:`float`
+                Total gross designated charging park capacity
+
+        """
         return round(self._edisgo_obj.electromobility.charging_processes_df.loc[
             self._edisgo_obj.electromobility.charging_processes_df.grid_connection_point_id == self._id
         ].drop_duplicates(subset=["car_id"]).netto_charging_capacity.sum() /\
@@ -1219,14 +1249,47 @@ class PotentialChargingParkGridConnection(BasicComponent):
 
     @property
     def user_centric_weight(self):
+        """
+            User centric weight of the potential charging park
+            determined by `SimBEV <https://github.com/rl-institut/simbev>`_.
+
+            Returns
+            --------
+            :obj:`float`
+                User centric weight
+
+        """
         return self._edisgo_obj.electromobility.grid_connections_gdf.at[self._id, "user_centric_weight"]
 
     @property
     def geometry(self):
+        """
+            Location of the potential charging park as :shapely:`Shapely Point object<points>`.
+
+            Returns
+            --------
+            :shapely:`Shapely Point object<points>`.
+                Location of the potential charging park
+
+        """
         return self._edisgo_obj.electromobility.grid_connections_gdf.at[self._id, "geometry"]
 
     @property
     def nearest_substation(self):
+        """
+            Determines the nearest LV Grid, substation and distance.
+
+            Returns
+            --------
+            :obj:`dict`
+                :obj:`int`
+                    LV Grid ID
+                :obj:`str`
+                    ID of the nearest substation
+                :obj:`float`
+                    Distance to nearest substation
+
+        """
         substations = self._topology.buses_df.loc[
             self._topology.transformers_df.bus1]
 
@@ -1237,21 +1300,48 @@ class PotentialChargingParkGridConnection(BasicComponent):
         return {"lv_grid_id": lv_grid_id, "nearest_substation": nearest_substation, "distance": distance}
 
     @property
-    def grid_centric_weight(self, **kwargs):
-        distance_weight_factor = kwargs.get("distance_weight_factor", 1/4)
-        generators_weight_factor = kwargs.get("generators_weight_factor", 1/4)
-        loads_weight_factor = kwargs.get("loads_weight_factor", 1/4)
-        charging_park_weight_factor = kwargs.get("weight_charging_park_capacity_factor", 1/4)
+    def charging_processes_df(self):
+        """
+            Determines designated charging processes for the potential charging park.
 
-        weights = (distance_weight_factor, generators_weight_factor,
-                   loads_weight_factor, charging_park_weight_factor)
+            Returns
+            --------
+            :pandas:`pandas.DataFrame<DataFrame>`
+                DataFrame with AGS, car ID, trip destination, charging use case (private or public),
+                netto charging capacity, charging demand, charge start, charge end, grid connection point and
+                charging point ID.
+
+        """
+        return self._edisgo_obj.electromobility.charging_processes_df.loc[
+            self._edisgo_obj.electromobility.charging_processes_df.grid_connection_point_id == self._id
+        ]
+
+    @property
+    def _last_charging_process_and_netto_charging_capacity_per_charging_point(self):
+        return self.charging_processes_df[
+            ["charging_point_id", "charge_end", "netto_charging_capacity"]
+        ].groupby(by="charging_point_id").max()
+
+    @property
+    def _load_and_generator_capacity_weight(self, **kwargs):
+        """
+            Determines grid centric weight regarding load and generator capacity in LV Grid.
+
+            Returns
+            --------
+            :obj:`float`
+                Grid centric weight regarding load and generator capacity in LV Grid
+
+        """
+        generators_weight_factor = kwargs.get("generators_weight_factor", 1 / 2)
+        loads_weight_factor = kwargs.get("loads_weight_factor", 1 / 2)
+
+        weights = (loads_weight_factor, generators_weight_factor)
 
         if not round(sum(weights), 3) == 1:
             f = 1 / sum(weights)
-            distance_weight_factor *= f
             generators_weight_factor *= f
             loads_weight_factor *= f
-            charging_park_weight_factor *= f
 
         generators_weight_value = self._topology.lv_grids_df.at[
             self.nearest_substation["lv_grid_id"], "generators_weight"]
@@ -1259,21 +1349,4 @@ class PotentialChargingParkGridConnection(BasicComponent):
         loads_weight_value = self._topology.lv_grids_df.at[
             self.nearest_substation["lv_grid_id"], "loads_weight"]
 
-        distance_weight_value = self._edisgo_obj.electromobility.potential_charging_points_df.at[
-            self._id, "distance_weight"]
-
-        return (distance_weight_value * distance_weight_factor + generators_weight_value * generators_weight_factor
-                + loads_weight_value * loads_weight_factor)
-
-    @property
-    def charging_processes_df(self):
-        return self._edisgo_obj.electromobility.charging_processes_df.loc[
-            self._edisgo_obj.electromobility.charging_processes_df.grid_connection_point_id == self._id
-        ]
-
-    @property
-    def last_charging_process_and_netto_charging_capacity_per_charging_point(self):
-        return self.charging_processes_df[
-            ["charging_point_id", "charge_end", "netto_charging_capacity"]
-        ].groupby(by="charging_point_id").max()
-
+        return generators_weight_value * generators_weight_factor + loads_weight_value * loads_weight_factor

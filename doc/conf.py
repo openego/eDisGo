@@ -72,6 +72,7 @@ napoleon_use_keyword = False
 # Dictionary of external links
 extlinks = {'pandas':('http://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.%s.html',
                       'pandas.'),
+            'geopandas': ('https://geopandas.org/docs/reference/#%s.html', 'geopandas'),
             'networkx':('https://networkx.github.io/documentation/stable/reference/classes/graph.html#%s',
                         'networkx.'),
             'sqlalchemy':('http://docs.sqlalchemy.org/en/latest/orm/session_basics.html%s',
@@ -80,7 +81,7 @@ extlinks = {'pandas':('http://pandas.pydata.org/pandas-docs/stable/reference/api
                        'shapely.'),
             'ding0':('https://dingo.readthedocs.io/en/dev/api/ding0.html#%s',
                      'Ding0'),
-            'pypsa': ('https://pypsa.org/doc/components.html#%s', 'pypsa')
+            'pypsa': ('https://pypsa.org/doc/components.html#%s', 'pypsa'),
             }
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
