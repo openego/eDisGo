@@ -1,4 +1,15 @@
 name,bus0,bus1,s_nom,r,x,type,type_info
+Transformer_lv_load_area_85334_1,Busbar_mvgd_460_MV,BusBar_lac_85334,1.0,0.0105,0.059074106002545645,,1.0 MVA 20/0.4 kV
+Transformer_lv_load_area_85334_2,Busbar_mvgd_460_MV,BusBar_lac_85334,1.0,0.0105,0.059074106002545645,,1.0 MVA 20/0.4 kV
+Transformer_lv_load_area_85334_3,Busbar_mvgd_460_MV,BusBar_lac_85334,1.0,0.0105,0.059074106002545645,,1.0 MVA 20/0.4 kV
+Transformer_lv_load_area_85334_4,Busbar_mvgd_460_MV,BusBar_lac_85334,1.0,0.0105,0.059074106002545645,,1.0 MVA 20/0.4 kV
+Transformer_lv_load_area_85334_5,Busbar_mvgd_460_MV,BusBar_lac_85334,1.0,0.0105,0.059074106002545645,,1.0 MVA 20/0.4 kV
+Transformer_lv_load_area_85334_6,Busbar_mvgd_460_MV,BusBar_lac_85334,1.0,0.0105,0.059074106002545645,,1.0 MVA 20/0.4 kV
+Transformer_lv_load_area_85334_7,Busbar_mvgd_460_MV,BusBar_lac_85334,1.0,0.0105,0.059074106002545645,,1.0 MVA 20/0.4 kV
+Transformer_lv_load_area_85334_8,Busbar_mvgd_460_MV,BusBar_lac_85334,1.0,0.0105,0.059074106002545645,,1.0 MVA 20/0.4 kV
+Transformer_lv_load_area_85334_9,Busbar_mvgd_460_MV,BusBar_lac_85334,1.0,0.0105,0.059074106002545645,,1.0 MVA 20/0.4 kV
+Transformer_lv_load_area_85334_10,Busbar_mvgd_460_MV,BusBar_lac_85334,1.0,0.0105,0.059074106002545645,,1.0 MVA 20/0.4 kV
+Transformer_lv_load_area_85334_11,Busbar_mvgd_460_MV,BusBar_lac_85334,1.0,0.0105,0.059074106002545645,,1.0 MVA 20/0.4 kV
 Transformer_lv_grid_179885_1,BusBar_mvgd_460_lvgd_179885_MV,BusBar_mvgd_460_lvgd_179885_LV,0.1,0.0175,0.035968736424845396,,0.1 MVA 20/0.4 kV
 Transformer_lv_grid_179886_1,BusBar_mvgd_460_lvgd_179886_MV,BusBar_mvgd_460_lvgd_179886_LV,0.1,0.0175,0.035968736424845396,,0.1 MVA 20/0.4 kV
 Transformer_lv_grid_127329_1,BusBar_mvgd_460_lvgd_127329_MV,BusBar_mvgd_460_lvgd_127329_LV,0.1,0.0175,0.035968736424845396,,0.1 MVA 20/0.4 kV
