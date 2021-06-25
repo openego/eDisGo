@@ -316,7 +316,7 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
 
     def normalize(weights_df):
         """
-        Normalize a given DataFrame so that it's sum equals 1 and reurn a flattened Array.
+        Normalize a given DataFrame so that it's sum equals 1 and return a flattened Array.
 
         Parameters
         ----------
@@ -602,5 +602,16 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
     t2 = perf_counter()
 
     print("It took {} seconds to distribute public charging.".format(round(t2 - t1, 1)))
+
+
+def determine_grid_connection_capacity(
+        total_charging_point_capacity, lower_limit=0.3, upper_limit=1.0, minimum_factor=0.45):
+    if total_charging_point_capacity <= lower_limit:
+        return total_charging_point_capacity
+    elif total_charging_point_capacity >= upper_limit:
+        return minimum_factor * total_charging_point_capacity
+    else:
+        return (((minimum_factor-1) / (upper_limit-lower_limit))
+                * (total_charging_point_capacity-lower_limit) + 1) * total_charging_point_capacity
 
 

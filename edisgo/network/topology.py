@@ -308,10 +308,10 @@ class Topology:
 
             use_case : str
               Specifies if charging point is e.g. for charging at
-              home, at work, in public, or public fast charging. Used in
+              home, at work, in public or HPC. Used in
               charging point integration (:attr:`~.EDisGo.integrate_component`)
               to determine possible grid connection points, in which case use
-              cases 'home', 'work', 'public', and 'fast' are distinguished.
+              cases 'home', 'work', 'public', and 'hpc' are distinguished.
 
         Returns
         --------
@@ -1877,7 +1877,7 @@ class Topology:
                   residential, if available
                 * with use case 'work' to LV loads of type
                   retail, industrial or agricultural, if available, otherwise
-                * with use case 'public' or 'fast' to some bus in the grid that
+                * with use case 'public' or 'hpc' to some bus in the grid that
                   is not a house connection
                 * to random bus in the LV grid that
                   is not a house connection if no appropriate load is available
@@ -2091,15 +2091,27 @@ class Topology:
                     ]
                     target_buses = tmp.bus.values
             else:
+                warning = "Sector declaration for LV loads is missing. "\
+                           "Using any LV loads as fallback to determine "\
+                           f"grid connection for {comp_type}."
+
                 if comp_data["use_case"] is "home":
-                    tmp = lv_loads[lv_loads.sector == "residential"]
+                    try:
+                        tmp = lv_loads[lv_loads.sector == "residential"]
+                    except:
+                        logging.warning(warning)
+                        tmp = lv_loads.copy()
                     target_buses = tmp.bus.values
                 elif comp_data["use_case"] is "work":
-                    tmp = lv_loads[
-                        lv_loads.sector.isin(
-                            ["industrial", "agricultural", "retail"]
-                        )
-                    ]
+                    try:
+                        tmp = lv_loads[
+                            lv_loads.sector.isin(
+                                ["industrial", "agricultural", "retail"]
+                            )
+                        ]
+                    except:
+                        logging.warning(warning)
+                        tmp = lv_loads.copy()
                     target_buses = tmp.bus.values
                 else:
                     target_buses = lv_grid.buses_df[

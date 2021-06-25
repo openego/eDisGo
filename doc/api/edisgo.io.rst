@@ -9,6 +9,14 @@ edisgo.io.ding0\_import module
     :undoc-members:
     :show-inheritance:
 
+edisgo.io.electromobility\_import module
+----------------------------------------
+
+.. automodule:: edisgo.io.electromobility_import
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 edisgo.io.generators\_import module
 -----------------------------------
 

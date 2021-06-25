@@ -5,6 +5,7 @@ from math import acos, tan
 from abc import ABC, abstractmethod
 
 from edisgo.tools.geo import find_nearest_bus
+from edisgo.io.electromobility_import import determine_grid_connection_capacity
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
@@ -500,8 +501,8 @@ class Generator(Component):
 
         """
         return self.edisgo_obj.timeseries.generators_active_power.loc[
-            :, self.id
-        ]
+               :, self.id
+               ]
 
     @property
     def reactive_power_timeseries(self):
@@ -515,8 +516,8 @@ class Generator(Component):
 
         """
         return self.edisgo_obj.timeseries.generators_reactive_power.loc[
-            :, self.id
-        ]
+               :, self.id
+               ]
 
     @property
     def weather_cell_id(self):
@@ -631,13 +632,13 @@ class Storage(Component):
             return self._timeseries
         else:
             self._timeseries["q"] = (
-                abs(self._timeseries.p)
-                * self.q_sign
-                * tan(acos(self.power_factor))
+                    abs(self._timeseries.p)
+                    * self.q_sign
+                    * tan(acos(self.power_factor))
             )
             return self._timeseries.loc[
-                self.grid.edisgo_obj.timeseries.timeindex, :
-            ]
+                   self.grid.edisgo_obj.timeseries.timeindex, :
+                   ]
 
     @property
     def nominal_power(self):
@@ -1189,15 +1190,13 @@ class PotentialChargingParks(BasicComponent):
 
         """
         try:
-            grid = self.topology.buses_df.loc[
-                self._network_component_df.loc[self.id, "bus"],
-                ["mv_grid_id", "lv_grid_id"],
-            ]
-            if math.isnan(grid.lv_grid_id):
+            bus = self.topology.charging_points_df.at[self.edisgo_id, "bus"]
+            lv_grid_id = self.topology.buses_df.at[bus, "lv_grid_id"]
+            if math.isnan(lv_grid_id):
                 return self.topology.mv_grid
             else:
                 return self.topology._grids[
-                    "LVGrid_{}".format(int(grid.lv_grid_id))
+                    "LVGrid_{}".format(int(lv_grid_id))
                 ]
         except:
             return None
@@ -1243,9 +1242,9 @@ class PotentialChargingParks(BasicComponent):
 
         """
         return round(self._edisgo_obj.electromobility.charging_processes_df.loc[
-            self._edisgo_obj.electromobility.charging_processes_df.grid_connection_point_id == self._id
-        ].drop_duplicates(subset=["car_id"]).netto_charging_capacity.sum() /\
-               self._edisgo_obj.electromobility.eta_charging_points, 1)
+                         self._edisgo_obj.electromobility.charging_processes_df.grid_connection_point_id == self._id
+                         ].drop_duplicates(subset=["car_id"]).netto_charging_capacity.sum() / \
+                     self._edisgo_obj.electromobility.eta_charging_points, 1)
 
     @property
     def user_centric_weight(self):
@@ -1300,6 +1299,13 @@ class PotentialChargingParks(BasicComponent):
         return {"lv_grid_id": lv_grid_id, "nearest_substation": nearest_substation, "distance": distance}
 
     @property
+    def edisgo_id(self):
+        try:
+            return self._edisgo_obj.electromobility.integrated_charging_parks_df.at[self.id, "edisgo_id"]
+        except:
+            return None
+
+    @property
     def charging_processes_df(self):
         """
             Determines designated charging processes for the potential charging park.
@@ -1314,7 +1320,11 @@ class PotentialChargingParks(BasicComponent):
         """
         return self._edisgo_obj.electromobility.charging_processes_df.loc[
             self._edisgo_obj.electromobility.charging_processes_df.grid_connection_point_id == self._id
-        ]
+            ]
+
+    @property
+    def grid_connection_capacity(self):
+        return determine_grid_connection_capacity(self.designated_charging_point_capacity / 10 ** 3)
 
     @property
     def _last_charging_process_and_netto_charging_capacity_per_charging_point(self):
@@ -1325,12 +1335,12 @@ class PotentialChargingParks(BasicComponent):
     @property
     def _load_and_generator_capacity_weight(self, **kwargs):
         """
-            Determines grid centric weight regarding load and generator capacity in LV Grid.
+        Determines grid centric weight regarding load and generator capacity in LV Grid.
 
-            Returns
-            --------
-            :obj:`float`
-                Grid centric weight regarding load and generator capacity in LV Grid
+        Returns
+        --------
+        :obj:`float`
+            Grid centric weight regarding load and generator capacity in LV Grid
 
         """
         generators_weight_factor = kwargs.get("generators_weight_factor", 1 / 2)

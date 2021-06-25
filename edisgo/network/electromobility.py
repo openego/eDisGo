@@ -5,7 +5,6 @@ from sklearn import preprocessing
 
 from edisgo.network.components import PotentialChargingParks
 
-
 logger = logging.getLogger("edisgo")
 
 COLUMNS = {
@@ -16,8 +15,9 @@ COLUMNS = {
     "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
     "simbev_config_df": ["value"],
     "potential_charging_parks_df": ["lv_grid_id", "distance_to_nearest_substation", "distance_weight",
-                                     "charging_point_capacity", "charging_point_weight"],
-    "designated_charging_points_df": ["charge_end", "netto_charging_capacity", "grid_connection_point_id", "use_case"]
+                                    "charging_point_capacity", "charging_point_weight"],
+    "designated_charging_points_df": ["charge_end", "netto_charging_capacity", "grid_connection_point_id", "use_case"],
+    "integrated_charging_parks_df": ["edisgo_id"],
 }
 
 USECASES = ["hpc", "public", "home", "work"]
@@ -108,7 +108,7 @@ class Electromobility:
             }
 
             for potential_charging_park in list(self.potential_charging_parks):
-                df = potential_charging_park.\
+                df = potential_charging_park. \
                     _last_charging_process_and_netto_charging_capacity_per_charging_point.copy()
 
                 df = df.assign(
@@ -148,6 +148,17 @@ class Electromobility:
     @simbev_config_df.setter
     def simbev_config_df(self, df):
         self._simbev_config_df = df
+
+    @property
+    def integrated_charging_parks_df(self):
+        try:
+            return self._integrated_charging_parks_df
+        except:
+            return pd.DataFrame(columns=COLUMNS["integrated_charging_parks_df"])
+
+    @integrated_charging_parks_df.setter
+    def integrated_charging_parks_df(self, df):
+        self._integrated_charging_parks_df = df
 
     @property
     def stepsize(self):
