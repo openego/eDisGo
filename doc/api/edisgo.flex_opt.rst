@@ -40,3 +40,11 @@ edisgo.flex\_opt.reinforce\_measures module
     :members:
     :undoc-members:
     :show-inheritance:
+
+edisgo.flex\_opt.charging\_strategies module
+------------------------------------------------
+
+.. automodule:: edisgo.flex_opt.charging_strategies
+    :members:
+    :undoc-members:
+    :show-inheritance:
