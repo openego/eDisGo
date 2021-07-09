@@ -279,7 +279,8 @@ class TestGeneratorsImportOEDB:
         old_wind_gen = gens_before[gens_before.type == "wind"].iloc[0, :]
         new_wind_gen = gens_new[
                             (gens_new.type == "wind") &
-                            (gens_new.weather_cell_id == old_wind_gen.weather_cell_id)].iloc[
+                            (gens_new.weather_cell_id == old_wind_gen.weather_cell_id) &
+                            (gens_new.p_nom == 0.001)].iloc[
                         0, :]
         # check if time series of old gen is the same as before
         assert np.isclose(gens_ts_active_before.loc[:, old_wind_gen.name].tolist(),
@@ -388,7 +389,11 @@ class TestGeneratorsImportOEDB:
 
         # check wind generator
         old_wind_gen = gens_before[gens_before.type == "wind"].iloc[0, :]
-        new_wind_gen = gens_new[gens_new.type == "wind"].iloc[0, :]
+        new_wind_gen = gens_new[
+                            (gens_new.type == "wind") &
+                            (gens_new.weather_cell_id == old_wind_gen.weather_cell_id) &
+                            (gens_new.p_nom == 0.001)].iloc[
+                        0, :]
         # check if time series of old gen is the same as before
         assert np.isclose(gens_ts_active_before.loc[:, old_wind_gen.name],
                           edisgo.timeseries.generators_active_power.loc[
