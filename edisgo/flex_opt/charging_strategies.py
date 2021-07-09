@@ -183,7 +183,7 @@ def charging_strategy(
             New timeseries
 
         """
-        edisgo_obj.timeseries._charging_points_active_power[edisgo_id] = ts
+        edisgo_obj.timeseries._charging_points_active_power.loc[:, edisgo_id] = ts
 
     # get integrated charging parks
     charging_parks = [
