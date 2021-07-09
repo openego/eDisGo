@@ -591,7 +591,7 @@ class TestEDisGo:
                     comp_name, "number"] == 13)
         # check bus
         assert self.edisgo.topology.charging_points_df.at[
-                   comp_name, "bus"] == "BusBar_MVGrid_1_LVGrid_1_LV"
+                   comp_name, "bus"] == "Bus_Load_agricultural_LVGrid_1_3"
         # check time series
         assert (self.edisgo.timeseries.charging_points_active_power.loc[
                 :, comp_name].values == [1, 2]).all()

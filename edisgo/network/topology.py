@@ -813,13 +813,13 @@ class Topology:
             ]
         )
         components["switches"] = self.switches_df.loc[
-            self.switches_df.bus_open == bus_name
+            self.switches_df.bus_closed == bus_name
         ]
         return components
 
     def get_neighbours(self, bus_name):
         """
-        Returns a list of neighbour buses of specified bus.
+        Returns a set of neighbour buses of specified bus.
 
         Parameters
         ----------
@@ -828,8 +828,8 @@ class Topology:
 
         Returns
         --------
-        list(str)
-            List of identifiers of neighbouring buses.
+        set(str)
+            Set of identifiers of neighbouring buses.
 
         """
         lines = self.get_connected_lines_from_bus(bus_name)
