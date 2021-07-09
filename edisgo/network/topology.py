@@ -955,6 +955,7 @@ class Topology:
             nr_loads = len(self._grids[grid_name].loads_df)
             load_name = "Load_{}_{}".format(tmp, nr_loads)
             while load_name in self.loads_df.index:
+                random.seed(a=load_name)
                 load_name = "Load_{}_{}".format(
                     tmp, random.randint(10 ** 8, 10 ** 9)
                 )
@@ -1092,6 +1093,7 @@ class Topology:
                 grid_name, id + 1
             )
             while name in self.charging_points_df.index:
+                random.seed(a=name)
                 name = "ChargingPoint_{}_{}".format(
                     grid_name, random.randint(10 ** 8, 10 ** 9)
                 )
@@ -1151,6 +1153,7 @@ class Topology:
                 grid_name, storage_id + 1
             )
             while storage_name in self.storage_units_df.index:
+                random.seed(a=storage_name)
                 storage_name = "StorageUnit_{}_{}".format(
                     grid_name, random.randint(10 ** 8, 10 ** 9)
                 )
@@ -1280,6 +1283,7 @@ class Topology:
         # generate line name and check uniqueness
         line_name = "Line_{}_{}".format(bus0, bus1)
         while line_name in self.lines_df.index:
+            random.seed(a=line_name)
             line_name = "Line_{}_{}_{}".format(
                 bus0, bus1, random.randint(10 ** 8, 10 ** 9)
             )
