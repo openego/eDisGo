@@ -248,7 +248,7 @@ class EDisGo:
         # load configuration
         self._config = Config(config_path=kwargs.get("config_path", None))
 
-        # instantiate topology object and load grid and equipment data
+        # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
         self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
 
@@ -259,7 +259,9 @@ class EDisGo:
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
-            self.import_generators(kwargs.get("generator_scenario"))
+            self.import_generators(
+                kwargs.get("generator_scenario"),
+                **kwargs)
 
         # set up time series for feed-in and load
         # worst-case time series
@@ -308,7 +310,7 @@ class EDisGo:
 
     def to_pypsa(self, **kwargs):
         """
-        Convert to PyPSA network representation
+        Convert to PyPSA network representation.
 
         A network topology representation based on
         :pandas:`pandas.DataFrame<DataFrame>`. The overall container object of
@@ -1141,6 +1143,9 @@ class EDisGo:
         """
         Adds single component to network topology.
 
+        Components can be lines or buses as well as generators, loads,
+        charging points or storage units.
+
         Parameters
         ----------
         comp_type : str
@@ -1238,6 +1243,8 @@ class EDisGo:
         """
         Adds single component to topology based on geolocation.
 
+        Currently components can be generators or charging points.
+
         Parameters
         ----------
         comp_type : str
@@ -1262,16 +1269,21 @@ class EDisGo:
 
         add_ts : bool, optional
             Indicator if time series for component are added as well.
-        ts_active_power : :pandas:`pandas.Series<series>`
+            Default: True.
+        ts_active_power : :pandas:`pandas.Series<Series>`, optional
             Active power time series of added component. Index of the series
             must contain all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex`.
-            Values are active power per time step in MW.
-        ts_reactive_power : :pandas:`pandas.Series<series>`
+            Values are active power per time step in MW. Currently, if you want
+            to add time series (if `add_ts` is True), you must provide a
+            time series. It is not automatically retrieved.
+        ts_reactive_power : :pandas:`pandas.Series<Series>`, optional
             Reactive power time series of added component. Index of the series
             must contain all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex`.
-            Values are reactive power per time step in MVA.
+            Values are reactive power per time step in MVA. Currently, if you
+            want to add time series (if `add_ts` is True), you must provide a
+            time series. It is not automatically retrieved.
 
         Other Parameters
         ------------------
