@@ -389,9 +389,9 @@ class TestTopology:
         )
 
         assert len_df_before + 1 == len(self.topology.lines_df)
-        assert (name ==
-                "Line_Bus_BranchTee_MVGrid_1_8_Bus_GeneratorFluctuating_7"
-                )
+        assert (
+            name == "Line_Bus_BranchTee_MVGrid_1_8_Bus_GeneratorFluctuating_7"
+        )
         assert self.topology.lines_df.at[name, "bus0"] == bus0
         assert self.topology.lines_df.at[name, "s_nom"] == 1
 
@@ -412,9 +412,9 @@ class TestTopology:
                 x=2,
             )
         assert len_df_before + 2 == len(self.topology.lines_df)
-        assert (name ==
-                "Line_Bus_BranchTee_MVGrid_1_8_Bus_GeneratorFluctuating_9"
-                )
+        assert (
+            name == "Line_Bus_BranchTee_MVGrid_1_8_Bus_GeneratorFluctuating_9"
+        )
         assert self.topology.lines_df.at[name, "s_nom"] == 6.1834213830208915
         assert self.topology.lines_df.at[name, "x"] == 0.38
 
@@ -542,6 +542,7 @@ class TestTopology:
         assert return_value
 
     def test_check_line_for_removal(self):
+
         # test warning if line does not exist
         msg = (
             "Line of name TestLine not in Topology. Cannot be removed."
@@ -803,47 +804,49 @@ class TestTopology:
         assert bus_name not in self.topology.buses_df.index
 
     def test_update_number_of_parallel_lines(self):
+
         line_1 = "Line_10026"
         line_2 = "Line_90000010"
         # manipulate number of parallel lines of line_2
         self.topology.lines_df.at[line_2, "num_parallel"] = 3
         # save values before update
         lines_attributes_pre = self.topology.lines_df.loc[
-                               [line_1, line_2], :
-                               ].copy()
+            [line_1, line_2], :
+        ].copy()
 
         lines = pd.Series(index=[line_1, line_2], data=[2, 5])
         self.topology.update_number_of_parallel_lines(lines)
 
         assert self.topology.lines_df.at[line_1, "num_parallel"] == 2
         assert (
-                self.topology.lines_df.at[line_1, "x"]
-                == lines_attributes_pre.at[line_1, "x"] / 2
+            self.topology.lines_df.at[line_1, "x"]
+            == lines_attributes_pre.at[line_1, "x"] / 2
         )
         assert (
-                self.topology.lines_df.at[line_1, "r"]
-                == lines_attributes_pre.at[line_1, "r"] / 2
+            self.topology.lines_df.at[line_1, "r"]
+            == lines_attributes_pre.at[line_1, "r"] / 2
         )
         assert (
-                self.topology.lines_df.at[line_1, "s_nom"]
-                == lines_attributes_pre.at[line_1, "s_nom"] * 2
+            self.topology.lines_df.at[line_1, "s_nom"]
+            == lines_attributes_pre.at[line_1, "s_nom"] * 2
         )
 
         assert self.topology.lines_df.at[line_2, "num_parallel"] == 5
         assert (
-                self.topology.lines_df.at[line_2, "x"]
-                == lines_attributes_pre.at[line_2, "x"] * 3 / 5
+            self.topology.lines_df.at[line_2, "x"]
+            == lines_attributes_pre.at[line_2, "x"] * 3 / 5
         )
         assert (
-                self.topology.lines_df.at[line_2, "r"]
-                == lines_attributes_pre.at[line_2, "r"] * 3 / 5
+            self.topology.lines_df.at[line_2, "r"]
+            == lines_attributes_pre.at[line_2, "r"] * 3 / 5
         )
         assert (
-                self.topology.lines_df.at[line_2, "s_nom"]
-                == lines_attributes_pre.at[line_2, "s_nom"] * 5 / 3
+            self.topology.lines_df.at[line_2, "s_nom"]
+            == lines_attributes_pre.at[line_2, "s_nom"] * 5 / 3
         )
 
     def test_change_line_type(self):
+
         # test line type not in equipment data
         line_1 = "Line_10027"
         msg = ("Given new line type is not in equipment data. Please "
@@ -888,8 +891,8 @@ class TestTopology:
             0.1 * self.topology.lines_df.at[line_2, "length"]
         )
         assert (
-                self.topology.lines_df.loc[[line_1, line_2], "s_nom"] ==
-                np.sqrt(3) * 0.4 * 0.419
+            self.topology.lines_df.loc[[line_1, line_2], "s_nom"] ==
+            np.sqrt(3) * 0.4 * 0.419
         ).all()
 
     def test_to_csv(self):
@@ -1131,6 +1134,7 @@ class TestTopologyWithEdisgoObject:
                    comp_name, "number"] == test_gen["number"]
 
     def test_connect_to_lv(self):
+
         # ######### Generator #############
 
         # test substation ID that does not exist in the grid
