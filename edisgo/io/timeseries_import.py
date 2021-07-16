@@ -10,6 +10,8 @@ def import_feedin_timeseries(config_data, weather_cell_ids, timeindex):
     """
     Import RES feed-in time series data and process
 
+    ToDo: Update docstring.
+
     Parameters
     ----------
     config_data : dict
@@ -19,8 +21,9 @@ def import_feedin_timeseries(config_data, weather_cell_ids, timeindex):
 
     Returns
     -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Feedin time series
+    :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with time series for active power feed-in, normalized to
+        a capacity of 1 MW.
 
     """
 
@@ -29,7 +32,8 @@ def import_feedin_timeseries(config_data, weather_cell_ids, timeindex):
 
         """
         # ToDo: add option to retrieve subset of time series
-        # ToDo: find the reference power class for mvgrid/w_id and insert instead of 4
+        # ToDo: find the reference power class for mvgrid/w_id and insert
+        #  instead of 4
         feedin_sqla = (
             session.query(
                 orm_feedin.w_id, orm_feedin.source, orm_feedin.feedin

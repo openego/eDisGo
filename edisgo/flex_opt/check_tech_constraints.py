@@ -604,8 +604,7 @@ def _mv_allowed_voltage_limits(edisgo_obj, voltage_levels):
 
         * 'mv_lv'
           The allowed voltage deviations for buses in the MV are the same as
-          for buses in the LV. Further load and feed-in case are not
-          distinguished.
+          for buses in the LV, namely $pm$ 10 %.
         * 'mv'
           Use this to handle allowed voltage limits in the MV and LV
           differently. In that case load and feed-in case are differentiated.

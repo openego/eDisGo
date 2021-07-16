@@ -66,10 +66,13 @@ class TestTopology:
         assert "Line_10019" in connected_lines.index
         assert "Line_10020" in connected_lines.index
         assert "Line_10021" in connected_lines.index
-        # test if the selected Bus is connected to the found lines
-        assert "Bus_BranchTee_MVGrid_1_8" in connected_lines.loc["Line_10019"].values.tolist()
-        assert "Bus_BranchTee_MVGrid_1_8" in connected_lines.loc["Line_10020"].values.tolist()
-        assert "Bus_BranchTee_MVGrid_1_8" in connected_lines.loc["Line_10021"].values.tolist()
+        # test if the selected bus is connected to the found lines
+        assert ("Bus_BranchTee_MVGrid_1_8" in
+                connected_lines.loc["Line_10019"].values.tolist())
+        assert ("Bus_BranchTee_MVGrid_1_8" in
+                connected_lines.loc["Line_10020"].values.tolist())
+        assert ("Bus_BranchTee_MVGrid_1_8" in
+                connected_lines.loc["Line_10021"].values.tolist())
 
     def test_get_connected_components_from_bus(self):
         """Test get_connected_components_from_bus method."""
@@ -102,7 +105,7 @@ class TestTopology:
         assert components["transformers_hvmv"].empty
         assert components["switches"].empty
 
-        # test if lines, storages and hvmv transformer are found at the bus
+        # test if lines, storage unit and HV/MV transformer are found at bus
         components = self.topology.get_connected_components_from_bus(
             "Bus_MVStation_1"
         )
@@ -113,7 +116,8 @@ class TestTopology:
         assert "Line_10004" in components["lines"].index
         assert "Line_10005" in components["lines"].index
         assert "Line_10006" in components["lines"].index
-        assert "MVStation_1_transformer_1" in components["transformers_hvmv"].index
+        assert "MVStation_1_transformer_1" in \
+               components["transformers_hvmv"].index
 
         assert components["generators"].empty
         assert components["loads"].empty
@@ -121,7 +125,8 @@ class TestTopology:
         assert components["transformers"].empty
         assert components["switches"].empty
 
-        # test if lines, transformers and switches are found at the bus for a closed switch
+        # test if lines, transformers and switches are found at the bus for a
+        # closed switch
         switch = Switch(id="circuit_breaker_1", topology=self.topology)
         switch.close()
         components = self.topology.get_connected_components_from_bus(
@@ -141,7 +146,8 @@ class TestTopology:
         assert components["storage_units"].empty
         assert components["transformers_hvmv"].empty
 
-        # test if lines, transformers and switches are found at the bus for an open switch
+        # test if lines, transformers and switches are found at the bus for an
+        # open switch
         switch.open()
         components = self.topology.get_connected_components_from_bus(
             "BusBar_MVGrid_1_LVGrid_4_MV"
@@ -157,17 +163,6 @@ class TestTopology:
         assert components["charging_points"].empty
         assert components["storage_units"].empty
         assert components["transformers_hvmv"].empty
-
-        # findet bei ungeändert code den  switch
-        # test if switches are found at the bus
-        # # searching switch through virtual bus
-        # components = self.topology.get_connected_components_from_bus(
-        #     "virtual_BusBar_MVGrid_1_LVGrid_4_MV"
-        # )
-        # assert "circuit_breaker_1" in components["switches"].index
-
-
-
 
     def test_get_neighbours(self):
         """Test get_neighbours method."""
@@ -395,7 +390,7 @@ class TestTopology:
 
         assert len_df_before + 1 == len(self.topology.lines_df)
         assert (
-                name == "Line_Bus_BranchTee_MVGrid_1_8_Bus_GeneratorFluctuating_7"
+            name == "Line_Bus_BranchTee_MVGrid_1_8_Bus_GeneratorFluctuating_7"
         )
         assert self.topology.lines_df.at[name, "bus0"] == bus0
         assert self.topology.lines_df.at[name, "s_nom"] == 1
@@ -418,9 +413,9 @@ class TestTopology:
             )
         assert len_df_before + 2 == len(self.topology.lines_df)
         assert (
-                name == "Line_Bus_BranchTee_MVGrid_1_8_Bus_GeneratorFluctuating_9"
+            name == "Line_Bus_BranchTee_MVGrid_1_8_Bus_GeneratorFluctuating_9"
         )
-        assert self.topology.lines_df.at[name, "s_nom"] == 6.183421383020891
+        assert self.topology.lines_df.at[name, "s_nom"] == 6.1834213830208915
         assert self.topology.lines_df.at[name, "x"] == 0.38
 
         # test no creation of new line when line between buses already exists
@@ -547,6 +542,7 @@ class TestTopology:
         assert return_value
 
     def test_check_line_for_removal(self):
+
         # test warning if line does not exist
         msg = (
             "Line of name TestLine not in Topology. Cannot be removed."
@@ -808,47 +804,49 @@ class TestTopology:
         assert bus_name not in self.topology.buses_df.index
 
     def test_update_number_of_parallel_lines(self):
+
         line_1 = "Line_10026"
         line_2 = "Line_90000010"
         # manipulate number of parallel lines of line_2
         self.topology.lines_df.at[line_2, "num_parallel"] = 3
         # save values before update
         lines_attributes_pre = self.topology.lines_df.loc[
-                               [line_1, line_2], :
-                               ].copy()
+            [line_1, line_2], :
+        ].copy()
 
         lines = pd.Series(index=[line_1, line_2], data=[2, 5])
         self.topology.update_number_of_parallel_lines(lines)
 
         assert self.topology.lines_df.at[line_1, "num_parallel"] == 2
         assert (
-                self.topology.lines_df.at[line_1, "x"]
-                == lines_attributes_pre.at[line_1, "x"] / 2
+            self.topology.lines_df.at[line_1, "x"]
+            == lines_attributes_pre.at[line_1, "x"] / 2
         )
         assert (
-                self.topology.lines_df.at[line_1, "r"]
-                == lines_attributes_pre.at[line_1, "r"] / 2
+            self.topology.lines_df.at[line_1, "r"]
+            == lines_attributes_pre.at[line_1, "r"] / 2
         )
         assert (
-                self.topology.lines_df.at[line_1, "s_nom"]
-                == lines_attributes_pre.at[line_1, "s_nom"] * 2
+            self.topology.lines_df.at[line_1, "s_nom"]
+            == lines_attributes_pre.at[line_1, "s_nom"] * 2
         )
 
         assert self.topology.lines_df.at[line_2, "num_parallel"] == 5
         assert (
-                self.topology.lines_df.at[line_2, "x"]
-                == lines_attributes_pre.at[line_2, "x"] * 3 / 5
+            self.topology.lines_df.at[line_2, "x"]
+            == lines_attributes_pre.at[line_2, "x"] * 3 / 5
         )
         assert (
-                self.topology.lines_df.at[line_2, "r"]
-                == lines_attributes_pre.at[line_2, "r"] * 3 / 5
+            self.topology.lines_df.at[line_2, "r"]
+            == lines_attributes_pre.at[line_2, "r"] * 3 / 5
         )
         assert (
-                self.topology.lines_df.at[line_2, "s_nom"]
-                == lines_attributes_pre.at[line_2, "s_nom"] * 5 / 3
+            self.topology.lines_df.at[line_2, "s_nom"]
+            == lines_attributes_pre.at[line_2, "s_nom"] * 5 / 3
         )
 
     def test_change_line_type(self):
+
         # test line type not in equipment data
         line_1 = "Line_10027"
         msg = ("Given new line type is not in equipment data. Please "
@@ -893,8 +891,8 @@ class TestTopology:
             0.1 * self.topology.lines_df.at[line_2, "length"]
         )
         assert (
-                self.topology.lines_df.loc[[line_1, line_2], "s_nom"] ==
-                np.sqrt(3) * 0.4 * 0.419
+            self.topology.lines_df.loc[[line_1, line_2], "s_nom"] ==
+            np.sqrt(3) * 0.4 * 0.419
         ).all()
 
     def test_to_csv(self):
@@ -1136,6 +1134,7 @@ class TestTopologyWithEdisgoObject:
                    comp_name, "number"] == test_gen["number"]
 
     def test_connect_to_lv(self):
+
         # ######### Generator #############
 
         # test substation ID that does not exist in the grid

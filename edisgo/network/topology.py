@@ -742,6 +742,33 @@ class Topology:
             self.lines_df.loc[self.lines_df.bus1 == bus_name]
         )
 
+    def get_line_connecting_buses(self, bus_1, bus_2):
+        """
+        Returns information of line connecting bus_1 and bus_2.
+
+        Parameters
+        ----------
+        bus_1 : str
+            Name of first bus.
+        bus_2 : str
+            Name of second bus.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with information of line connecting bus_1 and bus_2
+            in the same format as
+            :attr:`~.network.topology.Topology.lines_df`.
+
+        """
+        lines_bus_1 = self.get_connected_lines_from_bus(bus_1)
+        lines_bus_2 = self.get_connected_lines_from_bus(bus_2)
+        line = [_ for _ in lines_bus_1.index if _ in lines_bus_2.index]
+        if len(line) > 0:
+            return self.lines_df.loc[line, :]
+        else:
+            return None
+
     def get_connected_components_from_bus(self, bus_name):
         """
         Returns dictionary of components connected to specified bus.
@@ -955,6 +982,7 @@ class Topology:
             nr_loads = len(self._grids[grid_name].loads_df)
             load_name = "Load_{}_{}".format(tmp, nr_loads)
             while load_name in self.loads_df.index:
+                random.seed(a=load_name)
                 load_name = "Load_{}_{}".format(
                     tmp, random.randint(10 ** 8, 10 ** 9)
                 )
@@ -1092,6 +1120,7 @@ class Topology:
                 grid_name, id + 1
             )
             while name in self.charging_points_df.index:
+                random.seed(a=name)
                 name = "ChargingPoint_{}_{}".format(
                     grid_name, random.randint(10 ** 8, 10 ** 9)
                 )
@@ -1151,6 +1180,7 @@ class Topology:
                 grid_name, storage_id + 1
             )
             while storage_name in self.storage_units_df.index:
+                random.seed(a=storage_name)
                 storage_name = "StorageUnit_{}_{}".format(
                     grid_name, random.randint(10 ** 8, 10 ** 9)
                 )
@@ -1280,6 +1310,7 @@ class Topology:
         # generate line name and check uniqueness
         line_name = "Line_{}_{}".format(bus0, bus1)
         while line_name in self.lines_df.index:
+            random.seed(a=line_name)
             line_name = "Line_{}_{}_{}".format(
                 bus0, bus1, random.randint(10 ** 8, 10 ** 9)
             )

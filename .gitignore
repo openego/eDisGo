@@ -19,16 +19,17 @@ doc/_html
 
 # exclude egg-info
 eDisGo.egg-info/
-/edisgo/examples/Exemplary_PyPSA_bus_results.csv
-/edisgo/examples/Exemplary_PyPSA_line_results.csv
+/examples/Exemplary_PyPSA_bus_results.csv
+/examples/Exemplary_PyPSA_line_results.csv
 
 # exclude directories
-/edisgo/examples/edisgo2pypsa_export/*
-/edisgo/examples/data/
+/examples/edisgo2pypsa_export/*
+/examples/data/
+/examples/ding0_example_grid/
 
 # exclude check scripts
-/edisgo/examples/compare_graphs.py
-/edisgo/examples/compare_pypsa_network.py
+/examples/compare_graphs.py
+/examples/compare_pypsa_network.py
 
 # exclude .json files in opf
 /edisgo/opf/edisgo_scenario_data/*.json

@@ -24,10 +24,26 @@ logger = logging.getLogger("edisgo")
 class EDisGo:
     """
     Provides the top-level API for invocation of data import, power flow
-    analysis, network reinforcement and flexibility measures.
+    analysis, network reinforcement, flexibility measures, etc..
 
     Parameters
     ----------
+    ding0_grid : :obj:`str`
+        Path to directory containing csv files of network to be loaded.
+    generator_scenario : None or :obj:`str`, optional
+        If None, the generator park of the imported grid is kept as is.
+        Otherwise defines which scenario of future generator park to use
+        and invokes grid integration of these generators. Possible options are
+        'nep2035' and 'ego100'. These are scenarios from the research project
+        `open_eGo <https://openegoproject.wordpress.com/>`_ (see
+        `final report <https://www.uni-flensburg.de/fileadmin/content/\
+        abteilungen/industrial/dokumente/downloads/veroeffentlichungen/\
+        forschungsergebnisse/20190426endbericht-openego-fkz0325881-final.pdf>`_
+        for more information on the scenarios).
+        See :attr:`~.EDisGo.import_generators` for further information on how
+        generators are integrated and what further options there are.
+        Default: None.
+
     worst_case_analysis : None or :obj:`str`, optional
         If not None time series for feed-in and load will be generated
         according to the chosen worst case analysis.
@@ -47,15 +63,140 @@ class EDisGo:
 
           Feed-in and load for the worst-case scenario load case is generated.
 
+        Worst case scaling factors for loads and generators are specified in
+        the config section `worst_case_scale_factor`.
+
         Be aware that if you choose to conduct a worst-case analysis your
-        input for the following parameters will not be used:
+        input for all other time series parameters (e.g.
+        `timeseries_generation_fluctuating`,
+        `timeseries_generation_dispatchable`,
+        `timeseries_load`) will not be used.
+        As eDisGo is designed to work with time series but worst cases
+        are not time specific, a random time index 1/1/1970 is used.
 
-        * `timeseries_generation_fluctuating`
-        * `timeseries_generation_dispatchable`
-        * `timeseries_load`
+        Default: None.
 
-    ding0_grid : :obj:`str`
-        Path to directory containing csv files of network to be loaded.
+    timeseries_generation_fluctuating : :obj:`str` or \
+    :pandas:`pandas.DataFrame<DataFrame>` or None, optional
+        Parameter used to obtain time series for active power feed-in of
+        fluctuating renewables wind and solar.
+        Possible options are:
+
+        * 'oedb'
+
+          Hourly time series for the year 2011 are obtained from the OpenEnergy
+          DataBase. See
+          :func:`edisgo.io.timeseries_import.import_feedin_timeseries` for more
+          information.
+
+        * :pandas:`pandas.DataFrame<DataFrame>`
+
+          DataFrame with time series for active power feed-in, normalized to
+          a capacity of 1 MW.
+
+          Time series can either be aggregated by technology type or by type
+          and weather cell ID. In the first case columns of the DataFrame are
+          'solar' and 'wind'; in the second case columns need to be a
+          :pandas:`pandas.MultiIndex<MultiIndex>` with the first level
+          containing the type and the second level the weather cell ID.
+
+          Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+
+          When importing a ding0 grid and/or using predefined scenarios
+          of the future generator park (see parameter `generator_scenario`),
+          each generator has an assigned weather cell ID that identifies the
+          weather data cell from the weather data set used in the research
+          project `open_eGo <https://openegoproject.wordpress.com/>`_ to
+          determine feed-in profiles. The weather cell ID can be retrieved
+          from column `weather_cell_id` in
+          :attr:`~.network.topology.Topology.generators_df` and could be
+          overwritten to use own weather cells.
+
+        Default: None.
+
+    timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<DataFrame>`\
+    or None, optional
+        DataFrame with time series for active power of each
+        type of dispatchable generator, normalized to a capacity of 1 MW.
+
+        Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+
+        Columns represent generator type (e.g. 'gas', 'coal', 'biomass').
+        All in the current grid existing generator types can be retrieved
+        from column `type` in
+        :attr:`~.network.topology.Topology.generators_df`.
+        Use 'other' if you don't want to explicitly provide every possible
+        type.
+
+        Default: None.
+    timeseries_generation_reactive_power : \
+    :pandas:`pandas.DataFrame<DataFrame>` or None, optional
+        Dataframe with time series of normalized reactive power (normalized by
+        the rated nominal active power) per technology and weather cell. Index
+        needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+        Columns represent generator type and can be a MultiIndex containing
+        the weather cell ID in the second level. If the technology doesn't
+        contain weather cell information, i.e. if it is not a solar
+        or wind generator, this second level can be left as a numpy Nan or a
+        None.
+
+        If no time series for the technology or technology and weather cell ID
+        is given, reactive power will be calculated from power factor and
+        power factor mode in the config sections `reactive_power_factor` and
+        `reactive_power_mode` and a warning will be raised.
+
+        Default: None.
+    timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<DataFrame>` or \
+    None, optional
+        Parameter used to obtain time series of active power of loads.
+        Possible options are:
+
+        * 'demandlib'
+
+          Time series for the year specified in input parameter `timeindex` are
+          generated using standard electric load profiles from the oemof
+          `demandlib <https://github.com/oemof/demandlib/>`_.
+
+        * :pandas:`pandas.DataFrame<DataFrame>`
+
+          DataFrame with load time series of each type of load
+          normalized with corresponding annual energy demand. Index needs to
+          be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+          Columns represent load type. The in the current grid existing load
+          types can be retrieved from column `sector` in
+          :attr:`~.network.topology.Topology.loads_df`. In ding0 grids the
+          differentiated sectors are 'residential', 'retail', 'industrial', and
+          'agricultural'.
+
+        Default: None.
+
+    timeseries_load_reactive_power : :pandas:`pandas.DataFrame<DataFrame>` \
+    or None, optional
+        Dataframe with time series of normalized reactive power (normalized by
+        annual energy demand) per load sector.
+
+        Index needs to be a
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+
+        Columns represent load type. The in the current grid existing load
+        types can be retrieved from column `sector` in
+        :attr:`~.network.topology.Topology.loads_df`. In ding0 grids the
+        differentiated sectors are 'residential', 'retail', 'industrial', and
+        'agricultural'.
+
+        If no time series for the load sector is given, reactive power will be
+        calculated from power factor and power factor mode in the config
+        sections `reactive_power_factor` and `reactive_power_mode` and a
+        warning will be raised.
+
+        Default: None.
+
+    timeindex : None or :pandas:`pandas.DatetimeIndex<DatetimeIndex>`, optional
+        Can be used to select time ranges of the feed-in and load time series
+        that will be used in the power flow analysis. Also defines the year
+        load time series are obtained for when choosing the 'demandlib' option
+        to generate load time series.
+
     config_path : None or :obj:`str` or :obj:`dict`
         Path to the config directory. Options are:
 
@@ -89,116 +230,15 @@ class EDisGo:
           and config files must exist and are not automatically created.
 
         Default: None.
-    timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<DataFrame>`
-        Parameter used to obtain time series for active power feed-in of
-        fluctuating renewables wind and solar.
-        Possible options are:
-
-        * 'oedb'
-
-          Time series for the year 2011 are obtained from the OpenEnergy
-          DataBase.
-
-        * :pandas:`pandas.DataFrame<DataFrame>`
-
-          DataFrame with time series, normalized with corresponding capacity.
-          Time series can either be aggregated by technology type or by type
-          and weather cell ID. In the first case columns of the DataFrame are
-          'solar' and 'wind'; in the second case columns need to be a
-          :pandas:`pandas.MultiIndex<MultiIndex>` with the first level
-          containing the type and the second level the weather cell id.
-          Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-
-         .. ToDo: explain how to obtain weather cell id,
-
-         .. ToDo: add link to explanation of weather cell id
-
-    timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<DataFrame>`
-        DataFrame with time series for active power of each (aggregated)
-        type of dispatchable generator normalized with corresponding capacity.
-        Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-        Columns represent generator type:
-
-        * 'gas'
-        * 'coal'
-        * 'biomass'
-        * 'other'
-        * ...
-
-        Use 'other' if you don't want to explicitly provide every possible
-        type.
-    timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        DataFrame with time series of normalized reactive power (normalized by
-        the rated nominal active power) per technology and weather cell. Index
-        needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-        Columns represent generator type and can be a MultiIndex column
-        containing the weather cell ID in the second level. If the technology
-        doesn't contain weather cell information i.e. if it is other than solar
-        and wind generation, this second level can be left as a numpy Nan or a
-        None.
-        Default: None.
-        If no time series for the technology or technology and weather cell ID
-        is given, reactive power will be calculated from power factor and
-        power factor mode in the config sections `reactive_power_factor` and
-        `reactive_power_mode` and a warning will be raised.
-    timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<DataFrame>`
-        Parameter used to obtain time series of active power of loads.
-        Possible options are:
-
-        * 'demandlib'
-
-          Time series for the year specified in `timeindex` are
-          generated using the oemof demandlib.
-
-        * :pandas:`pandas.DataFrame<DataFrame>`
-
-          DataFrame with load time series of each type of load
-          normalized with corresponding annual energy demand. Index needs to
-          be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-          Columns represent load type:
-
-          * 'residential'
-          * 'retail'
-          * 'industrial'
-          * 'agricultural'
-
-    timeseries_load_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        DataFrame with time series of normalized reactive power (normalized by
-        annual energy demand) per load sector. Index needs to be a
-        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-        Columns represent load type:
-
-          * 'residential'
-          * 'retail'
-          * 'industrial'
-          * 'agricultural'
-
-        Default: None.
-        If no time series for the load sector is given, reactive power will be
-        calculated from power factor and power factor mode in the config
-        sections `reactive_power_factor` and `reactive_power_mode` and a
-        warning will be raised.
-    generator_scenario : None or :obj:`str`
-        If provided defines which scenario of future generator park to use
-        and invokes import of these generators. Possible options are 'nep2035'
-        and 'ego100'.
-
-        .. ToDo: Add link to explanation of scenarios.
-
-    timeindex : None or :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-        Can be used to select time ranges of the feed-in and load time series
-        that will be used in the power flow analysis. Also defines the year
-        load time series are obtained for when choosing the 'demandlib' option
-        to generate load time series.
 
     Attributes
     ----------
     topology : :class:`~.network.topology.Topology`
         The topology is a container object holding the topology of the grids.
     timeseries: :class:`~.network.timeseries.TimeSeries`
-        Container for component timeseries.
+        Container for component time series.
     results : :class:`~.network.results.Results`
-        This is a container holding alls calculation results from power flow
+        This is a container holding all calculation results from power flow
         analyses, curtailment, storage integration, etc.
 
     """
@@ -208,7 +248,7 @@ class EDisGo:
         # load configuration
         self._config = Config(config_path=kwargs.get("config_path", None))
 
-        # instantiate topology object and load grid and equipment data
+        # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
         self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
 
@@ -219,7 +259,9 @@ class EDisGo:
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
-            self.import_generators(kwargs.get("generator_scenario"))
+            self.import_generators(
+                generator_scenario=kwargs.pop("generator_scenario"),
+                **kwargs)
 
         # set up time series for feed-in and load
         # worst-case time series
@@ -268,7 +310,7 @@ class EDisGo:
 
     def to_pypsa(self, **kwargs):
         """
-        Convert to PyPSA network representation
+        Convert to PyPSA network representation.
 
         A network topology representation based on
         :pandas:`pandas.DataFrame<DataFrame>`. The overall container object of
@@ -1101,6 +1143,9 @@ class EDisGo:
         """
         Adds single component to network topology.
 
+        Components can be lines or buses as well as generators, loads,
+        charging points or storage units.
+
         Parameters
         ----------
         comp_type : str
@@ -1198,6 +1243,8 @@ class EDisGo:
         """
         Adds single component to topology based on geolocation.
 
+        Currently components can be generators or charging points.
+
         Parameters
         ----------
         comp_type : str
@@ -1222,16 +1269,21 @@ class EDisGo:
 
         add_ts : bool, optional
             Indicator if time series for component are added as well.
-        ts_active_power : :pandas:`pandas.Series<series>`
+            Default: True.
+        ts_active_power : :pandas:`pandas.Series<Series>`, optional
             Active power time series of added component. Index of the series
             must contain all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex`.
-            Values are active power per time step in MW.
-        ts_reactive_power : :pandas:`pandas.Series<series>`
+            Values are active power per time step in MW. Currently, if you want
+            to add time series (if `add_ts` is True), you must provide a
+            time series. It is not automatically retrieved.
+        ts_reactive_power : :pandas:`pandas.Series<Series>`, optional
             Reactive power time series of added component. Index of the series
             must contain all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex`.
-            Values are reactive power per time step in MVA.
+            Values are reactive power per time step in MVA. Currently, if you
+            want to add time series (if `add_ts` is True), you must provide a
+            time series. It is not automatically retrieved.
 
         Other Parameters
         ------------------
