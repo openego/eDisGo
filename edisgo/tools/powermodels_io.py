@@ -10,7 +10,8 @@ import pypsa
 
 def to_powermodels(pypsa_net):
     """
-    Convert pypsa network to network dictionary format, using the pypower structure as an intermediate steps
+    Convert pypsa network to network dictionary format, using the pypower
+    structure as an intermediate steps
 
     powermodels network dictionary:
     https://lanl-ansi.github.io/PowerModels.jl/stable/network-data/

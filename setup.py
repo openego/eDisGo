@@ -46,7 +46,7 @@ setup(
         'multiprocess',
         'workalendar',
         'egoio >= 0.4.7',
-        'matplotlib',
+        'matplotlib >= 3.3.0',
         'pypower',
         'sklearn'
     ],

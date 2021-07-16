@@ -58,7 +58,7 @@ class TestCheckTechConstraints:
 
         # create over-load problem in both time steps with higher over-load
         # in load case
-        self.edisgo.results.hv_mv_exchanges = pd.DataFrame(
+        self.edisgo.results.pfa_slack = pd.DataFrame(
             data={"p": [30, 25], "q": [30, 25]}, index=self.timesteps
         )
 
@@ -98,10 +98,14 @@ class TestCheckTechConstraints:
             df.at[self.timesteps[0], "Line_10005"],
             7.274613391789284 / 20 / sqrt(3),
         )
-        # check in load case
+        # check in load case (line in cycle as well as stub)
         assert np.isclose(
             df.at[self.timesteps[1], "Line_10005"],
             7.274613391789284 / 20 / sqrt(3) * 0.5,
+        )
+        assert np.isclose(
+            df.at[self.timesteps[1], "Line_10001"],
+            7.274613391789284 / 20 / sqrt(3),
         )
 
         # check for LV
@@ -218,7 +222,7 @@ class TestCheckTechConstraints:
         assert len(voltage_issues["LVGrid_6"]) == 1
         assert np.isclose(
             voltage_issues["LVGrid_6"].loc[
-                "Bus_secondary_LVStation_6", "v_diff_max"
+                "BusBar_MVGrid_1_LVGrid_6_LV", "v_diff_max"
             ],
             0.010635,
         )
@@ -226,7 +230,7 @@ class TestCheckTechConstraints:
         # check with voltage_levels="lv" and mode=None
         # create one voltage issue in LVGrid_6
         self.edisgo.results.v_res.at[
-            self.timesteps[0], "Bus_secondary_LVStation_6"
+            self.timesteps[0], "BusBar_MVGrid_1_LVGrid_6_LV"
         ] = 1.14
         self.edisgo.results.v_res.at[
             self.timesteps[0], "Bus_BranchTee_LVGrid_6_1"
@@ -283,7 +287,7 @@ class TestCheckTechConstraints:
         assert len(voltage_issues["LVGrid_6"]) == 1
         assert np.isclose(
             voltage_issues["LVGrid_6"].loc[
-                "Bus_secondary_LVStation_6", "v_diff_max"
+                "BusBar_MVGrid_1_LVGrid_6_LV", "v_diff_max"
             ],
             0.04,
         )
@@ -321,10 +325,10 @@ class TestCheckTechConstraints:
         lv_grid = self.edisgo.topology._grids["LVGrid_1"]
         # set voltage at stations' secondary side to known value
         self.edisgo.results._v_res.loc[
-            self.timesteps[0], "Bus_secondary_LVStation_1"
+            self.timesteps[0], "BusBar_MVGrid_1_LVGrid_1_LV"
         ] = 1.05
         self.edisgo.results._v_res.loc[
-            self.timesteps[1], "Bus_secondary_LVStation_1"
+            self.timesteps[1], "BusBar_MVGrid_1_LVGrid_1_LV"
         ] = 0.98
 
         # run function with mode=None
@@ -342,10 +346,10 @@ class TestCheckTechConstraints:
 
         # set voltage at stations' primary side to known value
         self.edisgo.results._v_res.loc[
-            self.timesteps[0], "Bus_primary_LVStation_1"
+            self.timesteps[0], "BusBar_MVGrid_1_LVGrid_1_MV"
         ] = 1.03
         self.edisgo.results._v_res.loc[
-            self.timesteps[1], "Bus_primary_LVStation_1"
+            self.timesteps[1], "BusBar_MVGrid_1_LVGrid_1_MV"
         ] = 0.99
 
         # run function with mode='stations'
@@ -425,7 +429,7 @@ class TestCheckTechConstraints:
         check_tech_constraints.check_ten_percent_voltage_deviation(self.edisgo)
         # create voltage issues greater 10% and check again
         self.edisgo.results.v_res.at[
-            self.timesteps[0], "Bus_primary_LVStation_9"
+            self.timesteps[0], "BusBar_MVGrid_1_LVGrid_9_MV"
         ] = 1.14
         msg = "Maximum allowed voltage deviation of 10% exceeded."
         with pytest.raises(ValueError, match=msg):

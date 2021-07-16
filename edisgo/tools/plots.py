@@ -349,17 +349,18 @@ def mv_grid_topology(
     def get_color_and_size(connected_components, colors_dict, sizes_dict):
         # Todo: handling of multiple connected elements, so far determined as
         #  'other'
-        if not connected_components["Transformer_HVMV"].empty:
+        if not connected_components["transformers_hvmv"].empty:
             return colors_dict["MVStation"], sizes_dict["MVStation"]
-        elif not connected_components["Transformer"].empty:
+        elif not connected_components["transformers"].empty:
             return colors_dict["LVStation"], sizes_dict["LVStation"]
         elif (
-            not connected_components["Generator"].empty
-            and connected_components["Load"].empty
-            and connected_components["StorageUnit"].empty
+            not connected_components["generators"].empty
+            and connected_components["loads"].empty
+            and connected_components["charging_points"].empty
+            and connected_components["storage_units"].empty
         ):
             if (
-                connected_components["Generator"].type.isin(["wind", "solar"])
+                connected_components["generators"].type.isin(["wind", "solar"])
             ).all():
                 return (
                     colors_dict["GeneratorFluctuating"],
@@ -368,23 +369,25 @@ def mv_grid_topology(
             else:
                 return colors_dict["Generator"], sizes_dict["Generator"]
         elif (
-            not connected_components["Load"].empty
-            and connected_components["Generator"].empty
-            and connected_components["StorageUnit"].empty
+                (not connected_components["loads"].empty
+                 or not connected_components["charging_points"].empty)
+                and connected_components["generators"].empty
+                and connected_components["storage_units"].empty
         ):
-            raise NotImplementedError
-        elif not connected_components["Switch"].empty:
+            return colors_dict["Load"], sizes_dict["Load"]
+        elif not connected_components["switches"].empty:
             return (
                 colors_dict["DisconnectingPoint"],
                 sizes_dict["DisconnectingPoint"],
             )
         elif (
-            not connected_components["StorageUnit"].empty
-            and connected_components["Load"].empty
-            and connected_components["Generator"].empty
+            not connected_components["storage_units"].empty
+            and connected_components["loads"].empty
+            and connected_components["charging_points"].empty
+            and connected_components["generators"].empty
         ):
             return colors_dict["Storage"], sizes_dict["Storage"]
-        elif len(connected_components["Line"]) > 1:
+        elif len(connected_components["lines"]) > 1:
             return colors_dict["BranchTee"], sizes_dict["BranchTee"]
         else:
             return colors_dict["else"], sizes_dict["else"]
@@ -396,6 +399,7 @@ def mv_grid_topology(
             "BranchTee": "b",
             "GeneratorFluctuating": "g",
             "Generator": "k",
+            "Load": "m",
             "LVStation": "c",
             "MVStation": "r",
             "Storage": "y",
@@ -406,6 +410,7 @@ def mv_grid_topology(
             "BranchTee": 10000,
             "GeneratorFluctuating": 100000,
             "Generator": 100000,
+            "Load": 100000,
             "LVStation": 50000,
             "MVStation": 120000,
             "Storage": 100000,
@@ -497,7 +502,7 @@ def mv_grid_topology(
             {
                 bus: edisgo_obj.topology.get_connected_components_from_bus(
                     bus
-                )["StorageUnit"].p_nom.values.sum()
+                )["storage_units"].p_nom.values.sum()
                 * 1000
                 / 3
                 for bus in buses_with_storages
@@ -630,10 +635,6 @@ def mv_grid_topology(
             pypsa_plot.buses.index, grid_expansion_costs, edisgo_obj
         )
         bus_cmap = plt.cm.get_cmap(lines_cmap)
-    elif node_color is None:
-        bus_sizes = 0
-        bus_colors = "r"
-        bus_cmap = None
     elif node_color == "curtailment":
         bus_sizes = nodes_curtailment(pypsa_plot.buses.index, curtailment_df)
         bus_colors = "orangered"
@@ -643,13 +644,37 @@ def mv_grid_topology(
             pypsa_plot.buses.index, edisgo_obj
         )
         bus_cmap = None
-    else:
-        logging.warning(
-            "Choice for `node_color` is not valid. Default is " "used instead."
-        )
+    elif node_color is None:
         bus_sizes = 0
         bus_colors = "r"
         bus_cmap = None
+    else:
+        if kwargs.get("bus_colors", None):
+            bus_colors = pd.Series(kwargs.get("bus_colors")).loc[
+                pypsa_plot.buses]
+        else:
+            logging.warning(
+                "Choice for `node_color` is not valid. Default bus colors are "
+                "used instead."
+            )
+            bus_colors = "r"
+        if kwargs.get("bus_sizes", None):
+            bus_sizes = pd.Series(kwargs.get("bus_sizes")).loc[
+                pypsa_plot.buses]
+        else:
+            logging.warning(
+                "Choice for `node_color` is not valid. Default bus sizes are "
+                "used instead."
+            )
+            bus_sizes = 0
+        if kwargs.get("bus_cmap", None):
+            bus_cmap = kwargs.get("bus_cmap", None)
+        else:
+            logging.warning(
+                "Choice for `node_color` is not valid. Default bus colormap "
+                "is used instead."
+            )
+            bus_cmap = None
 
     # convert bus coordinates to Mercator
     if contextily and background_map:
