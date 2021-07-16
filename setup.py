@@ -48,7 +48,6 @@ setup(
         'geopy == 2.1.0',
         'pandas == 1.2.4',
         'pyproj == 3.0.1',
-        'sqlalchemy == 1.3.24',
         'shapely == 1.7.1',
         'pypsa == 0.17.1',
         'pyomo >= 6.0',
