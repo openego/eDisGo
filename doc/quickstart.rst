@@ -6,7 +6,7 @@ Getting started
 Installation
 ------------
 
-.. warning:: Make sure to use python 3.5 or 3.6, as eDisGo currently does not work with higher python versions!
+.. warning:: Make sure to use python 3.7 or higher!
 
 Install latest eDisGo version through pip. Therefore, we highly recommend using
 a virtual environment and its pip.
