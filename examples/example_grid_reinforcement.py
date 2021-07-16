@@ -50,7 +50,7 @@ def run_example():
                      "transformers.csv", "transformers_hvmv.csv",
                      "switches.csv", "network.csv"]
         base_path = "https://raw.githubusercontent.com/openego/eDisGo/" \
-                    "features/refactoring/tests/ding0_test_network_2/"
+                    "dev/tests/ding0_test_network_2/"
         for f in file_list:
             file = os.path.join(dingo_grid_path, f)
             req = requests.get(base_path + f)
