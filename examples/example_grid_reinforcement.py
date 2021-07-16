@@ -37,8 +37,7 @@ logger = logging.getLogger('edisgo')
 logger.setLevel(logging.DEBUG)
 
 
-if __name__ == '__main__':
-
+def run_example():
     # Specify path to directory containing ding0 grid csv files
     dingo_grid_path = os.path.join(os.path.dirname(__file__),
                                    'ding0_example_grid')
@@ -99,8 +98,12 @@ if __name__ == '__main__':
     # Conduct topology reinforcement
     edisgo.reinforce()
 
-    logging.info('Grid expansion costs for NEP scenario are: {} kEUR.'.format(
-        edisgo.results.grid_expansion_costs.total_costs.sum()))
+    # Get total grid expansion costs
+    total_costs = edisgo.results.grid_expansion_costs.total_costs.sum()
+    logging.info(
+        'Grid expansion costs for NEP scenario are: {} kEUR.'.format(
+            total_costs)
+    )
 
     # Save grid expansion results
     edisgo.results.to_csv(
@@ -109,3 +112,9 @@ if __name__ == '__main__':
     )
 
     logging.info('SUCCESS!')
+
+    return total_costs
+
+
+if __name__ == '__main__':
+    run_example()
