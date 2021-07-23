@@ -253,7 +253,7 @@ def select_cable(edisgo_obj, level, apparent_power):
             "{} MVA.".format(apparent_power)
         )
 
-    cable_type = suitable_cables.ix[suitable_cables["I_max_th"].idxmin()]
+    cable_type = suitable_cables.loc[suitable_cables["I_max_th"].idxmin()]
 
     return cable_type, cable_count
 

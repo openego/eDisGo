@@ -116,10 +116,12 @@ class TestResults:
         self.results.from_csv(cur_dir)
 
         pd.testing.assert_frame_equal(
-            self.results.pfa_v_mag_pu_seed, pfa_v_mag_pu_seed
+            self.results.pfa_v_mag_pu_seed, pfa_v_mag_pu_seed,
+            check_freq=False
         )
         pd.testing.assert_frame_equal(
-            self.results.v_res, pfa_v_mag_pu_seed
+            self.results.v_res, pfa_v_mag_pu_seed,
+            check_freq=False
         )
         pd.testing.assert_frame_equal(
             self.results.grid_expansion_costs, grid_expansion_costs
@@ -136,7 +138,8 @@ class TestResults:
         )
 
         pd.testing.assert_frame_equal(
-            self.results.v_res, pfa_v_mag_pu_seed
+            self.results.v_res, pfa_v_mag_pu_seed,
+            check_freq=False
         )
         assert self.results.pfa_v_mag_pu_seed.empty
         assert self.results.grid_expansion_costs.empty
