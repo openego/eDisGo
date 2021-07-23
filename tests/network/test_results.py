@@ -126,6 +126,7 @@ class TestResults:
         pd.testing.assert_frame_equal(
             self.results.grid_expansion_costs, grid_expansion_costs
         )
+        assert self.results.measures == ["original", "test"]
 
         # reset self.results
         self.results = Results(self)
