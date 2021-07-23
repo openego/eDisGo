@@ -115,10 +115,17 @@ class TestResults:
         # test with default values
         self.results.from_csv(cur_dir)
 
-
-        assert self.results.pfa_v_mag_pu_seed.to_string() == pfa_v_mag_pu_seed.to_string()
-        assert self.results.v_res.to_string() == pfa_v_mag_pu_seed.to_string()
-        assert self.results.grid_expansion_costs.to_string() == grid_expansion_costs.to_string()
+        pd.testing.assert_frame_equal(
+            self.results.pfa_v_mag_pu_seed, pfa_v_mag_pu_seed,
+            check_freq=False
+        )
+        pd.testing.assert_frame_equal(
+            self.results.v_res, pfa_v_mag_pu_seed,
+            check_freq=False
+        )
+        pd.testing.assert_frame_equal(
+            self.results.grid_expansion_costs, grid_expansion_costs
+        )
         assert self.results.measures == ["original", "test"]
 
         # reset self.results
@@ -130,7 +137,10 @@ class TestResults:
             parameters={'powerflow_results': ['v_res']}
         )
 
-        assert self.results.v_res.to_string() == pfa_v_mag_pu_seed.to_string()
+        pd.testing.assert_frame_equal(
+            self.results.v_res, pfa_v_mag_pu_seed,
+            check_freq=False
+        )
         assert self.results.pfa_v_mag_pu_seed.empty
         assert self.results.grid_expansion_costs.empty
 

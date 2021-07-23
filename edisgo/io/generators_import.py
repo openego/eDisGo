@@ -360,7 +360,8 @@ def _update_grids(
         remove_decommissioned=True,
         update_existing=True,
         p_target=None,
-        allowed_number_of_comp_per_lv_bus=2
+        allowed_number_of_comp_per_lv_bus=2,
+        **kwargs
 ):
     """
     Update network according to new generator dataset.

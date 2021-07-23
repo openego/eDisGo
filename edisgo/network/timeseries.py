@@ -1717,8 +1717,10 @@ def import_load_timeseries(config_data, data_source, year=2018):
         """
         Get normalized sectoral load time series
 
-        Time series are normalized to 1 kWh consumption per year
-        # Todo: Check if this is still true or if unit is MWh
+        Time series are normalized to 1 MWh consumption per year
+
+        Todo: Move to io.
+        ToDo: Update docstring.
 
         Parameters
         ----------
