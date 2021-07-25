@@ -13,7 +13,7 @@ logger = logging.getLogger("edisgo")
 def reinforce_grid(
     edisgo,
     timesteps_pfa=None,
-    copy_graph=False,
+    copy_grid=False,
     max_while_iterations=10,
     combined_analysis=False,
     mode=None,
@@ -53,9 +53,9 @@ def reinforce_grid(
           :pandas:`pandas.Timestamp<Timestamp>`
           Use this option to explicitly choose which time steps to consider.
 
-    copy_graph : :obj:`Boolean`
-        If True reinforcement is conducted on a copied graph and discarded.
-        Default: False. Todo: Do we still need this? If so, rename.
+    copy_grid : :obj:`Boolean`
+        If True reinforcement is conducted on a copied grid and discarded.
+        Default: False.
     max_while_iterations : :obj:`int`
         Maximum number of times each while loop is conducted.
     combined_analysis : :obj:`Boolean`
@@ -127,7 +127,7 @@ def reinforce_grid(
 
     # in case reinforcement needs to be conducted on a copied graph the
     # edisgo object is deep copied
-    if copy_graph is True:
+    if copy_grid is True:
         edisgo_reinforce = copy.deepcopy(edisgo)
     else:
         edisgo_reinforce = edisgo
