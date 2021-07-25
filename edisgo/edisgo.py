@@ -6,7 +6,8 @@ import pickle
 from edisgo.network.topology import Topology
 from edisgo.network.results import Results
 from edisgo.network import timeseries
-from edisgo.tools import pypsa_io, plots, tools
+from edisgo.io import pypsa_io
+from edisgo.tools import plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.generators_import import oedb as import_generators_oedb
@@ -320,7 +321,7 @@ class EDisGo:
         Parameters
         ----------
         kwargs :
-            See :func:`~.tools.pypsa_io.to_pypsa` for further information.
+            See :func:`~.io.pypsa_io.to_pypsa` for further information.
 
         Returns
         -------
@@ -456,7 +457,7 @@ class EDisGo:
         current on lines and voltages at buses) to
         :class:`~.network.results.Results`
         (e.g. :attr:`~.network.results.Results.v_res` for voltages).
-        See :func:`~.tools.pypsa_io.to_pypsa` for more information.
+        See :func:`~.io.pypsa_io.to_pypsa` for more information.
 
         Parameters
         ----------

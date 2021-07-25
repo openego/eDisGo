@@ -12,7 +12,7 @@ from pyomo.environ import (
 )
 from pyomo.opt import SolverFactory
 
-from edisgo.tools import pypsa_io
+from edisgo.io import pypsa_io
 
 
 def voltage_based(
