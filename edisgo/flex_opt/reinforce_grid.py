@@ -68,15 +68,14 @@ def reinforce_grid(
         Determines network levels reinforcement is conducted for. Specify
 
         * None to reinforce MV and LV network levels. None is the default.
-        * 'mv' to reinforce MV network level only, neglecting MV/LV stations, and
-          LV network topology. LV load and generation is aggregated per
+        * 'mv' to reinforce MV network level only, neglecting MV/LV stations,
+          and LV network topology. LV load and generation is aggregated per
           LV network and directly connected to the primary side of the
           respective MV/LV station.
-        * 'mvlv' to reinforce MV network level only, including MV/LV stations, and
-          neglecting LV network topology. LV load and generation is aggregated per
-          LV network and directly connected to the secondary side of the
-          respective MV/LV station.
-          #Todo: check if this mode is implemented correctly, if not adjust
+        * 'mvlv' to reinforce MV network level only, including MV/LV stations,
+          and neglecting LV network topology. LV load and generation is
+          aggregated per LV network and directly connected to the secondary
+          side of the respective MV/LV station.
 
     Returns
     -------
