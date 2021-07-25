@@ -79,10 +79,10 @@ class TestTopology:
 
         # test if loads and lines are found at the bus
         components = self.topology.get_connected_components_from_bus(
-            "Bus_Load_residential_LVGrid_3_3"
+            "Bus_BranchTee_LVGrid_3_6"
         )
         assert "Load_residential_LVGrid_3_3" in components["loads"].index
-        assert "Line_30000010" in components["lines"].index
+        assert "Line_30000007" in components["lines"].index
 
         assert components["generators"].empty
         assert components["charging_points"].empty
@@ -93,36 +93,37 @@ class TestTopology:
 
         # test if generators and lines are found at the bus
         components = self.topology.get_connected_components_from_bus(
-            "Bus_GeneratorFluctuating_9"
+            "Bus_BranchTee_LVGrid_1_10"
         )
         assert "GeneratorFluctuating_9" in components["generators"].index
-        assert "Line_10000002" in components["lines"].index
+        assert "GeneratorFluctuating_10" in components["generators"].index
+        assert "Line_10000007" in components["lines"].index
+        assert "Load_residential_LVGrid_1_5" in components["loads"].index
 
-        assert components["loads"].empty
         assert components["charging_points"].empty
         assert components["storage_units"].empty
         assert components["transformers"].empty
         assert components["transformers_hvmv"].empty
         assert components["switches"].empty
 
-        # test if lines, storage unit and HV/MV transformer are found at bus
+        # test if lines, storage unit and transformers are found at bus
         components = self.topology.get_connected_components_from_bus(
             "Bus_MVStation_1"
         )
         assert "Storage_1" in components["storage_units"].index
-        assert "Line_10001" in components["lines"].index
-        assert "Line_10002" in components["lines"].index
         assert "Line_10003" in components["lines"].index
         assert "Line_10004" in components["lines"].index
         assert "Line_10005" in components["lines"].index
         assert "Line_10006" in components["lines"].index
         assert "MVStation_1_transformer_1" in \
                components["transformers_hvmv"].index
+        assert len(components["transformers"]) == 4
+        assert "Transformer_lv_load_area_1_1" in \
+               components["transformers"].index
 
         assert components["generators"].empty
         assert components["loads"].empty
         assert components["charging_points"].empty
-        assert components["transformers"].empty
         assert components["switches"].empty
 
         # test if lines, transformers and switches are found at the bus for a
@@ -272,7 +273,7 @@ class TestTopology:
 
         # test without kwargs
         name = self.topology.add_generator(
-            bus="Bus_Load_agricultural_LVGrid_1_2",
+            bus="Bus_BranchTee_LVGrid_1_4",
             p_nom=0.5,
             generator_type="solar"
         )
@@ -319,7 +320,7 @@ class TestTopology:
 
         # test without kwargs
         name = self.topology.add_charging_point(
-            bus="Bus_Load_agricultural_LVGrid_1_1",
+            bus="Bus_BranchTee_LVGrid_1_2",
             p_nom=0.5,
             use_case="work"
         )
@@ -346,7 +347,7 @@ class TestTopology:
 
         # test with kwargs
         name = self.topology.add_storage_unit(
-            bus="Bus_BranchTee_LVGrid_1_5",
+            bus="Bus_BranchTee_LVGrid_1_3",
             p_nom=1,
             control="Test",
             test_info="test"
@@ -358,7 +359,7 @@ class TestTopology:
 
         # test without kwargs
         name = self.topology.add_storage_unit(
-            bus="Bus_Load_agricultural_LVGrid_1_3",
+            bus="Bus_BranchTee_LVGrid_1_6",
             p_nom=2
         )
         assert len_df_before + 2 == len(self.topology.storage_units_df)
@@ -396,7 +397,7 @@ class TestTopology:
         assert self.topology.lines_df.at[name, "s_nom"] == 1
 
         # test with line type provided
-        bus1 = "Bus_GeneratorFluctuating_9"
+        bus1 = "Bus_BranchTee_LVGrid_1_10"
         msg = (
             "When line 'type_info' is provided when creating a new "
             "line, x, r and s_nom are calculated and provided "
@@ -413,7 +414,7 @@ class TestTopology:
             )
         assert len_df_before + 2 == len(self.topology.lines_df)
         assert (
-            name == "Line_Bus_BranchTee_MVGrid_1_8_Bus_GeneratorFluctuating_9"
+            name == "Line_Bus_BranchTee_MVGrid_1_8_Bus_BranchTee_LVGrid_1_10"
         )
         assert np.isclose(self.topology.lines_df.at[name, "s_nom"],
                           6.18342
@@ -566,7 +567,7 @@ class TestTopology:
         )
         assert not return_value
         return_value = self.topology._check_line_for_removal(
-            "Line_20000005"
+            "Line_20000002"
         )
         assert not return_value
 
@@ -575,7 +576,7 @@ class TestTopology:
         self.topology._loads_df.drop(
             "Load_residential_LVGrid_2_1", inplace=True)
         return_value = self.topology._check_line_for_removal(
-            "Line_20000005"
+            "Line_20000002"
         )
         assert return_value
 
@@ -615,15 +616,15 @@ class TestTopology:
         # check case where load is not the only connected element
         name = "Load_residential_LVGrid_1_6"
         self.topology.add_load(
-            "Bus_" + name, 2, 3
+            "Bus_BranchTee_LVGrid_1_12", 2, 3
         )
         # get connected line
         connected_lines = self.topology.get_connected_lines_from_bus(
-            "Bus_" + name
+            "Bus_BranchTee_LVGrid_1_12"
         )
         self.topology.remove_load(name)
         assert name not in self.topology.loads_df.index
-        assert "Bus_" + name in self.topology.buses_df.index
+        assert "Bus_BranchTee_LVGrid_1_12" in self.topology.buses_df.index
         assert (connected_lines.index.isin(
             self.topology.lines_df.index)).all()
 
@@ -648,15 +649,15 @@ class TestTopology:
         # check case where generator is not the only connected element
         name = "GeneratorFluctuating_18"
         self.topology.add_load(
-            "Bus_" + name, 2, 3
+            "Bus_BranchTee_LVGrid_4_2", 2, 3
         )
         # get connected line
         connected_lines = self.topology.get_connected_lines_from_bus(
-            "Bus_" + name
+            "Bus_BranchTee_LVGrid_4_2"
         )
         self.topology.remove_generator(name)
         assert name not in self.topology.generators_df.index
-        assert "Bus_" + name in self.topology.buses_df.index
+        assert "Bus_BranchTee_LVGrid_4_2" in self.topology.buses_df.index
         assert (connected_lines.index.isin(
             self.topology.lines_df.index)).all()
 
@@ -699,7 +700,7 @@ class TestTopology:
         # check case where only storage unit is connected to line,
         # line and bus are therefore removed as well
         name = "StorageUnit_LVGrid_1_1"
-        bus = "Bus_Load_agricultural_LVGrid_1_3"
+        bus = "Bus_BranchTee_LVGrid_1_6"
         # get connected line
         connected_lines = self.topology.get_connected_lines_from_bus(
             bus
@@ -713,9 +714,9 @@ class TestTopology:
             connected_lines.index.isin(self.topology.lines_df.index)
         ).any()
 
-        # check case where charging point is not the only connected element
+        # check case where storage is not the only connected element
         name = "StorageUnit_LVGrid_1_0"
-        bus = "Bus_BranchTee_LVGrid_1_5"
+        bus = "Bus_BranchTee_LVGrid_1_3"
         # get connected lines
         connected_lines = self.topology.get_connected_lines_from_bus(
             bus
@@ -765,27 +766,27 @@ class TestTopology:
         # drop connected load
         self.topology._loads_df.drop(
             "Load_residential_LVGrid_3_3", inplace=True)
-        line_name = "Line_30000010"
+        line_name = "Line_30000007"
         self.topology.remove_line(
             line_name
         )
         assert len_df_before - 2 == len(self.topology.lines_df)
         assert line_name not in self.topology.lines_df.index
-        assert "Bus_Load_residential_LVGrid_3_3" not in \
+        assert "Bus_BranchTee_LVGrid_3_6" not in \
                self.topology.buses_df.index
-        assert "Bus_BranchTee_LVGrid_3_6" in self.topology.buses_df.index
+        assert "Bus_BranchTee_LVGrid_3_5" in self.topology.buses_df.index
 
     def test_remove_bus(self):
         """Test remove_bus method"""
 
         # test bus cannot be removed
         msg = (
-            "Bus Bus_Load_residential_LVGrid_4_1 is not isolated and "
+            "Bus Bus_BranchTee_LVGrid_4_2 is not isolated and "
             "therefore not removed. Remove all connected elements *"
         )
         with pytest.warns(UserWarning, match=msg):
             self.topology.remove_bus(
-                "Bus_Load_residential_LVGrid_4_1"
+                "Bus_BranchTee_LVGrid_4_2"
             )
 
         # test bus can be removed
@@ -941,8 +942,8 @@ class TestTopologyWithEdisgoObject:
         assert len(self.edisgo.topology.generators_df) == 28
         assert self.edisgo.topology.charging_points_df.empty
         assert len(self.edisgo.topology.storage_units_df) == 1
-        assert len(self.edisgo.topology.lines_df) == 198
-        assert len(self.edisgo.topology.buses_df) == 208
+        assert len(self.edisgo.topology.lines_df) == 129
+        assert len(self.edisgo.topology.buses_df) == 140
         assert len(self.edisgo.topology.switches_df) == 2
         assert self.edisgo.topology.grid_district["population"] == 23358
 
@@ -1170,9 +1171,11 @@ class TestTopologyWithEdisgoObject:
         assert len(generators_before) + 1 == len(
             self.edisgo.topology.generators_df)
 
-        # check that new generator is connected to HV/MV station
+        # check that new generator is connected to random substation
+        # assert self.edisgo.topology.generators_df.at[
+        #            comp_name, "bus"] == 'BusBar_MVGrid_1_LVGrid_7_LV'
         assert self.edisgo.topology.generators_df.at[
-                   comp_name, "bus"] == "Bus_MVStation_1"
+                   comp_name, "bus"] == 'Bus_MVStation_1'
 
         # test missing substation ID
 
@@ -1338,7 +1341,7 @@ class TestTopologyWithEdisgoObject:
 
         # check bus
         gen_bus = self.edisgo.topology.generators_df.at[comp_name, "bus"]
-        assert gen_bus == "Bus_BranchTee_LVGrid_1_8"
+        assert gen_bus == "Bus_BranchTee_LVGrid_1_10"
         assert self.edisgo.topology.buses_df.at[
                    gen_bus, "lv_grid_id"] == 1
         # check new generator
@@ -1378,7 +1381,7 @@ class TestTopologyWithEdisgoObject:
 
         # check bus
         gen_bus = self.edisgo.topology.generators_df.at[comp_name, "bus"]
-        assert gen_bus == "Bus_Load_residential_LVGrid_2_1"
+        assert gen_bus == "Bus_BranchTee_LVGrid_2_1"
         assert self.edisgo.topology.buses_df.at[
                    gen_bus, "lv_grid_id"] == 2
         # check new generator
@@ -1489,7 +1492,7 @@ class TestTopologyWithEdisgoObject:
 
         # check bus
         bus = self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
-        assert bus == "Bus_Load_agricultural_LVGrid_3_1"
+        assert bus == "Bus_BranchTee_LVGrid_3_1"
         assert self.edisgo.topology.buses_df.at[
                    bus, "lv_grid_id"] == 3
         # check new charging point

@@ -51,12 +51,12 @@ class TestEDisGo:
         assert(len(overloaded_lv_station) == 4)
         assert (np.isclose(
             overloaded_lv_station.at['LVGrid_1', 's_missing'],
-            0.01942, atol=1e-5))
+            0.01936, atol=1e-5))
         assert (overloaded_lv_station.at[
                     'LVGrid_1', 'time_index'] == self.timesteps[1])
         assert (np.isclose(
             overloaded_lv_station.at['LVGrid_4', 's_missing'],
-            0.03426, atol=1e-5))
+            0.03427, atol=1e-5))
         assert (overloaded_lv_station.at[
                     'LVGrid_4', 'time_index'] == self.timesteps[0])
 
@@ -67,14 +67,14 @@ class TestEDisGo:
             self.edisgo.analyze()
         mv_crit_lines = checks.mv_line_load(self.edisgo)
         lv_crit_lines = checks.lv_line_load(self.edisgo)
-        assert len(lv_crit_lines) == 4
+        assert len(lv_crit_lines) == 2
         assert (lv_crit_lines.time_index == self.timesteps[1]).all()
         assert (np.isclose(
             lv_crit_lines.at['Line_50000002', 'max_rel_overload'],
-            1.02105, atol=1e-5))
+            1.02055, atol=1e-5))
         assert (np.isclose(
-            lv_crit_lines.at['Line_60000003', 'max_rel_overload'],
-            1.03784, atol=1e-5))
+            lv_crit_lines.at['Line_60000001', 'max_rel_overload'],
+            1.03730, atol=1e-5))
         assert len(mv_crit_lines) == 4
         assert (mv_crit_lines.time_index == self.timesteps[0]).all()
         assert (np.isclose(
@@ -90,41 +90,41 @@ class TestEDisGo:
         # check results
         assert(np.isclose(
             self.edisgo.results.grid_losses.loc[self.timesteps].values,
-            np.array([[0.19186, 0.40321], [0.41854, 0.17388]]),
+            np.array([[0.16484, 0.55544], [0.41859, 0.17233]]),
             atol=1e-5).all())
         assert(np.isclose(
             self.edisgo.results.pfa_slack.loc[self.timesteps].values,
-            np.array([[-21.69377, 10.87843], [1.36392, 0.18510]]),
+            np.array([[-21.68225, 10.54364], [1.36397, 0.13840]]),
             atol=1e-5).all())
         assert(np.isclose(
             self.edisgo.results.v_res.loc[
-                self.timesteps, 'Bus_GeneratorFluctuating_18'].values,
-            np.array([1.01699, 0.99917]),
+                self.timesteps, 'Bus_BranchTee_LVGrid_4_2'].values,
+            np.array([1.01695, 0.99917]),
             atol=1e-5).all())
         assert(np.isclose(
             self.edisgo.results.v_res.loc[
                 self.timesteps, 'virtual_BusBar_MVGrid_1_LVGrid_4_MV'].values,
-            np.array([1.00630, 0.99929]),
+            np.array([1.00630, 0.99930]),
             atol=1e-5).all())
         assert (np.isclose(
             self.edisgo.results.pfa_p.loc[
-                self.timesteps, 'Line_60000003'].values,
-            np.array([0.00799, 0.07996]), atol=1e-5).all())
+                self.timesteps, 'Line_60000002'].values,
+            np.array([0.00801, 0.08144]), atol=1e-5).all())
         assert (np.isclose(
             self.edisgo.results.pfa_q.loc[
-                self.timesteps, 'Line_60000003'].values,
-            np.array([0.00263, 0.026273]), atol=1e-5).all())
+                self.timesteps, 'Line_60000002'].values,
+            np.array([0.00263, 0.02661]), atol=1e-5).all())
         assert (np.isclose(
             self.edisgo.results.i_res.loc[
-                self.timesteps, ['Line_10002', 'Line_90000025']].values,
-            np.array([[0.001491, 0.000186], [0.009943, 0.001879]]),
-            atol=1e-6).all())
+                self.timesteps, ['Line_10005', 'Line_90000021']].values,
+            np.array([[0.22308, 0.00019], [0.00004, 0.00188]]),
+            atol=1e-5).all())
 
     def test_reinforce(self):
         results = self.edisgo.reinforce(combined_analysis=True)
         assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 12
-        assert len(results.equipment_changes) == 12
+        assert len(results.grid_expansion_costs) == 10
+        assert len(results.equipment_changes) == 10
         #Todo: test other relevant values
 
     def test_to_pypsa(self):
@@ -489,7 +489,7 @@ class TestEDisGo:
         """Test integrate_component method"""
         num_gens = len(self.edisgo.topology.generators_df)
 
-        random_bus = self.edisgo.topology.buses_df.index[10]
+        random_bus = 'Bus_BranchTee_MVGrid_1_1'
         x = self.edisgo.topology.buses_df.at[random_bus, "x"]
         y = self.edisgo.topology.buses_df.at[random_bus, "y"]
         geom = Point((x, y))
@@ -591,7 +591,7 @@ class TestEDisGo:
                     comp_name, "number"] == 13)
         # check bus
         assert self.edisgo.topology.charging_points_df.at[
-                   comp_name, "bus"] == "Bus_Load_agricultural_LVGrid_1_3"
+                   comp_name, "bus"] == "Bus_BranchTee_LVGrid_1_3"
         # check time series
         assert (self.edisgo.timeseries.charging_points_active_power.loc[
                 :, comp_name].values == [1, 2]).all()
@@ -620,16 +620,14 @@ class TestEDisGo:
 
         # test without charging points and aggregation at the same bus
 
-        # manipulate grid so that more than one generator and load is connected
+        # manipulate grid so that more than one load is connected
         # at the same bus
-        self.edisgo.topology._generators_df.at[
-            "GeneratorFluctuating_3", "bus"] = "Bus_GeneratorFluctuating_2"
         self.edisgo.topology._loads_df.at[
             "Load_residential_LVGrid_1_4", "bus"] = \
-            "Bus_Load_residential_LVGrid_1_5"
+            "Bus_BranchTee_LVGrid_1_10"
         feedin_before = self.edisgo.timeseries.generators_active_power.loc[
-                        :, ["GeneratorFluctuating_2",
-                            "GeneratorFluctuating_3"]].sum().sum()
+                        :, ["GeneratorFluctuating_13",
+                            "GeneratorFluctuating_14"]].sum().sum()
         load_before = self.edisgo.timeseries.loads_active_power.loc[
             :, ["Load_residential_LVGrid_1_5",
                 "Load_residential_LVGrid_1_4"]
@@ -657,18 +655,18 @@ class TestEDisGo:
             loads_demand_reactive_before,
             self.edisgo.timeseries.loads_reactive_power.sum().sum()))
         # test that two generators and two loads were aggregated
-        assert num_gens_before - 1 == len(self.edisgo.topology.generators_df)
+        assert num_gens_before - 4 == len(self.edisgo.topology.generators_df)
         assert self.edisgo.topology.generators_df.at[
-                   "Generators_Bus_GeneratorFluctuating_2", "p_nom"] == 4.97
+                   "Generators_Bus_BranchTee_LVGrid_1_14", "p_nom"] == 0.034
         assert self.edisgo.timeseries.generators_active_power.loc[
-               :, "Generators_Bus_GeneratorFluctuating_2"].sum() == \
+               :, "Generators_Bus_BranchTee_LVGrid_1_14"].sum() == \
                feedin_before
         assert num_loads_before - 1 == len(self.edisgo.topology.loads_df)
         assert self.edisgo.topology.loads_df.at[
-                   "Loads_Bus_Load_residential_LVGrid_1_5", "peak_load"] == (
+                   "Loads_Bus_BranchTee_LVGrid_1_10", "peak_load"] == (
                 2 * 0.001397)
         assert self.edisgo.timeseries.loads_active_power.loc[
-            :, "Loads_Bus_Load_residential_LVGrid_1_5"
+            :, "Loads_Bus_BranchTee_LVGrid_1_10"
         ].sum() == load_before
         # test that analyze does not fail
         self.edisgo.analyze()
@@ -679,7 +677,7 @@ class TestEDisGo:
                              worst_case_analysis='worst-case')
         self.edisgo.add_component(
             "ChargingPoint",
-            bus="Bus_Load_residential_LVGrid_1_5",
+            bus="Bus_BranchTee_LVGrid_1_10",
             use_case="home",
             p_nom=0.2,
             ts_active_power=pd.Series(
@@ -691,13 +689,16 @@ class TestEDisGo:
                 index=self.edisgo.timeseries.timeindex
             )
         )
-        # manipulate grid so that more than one generator and load is connected
-        # at the same bus
-        self.edisgo.topology._generators_df.at[
-            "GeneratorFluctuating_3", "bus"] = "Bus_GeneratorFluctuating_2"
+        # manipulate grid so that more than one load of the same sector is
+        # connected at the same bus
         self.edisgo.topology._loads_df.at[
             "Load_residential_LVGrid_1_4", "bus"] = \
-            "Bus_Load_residential_LVGrid_1_5"
+            "Bus_BranchTee_LVGrid_1_10"
+        # manipulate grid so that two generators of different types are
+        # connected at the same bus
+        self.edisgo.topology._generators_df.at[
+            "GeneratorFluctuating_13", "type"] = \
+            "misc"
 
         self.edisgo.aggregate_components(
             aggregate_loads_by_cols=["bus", "sector"],
@@ -733,15 +734,15 @@ class TestEDisGo:
             0,
             self.edisgo.timeseries.charging_points_reactive_power.sum().sum()))
         # test that two generators were not aggregated
-        assert num_gens_before == len(self.edisgo.topology.generators_df)
+        assert num_gens_before - 3 == len(self.edisgo.topology.generators_df)
         # test that two loads were aggregated
         assert num_loads_before - 1 == len(self.edisgo.topology.loads_df)
         assert self.edisgo.topology.loads_df.at[
-                   "Loads_Bus_Load_residential_LVGrid_1_5_residential",
+                   "Loads_Bus_BranchTee_LVGrid_1_10_residential",
                    "peak_load"] == (
                        2 * 0.001397)
         assert self.edisgo.timeseries.loads_active_power.loc[
-               :, "Loads_Bus_Load_residential_LVGrid_1_5_residential"
+               :, "Loads_Bus_BranchTee_LVGrid_1_10_residential"
                ].sum() == load_before
         # test that charging point was not aggregated with load
         assert 1 == len(self.edisgo.topology.charging_points_df)
@@ -781,10 +782,10 @@ class TestEDisGo:
         assert num_gens_before - 1 == len(self.edisgo.topology.generators_df)
         assert num_loads_before - 1 == len(self.edisgo.topology.loads_df)
         assert self.edisgo.topology.loads_df.at[
-                   "Loads_Bus_Load_residential_LVGrid_1_5", "peak_load"] == (
+                   "Loads_Bus_BranchTee_LVGrid_1_10", "peak_load"] == (
                        2 * 0.001397 + 0.2)
         assert self.edisgo.timeseries.loads_active_power.loc[
-               :, "Loads_Bus_Load_residential_LVGrid_1_5"
+               :, "Loads_Bus_BranchTee_LVGrid_1_10"
                ].sum() == load_before + 0.3
         # test that analyze does not fail
         self.edisgo.analyze()
@@ -796,14 +797,9 @@ class TestEDisGo:
         num_gens_before = len(self.edisgo.topology.generators_df)
         num_loads_before = len(self.edisgo.topology.loads_df) + \
                            len(self.edisgo.topology.charging_points_df)
-
-        # manipulate grid so that more than one generator and load is connected
-        # at the same bus
-        self.edisgo.topology._generators_df.at[
-            "GeneratorFluctuating_3", "bus"] = "Bus_GeneratorFluctuating_2"
-        self.edisgo.topology._loads_df.at[
-            "Load_residential_LVGrid_1_4", "bus"] = \
-            "Bus_Load_residential_LVGrid_1_5"
+        feedin_before = self.edisgo.timeseries.generators_active_power.loc[
+                        :, ["GeneratorFluctuating_17",
+                            "GeneratorFluctuating_18"]].sum().sum()
 
         self.edisgo.aggregate_components(mode="by_load_and_generation")
         # test that total p_nom/peak_load and total feed-in/demand stayed
@@ -826,22 +822,15 @@ class TestEDisGo:
         assert (np.isclose(
             loads_demand_reactive_before,
             self.edisgo.timeseries.loads_reactive_power.sum().sum()))
-        # test that two generators were aggregated
-        assert num_gens_before - 1 == len(self.edisgo.topology.generators_df)
+        # test that generators were aggregated
+        assert num_gens_before - 4 == len(self.edisgo.topology.generators_df)
         assert self.edisgo.topology.generators_df.at[
-                   "Generators_Bus_GeneratorFluctuating_2", "p_nom"] == 4.97
+                   "Generators_Bus_BranchTee_LVGrid_4_2", "p_nom"] == 0.065
         assert self.edisgo.timeseries.generators_active_power.loc[
-               :, "Generators_Bus_GeneratorFluctuating_2"].sum() == \
+               :, "Generators_Bus_BranchTee_LVGrid_4_2"].sum() == \
                feedin_before
-        # test that two loads were aggregated
-        assert num_loads_before - 1 == len(self.edisgo.topology.loads_df)
-        assert self.edisgo.topology.loads_df.at[
-                   "Loads_Bus_Load_residential_LVGrid_1_5",
-                   "peak_load"] == (
-                       2 * 0.001397)
-        assert self.edisgo.timeseries.loads_active_power.loc[
-               :, "Loads_Bus_Load_residential_LVGrid_1_5"
-               ].sum() == load_before
+        # test that no loads were aggregated
+        assert num_loads_before == len(self.edisgo.topology.loads_df)
         # test that analyze does not fail
         self.edisgo.analyze()
 

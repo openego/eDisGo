@@ -25,12 +25,12 @@ class TestTools:
         # test without providing lines and time steps
         rel_line_load = tools.calculate_relative_line_load(
             self.edisgo)
-        assert rel_line_load.shape == (2, 198)
+        assert rel_line_load.shape == (2, 129)
 
         # test with providing lines
         rel_line_load = tools.calculate_relative_line_load(
             self.edisgo,
-            lines=["Line_10005", "Line_50000002", "Line_90000025"])
+            lines=["Line_10005", "Line_50000002", "Line_90000021"])
         assert rel_line_load.shape == (2, 3)
         assert np.isclose(
             rel_line_load.at[self.timesteps[0], "Line_10005"],
@@ -99,12 +99,16 @@ class TestTools:
 
         topo = self.edisgo.topology
 
-        # check that all lines and all buses (except MV station bus) have an
-        # MV feeder assigned
+        # check that all lines and all buses (except MV station bus and buses
+        # in aggregated load areas) have an MV feeder assigned
         assert not topo.lines_df.mv_feeder.isna().any()
+        mv_station = topo.mv_grid.station.index[0]
+        buses_aggr_la = list(topo.transformers_df[
+            topo.transformers_df.bus0 == mv_station].bus1.unique())
+        buses_aggr_la.append(mv_station)
         assert not topo.buses_df[
             ~topo.buses_df.index.isin(
-                topo.mv_grid.station.index)].mv_feeder.isna().any()
+                buses_aggr_la)].mv_feeder.isna().any()
 
         # check specific buses
         # MV and LV bus in feeder 1
@@ -145,7 +149,7 @@ class TestTools:
             "Bus_BranchTee_LVGrid_1_8", "lv_feeder"] ==
                 "Bus_BranchTee_LVGrid_1_7")
         assert (topo.buses_df.at[
-            "Bus_Load_residential_LVGrid_2_2", "lv_feeder"] ==
+            "Bus_BranchTee_LVGrid_2_4", "lv_feeder"] ==
                 "Bus_BranchTee_LVGrid_2_1")
 
         # check specific lines
@@ -153,3 +157,37 @@ class TestTools:
             "Line_30000005", "lv_feeder"] == "Bus_BranchTee_LVGrid_3_3"
         assert topo.lines_df.at[
             "Line_40000001", "lv_feeder"] == "Bus_GeneratorFluctuating_16"
+
+        # ######## test real ding0 network ########
+        self.edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_2_path,
+            worst_case_analysis="worst-case"
+        )
+        topo = self.edisgo.topology
+
+        tools.assign_feeder(self.edisgo, mode="mv_feeder")
+
+        # check that all lines and all buses (except MV station bus and buses
+        # in aggregated load areas) have an MV feeder assigned
+        assert not topo.lines_df.mv_feeder.isna().any()
+        mv_station = topo.mv_grid.station.index[0]
+        buses_aggr_la = list(
+            topo.transformers_df[
+                topo.transformers_df.bus0 == mv_station].bus1.unique())
+        buses_aggr_la.append(mv_station)
+        assert not topo.buses_df[
+            ~topo.buses_df.index.isin(
+                buses_aggr_la)].mv_feeder.isna().any()
+
+        tools.assign_feeder(self.edisgo, mode="lv_feeder")
+        # check that all buses (except LV station buses) and lines in LV have
+        # an LV feeder assigned
+        mv_lines = topo.mv_grid.lines_df.index
+        assert not topo.lines_df[
+            ~topo.lines_df.index.isin(
+                mv_lines)].lv_feeder.isna().any()
+        mv_buses = list(topo.mv_grid.buses_df.index)
+        mv_buses.extend(topo.transformers_df.bus1)
+        assert not topo.buses_df[
+            ~topo.buses_df.index.isin(
+                mv_buses)].lv_feeder.isna().any()

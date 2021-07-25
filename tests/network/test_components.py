@@ -25,7 +25,7 @@ class TestComponents:
         assert load.peak_load == 0.0523
         assert load.annual_consumption == 238
         assert load.sector == 'agricultural'
-        assert load.bus == 'Bus_Load_agricultural_LVGrid_1_1'
+        assert load.bus == 'Bus_BranchTee_LVGrid_1_2'
         assert load.grid == self.edisgo_obj.topology._grids['LVGrid_1']
         assert load.voltage_level == 'lv'
         assert load.geom is None
@@ -76,8 +76,8 @@ class TestComponents:
         assert gen.subtype == 'rooftop'
         gen.weather_cell_id = 2
         assert gen.weather_cell_id == 2
-        gen.bus = 'Bus_GeneratorFluctuating_9'
-        assert gen.bus == 'Bus_GeneratorFluctuating_9'
+        gen.bus = 'Bus_BranchTee_LVGrid_1_5'
+        assert gen.bus == 'Bus_BranchTee_LVGrid_1_5'
         assert gen.grid == self.edisgo_obj.topology._grids['LVGrid_1']
         assert gen.voltage_level == 'lv'
         msg = "Given bus ID does not exist."

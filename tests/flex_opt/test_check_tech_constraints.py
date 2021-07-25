@@ -44,7 +44,7 @@ class TestCheckTechConstraints:
 
         df = check_tech_constraints.lv_line_load(self.edisgo)
         # check shape of dataframe
-        assert (4, 3) == df.shape
+        assert (2, 3) == df.shape
         # check relative overload of one line
         assert np.isclose(
             df.at["Line_50000002", "max_rel_overload"],
@@ -92,7 +92,7 @@ class TestCheckTechConstraints:
         # check for MV
         df = check_tech_constraints.lines_allowed_load(self.edisgo, "mv")
         # check shape of dataframe
-        assert (2, 32) == df.shape
+        assert (2, 30) == df.shape
         # check in feed-in case
         assert np.isclose(
             df.at[self.timesteps[0], "Line_10005"],
@@ -104,14 +104,14 @@ class TestCheckTechConstraints:
             7.274613391789284 / 20 / sqrt(3) * 0.5,
         )
         assert np.isclose(
-            df.at[self.timesteps[1], "Line_10001"],
-            7.274613391789284 / 20 / sqrt(3),
+            df.at[self.timesteps[1], "Line_10024"],
+            7.27461339178928 / 20 / sqrt(3),
         )
 
         # check for LV
         df = check_tech_constraints.lines_allowed_load(self.edisgo, "lv")
         # check shape of dataframe
-        assert (2, 166) == df.shape
+        assert (2, 99) == df.shape
         # check in feed-in case
         assert np.isclose(
             df.at[self.timesteps[0], "Line_50000002"],
@@ -224,7 +224,7 @@ class TestCheckTechConstraints:
             voltage_issues["LVGrid_6"].loc[
                 "BusBar_MVGrid_1_LVGrid_6_LV", "v_diff_max"
             ],
-            0.010635,
+            0.0106225,
         )
 
         # check with voltage_levels="lv" and mode=None
