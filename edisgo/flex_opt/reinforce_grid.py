@@ -125,11 +125,6 @@ def reinforce_grid(
     if mode and mode not in ["mv", "mvlv"]:
         raise ValueError("Provided mode {} is not a valid mode.".format(mode))
 
-    # assign MV feeder to every generator, LV station, load, and branch tee
-    # to assign network expansion costs to an MV feeder
-    # Todo: Necessary? If so change
-    # assign_mv_feeder_to_nodes(edisgo.topology.mv_grid)
-
     # in case reinforcement needs to be conducted on a copied graph the
     # edisgo object is deep copied
     if copy_graph is True:

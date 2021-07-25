@@ -1218,7 +1218,6 @@ def _worst_case_storage(edisgo_obj, modes, storage_names=None):
             index=edisgo_obj.timeseries.timeindex,
             columns=storage_df.index,
         )
-        # ToDo
         edisgo_obj.timeseries.storage_units_active_power = drop_duplicated_columns(
             pd.concat(
                 [edisgo_obj.timeseries.storage_units_active_power,

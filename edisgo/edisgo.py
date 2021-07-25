@@ -1413,7 +1413,6 @@ class EDisGo:
             raise ValueError("Component type is not correct.")
 
     def save_edisgo_to_pickle(self, path='', filename=None):
-        # Todo: integrate in save method?
         abs_path = os.path.abspath(path)
         if filename is None:
             filename = "edisgo_object_{ext}.pkl".format(
