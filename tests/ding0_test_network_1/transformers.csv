@@ -9,3 +9,7 @@ LVStation_6_transformer_1,BusBar_MVGrid_1_LVGrid_6_LV,BusBar_MVGrid_1_LVGrid_6_M
 LVStation_7_transformer_1,BusBar_MVGrid_1_LVGrid_7_MV,BusBar_MVGrid_1_LVGrid_7_LV,0.016,0.007,0.1,100 kVA
 LVStation_8_transformer_1,BusBar_MVGrid_1_LVGrid_8_MV,BusBar_MVGrid_1_LVGrid_8_LV,0.016,0.007,0.1,100 kVA
 LVStation_9_transformer_1,BusBar_MVGrid_1_LVGrid_9_MV,BusBar_MVGrid_1_LVGrid_9_LV,0.016,0.007,0.1,100 kVA
+Transformer_lv_load_area_1_1,Bus_MVStation_1,BusBar_lac_1,0.059074106002546,0.0105,1,1.0 MVA 20/0.4 kV
+Transformer_lv_load_area_1_2,Bus_MVStation_1,BusBar_lac_1,0.059074106002546,0.0105,1,1.0 MVA 20/0.4 kV
+Transformer_lv_load_area_1_3,Bus_MVStation_1,BusBar_lac_1,0.059074106002546,0.0105,1,1.0 MVA 20/0.4 kV
+Transformer_lv_load_area_1_4,Bus_MVStation_1,BusBar_lac_1,0.059074106002546,0.0105,1,1.0 MVA 20/0.4 kV
