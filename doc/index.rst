@@ -33,7 +33,7 @@ The toolbox currently includes:
 * Heuristic grid-supportive battery storage integration
 
 Currently, a method to optimize the flexibility that can be provided by electric
-vehicles through controlled charging and V2G is implemented.
+vehicles through controlled charging is being implemented.
 Prospectively, demand side management and reactive power management will
 be included.
 
