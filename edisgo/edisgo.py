@@ -6,7 +6,8 @@ import pickle
 from edisgo.network.topology import Topology
 from edisgo.network.results import Results
 from edisgo.network import timeseries
-from edisgo.tools import pypsa_io, plots, tools
+from edisgo.io import pypsa_io
+from edisgo.tools import plots, tools
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.generators_import import oedb as import_generators_oedb
@@ -320,7 +321,7 @@ class EDisGo:
         Parameters
         ----------
         kwargs :
-            See :func:`~.tools.pypsa_io.to_pypsa` for further information.
+            See :func:`~.io.pypsa_io.to_pypsa` for further information.
 
         Returns
         -------
@@ -456,7 +457,7 @@ class EDisGo:
         current on lines and voltages at buses) to
         :class:`~.network.results.Results`
         (e.g. :attr:`~.network.results.Results.v_res` for voltages).
-        See :func:`~.tools.pypsa_io.to_pypsa` for more information.
+        See :func:`~.io.pypsa_io.to_pypsa` for more information.
 
         Parameters
         ----------
@@ -504,14 +505,14 @@ class EDisGo:
         results = reinforce_grid(
             self,
             max_while_iterations=kwargs.get("max_while_iterations", 10),
-            copy_graph=kwargs.get("copy_graph", False),
+            copy_grid=kwargs.get("copy_grid", False),
             timesteps_pfa=kwargs.get("timesteps_pfa", None),
             combined_analysis=kwargs.get("combined_analysis", False),
             mode=kwargs.get("mode", None),
         )
 
         # add measure to Results object
-        if not kwargs.get("copy_graph", False):
+        if not kwargs.get("copy_grid", False):
             self.results.measures = "grid_expansion"
 
         return results
@@ -1412,7 +1413,6 @@ class EDisGo:
             raise ValueError("Component type is not correct.")
 
     def save_edisgo_to_pickle(self, path='', filename=None):
-        # Todo: integrate in save method?
         abs_path = os.path.abspath(path)
         if filename is None:
             filename = "edisgo_object_{ext}.pkl".format(
