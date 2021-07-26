@@ -488,7 +488,7 @@ class Results:
         """
         Voltages in p.u. from previous power flow analyses to be used as seed.
 
-        See :func:`~.tools.pypsa_io.set_seed` for more information.
+        See :func:`~.io.pypsa_io.set_seed` for more information.
 
         Parameters
         ----------
@@ -525,7 +525,7 @@ class Results:
         """
         Voltages in p.u. from previous power flow analyses to be used as seed.
 
-        See :func:`~.tools.pypsa_io.set_seed` for more information.
+        See :func:`~.io.pypsa_io.set_seed` for more information.
 
         Parameters
         ----------

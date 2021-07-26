@@ -17,6 +17,14 @@ edisgo.io.generators\_import module
     :undoc-members:
     :show-inheritance:
 
+edisgo.io.pypsa\_io module
+------------------------------
+
+.. automodule:: edisgo.io.pypsa_io
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 edisgo.io.timeseries\_import module
 ------------------------------------
 

@@ -343,10 +343,11 @@ class TimeSeries:
         """
         Returns residual load.
 
-        Residual load for each time step is calculated from total generation
-        plus storage active power (discharge is positive) minus total load.
-        A positive residual load represents a feed-in case while a negative
-        residual load here represents a load case.
+        Residual load for each time step is calculated from total load
+        (including charging points) minus total generation minus
+        storage active power (discharge is positive).
+        A positive residual load represents a load case while a negative
+        residual load here represents a feed-in case.
         Grid losses are not considered.
 
         Returns
@@ -357,10 +358,10 @@ class TimeSeries:
 
         """
         return (
-                self.generators_active_power.sum(axis=1) +
-                self.storage_units_active_power.sum(axis=1) -
-                self.loads_active_power.sum(axis=1) -
-                self.charging_points_active_power.sum(axis=1)
+                self.loads_active_power.sum(axis=1) +
+                self.charging_points_active_power.sum(axis=1) -
+                self.generators_active_power.sum(axis=1) -
+                self.storage_units_active_power.sum(axis=1)
         )
 
     @property
@@ -368,15 +369,15 @@ class TimeSeries:
         """
         Contains residual load and information on feed-in and load case.
 
-        Residual load is calculated from total (generation - load) in the
+        Residual load is calculated from total (load - generation) in the
         network. Grid losses are not considered.
 
         Feed-in and load case are identified based on the
         generation, load and storage time series and defined as follows:
 
-        1. Load case: negative (generation + storage - load) at HV/MV
+        1. Load case: positive (load - generation - storage) at HV/MV
            substation
-        2. Feed-in case: positive (generation + storage - load) at HV/MV
+        2. Feed-in case: negative (load - generation - storage) at HV/MV
            substation
 
         Returns
@@ -386,15 +387,11 @@ class TimeSeries:
             Series with information on whether time step is handled as load
             case ('load_case') or feed-in case ('feedin_case') for each time
             step in :py:attr:`~timeindex`.
-            Index of the dataframe is :py:attr:`~timeindex`. Columns of the
-            dataframe are 'residual_load' with (load - generation) in kW at
-            HV/MV substation and 'case' with 'load_case' for positive residual
-            load and 'feedin_case' for negative residual load.
 
         """
 
         return self.residual_load.apply(
-            lambda _: "feedin_case" if _ > 0 else "load_case"
+            lambda _: "feedin_case" if _ < 0. else "load_case"
         )
 
     def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
@@ -1221,7 +1218,6 @@ def _worst_case_storage(edisgo_obj, modes, storage_names=None):
             index=edisgo_obj.timeseries.timeindex,
             columns=storage_df.index,
         )
-        # ToDo
         edisgo_obj.timeseries.storage_units_active_power = drop_duplicated_columns(
             pd.concat(
                 [edisgo_obj.timeseries.storage_units_active_power,

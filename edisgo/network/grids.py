@@ -28,10 +28,6 @@ class Grid(ABC):
 
         self._nominal_voltage = None
 
-        # # ToDo Implement if necessary
-        # self._station = None
-        # ToDo maybe add lines_df and lines property if needed
-
     @property
     def id(self):
         return self._id
@@ -330,19 +326,6 @@ class Grid(ABC):
 
     def __repr__(self):
         return "_".join([self.__class__.__name__, str(self.id)])
-
-    def connect_generators(self, generators):
-        """
-        Connects generators to network.
-
-        Parameters
-        ----------
-        generators : :pandas:`pandas.DataFrame<DataFrame>`
-            Generators to be connected.
-
-        """
-        # ToDo: Should we implement this or move function from tools here?
-        raise NotImplementedError
 
 
 class MVGrid(Grid):
