@@ -49,14 +49,6 @@ edisgo.tools.preprocess\_pypsa\_opf\_structure module
     :undoc-members:
     :show-inheritance:
 
-edisgo.tools.pypsa\_io module
-------------------------------
-
-.. automodule:: edisgo.tools.pypsa_io
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 edisgo.tools.tools module
 --------------------------
 
