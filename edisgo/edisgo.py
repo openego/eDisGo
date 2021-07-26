@@ -1329,7 +1329,7 @@ class EDisGo:
         # Connect in LV
         else:
             substations = self.topology.buses_df.loc[
-                self.topology.transformers_df.bus1]
+                self.topology.transformers_df.bus1.unique()]
             nearest_substation, _ = find_nearest_bus(geolocation, substations)
             kwargs['mvlv_subst_id'] = int(nearest_substation.split("_")[-2])
             kwargs['geom'] = geolocation

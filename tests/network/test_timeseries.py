@@ -272,14 +272,13 @@ class Test_get_component_timeseries:
             self.timeseries.generators_reactive_power.loc[:, gen],
             exp * pf)
 
-        load = 'Load_retail_MVGrid_1_Load_aggregated_retail_' \
-               'MVGrid_1_1'  # retail, mv
-        exp = pd.Series(data=[0.15 * 0.31, 1.0 * 0.31],
+        load = 'Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1'  # retail, mv
+        exp = pd.Series(data=[0.1 * 0.31, 1.0 * 0.31],
                         name=load, index=self.timeseries.timeindex)
         assert_series_equal(
             self.timeseries.loads_active_power.loc[:, load], exp,
             check_exact=False, check_dtype=False)
-        pf = tan(acos(0.9))
+        pf = tan(acos(0.95))
         assert_series_equal(
             self.timeseries.loads_reactive_power.loc[:, load],
             exp * pf, check_exact=False, check_dtype=False)
@@ -528,8 +527,11 @@ class Test_get_component_timeseries:
             (self.timeseries.generators_active_power.index == timeindex).all()
         assert (self.timeseries.generators_active_power.loc[
             timeindex, gen_name].values == [0.85*p_nom, 0]).all()
-        assert np.isclose(self.timeseries.generators_reactive_power.loc[
-            timeindex, gen_name].to_list(), [-tan(acos(0.95))*0.85*p_nom, 0]).all()
+        assert np.isclose(
+            np.array(self.timeseries.generators_reactive_power.loc[
+                timeindex, gen_name].values, dtype=float),
+            [-tan(acos(0.95))*0.85*p_nom, 0]
+        ).all()
         # add multiple generators and check
         p_nom2 = 1.3
         gen_name2 = self.topology.add_generator(generator_id=2, p_nom=p_nom2,
@@ -545,13 +547,17 @@ class Test_get_component_timeseries:
         assert self.timeseries.generators_reactive_power.shape == (
             2, num_gens + 3)
         assert np.isclose(
-            self.timeseries.generators_active_power.loc[
-                timeindex, [gen_name2, gen_name3]].values.tolist(),
-            [[p_nom2, p_nom3], [0, 0]]).all()
+            np.array(
+                self.timeseries.generators_active_power.loc[
+                timeindex, [gen_name2, gen_name3]].values, dtype=float),
+            [[p_nom2, p_nom3], [0, 0]]
+        ).all()
         assert np.isclose(
-            self.timeseries.generators_reactive_power.loc[
-                timeindex, [gen_name2, gen_name3]].values.tolist(),
-            [[-p_nom2*tan(acos(0.9)), -p_nom3*tan(acos(0.95))], [0, 0]]).all()
+            np.array(
+                self.timeseries.generators_reactive_power.loc[
+                timeindex, [gen_name2, gen_name3]].values, dtype=float),
+            [[-p_nom2*tan(acos(0.9)), -p_nom3*tan(acos(0.95))], [0, 0]]
+        ).all()
         # remove added generators
         self.topology.remove_generator(gen_name)
         self.topology.remove_generator(gen_name2)
@@ -731,9 +737,12 @@ class Test_get_component_timeseries:
                 (len(timeindex), num_storage_units + 1))
         assert (self.timeseries.storage_units_active_power.loc[
                     timeindex, storage_name].values == [p_nom, -p_nom]).all()
-        assert (np.isclose(self.timeseries.storage_units_reactive_power.loc[
-                    timeindex, storage_name].values.tolist(),
-                    [-p_nom*tan(acos(0.9)), p_nom*tan(acos(0.9))])).all()
+        assert (np.isclose(
+            np.array(
+                self.timeseries.storage_units_reactive_power.loc[
+                    timeindex, storage_name].values, dtype=float),
+            [-p_nom*tan(acos(0.9)), p_nom * tan(acos(0.9))])
+        ).all()
         # add two storage units
         p_nom2 = 1.3
         storage_name2 = self.topology.add_storage_unit(
@@ -748,15 +757,21 @@ class Test_get_component_timeseries:
         assert (self.timeseries.storage_units_reactive_power.shape ==
                 (len(timeindex), num_storage_units + 3))
         assert np.isclose(
-            self.timeseries.storage_units_active_power.loc[
-                timeindex, [storage_name2, storage_name3]].values.tolist(),
-            [[p_nom2, p_nom3], [-p_nom2, -p_nom3]]).all()
+            np.array(
+                self.timeseries.storage_units_active_power.loc[
+                timeindex, [storage_name2, storage_name3]].values,
+                dtype=float),
+            [[p_nom2, p_nom3], [-p_nom2, -p_nom3]]
+        ).all()
         assert np.isclose(
-            self.timeseries.storage_units_reactive_power.loc[
-                timeindex, [storage_name2, storage_name3]].values.tolist(),
+            np.array(
+                self.timeseries.storage_units_reactive_power.loc[
+                timeindex, [storage_name2, storage_name3]].values,
+                dtype=float),
             [[-tan(acos(0.95))*p_nom2, -tan(acos(0.9))*p_nom3],
-             [tan(acos(0.95))*p_nom2, tan(acos(0.9))*p_nom3]]).all()
-        # remove storages
+             [tan(acos(0.95))*p_nom2, tan(acos(0.9))*p_nom3]]
+        ).all()
+        # remove storage units
         self.topology.remove_storage_unit(storage_name)
         self.topology.remove_storage_unit(storage_name2)
         self.topology.remove_storage_unit(storage_name3)
@@ -892,14 +907,20 @@ class Test_get_component_timeseries:
         assert (self.timeseries.storage_units_reactive_power.shape ==
                 (24, num_storage_units + 3))
         assert np.isclose(
-            self.timeseries.storage_units_active_power.loc[
+            np.array(
+                self.timeseries.storage_units_active_power.loc[
                 timeindex, [storage_name2, storage_name3]].values,
-            [p_nom2 * 0.97, p_nom3 * 0.98]).all()
+                dtype=float),
+            [p_nom2 * 0.97, p_nom3 * 0.98]
+        ).all()
         assert np.isclose(
-            self.timeseries.storage_units_reactive_power.loc[
+            np.array(
+                self.timeseries.storage_units_reactive_power.loc[
                 timeindex, [storage_name2, storage_name3]].values,
+                dtype=float),
             [-tan(acos(0.95)) * p_nom2 * 0.97,
-             -tan(acos(0.9)) * p_nom3 * 0.98]).all()
+             -tan(acos(0.9)) * p_nom3 * 0.98]
+        ).all()
         # check values when reactive power is inserted as timeseries
         timeseries.add_storage_units_timeseries(self,
                                                 [storage_name2, storage_name3],
@@ -1116,7 +1137,10 @@ class TestReactivePowerTimeSeriesFunctions:
             active_power_ts.loc[:, [comp_lv_1, comp_lv_2]] * -0.328684).all()
 
         # test for component_type="loads"
+        # change bus of load so that it becomes MV load
         comp_mv_1 = "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"
+        self.topology._loads_df.at[
+            comp_mv_1, "bus"] = "Bus_BranchTee_MVGrid_1_1"
         comp_lv_1 = "Load_residential_LVGrid_7_2"
         comp_lv_2 = "Load_agricultural_LVGrid_8_1"
 
