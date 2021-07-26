@@ -505,14 +505,14 @@ class EDisGo:
         results = reinforce_grid(
             self,
             max_while_iterations=kwargs.get("max_while_iterations", 10),
-            copy_graph=kwargs.get("copy_graph", False),
+            copy_grid=kwargs.get("copy_grid", False),
             timesteps_pfa=kwargs.get("timesteps_pfa", None),
             combined_analysis=kwargs.get("combined_analysis", False),
             mode=kwargs.get("mode", None),
         )
 
         # add measure to Results object
-        if not kwargs.get("copy_graph", False):
+        if not kwargs.get("copy_grid", False):
             self.results.measures = "grid_expansion"
 
         return results
