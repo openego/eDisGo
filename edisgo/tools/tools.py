@@ -1,8 +1,13 @@
 import pandas as pd
-import numpy as np
+import networkx as nx
+from math import pi, sqrt
+
+from edisgo.flex_opt import exceptions
+from edisgo.flex_opt import check_tech_constraints
+from edisgo.network.grids import LVGrid
 
 
-def select_worstcase_snapshots(network):
+def select_worstcase_snapshots(edisgo_obj):
     """
     Select two worst-case snapshots from time series
 
@@ -18,128 +23,33 @@ def select_worstcase_snapshots(network):
 
     Parameters
     ----------
-    network : :class:`~.grid.network.Network`
-        Network for which worst-case snapshots are identified.
+    edisgo_obj : :class:`~.EDisGo`
 
     Returns
     -------
     :obj:`dict`
         Dictionary with keys 'load_case' and 'feedin_case'. Values are
         corresponding worst-case snapshots of type
-        :pandas:`pandas.Timestamp<timestamp>` or None.
+        :pandas:`pandas.Timestamp<Timestamp>` or None.
 
     """
-    timeseries_load_feedin_case = network.timeseries.timesteps_load_feedin_case
+    residual_load = edisgo_obj.timeseries.residual_load
 
     timestamp = {}
-    timestamp['load_case'] = (
-        timeseries_load_feedin_case.residual_load.idxmax()
-        if max(timeseries_load_feedin_case.residual_load) > 0 else None)
-    timestamp['feedin_case'] = (
-        timeseries_load_feedin_case.residual_load.idxmin()
-        if min(timeseries_load_feedin_case.residual_load) < 0 else None)
+    timestamp["load_case"] = (
+        residual_load.idxmin() if min(residual_load) < 0 else None
+    )
+    timestamp["feedin_case"] = (
+        residual_load.idxmax() if max(residual_load) > 0 else None
+    )
     return timestamp
 
 
-def get_residual_load_from_pypsa_network(pypsa_network):
+def calculate_relative_line_load(
+    edisgo_obj, lines=None, timesteps=None
+):
     """
-    Calculates residual load in MW in MV grid and underlying LV grids.
-
-    Parameters
-    ----------
-    pypsa_network : :pypsa:`pypsa.Network<network>`
-        The `PyPSA network
-        <https://www.pypsa.org/doc/components.html#network>`_ container,
-        containing load flow results.
-
-    Returns
-    -------
-    :pandas:`pandas.Series<series>`
-        Series with residual load in MW for each time step. Positiv values
-        indicate a higher demand than generation and vice versa. Index of the
-        series is a :pandas:`pandas.DatetimeIndex<datetimeindex>`
-
-    """
-    residual_load = \
-        pypsa_network.loads_t.p_set.sum(axis=1) - (
-                pypsa_network.generators_t.p_set.loc[
-                :, pypsa_network.generators_t.p_set.columns !=
-                   'Generator_slack'].sum(axis=1) +
-                pypsa_network.storage_units_t.p_set.sum(axis=1))
-    return residual_load
-
-
-def assign_load_feedin_case(network):
-    """
-    For each time step evaluate whether it is a feed-in or a load case.
-
-    Feed-in and load case are identified based on the
-    generation and load time series and defined as follows:
-
-    1. Load case: positive (load - generation) at HV/MV substation
-    2. Feed-in case: negative (load - generation) at HV/MV substation
-
-    Output of this function is written to `timesteps_load_feedin_case`
-    attribute of the network.timeseries (see
-    :class:`~.grid.network.TimeSeries`).
-
-    Parameters
-    ----------
-    network : :class:`~.grid.network.Network`
-        Network for which worst-case snapshots are identified.
-
-    Returns
-    --------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Dataframe with information on whether time step is handled as load case
-        ('load_case') or feed-in case ('feedin_case') for each time step in
-        `timeindex` attribute of network.timeseries.
-        Index of the dataframe is network.timeseries.timeindex. Columns of the
-        dataframe are 'residual_load' with (load - generation) in kW at HV/MV
-        substation and 'case' with 'load_case' for positive residual load and
-        'feedin_case' for negative residual load.
-
-    """
-
-    if network.pypsa is not None:
-        residual_load = get_residual_load_from_pypsa_network(network.pypsa) * \
-                        1e3
-
-    else:
-        grids = [network.mv_grid] + list(network.mv_grid.lv_grids)
-
-        gens = []
-        loads = []
-        for grid in grids:
-            gens.extend(grid.generators)
-            gens.extend(list(grid.graph.nodes_by_attribute('storage')))
-            loads.extend(list(grid.graph.nodes_by_attribute('load')))
-
-        generation_timeseries = pd.Series(
-            0, index=network.timeseries.timeindex)
-        for gen in gens:
-            generation_timeseries += gen.timeseries.p
-
-        load_timeseries = pd.Series(0, index=network.timeseries.timeindex)
-        for load in loads:
-            load_timeseries += load.timeseries.p
-
-        residual_load = load_timeseries - generation_timeseries
-
-    timeseries_load_feedin_case = residual_load.rename(
-        'residual_load').to_frame()
-
-    timeseries_load_feedin_case['case'] = \
-        timeseries_load_feedin_case.residual_load.apply(
-            lambda _: 'feedin_case' if _ < 0 else 'load_case')
-
-    return timeseries_load_feedin_case
-
-
-def calculate_relative_line_load(network, configs, line_load, line_voltages,
-                                 lines=None, timesteps=None):
-    """
-    Calculates relative line loading.
+    Calculates relative line loading for specified lines and time steps.
 
     Line loading is calculated by dividing the current at the given time step
     by the allowed current.
@@ -147,37 +57,26 @@ def calculate_relative_line_load(network, configs, line_load, line_voltages,
 
     Parameters
     ----------
-    network : :pypsa:`pypsa.Network<network>`
-        Pypsa network with lines to calculate line loading for.
-    configs : :obj:`dict`
-        Dictionary with used configurations from config files. See
-        :class:`~.grid.network.Config` for more information.
-    line_load : :pandas:`pandas.DataFrame<dataframe>`
-        Dataframe with current results from power flow analysis in A. Index of
-        the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
-        columns are the line representatives.
-    line_voltages : :pandas:`pandas.Series<series>`
-        Series with nominal voltages of lines in kV. Index of the dataframe are
-        the line representatives.
+    edisgo_obj : :class:`~.EDisGo`
     lines : list(str) or None, optional
         Line names/representatives of lines to calculate line loading for. If
-        None line loading of all lines in `line_load` dataframe are used.
+        None, line loading is calculated for all lines in the network.
         Default: None.
-    timesteps : :pandas:`pandas.Timestamp<timestamp>` or list(:pandas:`pandas.Timestamp<timestamp>`) or None, optional
+    timesteps : :pandas:`pandas.Timestamp<Timestamp>` or list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
         Specifies time steps to calculate line loading for. If timesteps is
-        None all time steps in `line_load` dataframe are used. Default: None.
+        None, all time steps power flow analysis was conducted for are used.
+        Default: None.
 
     Returns
     --------
-    :pandas:`pandas.DataFrame<dataframe>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with relative line loading (unitless). Index of
-        the dataframe is a :pandas:`pandas.DatetimeIndex<datetimeindex>`,
+        the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
         columns are the line representatives.
 
     """
-
     if timesteps is None:
-        timesteps = line_load.index
+        timesteps = edisgo_obj.results.i_res.index
     # check if timesteps is array-like, otherwise convert to list
     if not hasattr(timesteps, "__len__"):
         timesteps = [timesteps]
@@ -185,25 +84,325 @@ def calculate_relative_line_load(network, configs, line_load, line_voltages,
     if lines is not None:
         line_indices = lines
     else:
-        line_indices = line_load.columns
+        line_indices = edisgo_obj.topology.lines_df.index
 
-    residual_load = get_residual_load_from_pypsa_network(network)
-    case = residual_load.apply(
-        lambda _: 'feedin_case' if _ < 0 else 'load_case')
+    mv_lines_allowed_load = check_tech_constraints.lines_allowed_load(
+        edisgo_obj, "mv")
+    lv_lines_allowed_load = check_tech_constraints.lines_allowed_load(
+        edisgo_obj, "lv")
+    lines_allowed_load = pd.concat(
+        [mv_lines_allowed_load, lv_lines_allowed_load],
+        axis=1, sort=False).loc[timesteps, line_indices]
 
-    load_factor = pd.DataFrame(
-        data={'i_nom': [float(configs[
-                                  'grid_expansion_load_factors'][
-                                  'mv_{}_line'.format(case.loc[_])])
-                        for _ in timesteps]},
-        index=timesteps)
+    return check_tech_constraints.lines_relative_load(
+        edisgo_obj, lines_allowed_load)
 
-    # current from power flow
-    i_res = line_load.loc[timesteps, line_indices]
-    # allowed current
-    i_allowed = load_factor.dot(
-        (network.lines.s_nom.T.loc[line_indices].divide(
-            line_voltages.T.loc[line_indices]) * 1e3 / np.sqrt(3)).to_frame(
-            'i_nom').T)
 
-    return i_res.divide(i_allowed)
+def calculate_line_reactance(line_inductance_per_km, line_length):
+    """
+    Calculates line reactance in Ohm from given line data and length.
+
+    Parameters
+    ----------
+    line_inductance_per_km : float or array-like
+        Line inductance in mH/km.
+    line_length : float
+        Length of line in km.
+
+    Returns
+    -------
+    float
+        Reactance in Ohm
+
+    """
+    return line_inductance_per_km / 1e3 * line_length * 2 * pi * 50
+
+
+def calculate_line_resistance(line_resistance_per_km, line_length):
+    """
+    Calculates line resistance in Ohm from given line data and length.
+
+    Parameters
+    ----------
+    line_resistance_per_km : float or array-like
+        Line resistance in Ohm/km.
+    line_length : float
+        Length of line in km.
+
+    Returns
+    -------
+    float
+        Resistance in Ohm
+
+    """
+    return line_resistance_per_km * line_length
+
+
+def calculate_apparent_power(nominal_voltage, current):
+    """
+    Calculates apparent power in MVA from given voltage and current.
+
+    Parameters
+    ----------
+    nominal_voltage : float or array-like
+        Nominal voltage in kV.
+    current : float or array-like
+        Current in kA.
+
+    Returns
+    -------
+    float
+        Apparent power in MVA.
+
+    """
+    return sqrt(3) * nominal_voltage * current
+
+
+def drop_duplicated_indices(dataframe, keep="first"):
+    """
+    Drop rows of duplicate indices in dataframe.
+
+    Parameters
+    ----------
+    dataframe::pandas:`pandas.DataFrame<DataFrame>`
+        handled dataframe
+    keep: str
+        indicator of row to be kept, 'first', 'last' or False,
+        see pandas.DataFrame.drop_duplicates() method
+    """
+    return dataframe[~dataframe.index.duplicated(keep=keep)]
+
+
+def drop_duplicated_columns(df, keep="first"):
+    """
+    Drop columns of dataframe that appear more than once.
+
+    Parameters
+    ----------
+    df : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe of which columns are dropped.
+    keep : str
+        Indicator of whether to keep first ('first'), last ('last') or
+        none (False) of the duplicated columns.
+        See `drop_duplicates()` method of
+        :pandas:`pandas.DataFrame<DataFrame>`.
+
+    """
+    return df.loc[:, ~df.columns.duplicated(keep=keep)]
+
+
+def select_cable(edisgo_obj, level, apparent_power):
+    """
+    Selects suitable cable type and quantity using given apparent power.
+
+    Cable is selected to be able to carry the given `apparent_power`, no load
+    factor is considered. Overhead lines are not considered in choosing a
+    suitable cable.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    level : str
+        Grid level to get suitable cable for. Possible options are 'mv' or
+        'lv'.
+    apparent_power : float
+        Apparent power the cable must carry in MVA.
+
+    Returns
+    -------
+    :pandas:`pandas.Series<Series>`
+        Series with attributes of selected cable as in equipment data and
+        cable type as series name.
+    int
+        Number of necessary parallel cables.
+
+    """
+
+    cable_count = 1
+
+    if level == "mv":
+        cable_data = edisgo_obj.topology.equipment_data["mv_cables"]
+        available_cables = cable_data[
+            cable_data["U_n"] == edisgo_obj.topology.mv_grid.nominal_voltage
+        ]
+    elif level == "lv":
+        available_cables = edisgo_obj.topology.equipment_data["lv_cables"]
+    else:
+        raise ValueError("Specified voltage level is not valid. Must "
+                         "either be 'mv' or 'lv'.")
+
+    suitable_cables = available_cables[
+        calculate_apparent_power(
+            available_cables["U_n"],
+            available_cables["I_max_th"])
+        > apparent_power
+    ]
+
+    # increase cable count until appropriate cable type is found
+    while suitable_cables.empty and cable_count < 7:
+        cable_count += 1
+        suitable_cables = available_cables[
+            calculate_apparent_power(
+                available_cables["U_n"],
+                available_cables["I_max_th"]) * cable_count
+            > apparent_power
+        ]
+    if suitable_cables.empty:
+        raise exceptions.MaximumIterationError(
+            "Could not find a suitable cable for apparent power of "
+            "{} MVA.".format(apparent_power)
+        )
+
+    cable_type = suitable_cables.loc[suitable_cables["I_max_th"].idxmin()]
+
+    return cable_type, cable_count
+
+
+def assign_feeder(edisgo_obj, mode="mv_feeder"):
+    """
+    Assigns MV or LV feeder to each bus and line, depending on the `mode`.
+
+    The feeder name is written to a new column `mv_feeder` or `lv_feeder`
+    in :class:`~.network.topology.Topology`'s
+    :attr:`~.network.topology.Topology.buses_df` and
+    :attr:`~.network.topology.Topology.lines_df`. The MV respectively LV feeder
+    name corresponds to the name of the first bus in the respective feeder.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+    mode : str
+        Specifies whether to assign MV or LV feeder. Valid options are
+        'mv_feeder' or 'lv_feeder'. Default: 'mv_feeder'.
+
+    """
+    def _assign_to_busses(graph, station):
+        # get all buses in network and remove station to get separate subgraphs
+        graph_nodes = list(graph.nodes())
+        graph_nodes.remove(station)
+        subgraph = graph.subgraph(graph_nodes)
+
+        for neighbor in graph.neighbors(station):
+            # get all nodes in that feeder by doing a DFS in the disconnected
+            # subgraph starting from the node adjacent to the station
+            # `neighbor`
+            subgraph_neighbor = nx.dfs_tree(subgraph, source=neighbor)
+            for node in subgraph_neighbor.nodes():
+
+                edisgo_obj.topology.buses_df.at[node, mode] = neighbor
+
+                # in case of an LV station, assign feeder to all nodes in that
+                # LV network (only applies when mode is 'mv_feeder'
+                if node.split("_")[0] == "BusBar" and node.split("_")[
+                    -1] == "MV":
+                    lvgrid = LVGrid(
+                        id=int(node.split("_")[-2]),
+                        edisgo_obj=edisgo_obj)
+                    edisgo_obj.topology.buses_df.loc[
+                        lvgrid.buses_df.index, mode] = neighbor
+
+    def _assign_to_lines(lines):
+        edisgo_obj.topology.lines_df.loc[
+            lines, mode] = edisgo_obj.topology.lines_df.loc[
+                lines].apply(
+                    lambda _: edisgo_obj.topology.buses_df.at[_.bus0, mode],
+                    axis=1)
+        tmp = edisgo_obj.topology.lines_df.loc[lines]
+        lines_nan = tmp[tmp.loc[lines, mode].isna()].index
+        edisgo_obj.topology.lines_df.loc[
+            lines_nan, mode] = edisgo_obj.topology.lines_df.loc[
+                lines_nan].apply(
+                    lambda _: edisgo_obj.topology.buses_df.at[_.bus1, mode],
+                    axis=1)
+
+    if mode == "mv_feeder":
+        graph = edisgo_obj.topology.mv_grid.graph
+        station = edisgo_obj.topology.mv_grid.station.index[0]
+        _assign_to_busses(graph, station)
+        lines = edisgo_obj.topology.lines_df.index
+        _assign_to_lines(lines)
+
+    elif mode == "lv_feeder":
+        for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
+            graph = lv_grid.graph
+            station = lv_grid.station.index[0]
+            _assign_to_busses(graph, station)
+            lines = lv_grid.lines_df.index
+            _assign_to_lines(lines)
+
+    else:
+        raise ValueError("Invalid mode. Mode must either be 'mv_feeder' or "
+                         "'lv_feeder'.")
+
+
+def get_path_length_to_station(edisgo_obj):
+    """
+    Determines path length from each bus to HV-MV station.
+
+    The path length is written to a new column `path_length_to_station` in
+    `buses_df` dataframe of :class:`~.network.topology.Topology` class.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+
+    Returns
+    -------
+    :pandas:`pandas.Series<Series>`
+        Series with bus name in index and path length to station as value.
+
+    """
+    graph = edisgo_obj.topology.mv_grid.graph
+    mv_station = edisgo_obj.topology.mv_grid.station.index[0]
+
+    for bus in edisgo_obj.topology.mv_grid.buses_df.index:
+        path = nx.shortest_path(graph, source=mv_station, target=bus)
+        edisgo_obj.topology.buses_df.at[
+            bus, "path_length_to_station"] = len(path) - 1
+        if bus.split("_")[0] == "BusBar" and bus.split("_")[-1] == "MV":
+            # check if there is an underlying LV grid
+            lv_grid_repr = "LVGrid_{}".format(int(bus.split("_")[-2]))
+            if lv_grid_repr in edisgo_obj.topology._grids.keys():
+                lvgrid = edisgo_obj.topology._grids[lv_grid_repr]
+                lv_graph = lvgrid.graph
+                lv_station = lvgrid.station.index[0]
+                for bus in lvgrid.buses_df.index:
+                    lv_path = nx.shortest_path(lv_graph, source=lv_station,
+                                            target=bus)
+                    edisgo_obj.topology.buses_df.at[
+                        bus, "path_length_to_station"] = \
+                        len(path) + len(lv_path)
+    return edisgo_obj.topology.buses_df.path_length_to_station
+
+
+def assign_voltage_level_to_component(edisgo_obj, df):
+    """
+    Adds column with specification of voltage level component is in.
+
+    The voltage level ('mv' or 'lv') is determined based on the nominal
+    voltage of the bus the component is connected to. If the nominal voltage
+    is smaller than 1 kV, voltage level 'lv' is assigned, otherwise 'mv' is
+    assigned.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    df : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with component names in the index. Only required column is
+        column 'bus', giving the name of the bus the component is connected to.
+
+    Returns
+    --------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Same dataframe as given in parameter `df` with new column
+        'voltage_level' specifying the voltage level the component is in
+        (either 'mv' or 'lv').
+
+    """
+    df["voltage_level"] = df.apply(
+        lambda _: "lv"
+        if edisgo_obj.topology.buses_df.at[_.bus, "v_nom"] < 1
+        else "mv",
+        axis=1,
+    )
+    return df

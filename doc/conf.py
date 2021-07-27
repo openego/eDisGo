@@ -70,14 +70,14 @@ napoleon_use_param = True
 napoleon_use_rtype = True
 napoleon_use_keyword = False
 # Dictionary of external links
-extlinks = {'pandas':('http://pandas.pydata.org/pandas-docs/stable/api.html#%s',
+extlinks = {'pandas':('http://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.%s.html',
                       'pandas.'),
-            'networkx':('https://networkx.readthedocs.io/en/stable/reference/classes.graph.html%s',
-                      'NetworkX Graph Obj'),
+            'networkx':('https://networkx.github.io/documentation/stable/reference/classes/graph.html#%s',
+                        'networkx.'),
             'sqlalchemy':('http://docs.sqlalchemy.org/en/latest/orm/session_basics.html%s',
-                      'SQLAlchemy session object'),
-            'shapely':('http://toblerity.org/shapely/manual.html#%s',
-                      'Shapely object'),
+                          'SQLAlchemy session object'),
+            'shapely':('https://shapely.readthedocs.io/en/latest/manual.html#%s',
+                       'shapely.'),
             'ding0':('https://dingo.readthedocs.io/en/dev/api/ding0.html#%s',
                      'Ding0'),
             'pypsa': ('https://pypsa.org/doc/components.html#%s', 'pypsa')
@@ -106,7 +106,7 @@ author = u'open_eGo-Team'
 # built documents.
 #
 # The short X.Y version.
-version = '0.0.10'
+version = '0.1.0'
 # The full version, including alpha/beta/rc tags.
 release = version
 

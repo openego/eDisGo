@@ -1,11 +1,12 @@
 class Error(Exception):
     """Base class for exceptions in this module."""
+
     pass
 
 
 class MaximumIterationError(Error):
     """
-    Exception raised when maximum number of iterations in grid reinforcement
+    Exception raised when maximum number of iterations in network reinforcement
     is exceeded.
 
     Attributes:

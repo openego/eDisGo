@@ -1,8 +1,14 @@
 <img align="right" width="200" height="200" src="https://github.com/openego/eDisGo/blob/dev/doc/images/edisgo_logo.png">
 
+Overview
+========
+[![Coverage Status](https://coveralls.io/repos/github/openego/eDisGo/badge.svg?branch=dev)](https://coveralls.io/github/openego/eDisGo?branch=dev)
+[![Tests & coverage](https://github.com/openego/eDisGo/actions/workflows/tests-coverage.yml/badge.svg)](https://github.com/openego/eDisGo/actions/workflows/tests-coverage.yml)
+
 # eDisGo
-The python package eDisGo provides a toolbox to analyze distribution grids for grid issues 
-and to evaluate measures responding these.
+The python package eDisGo serves as a toolbox to evaluate flexibility measures
+as an economic alternative to conventional grid expansion in
+medium and low voltage grids.
 See [documentation](https://edisgo.readthedocs.io/en/dev/) for further information.
 
 
