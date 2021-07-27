@@ -1,4 +1,4 @@
-<img align="right" width="200" height="200" src="https://github.com/openego/eDisGo/blob/dev/doc/images/edisgo_logo.png">
+<img align="right" width="200" height="200" src="https://raw.githubusercontent.com/openego/eDisGo/dev/doc/images/edisgo_logo.png">
 
 Overview
 ========
