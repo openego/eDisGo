@@ -41,7 +41,7 @@ setup(
     author_email='anya.heider@rl-institut.de',
     description='A python package for distribution network analysis and optimization',
     long_description=read('README.md'),
-    long_description_content_type='text/x-rst',
+    long_description_content_type='text/markdown',
     install_requires=[
         'demandlib',
         'networkx >= 2.5.0',
