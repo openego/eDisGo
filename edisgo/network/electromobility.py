@@ -9,14 +9,14 @@ logger = logging.getLogger("edisgo")
 
 COLUMNS = {
     "charging_processes_df": [
-        "location", "use_case", "netto_charging_capacity", "chargingdemand", "charge_start",
-        "charge_end", "grid_connection_point_id", "charging_point_id"
+        "location", "use_case", "netto_charging_capacity", "chargingdemand", "park_start",
+        "park_end", "grid_connection_point_id", "charging_point_id"
     ],
     "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
     "simbev_config_df": ["value"],
     "potential_charging_parks_df": ["lv_grid_id", "distance_to_nearest_substation", "distance_weight",
                                     "charging_point_capacity", "charging_point_weight"],
-    "designated_charging_points_df": ["charge_end", "netto_charging_capacity", "grid_connection_point_id", "use_case"],
+    "designated_charging_points_df": ["park_end", "netto_charging_capacity", "grid_connection_point_id", "use_case"],
     "integrated_charging_parks_df": ["edisgo_id"],
 }
 

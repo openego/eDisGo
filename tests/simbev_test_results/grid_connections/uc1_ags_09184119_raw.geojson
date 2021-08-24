@@ -1,0 +1,57 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6410015983796,
+          48.2266851922269
+        ]
+      },
+      "properties": {
+        "name": "J.B\u00f6hm"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6068756983843,
+          48.250363592233
+        ]
+      },
+      "properties": {
+        "name": "Aral"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6474019983787,
+          48.2447340922315
+        ]
+      },
+      "properties": {
+        "name": "OMV"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6471757983787,
+          48.250153092233
+        ]
+      },
+      "properties": {
+        "name": "Avia"
+      }
+    }
+  ]
+}

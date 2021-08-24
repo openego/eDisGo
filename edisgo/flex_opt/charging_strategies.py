@@ -51,7 +51,10 @@ def integrate_charging_points(edisgo_obj, comp_type="ChargingPoint"):
     edisgo_obj.electromobility.integrated_charging_parks_df = pd.DataFrame(
         columns=COLUMNS["integrated_charging_parks_df"], data=edisgo_id, index=charging_park_ids)
 
-
+# TODO: the dummy timeseries should be as long as the simulated days and not the timeindex of the edisgo object
+# At the moment this would result into wrong results if the timeindex of the edisgo object is
+# not continuously (e.g. 2 weeks of the year)
+# TODO: the chargingdemand for strategy reduced is 10% less as for the others
 def charging_strategy(
         edisgo_obj, strategy="dumb", timestamp_share_threshold=0.2, minimum_charging_capacity_factor=0.1):
     """
@@ -104,7 +107,7 @@ def charging_strategy(
 
         """
         # SimBEV has a MATLAB legacy and at the moment 1 is eDisGos 0
-        df.charge_start -= 1
+        df.park_start -= 1
 
         # calculate the minimum time taken the fulfill the charging demand
         minimum_charging_time = df.chargingdemand/df.netto_charging_capacity \
@@ -124,11 +127,11 @@ def charging_strategy(
         df = df.assign(
             minimum_charging_time=minimum_charging_time.astype(np.uint16),
             harmonized_chargingdemand=minimum_charging_time * df.netto_charging_capacity * edisgo_obj.electromobility.stepsize / 60,
-            netto_charging_capacity_mva=df.netto_charging_capacity.divide(10**3).divide(eta_cp),  # kW --> MW
+            netto_charging_capacity_mva=df.netto_charging_capacity.divide(10**3 * eta_cp),  # kW --> MW
         )
 
         if strategy == "reduced":
-            parking_time = df.charge_end - df.charge_start
+            parking_time = df.park_end - df.park_start
 
             # calculate the maximum needed charging time with the minimum charging capacity
             maximum_needed_charging_time = df.harmonized_chargingdemand /\
@@ -154,23 +157,23 @@ def charging_strategy(
                                            * 60/edisgo_obj.electromobility.stepsize
 
             df = df.assign(
-                reduced_charging_capacity_mva=df.reduced_charging_capacity.divide(10**3),
+                reduced_charging_capacity_mva=df.reduced_charging_capacity.divide(10**3 * eta_cp),
             )
 
         elif strategy == "residual":
             # the flex time/band is defined as the amount of time steps not needed to fulfill
             # the charging demand in a parking process
-            parking_time = df.charge_end - df.charge_start
+            parking_time = df.park_end - df.park_start
 
             df = df.assign(
                 flex_time=parking_time - df.minimum_charging_time
             )
 
-            df = df.sort_values(by=["flex_time", "charge_start"], ascending=[True, True])
+            df = df.sort_values(by=["flex_time", "park_start"], ascending=[True, True])
 
         return df
 
-    def overwrite_timeseries(edisgo_obj, edisgo_id, ts):
+    def _overwrite_timeseries(edisgo_obj, edisgo_id, ts):
         """
         Overwrites the dummy timeseries for the Charging Point
 
@@ -183,7 +186,8 @@ def charging_strategy(
             New timeseries
 
         """
-        edisgo_obj.timeseries._charging_points_active_power.loc[:, edisgo_id] = ts
+        edisgo_obj.timeseries._charging_points_active_power.loc[:, edisgo_id] = \
+            ts.loc[edisgo_obj.timeseries.timeindex]
 
     # get integrated charging parks
     charging_parks = [
@@ -192,29 +196,48 @@ def charging_strategy(
     ]
 
     # Reset possible old timeseries as these influence "residual" charging
+    ts = pd.Series(data=0, index=edisgo_obj.timeseries.timeindex)
+
     for cp in charging_parks:
-        overwrite_timeseries(edisgo_obj, cp.edisgo_id, 0)
+        _overwrite_timeseries(edisgo_obj, cp.edisgo_id, ts)
 
     eta_cp = edisgo_obj.electromobility.eta_charging_points
+
+    len_ts = int(edisgo_obj.electromobility.simulated_days * 24 \
+                 * 60 / edisgo_obj.electromobility.stepsize)
+
+    timeindex = pd.date_range(
+        edisgo_obj.timeseries.timeindex[0], periods=len_ts, freq=f"{edisgo_obj.electromobility.stepsize}min")
+
+    edisgo_timedelta = edisgo_obj.timeseries.timeindex[1] - edisgo_obj.timeseries.timeindex[0]
+    simbev_timedelta = timeindex[1] - timeindex[0]
+    
+    if edisgo_timedelta != simbev_timedelta:
+        raise ValueError(
+            "The stepsize of the timeseries of the edisgo object differs from the simbev stepsize.",
+            f"The edisgo timedelta is {edisgo_timedelta}, while the simbev timedelta is {simbev_timedelta}.",
+            "Make sure to use a matching stepsize."
+        )
 
     if strategy == "dumb":
         # "dumb" charging
         for cp in charging_parks:
-            dummy_ts = np.zeros(len(edisgo_obj.timeseries.timeindex))
+            dummy_ts = np.zeros(len_ts)
 
             charging_processes_df = harmonize_charging_processes_df(
                 cp.charging_processes_df, timestamp_share_threshold, strategy=strategy, eta_cp=eta_cp)
 
             for _, row in charging_processes_df.iterrows():
-                dummy_ts[row["charge_start"]:row["charge_start"] + row["minimum_charging_time"]] += \
+                dummy_ts[row["park_start"]:row["park_start"] + row["minimum_charging_time"]] += \
                     row["netto_charging_capacity_mva"]
 
-            overwrite_timeseries(edisgo_obj, cp.edisgo_id, dummy_ts)
+            _overwrite_timeseries(
+                edisgo_obj, cp.edisgo_id, pd.Series(data=dummy_ts, index=timeindex))
 
     elif strategy == "reduced":
         # "reduced" charging
         for cp in charging_parks:
-            dummy_ts = np.zeros(len(edisgo_obj.timeseries.timeindex))
+            dummy_ts = np.zeros(len_ts)
 
             charging_processes_df = harmonize_charging_processes_df(
                 cp.charging_processes_df, timestamp_share_threshold, strategy=strategy,
@@ -224,13 +247,14 @@ def charging_strategy(
                 if row["use_case"] == "public":
                     # if the charging process takes place in a "public" setting
                     # the charging is "dumb"
-                    dummy_ts[row["charge_start"]:row["charge_start"] + row["minimum_charging_time"]] += \
+                    dummy_ts[row["park_start"]:row["park_start"] + row["minimum_charging_time"]] += \
                         row["netto_charging_capacity_mva"]
                 else:
-                    dummy_ts[row["charge_start"]:row["charge_start"] + row["reduced_charging_time"]] += \
+                    dummy_ts[row["park_start"]:row["park_start"] + row["reduced_charging_time"]] += \
                         row["reduced_charging_capacity_mva"]
 
-            overwrite_timeseries(edisgo_obj, cp.edisgo_id, dummy_ts)
+            _overwrite_timeseries(
+                edisgo_obj, cp.edisgo_id, pd.Series(data=dummy_ts, index=timeindex))
 
     elif strategy == "residual":
         # "residual" charging
@@ -239,10 +263,24 @@ def charging_strategy(
                 strategy=strategy, eta_cp=eta_cp)
 
         # get residual load
-        init_residual_load = edisgo_obj.timeseries.residual_load.multiply(-1).to_numpy()
+        # TODO: remove inversion when merged with dev
+        init_residual_load = edisgo_obj.timeseries.residual_load.multiply(-1)
 
         dummy_ts = pd.DataFrame(
-            data=0, columns=[_.id for _ in charging_parks], index=edisgo_obj.timeseries.timeindex)
+            data=0, columns=[_.id for _ in charging_parks], index=timeindex)
+
+        if len(init_residual_load) >= len_ts:
+            init_residual_load = init_residual_load.loc[timeindex]
+        else:
+            while len(init_residual_load) < len_ts:
+                len_rl = len(init_residual_load)
+                len_append = min(len_rl, len_ts-len_rl)
+
+                s_append = init_residual_load.iloc[:len_append]
+
+                init_residual_load = init_residual_load.append(s_append)
+
+        init_residual_load = init_residual_load.to_numpy()
 
         # determine which charging processes can be flexibilized
         dumb_charging_processes_df = charging_processes_df.loc[
@@ -256,18 +294,18 @@ def charging_strategy(
         # perform dumb charging processes and respect them in the residual load
         for _, row in dumb_charging_processes_df.iterrows():
             dummy_ts[row["grid_connection_point_id"]].iloc[
-                row["charge_start"]:row["charge_start"] + row["minimum_charging_time"]
+                row["park_start"]:row["park_start"] + row["minimum_charging_time"]
             ] += row["netto_charging_capacity_mva"]
 
-        residual_load = init_residual_load + dummy_ts.sum(axis=1).values
+        residual_load = init_residual_load + dummy_ts.sum(axis=1).to_numpy()
 
         for _, row in flex_charging_processes_df.iterrows():
-            flex_band = residual_load[row["charge_start"]:row["charge_end"]]
+            flex_band = residual_load[row["park_start"]:row["park_end"]]
 
             k = row["minimum_charging_time"]
 
             # get k time steps with the lowest residual load in the parking time
-            idx = np.argpartition(flex_band, k)[:k] + row["charge_start"]
+            idx = np.argpartition(flex_band, k)[:k] + row["park_start"]
 
             dummy_ts[row["grid_connection_point_id"]].iloc[idx] += \
                 row["netto_charging_capacity_mva"]
@@ -275,8 +313,8 @@ def charging_strategy(
             residual_load[idx] += row["netto_charging_capacity_mva"]
 
         for count, col in enumerate(dummy_ts.columns):
-            overwrite_timeseries(
-                edisgo_obj, charging_parks[count].edisgo_id, dummy_ts[col].to_numpy())
+            _overwrite_timeseries(
+                edisgo_obj, charging_parks[count].edisgo_id, dummy_ts[col])
 
     else:
         raise ValueError(f"Strategy {strategy} has not yet been implemented.")

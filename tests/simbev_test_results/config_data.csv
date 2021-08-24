@@ -1,0 +1,14 @@
+,0
+random.seed,25588
+num_threads,16
+stepsize,15
+year,2050
+scenarette,
+days,371
+car_limit,100000
+completed_standing_times_ags,[]
+completed_timeseries_ags,[]
+car_ramp_up_data,RampUp_scenario_NEP_C_2035.csv
+eta_CP,0.9
+num_gem,
+date,NEP_C_2035
