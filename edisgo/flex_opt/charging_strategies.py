@@ -182,7 +182,7 @@ def charging_strategy(
         edisgo_obj : :class:`~.EDisGo`
         edisgo_id : str
             eDisGo ID of the Charging Point
-        ts : array_like
+        ts : :pandas:`pandas.Series<Series>`
             New timeseries
 
         """
@@ -263,8 +263,7 @@ def charging_strategy(
                 strategy=strategy, eta_cp=eta_cp)
 
         # get residual load
-        # TODO: remove inversion when merged with dev
-        init_residual_load = edisgo_obj.timeseries.residual_load.multiply(-1)
+        init_residual_load = edisgo_obj.timeseries.residual_load
 
         dummy_ts = pd.DataFrame(
             data=0., columns=[_.id for _ in charging_parks], index=timeindex)
