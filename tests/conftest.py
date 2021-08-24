@@ -11,6 +11,14 @@ def pytest_configure(config):
         os.path.realpath(os.path.dirname(__file__)),
         "ding0_test_network_2")
 
+    pytest.ding0_test_network_3_path = os.path.join(
+        os.path.realpath(os.path.dirname(__file__)),
+        "ding0_test_network_3")
+
+    pytest.simbev_test_results_path = os.path.join(
+        os.path.realpath(os.path.dirname(__file__)),
+        "simbev_test_results")
+
     config.addinivalue_line("markers", "slow: mark test as slow to run")
 
 

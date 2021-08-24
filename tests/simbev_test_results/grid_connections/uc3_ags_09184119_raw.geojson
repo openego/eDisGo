@@ -1,0 +1,2904 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6615873250961,
+          48.2465738317076
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6440365622672,
+          48.2450366502007
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6496532652638,
+          48.2521522418287
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 15
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6509696153809,
+          48.2512326562594
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6423115030775,
+          48.2333633509431
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6454698430477,
+          48.2477150594618
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6577274943664,
+          48.2520313541236
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6506761165764,
+          48.2422378499931
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 14
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6562050950777,
+          48.246654675845
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6509402595319,
+          48.2503331772911
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6409079688497,
+          48.2315843721292
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6519921934802,
+          48.2413182489272
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 12
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6549183809563,
+          48.2484738039413
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 15
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6483368676797,
+          48.2530718114614
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 35
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6408788093507,
+          48.2306848821677
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 11
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6547712763475,
+          48.2439764060806
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6536609792219,
+          48.2511923939685
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6524622164877,
+          48.2557099205643
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 18
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6157804201269,
+          48.2454536644132
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6469325623027,
+          48.2512929267536
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6605960714463,
+          48.2573877735729
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6590141958784,
+          48.2502121961924
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6577569724141,
+          48.2529308302886
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 18
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6523152977897,
+          48.2512125333101
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.645440588116,
+          48.2468155773728
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 16
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6453820822183,
+          48.2450166120893
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 15
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6579043826376,
+          48.2574282055898
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 26
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6536315755589,
+          48.2502929158258
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6481024192927,
+          48.2458759686998
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6603893717058,
+          48.2510914513772
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 15
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6617941454743,
+          48.2528701638926
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 27
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6546830295334,
+          48.2412779629387
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6578454145508,
+          48.2556292565738
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 27
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6565290759671,
+          48.2565489222684
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 21
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6587487622438,
+          48.2421168912168
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6604188962368,
+          48.2519909270815
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 21
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.650852199944,
+          48.2476347381759
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 7
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.641082953509,
+          48.2369813041424
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6574033237444,
+          48.242137091985
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 22
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6105127809888,
+          48.2491302475629
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 28
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6618236965838,
+          48.2537696384451
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6470497120479,
+          48.2548908438881
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6590731957919,
+          48.2520111487988
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 15
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6587192762803,
+          48.241217411042
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 5
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6520215599635,
+          48.2422177311693
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 18
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6481317207062,
+          48.2467754503346
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 12
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6522271625045,
+          48.248514096538
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 5
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6521684122852,
+          48.2467151368474
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6536903842137,
+          48.2520918717428
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 7
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6631694428834,
+          48.2537493831121
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6483954930215,
+          48.254870768469
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 23
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6077929119926,
+          48.2482699652181
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 12
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6494186362353,
+          48.244956399415
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 14
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6466690527881,
+          48.243197591652
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6482489396019,
+          48.2503733731887
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 5
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6591026977485,
+          48.2529106245494
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6605370077048,
+          48.2555888262153
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6507348057281,
+          48.2440368141956
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 12
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6482196328915,
+          48.2494738930278
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.651028331059,
+          48.253031613091
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.654712443809,
+          48.2421774443549
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6467276011972,
+          48.2449965575878
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 21
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6483661796882,
+          48.2539712901493
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 16
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6524916042115,
+          48.2566093969107
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6118297619727,
+          48.2482111257058
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 12
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6533670023746,
+          48.2421975959566
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 16
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6537197905344,
+          48.2529913491488
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6510576908882,
+          48.2539310909545
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6496825998569,
+          48.2530517204727
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6495946000543,
+          48.2503532834359
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6548595351245,
+          48.246674845903
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6469032781752,
+          48.2503934465494
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6480731192031,
+          48.2449764866964
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6549772321068,
+          48.2502727605053
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 5
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6533963940821,
+          48.2430970774169
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 11
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6104555128334,
+          48.2473312626053
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 11
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6604779493019,
+          48.253789877385
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6064758564381,
+          48.2491890391061
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6091099200779,
+          48.2473508753739
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6591912116183,
+          48.2556090495915
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 33
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6550360885765,
+          48.2520717155956
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6564701583708,
+          48.254749971688
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 20
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6522565396053,
+          48.2494135758304
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6507054604894,
+          48.2431373322788
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6537491981842,
+          48.2538908261865
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.646756877386,
+          48.2458960400027
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 7
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6494772855408,
+          48.2467553622295
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6591322010383,
+          48.2538100999317
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6466983263313,
+          48.2440970748043
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6520802969109,
+          48.2440166945469
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 40
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6414914355639,
+          48.2495740938567
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 11
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6144348789886,
+          48.2454733419395
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6506467739894,
+          48.2413383673386
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6470204226261,
+          48.2539913651567
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6550655188062,
+          48.2529711925883
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 5
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6575211853278,
+          48.2457350106517
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 17
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6454113345063,
+          48.2459160949153
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 14
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.646873995371,
+          48.249493965977
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 5
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6578159325062,
+          48.2547297815136
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 14
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6453528312521,
+          48.2441171288945
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 15
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6508228494007,
+          48.2467352577338
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 18
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6091671404226,
+          48.2491498611358
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 28
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6561462067619,
+          48.2448557171591
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6428370769728,
+          48.2495540864743
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6562934375307,
+          48.2493531111087
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 7
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6388001498363,
+          48.2496140594461
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6564407015696,
+          48.2538504958456
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 19
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.643861219676,
+          48.2396397430363
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6601237109561,
+          48.2429961534512
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6424574529542,
+          48.2378607894685
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6466397805675,
+          48.242298108131
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6564996165033,
+          48.2556494471623
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 12
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6422239489739,
+          48.2306648833965
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6523446788735,
+          48.2521120114974
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6469911345281,
+          48.2530918860572
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6550949503661,
+          48.2538706692127
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6547418594137,
+          48.2430769254022
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 7
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6495652694379,
+          48.249453803687
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6551832530269,
+          48.2565690968768
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 14
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6118011046372,
+          48.2473116334455
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6118870805287,
+          48.2500101091224
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6495066121812,
+          48.2476548430838
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6480438204375,
+          48.2440770043244
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 11
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6428078672075,
+          48.2486546043007
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6565585367625,
+          48.2574483970065
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 20
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.640937129666,
+          48.2324838617213
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6524328300921,
+          48.2548104438498
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6441827174109,
+          48.2495340627002
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6510870520444,
+          48.2548305684498
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 15
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6440073352009,
+          48.2441371665951
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 21
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6508815518135,
+          48.2485342182494
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6509109050094,
+          48.2494336979545
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6493893135701,
+          48.2440569174548
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6588667194216,
+          48.2457148082268
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6533376119951,
+          48.2412981141272
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 17
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6467861548977,
+          48.246795522049
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 15
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6409662917996,
+          48.233383350944
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.657874897928,
+          48.2565287312659
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 25
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6560284460942,
+          48.2412577953617
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 21
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6590436951686,
+          48.2511116726798
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 18
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6573444009403,
+          48.2403381304381
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6548301142028,
+          48.2457753663309
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6507641522929,
+          48.2449362957437
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 14
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6481610234438,
+          48.2476749316008
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 7
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6548889573756,
+          48.2475743251064
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.656381791961,
+          48.2520515430559
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 31
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6560873237676,
+          48.2430567569982
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 14
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6534551814813,
+          48.2448960392312
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6480145229957,
+          48.2431775215836
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 14
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6104268806966,
+          48.2464317695745
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 7
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6575801241084,
+          48.2475339677723
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6560578842659,
+          48.2421572763644
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 19
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6520509277737,
+          48.2431172130425
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 14
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6524034450246,
+          48.2539109667672
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6493306722142,
+          48.242257952428
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6631398678642,
+          48.252849908975
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6131466954886,
+          48.2472919878945
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.606418731715,
+          48.2473900517376
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6617645957003,
+          48.2519706889717
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6573738616768,
+          48.2412376113961
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 25
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6604484221022,
+          48.2528904024174
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 16
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6439781094551,
+          48.2432376826209
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6497119357758,
+          48.2539511987486
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 21
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6118584206031,
+          48.2491106175981
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 34
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6552126899079,
+          48.2574685720286
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.653572772219,
+          48.2484939584352
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6468154337323,
+          48.2476950037268
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6482782476366,
+          48.2512728529812
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6564112460997,
+          48.2529510196349
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 32
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.653778607163,
+          48.2547903028561
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 5
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6091385296038,
+          48.2482503684389
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6440657906543,
+          48.2459361334376
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6131180155445,
+          48.246392495669
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 15
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6561756502546,
+          48.2457551966864
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 11
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6592207189086,
+          48.2565085238691
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 28
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6483075569958,
+          48.2521723324054
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6401749564571,
+          48.2504935674728
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6575506540523,
+          48.2466344893964
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6494479602255,
+          48.2458558810066
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6479852268777,
+          48.242278038474
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6509989725566,
+          48.2521321348594
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6562639887157,
+          48.248453633056
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 17
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6592502275325,
+          48.2574079977786
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6574917179348,
+          48.2448355315383
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6055870140922,
+          48.2636004559381
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6415206227427,
+          48.2504735760723
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.657786451794,
+          48.2538303060852
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6064472934312,
+          48.2482895456058
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 18
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6587782495396,
+          48.2430163710227
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6496239319963,
+          48.2512527628165
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 7
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6469618477536,
+          48.2521924065895
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 12
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6550066596767,
+          48.2511722382347
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 4
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6493013535235,
+          48.2413584693614
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 7
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6455283568772,
+          48.2495140225344
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6104841462641,
+          48.2482307552681
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 18
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6078214989055,
+          48.2491694583169
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6117724485968,
+          48.2464121408172
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6507935001838,
+          48.2458357769231
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 13
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6535433725419,
+          48.2475944791871
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 5
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6562345412314,
+          48.2475541546348
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6563523391532,
+          48.2511520661086
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 21
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6440950203621,
+          48.2468356163059
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 5
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6495359401469,
+          48.2485543235696
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 7
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6591617056616,
+          48.2547095749457
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 10
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6493599922298,
+          48.2431574351258
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 16
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6130893368964,
+          48.2454930030754
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 6
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6132040592648,
+          48.2490909712414
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 8
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6523740612851,
+          48.2530114893164
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6453235816076,
+          48.2432176453311
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6576980176508,
+          48.2511318775903
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 7
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6536021732246,
+          48.2493934373148
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6563228876765,
+          48.2502525887929
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6497412730206,
+          48.2548506766563
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6574327871432,
+          48.243036572205
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 15
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6605665389082,
+          48.2564883000782
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 18
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6534257871176,
+          48.2439965585085
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 33
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6401457931847,
+          48.2495940848473
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 12
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6548006946105,
+          48.2448758863901
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6521096673752,
+          48.2449161756824
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 29
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6388292892022,
+          48.2505135424812
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 7
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6549478058667,
+          48.2493732824075
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 12
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6479559320833,
+          48.2413785549956
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6144635815391,
+          48.24637283413
+        ]
+      },
+      "properties": {
+        "building_wohneinheiten": 9
+      }
+    }
+  ]
+}

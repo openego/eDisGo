@@ -7,19 +7,20 @@ import geopandas as gpd
 from sklearn import preprocessing
 from pathlib import Path
 from numpy.random import default_rng
-from time import perf_counter
 
 logger = logging.getLogger("edisgo")
+
+min_max_scaler = preprocessing.MinMaxScaler()
 
 COLUMNS = {
     "charging_processes_df": [
         "ags", "car_id", "destination", "use_case", "netto_charging_capacity",
-        "chargingdemand", "charge_start", "charge_end"
+        "chargingdemand", "park_start", "park_end"
     ],
     "matching_demand_and_location": ["grid_connection_point_id", "charging_point_id"],
     "grid_connections_gdf": ["ags", "use_case", "user_centric_weight", "geometry"],
     "simbev_config_df": ["value"],
-    "available_charging_points_df": ["charge_end", "netto_charging_capacity", "grid_connection_point_id", "use_case"],
+    "available_charging_points_df": ["park_end", "netto_charging_capacity", "grid_connection_point_id", "use_case"],
 }
 
 DTYPES = {
@@ -30,8 +31,8 @@ DTYPES = {
         "use_case": str,
         "netto_charging_capacity": np.float64,
         "chargingdemand": np.float64,
-        "charge_start": np.uint16,
-        "charge_end": np.uint16,
+        "park_start": np.uint16,
+        "park_end": np.uint16,
     },
     "grid_connections_gdf": {
         "ags": np.uint32,
@@ -95,8 +96,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
         files = []
 
         for dirpath, dirnames, filenames in os.walk(path):
-            for filename in [f for f in filenames if f.endswith(".csv")]:
-                files.append(Path(os.path.join(dirpath, filename)))
+            files.extend(Path(os.path.join(dirpath, f)) for f in filenames if f.endswith(".csv"))
 
         if len(files) == 0:
             raise ValueError(
@@ -112,16 +112,16 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
         for car_id, f in enumerate(files):
             df = pd.read_csv(f, index_col=[0])
 
+            if mode == "frugal":
+                df = df.loc[df.chargingdemand > 0]
+            else:
+                pass
+
             df = df.rename(columns={"location": "destination"})
 
             df = df.assign(ags=int(f.parts[-2]), car_id=car_id)
 
             df = df[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
-
-            if mode == "frugal":
-                df = df.loc[df.chargingdemand > 0]
-            else:
-                pass
 
             charging_processes_df = charging_processes_df.append(
                 df, ignore_index=True,
@@ -216,7 +216,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
                 else:
                     raise ValueError(
-                        "GEOJSON {} contains unknown properties.".format(f)
+                        f"GEOJSON {f} contains unknown properties."
                     )
 
                 gdf = gdf.assign(use_case=USECASES[f[:3]], ags=int(f.split("_")[-2]))
@@ -230,8 +230,6 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
         # sort GeoDataFrame and normalize weights 0 .. 1
         grid_connections_gdf = grid_connections_gdf.sort_values(
             by=["use_case", "ags", "user_centric_weight"], ascending=[True, True, False]).reset_index(drop=True)
-
-        min_max_scaler = preprocessing.MinMaxScaler()
 
         normalized_weight = []
 
@@ -249,7 +247,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
     edisgo_obj.electromobility.charging_processes_df = read_csvs_charging_processes(
         path, mode=kwargs.get("mode_standing_times", "frugal"),
-        dir=kwargs.get("charging_processes_dir", "standing_times_looped")
+        dir=kwargs.get("charging_processes_dir", "simbev_run")
     )
 
     edisgo_obj.electromobility.simbev_config_df = read_csv_simbev_config(
@@ -260,7 +258,8 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
 
 def distribute_charging_demand(edisgo_obj, **kwargs):
-    def get_weights_df(grid_connections_indices, mode="user_friendly", user_friendly_weight=0.5, distance_weight=1/3):
+    def get_weights_df(
+            grid_connections_indices, **kwargs):
         """
         Get weights per potential charging point for a given set of grid connection indices.
 
@@ -284,28 +283,45 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
             DataFrame with numeric weights
 
         """
+        mode = kwargs.get("mode", "user_friendly")
+
         if mode == "user_friendly":
             weights = [
                 _.user_centric_weight for _ in edisgo_obj.electromobility.potential_charging_parks
                 if _.id in grid_connections_indices
             ]
         elif mode == "grid_friendly":
+            potential_charging_parks = list(edisgo_obj.electromobility.potential_charging_parks)
+
             user_friendly_weights = [
-                _.user_centric_weight for _ in edisgo_obj.electromobility.potential_charging_parks
+                _.user_centric_weight for _ in potential_charging_parks
                 if _.id in grid_connections_indices
             ]
 
+            lv_grids_df = edisgo_obj.topology.lv_grids_df
+
+            generators_weight_factor = kwargs.get("generators_weight_factor", 0.5)
+            loads_weight_factor = kwargs.get("loads_weight_factor", 0.5)
+
+            combined_weights = generators_weight_factor*lv_grids_df["generators_weight"] +\
+                               loads_weight_factor*lv_grids_df["loads_weight"]
+
+            lv_grid_ids = [_.nearest_substation["lv_grid_id"] for _ in potential_charging_parks]
+
             load_and_generator_capacity_weights = [
-                _._load_and_generator_capacity_weight for _ in edisgo_obj.electromobility.potential_charging_parks
-                if _.id in grid_connections_indices
+                combined_weights.at[lv_grid_id] for lv_grid_id in lv_grid_ids
             ]
 
             distance_weights = edisgo_obj.electromobility._potential_charging_parks_df.distance_weight.tolist()
+
+            distance_weight = kwargs.get("distance_weight", 1 / 3)
 
             grid_friendly_weights = [
                 (1 - distance_weight) * load_and_generator_capacity_weights[i] + distance_weight * distance_weights[i]
                 for i in range(len(distance_weights))
             ]
+
+            user_friendly_weight = kwargs.get("user_friendly_weight", 0.5)
 
             weights = [
                 (1 - user_friendly_weight) * grid_friendly_weights[i] + user_friendly_weight * user_friendly_weights[i]
@@ -330,7 +346,7 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
 
         """
         if weights_df.sum().sum() == 0:
-            return np.array([1/len(weights_df) for _ in range(len(weights_df))])
+            return np.array(1/len(weights_df) for _ in range(len(weights_df)))
         else:
             return weights_df.divide(weights_df.sum().sum()).T.to_numpy().flatten()
 
@@ -354,8 +370,6 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
             Array with normalized weights
 
         """
-        min_max_scaler = preprocessing.MinMaxScaler()
-
         capacity_df = designated_charging_point_capacity_df.loc[grid_connections_indices]
 
         capacity_weights = (1 - min_max_scaler.fit_transform(
@@ -508,7 +522,7 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
                     "Destination {} is unknown.".format(destination)
                 )
 
-    def distribute_public_charging_demand(edisgo_obj):
+    def distribute_public_charging_demand(edisgo_obj, **kwargs):
         """
         Distributes all public charging processes. For each process it is checked if a matching
         charging point is existing to minimize the number of charging points.
@@ -520,17 +534,17 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
         """
         public_charging_df = edisgo_obj.electromobility.charging_processes_df.loc[
             edisgo_obj.electromobility.charging_processes_df.use_case == "public"
-        ].sort_values(by=["charge_start", "charge_end"], ascending=[True, True])
+        ].sort_values(by=["park_start", "park_end"], ascending=[True, True])
 
         try:
             rng = default_rng(seed=edisgo_obj.topology.id)
         except:
-            rng = None
+            rng = default_rng(seed=1)
 
         available_charging_points_df = pd.DataFrame(columns=COLUMNS["available_charging_points_df"])
 
         grid_and_user_centric_weights_df = get_weights_df(
-            edisgo_obj.electromobility.grid_connections_gdf.index, mode="grid_friendly")
+            edisgo_obj.electromobility.grid_connections_gdf.index, **kwargs)
 
         designated_charging_point_capacity_df = pd.DataFrame(
             index=grid_and_user_centric_weights_df.index, columns=["designated_charging_point_capacity"], data=0)
@@ -539,7 +553,7 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
             use_case = PUBLIC_DESTINATIONS[row["destination"]]
 
             matching_charging_points_df = available_charging_points_df.loc[
-                (available_charging_points_df.charge_end < row["charge_end"]) &
+                (available_charging_points_df.park_end < row["park_end"]) &
                 (available_charging_points_df.netto_charging_capacity.round(1) ==
                  round(row["netto_charging_capacity"], 1))
             ]
@@ -557,7 +571,7 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
 
                 edisgo_obj.electromobility.charging_processes_df.at[idx, "charging_point_id"] = charging_point_s.name
 
-                available_charging_points_df.at[idx, "charge_end"] = row["charge_end"]
+                available_charging_points_df.at[idx, "park_end"] = row["park_end"]
 
             else:
                 grid_connections_indices = edisgo_obj.electromobility.grid_connections_gdf.loc[
@@ -586,22 +600,12 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
                     available_charging_points_df.columns].loc[idx].tolist()
 
                 designated_charging_point_capacity_df.at[
-                    grid_connection_point_id, "designated_charging_point_capacity"
-                ] += row["netto_charging_capacity"]
+                    grid_connection_point_id, "designated_charging_point_capacity"] += row["netto_charging_capacity"]
 
-    t0 = perf_counter()
 
     distribute_private_charging_demand(edisgo_obj)
 
-    t1 = perf_counter()
-
-    print("It took {} seconds to distribute private charging.".format(round(t1 - t0, 1)))
-
-    distribute_public_charging_demand(edisgo_obj)
-
-    t2 = perf_counter()
-
-    print("It took {} seconds to distribute public charging.".format(round(t2 - t1, 1)))
+    distribute_public_charging_demand(edisgo_obj, **kwargs)
 
 
 def determine_grid_connection_capacity(

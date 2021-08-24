@@ -1146,7 +1146,7 @@ class Topology:
             data,
             name=name,
         ).to_frame().T
-        self.charging_points_df = self.charging_points_df.append(new_df)
+        self.charging_points_df = self.charging_points_df.append(new_df, sort=True)
         return name
 
     def add_storage_unit(self, bus, p_nom, control="PQ", **kwargs):

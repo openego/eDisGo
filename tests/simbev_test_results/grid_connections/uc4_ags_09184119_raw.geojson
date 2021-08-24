@@ -1,0 +1,380 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6228063577137,
+          48.2477356428451
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 17.244789645260944,
+        "area": 560096.959487137
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6252228724406,
+          48.2520262708246
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 16.804577822209097,
+        "area": 399508.423534535
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6359750808549,
+          48.2521354426936
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 15.081697360996179,
+        "area": 106471.274721533
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6394370193096,
+          48.2324596809196
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 14.765430835981967,
+        "area": 83523.8065167898
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6420231406236,
+          48.2270542255224
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 14.393694115490892,
+        "area": 62791.0923696642
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6713021995629,
+          48.2595827181004
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 14.191398176129505,
+        "area": 53760.8415926434
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6350037311922,
+          48.2505533293148
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 13.708463351274883,
+        "area": 37109.7290774154
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6668006045223,
+          48.2597028463872
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 13.649418887566208,
+        "area": 35465.5170554844
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6413907422201,
+          48.2382699079762
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 13.468423600345549,
+        "area": 30865.5864796765
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6618448138035,
+          48.2601191595365
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 13.467564143138496,
+        "area": 30845.2324693657
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6673912150889,
+          48.2617099773677
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 12.419425227792292,
+        "area": 13797.7543690431
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6536159105358,
+          48.255595989565
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 11.931164752086376,
+        "area": 9485.3840019995
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6122638852073,
+          48.2480150506808
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 11.036180892946053,
+        "area": 4772.29151134307
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6300286182253,
+          48.2491310244521
+        ]
+      },
+      "properties": {
+        "landuse": "commercial",
+        "weight": 10.833821392384506,
+        "area": 4085.7688916597
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6534252925075,
+          48.2569075639085
+        ]
+      },
+      "properties": {
+        "landuse": "retail",
+        "weight": 8.523060506849436,
+        "area": 18261.2395441987
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.633961944987,
+          48.2495928075758
+        ]
+      },
+      "properties": {
+        "landuse": "retail",
+        "weight": 8.358822347148463,
+        "area": 15115.1051788676
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6056195825035,
+          48.2592890591251
+        ]
+      },
+      "properties": {
+        "landuse": "industrial",
+        "weight": 4.904647664416811,
+        "area": 80287.4499735299
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.665737555261,
+          48.2695992620142
+        ]
+      },
+      "properties": {
+        "landuse": "industrial",
+        "weight": 4.794361624103119,
+        "area": 62281.867190774
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6376945311045,
+          48.2499505909575
+        ]
+      },
+      "properties": {
+        "landuse": "industrial",
+        "weight": 4.347669159229942,
+        "area": 22267.3819827141
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6585556763022,
+          48.2606958155876
+        ]
+      },
+      "properties": {
+        "landuse": "industrial",
+        "weight": 4.289367484168952,
+        "area": 19470.0687108135
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6669386103139,
+          48.2570856852473
+        ]
+      },
+      "properties": {
+        "landuse": "industrial",
+        "weight": 3.6882215857286766,
+        "area": 4877.77300356082
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6632460905415,
+          48.2496846736606
+        ]
+      },
+      "properties": {
+        "landuse": "industrial",
+        "weight": 3.5082729136876307,
+        "area": 3223.0935695491
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6629657739823,
+          48.2614386522682
+        ]
+      },
+      "properties": {
+        "landuse": "industrial",
+        "weight": 3.421999914607461,
+        "area": 2642.40823776211
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.630113324506,
+          48.2470087829765
+        ]
+      },
+      "properties": {
+        "landuse": "industrial",
+        "weight": 2.382712421045906,
+        "area": 241.386190607971
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.6300267989702,
+          48.2470744040327
+        ]
+      },
+      "properties": {
+        "landuse": "industrial",
+        "weight": 1.8936923174249516,
+        "area": 78.2874806605247
+      }
+    }
+  ]
+}

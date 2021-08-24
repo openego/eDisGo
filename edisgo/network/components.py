@@ -1329,7 +1329,7 @@ class PotentialChargingParks(BasicComponent):
     @property
     def _last_charging_process_and_netto_charging_capacity_per_charging_point(self):
         return self.charging_processes_df[
-            ["charging_point_id", "charge_end", "netto_charging_capacity"]
+            ["charging_point_id", "park_end", "netto_charging_capacity"]
         ].groupby(by="charging_point_id").max()
 
     @property

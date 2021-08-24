@@ -1,18 +1,22 @@
 import pytest
 import pandas as pd
 
-from edisgo import EDisGo
-from edisgo.network.components import Load, Generator, Storage, Switch
+from edisgo.edisgo import import_edisgo_from_files
+from edisgo.network.components import Load, Generator, Storage, Switch, PotentialChargingParks
 
 
 class TestComponents:
-    #ToDo add tests for storages_df
+    # ToDo add tests for storages_df
+    # ToDo add tests for PotentialChargingParks
 
     @classmethod
     def setup_class(self):
-        self.edisgo_obj = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis='worst-case')
+        self.edisgo_obj = import_edisgo_from_files(
+            directory=pytest.ding0_test_network_path,
+            import_topology=True,
+            import_timeseries=True,
+            import_results=True,
+        )
 
     def test_load_class(self):
         """Test Load class getter, setter, methods"""
@@ -52,7 +56,7 @@ class TestComponents:
         """Test Generator class getter, setter, methods"""
 
         gen = Generator(id='GeneratorFluctuating_7', edisgo_obj=self.edisgo_obj)
-        #GeneratorFluctuating_7,Bus_GeneratorFluctuating_7,PQ,3,wind,1122075,wind_wind_onshore
+        # GeneratorFluctuating_7,Bus_GeneratorFluctuating_7,PQ,3,wind,1122075,wind_wind_onshore
         # test getter
         assert gen.id == 'GeneratorFluctuating_7'
         assert gen.bus == 'Bus_GeneratorFluctuating_7'
