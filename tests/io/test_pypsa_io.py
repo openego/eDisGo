@@ -3,7 +3,7 @@ import pandas as pd
 from pandas.util.testing import assert_frame_equal
 import numpy as np
 
-from edisgo.tools.pypsa_io import _append_lv_components, set_seed, \
+from edisgo.io.pypsa_io import _append_lv_components, set_seed, \
     process_pfa_results
 from edisgo import EDisGo
 from edisgo.network.results import Results

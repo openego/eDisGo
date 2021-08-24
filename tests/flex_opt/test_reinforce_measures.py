@@ -367,7 +367,7 @@ class TestReinforceMeasures:
         # * check for needed parallel standard lines (MV and LV) => problems at
         #   Line_10007 and Line_70000006
         # * check for parallel line of same type => problems at Line_10019
-        #   and Line_50000004
+        #   and Line_50000002
         # * check for replacement by parallel standard lines (MV and LV) =>
         #   problems at Line_10003 and Line_60000001
 
@@ -382,7 +382,7 @@ class TestReinforceMeasures:
                 "Line_10019",  # second parallel line of same type
                 "Line_10003",  # exchange by standard line
                 "Line_70000006",  # parallel standard line
-                "Line_50000004",  # second parallel line of same type
+                "Line_50000002",  # second parallel line of same type
                 "Line_60000001",  # exchange by standard line
             ],
         )
@@ -396,7 +396,7 @@ class TestReinforceMeasures:
         assert lines_changes["Line_10007"] == 2
         assert lines_changes["Line_10019"] == 1
         assert lines_changes["Line_70000006"] == 2
-        assert lines_changes["Line_50000004"] == 1
+        assert lines_changes["Line_50000002"] == 1
         assert lines_changes["Line_60000001"] == 1
 
         # check lines that were already standard lines and where parallel
@@ -434,11 +434,11 @@ class TestReinforceMeasures:
         assert np.isclose(line.s_nom, 7.274613391789284 * 2)
         assert line.num_parallel == 2
 
-        line = self.edisgo.topology.lines_df.loc["Line_50000004"]
+        line = self.edisgo.topology.lines_df.loc["Line_50000002"]
         assert line.type_info == "NAYY 4x1x35"
-        assert np.isclose(line.r, 0.000868 / 2)
-        assert np.isclose(line.x, 8.513716091228341e-05 / 2)
-        assert np.isclose(line.s_nom, 0.08521689973238901 * 2)
+        assert np.isclose(line.r, 0.02604 / 2)
+        assert np.isclose(line.x, 0.002554114827369 / 2)
+        assert np.isclose(line.s_nom, 0.085216899732389 * 2)
         assert line.num_parallel == 2
 
         # check lines that were exchanged by parallel standard lines

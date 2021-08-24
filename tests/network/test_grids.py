@@ -20,25 +20,19 @@ class TestGrids:
         # test getter
         assert mv_grid.id == 1
         assert mv_grid.nominal_voltage == 20
-        assert len(list(mv_grid.lv_grids)) == 9
+        assert len(list(mv_grid.lv_grids)) == 10
         assert isinstance(list(mv_grid.lv_grids)[0], LVGrid)
 
-        assert len(mv_grid.buses_df.index) == 33
+        assert len(mv_grid.buses_df.index) == 31
         assert 'Bus_BranchTee_MVGrid_1_7' in mv_grid.buses_df.index
 
-        assert len(mv_grid.generators_df.index) == 9
+        assert len(mv_grid.generators_df.index) == 8
         assert 'Generator_slack' not in mv_grid.generators_df.index
         assert 'Generator_1' in mv_grid.generators_df.index
         gen_list = list(mv_grid.generators)
         assert isinstance(gen_list[0], Generator)
-        assert len(gen_list) == 9
 
-        assert len(mv_grid.loads_df.index) == 1
-        assert 'Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1' in \
-               mv_grid.loads_df.index
-        load_list = list(mv_grid.loads)
-        assert isinstance(load_list[0], Load)
-        assert len(load_list) == 1
+        assert len(mv_grid.loads_df.index) == 0
 
         assert len(mv_grid.transformers_df.index) == 1
         assert 'MVStation_1_transformer_1' in mv_grid.transformers_df.index
@@ -50,10 +44,9 @@ class TestGrids:
         assert len(switch_list) == 2
 
         assert sorted(mv_grid.weather_cells) == [1122074, 1122075]
-        assert mv_grid.peak_generation_capacity == 22.075
+        assert mv_grid.peak_generation_capacity == 19.025
         assert mv_grid.peak_generation_capacity_per_technology['solar'] == 4.6
-        assert mv_grid.peak_load == 0.31
-        assert mv_grid.peak_load_per_sector['retail'] == 0.31
+        assert mv_grid.peak_load == 0.0
 
     def test_lv_grid(self):
         """Test LVGrid class getter, setter, methods"""
@@ -63,7 +56,7 @@ class TestGrids:
         assert lv_grid.id == 3
         assert lv_grid.nominal_voltage == 0.4
 
-        assert len(lv_grid.buses_df) == 13
+        assert len(lv_grid.buses_df) == 9
         assert 'Bus_BranchTee_LVGrid_3_2' in lv_grid.buses_df.index
 
         assert len(lv_grid.generators_df.index) == 0

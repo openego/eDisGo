@@ -247,16 +247,16 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
                 and not generators_res_lv["geom"].empty
                 and not generators_res_mv["geom"].empty
         ):
-
+            projection = proj2equidistant(srid)
             # get geom of 1 random MV and 1 random LV generator and transform
             sample_mv_geno_geom_shp = transform(
-                proj2equidistant(srid),
+                projection,
                 wkt_loads(
                     generators_res_mv["geom"].dropna().sample(n=1).values[0]
                 ),
             )
             sample_lv_geno_geom_shp = transform(
-                proj2equidistant(srid),
+                projection,
                 wkt_loads(
                     generators_res_lv["geom"].dropna().sample(n=1).values[0]
                 ),
@@ -264,7 +264,7 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
 
             # get geom of MV grid district
             mvgd_geom_shp = transform(
-                proj2equidistant(srid),
+                projection,
                 edisgo_object.topology.grid_district["geom"],
             )
 
@@ -360,7 +360,8 @@ def _update_grids(
         remove_decommissioned=True,
         update_existing=True,
         p_target=None,
-        allowed_number_of_comp_per_lv_bus=2
+        allowed_number_of_comp_per_lv_bus=2,
+        **kwargs
 ):
     """
     Update network according to new generator dataset.

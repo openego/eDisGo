@@ -782,6 +782,33 @@ class Topology:
             self.lines_df.loc[self.lines_df.bus1 == bus_name]
         )
 
+    def get_line_connecting_buses(self, bus_1, bus_2):
+        """
+        Returns information of line connecting bus_1 and bus_2.
+
+        Parameters
+        ----------
+        bus_1 : str
+            Name of first bus.
+        bus_2 : str
+            Name of second bus.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with information of line connecting bus_1 and bus_2
+            in the same format as
+            :attr:`~.network.topology.Topology.lines_df`.
+
+        """
+        lines_bus_1 = self.get_connected_lines_from_bus(bus_1)
+        lines_bus_2 = self.get_connected_lines_from_bus(bus_2)
+        line = [_ for _ in lines_bus_1.index if _ in lines_bus_2.index]
+        if len(line) > 0:
+            return self.lines_df.loc[line, :]
+        else:
+            return None
+
     def get_connected_components_from_bus(self, bus_name):
         """
         Returns dictionary of components connected to specified bus.
@@ -826,13 +853,13 @@ class Topology:
             ]
         )
         components["switches"] = self.switches_df.loc[
-            self.switches_df.bus_open == bus_name
+            self.switches_df.bus_closed == bus_name
         ]
         return components
 
     def get_neighbours(self, bus_name):
         """
-        Returns a list of neighbour buses of specified bus.
+        Returns a set of neighbour buses of specified bus.
 
         Parameters
         ----------
@@ -841,8 +868,8 @@ class Topology:
 
         Returns
         --------
-        list(str)
-            List of identifiers of neighbouring buses.
+        set(str)
+            Set of identifiers of neighbouring buses.
 
         """
         lines = self.get_connected_lines_from_bus(bus_name)
@@ -995,6 +1022,7 @@ class Topology:
             nr_loads = len(self._grids[grid_name].loads_df)
             load_name = "Load_{}_{}".format(tmp, nr_loads)
             while load_name in self.loads_df.index:
+                random.seed(a=load_name)
                 load_name = "Load_{}_{}".format(
                     tmp, random.randint(10 ** 8, 10 ** 9)
                 )
@@ -1132,6 +1160,7 @@ class Topology:
                 grid_name, id + 1
             )
             while name in self.charging_points_df.index:
+                random.seed(a=name)
                 name = "ChargingPoint_{}_{}".format(
                     grid_name, random.randint(10 ** 8, 10 ** 9)
                 )
@@ -1191,6 +1220,7 @@ class Topology:
                 grid_name, storage_id + 1
             )
             while storage_name in self.storage_units_df.index:
+                random.seed(a=storage_name)
                 storage_name = "StorageUnit_{}_{}".format(
                     grid_name, random.randint(10 ** 8, 10 ** 9)
                 )
@@ -1320,6 +1350,7 @@ class Topology:
         # generate line name and check uniqueness
         line_name = "Line_{}_{}".format(bus0, bus1)
         while line_name in self.lines_df.index:
+            random.seed(a=line_name)
             line_name = "Line_{}_{}_{}".format(
                 bus0, bus1, random.randint(10 ** 8, 10 ** 9)
             )
@@ -2002,6 +2033,21 @@ class Topology:
                 bus=b, **comp_data
             )
 
+        def _choose_random_substation_id():
+            """
+            Returns a random LV grid to connect component in in case no
+            substation ID is provided or it does not exist.
+
+            """
+            if comp_type == "Generator":
+                random.seed(a=comp_data["generator_id"])
+            else:
+                # ToDo: Seed shouldn't depend on number of charging points, but
+                #  there is currently no better solution
+                random.seed(a=len(self.charging_points_df))
+            lv_grid_id = random.choice(lv_grid_ids)
+            return LVGrid(id=lv_grid_id, edisgo_obj=edisgo_object)
+
         # get list of LV grid IDs
         lv_grid_ids = [_.id for _ in self.mv_grid.lv_grids]
 
@@ -2028,11 +2074,16 @@ class Topology:
                 ]
 
             # if substation ID (= LV grid ID) is given but it does not match an
-            # existing LV grid ID (i.e. it is an aggregated LV grid), connect
-            # component to HV/MV substation
-            # ToDo: Change once LV components in aggregated areas are handled
-            #  differently in ding0
+            # existing LV grid ID a random LV grid to connect in is chosen
             else:
+                # ToDo
+                # lv_grid = _choose_random_substation_id()
+                # warnings.warn(
+                #     "Given mvlv_subst_id does not exist, wherefore a random "
+                #     "LV Grid ({}) to connect in is chosen.".format(
+                #         lv_grid.id
+                #     )
+                # )
                 comp_name = add_func(
                     bus=self.mv_grid.station.index[0],
                     **comp_data
@@ -2041,18 +2092,11 @@ class Topology:
 
         # if no MV/LV substation ID is given, choose random LV grid
         else:
-            if comp_type == "Generator":
-                random.seed(a=comp_data["generator_id"])
-            else:
-                # ToDo: Seed shouldn't depend on number of charging points, but
-                #  there is currently no better solution
-                random.seed(a=len(self.charging_points_df))
-            lv_grid_id = random.choice(lv_grid_ids)
-            lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=edisgo_object)
+            lv_grid = _choose_random_substation_id()
             warnings.warn(
                 "Component has no mvlv_subst_id. It is therefore allocated "
                 "to a random LV Grid ({}).".format(
-                    lv_grid_id
+                    lv_grid.id
                 )
             )
 
@@ -2115,7 +2159,7 @@ class Topology:
                     target_buses = tmp.bus.values
                 else:
                     target_buses = lv_grid.buses_df[
-                        ~lv_grid.buses_df.in_building].index
+                        ~lv_grid.buses_df.in_building.astype(bool)].index
 
             # generate random list (unique elements) of possible target buses
             # to connect components to
@@ -2140,7 +2184,8 @@ class Topology:
                     "component is therefore connected to random LV bus."
                 )
                 bus = random.choice(
-                    lv_grid.buses_df[~lv_grid.buses_df.in_building].index
+                    lv_grid.buses_df[
+                        ~lv_grid.buses_df.in_building.astype(bool)].index
                 )
                 comp_name = add_func(
                     bus=bus, **comp_data
@@ -2152,67 +2197,25 @@ class Topology:
             # already connected to it
             lv_conn_target = None
 
-            # ToDo: Once export in ding0 connects generators directly to bus
-            #  with load, the following distinction does not need to be made
-            #  anymore.
-            if comp_type == "Generator" or (
-                    comp_type == "ChargingPoint" and
-                    comp_data["use_case"] in ["home", "work"]):
+            while len(lv_buses_rnd) > 0 and lv_conn_target is None:
 
-                while len(lv_buses_rnd) > 0 and lv_conn_target is None:
+                lv_bus = lv_buses_rnd.pop()
 
-                    lv_bus = lv_buses_rnd.pop()
+                # determine number of components of the same type at LV bus
+                if comp_type == "Generator":
+                    comps_at_bus = self.generators_df[
+                        self.generators_df.bus == lv_bus
+                    ]
+                else:
+                    comps_at_bus = self.charging_points_df[
+                        self.charging_points_df.bus == lv_bus
+                    ]
 
-                    # determine number of generators / charging points at
-                    # LV bus
-                    if not lv_grid.buses_df.at[lv_bus, "in_building"]:
-                        neighbours = list(
-                            self.get_neighbours(lv_bus)
-                        )
-                        branch_tee_in_building = neighbours[0]
-                        if len(neighbours) > 1 or np.logical_not(
-                                self.buses_df.at[
-                                    branch_tee_in_building, "in_building"
-                                ]
-                        ):
-                            raise ValueError(
-                                "Expected neighbour to be branch tee in "
-                                "building."
-                            )
-                    else:
-                        branch_tee_in_building = lv_bus
-                    # ToDo: Do generators at loads exported from ding0 have own
-                    #  bus? If so, the following needs to be changed.
-                    if comp_type == "Generator":
-                        comps_at_load = self.generators_df[
-                            self.generators_df.bus.isin(
-                                [lv_bus, branch_tee_in_building]
-                            )
-                        ]
-                    else:
-                        comps_at_load = \
-                        self.charging_points_df[
-                            self.charging_points_df.bus.isin(
-                                [lv_bus, branch_tee_in_building]
-                            )
-                        ]
-                    if len(comps_at_load) < allowed_number_of_comp_per_bus:
-                        lv_conn_target = branch_tee_in_building
-
-            else:
-
-                while len(lv_buses_rnd) > 0 and lv_conn_target is None:
-
-                    lv_bus = lv_buses_rnd.pop()
-
-                    # determine number of charging points at LV bus
-                    comps_at_load = self.charging_points_df[
-                        self.charging_points_df.bus == lv_bus]
-                    # ToDo: Increase number of generators/charging points
-                    #  allowed at one load in case all loads already have one
-                    #  generator/charging point
-                    if len(comps_at_load) <= allowed_number_of_comp_per_bus:
-                        lv_conn_target = lv_bus
+                # ToDo: Increase number of generators/charging points
+                #  allowed at one load in case all loads already have one
+                #  generator/charging point
+                if len(comps_at_bus) <= allowed_number_of_comp_per_bus:
+                    lv_conn_target = lv_bus
 
             if lv_conn_target is None:
                 logger.debug(

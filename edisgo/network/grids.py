@@ -1,4 +1,8 @@
 from abc import ABC, abstractmethod
+import pandas as pd
+import networkx as nx
+from networkx.drawing.nx_pydot import graphviz_layout
+import matplotlib.pyplot as plt
 
 from edisgo.network.components import Generator, Load, Switch
 from edisgo.tools.networkx_helper import translate_df_to_graph
@@ -23,10 +27,6 @@ class Grid(ABC):
         self._edisgo_obj = kwargs.get("edisgo_obj", None)
 
         self._nominal_voltage = None
-
-        # # ToDo Implement if necessary
-        # self._station = None
-        # ToDo maybe add lines_df and lines property if needed
 
     @property
     def id(self):
@@ -327,19 +327,6 @@ class Grid(ABC):
     def __repr__(self):
         return "_".join([self.__class__.__name__, str(self.id)])
 
-    def connect_generators(self, generators):
-        """
-        Connects generators to network.
-
-        Parameters
-        ----------
-        generators : :pandas:`pandas.DataFrame<DataFrame>`
-            Generators to be connected.
-
-        """
-        # ToDo: Should we implement this or move function from tools here?
-        raise NotImplementedError
-
 
 class MVGrid(Grid):
     """
@@ -459,10 +446,98 @@ class LVGrid(Grid):
             )
         ]
 
-    def draw(self):
+    def draw(self,
+             node_color="black", edge_color="black",
+             colorbar=False, labels=False, filename=None):
         """
         Draw LV network.
 
+        Currently, edge width is proportional to nominal apparent power of
+        the line and node size is proportional to peak load of connected loads.
+
+        Parameters
+        -----------
+        node_color : str or :pandas:`pandas.Series<Series>`
+            Color of the nodes (buses) of the grid. If provided as string
+            all nodes will have that color. If provided as series, the
+            index of the series must contain all buses in the LV grid and the
+            corresponding values must be float values, that will be translated
+            to the node color using a colormap, currently set to "Blues".
+            Default: "black".
+        edge_color : str or :pandas:`pandas.Series<Series>`
+            Color of the edges (lines) of the grid. If provided as string
+            all edges will have that color. If provided as series, the
+            index of the series must contain all lines in the LV grid and the
+            corresponding values must be float values, that will be translated
+            to the edge color using a colormap, currently set to "inferno_r".
+            Default: "black".
+        colorbar : bool
+            If True, a colorbar is added to the plot for node and edge colors,
+            in case these are sequences. Default: False.
+        labels : bool
+            If True, displays bus names. As bus names are quite long, this
+            is currently not very pretty. Default: False.
+        filename : str or None
+            If a filename is provided, the plot is saved under that name but
+            not displayed. If no filename is provided, the plot is only
+            displayed. Default: None.
+
         """
-        # ToDo: implement networkx graph plot
-        raise NotImplementedError
+        G = self.graph
+        pos = graphviz_layout(G, prog="dot")
+
+        # assign edge width + color and node size + color
+        top = self.edisgo_obj.topology
+        edge_width = [
+            top.get_line_connecting_buses(u, v).s_nom.sum() * 10 for
+            u, v in G.edges()]
+        if isinstance(edge_color, pd.Series):
+            edge_color = [
+                edge_color.loc[
+                    top.get_line_connecting_buses(u, v).index[0]]
+                for u, v in G.edges()]
+            edge_color_is_sequence = True
+        else:
+            edge_color_is_sequence = False
+
+        node_size = [top.get_connected_components_from_bus(v)[
+                        "loads"].peak_load.sum() * 50000 + 10 for v in G]
+        if isinstance(node_color, pd.Series):
+            node_color = [node_color.loc[v] for v in G]
+            node_color_is_sequence = True
+        else:
+            node_color_is_sequence = False
+
+        # draw edges and nodes of the graph
+        fig, ax = plt.subplots(figsize=(12, 12))
+        cm_edges = nx.draw_networkx_edges(
+            G, pos,
+            width=edge_width,
+            edge_color=edge_color,
+            edge_cmap=plt.cm.get_cmap("inferno_r")
+        )
+        cm_nodes = nx.draw_networkx_nodes(
+            G, pos,
+            node_size=node_size,
+            node_color=node_color,
+            cmap="Blues"
+        )
+        if colorbar:
+            if edge_color_is_sequence:
+                fig.colorbar(cm_edges, ax=ax)
+            if node_color_is_sequence:
+                fig.colorbar(cm_nodes, ax=ax)
+        if labels:
+            # ToDo find nicer way to display bus names
+            label_options = {"ec": "k", "fc": "white", "alpha": 0.7}
+            nx.draw_networkx_labels(
+                G, pos, font_size=8, bbox=label_options,
+                horizontalalignment="right")
+
+        if filename is None:
+            plt.show()
+        else:
+            plt.savefig(filename,
+                        dpi=150, bbox_inches='tight', pad_inches=0.1
+                        )
+            plt.close()

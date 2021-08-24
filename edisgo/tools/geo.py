@@ -1,6 +1,5 @@
-import pyproj
-from functools import partial
-from geopy.distance import vincenty
+from pyproj import Transformer
+from geopy.distance import geodesic
 
 import os
 
@@ -28,12 +27,7 @@ def proj2equidistant(srid):
 
     """
 
-    return partial(
-        pyproj.transform,
-        pyproj.Proj(init="epsg:{}".format(srid)),  # source CRS
-        pyproj.Proj(init="epsg:3035"),  # destination CRS
-    )
-
+    return Transformer.from_crs("EPSG:{}".format(srid), "EPSG:3035", always_xy=True).transform
 
 def proj2equidistant_reverse(srid):
     """
@@ -50,11 +44,7 @@ def proj2equidistant_reverse(srid):
 
     """
 
-    return partial(
-        pyproj.transform,
-        pyproj.Proj(init="epsg:3035"),  # source CRS
-        pyproj.Proj(init="epsg:{}".format(srid)),  # destination CRS
-    )
+    return Transformer.from_crs("EPSG:3035", "EPSG:{}".format(srid), always_xy=True).transform
 
 
 def proj_by_srids(srid1, srid2):
@@ -79,11 +69,7 @@ def proj_by_srids(srid1, srid2):
 
     """
 
-    return partial(
-        pyproj.transform,
-        pyproj.Proj(init="epsg:{}".format(srid1)),  # source CRS
-        pyproj.Proj(init="epsg:{}".format(srid2)),  # destination CRS
-    )
+    return Transformer.from_crs("EPSG:{}".format(srid1), "EPSG:{}".format(srid2), always_xy=True).transform
 
 
 def calc_geo_lines_in_buffer(grid_topology, bus, grid,
@@ -120,7 +106,7 @@ def calc_geo_lines_in_buffer(grid_topology, bus, grid,
     lines = []
     srid = grid_topology.grid_district["srid"]
     bus_shp = transform(proj2equidistant(srid), Point(bus.x, bus.y))
-
+    projection = proj2equidistant(srid)
     while not lines:
         buffer_zone_shp = bus_shp.buffer(buffer_radius)
         for line in grid.lines_df.index:
@@ -129,7 +115,7 @@ def calc_geo_lines_in_buffer(grid_topology, bus, grid,
             line_bus1 = grid_topology.lines_df.loc[line, "bus1"]
             bus1 = grid_topology.buses_df.loc[line_bus1, :]
             line_shp = transform(
-                proj2equidistant(srid),
+                projection,
                 LineString([Point(bus0.x, bus0.y), Point(bus1.x, bus1.y)]),
             )
             if buffer_zone_shp.intersects(line_shp):
@@ -172,7 +158,7 @@ def calc_geo_dist_vincenty(grid_topology, bus_source, bus_target,
     # notice: vincenty takes (lat,lon)
     branch_length = (
         branch_detour_factor
-        * vincenty(
+        * geodesic(
             (bus_source.y, bus_source.x), (bus_target.y, bus_target.x)
         ).m
     )
@@ -214,7 +200,7 @@ def find_nearest_bus(point, bus_target):
     """
 
     bus_target["dist"] = [
-        vincenty((point.y, point.x), (y, x)).km
+        geodesic((point.y, point.x), (y, x)).km
         for (x, y) in zip(bus_target["x"], bus_target["y"])
     ]
     return bus_target["dist"].idxmin(), bus_target["dist"].min()
@@ -257,7 +243,7 @@ def find_nearest_conn_objects(grid_topology, bus, lines,
 
     srid = grid_topology.grid_district["srid"]
     bus_shp = transform(proj2equidistant(srid), Point(bus.x, bus.y))
-
+    projection = proj2equidistant(srid)
     for line in lines:
 
         line_bus0 = grid_topology.buses_df.loc[
@@ -270,10 +256,10 @@ def find_nearest_conn_objects(grid_topology, bus, lines,
         # create shapely objects for 2 buses and line between them,
         # transform to equidistant CRS
         line_bus0_shp = transform(
-            proj2equidistant(srid), Point(line_bus0.x, line_bus0.y)
+            projection, Point(line_bus0.x, line_bus0.y)
         )
         line_bus1_shp = transform(
-            proj2equidistant(srid), Point(line_bus1.x, line_bus1.y)
+            projection, Point(line_bus1.x, line_bus1.y)
         )
         line_shp = LineString([line_bus0_shp, line_bus1_shp])
 

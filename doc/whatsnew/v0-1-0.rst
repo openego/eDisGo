@@ -1,7 +1,30 @@
 Release v0.1.0
 ================
 
-Release date: <month> <day>, <year>
+Release date: July 26, 2021
+
+This release comes with some major refactoring. The internal data structure
+of the network topologies was changed from a networkx graph structure to
+a pandas dataframe structure based on the
+`PyPSA <https://pypsa.readthedocs.io/en/latest/>`_ data structure. This comes
+along with major API changes.
+Not all functionality of the previous eDisGo release 0.0.10 is yet refactored
+(e.g. the heuristics for grid supportive storage integration and generator
+curtailment), but we are working on it and the upcoming releases will
+have the full functionality again.
+
+Besides the refactoring we added extensive tests along with automatic testing
+with GitHub Actions and coveralls tool to track test coverage.
+
+Further, from now on python 3.6 is not supported anymore. Supported python
+versions are 3.7, 3.8 and 3.9.
 
 Changes
 -------
+
+* Major refactoring `#159 <https://github.com/openego/eDisGo/pull/159>`_
+* Added support for Python 3.7, 3.8 and 3.9 `#181 <https://github.com/openego/eDisGo/pull/181>`_
+* Added GitHub Actions for testing and coverage `#180 <https://github.com/openego/eDisGo/pull/180>`_
+* Adapted to new ding0 release `#184 <https://github.com/openego/eDisGo/pull/184>`_ - loads and generators in the same building are now connected to the same bus instead of separate buses and loads and generators in aggregated load areas are connected via a MV/LV station instead of directly to the HV/MV station)
+* Added charging points as new components along with a methodology to integrate them into the grid
+* Added multiperiod optimal power flow based on julia package PowerModels.jl optimizing storage positioning and/or operation as well as generator dispatch with regard to minimizing grid expansion costs

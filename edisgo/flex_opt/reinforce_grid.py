@@ -13,7 +13,7 @@ logger = logging.getLogger("edisgo")
 def reinforce_grid(
     edisgo,
     timesteps_pfa=None,
-    copy_graph=False,
+    copy_grid=False,
     max_while_iterations=10,
     combined_analysis=False,
     mode=None,
@@ -53,9 +53,9 @@ def reinforce_grid(
           :pandas:`pandas.Timestamp<Timestamp>`
           Use this option to explicitly choose which time steps to consider.
 
-    copy_graph : :obj:`Boolean`
-        If True reinforcement is conducted on a copied graph and discarded.
-        Default: False. Todo: Do we still need this? If so, rename.
+    copy_grid : :obj:`Boolean`
+        If True reinforcement is conducted on a copied grid and discarded.
+        Default: False.
     max_while_iterations : :obj:`int`
         Maximum number of times each while loop is conducted.
     combined_analysis : :obj:`Boolean`
@@ -68,15 +68,14 @@ def reinforce_grid(
         Determines network levels reinforcement is conducted for. Specify
 
         * None to reinforce MV and LV network levels. None is the default.
-        * 'mv' to reinforce MV network level only, neglecting MV/LV stations, and
-          LV network topology. LV load and generation is aggregated per
+        * 'mv' to reinforce MV network level only, neglecting MV/LV stations,
+          and LV network topology. LV load and generation is aggregated per
           LV network and directly connected to the primary side of the
           respective MV/LV station.
-        * 'mvlv' to reinforce MV network level only, including MV/LV stations, and
-          neglecting LV network topology. LV load and generation is aggregated per
-          LV network and directly connected to the secondary side of the
-          respective MV/LV station.
-          #Todo: check if this mode is implemented correctly, if not adjust
+        * 'mvlv' to reinforce MV network level only, including MV/LV stations,
+          and neglecting LV network topology. LV load and generation is
+          aggregated per LV network and directly connected to the secondary
+          side of the respective MV/LV station.
 
     Returns
     -------
@@ -125,14 +124,9 @@ def reinforce_grid(
     if mode and mode not in ["mv", "mvlv"]:
         raise ValueError("Provided mode {} is not a valid mode.".format(mode))
 
-    # assign MV feeder to every generator, LV station, load, and branch tee
-    # to assign network expansion costs to an MV feeder
-    # Todo: Necessary? If so change
-    # assign_mv_feeder_to_nodes(edisgo.topology.mv_grid)
-
     # in case reinforcement needs to be conducted on a copied graph the
     # edisgo object is deep copied
-    if copy_graph is True:
+    if copy_grid is True:
         edisgo_reinforce = copy.deepcopy(edisgo)
     else:
         edisgo_reinforce = edisgo
