@@ -2139,14 +2139,14 @@ class Topology:
                            "Using any LV loads as fallback to determine "\
                            f"grid connection for {comp_type}."
 
-                if comp_data["use_case"] is "home":
+                if comp_data["use_case"] == "home":
                     try:
                         tmp = lv_loads[lv_loads.sector == "residential"]
                     except:
                         logging.warning(warning)
                         tmp = lv_loads.copy()
                     target_buses = tmp.bus.values
-                elif comp_data["use_case"] is "work":
+                elif comp_data["use_case"] == "work":
                     try:
                         tmp = lv_loads[
                             lv_loads.sector.isin(

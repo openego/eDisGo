@@ -177,9 +177,9 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             "fluctuating"
         ] = grid_object.generators_df.type.isin(["solar", "wind"])
 
-        if mode is "mv":
+        if mode == "mv":
             mv_components["Transformer"] = pd.DataFrame()
-        elif mode is "mvlv":
+        elif mode == "mvlv":
             # get all MV/LV transformers
             mv_components[
                 "Transformer"
@@ -202,12 +202,12 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         }
 
         for lv_grid in grid_object.lv_grids:
-            if mode is "mv":
+            if mode == "mv":
                 # get primary side of station to append loads and generators to
                 station_bus = grid_object.buses_df.loc[
                     lv_grid.transformers_df.bus0.unique()
                 ]
-            elif mode is "mvlv":
+            elif mode == "mvlv":
                 # get secondary side of station to append loads and generators
                 # to
                 station_bus = lv_grid.buses_df.loc[
@@ -242,7 +242,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             for key, value in comps.items():
                 components[key] = components[key].append(value)
 
-    elif mode is "lv":
+    elif mode == "lv":
 
         pypsa_network.mode = "lv"
 
@@ -578,7 +578,7 @@ def _append_lv_components(
         bus = comps.bus.unique()[0]
     else:
         return {}
-    if comp is "Load":
+    if comp == "Load":
         if aggregate_loads is None:
             comps_aggr = comps.loc[:, ["bus", "peak_load"]].rename(
                 columns={"peak_load": "p_set"}
@@ -605,7 +605,7 @@ def _append_lv_components(
         else:
             raise ValueError("Aggregation type for loads invalid.")
         lv_components[comp] = lv_components[comp].append(comps_aggr)
-    elif comp is "Generator":
+    elif comp == "Generator":
         flucts = ["wind", "solar"]
         if aggregate_generators is None:
             comps_aggr = comps.loc[:, ["bus", "control", "p_nom"]]
@@ -676,7 +676,7 @@ def _append_lv_components(
         else:
             raise ValueError("Aggregation type for generators invalid.")
         lv_components[comp] = lv_components[comp].append(comps_aggr)
-    elif comp is "StorageUnit":
+    elif comp == "StorageUnit":
         if aggregate_storages == None:
             comps_aggr = comps.loc[:, ["bus", "control"]]
         elif aggregate_storages == "all":

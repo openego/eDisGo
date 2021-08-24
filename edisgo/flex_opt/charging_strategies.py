@@ -107,7 +107,7 @@ def charging_strategy(
 
         """
         # SimBEV has a MATLAB legacy and at the moment 1 is eDisGos 0
-        df.park_start -= 1
+        df = df.assign(park_start=df.park_start-1)
 
         # calculate the minimum time taken the fulfill the charging demand
         minimum_charging_time = df.chargingdemand/df.netto_charging_capacity \
@@ -267,7 +267,7 @@ def charging_strategy(
         init_residual_load = edisgo_obj.timeseries.residual_load.multiply(-1)
 
         dummy_ts = pd.DataFrame(
-            data=0, columns=[_.id for _ in charging_parks], index=timeindex)
+            data=0., columns=[_.id for _ in charging_parks], index=timeindex)
 
         if len(init_residual_load) >= len_ts:
             init_residual_load = init_residual_load.loc[timeindex]
@@ -293,7 +293,7 @@ def charging_strategy(
 
         # perform dumb charging processes and respect them in the residual load
         for _, row in dumb_charging_processes_df.iterrows():
-            dummy_ts[row["grid_connection_point_id"]].iloc[
+            dummy_ts.loc[:, row["grid_connection_point_id"]].iloc[
                 row["park_start"]:row["park_start"] + row["minimum_charging_time"]
             ] += row["netto_charging_capacity_mva"]
 

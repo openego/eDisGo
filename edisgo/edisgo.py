@@ -594,7 +594,7 @@ class EDisGo:
 
         """
         # aggregate generators at the same bus
-        if mode is "by_component_type" or "by_load_and_generation":
+        if mode == "by_component_type" or mode == "by_load_and_generation":
             if not self.topology.generators_df.empty:
                 gens_groupby = self.topology.generators_df.groupby(
                     aggregate_generators_by_cols)
@@ -642,7 +642,7 @@ class EDisGo:
 
         # aggregate conventional loads at the same bus and charging points
         # at the same bus separately
-        if mode is "by_component_type":
+        if mode == "by_component_type":
 
             # conventional loads
             if not self.topology.loads_df.empty:
@@ -729,7 +729,7 @@ class EDisGo:
 
         # aggregate all loads (conventional loads and charging points) at the
         # same bus
-        elif mode is "by_load_and_generation":
+        elif mode == "by_load_and_generation":
             aggregate_loads_by_cols = ["bus"]
             loads_groupby = pd.concat(
                 [self.topology.loads_df.loc[:, ["bus", "peak_load"]],

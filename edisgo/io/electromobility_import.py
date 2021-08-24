@@ -208,7 +208,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
                 # levelize all GeoDataFrames to the same format
                 if len(gdf.columns) == 2:
-                    for col in [col for col in gdf.columns if col is not "geometry"]:
+                    for col in [col for col in gdf.columns if col != "geometry"]:
                         gdf = gdf.rename(columns={col: "user_centric_weight"})
 
                 elif len(gdf.columns) == 1:

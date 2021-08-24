@@ -168,7 +168,7 @@ def reinforce_grid(
 
     logger.debug("==> Check station load.")
     overloaded_mv_station = checks.hv_mv_station_load(edisgo_reinforce)
-    if mode is "mv":
+    if mode == "mv":
         overloaded_lv_stations = pd.DataFrame()
     else:
         overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce)
@@ -216,7 +216,7 @@ def reinforce_grid(
         edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = checks.hv_mv_station_load(edisgo_reinforce)
-        if mode is not "mv":
+        if mode != "mv":
             overloaded_lv_stations = checks.mv_lv_station_load(
                 edisgo_reinforce
             )
@@ -312,7 +312,7 @@ def reinforce_grid(
         )
 
     # solve voltage problems at secondary side of LV stations
-    if mode is not "mv":
+    if mode != "mv":
         logger.debug("==> Check voltage at secondary side of LV stations.")
         if combined_analysis:
             voltage_levels = "mv_lv"
@@ -420,7 +420,7 @@ def reinforce_grid(
     # RECHECK FOR OVERLOADED TRANSFORMERS AND LINES
     logger.debug("==> Recheck station load.")
     overloaded_mv_station = checks.hv_mv_station_load(edisgo_reinforce)
-    if mode is "mv":
+    if mode == "mv":
         overloaded_lv_stations = pd.DataFrame()
     else:
         overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce)
@@ -468,7 +468,7 @@ def reinforce_grid(
         edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = checks.hv_mv_station_load(edisgo_reinforce)
-        if mode is not "mv":
+        if mode != "mv":
             overloaded_lv_stations = checks.mv_lv_station_load(
                 edisgo_reinforce
             )
