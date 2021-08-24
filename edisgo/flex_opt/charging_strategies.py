@@ -182,7 +182,7 @@ def charging_strategy(
         edisgo_obj : :class:`~.EDisGo`
         edisgo_id : str
             eDisGo ID of the Charging Point
-        ts : array_like or float
+        ts : array_like
             New timeseries
 
         """
