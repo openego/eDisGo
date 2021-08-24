@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 
-from edisgo.edisgo import import_edisgo_from_files
+from edisgo import EDisGo
 from edisgo.network.components import Load, Generator, Storage, Switch, PotentialChargingParks
 
 
@@ -11,12 +11,9 @@ class TestComponents:
 
     @classmethod
     def setup_class(self):
-        self.edisgo_obj = import_edisgo_from_files(
-            directory=pytest.ding0_test_network_path,
-            import_topology=True,
-            import_timeseries=True,
-            import_results=True,
-        )
+        self.edisgo_obj = EDisGo(
+            ding0_grid=pytest.ding0_test_network_path,
+            worst_case_analysis='worst-case')
 
     def test_load_class(self):
         """Test Load class getter, setter, methods"""
