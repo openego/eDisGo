@@ -1,8 +1,10 @@
-from networkx import OrderedGraph
+from networkx import Graph
 
 
 def translate_df_to_graph(buses_df, lines_df, transformers_df=None):
-    graph = OrderedGraph()
+    # DeprecationWarning: OrderedGraph is deprecated and will be removed in version 3.0. Use `Graph` instead,
+    # which guarantees order is preserved for Python >= 3.7
+    graph = Graph()
 
     buses = buses_df.index
     # add nodes

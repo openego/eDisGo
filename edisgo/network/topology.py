@@ -549,6 +549,10 @@ class Topology:
         # make sure in_building takes on only True or False (not numpy bools)
         # needs to be tested using `== True`, not `is True`
         buses_in_building = df[df.in_building == True].index
+
+        # silences pandas SettingWithCopyWarning
+        df = df.copy()
+
         df.loc[buses_in_building, "in_building"] = True
         df.loc[
             ~df.index.isin(buses_in_building), "in_building"] = False
