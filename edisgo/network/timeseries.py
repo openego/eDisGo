@@ -1964,8 +1964,8 @@ def _set_reactive_power_time_series_for_fixed_cosphi_using_config(
 
     # write series with sign of reactive power and power factor
     # for each component
-    q_sign = pd.Series(data=0, index=df.index)
-    power_factor = pd.Series(data=0, index=df.index)
+    q_sign = pd.Series(dtype=int, index=df.index)
+    power_factor = pd.Series(dtype=float, index=df.index)
     if component_type in ["generators", "storage_units"]:
         get_q_sign = _get_q_sign_generator
     elif component_type == "loads":

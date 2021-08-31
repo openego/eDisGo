@@ -244,6 +244,7 @@ def _line_load(edisgo_obj, voltage_level):
     crit_lines_relative_load = (
         relative_i_res[relative_i_res > 1].max().dropna()
     )
+
     if len(crit_lines_relative_load) > 0:
         crit_lines = pd.concat(
             [
