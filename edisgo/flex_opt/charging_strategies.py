@@ -54,7 +54,6 @@ def integrate_charging_points(edisgo_obj, comp_type="ChargingPoint"):
 # TODO: the dummy timeseries should be as long as the simulated days and not the timeindex of the edisgo object
 # At the moment this would result into wrong results if the timeindex of the edisgo object is
 # not continuously (e.g. 2 weeks of the year)
-# TODO: the chargingdemand for strategy reduced is 10% less as for the others
 def charging_strategy(
         edisgo_obj, strategy="dumb", timestamp_share_threshold=0.2, minimum_charging_capacity_factor=0.1):
     """
