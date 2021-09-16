@@ -78,7 +78,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
             gc_to_car_rate_home : float
                 Specifies the minimum rate between possible grid connections points for the use case "home"
-                and the total number of cars. Default 0.8 .
+                and the total number of cars. Default 0.5 .
             gc_to_car_rate_work : float
                 Specifies the minimum rate between possible grid connections points for the use case "work"
                 and the total number of cars. Default 0.25 .
@@ -214,10 +214,6 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
             user centric weight and geometry.
 
         """
-        def use_case_specific_integration(
-                use_case, minimum_charging_point_to_car_rate):
-            pass
-
         if dir is not None:
             path = os.path.join(path, dir)
 
@@ -269,7 +265,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
         for _, use_case in USECASES.items():
             if use_case == "home":
-                gc_to_car_rate = kwargs.get("gc_to_car_rate_home", 0.8)
+                gc_to_car_rate = kwargs.get("gc_to_car_rate_home", 0.5)
             elif use_case == "work":
                 gc_to_car_rate = kwargs.get("gc_to_car_rate_work", 0.25)
             elif use_case == "public":
