@@ -601,6 +601,8 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
                     charging_park_id = weighted_random_choice(
                         edisgo_obj, grid_connections_indices, car_id, destination, charging_point_id, weights, rng=rng)
 
+                    print(private_charging_destination_df.head())
+
                     charging_capacity = private_charging_destination_df.loc[
                         (private_charging_destination_df.car_id == car_id) &
                         (private_charging_destination_df.destination == "0_work")
