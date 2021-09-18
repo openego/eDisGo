@@ -11,7 +11,7 @@ COLUMNS = {
 logger = logging.getLogger("edisgo")
 
 
-def integrate_charging_points(edisgo_obj, comp_type="ChargingPoint"):
+def integrate_charging_parks(edisgo_obj, comp_type="ChargingPoint"):
     """
     Integrates all designated charging parks into the grid. The charging demand is
     not integrated here, but an empty dummy timeseries is generated.
@@ -27,7 +27,7 @@ def integrate_charging_points(edisgo_obj, comp_type="ChargingPoint"):
 
     # Only integrate charging parks with designated charging points
     designated_charging_parks = [
-        _ for _ in charging_parks if _.designated_charging_point_capacity > 0]
+        cp for cp in charging_parks if (cp.designated_charging_point_capacity > 0) and cp.within_grid]
 
     charging_park_ids = [_.id for _ in designated_charging_parks]
 
@@ -210,13 +210,11 @@ def charging_strategy(
 
     edisgo_timedelta = edisgo_obj.timeseries.timeindex[1] - edisgo_obj.timeseries.timeindex[0]
     simbev_timedelta = timeindex[1] - timeindex[0]
-    
-    if edisgo_timedelta != simbev_timedelta:
-        raise ValueError(
-            "The stepsize of the timeseries of the edisgo object differs from the simbev stepsize.",
-            f"The edisgo timedelta is {edisgo_timedelta}, while the simbev timedelta is {simbev_timedelta}.",
-            "Make sure to use a matching stepsize."
-        )
+
+    assert edisgo_timedelta == simbev_timedelta, f"""
+        The stepsize of the timeseries of the edisgo object differs from the simbev stepsize. 
+        The edisgo timedelta is {edisgo_timedelta}, while the simbev timedelta is {simbev_timedelta}. 
+        Make sure to use a matching stepsize."""
 
     if strategy == "dumb":
         # "dumb" charging
@@ -257,9 +255,13 @@ def charging_strategy(
 
     elif strategy == "residual":
         # "residual" charging
+        # only use charging processes from integrated charging parks
+        charging_processes_df = edisgo_obj.electromobility.charging_processes_df[
+            edisgo_obj.electromobility.charging_processes_df.charging_park_id.isin(
+                edisgo_obj.electromobility.integrated_charging_parks_df.index)]
+
         charging_processes_df = harmonize_charging_processes_df(
-                edisgo_obj.electromobility.charging_processes_df, timestamp_share_threshold,
-                strategy=strategy, eta_cp=eta_cp)
+                charging_processes_df, timestamp_share_threshold, strategy=strategy, eta_cp=eta_cp)
 
         # get residual load
         init_residual_load = edisgo_obj.timeseries.residual_load
@@ -291,7 +293,7 @@ def charging_strategy(
 
         # perform dumb charging processes and respect them in the residual load
         for _, row in dumb_charging_processes_df.iterrows():
-            dummy_ts.loc[:, row["grid_connection_point_id"]].iloc[
+            dummy_ts.loc[:, row["charging_park_id"]].iloc[
                 row["park_start"]:row["park_start"] + row["minimum_charging_time"]
             ] += row["netto_charging_capacity_mva"]
 
@@ -305,7 +307,7 @@ def charging_strategy(
             # get k time steps with the lowest residual load in the parking time
             idx = np.argpartition(flex_band, k)[:k] + row["park_start"]
 
-            dummy_ts[row["grid_connection_point_id"]].iloc[idx] += \
+            dummy_ts[row["charging_park_id"]].iloc[idx] += \
                 row["netto_charging_capacity_mva"]
 
             residual_load[idx] += row["netto_charging_capacity_mva"]

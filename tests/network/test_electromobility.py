@@ -4,7 +4,7 @@ import pandas as pd
 
 from edisgo.edisgo import import_edisgo_from_files
 from edisgo.io.electromobility_import import import_simbev_electromobility, distribute_charging_demand
-from edisgo.flex_opt.charging_strategies import integrate_charging_points, charging_strategy
+from edisgo.flex_opt.charging_strategies import integrate_charging_parks, charging_strategy
 
 
 class TestElectromobility:
@@ -56,7 +56,7 @@ class TestElectromobility:
         designated_charging_parks_with_charging_points_in_dfs = 0
 
         for key, val in electromobility.designated_charging_points_dfs.items():
-            designated_charging_parks_with_charging_points_in_dfs += len(val.grid_connection_point_id.unique())
+            designated_charging_parks_with_charging_points_in_dfs += len(val.charging_park_id.unique())
 
         assert designated_charging_parks_with_charging_points == designated_charging_parks_with_charging_points_in_dfs
 
@@ -67,9 +67,9 @@ class TestElectromobility:
 
         assert round(total_charging_demand_at_charging_parks, 0) == round(total_charging_demand, 0)
 
-    def test_integrate_charging_points(self):
+    def test_integrate_charging_parks(self):
 
-        integrate_charging_points(self.edisgo_obj)
+        integrate_charging_parks(self.edisgo_obj)
 
         electromobility = self.edisgo_obj.electromobility
 

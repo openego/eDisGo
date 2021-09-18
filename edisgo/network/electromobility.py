@@ -10,13 +10,13 @@ logger = logging.getLogger("edisgo")
 COLUMNS = {
     "charging_processes_df": [
         "location", "use_case", "netto_charging_capacity", "chargingdemand", "park_start",
-        "park_end", "grid_connection_point_id", "charging_point_id"
+        "park_end", "charging_park_id", "charging_point_id"
     ],
     "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
     "simbev_config_df": ["value"],
     "potential_charging_parks_df": ["lv_grid_id", "distance_to_nearest_substation", "distance_weight",
                                     "charging_point_capacity", "charging_point_weight"],
-    "designated_charging_points_df": ["park_end", "netto_charging_capacity", "grid_connection_point_id", "use_case"],
+    "designated_charging_points_df": ["park_end", "netto_charging_capacity", "charging_park_id", "use_case"],
     "integrated_charging_parks_df": ["edisgo_id"],
 }
 
@@ -98,7 +98,7 @@ class Electromobility:
         -------
         dict(:pandas:`pandas.DataFrame<DataFrame>`)
             Dictionary with DataFrames including last charge end netto charging capacity,
-            grid_connection_point_id and use case per use case
+            charging_park_id and use case per use case
 
         """
         try:
@@ -112,7 +112,7 @@ class Electromobility:
                     _last_charging_process_and_netto_charging_capacity_per_charging_point.copy()
 
                 df = df.assign(
-                    grid_connection_point_id=potential_charging_park.id,
+                    charging_park_id=potential_charging_park.id,
                     use_case=potential_charging_park.use_case,
                 )
 
