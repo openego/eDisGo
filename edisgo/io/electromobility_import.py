@@ -254,13 +254,14 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
                         f"GEOJSON {f} contains unknown properties."
                     )
 
-                gdf = gdf.assign(use_case=USECASES[f[:3]], ags=int(f.split("_")[-2]))
+                gdf = gdf.assign(
+                    use_case=USECASES[f[:3]], ags=int(f.split("_")[-2]))
 
-                gdf = gdf[COLUMNS["grid_connections_gdf"]].astype(DTYPES["grid_connections_gdf"])
+                gdf = gdf[COLUMNS["grid_connections_gdf"]].astype(
+                    DTYPES["grid_connections_gdf"])
 
                 grid_connections_gdf = grid_connections_gdf.append(
-                    gdf, ignore_index=True,
-                )
+                    gdf, ignore_index=True)
 
         # ensure minimum number of grid connections per car
         num_cars = len(edisgo_obj.electromobility.charging_processes_df.car_id.unique())
