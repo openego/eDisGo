@@ -45,21 +45,6 @@ class TestElectromobility:
 
         electromobility = self.edisgo_obj.electromobility
 
-        # all charging point use cases have designated charging points
-        assert all(
-            ~electromobility.designated_charging_points_dfs[val].empty for val in ["home", "work", "public", "hpc"])
-
-        designated_charging_parks_with_charging_points = len(
-            [cp for cp in list(
-                electromobility.potential_charging_parks) if cp.designated_charging_point_capacity > 0])
-
-        designated_charging_parks_with_charging_points_in_dfs = 0
-
-        for key, val in electromobility.designated_charging_points_dfs.items():
-            designated_charging_parks_with_charging_points_in_dfs += len(val.charging_park_id.unique())
-
-        assert designated_charging_parks_with_charging_points == designated_charging_parks_with_charging_points_in_dfs
-
         total_charging_demand_at_charging_parks = sum([cp.charging_processes_df.chargingdemand.sum() for cp in list(
             electromobility.potential_charging_parks) if cp.designated_charging_point_capacity > 0])
 
