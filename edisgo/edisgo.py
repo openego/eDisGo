@@ -1333,7 +1333,20 @@ class EDisGo:
             elif 0 < p_nom <= 0.1:
                 voltage_level = 7
             else:
-                raise ValueError("Unsupported voltage level")
+                use_case = kwargs.get("use_case", None)
+                if use_case is None:
+                    raise ValueError(
+                        f"""Unsupported voltage level.
+                                            Max supported nominal power is 17.5 MW.
+                                            The actual component {comp_type} has a
+                                            nominal power of {p_nom}.""")
+                else:
+                    raise ValueError(
+                        f"""Unsupported voltage level.
+                                            Max supported nominal power is 17.5 MW.
+                                            The actual component {comp_type} with
+                                            use case {use_case} has a
+                                            nominal power of {p_nom}.""")
 
         # check if geolocation is given as shapely Point, otherwise transform
         # to shapely Point
