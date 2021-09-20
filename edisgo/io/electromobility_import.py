@@ -8,6 +8,7 @@ from sklearn import preprocessing
 from pathlib import Path
 from numpy.random import default_rng
 
+
 logger = logging.getLogger("edisgo")
 
 min_max_scaler = preprocessing.MinMaxScaler()
@@ -172,7 +173,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
         return charging_processes_df
 
     def read_csv_simbev_config(
-            path, simbev_config_file="config_data.csv"):
+            path, edisgo_obj, simbev_config_file="config_data.csv"):
         """
         Get `SimBEV <https://github.com/rl-institut/simbev>`_ config data.
 
@@ -180,6 +181,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
         ----------
         path : str
             Main path holding SimBEV output data
+        edisgo_obj : :class:`~.EDisGo`
         simbev_config_file : str
             SimBEV config file name
 
@@ -196,7 +198,18 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
                 return pd.read_csv(
                     os.path.join(path, simbev_config_file), index_col=[0], header=0, names=COLUMNS["simbev_config_df"])
         except:
-            return pd.DataFrame(columns=COLUMNS["simbev_config_df"])
+            logging.warning(
+                """SimBEV config file could not be imported. 
+                Charging point efficiency is set to 100%, the stepsize is set to 15 minutes and 
+                the simulated days are estimated from the charging processes.""")
+
+            data = [1., 15, np.ceil(
+                edisgo_obj.electromobility.charging_processes_df.park_end.max() / (4*24))]
+
+            index = ["eta_cp", "stepsize", "simulated_days"]
+
+            return pd.DataFrame(
+                data=data, index=index, columns=COLUMNS["simbev_config_df"])
 
     def read_geojsons_grid_connections(path, dir=None):
         """
@@ -353,7 +366,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
     )
 
     edisgo_obj.electromobility.simbev_config_df = read_csv_simbev_config(
-        path, simbev_config_file=kwargs.pop("simbev_config_file", "config_data.csv"))
+        path, edisgo_obj, simbev_config_file=kwargs.pop("simbev_config_file", "config_data.csv"))
 
     edisgo_obj.electromobility.grid_connections_gdf = read_geojsons_grid_connections(
         path, dir=kwargs.pop("grid_connections_dir", "grid_connections"), **kwargs)

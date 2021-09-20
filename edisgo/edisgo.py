@@ -1082,6 +1082,7 @@ class EDisGo:
         save_results=True,
         save_topology=True,
         save_timeseries=True,
+        save_electromobility=True,
         **kwargs
     ):
         """
@@ -1106,6 +1107,11 @@ class EDisGo:
             Indicates whether to save :class:`~.network.timeseries.Timeseries`.
             Per default it is saved. See
             :attr:`~.network.timeseries.Timeseries.to_csv` for more
+            information.
+        save_electromobility : bool, optional
+            Indicates whether to save :class:`~.network.electromobility.Electromobility`.
+            Per default it is saved. See
+            :attr:`~.network.electromobility.Electromobility.to_csv` for more
             information.
 
         Other Parameters
@@ -1143,6 +1149,9 @@ class EDisGo:
                 reduce_memory=kwargs.get("reduce_memory", False),
                 to_type=kwargs.get("to_type", "float32")
             )
+        if save_electromobility:
+            self.electromobility.to_csv(
+                os.path.join(directory, "electromobility"))
 
     def add_component(
         self,
@@ -1472,8 +1481,9 @@ def import_edisgo_from_pickle(filename, path=''):
 
 def import_edisgo_from_files(directory="", import_topology=True,
                              import_timeseries=False, import_results=False,
-                             **kwargs):
+                             import_electromobility=False, **kwargs):
     edisgo_obj = EDisGo(import_timeseries=False)
+
     if import_topology:
         topology_dir = kwargs.get("topology_directory",
                                   os.path.join(directory, "topology"))
@@ -1482,12 +1492,14 @@ def import_edisgo_from_files(directory="", import_topology=True,
         else:
             logging.warning(
                 'No topology directory found. Topology not imported.')
+
     if import_timeseries:
         if os.path.exists(os.path.join(directory, "timeseries")):
             edisgo_obj.timeseries.from_csv(os.path.join(directory, "timeseries"))
         else:
             logging.warning(
                 'No timeseries directory found. Timeseries not imported.')
+
     if import_results:
         parameters = kwargs.get('parameters', None)
         if os.path.exists(os.path.join(directory, "results")):
@@ -1495,6 +1507,13 @@ def import_edisgo_from_files(directory="", import_topology=True,
                                         parameters)
         else:
             logging.warning('No results directory found. Results not imported.')
+
+    if import_electromobility:
+        if os.path.exists(os.path.join(directory, "electromobility")):
+            edisgo_obj.electromobility.from_csv(os.path.join(directory, "electromobility"), edisgo_obj)
+        else:
+            logging.warning('No electromobility directory found. Electromobility not imported.')
+
     if kwargs.get('import_residual_load', False):
         if os.path.exists(
                 os.path.join(directory, 'time_series_sums.csv')):
@@ -1503,4 +1522,6 @@ def import_edisgo_from_files(directory="", import_topology=True,
                 columns={'Unnamed: 0': 'timeindex'}).set_index('timeindex')['residual_load']
             residual_load.index = pd.to_datetime(residual_load.index)
             edisgo_obj.timeseries._residual_load = residual_load
+
+
     return edisgo_obj

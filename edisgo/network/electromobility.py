@@ -1,5 +1,8 @@
+import os
 import logging
+import numpy as np
 import pandas as pd
+import geopandas as gpd
 
 from sklearn import preprocessing
 
@@ -69,11 +72,11 @@ class Electromobility:
         try:
             return self._grid_connections_gdf
         except:
-            return pd.DataFrame(columns=COLUMNS["grid_connections_gdf"])
+            return gpd.GeoDataFrame(columns=COLUMNS["grid_connections_gdf"])
 
     @grid_connections_gdf.setter
-    def grid_connections_gdf(self, df):
-        self._grid_connections_gdf = df
+    def grid_connections_gdf(self, gdf):
+        self._grid_connections_gdf = gdf
 
     @property
     def potential_charging_parks(self):
@@ -88,44 +91,6 @@ class Electromobility:
         """
         for cp_id in self.grid_connections_gdf.index:
             yield PotentialChargingParks(id=cp_id, edisgo_obj=self._edisgo_obj)
-
-    @property
-    def designated_charging_points_dfs(self):
-        """
-        Designated charging points per use case (home, work, public and hpc).
-
-        Returns
-        -------
-        dict(:pandas:`pandas.DataFrame<DataFrame>`)
-            Dictionary with DataFrames including last charge end netto charging capacity,
-            charging_park_id and use case per use case
-
-        """
-        try:
-            designated_charging_points_dfs = {
-                use_case: pd.DataFrame(columns=COLUMNS["designated_charging_points_df"])
-                for use_case in USECASES
-            }
-
-            for potential_charging_park in list(self.potential_charging_parks):
-                df = potential_charging_park. \
-                    _last_charging_process_and_netto_charging_capacity_per_charging_point.copy()
-
-                df = df.assign(
-                    charging_park_id=potential_charging_park.id,
-                    use_case=potential_charging_park.use_case,
-                )
-
-                designated_charging_points_dfs[
-                    potential_charging_park.use_case
-                ] = designated_charging_points_dfs[
-                    potential_charging_park.use_case
-                ].append(df)
-
-            return designated_charging_points_dfs
-
-        except:
-            return pd.DataFrame(columns=COLUMNS["designated_charging_points_df"])
 
     @property
     def simbev_config_df(self):
@@ -207,6 +172,84 @@ class Electromobility:
             return float(self.simbev_config_df.at["eta_CP", "value"])
         except:
             return None
+
+    def to_csv(self, directory):
+        """
+        Exports electromobility to csv files.
+
+        The following attributes are exported:
+
+        * 'charging_processes_df' : Attribute :py:attr:`~charging_processes_df` is saved to
+          `charging_processes.csv`.
+        * 'grid_connections_gdf' : Attribute :py:attr:`~grid_connections_gdf` is saved to
+          `grid_connections.csv`.
+        * 'integrated_charging_parks_df' : Attribute :py:attr:`~integrated_charging_parks_df` is
+          saved to `integrated_charging_parks.csv`.
+        * 'simbev_config_df' : Attribute :py:attr:`~simbev_config_df` is
+          saved to `simbev_config.csv`.
+
+        Parameters
+        ----------
+        directory : str
+            Path to save electromobility to.
+
+        """
+        os.makedirs(directory, exist_ok=True)
+
+        if not self.charging_processes_df.empty:
+            self.charging_processes_df.to_csv(
+                os.path.join(directory, "charging_processes.csv"))
+
+        if not self.grid_connections_gdf.empty:
+            self.grid_connections_gdf.to_csv(
+                os.path.join(directory, "grid_connections.csv"))
+
+        if not self.integrated_charging_parks_df.empty:
+            self.integrated_charging_parks_df.to_csv(
+                os.path.join(directory, "integrated_charging_parks.csv"))
+
+        if not self.simbev_config_df.empty:
+            self.simbev_config_df.to_csv(
+                os.path.join(directory, "simbev_config.csv"))
+
+    def from_csv(self, directory, edisgo_obj):
+        """
+        Restores electromobility from csv files.
+
+        Parameters
+        ----------
+        edisgo_obj : :class:`~.EDisGo`
+        directory : str
+            Path to electromobility csv files.
+
+        """
+        if os.path.exists(os.path.join(directory, "charging_processes.csv")):
+            self.charging_processes_df = pd.read_csv(
+                os.path.join(directory, "charging_processes.csv"), index_col=0)
+
+        if os.path.exists(os.path.join(directory, "grid_connections.csv")):
+            epsg = edisgo_obj.topology.grid_district["srid"]
+            try:
+                self.grid_connections_gdf = gpd.GeoDataFrame(
+                    pd.read_csv(
+                        os.path.join(directory, "grid_connections.csv"), index_col=0), crs={"init": f"epsg:{epsg}"})
+            except:
+                logging.warning(
+                    f"""Grid connections could not be loaded with EPSG {epsg}.
+                    Trying with EPSG 4326 as fallback.""")
+
+                self.grid_connections_gdf = gpd.GeoDataFrame(
+                    pd.read_csv(
+                        os.path.join(directory, "grid_connections.csv"), index_col=0), crs={"init": "epsg:4326"})
+
+        if os.path.exists(os.path.join(directory, "integrated_charging_parks.csv")):
+            self.integrated_charging_parks_df = pd.read_csv(
+                os.path.join(directory, "integrated_charging_parks.csv"), index_col=0)
+
+        if os.path.exists(os.path.join(directory, "simbev_config.csv")):
+            self.simbev_config_df = pd.read_csv(
+                os.path.join(directory, "simbev_config.csv"), index_col=0)
+
 
     @property
     def _potential_charging_parks_df(self):
