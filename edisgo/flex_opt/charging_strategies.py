@@ -213,10 +213,10 @@ def charging_strategy(
     edisgo_timedelta = edisgo_obj.timeseries.timeindex[1] - edisgo_obj.timeseries.timeindex[0]
     simbev_timedelta = timeindex[1] - timeindex[0]
 
-    assert edisgo_timedelta == simbev_timedelta, f"""
-        The stepsize of the timeseries of the edisgo object differs from the simbev stepsize. 
-        The edisgo timedelta is {edisgo_timedelta}, while the simbev timedelta is {simbev_timedelta}. 
-        Make sure to use a matching stepsize."""
+    assert edisgo_timedelta == simbev_timedelta, (
+        "The stepsize of the timeseries of the edisgo object differs from the simbev stepsize. " 
+        f"The edisgo timedelta is {edisgo_timedelta}, while the simbev timedelta is {simbev_timedelta}. " 
+        "Make sure to use a matching stepsize.")
 
     if strategy == "dumb":
         # "dumb" charging
@@ -295,11 +295,22 @@ def charging_strategy(
 
         # perform dumb charging processes and respect them in the residual load
         for _, row in dumb_charging_processes_df.iterrows():
-            dummy_ts.loc[:, row["charging_park_id"]].iloc[
-                row["park_start"]:row["park_start"] + row["minimum_charging_time"]
-            ] += row["netto_charging_capacity_mva"]
+            try:
+                dummy_ts.loc[:, row["charging_park_id"]].iloc[
+                    row["park_start"]:row["park_start"] + row["minimum_charging_time"]
+                ] += row["netto_charging_capacity_mva"]
+            except:
+                park_start = row["park_start"]
+                park_end = row["park_start"] + row["minimum_charging_time"]
+                maximum_ts = len(dummy_ts)
+                logger.warning(
+                    (f"Charging process with index {_} could not be respected. "
+                     f"The park start is at timestep {park_start} and the park end is "
+                     f"at timestep {park_end}, while the timeseries consists of {maximum_ts}"
+                     "timesteps."))
 
-        residual_load = init_residual_load + dummy_ts.sum(axis=1).to_numpy()
+        residual_load = init_residual_load + dummy_ts.sum(
+            axis=1).to_numpy()
 
         for _, row in flex_charging_processes_df.iterrows():
             flex_band = residual_load[row["park_start"]:row["park_end"]]
@@ -309,10 +320,17 @@ def charging_strategy(
             # get k time steps with the lowest residual load in the parking time
             idx = np.argpartition(flex_band, k)[:k] + row["park_start"]
 
-            dummy_ts[row["charging_park_id"]].iloc[idx] += \
-                row["netto_charging_capacity_mva"]
+            try:
+                dummy_ts[row["charging_park_id"]].iloc[idx] += \
+                    row["netto_charging_capacity_mva"]
 
-            residual_load[idx] += row["netto_charging_capacity_mva"]
+                residual_load[idx] += row["netto_charging_capacity_mva"]
+
+            except:
+                logger.warning(
+                    (f"Charging process with index {_} could not be respected. "
+                     f"The charging takes place within the timesteps {idx}, "
+                     f"while the timeseries consists of {maximum_ts} timesteps."))
 
         for count, col in enumerate(dummy_ts.columns):
             _overwrite_timeseries(

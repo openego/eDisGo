@@ -1,10 +1,10 @@
 ,0
 random.seed,25588
-num_threads,16
+num_threads,1
 stepsize,15
-year,2050
+year,2035
 scenarette,
-days,371
+days,7
 car_limit,100000
 completed_standing_times_ags,[]
 completed_timeseries_ags,[]
