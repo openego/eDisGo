@@ -66,7 +66,8 @@ PUBLIC_DESTINATIONS = {
 }
 
 
-def import_simbev_electromobility(path, edisgo_obj, **kwargs):
+def import_simbev_electromobility(
+        path, edisgo_obj, **kwargs):
     """
 
     Parameters
@@ -102,19 +103,19 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
     """
     # TODO: SimBEV is in development and this import will need constant updating for now
     def read_csvs_charging_processes(
-            path, mode="frugal", dir=None):
+            csv_path, mode="frugal", csv_dir=None):
         """
         Reads all CSVs in a given path and returns a DataFrame with all
         `SimBEV <https://github.com/rl-institut/simbev>`_ charging processes.
 
         Parameters
         ----------
-        path : str
+        csv_path : str
             Main path holding SimBEV output data
         mode : str
             Returns all information if None. Returns only rows with charging demand
             greater than 0 if "frugal". Default is "frugal".
-        dir : str
+        csv_dir : str
             Optional sub-directory holding charging processes CSVs under path
 
         Returns
@@ -125,17 +126,17 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
             charging point ID.
 
         """
-        if dir is not None:
-            path = os.path.join(path, dir)
+        if csv_dir is not None:
+            csv_path = os.path.join(csv_path, csv_dir)
 
         files = []
 
-        for dirpath, dirnames, filenames in os.walk(path):
+        for dirpath, dirnames, filenames in os.walk(csv_path):
             files.extend(Path(os.path.join(dirpath, f)) for f in filenames if f.endswith(".csv"))
 
         if len(files) == 0:
             raise ValueError(
-                "Couldn't find any CSVs in path {}.".format(path)
+                "Couldn't find any CSVs in path {}.".format(csv_path)
             )
 
         files.sort()
@@ -163,14 +164,13 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
                     df, ignore_index=True,
                 )
             except:
-                logger.warning(f"File {f} couldn't be read and is skipped.")
+                logger.warning(
+                    f"File {f} couldn't be read and is skipped.")
 
         charging_processes_df = pd.merge(
             charging_processes_df,
             pd.DataFrame(columns=COLUMNS["matching_demand_and_location"]),
-            how="outer",
-            left_index=True,
-            right_index=True
+            how="outer", left_index=True, right_index=True
         )
 
         return charging_processes_df
@@ -365,7 +365,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
 
     edisgo_obj.electromobility.charging_processes_df = read_csvs_charging_processes(
         path, mode=kwargs.pop("mode_parking_times", "frugal"),
-        dir=kwargs.pop("charging_processes_dir", "simbev_run")
+        csv_dir=kwargs.pop("charging_processes_dir", "simbev_run")
     )
 
     edisgo_obj.electromobility.simbev_config_df = read_csv_simbev_config(
