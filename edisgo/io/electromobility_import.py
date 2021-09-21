@@ -88,7 +88,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
                 and the total number of cars. Default 0.1 .
             gc_to_car_rate_hpc : float
                 Specifies the minimum rate between possible grid connections points for the use case "hpc"
-                and the total number of cars. As default 1 HPC grid Connection is guaranteed.
+                and the total number of cars. Default 0.05 .
             mode_parking_times : str
                 If the mode_parking_times is set to "frugal" only parking times with any charging demand
                 are imported. Default "frugal".
@@ -290,7 +290,7 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
             elif use_case == "public":
                 gc_to_car_rate = kwargs.get("gc_to_car_rate_public", 0.1)
             elif use_case == "hpc":
-                gc_to_car_rate = kwargs.get("gc_to_car_rate_hpc", 1/num_cars)
+                gc_to_car_rate = kwargs.get("gc_to_car_rate_hpc", 0.05)
 
             use_case_gdf = grid_connections_gdf.loc[
                 grid_connections_gdf.use_case == use_case]
