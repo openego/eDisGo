@@ -145,22 +145,25 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
         charging_processes_df = charging_processes_df.astype(DTYPES["charging_processes_df"])
 
         for car_id, f in enumerate(files):
-            df = pd.read_csv(f, index_col=[0])
+            try:
+                df = pd.read_csv(f, index_col=[0])
 
-            if mode == "frugal":
-                df = df.loc[df.chargingdemand > 0]
-            else:
-                pass
+                if mode == "frugal":
+                    df = df.loc[df.chargingdemand > 0]
+                else:
+                    pass
 
-            df = df.rename(columns={"location": "destination"})
+                df = df.rename(columns={"location": "destination"})
 
-            df = df.assign(ags=int(f.parts[-2]), car_id=car_id)
+                df = df.assign(ags=int(f.parts[-2]), car_id=car_id)
 
-            df = df[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
+                df = df[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
 
-            charging_processes_df = charging_processes_df.append(
-                df, ignore_index=True,
-            )
+                charging_processes_df = charging_processes_df.append(
+                    df, ignore_index=True,
+                )
+            except:
+                logger.warning(f"File {f} couldn't be read and is skipped.")
 
         charging_processes_df = pd.merge(
             charging_processes_df,
