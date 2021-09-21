@@ -34,8 +34,10 @@ def integrate_charging_parks(edisgo_obj, comp_type="ChargingPoint"):
     dummy_timeseries = pd.Series(
         [0] * len(edisgo_obj.timeseries.timeindex), index=edisgo_obj.timeseries.timeindex)
 
+    edisgo_ids = []
+
     # integrate ChargingPoints and save the names of the eDisGo ID
-    edisgo_id = [
+    edisgo_ids = [
         EDisGo.integrate_component(
             edisgo_obj,
             comp_type=comp_type,
@@ -49,7 +51,7 @@ def integrate_charging_parks(edisgo_obj, comp_type="ChargingPoint"):
     ]
 
     edisgo_obj.electromobility.integrated_charging_parks_df = pd.DataFrame(
-        columns=COLUMNS["integrated_charging_parks_df"], data=edisgo_id, index=charging_park_ids)
+        columns=COLUMNS["integrated_charging_parks_df"], data=edisgo_ids, index=charging_park_ids)
 
 # TODO: the dummy timeseries should be as long as the simulated days and not the timeindex of the edisgo object
 # At the moment this would result into wrong results if the timeindex of the edisgo object is
