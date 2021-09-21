@@ -12,8 +12,8 @@ logger = logging.getLogger("edisgo")
 
 COLUMNS = {
     "charging_processes_df": [
-        "location", "use_case", "netto_charging_capacity", "chargingdemand", "park_start",
-        "park_end", "charging_park_id", "charging_point_id"
+        "ags", "car_id", "destination", "use_case", "netto_charging_capacity",
+        "chargingdemand", "park_start", "park_end"
     ],
     "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
     "simbev_config_df": ["value"],
