@@ -1323,7 +1323,10 @@ class PotentialChargingParks(BasicComponent):
 
     @property
     def grid_connection_capacity(self):
-        return determine_grid_connection_capacity(self.designated_charging_point_capacity / 10**3)
+        if self.use_case == "hpc":
+            return self.designated_charging_point_capacity / 10**3
+        else:
+            return determine_grid_connection_capacity(self.designated_charging_point_capacity / 10**3)
 
     @property
     def within_grid(self):
