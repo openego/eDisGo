@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 
 from edisgo import EDisGo
+from datetime import timedelta
+
 
 COLUMNS = {
     "integrated_charging_parks_df": ["edisgo_id"],
@@ -272,9 +274,6 @@ def charging_strategy(
         # get residual load
         init_residual_load = edisgo_obj.timeseries.residual_load
 
-        dummy_ts = pd.DataFrame(
-            data=0., columns=[_.id for _ in charging_parks], index=timeindex)
-
         len_residual_load = int(charging_processes_df.park_end.max())
 
         if len(init_residual_load) >= len_residual_load:
@@ -286,9 +285,17 @@ def charging_strategy(
 
                 s_append = init_residual_load.iloc[:len_append]
 
-                init_residual_load = init_residual_load.append(s_append)
+                init_residual_load = init_residual_load.append(
+                    s_append, ignore_index=True)
 
         init_residual_load = init_residual_load.to_numpy()
+
+        timeindex_residual = timeindex = pd.date_range(
+            edisgo_obj.timeseries.timeindex[0], periods=len(init_residual_load),
+            freq=f"{edisgo_obj.electromobility.stepsize}min")
+
+        dummy_ts = pd.DataFrame(
+            data=0., columns=[_.id for _ in charging_parks], index=timeindex_residual)
 
         # determine which charging processes can be flexibilized
         dumb_charging_processes_df = charging_processes_df.loc[
@@ -343,6 +350,8 @@ def charging_strategy(
                 edisgo_obj, charging_parks[count].edisgo_id, dummy_ts[col])
 
     else:
-        raise ValueError(f"Strategy {strategy} has not yet been implemented.")
+        raise ValueError(
+            f"Strategy {strategy} has not yet been implemented.")
 
-    logging.info(f"Charging strategy {strategy} completed.")
+    logging.info(
+        f"Charging strategy {strategy} completed.")
