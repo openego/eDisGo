@@ -647,9 +647,13 @@ def get_component_timeseries(edisgo_obj, **kwargs):
             raise ValueError("{} is not a valid mode.".format(mode))
     else:
         config_data = edisgo_obj.config
+        # TODO: The weather cell IDs should be aquired for every weather cell that intersects
+        # with the mv grid districts. In some cases this leads to an error when `import_generators`
+        # is called as some new generators lay in new weather cells.
         weather_cell_ids = (
             edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique()
         )
+        weather_cell_ids = np.append(weather_cell_ids, [1133101]) # TODO: remove WA
         # feed-in time series of fluctuating renewables
         ts = kwargs.get("timeseries_generation_fluctuating", None)
         if isinstance(ts, pd.DataFrame):
