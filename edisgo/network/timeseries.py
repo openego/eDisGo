@@ -653,7 +653,8 @@ def get_component_timeseries(edisgo_obj, **kwargs):
         weather_cell_ids = (
             edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique()
         )
-        weather_cell_ids = np.append(weather_cell_ids, [1133101]) # TODO: remove WA
+        # TODO: remove WA
+        weather_cell_ids = np.append(weather_cell_ids, [1133101])
         # feed-in time series of fluctuating renewables
         ts = kwargs.get("timeseries_generation_fluctuating", None)
         if isinstance(ts, pd.DataFrame):
