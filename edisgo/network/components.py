@@ -1323,7 +1323,7 @@ class PotentialChargingParks(BasicComponent):
 
     @property
     def grid_connection_capacity(self):
-        return determine_grid_connection_capacity(self.designated_charging_point_capacity / 10 ** 3)
+        return determine_grid_connection_capacity(self.designated_charging_point_capacity / 10**3)
 
     @property
     def within_grid(self):

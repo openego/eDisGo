@@ -88,7 +88,7 @@ def charging_strategy(
 
     """
     def harmonize_charging_processes_df(
-            df, timestamp_share_threshold, strategy=None, minimum_charging_capacity_factor=0.1, eta_cp=1.0):
+            df, len_ts, timestamp_share_threshold, strategy=None, minimum_charging_capacity_factor=0.1, eta_cp=1.0):
         """
         Harmonizes the charging processes to prevent differences in the energy
         demand per charging strategy.
@@ -107,8 +107,12 @@ def charging_strategy(
             Charging Point efficiency. Default 1.0
 
         """
-        # SimBEV has a MATLAB legacy and at the moment 1 is eDisGos 0
+        # FIXME: SimBEV has a MATLAB legacy and at the moment 1 is eDisGos 0
         df = df.assign(park_start=df.park_start-1)
+
+        # FIXME: This should become obsolete in the future when SimBEV is bugfixed
+        # drop rows that have a park start higher than simulated days
+        df = df.loc[df.park_start <= len_ts]
 
         # calculate the minimum time taken the fulfill the charging demand
         minimum_charging_time = df.chargingdemand/df.netto_charging_capacity \
@@ -224,7 +228,7 @@ def charging_strategy(
             dummy_ts = np.zeros(len_ts)
 
             charging_processes_df = harmonize_charging_processes_df(
-                cp.charging_processes_df, timestamp_share_threshold, strategy=strategy, eta_cp=eta_cp)
+                cp.charging_processes_df, len_ts, timestamp_share_threshold, strategy=strategy, eta_cp=eta_cp)
 
             for _, row in charging_processes_df.iterrows():
                 dummy_ts[row["park_start"]:row["park_start"] + row["minimum_charging_time"]] += \
@@ -239,7 +243,7 @@ def charging_strategy(
             dummy_ts = np.zeros(len_ts)
 
             charging_processes_df = harmonize_charging_processes_df(
-                cp.charging_processes_df, timestamp_share_threshold, strategy=strategy,
+                cp.charging_processes_df, len_ts, timestamp_share_threshold, strategy=strategy,
                 minimum_charging_capacity_factor=minimum_charging_capacity_factor, eta_cp=eta_cp)
 
             for _, row in charging_processes_df.iterrows():
@@ -263,7 +267,7 @@ def charging_strategy(
                 edisgo_obj.electromobility.integrated_charging_parks_df.index)]
 
         charging_processes_df = harmonize_charging_processes_df(
-                charging_processes_df, timestamp_share_threshold, strategy=strategy, eta_cp=eta_cp)
+                charging_processes_df, len_ts, timestamp_share_threshold, strategy=strategy, eta_cp=eta_cp)
 
         # get residual load
         init_residual_load = edisgo_obj.timeseries.residual_load
@@ -271,12 +275,14 @@ def charging_strategy(
         dummy_ts = pd.DataFrame(
             data=0., columns=[_.id for _ in charging_parks], index=timeindex)
 
-        if len(init_residual_load) >= len_ts:
+        len_residual_load = int(charging_processes_df.park_end.max())
+
+        if len(init_residual_load) >= len_residual_load:
             init_residual_load = init_residual_load.loc[timeindex]
         else:
-            while len(init_residual_load) < len_ts:
+            while len(init_residual_load) < len_residual_load:
                 len_rl = len(init_residual_load)
-                len_append = min(len_rl, len_ts-len_rl)
+                len_append = min(len_rl, len_residual_load-len_rl)
 
                 s_append = init_residual_load.iloc[:len_append]
 
