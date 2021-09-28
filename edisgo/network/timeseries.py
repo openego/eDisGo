@@ -1,6 +1,5 @@
 import logging
 import pandas as pd
-import geopandas as gpd
 import numpy as np
 import datetime
 import os
@@ -9,13 +8,7 @@ from workalendar.europe import Germany
 from demandlib import bdew as bdew, particular_profiles as profiles
 from edisgo.io.timeseries_import import import_feedin_timeseries
 from edisgo.tools.tools import assign_voltage_level_to_component,\
-    drop_duplicated_columns
-from egoio.tools.db import connection
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import func
-from shapely.wkt import loads as wkt_loads
-from shapely.geometry.multipolygon import MultiPolygon
-from egoio.db_tables import climate, grid
+    drop_duplicated_columns, get_weather_cells_for_grid_district
 
 
 logger = logging.getLogger("edisgo")
@@ -604,7 +597,6 @@ def get_component_timeseries(edisgo_obj, **kwargs):
         ranges of the given time series that will be used in the analysis.
 
     """
-
     mode = kwargs.get("mode", None)
     timeindex = kwargs.get("timeindex", edisgo_obj.timeseries.timeindex)
     # reset TimeSeries
@@ -655,55 +647,18 @@ def get_component_timeseries(edisgo_obj, **kwargs):
     else:
         config_data = edisgo_obj.config
 
-        Session = sessionmaker(bind=connection(readonly=True))
-        session = Session()
-
-        # Download geometries of weather cells to make sure all weather cells are loaded accordingly
-        srid = edisgo_obj.topology.grid_district["srid"]
-        table = climate.Cosmoclmgrid
-        query = session.query(
-            table.gid,
-            func.ST_AsText(
-                func.ST_Transform(
-                    table.geom, srid
-                )
-            ).label("geometry")
-        )
-
-        geom_data = pd.read_sql_query(query.statement, query.session.bind)
-        geom_data.geometry = geom_data.apply(lambda _: wkt_loads(_.geometry), axis=1)
-        geom_data = gpd.GeoDataFrame(
-            geom_data, crs=f"EPSG:{srid}")
-
-        mv_geom = edisgo_obj.topology.grid_district["geom"]
-
-        if mv_geom.geom_type == "Polygon":
-            # Transform Polygon to MultiPolygon and overwrite geometry
-            p = wkt_loads(str(mv_geom))
-            m = MultiPolygon([p])
-            edisgo_obj.topology.grid_district["geom"] = m
-        elif mv_geom.geom_type == "MultiPolygon":
-            m = mv_geom
-        else:
-            raise ValueError(
-                f"Grid district geometry is of type {type(mv_geom)}."
-                " Only Shapely Polygon or MultiPolygon are accepted.")
-
-        mv_geom_gdf = gpd.GeoDataFrame(
-            m, crs=f"EPSG:{srid}", columns=["geometry"])
-
-        weather_cell_ids = set(np.append(gpd.sjoin(
-            geom_data, mv_geom_gdf, how="right", op='intersects').gid.unique(),
-            edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique()))
+        weather_cell_ids = get_weather_cells_for_grid_district(
+            edisgo_obj)
 
         # feed-in time series of fluctuating renewables
         ts = kwargs.get("timeseries_generation_fluctuating", None)
         if isinstance(ts, pd.DataFrame):
             edisgo_obj.timeseries.generation_fluctuating = ts
         elif isinstance(ts, str) and ts == "oedb":
-            edisgo_obj.timeseries.generation_fluctuating = import_feedin_timeseries(
-                config_data, weather_cell_ids, kwargs.get("timeindex", None)
-            )
+            edisgo_obj.timeseries.generation_fluctuating = \
+                import_feedin_timeseries(
+                    config_data, weather_cell_ids, kwargs.get(
+                        "timeindex", None))
         else:
             raise ValueError(
                 "Your input for "
