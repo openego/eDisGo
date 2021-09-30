@@ -1007,13 +1007,19 @@ def process_pfa_results(edisgo, pypsa, timesteps):
 
     # save seeds
     edisgo.results.pfa_v_mag_pu_seed = pd.concat(
-        [edisgo.results.pfa_v_mag_pu_seed, pypsa.buses_t["v_mag_pu"].reindex(index=timesteps)])
-
+        [edisgo.results.pfa_v_mag_pu_seed,
+         pypsa.buses_t["v_mag_pu"].reindex(index=timesteps)
+         ]
+    )
     edisgo.results.pfa_v_mag_pu_seed = edisgo.results.pfa_v_mag_pu_seed[
-        ~edisgo.results.pfa_v_mag_pu_seed.index.duplicated(keep='last')].fillna(1)
+        ~edisgo.results.pfa_v_mag_pu_seed.index.duplicated(
+            keep='last')].fillna(1)
 
     edisgo.results.pfa_v_ang_seed = pd.concat(
-        [edisgo.results.pfa_v_ang_seed, pypsa.buses_t["v_ang"].reindex(index=timesteps)])
-
+        [edisgo.results.pfa_v_ang_seed,
+         pypsa.buses_t["v_ang"].reindex(index=timesteps)
+         ]
+    )
     edisgo.results.pfa_v_ang_seed = edisgo.results.pfa_v_ang_seed[
-        ~edisgo.results.pfa_v_ang_seed.index.duplicated(keep='last')].fillna(0)
+        ~edisgo.results.pfa_v_ang_seed.index.duplicated(
+            keep='last')].fillna(0)
