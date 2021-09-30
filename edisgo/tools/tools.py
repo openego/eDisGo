@@ -3,20 +3,20 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 from math import pi, sqrt
-
-from shapely.geometry.multipolygon import MultiPolygon
-from shapely.wkt import loads as wkt_loads
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
 
 from edisgo.flex_opt import exceptions
 from edisgo.flex_opt import check_tech_constraints
 from edisgo.network.grids import LVGrid
+from edisgo.tools import session_scope
 
 if "READTHEDOCS" not in os.environ:
 
-    from egoio.db_tables import climate, grid
+    from egoio.db_tables import climate
     from egoio.tools.db import connection
+
+    from shapely.geometry.multipolygon import MultiPolygon
+    from shapely.wkt import loads as wkt_loads
 
     geopandas = True
     try:
@@ -428,8 +428,7 @@ def assign_voltage_level_to_component(edisgo_obj, df):
 
 def get_weather_cells_for_grid_district(edisgo_obj):
     """
-    Get all generator weather cells and weather cells that intersect with 
-    the grid district 
+    Get all weather cells that intersect with the grid district.
     
     Parameters
     ----------
@@ -441,22 +440,19 @@ def get_weather_cells_for_grid_district(edisgo_obj):
         Set with weather cell IDs
 
     """
-    Session = sessionmaker(bind=connection(readonly=True))
-    session = Session()
 
-    # Download geometries of weather cells to make sure all weather
-    # cells are loaded accordingly
+    # Download geometries of weather cells
     srid = edisgo_obj.topology.grid_district["srid"]
     table = climate.Cosmoclmgrid
-    query = session.query(
-        table.gid,
-        func.ST_AsText(
-            func.ST_Transform(
-                table.geom, srid
-            )
-        ).label("geometry")
-    )
-
+    with session_scope() as session:
+        query = session.query(
+            table.gid,
+            func.ST_AsText(
+                func.ST_Transform(
+                    table.geom, srid
+                )
+            ).label("geometry")
+        )
     geom_data = pd.read_sql_query(
         query.statement, query.session.bind)
     geom_data.geometry = geom_data.apply(
@@ -464,9 +460,8 @@ def get_weather_cells_for_grid_district(edisgo_obj):
     geom_data = gpd.GeoDataFrame(
         geom_data, crs=f"EPSG:{srid}")
 
-    mv_geom = edisgo_obj.topology.grid_district["geom"]
-
     # Make sure MV Geometry is MultiPolygon
+    mv_geom = edisgo_obj.topology.grid_district["geom"]
     if mv_geom.geom_type == "Polygon":
         # Transform Polygon to MultiPolygon and overwrite geometry
         p = wkt_loads(str(mv_geom))
@@ -478,7 +473,6 @@ def get_weather_cells_for_grid_district(edisgo_obj):
         raise ValueError(
             f"Grid district geometry is of type {type(mv_geom)}."
             " Only Shapely Polygon or MultiPolygon are accepted.")
-
     mv_geom_gdf = gpd.GeoDataFrame(
         m, crs=f"EPSG:{srid}", columns=["geometry"])
 
