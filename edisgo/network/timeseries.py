@@ -6,10 +6,10 @@ import os
 
 from workalendar.europe import Germany
 from demandlib import bdew as bdew, particular_profiles as profiles
-
 from edisgo.io.timeseries_import import import_feedin_timeseries
 from edisgo.tools.tools import assign_voltage_level_to_component,\
-    drop_duplicated_columns
+    drop_duplicated_columns, get_weather_cells_intersecting_with_grid_district
+
 
 logger = logging.getLogger("edisgo")
 
@@ -597,7 +597,6 @@ def get_component_timeseries(edisgo_obj, **kwargs):
         ranges of the given time series that will be used in the analysis.
 
     """
-
     mode = kwargs.get("mode", None)
     timeindex = kwargs.get("timeindex", edisgo_obj.timeseries.timeindex)
     # reset TimeSeries
@@ -647,17 +646,19 @@ def get_component_timeseries(edisgo_obj, **kwargs):
             raise ValueError("{} is not a valid mode.".format(mode))
     else:
         config_data = edisgo_obj.config
-        weather_cell_ids = (
-            edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique()
-        )
+
+        weather_cell_ids = get_weather_cells_intersecting_with_grid_district(
+            edisgo_obj)
+
         # feed-in time series of fluctuating renewables
         ts = kwargs.get("timeseries_generation_fluctuating", None)
         if isinstance(ts, pd.DataFrame):
             edisgo_obj.timeseries.generation_fluctuating = ts
         elif isinstance(ts, str) and ts == "oedb":
-            edisgo_obj.timeseries.generation_fluctuating = import_feedin_timeseries(
-                config_data, weather_cell_ids, kwargs.get("timeindex", None)
-            )
+            edisgo_obj.timeseries.generation_fluctuating = \
+                import_feedin_timeseries(
+                    config_data, weather_cell_ids, kwargs.get(
+                        "timeindex", None))
         else:
             raise ValueError(
                 "Your input for "

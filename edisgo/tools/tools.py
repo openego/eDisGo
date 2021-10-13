@@ -1,10 +1,28 @@
+import os
+import numpy as np
 import pandas as pd
 import networkx as nx
 from math import pi, sqrt
+from sqlalchemy import func
 
 from edisgo.flex_opt import exceptions
 from edisgo.flex_opt import check_tech_constraints
 from edisgo.network.grids import LVGrid
+from edisgo.tools import session_scope
+
+if "READTHEDOCS" not in os.environ:
+
+    from egoio.db_tables import climate
+    from egoio.tools.db import connection
+
+    from shapely.geometry.multipolygon import MultiPolygon
+    from shapely.wkt import loads as wkt_loads
+
+    geopandas = True
+    try:
+        import geopandas as gpd
+    except:
+        geopandas = False
 
 
 def select_worstcase_snapshots(edisgo_obj):
@@ -406,3 +424,58 @@ def assign_voltage_level_to_component(edisgo_obj, df):
         axis=1,
     )
     return df
+
+
+def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
+    """
+    Get all weather cells that intersect with the grid district.
+    
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+
+    Returns
+    -------
+    set
+        Set with weather cell IDs
+
+    """
+
+    # Download geometries of weather cells
+    srid = edisgo_obj.topology.grid_district["srid"]
+    table = climate.Cosmoclmgrid
+    with session_scope() as session:
+        query = session.query(
+            table.gid,
+            func.ST_AsText(
+                func.ST_Transform(
+                    table.geom, srid
+                )
+            ).label("geometry")
+        )
+    geom_data = pd.read_sql_query(
+        query.statement, query.session.bind)
+    geom_data.geometry = geom_data.apply(
+        lambda _: wkt_loads(_.geometry), axis=1)
+    geom_data = gpd.GeoDataFrame(
+        geom_data, crs=f"EPSG:{srid}")
+
+    # Make sure MV Geometry is MultiPolygon
+    mv_geom = edisgo_obj.topology.grid_district["geom"]
+    if mv_geom.geom_type == "Polygon":
+        # Transform Polygon to MultiPolygon and overwrite geometry
+        p = wkt_loads(str(mv_geom))
+        m = MultiPolygon([p])
+        edisgo_obj.topology.grid_district["geom"] = m
+    elif mv_geom.geom_type == "MultiPolygon":
+        m = mv_geom
+    else:
+        raise ValueError(
+            f"Grid district geometry is of type {type(mv_geom)}."
+            " Only Shapely Polygon or MultiPolygon are accepted.")
+    mv_geom_gdf = gpd.GeoDataFrame(
+        m, crs=f"EPSG:{srid}", columns=["geometry"])
+
+    return set(np.append(gpd.sjoin(
+        geom_data, mv_geom_gdf, how="right", op='intersects').gid.unique(),
+        edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique()))
