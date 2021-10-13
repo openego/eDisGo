@@ -8,7 +8,7 @@ from workalendar.europe import Germany
 from demandlib import bdew as bdew, particular_profiles as profiles
 from edisgo.io.timeseries_import import import_feedin_timeseries
 from edisgo.tools.tools import assign_voltage_level_to_component,\
-    drop_duplicated_columns, get_weather_cells_for_grid_district
+    drop_duplicated_columns, get_weather_cells_intersecting_with_grid_district
 
 
 logger = logging.getLogger("edisgo")
@@ -647,7 +647,7 @@ def get_component_timeseries(edisgo_obj, **kwargs):
     else:
         config_data = edisgo_obj.config
 
-        weather_cell_ids = get_weather_cells_for_grid_district(
+        weather_cell_ids = get_weather_cells_intersecting_with_grid_district(
             edisgo_obj)
 
         # feed-in time series of fluctuating renewables

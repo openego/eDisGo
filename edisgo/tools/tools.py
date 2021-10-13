@@ -426,7 +426,7 @@ def assign_voltage_level_to_component(edisgo_obj, df):
     return df
 
 
-def get_weather_cells_for_grid_district(edisgo_obj):
+def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
     """
     Get all weather cells that intersect with the grid district.
     
