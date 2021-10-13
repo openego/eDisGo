@@ -191,3 +191,16 @@ class TestTools:
         assert not topo.buses_df[
             ~topo.buses_df.index.isin(
                 mv_buses)].lv_feeder.isna().any()
+
+    def test_get_weather_cells_intersecting_with_grid_district(self):
+        weather_cells = \
+            tools.get_weather_cells_intersecting_with_grid_district(
+                self.edisgo)
+        assert len(weather_cells) == 4
+        assert 1123075 in weather_cells
+        assert 1122075 in weather_cells
+        assert 1122076 in weather_cells
+        # the following weather cell does not intersect with the grid district
+        # but there are generators in the grid that have that weather cell
+        # for some reason..
+        assert 1122074 in weather_cells
