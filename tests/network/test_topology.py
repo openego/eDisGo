@@ -419,8 +419,8 @@ class TestTopology:
         assert np.isclose(self.topology.lines_df.at[name, "s_nom"],
                           6.18342
                           )
-        assert np.isclose(self.topology.lines_df.at[name, "x"],
-                          0.38
+        assert np.isclose(self.topology.lines_df.at[name, "r"],
+                          0.164
                           )
 
         # test no creation of new line when line between buses already exists
