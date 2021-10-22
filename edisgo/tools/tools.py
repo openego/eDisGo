@@ -116,9 +116,10 @@ def calculate_relative_line_load(
         edisgo_obj, lines_allowed_load)
 
 
-def calculate_line_reactance(line_inductance_per_km, line_length):
+def calculate_line_reactance(line_inductance_per_km, line_length,
+                             num_parallel):
     """
-    Calculates line reactance in Ohm from given line data and length.
+    Calculates line reactance in Ohm.
 
     Parameters
     ----------
@@ -126,6 +127,8 @@ def calculate_line_reactance(line_inductance_per_km, line_length):
         Line inductance in mH/km.
     line_length : float
         Length of line in km.
+    num_parallel : int
+        Number of parallel lines.
 
     Returns
     -------
@@ -133,12 +136,14 @@ def calculate_line_reactance(line_inductance_per_km, line_length):
         Reactance in Ohm
 
     """
-    return line_inductance_per_km / 1e3 * line_length * 2 * pi * 50
+    return (line_inductance_per_km / 1e3 * line_length *
+            2 * pi * 50 / num_parallel)
 
 
-def calculate_line_resistance(line_resistance_per_km, line_length):
+def calculate_line_resistance(line_resistance_per_km, line_length,
+                              num_parallel):
     """
-    Calculates line resistance in Ohm from given line data and length.
+    Calculates line resistance in Ohm.
 
     Parameters
     ----------
@@ -146,6 +151,8 @@ def calculate_line_resistance(line_resistance_per_km, line_length):
         Line resistance in Ohm/km.
     line_length : float
         Length of line in km.
+    num_parallel : int
+        Number of parallel lines.
 
     Returns
     -------
@@ -153,10 +160,10 @@ def calculate_line_resistance(line_resistance_per_km, line_length):
         Resistance in Ohm
 
     """
-    return line_resistance_per_km * line_length
+    return line_resistance_per_km * line_length / num_parallel
 
 
-def calculate_apparent_power(nominal_voltage, current):
+def calculate_apparent_power(nominal_voltage, current, num_parallel):
     """
     Calculates apparent power in MVA from given voltage and current.
 
@@ -166,6 +173,8 @@ def calculate_apparent_power(nominal_voltage, current):
         Nominal voltage in kV.
     current : float or array-like
         Current in kA.
+    num_parallel : int or array-like
+        Number of parallel lines.
 
     Returns
     -------
@@ -173,7 +182,7 @@ def calculate_apparent_power(nominal_voltage, current):
         Apparent power in MVA.
 
     """
-    return sqrt(3) * nominal_voltage * current
+    return sqrt(3) * nominal_voltage * current * num_parallel
 
 
 def drop_duplicated_indices(dataframe, keep="first"):
@@ -252,7 +261,9 @@ def select_cable(edisgo_obj, level, apparent_power):
     suitable_cables = available_cables[
         calculate_apparent_power(
             available_cables["U_n"],
-            available_cables["I_max_th"])
+            available_cables["I_max_th"],
+            cable_count
+        )
         > apparent_power
     ]
 
@@ -262,7 +273,8 @@ def select_cable(edisgo_obj, level, apparent_power):
         suitable_cables = available_cables[
             calculate_apparent_power(
                 available_cables["U_n"],
-                available_cables["I_max_th"]) * cable_count
+                available_cables["I_max_th"],
+                cable_count)
             > apparent_power
         ]
     if suitable_cables.empty:
