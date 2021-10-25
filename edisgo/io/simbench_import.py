@@ -367,6 +367,7 @@ def create_loads_df(simbench_dict):
         'id':'name',
         'node':'bus',
         'profile': 'sector'
+        #Todo: add 'pLoad': 'peak_load' ?
     }
 
     loads_cols_location = [
@@ -385,25 +386,18 @@ def create_loads_df(simbench_dict):
     # get s_nom timeseries
     sectors = loads_df.sector.unique()
     sectoral_loads_data = pd.DataFrame(index=sectors, columns=[
-        'rated_annual_consumption', 'rated_s_max'])
+        'rated_annual_consumption'])
     # Todo: check with birgit if we use s or p
     for sector in sectors:
-        loads_profile[sector] = \
-            np.sqrt(np.square(loads_profile[ sector + '_pload'])+
-                    np.square(loads_profile[sector + '_qload']))
         sectoral_loads_data.loc[sector, 'rated_annual_consumption'] = \
-            loads_profile[sector].sum()/1e3
-        sectoral_loads_data.loc[sector, 'rated_s_max'] = \
-            loads_profile[sector].max()/1e3
-    loads_df['peak_load'] = \
-        loads_df['sR'] * sectoral_loads_data.loc[loads_df.sector,
-                                                 'rated_s_max'].values
+            loads_profile[sector + '_pload'].sum()/4
+    loads_df['peak_load'] = loads_df['pLoad']
     loads_df['annual_consumption'] = \
-        loads_df['sR'] * sectoral_loads_data.loc[
+        loads_df['pLoad'] * sectoral_loads_data.loc[
             loads_df.sector, 'rated_annual_consumption'].values
     loads_df = loads_df[loads_cols_location]
 
-    print ('Converted loads_df')
+    print('Converted loads_df')
     return loads_df
 
 
@@ -436,10 +430,21 @@ def create_switches_df(simbench_dict):
         'branch',
         'type_info'
     ]
-
+    print('Careful: So far only -no-sw grids can be imported.')
     switches_df = simbench_dict['Switch']
     switches_df = switches_df.rename(columns=switch_rename_dict)
     switches_df = switches_df[switch_col_location]
+    # add branches #Todo: adapt for closed switches
+    tmp_branches = simbench_dict['Line'].set_index('id')
+    tmp_branches_nodeA = tmp_branches.loc[tmp_branches.nodeA.isin(switches_df.bus_open)]
+    tmp_branches_nodeA.loc[:, 'bus'] = tmp_branches_nodeA.nodeA
+    tmp_branches_nodeB = tmp_branches.loc[tmp_branches.nodeB.isin(switches_df.bus_open)]
+    tmp_branches_nodeB.loc[:, 'bus'] = tmp_branches_nodeB.nodeB
+    tmp_branches = pd.concat([tmp_branches_nodeA, tmp_branches_nodeB],
+                             sort=False).reset_index().set_index('bus')
+    tmp_branches = tmp_branches[~tmp_branches.index.duplicated(keep='last')]
+    switches_df['branch'] = tmp_branches.loc[switches_df.bus_open].id.values
+    switches_df['type_info'] = "Switch Disconnector"
 
     print ('Converted switches_df')
     return switches_df
@@ -541,6 +546,8 @@ def import_sb_topology(sb_dict):
 
     _validate_ding0_grid_import(edisgo_obj.topology)
     print('created edisgo topology')
+    for switch in edisgo_obj.topology.mv_grid.switch_disconnectors:
+        switch.open()
 
     return edisgo_obj
 
