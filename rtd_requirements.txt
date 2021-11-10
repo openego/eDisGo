@@ -10,6 +10,6 @@ pyomo >= 5.5.0
 multiprocess
 workalendar
 egoio >= 0.4.7
-matplotlib
+matplotlib >= 3.3.0
 pypower
 sklearn

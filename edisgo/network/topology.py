@@ -1347,9 +1347,12 @@ class Topology:
                         line_data.U_n == self.buses_df.loc[bus0, "v_nom"]
                     ]
                 ).iloc[0, :]
-            x = calculate_line_resistance(line_data.L_per_km, length)
-            r = calculate_line_reactance(line_data.R_per_km, length)
-            s_nom = calculate_apparent_power(line_data.U_n, line_data.I_max_th)
+            x = calculate_line_reactance(
+                line_data.L_per_km, length, num_parallel)
+            r = calculate_line_resistance(
+                line_data.R_per_km, length, num_parallel)
+            s_nom = calculate_apparent_power(
+                line_data.U_n, line_data.I_max_th, num_parallel)
 
         # generate line name and check uniqueness
         line_name = "Line_{}_{}".format(bus0, bus1)

@@ -1,10 +1,28 @@
+import os
+import numpy as np
 import pandas as pd
 import networkx as nx
 from math import pi, sqrt
+from sqlalchemy import func
 
 from edisgo.flex_opt import exceptions
 from edisgo.flex_opt import check_tech_constraints
 from edisgo.network.grids import LVGrid
+from edisgo.tools import session_scope
+
+if "READTHEDOCS" not in os.environ:
+
+    from egoio.db_tables import climate
+    from egoio.tools.db import connection
+
+    from shapely.geometry.multipolygon import MultiPolygon
+    from shapely.wkt import loads as wkt_loads
+
+    geopandas = True
+    try:
+        import geopandas as gpd
+    except:
+        geopandas = False
 
 
 def select_worstcase_snapshots(edisgo_obj):
@@ -98,9 +116,10 @@ def calculate_relative_line_load(
         edisgo_obj, lines_allowed_load)
 
 
-def calculate_line_reactance(line_inductance_per_km, line_length):
+def calculate_line_reactance(line_inductance_per_km, line_length,
+                             num_parallel):
     """
-    Calculates line reactance in Ohm from given line data and length.
+    Calculates line reactance in Ohm.
 
     Parameters
     ----------
@@ -108,6 +127,8 @@ def calculate_line_reactance(line_inductance_per_km, line_length):
         Line inductance in mH/km.
     line_length : float
         Length of line in km.
+    num_parallel : int
+        Number of parallel lines.
 
     Returns
     -------
@@ -115,12 +136,14 @@ def calculate_line_reactance(line_inductance_per_km, line_length):
         Reactance in Ohm
 
     """
-    return line_inductance_per_km / 1e3 * line_length * 2 * pi * 50
+    return (line_inductance_per_km / 1e3 * line_length *
+            2 * pi * 50 / num_parallel)
 
 
-def calculate_line_resistance(line_resistance_per_km, line_length):
+def calculate_line_resistance(line_resistance_per_km, line_length,
+                              num_parallel):
     """
-    Calculates line resistance in Ohm from given line data and length.
+    Calculates line resistance in Ohm.
 
     Parameters
     ----------
@@ -128,6 +151,8 @@ def calculate_line_resistance(line_resistance_per_km, line_length):
         Line resistance in Ohm/km.
     line_length : float
         Length of line in km.
+    num_parallel : int
+        Number of parallel lines.
 
     Returns
     -------
@@ -135,10 +160,10 @@ def calculate_line_resistance(line_resistance_per_km, line_length):
         Resistance in Ohm
 
     """
-    return line_resistance_per_km * line_length
+    return line_resistance_per_km * line_length / num_parallel
 
 
-def calculate_apparent_power(nominal_voltage, current):
+def calculate_apparent_power(nominal_voltage, current, num_parallel):
     """
     Calculates apparent power in MVA from given voltage and current.
 
@@ -148,6 +173,8 @@ def calculate_apparent_power(nominal_voltage, current):
         Nominal voltage in kV.
     current : float or array-like
         Current in kA.
+    num_parallel : int or array-like
+        Number of parallel lines.
 
     Returns
     -------
@@ -155,7 +182,7 @@ def calculate_apparent_power(nominal_voltage, current):
         Apparent power in MVA.
 
     """
-    return sqrt(3) * nominal_voltage * current
+    return sqrt(3) * nominal_voltage * current * num_parallel
 
 
 def drop_duplicated_indices(dataframe, keep="first"):
@@ -234,7 +261,9 @@ def select_cable(edisgo_obj, level, apparent_power):
     suitable_cables = available_cables[
         calculate_apparent_power(
             available_cables["U_n"],
-            available_cables["I_max_th"])
+            available_cables["I_max_th"],
+            cable_count
+        )
         > apparent_power
     ]
 
@@ -244,7 +273,8 @@ def select_cable(edisgo_obj, level, apparent_power):
         suitable_cables = available_cables[
             calculate_apparent_power(
                 available_cables["U_n"],
-                available_cables["I_max_th"]) * cable_count
+                available_cables["I_max_th"],
+                cable_count)
             > apparent_power
         ]
     if suitable_cables.empty:
@@ -406,3 +436,58 @@ def assign_voltage_level_to_component(edisgo_obj, df):
         axis=1,
     )
     return df
+
+
+def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
+    """
+    Get all weather cells that intersect with the grid district.
+    
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+
+    Returns
+    -------
+    set
+        Set with weather cell IDs
+
+    """
+
+    # Download geometries of weather cells
+    srid = edisgo_obj.topology.grid_district["srid"]
+    table = climate.Cosmoclmgrid
+    with session_scope() as session:
+        query = session.query(
+            table.gid,
+            func.ST_AsText(
+                func.ST_Transform(
+                    table.geom, srid
+                )
+            ).label("geometry")
+        )
+    geom_data = pd.read_sql_query(
+        query.statement, query.session.bind)
+    geom_data.geometry = geom_data.apply(
+        lambda _: wkt_loads(_.geometry), axis=1)
+    geom_data = gpd.GeoDataFrame(
+        geom_data, crs=f"EPSG:{srid}")
+
+    # Make sure MV Geometry is MultiPolygon
+    mv_geom = edisgo_obj.topology.grid_district["geom"]
+    if mv_geom.geom_type == "Polygon":
+        # Transform Polygon to MultiPolygon and overwrite geometry
+        p = wkt_loads(str(mv_geom))
+        m = MultiPolygon([p])
+        edisgo_obj.topology.grid_district["geom"] = m
+    elif mv_geom.geom_type == "MultiPolygon":
+        m = mv_geom
+    else:
+        raise ValueError(
+            f"Grid district geometry is of type {type(mv_geom)}."
+            " Only Shapely Polygon or MultiPolygon are accepted.")
+    mv_geom_gdf = gpd.GeoDataFrame(
+        m, crs=f"EPSG:{srid}", columns=["geometry"])
+
+    return set(np.append(gpd.sjoin(
+        geom_data, mv_geom_gdf, how="right", op='intersects').gid.unique(),
+        edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique()))
