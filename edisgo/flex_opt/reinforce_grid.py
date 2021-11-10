@@ -140,8 +140,8 @@ def reinforce_grid(
             snapshots = tools.select_worstcase_snapshots(edisgo_reinforce)
             # drop None values in case any of the two snapshots does not exist
             timesteps_pfa = pd.DatetimeIndex(
-                data=[snapshots["min_residual_load"],
-                      snapshots["max_residual_load"]]
+                data=[snapshots["max_residual_load"],
+                      snapshots["min_residual_load"]]
             ).dropna()
         # if timesteps_pfa is not of type datetime or does not contain
         # datetimes throw an error
