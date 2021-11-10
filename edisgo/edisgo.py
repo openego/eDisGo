@@ -1463,6 +1463,7 @@ def import_edisgo_from_files(directory="", import_topology=True,
                              import_timeseries=False, import_results=False,
                              **kwargs):
     edisgo_obj = EDisGo(import_timeseries=False)
+
     if import_topology:
         topology_dir = kwargs.get("topology_directory",
                                   os.path.join(directory, "topology"))
@@ -1471,25 +1472,35 @@ def import_edisgo_from_files(directory="", import_topology=True,
         else:
             logging.warning(
                 'No topology directory found. Topology not imported.')
+
     if import_timeseries:
         if os.path.exists(os.path.join(directory, "timeseries")):
-            edisgo_obj.timeseries.from_csv(os.path.join(directory, "timeseries"))
+            dtype = kwargs.get("dtype", None)
+            edisgo_obj.timeseries.from_csv(
+                os.path.join(directory, "timeseries"),
+                dtype=dtype)
         else:
             logging.warning(
                 'No timeseries directory found. Timeseries not imported.')
+
     if import_results:
-        parameters = kwargs.get('parameters', None)
         if os.path.exists(os.path.join(directory, "results")):
-            edisgo_obj.results.from_csv(os.path.join(directory, "results"),
-                                        parameters)
+            parameters = kwargs.get('parameters', None)
+            dtype = kwargs.get("dtype", None)
+            edisgo_obj.results.from_csv(
+                os.path.join(directory, "results"), parameters, dtype=dtype)
         else:
-            logging.warning('No results directory found. Results not imported.')
+            logging.warning(
+                'No results directory found. Results not imported.')
+
     if kwargs.get('import_residual_load', False):
         if os.path.exists(
                 os.path.join(directory, 'time_series_sums.csv')):
             residual_load = pd.read_csv(
                 os.path.join(directory, 'time_series_sums.csv')).rename(
-                columns={'Unnamed: 0': 'timeindex'}).set_index('timeindex')['residual_load']
+                columns={'Unnamed: 0': 'timeindex'}).set_index(
+                'timeindex')['residual_load']
             residual_load.index = pd.to_datetime(residual_load.index)
             edisgo_obj.timeseries._residual_load = residual_load
+            
     return edisgo_obj
