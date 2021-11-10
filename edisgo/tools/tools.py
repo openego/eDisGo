@@ -31,10 +31,10 @@ def select_worstcase_snapshots(edisgo_obj):
 
     Two time steps in a time series represent worst-case snapshots. These are
 
-    1. Load case: refers to the point in the time series where the
-        (load - generation) achieves its maximum and is greater than 0.
-    2. Feed-in case: refers to the point in the time series where the
-        (load - generation) achieves its minimum and is smaller than 0.
+    1. Maximum Residual Load: refers to the point in the time series where the
+        (load - generation) achieves its maximum.
+    2. Minimum Residual Load: refers to the point in the time series where the
+        (load - generation) achieves its minimum.
 
     These two points are identified based on the generation and load time
     series. In case load or feed-in case don't exist None is returned.
@@ -46,20 +46,17 @@ def select_worstcase_snapshots(edisgo_obj):
     Returns
     -------
     :obj:`dict`
-        Dictionary with keys 'load_case' and 'feedin_case'. Values are
-        corresponding worst-case snapshots of type
-        :pandas:`pandas.Timestamp<Timestamp>` or None.
+        Dictionary with keys 'min_residual_load' and 'max_residual_load'.
+        Values are corresponding worst-case snapshots of type
+        :pandas:`pandas.Timestamp<Timestamp>`.
 
     """
     residual_load = edisgo_obj.timeseries.residual_load
 
-    timestamp = {}
-    timestamp["load_case"] = (
-        residual_load.idxmin() if min(residual_load) < 0 else None
-    )
-    timestamp["feedin_case"] = (
-        residual_load.idxmax() if max(residual_load) > 0 else None
-    )
+    timestamp = {
+        "min_residual_load": residual_load.idxmin(),
+        "max_residual_load": residual_load.idxmax()}
+    
     return timestamp
 
 
