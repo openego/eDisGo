@@ -36,8 +36,6 @@ def integrate_charging_parks(edisgo_obj, comp_type="ChargingPoint"):
     dummy_timeseries = pd.Series(
         [0] * len(edisgo_obj.timeseries.timeindex), index=edisgo_obj.timeseries.timeindex)
 
-    edisgo_ids = []
-
     # integrate ChargingPoints and save the names of the eDisGo ID
     edisgo_ids = [
         EDisGo.integrate_component(
@@ -99,6 +97,8 @@ def charging_strategy(
         ----------
         df : :pandas:`pandas.DataFrame<DataFrame>`
             Charging processes DataFrame
+        len_ts : int
+            Length of the timeseries
         timestamp_share_threshold : float
             See description in the main function. Default 0.2
         strategy : str
@@ -290,7 +290,7 @@ def charging_strategy(
 
         init_residual_load = init_residual_load.to_numpy()
 
-        timeindex_residual = timeindex = pd.date_range(
+        timeindex_residual = pd.date_range(
             edisgo_obj.timeseries.timeindex[0], periods=len(init_residual_load),
             freq=f"{edisgo_obj.electromobility.stepsize}min")
 

@@ -424,9 +424,7 @@ class TimeSeries:
             setattr(
                 self,
                 attr,
-                getattr(self, attr).apply(
-                    lambda _: _.astype(to_type)
-                )
+                getattr(self, attr).astype(to_type)
             )
 
     def to_csv(self, directory, reduce_memory=False, **kwargs):

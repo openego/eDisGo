@@ -29,7 +29,6 @@ def _get_matching_dict_of_attributes_and_file_names():
         "i_res": "currents",
         "pfa_p": "active_powers",
         "pfa_q": "reactive_powers",
-        "s_res": "apparent_powers",
         "grid_losses": "grid_losses",
         "pfa_slack": "slack_results",
         "pfa_v_mag_pu_seed": "pfa_v_mag_pu_seed",
@@ -802,9 +801,7 @@ class Results:
             setattr(
                 self,
                 attr,
-                getattr(self, attr).apply(
-                    lambda _: _.astype(to_type)
-                )
+                getattr(self, attr).astype(to_type)
             )
 
     def to_csv(self, directory, parameters=None, reduce_memory=False,
