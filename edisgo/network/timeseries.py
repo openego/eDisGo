@@ -484,7 +484,7 @@ class TimeSeries:
         directory : str
             Directory time series are saved in.
         dtype : str, optional
-            Numerical data type for data to be loaded from csv.
+            Numerical data type for data to be loaded from csv. E.g. "float32"
 
         """
         timeindex = None

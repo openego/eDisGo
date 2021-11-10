@@ -1046,7 +1046,7 @@ class Results:
             all available attributes. See function docstring `parameters`
             parameter in :func:`~to_csv` for more information.
         dtype : str, optional
-            Numerical data type for data to be loaded from csv.
+            Numerical data type for data to be loaded from csv. E.g. "float32"
 
         """
         # restore measures
