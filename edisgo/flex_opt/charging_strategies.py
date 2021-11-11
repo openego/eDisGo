@@ -3,11 +3,39 @@ import numpy as np
 import pandas as pd
 
 from edisgo import EDisGo
-from datetime import timedelta
 
 
 COLUMNS = {
     "integrated_charging_parks_df": ["edisgo_id"],
+}
+
+RELEVANT_CHARGING_STRATEGIES_COLUMNS = {
+    "dumb": [
+        "park_start",
+        "minimum_charging_time",
+        "netto_charging_capacity_mva"
+    ],
+    "reduced": [
+        "use_case",
+        "park_start",
+        "minimum_charging_time",
+        "netto_charging_capacity_mva",
+        "reduced_charging_time",
+        "reduced_charging_capacity_mva"
+    ],
+    "residual_dumb": [
+        "charging_park_id",
+        "park_start",
+        "minimum_charging_time",
+        "netto_charging_capacity_mva"
+    ],
+    "residual": [
+        "park_start",
+        "park_end",
+        "minimum_charging_time",
+        "charging_park_id",
+        "netto_charging_capacity_mva"
+    ]
 }
 
 logger = logging.getLogger("edisgo")
@@ -15,8 +43,8 @@ logger = logging.getLogger("edisgo")
 
 def integrate_charging_parks(edisgo_obj, comp_type="ChargingPoint"):
     """
-    Integrates all designated charging parks into the grid. The charging demand is
-    not integrated here, but an empty dummy timeseries is generated.
+    Integrates all designated charging parks into the grid. The charging demand
+    is not integrated here, but an empty dummy timeseries is generated.
 
     Parameters
     ----------
@@ -29,12 +57,17 @@ def integrate_charging_parks(edisgo_obj, comp_type="ChargingPoint"):
 
     # Only integrate charging parks with designated charging points
     designated_charging_parks = [
-        cp for cp in charging_parks if (cp.designated_charging_point_capacity > 0) and cp.within_grid]
+        cp
+        for cp in charging_parks
+        if (cp.designated_charging_point_capacity > 0) and cp.within_grid
+    ]
 
     charging_park_ids = [_.id for _ in designated_charging_parks]
 
     dummy_timeseries = pd.Series(
-        [0] * len(edisgo_obj.timeseries.timeindex), index=edisgo_obj.timeseries.timeindex)
+        [0] * len(edisgo_obj.timeseries.timeindex),
+        index=edisgo_obj.timeseries.timeindex,
+    )
 
     # integrate ChargingPoints and save the names of the eDisGo ID
     edisgo_ids = [
@@ -47,17 +80,27 @@ def integrate_charging_parks(edisgo_obj, comp_type="ChargingPoint"):
             ts_active_power=dummy_timeseries,
             ts_reactive_power=dummy_timeseries,
             p_nom=cp.grid_connection_capacity,
-        ) for cp in designated_charging_parks
+        )
+        for cp in designated_charging_parks
     ]
 
     edisgo_obj.electromobility.integrated_charging_parks_df = pd.DataFrame(
-        columns=COLUMNS["integrated_charging_parks_df"], data=edisgo_ids, index=charging_park_ids)
+        columns=COLUMNS["integrated_charging_parks_df"],
+        data=edisgo_ids,
+        index=charging_park_ids,
+    )
 
-# TODO: the dummy timeseries should be as long as the simulated days and not the timeindex of the edisgo object
-# At the moment this would result into wrong results if the timeindex of the edisgo object is
-# not continuously (e.g. 2 weeks of the year)
+
+# TODO: the dummy timeseries should be as long as the simulated days and not
+#  the timeindex of the edisgo object. At the moment this would result into
+#  wrong results if the timeindex of the edisgo object is not continuously
+#  (e.g. 2 weeks of the year)
 def charging_strategy(
-        edisgo_obj, strategy="dumb", timestamp_share_threshold=0.2, minimum_charging_capacity_factor=0.1):
+    edisgo_obj,
+    strategy="dumb",
+    timestamp_share_threshold=0.2,
+    minimum_charging_capacity_factor=0.1,
+):
     """
     Calculates the timeseries per charging park if parking times are given.
 
@@ -65,30 +108,41 @@ def charging_strategy(
     ----------
     edisgo_obj : :class:`~.EDisGo`
     strategy : str
-        The charging strategy. Default "dumb". Only "private" charging processes at "home"
-        or at "work" can be flexibilized. "Public" charging processes will always be "dumb".
-        For now the following charging strategies are valid:
-            "dumb": The cars are charged directly after arrival with the maximum possible
-            charging capacity.
-            "reduced": The cars are charged directly after arrival with the minimum possible
-            charging capacity. The minimum possible charging capacity is determined by the
-            parking time and the minimum_charging_capacity_factor.
-            "residual": The cars are charged when the residual load in the MV grid is at it's
-            lowest (high generation and low consumption). Charging processes with a low
-            flexibility band are given priority.
+        The charging strategy. Default "dumb". Only "private" charging
+        processes at "home" or at "work" can be flexibilized. "Public" charging
+        processes will always be "dumb". For now the following charging
+        strategies are valid:
+            "dumb": The cars are charged directly after arrival with the
+            maximum possible charging capacity.
+            "reduced": The cars are charged directly after arrival with the
+            minimum possible charging capacity. The minimum possible charging
+            capacity is determined by the parking time and the
+            minimum_charging_capacity_factor.
+            "residual": The cars are charged when the residual load in the MV
+            grid is at it's lowest (high generation and low consumption).
+            Charging processes with a low flexibility band are given priority.
     timestamp_share_threshold : float
-        Percental threshold of the time required at a time step for charging the vehicle.
-        If the time requirement is below this limit, then the charging process is not mapped
-        into the time series. If, however, it is above this limit, the time step is mapped
-        to 100% into the time series. This prevents differences between the charging strategies
-        and creates a compromise between the simultaneity of charging processes and an
+        Percental threshold of the time required at a time step for charging
+        the vehicle. If the time requirement is below this limit, then the
+        charging process is not mapped into the time series. If, however, it is
+        above this limit, the time step is mapped to 100% into the time series.
+        This prevents differences between the charging strategies and creates a
+        compromise between the simultaneity of charging processes and an
         artificial increase in the charging demand. Default 0.2
     minimum_charging_capacity_factor : float
-        Technical percental minimum charging capacity per charging point. Default 0.1
+        Technical percental minimum charging capacity per charging point.
+        Default 0.1
 
     """
+
     def harmonize_charging_processes_df(
-            df, len_ts, timestamp_share_threshold, strategy=None, minimum_charging_capacity_factor=0.1, eta_cp=1.0):
+        df,
+        len_ts,
+        timestamp_share_threshold,
+        strategy=None,
+        minimum_charging_capacity_factor=0.1,
+        eta_cp=1.0,
+    ):
         """
         Harmonizes the charging processes to prevent differences in the energy
         demand per charging strategy.
@@ -110,45 +164,65 @@ def charging_strategy(
 
         """
         # FIXME: SimBEV has a MATLAB legacy and at the moment 1 is eDisGos 0
-        df = df.assign(park_start=df.park_start-1)
+        df = df.assign(park_start=df.park_start - 1)
 
-        # FIXME: This should become obsolete in the future when SimBEV is bugfixed
-        # drop rows that have a park start higher than simulated days
+        # FIXME: This should become obsolete in the future when SimBEV is
+        #  bugfixed drop rows that have a park start higher than simulated days
         df = df.loc[df.park_start <= len_ts]
 
         # calculate the minimum time taken the fulfill the charging demand
-        minimum_charging_time = df.chargingdemand/df.netto_charging_capacity \
-                                * 60/edisgo_obj.electromobility.stepsize
+        minimum_charging_time = (
+            df.chargingdemand
+            / df.netto_charging_capacity
+            * 60
+            / edisgo_obj.electromobility.stepsize
+        )
 
-        # calculate in which time steps the last time step needed to fulfill the
-        # charging demand is considered in the timeseries
+        # calculate in which time steps the last time step needed to fulfill
+        # the charging demand is considered in the timeseries
         mask = (minimum_charging_time % 1) >= timestamp_share_threshold
 
         minimum_charging_time.loc[mask] = minimum_charging_time.apply(np.ceil)
 
-        minimum_charging_time.loc[~mask] = minimum_charging_time.apply(np.floor)
+        minimum_charging_time.loc[~mask] = minimum_charging_time.apply(
+            np.floor)
 
         # recalculate the charging demand from the charging capacity
         # and the minimum charging time
         # Calculate the grid sided charging capacity in MVA
         df = df.assign(
             minimum_charging_time=minimum_charging_time.astype(np.uint16),
-            harmonized_chargingdemand=minimum_charging_time * df.netto_charging_capacity * edisgo_obj.electromobility.stepsize / 60,
-            netto_charging_capacity_mva=df.netto_charging_capacity.divide(10**3 * eta_cp),  # kW --> MW
+            harmonized_chargingdemand=minimum_charging_time
+            * df.netto_charging_capacity
+            * edisgo_obj.electromobility.stepsize
+            / 60,
+            netto_charging_capacity_mva=df.netto_charging_capacity.divide(
+                10 ** 3 * eta_cp
+            ),  # kW --> MW
         )
 
         if strategy == "reduced":
             parking_time = df.park_end - df.park_start
 
-            # calculate the maximum needed charging time with the minimum charging capacity
-            maximum_needed_charging_time = df.harmonized_chargingdemand /\
-                                           (minimum_charging_capacity_factor * df.netto_charging_capacity)\
-                                           * 60/edisgo_obj.electromobility.stepsize
+            # calculate the maximum needed charging time with the minimum
+            # charging capacity
+            maximum_needed_charging_time = (
+                df.harmonized_chargingdemand
+                / (
+                    minimum_charging_capacity_factor *
+                    df.netto_charging_capacity
+                )
+                * 60
+                / edisgo_obj.electromobility.stepsize
+            )
 
-            maximum_needed_charging_time = maximum_needed_charging_time.apply(np.floor).astype(np.uint16)
+            maximum_needed_charging_time = maximum_needed_charging_time.apply(
+                np.floor
+            ).astype(np.uint16)
 
-            # when the parking time is less than the maximum needed charging time, the total charging time
-            # equates the parking time and the charging capacity is recalculated accordingly
+            # when the parking time is less than the maximum needed charging
+            # time, the total charging time equates the parking time and the
+            # charging capacity is recalculated accordingly
             mask = parking_time <= maximum_needed_charging_time
 
             df = df.assign(
@@ -158,25 +232,30 @@ def charging_strategy(
 
             df.loc[mask, "reduced_charging_time"] = parking_time.loc[mask]
 
-            df.loc[~mask, "reduced_charging_time"] = maximum_needed_charging_time.loc[~mask]
+            df.loc[~mask, "reduced_charging_time"] = \
+                maximum_needed_charging_time.loc[~mask]
 
-            df.reduced_charging_capacity = df.harmonized_chargingdemand / df.reduced_charging_time \
-                                           * 60/edisgo_obj.electromobility.stepsize
+            df.reduced_charging_capacity = (
+                df.harmonized_chargingdemand
+                / df.reduced_charging_time
+                * 60
+                / edisgo_obj.electromobility.stepsize
+            )
 
             df = df.assign(
-                reduced_charging_capacity_mva=df.reduced_charging_capacity.divide(10**3 * eta_cp),
+                reduced_charging_capacity_mva=
+                df.reduced_charging_capacity.divide(10 ** 3 * eta_cp)
             )
 
         elif strategy == "residual":
-            # the flex time/band is defined as the amount of time steps not needed to fulfill
-            # the charging demand in a parking process
+            # the flex time/band is defined as the amount of time steps not
+            # needed to fulfill the charging demand in a parking process
             parking_time = df.park_end - df.park_start
 
-            df = df.assign(
-                flex_time=parking_time - df.minimum_charging_time
-            )
+            df = df.assign(flex_time=parking_time - df.minimum_charging_time)
 
-            df = df.sort_values(by=["flex_time", "park_start"], ascending=[True, True])
+            df = df.sort_values(
+                by=["flex_time", "park_start"], ascending=[True, True])
 
         return df
 
@@ -193,12 +272,15 @@ def charging_strategy(
             New timeseries
 
         """
-        edisgo_obj.timeseries._charging_points_active_power.loc[:, edisgo_id] = \
-            ts.loc[edisgo_obj.timeseries.timeindex]
+        edisgo_obj.timeseries._charging_points_active_power.loc[
+            :, edisgo_id] = ts.loc[
+                edisgo_obj.timeseries.timeindex
+            ]
 
     # get integrated charging parks
     charging_parks = [
-        cp for cp in list(edisgo_obj.electromobility.potential_charging_parks)
+        cp
+        for cp in list(edisgo_obj.electromobility.potential_charging_parks)
         if cp.grid is not None
     ]
 
@@ -210,19 +292,30 @@ def charging_strategy(
 
     eta_cp = edisgo_obj.electromobility.eta_charging_points
 
-    len_ts = int(edisgo_obj.electromobility.simulated_days * 24 \
-                 * 60 / edisgo_obj.electromobility.stepsize)
+    len_ts = int(
+        edisgo_obj.electromobility.simulated_days
+        * 24
+        * 60
+        / edisgo_obj.electromobility.stepsize
+    )
 
     timeindex = pd.date_range(
-        edisgo_obj.timeseries.timeindex[0], periods=len_ts, freq=f"{edisgo_obj.electromobility.stepsize}min")
+        edisgo_obj.timeseries.timeindex[0],
+        periods=len_ts,
+        freq=f"{edisgo_obj.electromobility.stepsize}min",
+    )
 
-    edisgo_timedelta = edisgo_obj.timeseries.timeindex[1] - edisgo_obj.timeseries.timeindex[0]
+    edisgo_timedelta = (
+        edisgo_obj.timeseries.timeindex[1] - edisgo_obj.timeseries.timeindex[0]
+    )
     simbev_timedelta = timeindex[1] - timeindex[0]
 
     assert edisgo_timedelta == simbev_timedelta, (
-        "The stepsize of the timeseries of the edisgo object differs from the simbev stepsize. " 
-        f"The edisgo timedelta is {edisgo_timedelta}, while the simbev timedelta is {simbev_timedelta}. " 
-        "Make sure to use a matching stepsize.")
+        "The stepsize of the timeseries of the edisgo object differs from the"
+        f"simbev stepsize. The edisgo timedelta is {edisgo_timedelta}, while"
+        f" the simbev timedelta is {simbev_timedelta}. Make sure to use a "
+        f"matching stepsize."
+    )
 
     if strategy == "dumb":
         # "dumb" charging
@@ -230,14 +323,22 @@ def charging_strategy(
             dummy_ts = np.zeros(len_ts)
 
             charging_processes_df = harmonize_charging_processes_df(
-                cp.charging_processes_df, len_ts, timestamp_share_threshold, strategy=strategy, eta_cp=eta_cp)
+                cp.charging_processes_df,
+                len_ts,
+                timestamp_share_threshold,
+                strategy=strategy,
+                eta_cp=eta_cp,
+            )
 
-            for _, row in charging_processes_df.iterrows():
-                dummy_ts[row["park_start"]:row["park_start"] + row["minimum_charging_time"]] += \
-                    row["netto_charging_capacity_mva"]
+            for _, start, stop, cap in charging_processes_df[
+                RELEVANT_CHARGING_STRATEGIES_COLUMNS["dumb"]
+            ].itertuples():
+                dummy_ts[start:start + stop] += cap
 
             _overwrite_timeseries(
-                edisgo_obj, cp.edisgo_id, pd.Series(data=dummy_ts, index=timeindex))
+                edisgo_obj, cp.edisgo_id, pd.Series(
+                    data=dummy_ts, index=timeindex)
+            )
 
     elif strategy == "reduced":
         # "reduced" charging
@@ -245,31 +346,52 @@ def charging_strategy(
             dummy_ts = np.zeros(len_ts)
 
             charging_processes_df = harmonize_charging_processes_df(
-                cp.charging_processes_df, len_ts, timestamp_share_threshold, strategy=strategy,
-                minimum_charging_capacity_factor=minimum_charging_capacity_factor, eta_cp=eta_cp)
+                cp.charging_processes_df,
+                len_ts,
+                timestamp_share_threshold,
+                strategy=strategy,
+                minimum_charging_capacity_factor=
+                minimum_charging_capacity_factor,
+                eta_cp=eta_cp,
+            )
 
-            for _, row in charging_processes_df.iterrows():
-                if row["use_case"] == "public":
+            for (
+                _, use_case, start, stop_dumb, cap_dumb, stop_reduced,
+                cap_reduced
+            ) in charging_processes_df[
+                RELEVANT_CHARGING_STRATEGIES_COLUMNS["reduced"]
+            ].itertuples():
+                if use_case == "public":
                     # if the charging process takes place in a "public" setting
                     # the charging is "dumb"
-                    dummy_ts[row["park_start"]:row["park_start"] + row["minimum_charging_time"]] += \
-                        row["netto_charging_capacity_mva"]
+                    dummy_ts[start:start + stop_dumb] += cap_dumb
                 else:
-                    dummy_ts[row["park_start"]:row["park_start"] + row["reduced_charging_time"]] += \
-                        row["reduced_charging_capacity_mva"]
+                    dummy_ts[start:start + stop_reduced] += cap_reduced
 
             _overwrite_timeseries(
-                edisgo_obj, cp.edisgo_id, pd.Series(data=dummy_ts, index=timeindex))
+                edisgo_obj, cp.edisgo_id, pd.Series(
+                    data=dummy_ts, index=timeindex)
+            )
 
     elif strategy == "residual":
         # "residual" charging
         # only use charging processes from integrated charging parks
-        charging_processes_df = edisgo_obj.electromobility.charging_processes_df[
-            edisgo_obj.electromobility.charging_processes_df.charging_park_id.isin(
-                edisgo_obj.electromobility.integrated_charging_parks_df.index)]
+        charging_processes_df = edisgo_obj.electromobility.\
+            charging_processes_df[
+                edisgo_obj.electromobility.charging_processes_df.
+                charging_park_id.isin(
+                    edisgo_obj.electromobility.integrated_charging_parks_df.
+                    index
+                )
+            ]
 
         charging_processes_df = harmonize_charging_processes_df(
-                charging_processes_df, len_ts, timestamp_share_threshold, strategy=strategy, eta_cp=eta_cp)
+            charging_processes_df,
+            len_ts,
+            timestamp_share_threshold,
+            strategy=strategy,
+            eta_cp=eta_cp,
+        )
 
         # get residual load
         init_residual_load = edisgo_obj.timeseries.residual_load
@@ -281,77 +403,88 @@ def charging_strategy(
         else:
             while len(init_residual_load) < len_residual_load:
                 len_rl = len(init_residual_load)
-                len_append = min(len_rl, len_residual_load-len_rl)
+                len_append = min(len_rl, len_residual_load - len_rl)
 
                 s_append = init_residual_load.iloc[:len_append]
 
                 init_residual_load = init_residual_load.append(
-                    s_append, ignore_index=True)
+                    s_append, ignore_index=True
+                )
 
         init_residual_load = init_residual_load.to_numpy()
 
         timeindex_residual = pd.date_range(
-            edisgo_obj.timeseries.timeindex[0], periods=len(init_residual_load),
-            freq=f"{edisgo_obj.electromobility.stepsize}min")
+            edisgo_obj.timeseries.timeindex[0],
+            periods=len(init_residual_load),
+            freq=f"{edisgo_obj.electromobility.stepsize}min",
+        )
 
         dummy_ts = pd.DataFrame(
-            data=0., columns=[_.id for _ in charging_parks], index=timeindex_residual)
+            data=0.0, columns=[_.id for _ in charging_parks],
+            index=timeindex_residual
+        )
 
         # determine which charging processes can be flexibilized
         dumb_charging_processes_df = charging_processes_df.loc[
-            (charging_processes_df.use_case == "public") |
-            (charging_processes_df.flex_time == 0)
+            (charging_processes_df.use_case == "public")
+            | (charging_processes_df.flex_time == 0)
         ]
 
         flex_charging_processes_df = charging_processes_df.loc[
-            ~charging_processes_df.index.isin(dumb_charging_processes_df.index)]
+            ~charging_processes_df.index.isin(dumb_charging_processes_df.index)
+        ]
 
         # perform dumb charging processes and respect them in the residual load
-        for _, row in dumb_charging_processes_df.iterrows():
+        for _, cp_id, start, stop, cap in dumb_charging_processes_df[
+            RELEVANT_CHARGING_STRATEGIES_COLUMNS["residual_dumb"]
+        ].itertuples():
             try:
-                dummy_ts.loc[:, row["charging_park_id"]].iloc[
-                    row["park_start"]:row["park_start"] + row["minimum_charging_time"]
-                ] += row["netto_charging_capacity_mva"]
-            except:
-                park_start = row["park_start"]
-                park_end = row["park_start"] + row["minimum_charging_time"]
+                dummy_ts.loc[:, cp_id].iloc[start:start + stop] += cap
+
+            except Exception:
                 maximum_ts = len(dummy_ts)
                 logger.warning(
-                    (f"Charging process with index {_} could not be respected. "
-                     f"The park start is at timestep {park_start} and the park end is "
-                     f"at timestep {park_end}, while the timeseries consists of {maximum_ts}"
-                     "timesteps."))
+                    (
+                        f"Charging process with index {_} could not be "
+                        "respected. The park start is at timestep "
+                        f"{start} and the park end is at timestep "
+                        f"{start + stop}, while the timeseries consists of"
+                        f" {maximum_ts} timesteps."
+                    )
+                )
 
-        residual_load = init_residual_load + dummy_ts.sum(
-            axis=1).to_numpy()
+        residual_load = init_residual_load + dummy_ts.sum(axis=1).to_numpy()
 
-        for _, row in flex_charging_processes_df.iterrows():
-            flex_band = residual_load[row["park_start"]:row["park_end"]]
+        for _, start, end, k, cp_id, cap in flex_charging_processes_df[
+            RELEVANT_CHARGING_STRATEGIES_COLUMNS["residual"]
+        ].itertuples():
+            flex_band = residual_load[start:end]
 
-            k = row["minimum_charging_time"]
-
-            # get k time steps with the lowest residual load in the parking time
-            idx = np.argpartition(flex_band, k)[:k] + row["park_start"]
+            # get k time steps with the lowest residual load in the parking
+            # time
+            idx = np.argpartition(flex_band, k)[:k] + start
 
             try:
-                dummy_ts[row["charging_park_id"]].iloc[idx] += \
-                    row["netto_charging_capacity_mva"]
+                dummy_ts[cp_id].iloc[idx] += cap
 
-                residual_load[idx] += row["netto_charging_capacity_mva"]
+                residual_load[idx] += cap
 
-            except:
+            except Exception:
                 logger.warning(
-                    (f"Charging process with index {_} could not be respected. "
-                     f"The charging takes place within the timesteps {idx}, "
-                     f"while the timeseries consists of {maximum_ts} timesteps."))
+                    (
+                        f"Charging process with index {_} could not be "
+                        f"respected. The charging takes place within the "
+                        f"timesteps {idx}, while the timeseries consists of "
+                        f"{maximum_ts} timesteps."
+                    )
+                )
 
         for count, col in enumerate(dummy_ts.columns):
             _overwrite_timeseries(
-                edisgo_obj, charging_parks[count].edisgo_id, dummy_ts[col])
+                edisgo_obj, charging_parks[count].edisgo_id, dummy_ts[col]
+            )
 
     else:
-        raise ValueError(
-            f"Strategy {strategy} has not yet been implemented.")
+        raise ValueError(f"Strategy {strategy} has not yet been implemented.")
 
-    logging.info(
-        f"Charging strategy {strategy} completed.")
+    logging.info(f"Charging strategy {strategy} completed.")
