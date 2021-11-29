@@ -1277,13 +1277,15 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     edisgo.results.pfa_v_mag_pu_seed = pd.concat(
         [edisgo.results.pfa_v_mag_pu_seed,
          pypsa.buses_t["v_mag_pu"].loc[timesteps, :]
-         ]
+         ],
+        sort=False
     ).reset_index().drop_duplicates(
         subset='index', keep='last').set_index('index').fillna(1)
 
     edisgo.results.pfa_v_ang_seed = pd.concat(
         [edisgo.results.pfa_v_ang_seed,
          pypsa.buses_t["v_ang"].loc[timesteps, :]
-         ]
+         ],
+        sort=False
     ).reset_index().drop_duplicates(
         subset='index', keep='last').set_index('index').fillna(0)
