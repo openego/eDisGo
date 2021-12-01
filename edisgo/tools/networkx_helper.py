@@ -1,11 +1,14 @@
-from networkx import OrderedGraph
+from networkx import Graph
 
 
 def translate_df_to_graph(buses_df, lines_df, transformers_df=None):
-    graph = OrderedGraph()
+    graph = Graph()
 
-    buses = buses_df.index
-    # add nodes
+    buses = []
+    for bus_name, bus in buses_df.iterrows():
+        pos = (bus.x, bus.y)
+        buses.append((bus_name, {'pos': pos}))
+        # add nodes
     graph.add_nodes_from(buses)
     # add branches
     branches = []
