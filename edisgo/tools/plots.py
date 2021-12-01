@@ -2,6 +2,9 @@ import os
 import pandas as pd
 import numpy as np
 import logging
+import plotly.graph_objects as go
+import matplotlib
+
 from matplotlib import pyplot as plt
 from pypsa import Network as PyPSANetwork
 
@@ -890,3 +893,403 @@ def mv_grid_topology(
     else:
         plt.savefig(filename)
         plt.close()
+
+
+def draw_plotly(edisgo_obj,
+                G,
+                mode_lines='relative_loading',
+                mode_nodes='voltage_deviation',
+                grid=False):
+    # initialization
+    transformer_4326_to_3035 = Transformer.from_crs("EPSG:4326", "EPSG:3035", always_xy=True)
+    data = []
+    node_list = list(G.nodes())
+    if grid == False:
+        x_root = 0
+        y_root = 0
+    elif grid == None:
+        node_root = edisgo_obj.topology.transformers_hvmv_df.bus1[0]
+        x_root, y_root = G.nodes[node_root]['pos']
+    else:
+        node_root = grid.transformers_df.bus1[0]
+        x_root, y_root = G.nodes[node_root]['pos']
+
+    x_root, y_root = transformer_4326_to_3035.transform(x_root, y_root)
+
+    # line text
+    middle_node_x = []
+    middle_node_y = []
+    middle_node_text = []
+    for edge in G.edges(data=True):
+        x0, y0 = G.nodes[edge[0]]['pos']
+        x1, y1 = G.nodes[edge[1]]['pos']
+        x0, y0 = transformer_4326_to_3035.transform(x0, y0)
+        x1, y1 = transformer_4326_to_3035.transform(x1, y1)
+        middle_node_x.append((x0 - x_root + x1 - x_root) / 2)
+        middle_node_y.append((y0 - y_root + y1 - y_root) / 2)
+
+        text = str(edge[2]['branch_name'])
+        try:
+            loading = edisgo_obj.results.s_res.T.loc[edge[2]['branch_name']].max()  # * 1000
+            text = text + '<br>' + 'Loading = ' + str(loading)
+        except KeyError:
+            text = text
+
+        try:
+            line_parameters = edisgo_obj.topology.lines_df.loc[edge[2]['branch_name'], :]
+            for index, value in line_parameters.iteritems():
+                text = text + '<br>' + str(index) + ' = ' + str(value)
+        except KeyError:
+            text = text
+
+        middle_node_text.append(text)
+
+    middle_node_trace = go.Scatter(
+        x=middle_node_x,
+        y=middle_node_y,
+        text=middle_node_text,
+        mode='markers',
+        hoverinfo='text',
+        marker=dict(
+            opacity=0.0,
+            size=10,
+            color='white'
+        )
+    )
+    data.append(middle_node_trace)
+
+    # line plot
+    import matplotlib.cm as cm
+    import matplotlib as matplotlib
+
+    if mode_lines == 'loading':
+        s_res_view = edisgo_obj.results.s_res.T.index.isin(
+            [edge[2]['branch_name'] for edge in G.edges.data()])
+        color_min = edisgo_obj.results.s_res.T.loc[s_res_view].T.min().max()
+        color_max = edisgo_obj.results.s_res.T.loc[s_res_view].T.max().max()
+    elif mode_lines == 'relative_loading':
+        color_min = 0
+        color_max = 1
+
+    if mode_lines != 'reinforce':
+        def color_map_color(value, cmap_name='coolwarm', vmin=color_min, vmax=color_max):
+            norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
+            cmap = cm.get_cmap(cmap_name)
+            rgb = cmap(norm(abs(value)))[:3]
+            color = matplotlib.colors.rgb2hex(rgb)
+            return color
+
+    for edge in G.edges(data=True):
+        edge_x = []
+        edge_y = []
+
+        x0, y0 = G.nodes[edge[0]]['pos']
+        x1, y1 = G.nodes[edge[1]]['pos']
+        x0, y0 = transformer_4326_to_3035.transform(x0, y0)
+        x1, y1 = transformer_4326_to_3035.transform(x1, y1)
+        edge_x.append(x0 - x_root)
+        edge_x.append(x1 - x_root)
+        edge_x.append(None)
+        edge_y.append(y0 - y_root)
+        edge_y.append(y1 - y_root)
+        edge_y.append(None)
+
+        if mode_lines == 'reinforce':
+            if edisgo_obj.results.grid_expansion_costs.index.isin([edge[2]['branch_name']]).any():
+                color = 'lightgreen'
+            else:
+                color = 'black'
+        elif mode_lines == 'loading':
+            loading = edisgo_obj.results.s_res.T.loc[edge[2]['branch_name']].max()
+            color = color_map_color(loading)
+        elif mode_lines == 'relative_loading':
+            loading = edisgo_obj.results.s_res.T.loc[edge[2]['branch_name']].max()
+            s_nom = edisgo_obj.topology.lines_df.s_nom.loc[edge[2]['branch_name']]
+            color = color_map_color(loading / s_nom)
+            if loading > s_nom:
+                color = 'green'
+        else:
+            color = 'black'
+
+        edge_trace = go.Scatter(
+            x=edge_x,
+            y=edge_y,
+            hoverinfo='none',
+            opacity=0.4,
+            mode='lines',
+            line=dict(
+                width=2,
+                color=color
+            )
+        )
+        data.append(edge_trace)
+
+    # node plot
+    node_x = []
+    node_y = []
+
+    for node in G.nodes():
+        x, y = G.nodes[node]['pos']
+        x, y = transformer_4326_to_3035.transform(x, y)
+        node_x.append(x - x_root)
+        node_y.append(y - y_root)
+
+    colors = []
+    if mode_nodes == 'adjecencies':
+        for node, adjacencies in enumerate(G.adjacency()):
+            colors.append(len(adjacencies[1]))
+        colorscale = 'YlGnBu'
+        cmid = None
+    elif mode_nodes == 'voltage_deviation':
+        for node in G.nodes():
+            v_min = edisgo_obj.results.v_res.T.loc[node].min()
+            v_max = edisgo_obj.results.v_res.T.loc[node].max()
+            if abs(v_min - 1) > abs(v_max - 1):
+                color = v_min - 1
+            else:
+                color = v_max - 1
+            colors.append(color)
+        colorscale = 'RdBu'
+        cmid = 0
+    else:
+        for node, adjacencies in enumerate(G.adjacency()):
+            colors.append(len(adjacencies[1]))
+        colorscale = 'YlGnBu'
+        cmid = None
+
+    node_text = []
+    for node in G.nodes():
+        text = str(node)
+        try:
+            peak_load = edisgo_obj.topology.loads_df.loc[
+                edisgo_obj.topology.loads_df.bus == node].peak_load.sum()
+            text = text + '<br>' + 'peak_load = ' + str(peak_load)
+            p_nom = edisgo_obj.topology.generators_df.loc[
+                edisgo_obj.topology.generators_df.bus == node].p_nom.sum()
+            text = text + '<br>' + 'p_nom_gen = ' + str(p_nom)
+            v_min = edisgo_obj.results.v_res.T.loc[node].min()
+            v_max = edisgo_obj.results.v_res.T.loc[node].max()
+            if abs(v_min - 1) > abs(v_max - 1):
+                text = text + '<br>' + 'v = ' + str(v_min)
+            else:
+                text = text + '<br>' + 'v = ' + str(v_max)
+        except KeyError:
+            text = text
+        try:
+            text = text + '<br>' + 'Neighbors = ' + str(G.degree(node))
+        except KeyError:
+            text = text
+        try:
+            node_parameters = edisgo_obj.topology.buses_df.loc[node]
+            for index, value in node_parameters.iteritems():
+                text = text + '<br>' + str(index) + ' = ' + str(value)
+        except KeyError:
+            text = text
+        node_text.append(text)
+
+    node_trace = go.Scatter(
+        x=node_x,
+        y=node_y,
+        mode='markers',
+        hoverinfo='text',
+        text=node_text,
+        marker=dict(
+            showscale=True,
+            colorscale=colorscale,
+            reversescale=True,
+            color=colors,
+            size=8,
+            cmid=cmid,
+            line_width=2,
+            colorbar=dict(
+                thickness=15,
+                title='Node Connections',
+                xanchor='left',
+                titleside='right'
+            )
+        )
+    )
+
+    data.append(node_trace)
+
+    fig = go.Figure(data=data,
+                    layout=go.Layout(
+                        height=500,
+                        titlefont_size=16,
+                        showlegend=False,
+                        hovermode='closest',
+                        margin=dict(b=20, l=5, r=5, t=40),
+                        xaxis=dict(showgrid=True, zeroline=True, showticklabels=True),
+                        yaxis=dict(showgrid=True, zeroline=True, showticklabels=True))
+                    )
+
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    # fig.update_yaxes(tick0=0, dtick=1000)
+    # fig.update_xaxes(tick0=0, dtick=1000)
+    return fig
+
+
+def dash_plot(**kwargs):
+    from jupyter_dash import JupyterDash
+    from dash import dcc
+    from dash import html
+    from dash.dependencies import Input, Output
+
+    def chosen_graph(edisgo_obj, selected_grid):
+        try:
+            lv_grid_id = lv_grid_name_list.index(selected_grid)
+        except ValueError:
+            lv_grid_id = False
+
+        mv_grid = edisgo_obj.topology.mv_grid
+        lv_grid = list(edisgo_obj.topology.mv_grid.lv_grids)[lv_grid_id]
+
+        if selected_grid == 'Grid':
+            G = edisgo_obj.to_graph()
+            grid = None
+        elif selected_grid == str(mv_grid):
+            G = mv_grid.graph
+            grid = mv_grid
+        elif selected_grid.split('_')[0] == 'LVGrid':
+            G = lv_grid.graph
+            grid = lv_grid
+        else:
+            raise ValueError('False Grid')
+
+        return G, grid
+
+    edisgo_obj = list(kwargs.values())[0]
+    mv_grid = edisgo_obj.topology.mv_grid
+    lv_grids = list(edisgo_obj.topology.mv_grid.lv_grids)
+
+    edisgo_name_list = list(kwargs.keys())
+
+    lv_grid_name_list = list(map(str, lv_grids))
+
+    grid_name_list = ['Grid', str(mv_grid)] + lv_grid_name_list
+
+    line_plot_modes = ['reinforce', 'loading', 'relative_loading']
+    node_plot_modes = ['adjecencies', 'voltage_deviation']
+
+    app = JupyterDash(__name__)
+    if len(kwargs) > 1:
+        app.layout = html.Div([
+            html.Div([
+                dcc.Dropdown(
+                    id='dropdown_edisgo_object_1',
+                    options=[{'label': i, 'value': i} for i in edisgo_name_list],
+                    value=edisgo_name_list[0]
+                ),
+                dcc.Dropdown(
+                    id='dropdown_edisgo_object_2',
+                    options=[{'label': i, 'value': i} for i in edisgo_name_list],
+                    value=edisgo_name_list[1]
+                ),
+                dcc.Dropdown(
+                    id='dropdown_grid',
+                    options=[{'label': i, 'value': i} for i in grid_name_list],
+                    value=grid_name_list[1]
+                ),
+                dcc.Dropdown(
+                    id='dropdown_line_plot_mode',
+                    options=[{'label': i, 'value': i} for i in line_plot_modes],
+                    value=line_plot_modes[0]
+                ),
+                dcc.Dropdown(
+                    id='dropdown_node_plot_mode',
+                    options=[{'label': i, 'value': i} for i in node_plot_modes],
+                    value=node_plot_modes[0]
+                )
+            ]),
+            html.Div([
+                html.Div([
+                    dcc.Graph(id='fig_1')
+                ], style={'flex': 'auto'}),
+                html.Div([
+                    dcc.Graph(id='fig_2')
+                ], style={'flex': 'auto'})
+            ], style={'display': 'flex', 'flex-direction': 'row'})
+        ], style={'display': 'flex', 'flex-direction': 'column'})
+
+        @app.callback(
+            Output('fig_1', 'figure'),
+            Output('fig_2', 'figure'),
+            Input('dropdown_grid', 'value'),
+            Input('dropdown_edisgo_object_1', 'value'),
+            Input('dropdown_edisgo_object_2', 'value'),
+            Input('dropdown_line_plot_mode', 'value'),
+            Input('dropdown_node_plot_mode', 'value'))
+        def update_figure(selected_grid,
+                          selected_edisgo_object_1,
+                          selected_edisgo_object_2,
+                          selected_line_plot_mode,
+                          selected_node_plot_mode):
+
+            edisgo_obj = kwargs[selected_edisgo_object_1]
+            (G, grid) = chosen_graph(edisgo_obj, selected_grid)
+            fig_1 = draw_plotly(
+                edisgo_obj,
+                G,
+                selected_line_plot_mode,
+                selected_node_plot_mode,
+                grid=grid
+            )
+
+            edisgo_obj = kwargs[selected_edisgo_object_2]
+            (G, grid) = chosen_graph(edisgo_obj, selected_grid)
+            fig_2 = draw_plotly(
+                edisgo_obj,
+                G,
+                selected_line_plot_mode,
+                selected_node_plot_mode,
+                grid=grid
+            )
+
+            return fig_1, fig_2
+    else:
+        app.layout = html.Div([
+            html.Div([
+                dcc.Dropdown(
+                    id='dropdown_grid',
+                    options=[{'label': i, 'value': i} for i in grid_name_list],
+                    value=grid_name_list[1]
+                ),
+                dcc.Dropdown(
+                    id='dropdown_line_plot_mode',
+                    options=[{'label': i, 'value': i} for i in line_plot_modes],
+                    value=line_plot_modes[0]
+                ),
+                dcc.Dropdown(
+                    id='dropdown_node_plot_mode',
+                    options=[{'label': i, 'value': i} for i in node_plot_modes],
+                    value=node_plot_modes[0]
+                )
+            ]),
+            html.Div([
+                html.Div([
+                    dcc.Graph(id='fig')
+                ], style={'flex': 'auto'})
+            ], style={'display': 'flex', 'flex-direction': 'row'})
+        ], style={'display': 'flex', 'flex-direction': 'column'})
+
+        @app.callback(
+            Output('fig', 'figure'),
+            Input('dropdown_grid', 'value'),
+            Input('dropdown_line_plot_mode', 'value'),
+            Input('dropdown_node_plot_mode', 'value'))
+        def update_figure(selected_grid,
+                          selected_line_plot_mode,
+                          selected_node_plot_mode):
+
+            edisgo_obj = list(kwargs.values())[0]
+            (G, grid) = chosen_graph(edisgo_obj, selected_grid)
+            fig = draw_plotly(
+                edisgo_obj,
+                G,
+                selected_line_plot_mode,
+                selected_node_plot_mode,
+                grid=grid
+            )
+            return fig
+
+    return app
