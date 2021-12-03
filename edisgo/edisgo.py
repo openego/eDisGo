@@ -1486,24 +1486,10 @@ def import_edisgo_from_pickle(filename, path=''):
     return pickle.load(open(os.path.join(abs_path, filename), "rb"))
 
 
-def import_edisgo_from_files(edisgo_path="", import_topology=True,
-                             import_timeseries=False, import_results=False,
-                             from_zip_archive=False, **kwargs):
-    """
+def import_edisgo_from_files(
+        edisgo_path="", import_topology=True, import_timeseries=False,
+        import_results=False, from_zip_archive=False, **kwargs):
 
-    Parameters
-    ----------
-    edisgo_path
-    import_topology
-    import_timeseries
-    import_results
-    from_zip_archive
-    kwargs
-
-    Returns
-    -------
-
-    """
     edisgo_obj = EDisGo(import_timeseries=False)
 
     if str(edisgo_path).endswith(".zip"):
@@ -1520,10 +1506,10 @@ def import_edisgo_from_files(edisgo_path="", import_topology=True,
                 directory, edisgo_obj, from_zip_archive)
         else:
             logging.warning(
-                "No topology directory found. Topology not imported.")
+                "No topology data found. Topology not imported.")
 
     if import_timeseries:
-	dtype = kwargs.get("dtype", None)
+        dtype = kwargs.get("dtype", None)
 
         if not from_zip_archive:
             directory = kwargs.get(
@@ -1534,11 +1520,11 @@ def import_edisgo_from_files(edisgo_path="", import_topology=True,
             edisgo_obj.timeseries.from_csv(directory, dtype=dtype)
         else:
             logging.warning(
-                "No timeseries directory found. Timeseries not imported.")
+                "No timeseries data found. Timeseries not imported.")
 
     if import_results:
         parameters = kwargs.get("parameters", None)
-	dtype = kwargs.get("dtype", None)
+        dtype = kwargs.get("dtype", None)
 
         if not from_zip_archive:
             directory = kwargs.get(
@@ -1547,7 +1533,8 @@ def import_edisgo_from_files(edisgo_path="", import_topology=True,
         if os.path.exists(directory):
             edisgo_obj.results.from_csv(directory, parameters, dtype=dtype)
         else:
-            logging.warning("No results directory found. Results not imported.")
+            logging.warning(
+                "No results data found. Results not imported.")
 
     if kwargs.get("import_residual_load", False):
         if not from_zip_archive:
@@ -1563,5 +1550,8 @@ def import_edisgo_from_files(edisgo_path="", import_topology=True,
 
             edisgo_obj.timeseries._residual_load = \
                 residual_load["residual_load"]
+        else:
+            logging.warning(
+                "No residual load data found. Timeseries not imported.")
 
     return edisgo_obj
