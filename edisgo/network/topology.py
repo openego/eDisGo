@@ -2550,24 +2550,25 @@ class Topology:
                     index_col=0
                 )
 
-            # import network data
-            network = pd.read_csv(os.path.join(directory, "network.csv")).\
-                rename(columns={
-                    "mv_grid_district_geom": "geom",
-                    "mv_grid_district_population": "population",
-                })
-
         else:
             with ZipFile(directory) as zip:
 
                 namelist = zip.namelist()
 
+                attrs = _get_matching_dict_of_attributes_and_file_names()
 
+                attrs = {k: f"topology/{v}.csv" for k, v in attrs.items()}
 
                 print("break")
 
                 breakpoint()
 
+        # import network data
+        network = pd.read_csv(os.path.join(directory, "network.csv")). \
+            rename(columns={
+            "mv_grid_district_geom": "geom",
+            "mv_grid_district_population": "population",
+        })
 
         self.grid_district = {
             "population": network.population[0],
@@ -2615,14 +2616,15 @@ def _get_matching_dict_of_attributes_and_file_names():
 
     """
     topo_dict = {
-        "v_res": "voltages_pu",
-        "i_res": "currents",
-        "pfa_p": "active_powers",
-        "pfa_q": "reactive_powers",
-        "s_res": "apparent_powers",
-        "grid_losses": "grid_losses",
-        "pfa_slack": "slack_results",
-        "pfa_v_mag_pu_seed": "pfa_v_mag_pu_seed",
-        "pfa_v_ang_seed": "pfa_v_ang_seed",
+        "buses_df": "buses",
+        "lines_df": "lines",
+        "loads_df": "loads",
+        "generators_df": "generators",
+        "charging_points_df": "charging_points",
+        "storage_units_df": "storage_units",
+        "transformers_df": "transformers",
+        "transformers_hvmv_df": "transformers_hvmv",
+        "switches_df": "switches",
     }
+
     return topo_dict
