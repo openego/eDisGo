@@ -8,6 +8,9 @@ import networkx as nx
 from sklearn import preprocessing
 
 import edisgo
+
+from pathlib import Path
+from zipfile import ZipFile
 from edisgo.network.grids import MVGrid, LVGrid
 from edisgo.network.components import Switch
 from edisgo.tools.tools import (
@@ -2538,99 +2541,142 @@ class Topology:
             axis=1,
         ).to_csv(os.path.join(directory, "network.csv"))
 
-    def from_csv(self, directory, edisgo_obj):
+    def from_csv(self, data_path, edisgo_obj, from_zip_archive=False):
         """
         Restores topology from csv files.
 
         Parameters
         ----------
-        directory : str
-            Path to topology csv files.
+        data_path : str
+            Path to topology csv files or zip archive.
+        edisgo_obj : :class:`~.EDisGo`
+        from_zip_archive : bool
+            Set True if data is archived in a zip archive. Default: False
 
         """
-        self.buses_df = pd.read_csv(
-            os.path.join(directory, "buses.csv"),
-            index_col=0
-        )
-        self.lines_df = pd.read_csv(
-            os.path.join(directory, "lines.csv"),
-            index_col=0
-        )
-        if os.path.exists(os.path.join(directory, "loads.csv")):
-            self.loads_df = pd.read_csv(
-                os.path.join(directory, "loads.csv"),
-                index_col=0
-            )
-        if os.path.exists(os.path.join(directory, "generators.csv")):
-            generators_df = pd.read_csv(
-                os.path.join(directory, "generators.csv"),
-                index_col=0
-            )
-            # delete slack if it was included
-            slack = generators_df.loc[
-                generators_df.control == "Slack"].index
-            self.generators_df = generators_df.drop(slack)
-        if os.path.exists(os.path.join(directory, "charging_points.csv")):
-            self.charging_points_df = pd.read_csv(
-                os.path.join(directory, "charging_points.csv"),
-                index_col=0
-            )
-        if os.path.exists(os.path.join(directory, "storage_units.csv")):
-            self.storage_units_df = pd.read_csv(
-                os.path.join(directory, "storage_units.csv"),
-                index_col=0
-            )
-        if os.path.exists(os.path.join(directory, "transformers.csv")):
-            self.transformers_df = pd.read_csv(
-                os.path.join(directory, "transformers.csv"),
-                index_col=0
-            ).rename(
-                columns={"x": "x_pu",
-                         "r": "r_pu"}
-            )
-        if os.path.exists(os.path.join(directory, "transformers_hvmv.csv")):
-            self.transformers_hvmv_df = pd.read_csv(
-                os.path.join(directory, "transformers_hvmv.csv"),
-                index_col=0
-            ).rename(
-                columns={"x": "x_pu",
-                         "r": "r_pu"}
-            )
-        if os.path.exists(os.path.join(directory, "switches.csv")):
-            self.switches_df = pd.read_csv(
-                os.path.join(directory, "switches.csv"),
-                index_col=0
-            )
+        # get all attributes and corresponding file names
+        attrs = _get_matching_dict_of_attributes_and_file_names()
 
-        # import network data
-        network = pd.read_csv(os.path.join(directory, "network.csv")).\
-            rename(columns={
-                "mv_grid_district_geom": "geom",
-                "mv_grid_district_population": "population",
-            })
-        self.grid_district = {
-            "population": network.population[0],
-            "geom": wkt_loads(network.geom[0]),
-            "srid": network.srid[0],
-        }
-        # set up medium voltage grid
-        self.mv_grid = MVGrid(
-            edisgo_obj=edisgo_obj,
-            id=network['name'].values[0]
-        )
-        self._grids = {}
-        self._grids[
-            str(self.mv_grid)
-        ] = self.mv_grid
-        # set up low voltage grids
-        lv_grid_ids = set(self.buses_df.lv_grid_id.dropna())
-        for lv_grid_id in lv_grid_ids:
-            lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=edisgo_obj)
-            self.mv_grid._lv_grids.append(lv_grid)
-            self._grids[str(lv_grid)] = lv_grid
+        if from_zip_archive:
+            # read from zip archive
+            # setup ZipFile Class
+            zip = ZipFile(data_path)
 
-        # Check data integrity
+            # get all directories and files within zip archive
+            files = zip.namelist()
+
+            # add directory to attributes to match zip archive
+            attrs = {k: f"topology/{v}" for k, v in attrs.items()}
+
+        else:
+            # read from directory
+            # check files within the directory
+            files = os.listdir(data_path)
+
+        attrs_to_read = {k: v for k, v in attrs.items()
+                         if v in files}
+
+        for attr, file in attrs_to_read.items():
+            if from_zip_archive:
+                # open zip file to make it readable for pandas
+                with zip.open(file) as file:
+                    df = pd.read_csv(file, index_col=0)
+            else:
+                path = os.path.join(data_path, file)
+                df = pd.read_csv(path, index_col=0)
+
+            if attr == "generators_df":
+                # delete slack if it was included
+                df = df.loc[df.control != "Slack"]
+            elif "transformers" in attr:
+                # rename columns to match convention
+                df = df.rename(
+                    columns={"x": "x_pu",
+                             "r": "r_pu"})
+            elif attr == "network":
+                # rename columns to match convention
+                df = df.rename(columns={
+                    "mv_grid_district_geom": "geom",
+                    "mv_grid_district_population": "population"})
+
+                # set grid district information
+                setattr(
+                    self, "grid_district",
+                    {
+                        "population": df.population.iat[0],
+                        "geom": wkt_loads(df.geom.iat[0]),
+                        "srid": df.srid.iat[0],
+                    }
+                )
+
+                # set up medium voltage grid
+                setattr(
+                    self, "mv_grid",
+                    MVGrid(
+                        edisgo_obj=edisgo_obj,
+                        id=df.index[0]
+                    )
+                )
+
+                self._grids = {}
+                self._grids[
+                    str(self.mv_grid)
+                ] = self.mv_grid
+
+                # set up low voltage grids
+                lv_grid_ids = self.buses_df.lv_grid_id.dropna().\
+                    sort_values().unique()
+
+                for lv_grid_id in lv_grid_ids:
+                    lv_grid = LVGrid(id=lv_grid_id,
+                                     edisgo_obj=edisgo_obj)
+
+                    self.mv_grid._lv_grids.append(lv_grid)
+                    self._grids[str(lv_grid)] = lv_grid
+
+                continue
+
+            # set attribute
+            setattr(
+                self, attr, df)
+
+        if from_zip_archive:
+            # make sure to destroy ZipFile Class to close any open connections
+            zip.close()
+
+        # validate import
         _validate_ding0_grid_import(edisgo_obj.topology)
 
     def __repr__(self):
         return "Network topology " + str(self.id)
+
+
+def _get_matching_dict_of_attributes_and_file_names():
+    """
+    Helper function that matches attribute names to file names.
+
+    Is used in function :attr:`~.network.topology.Topology.from_csv` to set
+    which attribute of :class:`~.network.topology.Topology` is saved under
+    which file name.
+
+    Returns
+    -------
+    dict
+        Dictionary matching attribute names and file names with attribute
+        names as keys and corresponding file names as values.
+
+    """
+    topo_dict = {
+        "buses_df": "buses.csv",
+        "lines_df": "lines.csv",
+        "loads_df": "loads.csv",
+        "generators_df": "generators.csv",
+        "charging_points_df": "charging_points.csv",
+        "storage_units_df": "storage_units.csv",
+        "transformers_df": "transformers.csv",
+        "transformers_hvmv_df": "transformers_hvmv.csv",
+        "switches_df": "switches.csv",
+        "network": "network.csv"
+    }
+
+    return topo_dict
