@@ -1025,7 +1025,8 @@ class Results:
             ]
             writer.writerows(rows)
 
-    def from_csv(self, directory, parameters=None):
+    def from_csv(
+            self, directory, parameters=None, dtype=None):
         """
         Restores results from csv files.
 
@@ -1044,6 +1045,8 @@ class Results:
             values must be lists with attributes to restore or None to restore
             all available attributes. See function docstring `parameters`
             parameter in :func:`~to_csv` for more information.
+        dtype : str, optional
+            Numerical data type for data to be loaded from csv. E.g. "float32"
 
         """
         # restore measures
@@ -1071,6 +1074,15 @@ class Results:
                 "results from csv. `parameters` must be a dictionary. "
                 "See docstring for more information.")
 
+        # set attributes to set dtype for if dtype is not None
+        if dtype is not None:
+            attr_to_reduce = [
+                "pfa_p", "pfa_q",
+                "v_res", "i_res",
+                "grid_losses"]
+        else:
+            attr_to_reduce = []
+
         # import power flow results
         if 'powerflow_results' in list(parameters.keys()) and \
                 os.path.isdir(os.path.join(directory, 'powerflow_results')):
@@ -1080,12 +1092,19 @@ class Results:
                             'powerflow_results',
                             '{}.csv'.format(power_flow_results_dict[attr])
                         )
+
                 if os.path.exists(path):
+                    if attr in attr_to_reduce:
+                        value = pd.read_csv(
+                            path, index_col=0, parse_dates=True, dtype=dtype)
+                    else:
+                        value = pd.read_csv(
+                            path, index_col=0, parse_dates=True)
+
                     setattr(
                         self,
                         attr,
-                        pd.read_csv(path, index_col=0, parse_dates=True)
-                    )
+                        value)
 
         # import grid expansion results
         if 'grid_expansion_results' in list(parameters.keys()) and \

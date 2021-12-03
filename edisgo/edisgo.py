@@ -1523,26 +1523,29 @@ def import_edisgo_from_files(edisgo_path="", import_topology=True,
                 "No topology directory found. Topology not imported.")
 
     if import_timeseries:
+	dtype = kwargs.get("dtype", None)
+
         if not from_zip_archive:
             directory = kwargs.get(
                 "timeseries_directory", os.path.join(
                     edisgo_path, "timeseries"))
 
         if os.path.exists(directory):
-            edisgo_obj.timeseries.from_csv(directory)
+            edisgo_obj.timeseries.from_csv(directory, dtype=dtype)
         else:
             logging.warning(
                 "No timeseries directory found. Timeseries not imported.")
 
     if import_results:
         parameters = kwargs.get("parameters", None)
+	dtype = kwargs.get("dtype", None)
 
         if not from_zip_archive:
             directory = kwargs.get(
                 "results_directory", os.path.join(edisgo_path, "results"))
 
         if os.path.exists(directory):
-            edisgo_obj.results.from_csv(directory, parameters)
+            edisgo_obj.results.from_csv(directory, parameters, dtype=dtype)
         else:
             logging.warning("No results directory found. Results not imported.")
 

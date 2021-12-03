@@ -471,7 +471,8 @@ class TimeSeries:
                     os.path.join(directory, "{}.csv".format(attr))
                 )
 
-    def from_csv(self, directory):
+    def from_csv(
+            self, directory, dtype=None):
         """
         Restores time series from csv files.
 
@@ -482,6 +483,8 @@ class TimeSeries:
         ----------
         directory : str
             Directory time series are saved in.
+        dtype : str, optional
+            Numerical data type for data to be loaded from csv. E.g. "float32"
 
         """
         timeindex = None
@@ -494,8 +497,9 @@ class TimeSeries:
                 setattr(
                     self,
                     attr,
-                    pd.read_csv(path, index_col=0, parse_dates=True)
-                )
+                    pd.read_csv(
+                        path, index_col=0, parse_dates=True, dtype=dtype))
+
                 if timeindex is None:
                     timeindex = getattr(
                         self,
