@@ -7,6 +7,9 @@ import warnings
 import networkx as nx
 
 import edisgo
+
+from pathlib import Path
+from zipfile import ZipFile
 from edisgo.network.grids import MVGrid, LVGrid
 from edisgo.network.components import Switch
 from edisgo.tools.tools import (
@@ -2482,7 +2485,7 @@ class Topology:
             axis=1,
         ).to_csv(os.path.join(directory, "network.csv"))
 
-    def from_csv(self, directory, edisgo_obj):
+    def from_csv(self, directory, edisgo_obj, from_zip_archive=False):
         """
         Restores topology from csv files.
 
@@ -2492,66 +2495,80 @@ class Topology:
             Path to topology csv files.
 
         """
-        self.buses_df = pd.read_csv(
-            os.path.join(directory, "buses.csv"),
-            index_col=0
-        )
-        self.lines_df = pd.read_csv(
-            os.path.join(directory, "lines.csv"),
-            index_col=0
-        )
-        if os.path.exists(os.path.join(directory, "loads.csv")):
-            self.loads_df = pd.read_csv(
-                os.path.join(directory, "loads.csv"),
+        if not from_zip_archive:
+            self.buses_df = pd.read_csv(
+                os.path.join(directory, "buses.csv"),
                 index_col=0
             )
-        if os.path.exists(os.path.join(directory, "generators.csv")):
-            generators_df = pd.read_csv(
-                os.path.join(directory, "generators.csv"),
+            self.lines_df = pd.read_csv(
+                os.path.join(directory, "lines.csv"),
                 index_col=0
             )
-            # delete slack if it was included
-            slack = generators_df.loc[
-                generators_df.control == "Slack"].index
-            self.generators_df = generators_df.drop(slack)
-        if os.path.exists(os.path.join(directory, "charging_points.csv")):
-            self.charging_points_df = pd.read_csv(
-                os.path.join(directory, "charging_points.csv"),
-                index_col=0
-            )
-        if os.path.exists(os.path.join(directory, "storage_units.csv")):
-            self.storage_units_df = pd.read_csv(
-                os.path.join(directory, "storage_units.csv"),
-                index_col=0
-            )
-        if os.path.exists(os.path.join(directory, "transformers.csv")):
-            self.transformers_df = pd.read_csv(
-                os.path.join(directory, "transformers.csv"),
-                index_col=0
-            ).rename(
-                columns={"x": "x_pu",
-                         "r": "r_pu"}
-            )
-        if os.path.exists(os.path.join(directory, "transformers_hvmv.csv")):
-            self.transformers_hvmv_df = pd.read_csv(
-                os.path.join(directory, "transformers_hvmv.csv"),
-                index_col=0
-            ).rename(
-                columns={"x": "x_pu",
-                         "r": "r_pu"}
-            )
-        if os.path.exists(os.path.join(directory, "switches.csv")):
-            self.switches_df = pd.read_csv(
-                os.path.join(directory, "switches.csv"),
-                index_col=0
-            )
+            if os.path.exists(os.path.join(directory, "loads.csv")):
+                self.loads_df = pd.read_csv(
+                    os.path.join(directory, "loads.csv"),
+                    index_col=0
+                )
+            if os.path.exists(os.path.join(directory, "generators.csv")):
+                generators_df = pd.read_csv(
+                    os.path.join(directory, "generators.csv"),
+                    index_col=0
+                )
+                # delete slack if it was included
+                slack = generators_df.loc[
+                    generators_df.control == "Slack"].index
+                self.generators_df = generators_df.drop(slack)
+            if os.path.exists(os.path.join(directory, "charging_points.csv")):
+                self.charging_points_df = pd.read_csv(
+                    os.path.join(directory, "charging_points.csv"),
+                    index_col=0
+                )
+            if os.path.exists(os.path.join(directory, "storage_units.csv")):
+                self.storage_units_df = pd.read_csv(
+                    os.path.join(directory, "storage_units.csv"),
+                    index_col=0
+                )
+            if os.path.exists(os.path.join(directory, "transformers.csv")):
+                self.transformers_df = pd.read_csv(
+                    os.path.join(directory, "transformers.csv"),
+                    index_col=0
+                ).rename(
+                    columns={"x": "x_pu",
+                             "r": "r_pu"}
+                )
+            if os.path.exists(os.path.join(directory, "transformers_hvmv.csv")):
+                self.transformers_hvmv_df = pd.read_csv(
+                    os.path.join(directory, "transformers_hvmv.csv"),
+                    index_col=0
+                ).rename(
+                    columns={"x": "x_pu",
+                             "r": "r_pu"}
+                )
+            if os.path.exists(os.path.join(directory, "switches.csv")):
+                self.switches_df = pd.read_csv(
+                    os.path.join(directory, "switches.csv"),
+                    index_col=0
+                )
 
-        # import network data
-        network = pd.read_csv(os.path.join(directory, "network.csv")).\
-            rename(columns={
-                "mv_grid_district_geom": "geom",
-                "mv_grid_district_population": "population",
-            })
+            # import network data
+            network = pd.read_csv(os.path.join(directory, "network.csv")).\
+                rename(columns={
+                    "mv_grid_district_geom": "geom",
+                    "mv_grid_district_population": "population",
+                })
+
+        else:
+            with ZipFile(directory) as zip:
+
+                namelist = zip.namelist()
+
+
+
+                print("break")
+
+                breakpoint()
+
+
         self.grid_district = {
             "population": network.population[0],
             "geom": wkt_loads(network.geom[0]),
@@ -2578,3 +2595,34 @@ class Topology:
 
     def __repr__(self):
         return "Network topology " + str(self.id)
+
+
+def _get_matching_dict_of_attributes_and_file_names():
+    """
+    Helper function that matches attribute names to file names.
+
+    Is used in functions :attr:`~.network.results.Results.to_csv`
+    and :attr:`~.network.results.Results.from_csv` to set which attribute
+    of :class:`~.network.results.Results` is saved under which file name.
+
+    Returns
+    -------
+    tuple(dict, dict)
+        Dictionaries matching attribute names and file names with attribute
+        names as keys and corresponding file names as values. First dictionary
+        matches power flow result attributes and second dictionary grid
+        expansion result attributes.
+
+    """
+    topo_dict = {
+        "v_res": "voltages_pu",
+        "i_res": "currents",
+        "pfa_p": "active_powers",
+        "pfa_q": "reactive_powers",
+        "s_res": "apparent_powers",
+        "grid_losses": "grid_losses",
+        "pfa_slack": "slack_results",
+        "pfa_v_mag_pu_seed": "pfa_v_mag_pu_seed",
+        "pfa_v_ang_seed": "pfa_v_ang_seed",
+    }
+    return topo_dict

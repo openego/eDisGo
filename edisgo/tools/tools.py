@@ -488,3 +488,32 @@ def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
     return set(np.append(gpd.sjoin(
         geom_data, mv_geom_gdf, how="right", op='intersects').gid.unique(),
         edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique()))
+
+
+def get_directory_size(start_dir):
+    """
+    Walk over all files and sub-directories within a given directory and
+    calculate the sum of size of all files in the directory.
+    See: https://stackoverflow.com/a/1392549/13491957
+
+    Parameters
+    ----------
+    start_dir : str
+        Start path. Calculates the size of all files within the start path.
+
+    Returns
+    -------
+    int
+        Size of the directory.
+
+    """
+    total_size = 0
+
+    for dirpath, dirnames, filenames in os.walk(start_dir):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            # skip if it is symbolic link
+            if not os.path.islink(fp):
+                total_size += os.path.getsize(fp)
+
+    return total_size

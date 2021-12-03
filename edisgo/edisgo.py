@@ -1113,10 +1113,12 @@ class EDisGo:
         to_type : str, optional
             Data type to convert time series data to. This is a tradeoff
             between precision and memory. Default: "float32".
-        zip_directory : bool, optional
-            Save storage capacity by archiving the results in a zip archive.
-            The archiving takes place after the generation of the CSVs and
+        archive : bool, optional
+            Save storage capacity by archiving the results in an archive. The
+            archiving takes place after the generation of the CSVs and
             therefore temporarily the storage needs are higher. Default: False.
+        archive_type : str, optional
+            Set archive type. Default "zip"
 
         """
         os.makedirs(directory, exist_ok=True)
@@ -1141,9 +1143,21 @@ class EDisGo:
                 to_type=kwargs.get("to_type", "float32")
             )
 
-        if kwargs.get("zip_directory", False):
+        if kwargs.get("archive", False):
+            archive_type = kwargs.get("archive_type", "zip")
             shutil.make_archive(
-                directory + ".zip", 'zip', directory)
+                directory, archive_type, directory)
+            
+            dir_size = tools.get_directory_size(directory)
+            zip_size = os.path.getsize(directory + '.zip')
+            
+            reduction = round((1 - zip_size / dir_size) * 100, 1)
+            
+            logger.info(
+                f"Archived files in a {archive_type} archive and reduced"
+                f"storage needs by {reduction} %.")
+
+            shutil.rmtree(directory)
 
 
     def add_component(
@@ -1472,37 +1486,79 @@ def import_edisgo_from_pickle(filename, path=''):
     return pickle.load(open(os.path.join(abs_path, filename), "rb"))
 
 
-def import_edisgo_from_files(directory="", import_topology=True,
+def import_edisgo_from_files(edisgo_path="", import_topology=True,
                              import_timeseries=False, import_results=False,
-                             **kwargs):
+                             from_zip_archive=False, **kwargs):
+    """
+
+    Parameters
+    ----------
+    edisgo_path
+    import_topology
+    import_timeseries
+    import_results
+    from_zip_archive
+    kwargs
+
+    Returns
+    -------
+
+    """
     edisgo_obj = EDisGo(import_timeseries=False)
+
+    if str(edisgo_path).endswith(".zip"):
+        from_zip_archive = True
+        directory = edisgo_path
+
     if import_topology:
-        topology_dir = kwargs.get("topology_directory",
-                                  os.path.join(directory, "topology"))
-        if os.path.exists(topology_dir):
-            edisgo_obj.topology.from_csv(topology_dir, edisgo_obj)
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "topology_directory", os.path.join(edisgo_path, "topology"))
+
+        if os.path.exists(directory):
+            edisgo_obj.topology.from_csv(
+                directory, from_zip_archive, edisgo_obj)
         else:
             logging.warning(
-                'No topology directory found. Topology not imported.')
+                "No topology directory found. Topology not imported.")
+
     if import_timeseries:
-        if os.path.exists(os.path.join(directory, "timeseries")):
-            edisgo_obj.timeseries.from_csv(os.path.join(directory, "timeseries"))
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "timeseries_directory", os.path.join(
+                    edisgo_path, "timeseries"))
+
+        if os.path.exists(directory):
+            edisgo_obj.timeseries.from_csv(directory)
         else:
             logging.warning(
-                'No timeseries directory found. Timeseries not imported.')
+                "No timeseries directory found. Timeseries not imported.")
+
     if import_results:
-        parameters = kwargs.get('parameters', None)
-        if os.path.exists(os.path.join(directory, "results")):
-            edisgo_obj.results.from_csv(os.path.join(directory, "results"),
-                                        parameters)
+        parameters = kwargs.get("parameters", None)
+
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "results_directory", os.path.join(edisgo_path, "results"))
+
+        if os.path.exists(directory):
+            edisgo_obj.results.from_csv(directory, parameters)
         else:
-            logging.warning('No results directory found. Results not imported.')
-    if kwargs.get('import_residual_load', False):
-        if os.path.exists(
-                os.path.join(directory, 'time_series_sums.csv')):
+            logging.warning("No results directory found. Results not imported.")
+
+    if kwargs.get("import_residual_load", False):
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "residual_load_path",
+                os.path.join(edisgo_path, "time_series_sums.csv"))
+
+        if os.path.exists(directory):
             residual_load = pd.read_csv(
-                os.path.join(directory, 'time_series_sums.csv')).rename(
-                columns={'Unnamed: 0': 'timeindex'}).set_index('timeindex')['residual_load']
-            residual_load.index = pd.to_datetime(residual_load.index)
-            edisgo_obj.timeseries._residual_load = residual_load
+                directory, index_col=0, parse_dates=True)
+
+            residual_load.index.name = "timeindex"
+
+            edisgo_obj.timeseries._residual_load = \
+                residual_load["residual_load"]
+
     return edisgo_obj
