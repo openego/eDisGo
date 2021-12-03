@@ -1517,7 +1517,7 @@ def import_edisgo_from_files(edisgo_path="", import_topology=True,
 
         if os.path.exists(directory):
             edisgo_obj.topology.from_csv(
-                directory, from_zip_archive, edisgo_obj)
+                directory, edisgo_obj, from_zip_archive)
         else:
             logging.warning(
                 "No topology directory found. Topology not imported.")
