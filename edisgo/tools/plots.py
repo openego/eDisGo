@@ -3,12 +3,14 @@ import pandas as pd
 import numpy as np
 import logging
 import plotly.graph_objects as go
-import matplotlib
+from jupyter_dash import JupyterDash
+from dash import dcc
+from dash import html
+from dash.dependencies import Input, Output
 
 from matplotlib import pyplot as plt
 from pypsa import Network as PyPSANetwork
 
-from pyproj import Proj
 from pyproj import Transformer
 import matplotlib
 
@@ -900,10 +902,46 @@ def draw_plotly(edisgo_obj,
                 mode_lines='relative_loading',
                 mode_nodes='voltage_deviation',
                 grid=False):
+    """
+        Plot the graph and shows information of the grid
+
+        Parameters
+        ----------
+        edisgo_obj : :class:`~edisgo.EDisGo`
+            EDisGo object which contains data of the grid
+
+        G : :networkx:`Graph`
+            Transfer the graph of the grid to plot, the graph must contain the positions
+
+        mode_lines : :obj:`str`
+            Defines the color of the lines
+
+            * 'relative_loading'
+              - shows the line loading relative to the s_nom of the line
+            * 'loading'
+              - shows the loading
+            * 'reinforce'
+              - shows the reinforced lines in green
+
+        mode_nodes : :obj:`str`
+
+            * 'voltage_deviation'
+              - shows the deviation of the node voltage relative to 1 p.u.
+            * 'adjecencies'
+              - shows the the number of connections of the graph
+
+        grid : :class:`~.network.grids.Grid` or :obj:`False`
+
+            * :class:`~.network.grids.Grid`
+              - transfer the grid of the graph, to set the coordinate origin to the first bus of the grid
+            * :obj:`False`
+              - the coordinates are not modified
+
+        """
+
     # initialization
     transformer_4326_to_3035 = Transformer.from_crs("EPSG:4326", "EPSG:3035", always_xy=True)
     data = []
-    node_list = list(G.nodes())
     if grid == False:
         x_root = 0
         y_root = 0
@@ -1040,6 +1078,12 @@ def draw_plotly(edisgo_obj,
             colors.append(len(adjacencies[1]))
         colorscale = 'YlGnBu'
         cmid = None
+        colorbar = dict(
+            thickness=15,
+            title='Node Connections',
+            xanchor='left',
+            titleside='right'
+        )
     elif mode_nodes == 'voltage_deviation':
         for node in G.nodes():
             v_min = edisgo_obj.results.v_res.T.loc[node].min()
@@ -1051,11 +1095,12 @@ def draw_plotly(edisgo_obj,
             colors.append(color)
         colorscale = 'RdBu'
         cmid = 0
-    else:
-        for node, adjacencies in enumerate(G.adjacency()):
-            colors.append(len(adjacencies[1]))
-        colorscale = 'YlGnBu'
-        cmid = None
+        colorbar = dict(
+            thickness=15,
+            title='Node Voltage Deviation',
+            xanchor='left',
+            titleside='right'
+        )
 
     node_text = []
     for node in G.nodes():
@@ -1101,12 +1146,7 @@ def draw_plotly(edisgo_obj,
             size=8,
             cmid=cmid,
             line_width=2,
-            colorbar=dict(
-                thickness=15,
-                title='Node Connections',
-                xanchor='left',
-                titleside='right'
-            )
+            colorbar=colorbar
         )
     )
 
@@ -1130,10 +1170,20 @@ def draw_plotly(edisgo_obj,
 
 
 def dash_plot(**kwargs):
-    from jupyter_dash import JupyterDash
-    from dash import dcc
-    from dash import html
-    from dash.dependencies import Input, Output
+    """
+    Uses the :func:`draw_plotly` for interactive plotting.
+
+    Shows different behavior for different number of parameters.
+    One edisgo object creates one large plot.
+    Two or more edisgo objects create two adjacent plots,
+    the objects to be plotted are selected in the dropdown menu.
+
+    **Example run:**
+
+        | app = dash_plot(edisgo_obj_1=edisgo_obj_1,edisgo_obj_2=edisgo_obj_2,...)
+        | app.run_server(mode="inline",debug=True)
+
+    """
 
     def chosen_graph(edisgo_obj, selected_grid):
         try:
