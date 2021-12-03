@@ -1,5 +1,6 @@
 import os
 import logging
+import shutil
 import pandas as pd
 import pickle
 
@@ -1112,9 +1113,14 @@ class EDisGo:
         to_type : str, optional
             Data type to convert time series data to. This is a tradeoff
             between precision and memory. Default: "float32".
+        zip_directory : bool, optional
+            Save storage capacity by archiving the results in a zip archive.
+            The archiving takes place after the generation of the CSVs and
+            therefore temporarily the storage needs are higher. Default: False.
 
         """
         os.makedirs(directory, exist_ok=True)
+
         if save_results:
             self.results.to_csv(
                 os.path.join(directory, "results"),
@@ -1122,16 +1128,23 @@ class EDisGo:
                 to_type=kwargs.get("to_type", "float32"),
                 parameters=kwargs.get("parameters", None)
             )
+
         if save_topology:
             self.topology.to_csv(
                 os.path.join(directory, "topology")
             )
+
         if save_timeseries:
             self.timeseries.to_csv(
                 os.path.join(directory, "timeseries"),
                 reduce_memory=kwargs.get("reduce_memory", False),
                 to_type=kwargs.get("to_type", "float32")
             )
+
+        if kwargs.get("zip_directory", False):
+            shutil.make_archive(
+                directory + ".zip", 'zip', directory)
+
 
     def add_component(
         self,
