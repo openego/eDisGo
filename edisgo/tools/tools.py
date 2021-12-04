@@ -517,3 +517,28 @@ def get_directory_size(start_dir):
                 total_size += os.path.getsize(fp)
 
     return total_size
+
+
+def get_files_recursive(path, files=[]):
+    """
+    Recursive function to get all files in a given path and its sub directories
+
+    Parameters
+    ----------
+    path : str
+        Directory to start from.
+    files : list, optional
+        List of files to start with. Default: []
+
+    Returns
+    -------
+
+    """
+    for f in os.listdir(path):
+        file = os.path.join(path, f)
+        if os.path.isdir(file):
+            files = get_files_recursive(file, files)
+        else:
+            files.append(file)
+
+    return files

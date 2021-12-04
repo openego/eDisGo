@@ -3,6 +3,7 @@ import logging
 import pandas as pd
 import geopandas as gpd
 
+from zipfile import ZipFile
 from sklearn import preprocessing
 
 from edisgo.network.components import PotentialChargingParks
@@ -225,81 +226,84 @@ class Electromobility:
         """
         os.makedirs(directory, exist_ok=True)
 
-        if not self.charging_processes_df.empty:
-            self.charging_processes_df.to_csv(
-                os.path.join(directory, "charging_processes.csv")
-            )
+        attrs = _get_matching_dict_of_attributes_and_file_names()
 
-        if not self.grid_connections_gdf.empty:
-            self.grid_connections_gdf.to_csv(
-                os.path.join(directory, "grid_connections.csv")
-            )
+        for attr, file in attrs.items():
+            df = getattr(self, attr)
 
-        if not self.integrated_charging_parks_df.empty:
-            self.integrated_charging_parks_df.to_csv(
-                os.path.join(directory, "integrated_charging_parks.csv")
-            )
+            if not df.empty:
+                path = os.path.join(directory, file)
+                df.to_csv(path)
 
-        if not self.simbev_config_df.empty:
-            self.simbev_config_df.to_csv(os.path.join(
-                directory, "simbev_config.csv"))
-
-    def from_csv(self, directory, edisgo_obj):
+    def from_csv(
+            self, data_path, edisgo_obj, from_zip_archive=False):
         """
         Restores electromobility from csv files.
 
         Parameters
         ----------
-        edisgo_obj : :class:`~.EDisGo`
-        directory : str
+        data_path : str
             Path to electromobility csv files.
+        edisgo_obj : :class:`~.EDisGo`
+        from_zip_archive : bool, optional
+            Set True if data is archived in a zip archive. Default: False
 
         """
-        if os.path.exists(os.path.join(directory, "charging_processes.csv")):
-            self.charging_processes_df = pd.read_csv(
-                os.path.join(directory, "charging_processes.csv"), index_col=0
-            )
+        attrs = _get_matching_dict_of_attributes_and_file_names()
 
-        if os.path.exists(os.path.join(directory, "grid_connections.csv")):
-            epsg = edisgo_obj.topology.grid_district["srid"]
+        if from_zip_archive:
+            # read from zip archive
+            # setup ZipFile Class
+            zip = ZipFile(data_path)
 
-            grid_connections_df = pd.read_csv(
-                os.path.join(directory, "grid_connections.csv"), index_col=0
-            )
+            # get all directories and files within zip archive
+            files = zip.namelist()
 
-            grid_connections_df = grid_connections_df.assign(
-                geometry=gpd.GeoSeries.from_wkt(
-                    grid_connections_df["geometry"])
-            )
+            # add directory and .csv to files to match zip archive
+            attrs = {k: f"electromobility/{v}" for k, v in attrs.items()}
 
-            try:
-                self.grid_connections_gdf = gpd.GeoDataFrame(
-                    grid_connections_df,
-                    geometry="geometry",
-                    crs={"init": f"epsg:{epsg}"},
-                )
-            except Exception:
-                logging.warning(
-                    f"""Grid connections could not be loaded with EPSG {epsg}.
-                    Trying with EPSG 4326 as fallback."""
-                )
+        else:
+            # read from directory
+            # check files within the directory
+            files = os.listdir(data_path)
 
-                self.grid_connections_gdf = gpd.GeoDataFrame(
-                    grid_connections_df, geometry="geometry",
-                    crs={"init": "epsg:4326"}
-                )
+        attrs_to_read = {k: v for k, v in attrs.items() if v in files}
 
-        if os.path.exists(os.path.join(
-                directory, "integrated_charging_parks.csv")):
-            self.integrated_charging_parks_df = pd.read_csv(
-                os.path.join(directory, "integrated_charging_parks.csv"),
-                index_col=0
-            )
+        for attr, file in attrs_to_read.items():
+            if from_zip_archive:
+                # open zip file to make it readable for pandas
+                with zip.open(file) as f:
+                    df = pd.read_csv(
+                        f, index_col=0)
+            else:
+                path = os.path.join(data_path, file)
+                df = pd.read_csv(
+                    path, index_col=0)
 
-        if os.path.exists(os.path.join(directory, "simbev_config.csv")):
-            self.simbev_config_df = pd.read_csv(
-                os.path.join(directory, "simbev_config.csv"), index_col=0
-            )
+            if attr == "grid_connections_gdf":
+                epsg = edisgo_obj.topology.grid_district["srid"]
+
+                df = df.assign(
+                    geometry=gpd.GeoSeries.from_wkt(df["geometry"]))
+
+                try:
+                    df = gpd.GeoDataFrame(
+                        df, geometry="geometry", crs={"init": f"epsg:{epsg}"})
+
+                except Exception as _:
+                    logging.warning(
+                        f"Grid connections could not be loaded with "
+                        f"EPSG {epsg}. Trying with EPSG 4326 as fallback.")
+
+                    df = gpd.GeoDataFrame(
+                        df, geometry="geometry", crs={"init": "epsg:4326"})
+
+            setattr(
+                self, attr, df)
+
+        if from_zip_archive:
+            # make sure to destroy ZipFile Class to close any open connections
+            zip.close()
 
     @property
     def _potential_charging_parks_df(self):
@@ -357,3 +361,28 @@ class Electromobility:
             return potential_charging_parks_df
         except Exception:
             return pd.DataFrame(columns=COLUMNS["potential_charging_parks_df"])
+
+
+def _get_matching_dict_of_attributes_and_file_names():
+    """
+    Helper function to specify which Electromobility attributes to save and
+    restore and maps them to the file name.
+
+    Is used in functions
+    :attr:`~.network.electromobility.Electromobility.from_csv`.
+
+    Returns
+    -------
+    dict
+        Dict of Electromobility attributes to save and restore as keys and
+        and matching files as values.
+
+    """
+    emob_dict = {
+        "charging_processes_df": "charging_processes.csv",
+        "grid_connections_gdf": "grid_connections.csv",
+        "integrated_charging_parks_df": "integrated_charging_parks.csv",
+        "simbev_config_df": "simbev_config.csv",
+    }
+
+    return emob_dict

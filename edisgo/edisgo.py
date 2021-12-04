@@ -1080,9 +1080,9 @@ class EDisGo:
     def save(
         self,
         directory,
-        save_results=True,
         save_topology=True,
         save_timeseries=True,
+        save_results=True,
         save_electromobility=True,
         **kwargs
     ):
@@ -1096,10 +1096,6 @@ class EDisGo:
         ----------
         directory : str
             Main directory to save EDisGo object to.
-        save_results : bool, optional
-            Indicates whether to save :class:`~.network.results.Results`
-            object. Per default it is saved. See
-            :attr:`~.network.results.Results.to_csv` for more information.
         save_topology : bool, optional
             Indicates whether to save :class:`~.network.topology.Topology`.
             Per default it is saved. See
@@ -1109,6 +1105,10 @@ class EDisGo:
             Per default it is saved. See
             :attr:`~.network.timeseries.Timeseries.to_csv` for more
             information.
+        save_results : bool, optional
+            Indicates whether to save :class:`~.network.results.Results`
+            object. Per default it is saved. See
+            :attr:`~.network.results.Results.to_csv` for more information.
         save_electromobility : bool, optional
             Indicates whether to save :class:`~.network.electromobility.Electromobility`.
             Per default it is saved. See
@@ -1136,17 +1136,12 @@ class EDisGo:
             therefore temporarily the storage needs are higher. Default: False.
         archive_type : str, optional
             Set archive type. Default "zip"
+        drop_unarchived : bool, optional
+            Drop the unarchived data if parameter archive is set to True.
+            Default: True.
 
         """
         os.makedirs(directory, exist_ok=True)
-
-        if save_results:
-            self.results.to_csv(
-                os.path.join(directory, "results"),
-                reduce_memory=kwargs.get("reduce_memory", False),
-                to_type=kwargs.get("to_type", "float32"),
-                parameters=kwargs.get("parameters", None)
-            )
 
         if save_topology:
             self.topology.to_csv(
@@ -1158,6 +1153,14 @@ class EDisGo:
                 os.path.join(directory, "timeseries"),
                 reduce_memory=kwargs.get("reduce_memory", False),
                 to_type=kwargs.get("to_type", "float32")
+            )
+
+        if save_results:
+            self.results.to_csv(
+                os.path.join(directory, "results"),
+                reduce_memory=kwargs.get("reduce_memory", False),
+                to_type=kwargs.get("to_type", "float32"),
+                parameters=kwargs.get("parameters", None)
             )
 
         if save_electromobility:
@@ -1172,13 +1175,17 @@ class EDisGo:
             dir_size = tools.get_directory_size(directory)
             zip_size = os.path.getsize(directory + '.zip')
             
-            reduction = round((1 - zip_size / dir_size) * 100, 1)
-            
-            logger.info(
-                f"Archived files in a {archive_type} archive and reduced"
-                f"storage needs by {reduction} %.")
+            reduction = (1 - zip_size / dir_size) * 100
 
-            shutil.rmtree(directory)
+            drop_unarchived = kwargs.get("drop_unarchived", True)
+            
+            if drop_unarchived:
+                shutil.rmtree(directory)
+
+            logger.info(
+                f"Archived files in a {archive_type} archive and reduced "
+                f"storage needs by {reduction:.2f} %. The unarchived files"
+                f" were dropped: {drop_unarchived}")
 
     def add_component(
         self,
@@ -1521,12 +1528,18 @@ def import_edisgo_from_pickle(filename, path=''):
 
 def import_edisgo_from_files(
         edisgo_path="", import_topology=True, import_timeseries=False,
-        import_results=False, import_electromobility=False, from_zip_archive=False, **kwargs):
+        import_results=False, import_electromobility=False,
+        from_zip_archive=False, **kwargs):
 
     edisgo_obj = EDisGo(import_timeseries=False)
 
-    if str(edisgo_path).endswith(".zip"):
+    if not from_zip_archive and str(edisgo_path).endswith(".zip"):
         from_zip_archive = True
+
+        logging.info(
+            "Given path is a zip archive. Setting 'from_zip_archive' to True.")
+
+    if from_zip_archive:
         directory = edisgo_path
 
     if import_topology:
@@ -1550,7 +1563,8 @@ def import_edisgo_from_files(
                     edisgo_path, "timeseries"))
 
         if os.path.exists(directory):
-            edisgo_obj.timeseries.from_csv(directory, dtype=dtype)
+            edisgo_obj.timeseries.from_csv(
+                directory, dtype=dtype, from_zip_archive=from_zip_archive)
         else:
             logging.warning(
                 "No timeseries data found. Timeseries not imported.")
@@ -1564,16 +1578,25 @@ def import_edisgo_from_files(
                 "results_directory", os.path.join(edisgo_path, "results"))
 
         if os.path.exists(directory):
-            edisgo_obj.results.from_csv(directory, parameters, dtype=dtype)
+            edisgo_obj.results.from_csv(
+                directory, parameters, dtype=dtype,
+                from_zip_archive=from_zip_archive)
         else:
             logging.warning(
                 "No results data found. Results not imported.")
 
     if import_electromobility:
-        if os.path.exists(os.path.join(directory, "electromobility")):
-            edisgo_obj.electromobility.from_csv(os.path.join(directory, "electromobility"), edisgo_obj)
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "electromobility_directory", os.path.join(
+                    edisgo_path, "electromobility"))
+
+        if os.path.exists(directory):
+            edisgo_obj.electromobility.from_csv(
+                directory, edisgo_obj, from_zip_archive=from_zip_archive)
         else:
-            logging.warning('No electromobility directory found. Electromobility not imported.')
+            logging.warning(
+                "No electromobility data found. Electromobility not imported.")
 
     if kwargs.get("import_residual_load", False):
         if not from_zip_archive:

@@ -4,6 +4,10 @@ import csv
 import pandas as pd
 import numpy as np
 
+from zipfile import ZipFile
+from edisgo.tools.tools import get_files_recursive
+
+
 logger = logging.getLogger("edisgo")
 
 
@@ -1023,7 +1027,8 @@ class Results:
             writer.writerows(rows)
 
     def from_csv(
-            self, directory, parameters=None, dtype=None):
+            self, data_path, parameters=None, dtype=None,
+            from_zip_archive=False):
         """
         Restores results from csv files.
 
@@ -1032,8 +1037,9 @@ class Results:
 
         Parameters
         ----------
-        directory : str
-            Main directory results are saved in.
+        data_path : str
+            Main data path results are saved in. Must be directory or zip
+            archive.
         parameters : None or dict, optional
             Specifies which results to restore. By default this is set to None,
             in which case all available results are restored.
@@ -1044,18 +1050,16 @@ class Results:
             parameter in :func:`~to_csv` for more information.
         dtype : str, optional
             Numerical data type for data to be loaded from csv. E.g. "float32"
+        from_zip_archive : bool, optional
+            Set True if data is archived in a zip archive. Default: False
 
         """
-        # restore measures
-        if os.path.exists(os.path.join(directory, "measures.csv")):
-            measures_df = pd.read_csv(
-                os.path.join(directory, 'measures.csv'),
-                index_col=0)
-            self._measures = list(measures_df.measure.values)
-
         # get dictionaries matching attribute names and file names
         power_flow_results_dict, grid_expansion_results_dict = \
             _get_matching_dict_of_attributes_and_file_names()
+
+        all_keys_dict = dict(power_flow_results_dict)
+        all_keys_dict.update(grid_expansion_results_dict)
 
         # if None, set to restore all attributes
         if parameters is None:
@@ -1071,6 +1075,52 @@ class Results:
                 "results from csv. `parameters` must be a dictionary. "
                 "See docstring for more information.")
 
+        if from_zip_archive:
+            # read from zip archive
+            # setup ZipFile Class
+            zip = ZipFile(data_path)
+
+            # get all directories and files within zip archive
+            files = zip.namelist()
+
+            # add directory and .csv to files to match zip archive
+            params = {}
+
+            # flatten attributes and files into one dict
+            for key, value in parameters.items():
+                for v in value:
+                    new_key = v
+                    new_value = "results/" + key + f"/{all_keys_dict[v]}.csv"
+
+                    params[new_key] = new_value
+
+            # append measures
+            params["measures"] = "results/measures.csv"
+
+        else:
+            # read from directory
+            # check files within the directory and sub directories
+            files = [
+                f.split("/results/")[-1]
+                for f in get_files_recursive(data_path)]
+
+            # add .csv to files to match directory structure
+            params = {}
+
+            # flatten attributes and files into one dict
+            for key, value in parameters.items():
+                for v in value:
+                    new_key = v
+                    new_value = key + f"/{all_keys_dict[v]}.csv"
+
+                    params[new_key] = new_value
+
+            # append measures
+            params["measures"] = "measures.csv"
+
+        attrs_to_read = {k: v for k, v in params.items()
+                         if v in files}
+
         # set attributes to set dtype for if dtype is not None
         if dtype is not None:
             attr_to_reduce = [
@@ -1080,45 +1130,28 @@ class Results:
         else:
             attr_to_reduce = []
 
-        # import power flow results
-        if 'powerflow_results' in list(parameters.keys()) and \
-                os.path.isdir(os.path.join(directory, 'powerflow_results')):
-            for attr in parameters["powerflow_results"]:
-                path = os.path.join(
-                            directory,
-                            'powerflow_results',
-                            '{}.csv'.format(power_flow_results_dict[attr])
-                        )
+        for attr, file in attrs_to_read.items():
+            if attr in attr_to_reduce:
+                dt = dtype
+            else:
+                dt = None
 
-                if os.path.exists(path):
-                    if attr in attr_to_reduce:
-                        value = pd.read_csv(
-                            path, index_col=0, parse_dates=True, dtype=dtype)
-                    else:
-                        value = pd.read_csv(
-                            path, index_col=0, parse_dates=True)
+            if from_zip_archive:
+                # open zip file to make it readable for pandas
+                with zip.open(file) as f:
+                    df = pd.read_csv(
+                        f, index_col=0, parse_dates=True, dtype=dt)
+            else:
+                path = os.path.join(data_path, file)
+                df = pd.read_csv(
+                    path, index_col=0, parse_dates=True, dtype=dt)
 
-                    setattr(
-                        self,
-                        attr,
-                        value)
+            setattr(
+                self, attr, df)
 
-        # import grid expansion results
-        if 'grid_expansion_results' in list(parameters.keys()) and \
-                os.path.isdir(
-                    os.path.join(directory, 'grid_expansion_results')):
-            for attr in parameters["grid_expansion_results"]:
-                path = os.path.join(
-                            directory,
-                            'grid_expansion_results',
-                            '{}.csv'.format(grid_expansion_results_dict[attr])
-                        )
-                if os.path.exists(path):
-                    setattr(
-                        self,
-                        attr,
-                        pd.read_csv(path, index_col=0)
-                    )
+        if from_zip_archive:
+            # make sure to destroy ZipFile Class to close any open connections
+            zip.close()
 
         # # import curtailment results
         # if 'curtailment_results' in parameters and os.path.isdir(

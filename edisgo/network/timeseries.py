@@ -4,6 +4,7 @@ import numpy as np
 import datetime
 import os
 
+from zipfile import ZipFile
 from workalendar.europe import Germany
 from demandlib import bdew as bdew, particular_profiles as profiles
 from edisgo.io.timeseries_import import import_feedin_timeseries
@@ -470,7 +471,7 @@ class TimeSeries:
                 )
 
     def from_csv(
-            self, directory, dtype=None):
+            self, data_path, dtype=None, from_zip_archive=False):
         """
         Restores time series from csv files.
 
@@ -479,32 +480,68 @@ class TimeSeries:
 
         Parameters
         ----------
-        directory : str
-            Directory time series are saved in.
+        data_path : str
+            Data path time series are saved in. Must be a directory or zip
+            archive.
         dtype : str, optional
-            Numerical data type for data to be loaded from csv. E.g. "float32"
+            Numerical data type for data to be loaded from csv. E.g. "float32".
+            Default: None.
+        from_zip_archive : bool, optional
+            Set True if data is archived in a zip archive. Default: False
 
         """
         timeindex = None
-        for attr in _get_attributes_to_save():
-            path = os.path.join(
-                directory,
-                '{}.csv'.format(attr)
-            )
-            if os.path.exists(path):
-                setattr(
-                    self,
-                    attr,
-                    pd.read_csv(
-                        path, index_col=0, parse_dates=True, dtype=dtype))
 
-                if timeindex is None:
-                    timeindex = getattr(
-                        self,
-                        "_{}".format(attr)
-                    ).index
+        # get all attributes
+        attrs = _get_attributes_to_save()
+
+        if from_zip_archive:
+            # read from zip archive
+            # setup ZipFile Class
+            zip = ZipFile(data_path)
+
+            # get all directories and files within zip archive
+            files = zip.namelist()
+
+            # add directory and .csv to files to match zip archive
+            attrs = {v: f"timeseries/{v}.csv" for v in attrs}
+
+        else:
+            # read from directory
+            # check files within the directory
+            files = os.listdir(data_path)
+
+            # add .csv to files to match directory structure
+            attrs = {v: f"{v}.csv" for v in attrs}
+
+        attrs_to_read = {k: v for k, v in attrs.items() if v in files}
+
+        for attr, file in attrs_to_read.items():
+            if from_zip_archive:
+                # open zip file to make it readable for pandas
+                with zip.open(file) as f:
+                    df = pd.read_csv(
+                        f, index_col=0, parse_dates=True, dtype=dtype)
+            else:
+                path = os.path.join(data_path, file)
+                df = pd.read_csv(
+                    path, index_col=0, parse_dates=True, dtype=dtype)
+
+            setattr(
+                self, attr, df)
+
+            if timeindex is None:
+                timeindex = getattr(
+                    self,
+                    f"_{attr}").index
+
+        if from_zip_archive:
+            # make sure to destroy ZipFile Class to close any open connections
+            zip.close()
+
         if timeindex is None:
             timeindex = pd.DatetimeIndex([])
+
         self._timeindex = timeindex
 
 

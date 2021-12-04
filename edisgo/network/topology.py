@@ -2579,8 +2579,8 @@ class Topology:
         for attr, file in attrs_to_read.items():
             if from_zip_archive:
                 # open zip file to make it readable for pandas
-                with zip.open(file) as file:
-                    df = pd.read_csv(file, index_col=0)
+                with zip.open(file) as f:
+                    df = pd.read_csv(f, index_col=0)
             else:
                 path = os.path.join(data_path, file)
                 df = pd.read_csv(path, index_col=0)
