@@ -107,6 +107,7 @@ class TestResults:
         self.results.measures = "test"
 
         cur_dir = os.getcwd()
+
         self.results.to_csv(cur_dir, save_seed=True)
 
         # reset self.results

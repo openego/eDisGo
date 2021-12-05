@@ -1101,7 +1101,7 @@ class Results:
             # read from directory
             # check files within the directory and sub directories
             files = [
-                f.split("/results/")[-1]
+                f.split(str(data_path) + "/")[-1]
                 for f in get_files_recursive(data_path)]
 
             # add .csv to files to match directory structure
@@ -1145,6 +1145,10 @@ class Results:
                 path = os.path.join(data_path, file)
                 df = pd.read_csv(
                     path, index_col=0, parse_dates=True, dtype=dt)
+
+            if attr == "measures":
+                self._measures = df.measure.tolist()
+                continue
 
             setattr(
                 self, attr, df)
