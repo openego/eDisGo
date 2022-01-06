@@ -390,9 +390,12 @@ def one_storage_per_feeder(
         )
         return
     else:
-        equipment_changes_reinforcement_init = grid_expansion_results_init.equipment_changes.loc[
-            grid_expansion_results_init.equipment_changes.iteration_step > 0
-        ]
+        equipment_changes_reinforcement_init = (
+            grid_expansion_results_init.equipment_changes.loc[
+                grid_expansion_results_init.equipment_changes.iteration_step
+                > 0
+            ]
+        )
         total_grid_expansion_costs = (
             grid_expansion_results_init.grid_expansion_costs.total_costs.sum()
         )
@@ -553,8 +556,8 @@ def one_storage_per_feeder(
                             )
 
                 else:
-                    number_parallel_lines_before = _estimate_new_number_of_lines(
-                        critical_lines_feeder
+                    number_parallel_lines_before = (
+                        _estimate_new_number_of_lines(critical_lines_feeder)
                     )
                     edisgo.analyze()
                     critical_lines_feeder_new = _critical_lines_feeder(

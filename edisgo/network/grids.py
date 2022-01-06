@@ -299,7 +299,7 @@ class Grid(ABC):
         return self.generators_df.groupby(["type"]).sum()["p_nom"]
 
     @property
-    def peak_load(self):
+    def p_nom(self):
         """
         Cumulative peak load of loads in the network in MW.
 
@@ -309,10 +309,10 @@ class Grid(ABC):
             Cumulative peak load of loads in the network in MW.
 
         """
-        return self.loads_df.peak_load.sum()
+        return self.loads_df.p_nom.sum()
 
     @property
-    def peak_load_per_sector(self):
+    def p_nom_per_sector(self):
         """
         Cumulative peak load of loads in the network per sector in MW.
 
@@ -322,7 +322,7 @@ class Grid(ABC):
             Cumulative peak load of loads in the network per sector in MW.
 
         """
-        return self.loads_df.groupby(["sector"]).sum()["peak_load"]
+        return self.loads_df.groupby(["sector"]).sum()["p_nom"]
 
     def __repr__(self):
         return "_".join([self.__class__.__name__, str(self.id)])
@@ -446,9 +446,14 @@ class LVGrid(Grid):
             )
         ]
 
-    def draw(self,
-             node_color="black", edge_color="black",
-             colorbar=False, labels=False, filename=None):
+    def draw(
+        self,
+        node_color="black",
+        edge_color="black",
+        colorbar=False,
+        labels=False,
+        filename=None,
+    ):
         """
         Draw LV network.
 
@@ -489,19 +494,24 @@ class LVGrid(Grid):
         # assign edge width + color and node size + color
         top = self.edisgo_obj.topology
         edge_width = [
-            top.get_line_connecting_buses(u, v).s_nom.sum() * 10 for
-            u, v in G.edges()]
+            top.get_line_connecting_buses(u, v).s_nom.sum() * 10
+            for u, v in G.edges()
+        ]
         if isinstance(edge_color, pd.Series):
             edge_color = [
-                edge_color.loc[
-                    top.get_line_connecting_buses(u, v).index[0]]
-                for u, v in G.edges()]
+                edge_color.loc[top.get_line_connecting_buses(u, v).index[0]]
+                for u, v in G.edges()
+            ]
             edge_color_is_sequence = True
         else:
             edge_color_is_sequence = False
 
-        node_size = [top.get_connected_components_from_bus(v)[
-                        "loads"].peak_load.sum() * 50000 + 10 for v in G]
+        node_size = [
+            top.get_connected_components_from_bus(v)["loads"].p_nom.sum()
+            * 50000
+            + 10
+            for v in G
+        ]
         if isinstance(node_color, pd.Series):
             node_color = [node_color.loc[v] for v in G]
             node_color_is_sequence = True
@@ -511,16 +521,14 @@ class LVGrid(Grid):
         # draw edges and nodes of the graph
         fig, ax = plt.subplots(figsize=(12, 12))
         cm_edges = nx.draw_networkx_edges(
-            G, pos,
+            G,
+            pos,
             width=edge_width,
             edge_color=edge_color,
-            edge_cmap=plt.cm.get_cmap("inferno_r")
+            edge_cmap=plt.cm.get_cmap("inferno_r"),
         )
         cm_nodes = nx.draw_networkx_nodes(
-            G, pos,
-            node_size=node_size,
-            node_color=node_color,
-            cmap="Blues"
+            G, pos, node_size=node_size, node_color=node_color, cmap="Blues"
         )
         if colorbar:
             if edge_color_is_sequence:
@@ -531,13 +539,15 @@ class LVGrid(Grid):
             # ToDo find nicer way to display bus names
             label_options = {"ec": "k", "fc": "white", "alpha": 0.7}
             nx.draw_networkx_labels(
-                G, pos, font_size=8, bbox=label_options,
-                horizontalalignment="right")
+                G,
+                pos,
+                font_size=8,
+                bbox=label_options,
+                horizontalalignment="right",
+            )
 
         if filename is None:
             plt.show()
         else:
-            plt.savefig(filename,
-                        dpi=150, bbox_inches='tight', pad_inches=0.1
-                        )
+            plt.savefig(filename, dpi=150, bbox_inches="tight", pad_inches=0.1)
             plt.close()

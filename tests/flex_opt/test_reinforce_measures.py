@@ -7,12 +7,11 @@ from edisgo.flex_opt import reinforce_measures
 
 
 class TestReinforceMeasures:
-
     @classmethod
     def setup_class(self):
         self.edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case"
+            worst_case_analysis="worst-case",
         )
         self.edisgo.analyze()
         self.timesteps = pd.date_range("1/1/1970", periods=2, freq="H")
@@ -30,8 +29,10 @@ class TestReinforceMeasures:
             },
             index=["LVGrid_1", "LVGrid_4"],
         )
-        transformer_changes = reinforce_measures.reinforce_mv_lv_station_overloading(
-            self.edisgo, crit_lv_stations
+        transformer_changes = (
+            reinforce_measures.reinforce_mv_lv_station_overloading(
+                self.edisgo, crit_lv_stations
+            )
         )
 
         # check transformer changes
@@ -92,8 +93,10 @@ class TestReinforceMeasures:
             {"s_missing": [19], "time_index": [self.timesteps[1]]},
             index=["MVGrid_1"],
         )
-        transformer_changes = reinforce_measures.reinforce_hv_mv_station_overloading(
-            self.edisgo, crit_mv_station
+        transformer_changes = (
+            reinforce_measures.reinforce_hv_mv_station_overloading(
+                self.edisgo, crit_mv_station
+            )
         )
         assert len(transformer_changes["added"]["MVGrid_1"]) == 1
         assert len(transformer_changes["removed"]) == 0
@@ -120,8 +123,10 @@ class TestReinforceMeasures:
             {"s_missing": [50], "time_index": [self.timesteps[1]]},
             index=["MVGrid_1"],
         )
-        transformer_changes = reinforce_measures.reinforce_hv_mv_station_overloading(
-            self.edisgo, crit_mv_station
+        transformer_changes = (
+            reinforce_measures.reinforce_hv_mv_station_overloading(
+                self.edisgo, crit_mv_station
+            )
         )
         assert len(transformer_changes["added"]["MVGrid_1"]) == 3
         assert len(transformer_changes["removed"]["MVGrid_1"]) == 1
@@ -150,8 +155,10 @@ class TestReinforceMeasures:
 
         trafos_pre = self.edisgo.topology.transformers_df
 
-        trafo_changes = reinforce_measures.reinforce_mv_lv_station_voltage_issues(
-            self.edisgo, crit_stations
+        trafo_changes = (
+            reinforce_measures.reinforce_mv_lv_station_voltage_issues(
+                self.edisgo, crit_stations
+            )
         )
 
         assert len(trafo_changes) == 1
@@ -403,27 +410,20 @@ class TestReinforceMeasures:
         # standard lines were added
         line = self.edisgo.topology.lines_df.loc["Line_10007"]
         assert line.type_info == "NA2XS2Y 3x1x185 RM/25"
+        assert np.isclose(line.r, 0.164 * line.length / 3)
         assert np.isclose(
-            line.r,
-            0.164 * line.length / 3)
-        assert np.isclose(
-            line.x,
-            0.38 * 2 * np.pi * 50 / 1e3 * line.length / 3)
-        assert np.isclose(
-            line.s_nom, 0.357 * 20 * np.sqrt(3) * 3)
+            line.x, 0.38 * 2 * np.pi * 50 / 1e3 * line.length / 3
+        )
+        assert np.isclose(line.s_nom, 0.357 * 20 * np.sqrt(3) * 3)
         assert line.num_parallel == 3
 
         line = self.edisgo.topology.lines_df.loc["Line_70000006"]
         assert line.type_info == "NAYY 4x1x150"
+        assert np.isclose(line.r, 0.206 * line.length / 3)
         assert np.isclose(
-            line.r,
-            0.206 * line.length / 3)
-        assert np.isclose(
-            line.x,
-            0.256 * 2 * np.pi * 50 / 1e3 * line.length / 3)
-        assert np.isclose(
-            line.s_nom,
-            0.275 * 0.4 * np.sqrt(3) * 3)
+            line.x, 0.256 * 2 * np.pi * 50 / 1e3 * line.length / 3
+        )
+        assert np.isclose(line.s_nom, 0.275 * 0.4 * np.sqrt(3) * 3)
         assert line.num_parallel == 3
 
         # check lines where a second parallel line of the same type is added
@@ -444,25 +444,16 @@ class TestReinforceMeasures:
         # check lines that were exchanged by parallel standard lines
         line = self.edisgo.topology.lines_df.loc["Line_10003"]
         assert line.type_info == "NA2XS2Y 3x1x185 RM/25"
+        assert np.isclose(line.r, 0.164 * line.length / 2)
         assert np.isclose(
-            line.r,
-            0.164 * line.length / 2)
-        assert np.isclose(
-            line.x,
-            0.38 * 2 * np.pi * 50 / 1e3 * line.length / 2)
-        assert np.isclose(
-            line.s_nom, 0.357 * 20 * np.sqrt(3) * 2)
+            line.x, 0.38 * 2 * np.pi * 50 / 1e3 * line.length / 2
+        )
+        assert np.isclose(line.s_nom, 0.357 * 20 * np.sqrt(3) * 2)
         assert line.num_parallel == 2
 
         line = self.edisgo.topology.lines_df.loc["Line_60000001"]
         assert line.type_info == "NAYY 4x1x150"
-        assert np.isclose(
-            line.r,
-            0.206 * line.length)
-        assert np.isclose(
-            line.x,
-            0.256 * 2 * np.pi * 50 / 1e3 * line.length)
-        assert np.isclose(
-            line.s_nom,
-            0.275 * 0.4 * np.sqrt(3))
+        assert np.isclose(line.r, 0.206 * line.length)
+        assert np.isclose(line.x, 0.256 * 2 * np.pi * 50 / 1e3 * line.length)
+        assert np.isclose(line.s_nom, 0.275 * 0.4 * np.sqrt(3))
         assert line.num_parallel == 1

@@ -274,13 +274,13 @@ class Load(Component):
         return self.topology.loads_df
 
     @property
-    def peak_load(self):
+    def p_nom(self):
         """
         Peak load in MW.
 
         Parameters
         -----------
-        peak_load : :obj:`float`
+        p_nom : :obj:`float`
             Peak load in MW.
 
         Returns
@@ -289,12 +289,11 @@ class Load(Component):
             Peak load in MW.
 
         """
-        return self.topology.loads_df.at[self.id, "peak_load"]
+        return self.topology.loads_df.at[self.id, "p_nom"]
 
-    @peak_load.setter
-    def peak_load(self, peak_load):
-        # ToDo: Maybe perform type check before setting it.
-        self.topology._loads_df.at[self.id, "peak_load"] = peak_load
+    @p_nom.setter
+    def p_nom(self, p_nom):
+        self.topology._loads_df.at[self.id, "p_nom"] = float(p_nom)
 
     @property
     def annual_consumption(self):
@@ -312,9 +311,7 @@ class Load(Component):
             Annual consumption of load in MWh.
 
         """
-        return self.topology.loads_df.at[
-            self.id, "annual_consumption"
-        ]
+        return self.topology.loads_df.at[self.id, "annual_consumption"]
 
     @annual_consumption.setter
     def annual_consumption(self, annual_consumption):
@@ -433,9 +430,7 @@ class Generator(Component):
     @nominal_power.setter
     def nominal_power(self, nominal_power):
         # ToDo: Maybe perform type check before setting it.
-        self.topology._generators_df.at[
-            self.id, "p_nom"
-        ] = nominal_power
+        self.topology._generators_df.at[self.id, "p_nom"] = nominal_power
 
     @property
     def type(self):
@@ -482,9 +477,7 @@ class Generator(Component):
 
     @subtype.setter
     def subtype(self, subtype):
-        self.topology._generators_df.at[
-            self.id, "subtype"
-        ] = subtype
+        self.topology._generators_df.at[self.id, "subtype"] = subtype
 
     @property
     def active_power_timeseries(self):
@@ -535,9 +528,7 @@ class Generator(Component):
             Weather cell ID of generator.
 
         """
-        return self.topology.generators_df.at[
-            self.id, "weather_cell_id"
-        ]
+        return self.topology.generators_df.at[self.id, "weather_cell_id"]
 
     @weather_cell_id.setter
     def weather_cell_id(self, weather_cell_id):
@@ -994,9 +985,7 @@ class Switch(BasicComponent):
             self._state = "open"
             col = self._get_bus_column(self.bus_closed)
             if col is not None:
-                self.topology.lines_df.at[
-                    self.branch, col
-                ] = self.bus_open
+                self.topology.lines_df.at[self.branch, col] = self.bus_open
             else:
                 raise AttributeError(
                     "Could not open switch {}. Specified branch {} of switch "
@@ -1014,9 +1003,7 @@ class Switch(BasicComponent):
             self._state = "closed"
             col = self._get_bus_column(self.bus_open)
             if col is not None:
-                self.topology.lines_df.at[
-                    self.branch, col
-                ] = self.bus_closed
+                self.topology.lines_df.at[self.branch, col] = self.bus_closed
             else:
                 raise AttributeError(
                     "Could not close switch {}. Specified branch {} of switch "

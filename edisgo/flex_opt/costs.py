@@ -8,9 +8,7 @@ if "READTHEDOCS" not in os.environ:
 from edisgo.tools.geo import proj2equidistant
 
 
-def grid_expansion_costs(
-    edisgo_obj, without_generator_import=False
-):
+def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     """
     Calculates topology expansion costs for each reinforced transformer and line
     in kEUR.

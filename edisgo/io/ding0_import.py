@@ -69,15 +69,19 @@ def import_ding0_grid(path, edisgo_obj):
 
     # write dataframes to edisgo_obj
     edisgo_obj.topology.buses_df = grid.buses[
-        edisgo_obj.topology.buses_df.columns]
+        edisgo_obj.topology.buses_df.columns
+    ]
     edisgo_obj.topology.lines_df = grid.lines[
-        edisgo_obj.topology.lines_df.columns]
+        edisgo_obj.topology.lines_df.columns
+    ]
+
+    grid.loads = grid.loads.rename(columns={"peak_load": "p_nom"})
 
     edisgo_obj.topology.loads_df = grid.loads[
-        edisgo_obj.topology.loads_df.columns]
+        edisgo_obj.topology.loads_df.columns
+    ]
     # drop slack generator from generators
-    slack = grid.generators.loc[
-        grid.generators.control == "Slack"].index
+    slack = grid.generators.loc[grid.generators.control == "Slack"].index
     grid.generators.drop(slack, inplace=True)
     edisgo_obj.topology.generators_df = grid.generators[
         edisgo_obj.topology.generators_df.columns
@@ -86,15 +90,13 @@ def import_ding0_grid(path, edisgo_obj):
         edisgo_obj.topology.storage_units_df.columns
     ]
     edisgo_obj.topology.transformers_df = sort_transformer_buses(
-        grid.transformers.drop(
-            labels=["x_pu", "r_pu"], axis=1).rename(
-                columns={"r": "r_pu", "x": "x_pu"}
+        grid.transformers.drop(labels=["x_pu", "r_pu"], axis=1).rename(
+            columns={"r": "r_pu", "x": "x_pu"}
         )[edisgo_obj.topology.transformers_df.columns]
     )
     edisgo_obj.topology.transformers_hvmv_df = sort_hvmv_transformer_buses(
         pd.read_csv(
-            os.path.join(path, "transformers_hvmv.csv"),
-            index_col=[0]
+            os.path.join(path, "transformers_hvmv.csv"), index_col=[0]
         ).rename(columns={"r": "r_pu", "x": "x_pu"})
     )
     edisgo_obj.topology.switches_df = pd.read_csv(
@@ -193,7 +195,11 @@ def _validate_ding0_grid_import(topology):
     buses = []
 
     for nodal_component in [
-        "loads", "generators", "charging_points", "storage_units"]:
+        "loads",
+        "generators",
+        "charging_points",
+        "storage_units",
+    ]:
         df = getattr(topology, nodal_component + "_df")
         missing = df.index[~df.bus.isin(topology.buses_df.index)]
         buses.append(df.bus.values)

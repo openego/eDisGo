@@ -147,14 +147,18 @@ def lines_allowed_load(edisgo_obj, voltage_level):
 
     # adapt i_lines_allowed for radial feeders
     buses_in_cycles = list(
-        set(itertools.chain.from_iterable(edisgo_obj.topology.rings)))
+        set(itertools.chain.from_iterable(edisgo_obj.topology.rings))
+    )
 
     # Find lines in cycles
     lines_in_cycles = list(
-        lines_df.loc[lines_df[[
-            'bus0', 'bus1']].isin(buses_in_cycles).all(axis=1)].index.values)
+        lines_df.loc[
+            lines_df[["bus0", "bus1"]].isin(buses_in_cycles).all(axis=1)
+        ].index.values
+    )
     lines_radial_feeders = list(
-        lines_df.loc[~lines_df.index.isin(lines_in_cycles)].index.values)
+        lines_df.loc[~lines_df.index.isin(lines_in_cycles)].index.values
+    )
 
     # lines in cycles have to be n-1 secure
     i_lines_allowed_per_case["load_case"] = (
@@ -167,9 +171,11 @@ def lines_allowed_load(edisgo_obj, voltage_level):
     )
 
     # lines in radial feeders are not n-1 secure anyways
-    i_lines_allowed_per_case["load_case"] = \
-        i_lines_allowed_per_case["load_case"].append(
-            lines_df.loc[lines_radial_feeders].s_nom / sqrt(3) / nominal_voltage)
+    i_lines_allowed_per_case["load_case"] = i_lines_allowed_per_case[
+        "load_case"
+    ].append(
+        lines_df.loc[lines_radial_feeders].s_nom / sqrt(3) / nominal_voltage
+    )
 
     i_lines_allowed = edisgo_obj.timeseries.timesteps_load_feedin_case.loc[
         edisgo_obj.results.i_res.index
@@ -198,8 +204,9 @@ def lines_relative_load(edisgo_obj, lines_allowed_load):
 
     """
     # get line load from power flow analysis
-    i_lines_pfa = edisgo_obj.results.i_res.loc[lines_allowed_load.index,
-                                               lines_allowed_load.columns]
+    i_lines_pfa = edisgo_obj.results.i_res.loc[
+        lines_allowed_load.index, lines_allowed_load.columns
+    ]
 
     return i_lines_pfa / lines_allowed_load
 
@@ -252,7 +259,7 @@ def _line_load(edisgo_obj, voltage_level):
             ],
             axis=1,
             keys=["max_rel_overload", "time_index"],
-            sort=True
+            sort=True,
         )
         crit_lines.loc[:, "voltage_level"] = voltage_level
     else:
@@ -376,7 +383,8 @@ def _station_load(edisgo_obj, grid):
         if not any(mv_lines.isin(edisgo_obj.results.i_res.columns)):
             raise ValueError(
                 "MV was not included in power flow analysis, wherefore load "
-                "of HV/MV station cannot be calculated.")
+                "of HV/MV station cannot be calculated."
+            )
         s_station_pfa = np.hypot(
             edisgo_obj.results.pfa_slack.p,
             edisgo_obj.results.pfa_slack.q,

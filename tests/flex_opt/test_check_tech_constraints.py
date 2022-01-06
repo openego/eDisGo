@@ -8,12 +8,11 @@ from edisgo.flex_opt import check_tech_constraints
 
 
 class TestCheckTechConstraints:
-
     @classmethod
     def setup_class(self):
         self.edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case"
+            worst_case_analysis="worst-case",
         )
         self.timesteps = self.edisgo.timeseries.timeindex
 
@@ -67,7 +66,8 @@ class TestCheckTechConstraints:
         assert (1, 2) == df.shape
         # check missing transformer capacity
         assert np.isclose(
-            df.at["MVGrid_1", "s_missing"], (sqrt(1250) - 20) / 0.5,
+            df.at["MVGrid_1", "s_missing"],
+            (sqrt(1250) - 20) / 0.5,
         )
         assert df.at["MVGrid_1", "time_index"] == self.timesteps[1]
 
@@ -255,7 +255,9 @@ class TestCheckTechConstraints:
         )
         assert len(voltage_issues) == 1
         assert len(voltage_issues["LVGrid_6"]) == 2
-        assert voltage_issues["LVGrid_6"].index[0] == "Bus_BranchTee_LVGrid_6_2"
+        assert (
+            voltage_issues["LVGrid_6"].index[0] == "Bus_BranchTee_LVGrid_6_2"
+        )
         assert np.isclose(
             voltage_issues["LVGrid_6"].loc[
                 "Bus_BranchTee_LVGrid_6_2", "v_diff_max"
@@ -270,7 +272,9 @@ class TestCheckTechConstraints:
         )
         assert len(voltage_issues) == 1
         assert len(voltage_issues["LVGrid_6"]) == 3
-        assert voltage_issues["LVGrid_6"].index[0] == "Bus_BranchTee_LVGrid_6_2"
+        assert (
+            voltage_issues["LVGrid_6"].index[0] == "Bus_BranchTee_LVGrid_6_2"
+        )
         assert np.isclose(
             voltage_issues["LVGrid_6"].loc[
                 "Bus_BranchTee_LVGrid_6_2", "v_diff_max"

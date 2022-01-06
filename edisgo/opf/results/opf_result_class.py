@@ -228,11 +228,11 @@ class OPFResults:
 
         pd_t = pd.DataFrame(
             index=ts,
-            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()]
+            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()],
         )
         qd_t = pd.DataFrame(
             index=ts,
-            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()]
+            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()],
         )
         for (t, date_idx) in enumerate(ts):
             load_t = pd.DataFrame(load_solution_data[str(t + 1)])
@@ -241,12 +241,9 @@ class OPFResults:
             qd_t.loc[date_idx] = load_t.qd
 
         load_buses = self.pypsa.loads.bus.unique()
-        load_bus_df = pd.DataFrame(
-            columns=["bus_loc"],
-            index=[load_buses])
+        load_bus_df = pd.DataFrame(columns=["bus_loc"], index=[load_buses])
         for b in load_buses:
-            load_bus_df.at[
-                b, "bus_loc"] = self.pypsa.buses.index.get_loc(b)
+            load_bus_df.at[b, "bus_loc"] = self.pypsa.buses.index.get_loc(b)
         load_bus_df = load_bus_df.sort_values(by="bus_loc").reset_index()
         load_bus_df.index = load_bus_df.index + 1
         pd_t = pd_t.rename(columns=load_bus_df.level_0.to_dict())

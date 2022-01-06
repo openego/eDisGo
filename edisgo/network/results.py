@@ -38,7 +38,7 @@ def _get_matching_dict_of_attributes_and_file_names():
     grid_expansion_results_dict = {
         "grid_expansion_costs": "grid_expansion_costs",
         "unresolved_issues": "unresolved_issues",
-        "equipment_changes": "equipment_changes"
+        "equipment_changes": "equipment_changes",
     }
     return powerflow_results_dict, grid_expansion_results_dict
 
@@ -731,18 +731,17 @@ class Results:
             contain `type_info`. Line representative is the series name.
 
         """
-        self.equipment_changes = \
-            self.equipment_changes.append(
-                pd.DataFrame(
-                    {
-                        "iteration_step": [0],
-                        "change": ["added"],
-                        "equipment": [line.type_info],
-                        "quantity": [1],
-                    },
-                    index=[line.name],
-                )
+        self.equipment_changes = self.equipment_changes.append(
+            pd.DataFrame(
+                {
+                    "iteration_step": [0],
+                    "change": ["added"],
+                    "equipment": [line.type_info],
+                    "quantity": [1],
+                },
+                index=[line.name],
             )
+        )
 
     def _del_line_from_equipment_changes(self, line_repr):
         """
@@ -762,10 +761,7 @@ class Results:
 
         """
         if line_repr in self.equipment_changes.index:
-            self.equipment_changes = \
-                self.equipment_changes.drop(
-                    line_repr
-                )
+            self.equipment_changes = self.equipment_changes.drop(line_repr)
 
     def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
         """
@@ -794,21 +790,27 @@ class Results:
         """
         if attr_to_reduce is None:
             attr_to_reduce = [
-                "pfa_p", "pfa_q",
-                "v_res", "i_res",
-                "grid_losses"
+                "pfa_p",
+                "pfa_q",
+                "v_res",
+                "i_res",
+                "grid_losses",
             ]
         for attr in attr_to_reduce:
             setattr(
                 self,
                 attr,
-                getattr(self, attr).apply(
-                    lambda _: _.astype(to_type)
-                )
+                getattr(self, attr).apply(lambda _: _.astype(to_type)),
             )
 
-    def to_csv(self, directory, parameters=None, reduce_memory=False,
-               save_seed=False, **kwargs):
+    def to_csv(
+        self,
+        directory,
+        parameters=None,
+        reduce_memory=False,
+        save_seed=False,
+        **kwargs
+    ):
         """
         Saves results to csv.
 
@@ -903,8 +905,10 @@ class Results:
             for attr in save_attributes:
                 if not getattr(self, attr).empty:
                     getattr(self, attr).to_csv(
-                        os.path.join(target_dir, "{}.csv".format(
-                            power_flow_results_dict[attr]))
+                        os.path.join(
+                            target_dir,
+                            "{}.csv".format(power_flow_results_dict[attr]),
+                        )
                     )
 
         def _save_grid_expansion_results(target_dir, save_attributes):
@@ -917,9 +921,10 @@ class Results:
             for attr in save_attributes:
                 if not getattr(self, attr).empty:
                     getattr(self, attr).to_csv(
-                        os.path.join(target_dir, "{}.csv".format(
-                            grid_expansion_results_dict[attr]
-                        ))
+                        os.path.join(
+                            target_dir,
+                            "{}.csv".format(grid_expansion_results_dict[attr]),
+                        )
                     )
 
         def _save_curtailment_results(target_dir):
@@ -970,23 +975,27 @@ class Results:
         # dictionary with function to call to save each parameter
         func_dict = {
             "powerflow_results": _save_power_flow_results,
-            "grid_expansion_results": _save_grid_expansion_results
+            "grid_expansion_results": _save_grid_expansion_results,
         }
 
         # get dictionaries matching attribute names and file names
-        power_flow_results_dict, grid_expansion_results_dict = \
-            _get_matching_dict_of_attributes_and_file_names()
+        (
+            power_flow_results_dict,
+            grid_expansion_results_dict,
+        ) = _get_matching_dict_of_attributes_and_file_names()
 
         # if None, set to save all attributes
         if parameters is None:
             parameters = {
                 "powerflow_results": list(power_flow_results_dict.keys()),
                 "grid_expansion_results": list(
-                    grid_expansion_results_dict.keys())
+                    grid_expansion_results_dict.keys()
+                ),
             }
             if not save_seed:
                 parameters["powerflow_results"] = [
-                    _ for _ in parameters["powerflow_results"]
+                    _
+                    for _ in parameters["powerflow_results"]
                     if not "seed" in _
                 ]
 
@@ -994,7 +1003,8 @@ class Results:
             raise ValueError(
                 "Invalid input for `parameters` when saving "
                 "results to csv. `parameters` must be a dictionary. "
-                "See docstring for more information.")
+                "See docstring for more information."
+            )
 
         # iterate over dictionary to save power flow results, etc. to csv
         # depending on what is specified in parameters
@@ -1049,60 +1059,61 @@ class Results:
         # restore measures
         if os.path.exists(os.path.join(directory, "measures.csv")):
             measures_df = pd.read_csv(
-                os.path.join(directory, 'measures.csv'),
-                index_col=0)
+                os.path.join(directory, "measures.csv"), index_col=0
+            )
             self._measures = list(measures_df.measure.values)
 
         # get dictionaries matching attribute names and file names
-        power_flow_results_dict, grid_expansion_results_dict = \
-            _get_matching_dict_of_attributes_and_file_names()
+        (
+            power_flow_results_dict,
+            grid_expansion_results_dict,
+        ) = _get_matching_dict_of_attributes_and_file_names()
 
         # if None, set to restore all attributes
         if parameters is None:
             parameters = {
                 "powerflow_results": list(power_flow_results_dict.keys()),
                 "grid_expansion_results": list(
-                    grid_expansion_results_dict.keys())
+                    grid_expansion_results_dict.keys()
+                ),
             }
 
         if not isinstance(parameters, dict):
             raise ValueError(
                 "Invalid input for `parameters` when restoring "
                 "results from csv. `parameters` must be a dictionary. "
-                "See docstring for more information.")
+                "See docstring for more information."
+            )
 
         # import power flow results
-        if 'powerflow_results' in list(parameters.keys()) and \
-                os.path.isdir(os.path.join(directory, 'powerflow_results')):
+        if "powerflow_results" in list(parameters.keys()) and os.path.isdir(
+            os.path.join(directory, "powerflow_results")
+        ):
             for attr in parameters["powerflow_results"]:
                 path = os.path.join(
-                            directory,
-                            'powerflow_results',
-                            '{}.csv'.format(power_flow_results_dict[attr])
-                        )
+                    directory,
+                    "powerflow_results",
+                    "{}.csv".format(power_flow_results_dict[attr]),
+                )
                 if os.path.exists(path):
                     setattr(
                         self,
                         attr,
-                        pd.read_csv(path, index_col=0, parse_dates=True)
+                        pd.read_csv(path, index_col=0, parse_dates=True),
                     )
 
         # import grid expansion results
-        if 'grid_expansion_results' in list(parameters.keys()) and \
-                os.path.isdir(
-                    os.path.join(directory, 'grid_expansion_results')):
+        if "grid_expansion_results" in list(
+            parameters.keys()
+        ) and os.path.isdir(os.path.join(directory, "grid_expansion_results")):
             for attr in parameters["grid_expansion_results"]:
                 path = os.path.join(
-                            directory,
-                            'grid_expansion_results',
-                            '{}.csv'.format(grid_expansion_results_dict[attr])
-                        )
+                    directory,
+                    "grid_expansion_results",
+                    "{}.csv".format(grid_expansion_results_dict[attr]),
+                )
                 if os.path.exists(path):
-                    setattr(
-                        self,
-                        attr,
-                        pd.read_csv(path, index_col=0)
-                    )
+                    setattr(self, attr, pd.read_csv(path, index_col=0))
 
         # # import curtailment results
         # if 'curtailment_results' in parameters and os.path.isdir(

@@ -43,10 +43,7 @@ def _scored_critical_overvoltage(edisgo_obj, grid):
         edisgo_obj, voltage_levels="mv"
     )
     _, voltage_diff_ov = check_tech_constraints.voltage_diff(
-        edisgo_obj,
-        nodes,
-        v_dev_allowed_upper,
-        v_dev_allowed_lower
+        edisgo_obj, nodes, v_dev_allowed_upper, v_dev_allowed_lower
     )
 
     # Get score for nodes that are over or under the allowed deviations

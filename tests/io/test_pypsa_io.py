@@ -3,282 +3,412 @@ import pandas as pd
 from pandas.util.testing import assert_frame_equal
 import numpy as np
 
-from edisgo.io.pypsa_io import _append_lv_components, set_seed, \
-    process_pfa_results
+from edisgo.io.pypsa_io import (
+    _append_lv_components,
+    set_seed,
+    process_pfa_results,
+)
 from edisgo import EDisGo
 from edisgo.network.results import Results
 
 
 class TestPypsaIO:
-
     def test_append_lv_components(self):
-        lv_components = {'Load': pd.DataFrame(),
-                         'Generator': pd.DataFrame(),
-                         'StorageUnit': pd.DataFrame()}
-        comps = pd.DataFrame({'bus':[]})
+        lv_components = {
+            "Load": pd.DataFrame(),
+            "Generator": pd.DataFrame(),
+            "StorageUnit": pd.DataFrame(),
+        }
+        comps = pd.DataFrame({"bus": []})
         # check if returns when comps is empty
-        _append_lv_components('Unkown', comps, lv_components,
-                             'TestGrid')
+        _append_lv_components("Unkown", comps, lv_components, "TestGrid")
         # check exceptions for wrong input parameters
-        comps = pd.DataFrame({'bus': ['bus1']}, index=['dummy'])
-        msg = 'Component type not defined.'
+        comps = pd.DataFrame({"bus": ["bus1"]}, index=["dummy"])
+        msg = "Component type not defined."
         with pytest.raises(ValueError, match=msg):
-            _append_lv_components('Unkown', comps, lv_components,
-                                 'TestGrid')
-        msg = 'Aggregation type for loads invalid.'
+            _append_lv_components("Unkown", comps, lv_components, "TestGrid")
+        msg = "Aggregation type for loads invalid."
         with pytest.raises(ValueError, match=msg):
-            _append_lv_components('Load', comps, lv_components,
-                                 'TestGrid', aggregate_loads='unknown')
-        msg = 'Aggregation type for generators invalid.'
+            _append_lv_components(
+                "Load",
+                comps,
+                lv_components,
+                "TestGrid",
+                aggregate_loads="unknown",
+            )
+        msg = "Aggregation type for generators invalid."
         with pytest.raises(ValueError, match=msg):
-            _append_lv_components('Generator', comps, lv_components, 'TestGrid',
-                                  aggregate_generators='unknown')
-        msg = 'Aggregation type for storages invalid.'
+            _append_lv_components(
+                "Generator",
+                comps,
+                lv_components,
+                "TestGrid",
+                aggregate_generators="unknown",
+            )
+        msg = "Aggregation type for storages invalid."
         with pytest.raises(ValueError, match=msg):
-            _append_lv_components('StorageUnit', comps, lv_components,
-                                 'TestGrid', aggregate_storages='unknown')
+            _append_lv_components(
+                "StorageUnit",
+                comps,
+                lv_components,
+                "TestGrid",
+                aggregate_storages="unknown",
+            )
         # check appending aggregated elements to lv_components in different
         # modes
         # CHECK GENERATORS
-        gens = pd.DataFrame({'bus': ['LVStation'] * 6, 'control': ['PQ'] * 6,
-                             'p_nom': [0.05, 0.23, 0.04, 0.2, 0.1, 0.4],
-                             'type': ['solar', 'wind', 'solar', 'solar', 'gas',
-                                      'wind']}, index=['Solar_1', 'Wind_1',
-                                                       'Solar_2', 'Solar_3',
-                                                       'Gas_1', 'Wind_2'])
+        gens = pd.DataFrame(
+            {
+                "bus": ["LVStation"] * 6,
+                "control": ["PQ"] * 6,
+                "p_nom": [0.05, 0.23, 0.04, 0.2, 0.1, 0.4],
+                "type": ["solar", "wind", "solar", "solar", "gas", "wind"],
+            },
+            index=[
+                "Solar_1",
+                "Wind_1",
+                "Solar_2",
+                "Solar_3",
+                "Gas_1",
+                "Wind_2",
+            ],
+        )
         # check not aggregated generators
-        aggr_dict = _append_lv_components('Generator', gens, lv_components,
-                                         'TestGrid', aggregate_generators=None)
+        aggr_dict = _append_lv_components(
+            "Generator",
+            gens,
+            lv_components,
+            "TestGrid",
+            aggregate_generators=None,
+        )
         assert len(aggr_dict) == 0
-        assert len(lv_components['Generator']) == 6
-        assert_frame_equal(gens.loc[:, ['bus', 'control', 'p_nom']],
-                           lv_components['Generator'].loc[:,
-                           ['bus', 'control', 'p_nom']])
-        assert (lv_components['Generator'].fluctuating == \
-               [True, True, True, True, False, True]).all()
+        assert len(lv_components["Generator"]) == 6
+        assert_frame_equal(
+            gens.loc[:, ["bus", "control", "p_nom"]],
+            lv_components["Generator"].loc[:, ["bus", "control", "p_nom"]],
+        )
+        assert (
+            lv_components["Generator"].fluctuating
+            == [True, True, True, True, False, True]
+        ).all()
         # check aggregation of generators by type
-        lv_components['Generator'] = pd.DataFrame()
-        aggr_dict = _append_lv_components('Generator', gens, lv_components,
-                                         'TestGrid',
-                                          aggregate_generators='type')
+        lv_components["Generator"] = pd.DataFrame()
+        aggr_dict = _append_lv_components(
+            "Generator",
+            gens,
+            lv_components,
+            "TestGrid",
+            aggregate_generators="type",
+        )
         assert len(aggr_dict) == 3
-        assert (aggr_dict['TestGrid_gas'] == ['Gas_1']).all()
-        assert (aggr_dict['TestGrid_solar'] ==
-                ['Solar_1', 'Solar_2', 'Solar_3']).all()
-        assert (aggr_dict['TestGrid_wind'] ==
-                ['Wind_1', 'Wind_2']).all()
-        assert len(lv_components['Generator']) == 3
-        assert (lv_components['Generator'].control == 'PQ').all()
-        assert (lv_components['Generator'].bus == 'LVStation').all()
-        assert (lv_components['Generator'].index.values ==
-                ['TestGrid_gas', 'TestGrid_solar', 'TestGrid_wind']).all()
-        assert np.isclose(lv_components['Generator'].p_nom,
-                          [0.1, 0.29, 0.63]).all()
-        assert (lv_components['Generator'].fluctuating ==
-                [False, True, True]).all()
+        assert (aggr_dict["TestGrid_gas"] == ["Gas_1"]).all()
+        assert (
+            aggr_dict["TestGrid_solar"] == ["Solar_1", "Solar_2", "Solar_3"]
+        ).all()
+        assert (aggr_dict["TestGrid_wind"] == ["Wind_1", "Wind_2"]).all()
+        assert len(lv_components["Generator"]) == 3
+        assert (lv_components["Generator"].control == "PQ").all()
+        assert (lv_components["Generator"].bus == "LVStation").all()
+        assert (
+            lv_components["Generator"].index.values
+            == ["TestGrid_gas", "TestGrid_solar", "TestGrid_wind"]
+        ).all()
+        assert np.isclose(
+            lv_components["Generator"].p_nom, [0.1, 0.29, 0.63]
+        ).all()
+        assert (
+            lv_components["Generator"].fluctuating == [False, True, True]
+        ).all()
         # check if only one type is existing
-        lv_components['Generator'] = pd.DataFrame()
-        aggr_dict = _append_lv_components('Generator',
-                                          gens.loc[gens.type == 'solar'],
-                                          lv_components, 'TestGrid',
-                                          aggregate_generators='type')
+        lv_components["Generator"] = pd.DataFrame()
+        aggr_dict = _append_lv_components(
+            "Generator",
+            gens.loc[gens.type == "solar"],
+            lv_components,
+            "TestGrid",
+            aggregate_generators="type",
+        )
         assert len(aggr_dict) == 1
-        assert (aggr_dict['TestGrid_solar'] ==
-                ['Solar_1', 'Solar_2', 'Solar_3']).all()
-        assert len(lv_components['Generator']) == 1
-        assert lv_components['Generator'].index.values == ['TestGrid_solar']
-        assert np.isclose(lv_components['Generator'].p_nom, 0.29)
-        assert (lv_components['Generator'].fluctuating == [True]).all()
+        assert (
+            aggr_dict["TestGrid_solar"] == ["Solar_1", "Solar_2", "Solar_3"]
+        ).all()
+        assert len(lv_components["Generator"]) == 1
+        assert lv_components["Generator"].index.values == ["TestGrid_solar"]
+        assert np.isclose(lv_components["Generator"].p_nom, 0.29)
+        assert (lv_components["Generator"].fluctuating == [True]).all()
         # check aggregation of generators by fluctuating or dispatchable
-        lv_components['Generator'] = pd.DataFrame()
-        aggr_dict = _append_lv_components('Generator', gens, lv_components,
-                                         'TestGrid',
-                                          aggregate_generators='curtailable')
+        lv_components["Generator"] = pd.DataFrame()
+        aggr_dict = _append_lv_components(
+            "Generator",
+            gens,
+            lv_components,
+            "TestGrid",
+            aggregate_generators="curtailable",
+        )
         assert len(aggr_dict) == 2
-        assert (aggr_dict['TestGrid_fluctuating'] ==
-                ['Solar_1', 'Wind_1', 'Solar_2', 'Solar_3', 'Wind_2']).all()
-        assert (aggr_dict['TestGrid_dispatchable'] == ['Gas_1']).all()
-        assert len(lv_components['Generator']) == 2
-        assert (lv_components['Generator'].control == 'PQ').all()
-        assert (lv_components['Generator'].bus == 'LVStation').all()
-        assert (lv_components['Generator'].index.values ==
-                ['TestGrid_fluctuating', 'TestGrid_dispatchable']).all()
-        assert np.isclose(lv_components['Generator'].p_nom,
-                          [0.92, 0.1]).all()
-        assert (lv_components['Generator'].fluctuating == [True, False]).all()
+        assert (
+            aggr_dict["TestGrid_fluctuating"]
+            == ["Solar_1", "Wind_1", "Solar_2", "Solar_3", "Wind_2"]
+        ).all()
+        assert (aggr_dict["TestGrid_dispatchable"] == ["Gas_1"]).all()
+        assert len(lv_components["Generator"]) == 2
+        assert (lv_components["Generator"].control == "PQ").all()
+        assert (lv_components["Generator"].bus == "LVStation").all()
+        assert (
+            lv_components["Generator"].index.values
+            == ["TestGrid_fluctuating", "TestGrid_dispatchable"]
+        ).all()
+        assert np.isclose(lv_components["Generator"].p_nom, [0.92, 0.1]).all()
+        assert (lv_components["Generator"].fluctuating == [True, False]).all()
         # check if only dispatchable gens are given
-        lv_components['Generator'] = pd.DataFrame()
-        aggr_dict = _append_lv_components('Generator',
-                                          gens.loc[gens.type == 'gas'],
-                                          lv_components, 'TestGrid',
-                                          aggregate_generators='curtailable')
+        lv_components["Generator"] = pd.DataFrame()
+        aggr_dict = _append_lv_components(
+            "Generator",
+            gens.loc[gens.type == "gas"],
+            lv_components,
+            "TestGrid",
+            aggregate_generators="curtailable",
+        )
         assert len(aggr_dict) == 1
-        assert (aggr_dict['TestGrid_dispatchable'] == ['Gas_1']).all()
-        assert len(lv_components['Generator']) == 1
-        assert lv_components['Generator'].index.values == \
-               ['TestGrid_dispatchable']
-        assert np.isclose(lv_components['Generator'].p_nom, 0.1)
-        assert (lv_components['Generator'].fluctuating == [False]).all()
+        assert (aggr_dict["TestGrid_dispatchable"] == ["Gas_1"]).all()
+        assert len(lv_components["Generator"]) == 1
+        assert lv_components["Generator"].index.values == [
+            "TestGrid_dispatchable"
+        ]
+        assert np.isclose(lv_components["Generator"].p_nom, 0.1)
+        assert (lv_components["Generator"].fluctuating == [False]).all()
         # check if only fluctuating gens are given
-        lv_components['Generator'] = pd.DataFrame()
-        aggr_dict = \
-            _append_lv_components('Generator',
-                                  gens.drop(gens.loc[gens.type == 'gas'].index),
-                                  lv_components, 'TestGrid',
-                                  aggregate_generators='curtailable')
+        lv_components["Generator"] = pd.DataFrame()
+        aggr_dict = _append_lv_components(
+            "Generator",
+            gens.drop(gens.loc[gens.type == "gas"].index),
+            lv_components,
+            "TestGrid",
+            aggregate_generators="curtailable",
+        )
         assert len(aggr_dict) == 1
-        assert (aggr_dict['TestGrid_fluctuating'] ==
-                ['Solar_1', 'Wind_1', 'Solar_2', 'Solar_3', 'Wind_2']).all()
-        assert len(lv_components['Generator']) == 1
-        assert lv_components['Generator'].index.values == \
-               ['TestGrid_fluctuating']
-        assert np.isclose(lv_components['Generator'].p_nom, 0.92)
-        assert (lv_components['Generator'].fluctuating == [True]).all()
+        assert (
+            aggr_dict["TestGrid_fluctuating"]
+            == ["Solar_1", "Wind_1", "Solar_2", "Solar_3", "Wind_2"]
+        ).all()
+        assert len(lv_components["Generator"]) == 1
+        assert lv_components["Generator"].index.values == [
+            "TestGrid_fluctuating"
+        ]
+        assert np.isclose(lv_components["Generator"].p_nom, 0.92)
+        assert (lv_components["Generator"].fluctuating == [True]).all()
         # check aggregation of all generators
-        lv_components['Generator'] = pd.DataFrame()
-        aggr_dict = _append_lv_components('Generator', gens, lv_components,
-                                         'TestGrid', aggregate_generators='all')
+        lv_components["Generator"] = pd.DataFrame()
+        aggr_dict = _append_lv_components(
+            "Generator",
+            gens,
+            lv_components,
+            "TestGrid",
+            aggregate_generators="all",
+        )
         assert len(aggr_dict) == 1
-        assert (aggr_dict['TestGrid_generators']
-                == ['Solar_1', 'Wind_1', 'Solar_2', 'Solar_3', 'Gas_1',
-                    'Wind_2']).all()
-        assert len(lv_components['Generator']) == 1
-        assert (lv_components['Generator'].control == 'PQ').all()
-        assert (lv_components['Generator'].bus == 'LVStation').all()
-        assert (lv_components['Generator'].index.values ==
-                ['TestGrid_generators']).all()
-        assert np.isclose(lv_components['Generator'].p_nom, 1.02)
-        assert (lv_components['Generator'].fluctuating == ['Mixed']).all()
+        assert (
+            aggr_dict["TestGrid_generators"]
+            == ["Solar_1", "Wind_1", "Solar_2", "Solar_3", "Gas_1", "Wind_2"]
+        ).all()
+        assert len(lv_components["Generator"]) == 1
+        assert (lv_components["Generator"].control == "PQ").all()
+        assert (lv_components["Generator"].bus == "LVStation").all()
+        assert (
+            lv_components["Generator"].index.values == ["TestGrid_generators"]
+        ).all()
+        assert np.isclose(lv_components["Generator"].p_nom, 1.02)
+        assert (lv_components["Generator"].fluctuating == ["Mixed"]).all()
         # check only fluctuating
-        lv_components['Generator'] = pd.DataFrame()
-        aggr_dict = _append_lv_components('Generator',
-                                          gens.drop(gens.loc[gens.type ==
-                                                            'gas'].index),
-                                          lv_components, 'TestGrid',
-                                          aggregate_generators='all')
+        lv_components["Generator"] = pd.DataFrame()
+        aggr_dict = _append_lv_components(
+            "Generator",
+            gens.drop(gens.loc[gens.type == "gas"].index),
+            lv_components,
+            "TestGrid",
+            aggregate_generators="all",
+        )
         assert len(aggr_dict) == 1
-        assert (aggr_dict['TestGrid_generators']
-                == ['Solar_1', 'Wind_1', 'Solar_2', 'Solar_3',
-                    'Wind_2']).all()
-        assert len(lv_components['Generator']) == 1
-        assert (lv_components['Generator'].control == 'PQ').all()
-        assert (lv_components['Generator'].bus == 'LVStation').all()
-        assert (lv_components['Generator'].index.values ==
-                ['TestGrid_generators']).all()
-        assert np.isclose(lv_components['Generator'].p_nom, 0.92)
-        assert (lv_components['Generator'].fluctuating == [True]).all()
+        assert (
+            aggr_dict["TestGrid_generators"]
+            == ["Solar_1", "Wind_1", "Solar_2", "Solar_3", "Wind_2"]
+        ).all()
+        assert len(lv_components["Generator"]) == 1
+        assert (lv_components["Generator"].control == "PQ").all()
+        assert (lv_components["Generator"].bus == "LVStation").all()
+        assert (
+            lv_components["Generator"].index.values == ["TestGrid_generators"]
+        ).all()
+        assert np.isclose(lv_components["Generator"].p_nom, 0.92)
+        assert (lv_components["Generator"].fluctuating == [True]).all()
         # check only dispatchable
-        lv_components['Generator'] = pd.DataFrame()
-        aggr_dict = _append_lv_components('Generator',
-                                          gens.loc[gens.type == 'gas'],
-                                          lv_components, 'TestGrid',
-                                          aggregate_generators='all')
+        lv_components["Generator"] = pd.DataFrame()
+        aggr_dict = _append_lv_components(
+            "Generator",
+            gens.loc[gens.type == "gas"],
+            lv_components,
+            "TestGrid",
+            aggregate_generators="all",
+        )
         assert len(aggr_dict) == 1
-        assert (aggr_dict['TestGrid_generators']
-                == ['Gas_1']).all()
-        assert len(lv_components['Generator']) == 1
-        assert (lv_components['Generator'].control == 'PQ').all()
-        assert (lv_components['Generator'].bus == 'LVStation').all()
-        assert (lv_components['Generator'].index.values ==
-                ['TestGrid_generators']).all()
-        assert np.isclose(lv_components['Generator'].p_nom, 0.1)
-        assert (lv_components['Generator'].fluctuating == [False]).all()
-        lv_components['Generator'] = pd.DataFrame()
+        assert (aggr_dict["TestGrid_generators"] == ["Gas_1"]).all()
+        assert len(lv_components["Generator"]) == 1
+        assert (lv_components["Generator"].control == "PQ").all()
+        assert (lv_components["Generator"].bus == "LVStation").all()
+        assert (
+            lv_components["Generator"].index.values == ["TestGrid_generators"]
+        ).all()
+        assert np.isclose(lv_components["Generator"].p_nom, 0.1)
+        assert (lv_components["Generator"].fluctuating == [False]).all()
+        lv_components["Generator"] = pd.DataFrame()
         # CHECK LOADS
-        loads = pd.DataFrame({'bus': ['LVStation'] * 6,
-                              'peak_load': [0.05, 0.23, 0.04, 0.2, 0.1, 0.4],
-                              'sector': ['retail', 'agricultural', 'retail',
-                                       'retail', 'industrial', 'agricultural']},
-                             index=['Retail_1', 'Agricultural_1', 'Retail_2',
-                                    'Retail_3', 'Industrial_1',
-                                    'Agricultural_2'])
+        loads = pd.DataFrame(
+            {
+                "bus": ["LVStation"] * 6,
+                "p_nom": [0.05, 0.23, 0.04, 0.2, 0.1, 0.4],
+                "sector": [
+                    "retail",
+                    "agricultural",
+                    "retail",
+                    "retail",
+                    "industrial",
+                    "agricultural",
+                ],
+            },
+            index=[
+                "Retail_1",
+                "Agricultural_1",
+                "Retail_2",
+                "Retail_3",
+                "Industrial_1",
+                "Agricultural_2",
+            ],
+        )
         # check not aggregated loads
-        aggr_dict = _append_lv_components('Load', loads, lv_components,
-                                         'TestGrid', aggregate_loads=None)
+        aggr_dict = _append_lv_components(
+            "Load", loads, lv_components, "TestGrid", aggregate_loads=None
+        )
         assert len(aggr_dict) == 0
-        assert len(lv_components['Load']) == 6
-        assert (loads.peak_load.values ==
-                lv_components['Load'].p_set.values).all()
-        assert (lv_components['Load'].bus == 'LVStation').all()
-        assert (lv_components['Load'].index == loads.index).all()
+        assert len(lv_components["Load"]) == 6
+        assert (loads.p_nom.values == lv_components["Load"].p_set.values).all()
+        assert (lv_components["Load"].bus == "LVStation").all()
+        assert (lv_components["Load"].index == loads.index).all()
         # check aggregate loads by sector
-        lv_components['Load'] = pd.DataFrame()
-        aggr_dict = _append_lv_components('Load', loads, lv_components,
-                                         'TestGrid', aggregate_loads='sectoral')
+        lv_components["Load"] = pd.DataFrame()
+        aggr_dict = _append_lv_components(
+            "Load",
+            loads,
+            lv_components,
+            "TestGrid",
+            aggregate_loads="sectoral",
+        )
         assert len(aggr_dict) == 3
-        assert (aggr_dict['TestGrid_agricultural'] ==
-                ['Agricultural_1', 'Agricultural_2']).all()
-        assert (aggr_dict['TestGrid_industrial'] ==
-                ['Industrial_1']).all()
-        assert (aggr_dict['TestGrid_retail'] ==
-                ['Retail_1', 'Retail_2', 'Retail_3']).all()
-        assert len(lv_components['Load']) == 3
-        assert (lv_components['Load'].bus == 'LVStation').all()
-        assert (lv_components['Load'].index.values ==
-                ['TestGrid_agricultural', 'TestGrid_industrial',
-                 'TestGrid_retail']).all()
-        assert np.isclose(lv_components['Load'].p_set, [0.63, 0.1, 0.29]).all()
+        assert (
+            aggr_dict["TestGrid_agricultural"]
+            == ["Agricultural_1", "Agricultural_2"]
+        ).all()
+        assert (aggr_dict["TestGrid_industrial"] == ["Industrial_1"]).all()
+        assert (
+            aggr_dict["TestGrid_retail"]
+            == ["Retail_1", "Retail_2", "Retail_3"]
+        ).all()
+        assert len(lv_components["Load"]) == 3
+        assert (lv_components["Load"].bus == "LVStation").all()
+        assert (
+            lv_components["Load"].index.values
+            == [
+                "TestGrid_agricultural",
+                "TestGrid_industrial",
+                "TestGrid_retail",
+            ]
+        ).all()
+        assert np.isclose(lv_components["Load"].p_set, [0.63, 0.1, 0.29]).all()
         # check if only one sector exists
-        lv_components['Load'] = pd.DataFrame()
-        aggr_dict = _append_lv_components('Load',
-                                          loads.loc[loads.sector == 'industrial'],
-                                          lv_components, 'TestGrid',
-                                          aggregate_loads='sectoral')
+        lv_components["Load"] = pd.DataFrame()
+        aggr_dict = _append_lv_components(
+            "Load",
+            loads.loc[loads.sector == "industrial"],
+            lv_components,
+            "TestGrid",
+            aggregate_loads="sectoral",
+        )
         assert len(aggr_dict) == 1
-        assert (aggr_dict['TestGrid_industrial'] ==
-                ['Industrial_1']).all()
-        assert len(lv_components['Load']) == 1
-        assert (lv_components['Load'].bus == 'LVStation').all()
-        assert (lv_components['Load'].index.values ==
-                ['TestGrid_industrial']).all()
-        assert np.isclose(lv_components['Load'].p_set, 0.1).all()
+        assert (aggr_dict["TestGrid_industrial"] == ["Industrial_1"]).all()
+        assert len(lv_components["Load"]) == 1
+        assert (lv_components["Load"].bus == "LVStation").all()
+        assert (
+            lv_components["Load"].index.values == ["TestGrid_industrial"]
+        ).all()
+        assert np.isclose(lv_components["Load"].p_set, 0.1).all()
         # check aggregation of all loads
-        lv_components['Load'] = pd.DataFrame()
-        aggr_dict = _append_lv_components('Load', loads, lv_components,
-                                         'TestGrid', aggregate_loads='all')
+        lv_components["Load"] = pd.DataFrame()
+        aggr_dict = _append_lv_components(
+            "Load", loads, lv_components, "TestGrid", aggregate_loads="all"
+        )
         assert len(aggr_dict) == 1
-        assert (aggr_dict['TestGrid_loads'] ==
-                ['Retail_1', 'Agricultural_1', 'Retail_2', 'Retail_3',
-                 'Industrial_1', 'Agricultural_2']).all()
-        assert len(lv_components['Load']) == 1
-        assert (lv_components['Load'].bus == 'LVStation').all()
-        assert (lv_components['Load'].index.values ==
-                ['TestGrid_loads']).all()
-        assert np.isclose(lv_components['Load'].p_set, 1.02).all()
-        lv_components['Load'] = pd.DataFrame()
+        assert (
+            aggr_dict["TestGrid_loads"]
+            == [
+                "Retail_1",
+                "Agricultural_1",
+                "Retail_2",
+                "Retail_3",
+                "Industrial_1",
+                "Agricultural_2",
+            ]
+        ).all()
+        assert len(lv_components["Load"]) == 1
+        assert (lv_components["Load"].bus == "LVStation").all()
+        assert (lv_components["Load"].index.values == ["TestGrid_loads"]).all()
+        assert np.isclose(lv_components["Load"].p_set, 1.02).all()
+        lv_components["Load"] = pd.DataFrame()
         # CHECK STORAGES
-        storages = pd.DataFrame({'bus': ['LVStation'] * 2,
-                                'control': ['PQ'] * 2},
-                                index=['Storage_1', 'Storage_2'])
+        storages = pd.DataFrame(
+            {"bus": ["LVStation"] * 2, "control": ["PQ"] * 2},
+            index=["Storage_1", "Storage_2"],
+        )
         # check appending without aggregation
-        aggr_dict = _append_lv_components('StorageUnit', storages,
-                                          lv_components, 'TestGrid',
-                                          aggregate_storages=None)
+        aggr_dict = _append_lv_components(
+            "StorageUnit",
+            storages,
+            lv_components,
+            "TestGrid",
+            aggregate_storages=None,
+        )
         assert len(aggr_dict) == 0
-        assert len(lv_components['StorageUnit']) == 2
-        assert (lv_components['StorageUnit'].bus == 'LVStation').all()
-        assert (lv_components['StorageUnit'].control == 'PQ').all()
-        assert (lv_components['StorageUnit'].index.values
-                == ['Storage_1', 'Storage_2']).all()
+        assert len(lv_components["StorageUnit"]) == 2
+        assert (lv_components["StorageUnit"].bus == "LVStation").all()
+        assert (lv_components["StorageUnit"].control == "PQ").all()
+        assert (
+            lv_components["StorageUnit"].index.values
+            == ["Storage_1", "Storage_2"]
+        ).all()
         # check aggregration of all storages
-        lv_components['StorageUnit'] = pd.DataFrame()
-        aggr_dict = _append_lv_components('StorageUnit', storages,
-                                          lv_components, 'TestGrid',
-                                          aggregate_storages='all')
+        lv_components["StorageUnit"] = pd.DataFrame()
+        aggr_dict = _append_lv_components(
+            "StorageUnit",
+            storages,
+            lv_components,
+            "TestGrid",
+            aggregate_storages="all",
+        )
         assert len(aggr_dict) == 1
-        assert (aggr_dict['TestGrid_storages'] ==
-                ['Storage_1', 'Storage_2']).all()
-        assert len(lv_components['StorageUnit']) == 1
-        assert (lv_components['StorageUnit'].bus == 'LVStation').all()
-        assert (lv_components['StorageUnit'].control == 'PQ').all()
-        assert lv_components['StorageUnit'].index.values == 'TestGrid_storages'
+        assert (
+            aggr_dict["TestGrid_storages"] == ["Storage_1", "Storage_2"]
+        ).all()
+        assert len(lv_components["StorageUnit"]) == 1
+        assert (lv_components["StorageUnit"].bus == "LVStation").all()
+        assert (lv_components["StorageUnit"].control == "PQ").all()
+        assert lv_components["StorageUnit"].index.values == "TestGrid_storages"
 
     def test_get_generators_timeseries_with_aggregated_elements(self):
         pass
 
     def test_set_seed(self):
-        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path,
-                             worst_case_analysis='worst-case')
+        self.edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_path,
+            worst_case_analysis="worst-case",
+        )
         timeindex = self.edisgo.timeseries.timeindex
 
         # test with missing busses
@@ -293,21 +423,21 @@ class TestPypsaIO:
         # results from previous power flow
         lv_bus = "Bus_BranchTee_LVGrid_1_10"
         mv_bus = "BusBar_MVGrid_1_LVGrid_3_MV"
-        assert pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], lv_bus] == 1.
-        assert pypsa_network.buses_t.v_ang.loc[timeindex[0], lv_bus] == 0.
-        assert (pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], mv_bus] ==
-                self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], mv_bus]
-                )
-        assert np.isclose(
-            pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], mv_bus],
-            1.00657
+        assert pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], lv_bus] == 1.0
+        assert pypsa_network.buses_t.v_ang.loc[timeindex[0], lv_bus] == 0.0
+        assert (
+            pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], mv_bus]
+            == self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], mv_bus]
         )
-        assert (pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus] ==
-                self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], mv_bus]
-                )
         assert np.isclose(
-            pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus],
-            0.0195367
+            pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], mv_bus], 1.00657
+        )
+        assert (
+            pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus]
+            == self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], mv_bus]
+        )
+        assert np.isclose(
+            pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus], 0.0195367
         )
         # run power flow to check if it converges
         pypsa_network.pf(use_seed=True)
@@ -320,22 +450,26 @@ class TestPypsaIO:
 
         # check that second time step default values are used and for first
         # time steps results from previous power flow
-        assert (pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], lv_bus] ==
-                self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], lv_bus]
-                )
-        assert (pypsa_network.buses_t.v_ang.loc[timeindex[0], lv_bus] ==
-                self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], lv_bus]
-                )
-        assert (pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], mv_bus] ==
-                self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], mv_bus]
-                )
-        assert (pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus] ==
-                self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], mv_bus]
-                )
-        assert pypsa_network.buses_t.v_mag_pu.loc[timeindex[1], lv_bus] == 1.
-        assert pypsa_network.buses_t.v_ang.loc[timeindex[1], lv_bus] == 0.
-        assert pypsa_network.buses_t.v_mag_pu.loc[timeindex[1], mv_bus] == 1.
-        assert pypsa_network.buses_t.v_ang.loc[timeindex[1], mv_bus] == 0.
+        assert (
+            pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], lv_bus]
+            == self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], lv_bus]
+        )
+        assert (
+            pypsa_network.buses_t.v_ang.loc[timeindex[0], lv_bus]
+            == self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], lv_bus]
+        )
+        assert (
+            pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], mv_bus]
+            == self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], mv_bus]
+        )
+        assert (
+            pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus]
+            == self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], mv_bus]
+        )
+        assert pypsa_network.buses_t.v_mag_pu.loc[timeindex[1], lv_bus] == 1.0
+        assert pypsa_network.buses_t.v_ang.loc[timeindex[1], lv_bus] == 0.0
+        assert pypsa_network.buses_t.v_mag_pu.loc[timeindex[1], mv_bus] == 1.0
+        assert pypsa_network.buses_t.v_ang.loc[timeindex[1], mv_bus] == 0.0
         # run power flow to check if it converges
         pypsa_network.pf(use_seed=True)
 
@@ -353,18 +487,22 @@ class TestPypsaIO:
 
         # check that for both time steps results from previous power flow
         # analyses are used
-        assert (pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], lv_bus] ==
-                self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], lv_bus]
-                )
-        assert (pypsa_network.buses_t.v_ang.loc[timeindex[1], lv_bus] ==
-                self.edisgo.results.pfa_v_ang_seed.loc[timeindex[1], lv_bus]
-                )
-        assert (pypsa_network.buses_t.v_mag_pu.loc[timeindex[1], mv_bus] ==
-                self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[1], mv_bus]
-                )
-        assert (pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus] ==
-                self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], mv_bus]
-                )
+        assert (
+            pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], lv_bus]
+            == self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], lv_bus]
+        )
+        assert (
+            pypsa_network.buses_t.v_ang.loc[timeindex[1], lv_bus]
+            == self.edisgo.results.pfa_v_ang_seed.loc[timeindex[1], lv_bus]
+        )
+        assert (
+            pypsa_network.buses_t.v_mag_pu.loc[timeindex[1], mv_bus]
+            == self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[1], mv_bus]
+        )
+        assert (
+            pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus]
+            == self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], mv_bus]
+        )
         # run power flow to check if it converges
         pypsa_network.pf(use_seed=True)
 

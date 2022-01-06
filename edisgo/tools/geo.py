@@ -27,7 +27,10 @@ def proj2equidistant(srid):
 
     """
 
-    return Transformer.from_crs("EPSG:{}".format(srid), "EPSG:3035", always_xy=True).transform
+    return Transformer.from_crs(
+        "EPSG:{}".format(srid), "EPSG:3035", always_xy=True
+    ).transform
+
 
 def proj2equidistant_reverse(srid):
     """
@@ -44,7 +47,9 @@ def proj2equidistant_reverse(srid):
 
     """
 
-    return Transformer.from_crs("EPSG:3035", "EPSG:{}".format(srid), always_xy=True).transform
+    return Transformer.from_crs(
+        "EPSG:3035", "EPSG:{}".format(srid), always_xy=True
+    ).transform
 
 
 def proj_by_srids(srid1, srid2):
@@ -69,11 +74,14 @@ def proj_by_srids(srid1, srid2):
 
     """
 
-    return Transformer.from_crs("EPSG:{}".format(srid1), "EPSG:{}".format(srid2), always_xy=True).transform
+    return Transformer.from_crs(
+        "EPSG:{}".format(srid1), "EPSG:{}".format(srid2), always_xy=True
+    ).transform
 
 
-def calc_geo_lines_in_buffer(grid_topology, bus, grid,
-                             buffer_radius=2000, buffer_radius_inc=1000):
+def calc_geo_lines_in_buffer(
+    grid_topology, bus, grid, buffer_radius=2000, buffer_radius_inc=1000
+):
     """
     Determines lines that are at least partly within buffer around given bus.
 
@@ -125,8 +133,9 @@ def calc_geo_lines_in_buffer(grid_topology, bus, grid,
     return sorted(lines)
 
 
-def calc_geo_dist_vincenty(grid_topology, bus_source, bus_target,
-                           branch_detour_factor=1.3):
+def calc_geo_dist_vincenty(
+    grid_topology, bus_source, bus_target, branch_detour_factor=1.3
+):
     """
     Calculates the geodesic distance between two buses in km.
 
@@ -206,8 +215,9 @@ def find_nearest_bus(point, bus_target):
     return bus_target["dist"].idxmin(), bus_target["dist"].min()
 
 
-def find_nearest_conn_objects(grid_topology, bus, lines,
-                              conn_diff_tolerance=0.0001):
+def find_nearest_conn_objects(
+    grid_topology, bus, lines, conn_diff_tolerance=0.0001
+):
     """
     Searches all lines for the nearest possible connection object per line.
 
@@ -255,12 +265,8 @@ def find_nearest_conn_objects(grid_topology, bus, lines,
 
         # create shapely objects for 2 buses and line between them,
         # transform to equidistant CRS
-        line_bus0_shp = transform(
-            projection, Point(line_bus0.x, line_bus0.y)
-        )
-        line_bus1_shp = transform(
-            projection, Point(line_bus1.x, line_bus1.y)
-        )
+        line_bus0_shp = transform(projection, Point(line_bus0.x, line_bus0.y))
+        line_bus1_shp = transform(projection, Point(line_bus1.x, line_bus1.y))
         line_shp = LineString([line_bus0_shp, line_bus1_shp])
 
         # create dict with line & 2 adjacent buses and their shapely objects
@@ -287,29 +293,27 @@ def find_nearest_conn_objects(grid_topology, bus, lines,
         # close to the bus (necessary to assure that connection target is
         # reproducible)
         if (
-                abs(conn_objects["s1"]["dist"] - conn_objects["b"]["dist"])
-                < conn_diff_tolerance
-                or abs(conn_objects["s2"]["dist"] - conn_objects["b"]["dist"])
-                < conn_diff_tolerance
+            abs(conn_objects["s1"]["dist"] - conn_objects["b"]["dist"])
+            < conn_diff_tolerance
+            or abs(conn_objects["s2"]["dist"] - conn_objects["b"]["dist"])
+            < conn_diff_tolerance
         ):
             del conn_objects["b"]
 
         # remove MV station as possible connection point
         if (
-                conn_objects["s1"]["repr"]
-                == grid_topology.mv_grid.station.index[0]
+            conn_objects["s1"]["repr"]
+            == grid_topology.mv_grid.station.index[0]
         ):
             del conn_objects["s1"]
         elif (
-                conn_objects["s2"]["repr"]
-                == grid_topology.mv_grid.station.index[0]
+            conn_objects["s2"]["repr"]
+            == grid_topology.mv_grid.station.index[0]
         ):
             del conn_objects["s2"]
 
         # find nearest connection point in conn_objects
-        conn_objects_min = min(
-            conn_objects.values(), key=lambda v: v["dist"]
-        )
+        conn_objects_min = min(conn_objects.values(), key=lambda v: v["dist"])
         # discard duplicates
         if not conn_objects_min["repr"] in repr:
             conn_objects_min_stack.append(conn_objects_min)

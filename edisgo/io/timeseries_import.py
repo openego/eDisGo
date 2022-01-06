@@ -28,9 +28,7 @@ def import_feedin_timeseries(config_data, weather_cell_ids, timeindex):
     """
 
     def _retrieve_timeseries_from_oedb(session, timeindex):
-        """Retrieve time series from oedb
-
-        """
+        """Retrieve time series from oedb"""
         # ToDo: add option to retrieve subset of time series
         # ToDo: find the reference power class for mvgrid/w_id and insert
         #  instead of 4

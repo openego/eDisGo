@@ -164,9 +164,11 @@ def run_edisgo_basic(
         edisgo_grid.reinforce()
 
         # Get costs
-        costs_grouped = edisgo_grid.network.results.grid_expansion_costs.groupby(
-            ["type"]
-        ).sum()
+        costs_grouped = (
+            edisgo_grid.network.results.grid_expansion_costs.groupby(
+                ["type"]
+            ).sum()
+        )
         costs = pd.DataFrame(
             costs_grouped.values,
             columns=costs_grouped.columns,

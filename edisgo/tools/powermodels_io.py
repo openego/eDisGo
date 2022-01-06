@@ -99,9 +99,9 @@ def add_storage_from_edisgo(edisgo_obj, psa_net, pm_dict):
 def pypsa2ppc(psa_net):
     """Converter from pypsa data structure to pypower data structure
 
-        adapted from pandapower's pd2ppc converter
+    adapted from pandapower's pd2ppc converter
 
-        https://github.com/e2nIEE/pandapower/blob/911f300a96ee0ac062d82f7684083168ff052586/pandapower/pd2ppc.py
+    https://github.com/e2nIEE/pandapower/blob/911f300a96ee0ac062d82f7684083168ff052586/pandapower/pd2ppc.py
 
     """
 

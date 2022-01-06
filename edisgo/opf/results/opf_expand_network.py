@@ -209,7 +209,7 @@ def integrate_storage_units(
                 storage = edisgo.topology.add_load(
                     load_id=1,
                     bus=st,
-                    peak_load=storage_cap,
+                    p_nom=storage_cap,
                     annual_consumption=0.0,
                     sector="storage",
                 )
@@ -231,11 +231,13 @@ def integrate_storage_units(
                     # ToDo change once fixed in timeseries
                     edisgo.timeseries.loads_active_power = pd.concat(
                         [edisgo.timeseries.loads_active_power, -ts_active],
-                        axis=1, sort=False
+                        axis=1,
+                        sort=False,
                     )
                     edisgo.timeseries.loads_reactive_power = pd.concat(
                         [edisgo.timeseries.loads_reactive_power, ts_reactive],
-                        axis=1, sort=False
+                        axis=1,
+                        sort=False,
                     )
 
             added_storage_units.append(storage)
@@ -299,8 +301,7 @@ def get_curtailment_per_node(edisgo, curtailment_ts=None, tolerance=1e-3):
     # group by node
     tmp = diff.T.copy()
     tmp.index = [
-        edisgo.opf_results.pypsa.generators.at[g, "bus"]
-        for g in diff.columns
+        edisgo.opf_results.pypsa.generators.at[g, "bus"] for g in diff.columns
     ]
     curtailment_per_node = (tmp.groupby(tmp.index).sum()).T
 
@@ -332,12 +333,15 @@ def get_load_curtailment_per_node(edisgo, tolerance=1e-3):
     """
     load_agg_at_bus = pd.DataFrame(
         columns=edisgo.opf_results.pypsa.loads.bus.unique(),
-        index=edisgo.opf_results.pypsa.snapshots)
+        index=edisgo.opf_results.pypsa.snapshots,
+    )
     for b in edisgo.opf_results.pypsa.loads.bus.unique():
         loads = edisgo.opf_results.pypsa.loads[
-            edisgo.opf_results.pypsa.loads.bus == b].index
+            edisgo.opf_results.pypsa.loads.bus == b
+        ].index
         load_agg_at_bus.loc[:, b] = edisgo.opf_results.pypsa.loads_t.p_set.loc[
-                                    :, loads].sum(axis=1)
+            :, loads
+        ].sum(axis=1)
 
     diff = load_agg_at_bus - edisgo.opf_results.loads_t.pd
     # set very small differences to zero
@@ -365,19 +369,22 @@ def integrate_curtailment_as_load(edisgo, curtailment_per_node):
     active_power_ts = pd.DataFrame(
         data=0,
         columns=curtailment_per_node.columns,
-        index=edisgo.timeseries.timeindex)
-    active_power_ts.loc[curtailment_per_node.index,
-        :] = curtailment_per_node.apply(pd.to_numeric)
+        index=edisgo.timeseries.timeindex,
+    )
+    active_power_ts.loc[
+        curtailment_per_node.index, :
+    ] = curtailment_per_node.apply(pd.to_numeric)
     # drop all zeros
     active_power_ts = active_power_ts.loc[:, ~(active_power_ts == 0.0).all()]
     reactive_power_ts = pd.DataFrame(
         data=0,
         columns=active_power_ts.columns,
-        index=edisgo.timeseries.timeindex
+        index=edisgo.timeseries.timeindex,
     )
 
     curtailment_loads = edisgo.topology.loads_df[
-        edisgo.topology.loads_df.sector == "curtailment"]
+        edisgo.topology.loads_df.sector == "curtailment"
+    ]
 
     for n in active_power_ts.columns:
 
@@ -386,7 +393,7 @@ def integrate_curtailment_as_load(edisgo, curtailment_per_node):
             load = edisgo.topology.add_load(
                 load_id=1,
                 bus=n,
-                peak_load=curtailment_per_node.loc[:, n].max(),
+                p_nom=curtailment_per_node.loc[:, n].max(),
                 annual_consumption=0.0,
                 sector="curtailment",
             )
@@ -394,18 +401,27 @@ def integrate_curtailment_as_load(edisgo, curtailment_per_node):
             # add time series
             ts_active = active_power_ts.loc[:, [n]].rename(columns={n: load})
             ts_reactive = reactive_power_ts.loc[:, [n]].rename(
-                columns={n: load})
+                columns={n: load}
+            )
             edisgo.timeseries.loads_active_power = pd.concat(
                 [edisgo.timeseries.loads_active_power, ts_active],
-                axis=1, sort=False
+                axis=1,
+                sort=False,
             )
             edisgo.timeseries.loads_reactive_power = pd.concat(
                 [edisgo.timeseries.loads_reactive_power, ts_reactive],
-                axis=1, sort=False
+                axis=1,
+                sort=False,
             )
         else:
             # add to existing load
             load = curtailment_loads[curtailment_loads.bus == n].index
-            edisgo.timeseries._loads_active_power.loc[:, load] = \
-                edisgo.timeseries._loads_active_power.loc[:,
-                load] + active_power_ts.loc[:, n].rename(columns={n: load})
+            edisgo.timeseries._loads_active_power.loc[
+                :, load
+            ] = edisgo.timeseries._loads_active_power.loc[
+                :, load
+            ] + active_power_ts.loc[
+                :, n
+            ].rename(
+                columns={n: load}
+            )
