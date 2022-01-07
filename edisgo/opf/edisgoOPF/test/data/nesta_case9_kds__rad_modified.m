@@ -94,17 +94,17 @@ mpc.storage = [
 % INFO    : Gen Reactive Capacity Model: am50ag
 % INFO    : Line Capacity PAB:           25.0 (deg.)
 % WARNING : No active generation at the slack bus, assigning type - NUC
-% INFO    : 
+% INFO    :
 % INFO    : === Generator Classification Notes ===
 % INFO    : NUC    1   -     0.00
 % INFO    : COW    1   -    65.73
 % INFO    : NG     1   -    34.27
-% INFO    : 
+% INFO    :
 % INFO    : === Generator Reactive Capacity Atmost Max 50 Percent Active Model Notes ===
 % INFO    : Gen at bus 1 - NUC	: Pmax 250.0, Qmin 100.0, Qmax 300.0 -> Qmin 100.0, Qmax 125.0
 % INFO    : Gen at bus 2 - COW	: Pmax 300.0, Qmin 100.0, Qmax 300.0 -> Qmin 100.0, Qmax 150.0
 % INFO    : Gen at bus 3 - NG	: Pmax 270.0, Qmin 100.0, Qmax 300.0 -> Qmin 100.0, Qmax 135.0
-% INFO    : 
+% INFO    :
 % INFO    : === Line Capacity UB Model Notes ===
 % INFO    : Updated Thermal Rating: on line 1-4 : Rate A , 9900.0 -> 910
 % INFO    : Updated Thermal Rating: on line 4-5 : Rate A , 9900.0 -> 560
@@ -114,5 +114,5 @@ mpc.storage = [
 % INFO    : Updated Thermal Rating: on line 8-2 : Rate A , 9900.0 -> 839
 % INFO    : Updated Thermal Rating: on line 8-9 : Rate A , 9900.0 -> 320
 % INFO    : Updated Thermal Rating: on line 9-4 : Rate A , 9900.0 -> 612
-% INFO    : 
+% INFO    :
 % INFO    : === Writing Matpower Case File Notes ===

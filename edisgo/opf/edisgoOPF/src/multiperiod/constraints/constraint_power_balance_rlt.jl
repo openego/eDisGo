@@ -2,7 +2,7 @@
 # using JuMP
 # using PowerModels
 
-# using a reformulation-linearization technique (rlt) 
+# using a reformulation-linearization technique (rlt)
 # from Bigane2012 "Tight-and-Cheap Conic Relaxation for the AC OPF problem"
 function constraint_power_balance_rlt(pm, i,nw::Int=pm.cnw, cnd::Int=pm.ccnd)
     n_branches = length(ref(pm,:branch))
@@ -20,7 +20,7 @@ function constraint_power_balance_rlt(pm, i,nw::Int=pm.cnw, cnd::Int=pm.ccnd)
     bus_gens = ref(pm, nw, :bus_gens, i)
     bus_loads = ref(pm, nw, :bus_loads, i)
     bus_shunts = ref(pm, nw, :bus_shunts, i)
-    
+
     if haskey(var(pm,nw),:uc)
         bus_storage = ref(pm,nw,:bus_storage,i)
         uc = var(pm,nw,:uc)
@@ -34,23 +34,23 @@ function constraint_power_balance_rlt(pm, i,nw::Int=pm.cnw, cnd::Int=pm.ccnd)
 
     bus_gs = Dict(k => ref(pm, nw, :shunt, k, "gs", cnd) for k in bus_shunts)
     bus_bs = Dict(k => ref(pm, nw, :shunt, k, "bs", cnd) for k in bus_shunts)
-    
+
     incoming_arcs = [idx for idx in ref(pm)[:arcs][1:n_branches] if idx[3]==i]
     outgoing_arcs = [idx for idx in ref(pm)[:arcs][1:n_branches] if idx[2]==i]
-    
+
     branch = ref(pm,:branch)
 
-    @constraint(pm.model, sum(pg[g] for g in bus_gens)-sum(pd for pd in values(bus_pd)) + 
+    @constraint(pm.model, sum(pg[g] for g in bus_gens)-sum(pd for pd in values(bus_pd)) +
                         sum(ud[s] - uc[s] for s in bus_storage) ==
                         sum(p[idx] for idx in outgoing_arcs)-
                         sum(p[idx]- zr[idx[1]] for idx in incoming_arcs) +
                         sum(gs for gs in values(bus_gs))*w[i])
-    
+
     @constraint(pm.model, sum(qg[g] for g in bus_gens)-sum(qd for qd in values(bus_qd)) ==
                         sum(q[idx] for idx in outgoing_arcs)-
                         sum(q[idx]-zx[idx[1]] for idx in incoming_arcs)-
                         sum(bs for bs in values(bus_bs))*w[i])
-                         
+
 end
 
 function constraint_z_rlt(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd)

@@ -26,4 +26,3 @@ Changes
   parallelization. CLI uses higher level functions to run eDisGo. Consult
   :mod:`~.tools.edisgo_run` for further details.
   `#93 <https://github.com/openego/eDisGo/issues/93>`_.
-

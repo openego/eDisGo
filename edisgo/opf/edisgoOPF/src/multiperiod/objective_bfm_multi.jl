@@ -9,7 +9,7 @@ function add_objective(pm;ismultinetwork::Bool=true,cost_factor=1.,scenario="bot
         end
         for (i,gen) in nw_ref[:gen]
             pg = sum(var(pm, nw, :pg, i))
-    
+
             if length(gen["cost"]) == 1
                 gen_cost[(nw,i)] = gen["cost"][1]
             elseif length(gen["cost"]) == 2
@@ -21,7 +21,7 @@ function add_objective(pm;ismultinetwork::Bool=true,cost_factor=1.,scenario="bot
             end
         end
     end
-    
+
 
     gen_sum = 0
     for (nw, nw_ref) in nws(pm)
@@ -33,20 +33,20 @@ function add_objective(pm;ismultinetwork::Bool=true,cost_factor=1.,scenario="bot
     end
     if scenario=="onlyGen"
 #         @objective(pm.model,Min,sum(g["cost"][1]*pg[i] for (i,g) in ref(pm,nw,:gen) if !isempty(g["cost"])) )
-        @objective(pm.model,Min,gen_sum) 
+        @objective(pm.model,Min,gen_sum)
     elseif scenario=="onlyExp"
-        I_max = var(pm,:I_max) 
+        I_max = var(pm,:I_max)
         @objective(pm.model,Min,sum(I_max[i] for (i,b) in ref(pm,:branch)))
     else
-        I_max = var(pm,:I_max) 
+        I_max = var(pm,:I_max)
         @objective(pm.model,Min,
             gen_sum +
             cost_factor*sum(I_max[i] for (i,b) in ref(pm,:branch)))
-#         @objective(pm.model,Min,sum(g["cost"][1]*pg[i] for (i,g) in ref(pm,nw,:gen) if !isempty(g["cost"])) + 
+#         @objective(pm.model,Min,sum(g["cost"][1]*pg[i] for (i,g) in ref(pm,nw,:gen) if !isempty(g["cost"])) +
 #                         sum(I_max[i] for (i,b) in ref(pm,nw,:branch)))
     end
 end
-                            
+
 function add_objective_linear(pm;ismultinetwork::Bool=true,cost_factor=1,scenario="both")
     #     pg = var(pm,nw,cnd,:pg)
     cnd=pm.ccnd
@@ -54,7 +54,7 @@ function add_objective_linear(pm;ismultinetwork::Bool=true,cost_factor=1,scenari
     for (nw,nw_ref) in nws(pm)
         for (i,gen) in nw_ref[:gen]
             pg = sum(var(pm, nw, :pg, i))
-    
+
             if length(gen["cost"]) == 1
                 gen_cost[(nw,i)] = gen["cost"][1]
             elseif length(gen["cost"]) == 2
@@ -66,7 +66,7 @@ function add_objective_linear(pm;ismultinetwork::Bool=true,cost_factor=1,scenari
             end
         end
     end
-    
+
 
     if scenario=="onlyGen"
         # @objective(pm.model,Min,sum(g["cost"][1]*pg[i] for (i,g) in ref(pm,nw,:gen) if !isempty(g["cost"])) )
@@ -74,18 +74,18 @@ function add_objective_linear(pm;ismultinetwork::Bool=true,cost_factor=1,scenari
             sum(gen_cost[(nw,i)] for (i,gen) in nw_ref[:gen])
             for (nw, nw_ref) in nws(pm)))
     elseif scenario=="onlyExp"
-        I_max = var(pm,:I_max) 
+        I_max = var(pm,:I_max)
         @objective(pm.model,Min,sum(I_max[i] for (i,b) in ref(pm,:branch)))
     else
-        I_max = var(pm,:I_max) 
+        I_max = var(pm,:I_max)
         @objective(pm.model,Min,sum(
             sum(gen_cost[(nw,i)] for (i,gen) in nw_ref[:gen])
-            for (nw, nw_ref) in nws(pm)) + 
+            for (nw, nw_ref) in nws(pm)) +
             cost_factor*sum(I_max[i] for (i,b) in ref(pm,:branch)))
-        #   @objective(pm.model,Min,sum(g["cost"][1]*pg[i] for (i,g) in ref(pm,nw,:gen) if !isempty(g["cost"])) + 
+        #   @objective(pm.model,Min,sum(g["cost"][1]*pg[i] for (i,g) in ref(pm,nw,:gen) if !isempty(g["cost"])) +
         #                  sum(I_max[i] for (i,b) in ref(pm,nw,:branch)))
     end
-end 
+end
 
 function add_objective_nep(pm, cost_factor=0.001)
     branch_cost = Dict()
