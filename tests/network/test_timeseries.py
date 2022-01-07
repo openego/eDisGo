@@ -108,21 +108,13 @@ class Test_get_component_timeseries:
     def test_timeseries_imported(self):
         # test storage ts
         storage_1 = self.topology.add_storage_unit("Bus_MVStation_1", 0.3)
-        storage_2 = self.topology.add_storage_unit(
-            "Bus_GeneratorFluctuating_2", 0.45
-        )
-        storage_3 = self.topology.add_storage_unit(
-            "Bus_BranchTee_LVGrid_1_10", 0.05
-        )
+        storage_2 = self.topology.add_storage_unit("Bus_GeneratorFluctuating_2", 0.45)
+        storage_3 = self.topology.add_storage_unit("Bus_BranchTee_LVGrid_1_10", 0.05)
 
         timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
-        ts_gen_dispatchable = pd.DataFrame(
-            {"other": [0.775] * 8760}, index=timeindex
-        )
+        ts_gen_dispatchable = pd.DataFrame({"other": [0.775] * 8760}, index=timeindex)
         # test error raising in case of missing ts for dispatchable gens
-        msg = (
-            'Your input for "timeseries_generation_dispatchable" is not valid.'
-        )
+        msg = 'Your input for "timeseries_generation_dispatchable" is not valid.'
         with pytest.raises(ValueError, match=msg):
             timeseries.get_component_timeseries(
                 edisgo_obj=self, timeseries_generation_fluctuating="oedb"
@@ -186,14 +178,11 @@ class Test_get_component_timeseries:
             self.config, "demandlib", timeindex[0].year
         )
         assert (
-            load.columns
-            == ["retail", "residential", "agricultural", "industrial"]
+            load.columns == ["retail", "residential", "agricultural", "industrial"]
         ).all()
         assert load.loc[timeindex[453], "retail"] == 8.33507681075118e-05
         assert load.loc[timeindex[13], "residential"] == 0.00017315167492271174
-        assert (
-            load.loc[timeindex[6328], "agricultural"] == 0.00010134645909959971
-        )
+        assert load.loc[timeindex[6328], "agricultural"] == 0.00010134645909959971
         assert load.loc[timeindex[4325], "industrial"] == 9.91768322919766e-05
 
     def test_worst_case(self):
@@ -202,27 +191,17 @@ class Test_get_component_timeseries:
         storage_1 = self.topology.add_storage_unit("Bus_MVStation_1", 0.3)
         # storage_2 = self.topology.add_storage_unit(
         #     'Bus_GeneratorFluctuating_2', 0.45)
-        storage_3 = self.topology.add_storage_unit(
-            "Bus_BranchTee_LVGrid_1_10", 0.05
-        )
+        storage_3 = self.topology.add_storage_unit("Bus_BranchTee_LVGrid_1_10", 0.05)
 
         timeseries.get_component_timeseries(edisgo_obj=self, mode="worst-case")
 
         # check type
-        assert isinstance(
-            self.timeseries.generators_active_power, pd.DataFrame
-        )
-        assert isinstance(
-            self.timeseries.generators_reactive_power, pd.DataFrame
-        )
+        assert isinstance(self.timeseries.generators_active_power, pd.DataFrame)
+        assert isinstance(self.timeseries.generators_reactive_power, pd.DataFrame)
         assert isinstance(self.timeseries.loads_active_power, pd.DataFrame)
         assert isinstance(self.timeseries.loads_reactive_power, pd.DataFrame)
-        assert isinstance(
-            self.timeseries.storage_units_active_power, pd.DataFrame
-        )
-        assert isinstance(
-            self.timeseries.storage_units_reactive_power, pd.DataFrame
-        )
+        assert isinstance(self.timeseries.storage_units_active_power, pd.DataFrame)
+        assert isinstance(self.timeseries.storage_units_reactive_power, pd.DataFrame)
 
         # check shape
         number_of_timesteps = len(self.timeseries.timeindex)
@@ -261,9 +240,7 @@ class Test_get_component_timeseries:
             name=gen,
             index=self.timeseries.timeindex,
         )
-        assert_series_equal(
-            self.timeseries.generators_active_power.loc[:, gen], exp
-        )
+        assert_series_equal(self.timeseries.generators_active_power.loc[:, gen], exp)
         pf = -tan(acos(0.9))
         assert_series_equal(
             self.timeseries.generators_reactive_power.loc[:, gen], exp * pf
@@ -273,9 +250,7 @@ class Test_get_component_timeseries:
         exp = pd.Series(
             data=[1 * 2.3, 0 * 2.3], name=gen, index=self.timeseries.timeindex
         )
-        assert_series_equal(
-            self.timeseries.generators_active_power.loc[:, gen], exp
-        )
+        assert_series_equal(self.timeseries.generators_active_power.loc[:, gen], exp)
         pf = -tan(acos(0.9))
         assert_series_equal(
             self.timeseries.generators_reactive_power.loc[:, gen], exp * pf
@@ -287,9 +262,7 @@ class Test_get_component_timeseries:
             name=gen,
             index=self.timeseries.timeindex,
         )
-        assert_series_equal(
-            self.timeseries.generators_active_power.loc[:, gen], exp
-        )
+        assert_series_equal(self.timeseries.generators_active_power.loc[:, gen], exp)
         pf = -tan(acos(0.9))
         assert_series_equal(
             self.timeseries.generators_reactive_power.loc[:, gen], exp * pf
@@ -301,9 +274,7 @@ class Test_get_component_timeseries:
             name=gen,
             index=self.timeseries.timeindex,
         )
-        assert_series_equal(
-            self.timeseries.generators_active_power.loc[:, gen], exp
-        )
+        assert_series_equal(self.timeseries.generators_active_power.loc[:, gen], exp)
         pf = -tan(acos(0.95))
         assert_series_equal(
             self.timeseries.generators_reactive_power.loc[:, gen], exp * pf
@@ -417,18 +388,12 @@ class Test_get_component_timeseries:
         self.topology.remove_storage_unit(storage_3)
 
         # test for only feed-in case
-        timeseries.get_component_timeseries(
-            edisgo_obj=self, mode="worst-case-feedin"
-        )
+        timeseries.get_component_timeseries(edisgo_obj=self, mode="worst-case-feedin")
 
         # value
         gen = "Generator_1"  # gas, mv
-        exp = pd.Series(
-            data=[1 * 0.775], name=gen, index=self.timeseries.timeindex
-        )
-        assert_series_equal(
-            self.timeseries.generators_active_power.loc[:, gen], exp
-        )
+        exp = pd.Series(data=[1 * 0.775], name=gen, index=self.timeseries.timeindex)
+        assert_series_equal(self.timeseries.generators_active_power.loc[:, gen], exp)
         pf = -tan(acos(0.9))
         assert_series_equal(
             self.timeseries.generators_reactive_power.loc[:, gen], exp * pf
@@ -452,17 +417,11 @@ class Test_get_component_timeseries:
         )
 
         # test for only load case
-        timeseries.get_component_timeseries(
-            edisgo_obj=self, mode="worst-case-load"
-        )
+        timeseries.get_component_timeseries(edisgo_obj=self, mode="worst-case-load")
 
         gen = "Generator_1"  # gas, mv
-        exp = pd.Series(
-            data=[0 * 0.775], name=gen, index=self.timeseries.timeindex
-        )
-        assert_series_equal(
-            self.timeseries.generators_active_power.loc[:, gen], exp
-        )
+        exp = pd.Series(data=[0 * 0.775], name=gen, index=self.timeseries.timeindex)
+        assert_series_equal(self.timeseries.generators_active_power.loc[:, gen], exp)
         pf = -tan(acos(0.9))
         assert_series_equal(
             self.timeseries.generators_reactive_power.loc[:, gen], exp * pf
@@ -534,9 +493,7 @@ class Test_get_component_timeseries:
         assert np.isclose(
             active_power_new_load.loc[timeindex[0], load_name], (0.15 * p_nom)
         )
-        assert np.isclose(
-            active_power_new_load.loc[timeindex[1], load_name], p_nom
-        )
+        assert np.isclose(active_power_new_load.loc[timeindex[1], load_name], p_nom)
         self.topology.remove_load(load_name)
 
         # test manual
@@ -599,9 +556,7 @@ class Test_get_component_timeseries:
 
         # test import timeseries from dbs
         timeindex = pd.date_range("1/1/2011", periods=24, freq="H")
-        ts_gen_dispatchable = pd.DataFrame(
-            {"other": [0.775] * 24}, index=timeindex
-        )
+        ts_gen_dispatchable = pd.DataFrame({"other": [0.775] * 24}, index=timeindex)
         storage_units_active_power.index = timeindex
         timeseries.get_component_timeseries(
             timeindex=timeindex,
@@ -661,13 +616,9 @@ class Test_get_component_timeseries:
             2,
             num_gens + 1,
         )
+        assert (self.timeseries.generators_active_power.index == timeindex).all()
         assert (
-            self.timeseries.generators_active_power.index == timeindex
-        ).all()
-        assert (
-            self.timeseries.generators_active_power.loc[
-                timeindex, gen_name
-            ].values
+            self.timeseries.generators_active_power.loc[timeindex, gen_name].values
             == [0.85 * p_nom, 0]
         ).all()
         assert np.isclose(
@@ -780,13 +731,9 @@ class Test_get_component_timeseries:
             24,
             num_gens + 1,
         )
+        assert (self.timeseries.generators_active_power.index == timeindex).all()
         assert (
-            self.timeseries.generators_active_power.index == timeindex
-        ).all()
-        assert (
-            self.timeseries.generators_active_power.loc[
-                timeindex, gen_name
-            ].values
+            self.timeseries.generators_active_power.loc[timeindex, gen_name].values
             == 0.97 * p_nom
         ).all()
         assert np.isclose(
@@ -860,9 +807,7 @@ class Test_get_component_timeseries:
         # TEST TIMESERIES IMPORT
         # test import timeseries from dbs
         timeindex = pd.date_range("1/1/2011", periods=24, freq="H")
-        ts_gen_dispatchable = pd.DataFrame(
-            {"other": [0.775] * 24}, index=timeindex
-        )
+        ts_gen_dispatchable = pd.DataFrame({"other": [0.775] * 24}, index=timeindex)
         storage_units_active_power.index = timeindex
         timeseries.get_component_timeseries(
             timeindex=timeindex,
@@ -993,12 +938,8 @@ class Test_get_component_timeseries:
             bus="Bus_MVStation_1", p_nom=p_nom
         )
         timeseries.add_storage_units_timeseries(self, storage_name)
-        assert (
-            self.timeseries.storage_units_active_power.index == timeindex
-        ).all()
-        assert (
-            self.timeseries.storage_units_reactive_power.index == timeindex
-        ).all()
+        assert (self.timeseries.storage_units_active_power.index == timeindex).all()
+        assert (self.timeseries.storage_units_reactive_power.index == timeindex).all()
         assert self.timeseries.storage_units_active_power.shape == (
             len(timeindex),
             num_storage_units + 1,
@@ -1033,9 +974,7 @@ class Test_get_component_timeseries:
         storage_name3 = self.topology.add_storage_unit(
             bus="BusBar_MVGrid_1_LVGrid_6_MV", p_nom=p_nom3
         )
-        timeseries.add_storage_units_timeseries(
-            self, [storage_name2, storage_name3]
-        )
+        timeseries.add_storage_units_timeseries(self, [storage_name2, storage_name3])
         assert self.timeseries.storage_units_active_power.shape == (
             len(timeindex),
             num_storage_units + 3,
@@ -1120,9 +1059,7 @@ class Test_get_component_timeseries:
             24,
             num_storage_units + 1,
         )
-        assert (
-            self.timeseries.storage_units_active_power.index == timeindex
-        ).all()
+        assert (self.timeseries.storage_units_active_power.index == timeindex).all()
         assert (
             self.timeseries.storage_units_active_power.loc[
                 timeindex, storage_name
@@ -1130,9 +1067,7 @@ class Test_get_component_timeseries:
             == 0.97 * p_nom
         ).all()
         assert np.isclose(
-            self.timeseries.storage_units_reactive_power.loc[
-                timeindex, storage_name
-            ],
+            self.timeseries.storage_units_reactive_power.loc[timeindex, storage_name],
             p_nom * 0.5,
         ).all()
         # add multiple generators and check
@@ -1197,25 +1132,13 @@ class Test_get_component_timeseries:
         # TEST TIMESERIES IMPORT
         # test import timeseries from dbs
         timeindex = pd.date_range("1/1/2011", periods=24, freq="H")
-        ts_gen_dispatchable = pd.DataFrame(
-            {"other": [0.775] * 24}, index=timeindex
-        )
+        ts_gen_dispatchable = pd.DataFrame({"other": [0.775] * 24}, index=timeindex)
         # reindex timeseries
-        storage_units_active_power = storage_units_active_power.set_index(
-            timeindex
-        )
-        new_storage_active_power = new_storage_active_power.set_index(
-            timeindex
-        )
-        new_storage_reactive_power = new_storage_reactive_power.set_index(
-            timeindex
-        )
-        new_storages_active_power = new_storages_active_power.set_index(
-            timeindex
-        )
-        new_storages_reactive_power = new_storages_reactive_power.set_index(
-            timeindex
-        )
+        storage_units_active_power = storage_units_active_power.set_index(timeindex)
+        new_storage_active_power = new_storage_active_power.set_index(timeindex)
+        new_storage_reactive_power = new_storage_reactive_power.set_index(timeindex)
+        new_storages_active_power = new_storages_active_power.set_index(timeindex)
+        new_storages_reactive_power = new_storages_reactive_power.set_index(timeindex)
         timeseries.get_component_timeseries(
             timeindex=timeindex,
             edisgo_obj=self,
@@ -1245,15 +1168,11 @@ class Test_get_component_timeseries:
             num_storage_units + 1,
         )
         assert_frame_equal(
-            self.timeseries.storage_units_active_power.loc[
-                timeindex, [storage_name]
-            ],
+            self.timeseries.storage_units_active_power.loc[timeindex, [storage_name]],
             new_storage_active_power,
         )
         assert_frame_equal(
-            self.timeseries.storage_units_reactive_power.loc[
-                timeindex, [storage_name]
-            ],
+            self.timeseries.storage_units_reactive_power.loc[timeindex, [storage_name]],
             new_storage_reactive_power,
         )
 
@@ -1476,17 +1395,11 @@ class Test_get_component_timeseries:
         # test drop storage units timeseries
         assert hasattr(self.timeseries.storage_units_active_power, storage_1)
         assert hasattr(self.timeseries.storage_units_reactive_power, storage_1)
-        timeseries._drop_existing_component_timeseries(
-            self, "storage_units", storage_1
-        )
+        timeseries._drop_existing_component_timeseries(self, "storage_units", storage_1)
         with pytest.raises(KeyError):
-            self.timeseries.storage_units_active_power.loc[
-                timeindex, storage_1
-            ]
+            self.timeseries.storage_units_active_power.loc[timeindex, storage_1]
         with pytest.raises(KeyError):
-            self.timeseries.storage_units_reactive_power.loc[
-                timeindex, storage_1
-            ]
+            self.timeseries.storage_units_reactive_power.loc[timeindex, storage_1]
         self.topology.remove_storage_unit(storage_1)
 
 
@@ -1497,9 +1410,7 @@ class TestReactivePowerTimeSeriesFunctions:
         self.timeseries = timeseries.TimeSeries()
         self.config = Config()
         ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
-        self.timeseries.timeindex = pd.date_range(
-            "1/1/1970", periods=2, freq="H"
-        )
+        self.timeseries.timeindex = pd.date_range("1/1/1970", periods=2, freq="H")
 
     def test_set_reactive_power_time_series_for_fixed_cosphi_using_config(
         self,
@@ -1524,9 +1435,7 @@ class TestReactivePowerTimeSeriesFunctions:
 
         timeseries._set_reactive_power_time_series_for_fixed_cosphi_using_config(
             self,
-            self.topology.generators_df.loc[
-                [comp_mv_1, comp_mv_2, comp_lv_1], :
-            ],
+            self.topology.generators_df.loc[[comp_mv_1, comp_mv_2, comp_lv_1], :],
             "generators",
         )
 
@@ -1565,9 +1474,7 @@ class TestReactivePowerTimeSeriesFunctions:
         # test for component_type="loads"
         # change bus of load so that it becomes MV load
         comp_mv_1 = "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"
-        self.topology._loads_df.at[
-            comp_mv_1, "bus"
-        ] = "Bus_BranchTee_MVGrid_1_1"
+        self.topology._loads_df.at[comp_mv_1, "bus"] = "Bus_BranchTee_MVGrid_1_1"
         comp_lv_1 = "Load_residential_LVGrid_7_2"
         comp_lv_2 = "Load_agricultural_LVGrid_8_1"
 
@@ -1623,8 +1530,6 @@ class TestReactivePowerTimeSeriesFunctions:
 
         assert self.timeseries.storage_units_reactive_power.shape == (2, 1)
         assert np.isclose(
-            self.timeseries.storage_units_reactive_power.loc[
-                :, [comp_mv_1]
-            ].values,
+            self.timeseries.storage_units_reactive_power.loc[:, [comp_mv_1]].values,
             active_power_ts.loc[:, [comp_mv_1]].values * -0.484322,
         ).all()

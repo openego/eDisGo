@@ -65,9 +65,7 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
         return
     # get name of old slack bus
     if any(psa_network.buses.control == "Slack"):
-        slack_bus_mv = psa_network.buses.loc[
-            psa_network.buses.control == "Slack"
-        ]
+        slack_bus_mv = psa_network.buses.loc[psa_network.buses.control == "Slack"]
     else:
         slack_bus_mv = psa_network.buses.loc[
             psa_network.generators.loc[gen_slack_loc].bus[0]
@@ -108,22 +106,18 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
     for attr in ["r", "x"]:
         t[attr] /= len(mv_grid.transformers_df)
 
-    psa_network.transformers.iloc[
-        0
-    ] = t.transpose()  # pd.DataFrame(t).transpose()
+    psa_network.transformers.iloc[0] = t.transpose()  # pd.DataFrame(t).transpose()
 
-    psa_network.transformers["trafo_costs"] = edisgo_grid.config[
-        "costs_transformers"
-    ][mode]
+    psa_network.transformers["trafo_costs"] = edisgo_grid.config["costs_transformers"][
+        mode
+    ]
     # print(psa_network.transformers)
     print(hasattr(psa_network.transformers, "trafo_costs"))
     # add new slack bus to dict buses_t
     for key, val in psa_network.buses_t.items():
         if len(val.columns) != 0:
             try:
-                val.insert(
-                    0, slack_bus_hv_name, [1.0] * len(psa_network.snapshots)
-                )
+                val.insert(0, slack_bus_hv_name, [1.0] * len(psa_network.snapshots))
             except ValueError as e:
                 print("ValueError: {}".format(e))
 
@@ -173,9 +167,7 @@ def aggregate_fluct_generators(psa_network):
                         "q_set": gens_to_aggr["q_set"].iloc[0],
                         "p_nom": [sum(gens_to_aggr.p_nom)],
                         "start_up_cost": gens_to_aggr["start_up_cost"].iloc[0],
-                        "shut_down_cost": gens_to_aggr["shut_down_cost"].iloc[
-                            0
-                        ],
+                        "shut_down_cost": gens_to_aggr["shut_down_cost"].iloc[0],
                         "marginal_cost": gens_to_aggr["marginal_cost"].iloc[0],
                         "fluctuating": [True],
                     },

@@ -100,24 +100,16 @@ def calculate_relative_line_load(edisgo_obj, lines=None, timesteps=None):
     else:
         line_indices = edisgo_obj.topology.lines_df.index
 
-    mv_lines_allowed_load = check_tech_constraints.lines_allowed_load(
-        edisgo_obj, "mv"
-    )
-    lv_lines_allowed_load = check_tech_constraints.lines_allowed_load(
-        edisgo_obj, "lv"
-    )
+    mv_lines_allowed_load = check_tech_constraints.lines_allowed_load(edisgo_obj, "mv")
+    lv_lines_allowed_load = check_tech_constraints.lines_allowed_load(edisgo_obj, "lv")
     lines_allowed_load = pd.concat(
         [mv_lines_allowed_load, lv_lines_allowed_load], axis=1, sort=False
     ).loc[timesteps, line_indices]
 
-    return check_tech_constraints.lines_relative_load(
-        edisgo_obj, lines_allowed_load
-    )
+    return check_tech_constraints.lines_relative_load(edisgo_obj, lines_allowed_load)
 
 
-def calculate_line_reactance(
-    line_inductance_per_km, line_length, num_parallel
-):
+def calculate_line_reactance(line_inductance_per_km, line_length, num_parallel):
     """
     Calculates line reactance in Ohm.
 
@@ -136,14 +128,10 @@ def calculate_line_reactance(
         Reactance in Ohm
 
     """
-    return (
-        line_inductance_per_km / 1e3 * line_length * 2 * pi * 50 / num_parallel
-    )
+    return line_inductance_per_km / 1e3 * line_length * 2 * pi * 50 / num_parallel
 
 
-def calculate_line_resistance(
-    line_resistance_per_km, line_length, num_parallel
-):
+def calculate_line_resistance(line_resistance_per_km, line_length, num_parallel):
     """
     Calculates line resistance in Ohm.
 
@@ -258,8 +246,7 @@ def select_cable(edisgo_obj, level, apparent_power):
         available_cables = edisgo_obj.topology.equipment_data["lv_cables"]
     else:
         raise ValueError(
-            "Specified voltage level is not valid. Must "
-            "either be 'mv' or 'lv'."
+            "Specified voltage level is not valid. Must " "either be 'mv' or 'lv'."
         )
 
     suitable_cables = available_cables[
@@ -327,13 +314,8 @@ def assign_feeder(edisgo_obj, mode="mv_feeder"):
 
                 # in case of an LV station, assign feeder to all nodes in that
                 # LV network (only applies when mode is 'mv_feeder'
-                if (
-                    node.split("_")[0] == "BusBar"
-                    and node.split("_")[-1] == "MV"
-                ):
-                    lvgrid = LVGrid(
-                        id=int(node.split("_")[-2]), edisgo_obj=edisgo_obj
-                    )
+                if node.split("_")[0] == "BusBar" and node.split("_")[-1] == "MV":
+                    lvgrid = LVGrid(id=int(node.split("_")[-2]), edisgo_obj=edisgo_obj)
                     edisgo_obj.topology.buses_df.loc[
                         lvgrid.buses_df.index, mode
                     ] = neighbor
@@ -395,9 +377,7 @@ def get_path_length_to_station(edisgo_obj):
 
     for bus in edisgo_obj.topology.mv_grid.buses_df.index:
         path = nx.shortest_path(graph, source=mv_station, target=bus)
-        edisgo_obj.topology.buses_df.at[bus, "path_length_to_station"] = (
-            len(path) - 1
-        )
+        edisgo_obj.topology.buses_df.at[bus, "path_length_to_station"] = len(path) - 1
         if bus.split("_")[0] == "BusBar" and bus.split("_")[-1] == "MV":
             # check if there is an underlying LV grid
             lv_grid_repr = "LVGrid_{}".format(int(bus.split("_")[-2]))
@@ -406,9 +386,7 @@ def get_path_length_to_station(edisgo_obj):
                 lv_graph = lvgrid.graph
                 lv_station = lvgrid.station.index[0]
                 for bus in lvgrid.buses_df.index:
-                    lv_path = nx.shortest_path(
-                        lv_graph, source=lv_station, target=bus
-                    )
+                    lv_path = nx.shortest_path(lv_graph, source=lv_station, target=bus)
                     edisgo_obj.topology.buses_df.at[
                         bus, "path_length_to_station"
                     ] = len(path) + len(lv_path)
@@ -440,9 +418,7 @@ def assign_voltage_level_to_component(edisgo_obj, df):
 
     """
     df["voltage_level"] = df.apply(
-        lambda _: "lv"
-        if edisgo_obj.topology.buses_df.at[_.bus, "v_nom"] < 1
-        else "mv",
+        lambda _: "lv" if edisgo_obj.topology.buses_df.at[_.bus, "v_nom"] < 1 else "mv",
         axis=1,
     )
     return df
@@ -469,14 +445,10 @@ def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
     with session_scope() as session:
         query = session.query(
             table.gid,
-            func.ST_AsText(func.ST_Transform(table.geom, srid)).label(
-                "geometry"
-            ),
+            func.ST_AsText(func.ST_Transform(table.geom, srid)).label("geometry"),
         )
     geom_data = pd.read_sql_query(query.statement, query.session.bind)
-    geom_data.geometry = geom_data.apply(
-        lambda _: wkt_loads(_.geometry), axis=1
-    )
+    geom_data.geometry = geom_data.apply(lambda _: wkt_loads(_.geometry), axis=1)
     geom_data = gpd.GeoDataFrame(geom_data, crs=f"EPSG:{srid}")
 
     # Make sure MV Geometry is MultiPolygon

@@ -95,8 +95,7 @@ def reinforce_grid(
             edisgo_reinforce.results.equipment_changes.append(
                 pd.DataFrame(
                     {
-                        "iteration_step": [iteration_step]
-                        * len(lines_changes),
+                        "iteration_step": [iteration_step] * len(lines_changes),
                         "change": ["changed"] * len(lines_changes),
                         "equipment": edisgo_reinforce.topology.lines_df.loc[
                             lines_changes.keys(), "type_info"
@@ -114,8 +113,7 @@ def reinforce_grid(
                 edisgo_reinforce.results.equipment_changes.append(
                     pd.DataFrame(
                         {
-                            "iteration_step": [iteration_step]
-                            * len(transformer_list),
+                            "iteration_step": [iteration_step] * len(transformer_list),
                             "change": [mode] * len(transformer_list),
                             "equipment": transformer_list,
                             "quantity": [1] * len(transformer_list),
@@ -138,10 +136,7 @@ def reinforce_grid(
 
     if timesteps_pfa is not None:
         # if timesteps_pfa = 'snapshot_analysis' get snapshots
-        if (
-            isinstance(timesteps_pfa, str)
-            and timesteps_pfa == "snapshot_analysis"
-        ):
+        if isinstance(timesteps_pfa, str) and timesteps_pfa == "snapshot_analysis":
             snapshots = tools.select_worstcase_snapshots(edisgo_reinforce)
             # drop None values in case any of the two snapshots does not exist
             timesteps_pfa = pd.DatetimeIndex(
@@ -154,19 +149,13 @@ def reinforce_grid(
         # datetimes throw an error
         elif not isinstance(timesteps_pfa, datetime.datetime):
             if hasattr(timesteps_pfa, "__iter__"):
-                if not all(
-                    isinstance(_, datetime.datetime) for _ in timesteps_pfa
-                ):
+                if not all(isinstance(_, datetime.datetime) for _ in timesteps_pfa):
                     raise ValueError(
-                        "Input {} for timesteps_pfa is not valid.".format(
-                            timesteps_pfa
-                        )
+                        "Input {} for timesteps_pfa is not valid.".format(timesteps_pfa)
                     )
             else:
                 raise ValueError(
-                    "Input {} for timesteps_pfa is not valid.".format(
-                        timesteps_pfa
-                    )
+                    "Input {} for timesteps_pfa is not valid.".format(timesteps_pfa)
                 )
 
     iteration_step = 1
@@ -229,15 +218,11 @@ def reinforce_grid(
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = checks.hv_mv_station_load(edisgo_reinforce)
         if mode != "mv":
-            overloaded_lv_stations = checks.mv_lv_station_load(
-                edisgo_reinforce
-            )
+            overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce)
         logger.debug("==> Recheck line load.")
         crit_lines = checks.mv_line_load(edisgo_reinforce)
         if not mode:
-            crit_lines = crit_lines.append(
-                checks.lv_line_load(edisgo_reinforce)
-            )
+            crit_lines = crit_lines.append(checks.lv_line_load(edisgo_reinforce))
 
         iteration_step += 1
         while_counter += 1
@@ -349,9 +334,7 @@ def reinforce_grid(
             # check if all over-voltage problems were solved
             logger.debug("==> Run power flow analysis.")
             edisgo_reinforce.analyze(mode=mode, timesteps=timesteps_pfa)
-            logger.debug(
-                "==> Recheck voltage at secondary side of LV stations."
-            )
+            logger.debug("==> Recheck voltage at secondary side of LV stations.")
             crit_stations = checks.lv_voltage_deviation(
                 edisgo_reinforce,
                 mode="stations",
@@ -392,12 +375,10 @@ def reinforce_grid(
             # for every topology in crit_nodes do reinforcement
             for grid in crit_nodes:
                 # reinforce lines
-                lines_changes = (
-                    reinforce_measures.reinforce_lines_voltage_issues(
-                        edisgo_reinforce,
-                        edisgo_reinforce.topology._grids[grid],
-                        crit_nodes[grid],
-                    )
+                lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
+                    edisgo_reinforce,
+                    edisgo_reinforce.topology._grids[grid],
+                    crit_nodes[grid],
                 )
                 # write changed lines to results.equipment_changes
                 _add_lines_changes_to_equipment_changes()
@@ -489,15 +470,11 @@ def reinforce_grid(
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = checks.hv_mv_station_load(edisgo_reinforce)
         if mode != "mv":
-            overloaded_lv_stations = checks.mv_lv_station_load(
-                edisgo_reinforce
-            )
+            overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce)
         logger.debug("==> Recheck line load.")
         crit_lines = checks.mv_line_load(edisgo_reinforce)
         if not mode:
-            crit_lines = crit_lines.append(
-                checks.lv_line_load(edisgo_reinforce)
-            )
+            crit_lines = crit_lines.append(checks.lv_line_load(edisgo_reinforce))
 
         iteration_step += 1
         while_counter += 1

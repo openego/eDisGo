@@ -804,12 +804,7 @@ class Results:
             )
 
     def to_csv(
-        self,
-        directory,
-        parameters=None,
-        reduce_memory=False,
-        save_seed=False,
-        **kwargs
+        self, directory, parameters=None, reduce_memory=False, save_seed=False, **kwargs
     ):
         """
         Saves results to csv.
@@ -988,15 +983,11 @@ class Results:
         if parameters is None:
             parameters = {
                 "powerflow_results": list(power_flow_results_dict.keys()),
-                "grid_expansion_results": list(
-                    grid_expansion_results_dict.keys()
-                ),
+                "grid_expansion_results": list(grid_expansion_results_dict.keys()),
             }
             if not save_seed:
                 parameters["powerflow_results"] = [
-                    _
-                    for _ in parameters["powerflow_results"]
-                    if not "seed" in _
+                    _ for _ in parameters["powerflow_results"] if not "seed" in _
                 ]
 
         if not isinstance(parameters, dict):
@@ -1073,9 +1064,7 @@ class Results:
         if parameters is None:
             parameters = {
                 "powerflow_results": list(power_flow_results_dict.keys()),
-                "grid_expansion_results": list(
-                    grid_expansion_results_dict.keys()
-                ),
+                "grid_expansion_results": list(grid_expansion_results_dict.keys()),
             }
 
         if not isinstance(parameters, dict):
@@ -1103,9 +1092,9 @@ class Results:
                     )
 
         # import grid expansion results
-        if "grid_expansion_results" in list(
-            parameters.keys()
-        ) and os.path.isdir(os.path.join(directory, "grid_expansion_results")):
+        if "grid_expansion_results" in list(parameters.keys()) and os.path.isdir(
+            os.path.join(directory, "grid_expansion_results")
+        ):
             for attr in parameters["grid_expansion_results"]:
                 path = os.path.join(
                     directory,

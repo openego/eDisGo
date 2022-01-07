@@ -54,9 +54,7 @@ class TestGeneratorsImport:
             index=[13, 14, 456],
         )
 
-        generators_import._update_grids(
-            self.edisgo, generators_mv, generators_lv
-        )
+        generators_import._update_grids(self.edisgo, generators_mv, generators_lv)
 
         # check number of generators
         assert len(self.edisgo.topology.generators_df) == 6
@@ -64,60 +62,41 @@ class TestGeneratorsImport:
 
         # check removed generators
         assert "Generator_1" not in self.edisgo.topology.generators_df.index
-        assert (
-            "GeneratorFluctuating_12"
-            not in self.edisgo.topology.generators_df.index
-        )
+        assert "GeneratorFluctuating_12" not in self.edisgo.topology.generators_df.index
 
         # check updated generators
         assert (
-            self.edisgo.topology.generators_df.at[
-                "GeneratorFluctuating_2", "p_nom"
-            ]
+            self.edisgo.topology.generators_df.at["GeneratorFluctuating_2", "p_nom"]
             == 3
         )
         assert (
-            self.edisgo.topology.generators_df.at[
-                "GeneratorFluctuating_2", "subtype"
-            ]
+            self.edisgo.topology.generators_df.at["GeneratorFluctuating_2", "subtype"]
             == "wind_wind_onshore"
         )
         assert (
-            self.edisgo.topology.generators_df.at[
-                "GeneratorFluctuating_13", "p_nom"
-            ]
+            self.edisgo.topology.generators_df.at["GeneratorFluctuating_13", "p_nom"]
             == 0.027
         )
         assert (
-            self.edisgo.topology.generators_df.at[
-                "GeneratorFluctuating_13", "subtype"
-            ]
+            self.edisgo.topology.generators_df.at["GeneratorFluctuating_13", "subtype"]
             == "solar_solar_roof_mounted"
         )
 
         # check generators that stayed the same
         assert (
-            self.edisgo.topology.generators_df.at[
-                "GeneratorFluctuating_3", "p_nom"
-            ]
+            self.edisgo.topology.generators_df.at["GeneratorFluctuating_3", "p_nom"]
             == 2.67
         )
         assert (
-            self.edisgo.topology.generators_df.at[
-                "GeneratorFluctuating_3", "subtype"
-            ]
+            self.edisgo.topology.generators_df.at["GeneratorFluctuating_3", "subtype"]
             == "solar_solar_ground_mounted"
         )
         assert (
-            self.edisgo.topology.generators_df.at[
-                "GeneratorFluctuating_14", "p_nom"
-            ]
+            self.edisgo.topology.generators_df.at["GeneratorFluctuating_14", "p_nom"]
             == 0.005
         )
         assert (
-            self.edisgo.topology.generators_df.at[
-                "GeneratorFluctuating_14", "subtype"
-            ]
+            self.edisgo.topology.generators_df.at["GeneratorFluctuating_14", "subtype"]
             == "solar_solar_roof_mounted"
         )
 
@@ -202,16 +181,11 @@ class TestGeneratorsImport:
         )
 
         # check that all old generators still exist
-        assert gens_before.index.isin(
-            self.edisgo.topology.generators_df.index
-        ).all()
+        assert gens_before.index.isin(self.edisgo.topology.generators_df.index).all()
 
         # check that types for which no target capacity is specified are
         # not expanded
-        assert (
-            "run_of_river"
-            not in self.edisgo.topology.generators_df["type"].unique()
-        )
+        assert "run_of_river" not in self.edisgo.topology.generators_df["type"].unique()
 
         # check that target capacity for specified types is met
         # wind - target capacity higher than existing capacity plus new
@@ -268,8 +242,7 @@ class TestGeneratorsImport:
             ]
         ) == len(gens_before[gens_before["type"] == "gas"])
         assert (
-            self.edisgo.topology.generators_df.at["Generator_1", "p_nom"]
-            == 0.775 + 1.5
+            self.edisgo.topology.generators_df.at["Generator_1", "p_nom"] == 0.775 + 1.5
         )
 
 
@@ -292,9 +265,7 @@ class TestGeneratorsImportOEDB:
         # check number of generators
         assert len(edisgo.topology.generators_df) == 18 + 1618
         # check total installed capacity
-        assert np.isclose(
-            edisgo.topology.generators_df.p_nom.sum(), 54.52844 + 19.8241
-        )
+        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 54.52844 + 19.8241)
 
     @pytest.mark.slow
     def test_oedb_with_worst_case_timeseries(self):
@@ -305,21 +276,15 @@ class TestGeneratorsImportOEDB:
         )
 
         gens_before = edisgo.topology.generators_df.copy()
-        gens_ts_active_before = (
-            edisgo.timeseries.generators_active_power.copy()
-        )
-        gens_ts_reactive_before = (
-            edisgo.timeseries.generators_reactive_power.copy()
-        )
+        gens_ts_active_before = edisgo.timeseries.generators_active_power.copy()
+        gens_ts_reactive_before = edisgo.timeseries.generators_reactive_power.copy()
 
         edisgo.import_generators("nep2035")
 
         # check number of generators
         assert len(edisgo.topology.generators_df) == 18 + 1618
         # check total installed capacity
-        assert np.isclose(
-            edisgo.topology.generators_df.p_nom.sum(), 54.52844 + 19.8241
-        )
+        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 54.52844 + 19.8241)
 
         gens_new = edisgo.topology.generators_df[
             ~edisgo.topology.generators_df.index.isin(gens_before.index)
@@ -362,9 +327,7 @@ class TestGeneratorsImportOEDB:
                 :, new_solar_gen.name
             ].tolist(),
             (
-                edisgo.timeseries.generators_active_power.loc[
-                    :, new_solar_gen.name
-                ]
+                edisgo.timeseries.generators_active_power.loc[:, new_solar_gen.name]
                 * -np.tan(np.arccos(0.95))
             ).tolist(),
         ).all()
@@ -401,25 +364,19 @@ class TestGeneratorsImportOEDB:
         # time series of old gen
         assert np.isclose(
             (
-                gens_ts_active_before.loc[:, old_wind_gen.name]
-                / old_wind_gen.p_nom
+                gens_ts_active_before.loc[:, old_wind_gen.name] / old_wind_gen.p_nom
             ).tolist(),
             (
-                edisgo.timeseries.generators_active_power.loc[
-                    :, new_wind_gen.name
-                ]
+                edisgo.timeseries.generators_active_power.loc[:, new_wind_gen.name]
                 / new_wind_gen.p_nom
             ).tolist(),
         ).all()
         assert np.isclose(
             (
-                gens_ts_reactive_before.loc[:, old_wind_gen.name]
-                / old_wind_gen.p_nom
+                gens_ts_reactive_before.loc[:, old_wind_gen.name] / old_wind_gen.p_nom
             ).tolist(),
             (
-                edisgo.timeseries.generators_reactive_power.loc[
-                    :, new_wind_gen.name
-                ]
+                edisgo.timeseries.generators_reactive_power.loc[:, new_wind_gen.name]
                 / new_wind_gen.p_nom
             ).tolist(),
         ).all()
@@ -438,9 +395,7 @@ class TestGeneratorsImportOEDB:
         ).all()
         assert np.isclose(
             (
-                edisgo.timeseries.generators_reactive_power.loc[
-                    :, new_gen.name
-                ]
+                edisgo.timeseries.generators_reactive_power.loc[:, new_gen.name]
                 / new_gen.p_nom
             ).tolist(),
             [-np.tan(np.arccos(0.95)), 0],
@@ -466,21 +421,15 @@ class TestGeneratorsImportOEDB:
         )
 
         gens_before = edisgo.topology.generators_df.copy()
-        gens_ts_active_before = (
-            edisgo.timeseries.generators_active_power.copy()
-        )
-        gens_ts_reactive_before = (
-            edisgo.timeseries.generators_reactive_power.copy()
-        )
+        gens_ts_active_before = edisgo.timeseries.generators_active_power.copy()
+        gens_ts_reactive_before = edisgo.timeseries.generators_reactive_power.copy()
 
         edisgo.import_generators("nep2035")
 
         # check number of generators
         assert len(edisgo.topology.generators_df) == 18 + 1618
         # check total installed capacity
-        assert np.isclose(
-            edisgo.topology.generators_df.p_nom.sum(), 54.52844 + 19.8241
-        )
+        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 54.52844 + 19.8241)
 
         gens_new = edisgo.topology.generators_df[
             ~edisgo.topology.generators_df.index.isin(gens_before.index)
@@ -496,33 +445,22 @@ class TestGeneratorsImportOEDB:
         # check if time series of old gen is the same as before
         assert np.isclose(
             gens_ts_active_before.loc[:, old_solar_gen.name],
-            edisgo.timeseries.generators_active_power.loc[
-                :, old_solar_gen.name
-            ],
+            edisgo.timeseries.generators_active_power.loc[:, old_solar_gen.name],
         ).all()
         assert np.isclose(
             gens_ts_reactive_before.loc[:, old_solar_gen.name],
-            edisgo.timeseries.generators_reactive_power.loc[
-                :, old_solar_gen.name
-            ],
+            edisgo.timeseries.generators_reactive_power.loc[:, old_solar_gen.name],
         ).all()
         # check if normalized time series of new gen is the same as normalized
         # time series of old gen
         assert np.isclose(
-            gens_ts_active_before.loc[:, old_solar_gen.name]
-            / old_solar_gen.p_nom,
-            edisgo.timeseries.generators_active_power.loc[
-                :, new_solar_gen.name
-            ]
+            gens_ts_active_before.loc[:, old_solar_gen.name] / old_solar_gen.p_nom,
+            edisgo.timeseries.generators_active_power.loc[:, new_solar_gen.name]
             / new_solar_gen.p_nom,
         ).all()
         assert np.isclose(
-            edisgo.timeseries.generators_reactive_power.loc[
-                :, new_solar_gen.name
-            ],
-            edisgo.timeseries.generators_active_power.loc[
-                :, new_solar_gen.name
-            ]
+            edisgo.timeseries.generators_reactive_power.loc[:, new_solar_gen.name],
+            edisgo.timeseries.generators_active_power.loc[:, new_solar_gen.name]
             * -np.tan(np.arccos(0.95)),
         ).all()
         # ToDo following test currently does fail sometimes as lv generators
@@ -544,30 +482,22 @@ class TestGeneratorsImportOEDB:
         # check if time series of old gen is the same as before
         assert np.isclose(
             gens_ts_active_before.loc[:, old_wind_gen.name],
-            edisgo.timeseries.generators_active_power.loc[
-                :, old_wind_gen.name
-            ],
+            edisgo.timeseries.generators_active_power.loc[:, old_wind_gen.name],
         ).all()
         assert np.isclose(
             gens_ts_reactive_before.loc[:, old_wind_gen.name],
-            edisgo.timeseries.generators_reactive_power.loc[
-                :, old_wind_gen.name
-            ],
+            edisgo.timeseries.generators_reactive_power.loc[:, old_wind_gen.name],
         ).all()
         # check if normalized time series of new gen is the same as normalized
         # time series of old gen
         assert np.isclose(
-            gens_ts_active_before.loc[:, old_wind_gen.name]
-            / old_wind_gen.p_nom,
+            gens_ts_active_before.loc[:, old_wind_gen.name] / old_wind_gen.p_nom,
             edisgo.timeseries.generators_active_power.loc[:, new_wind_gen.name]
             / new_wind_gen.p_nom,
         ).all()
         assert np.isclose(
-            gens_ts_reactive_before.loc[:, old_wind_gen.name]
-            / old_wind_gen.p_nom,
-            edisgo.timeseries.generators_reactive_power.loc[
-                :, new_wind_gen.name
-            ]
+            gens_ts_reactive_before.loc[:, old_wind_gen.name] / old_wind_gen.p_nom,
+            edisgo.timeseries.generators_reactive_power.loc[:, new_wind_gen.name]
             / new_wind_gen.p_nom,
         ).all()
 
@@ -619,9 +549,7 @@ class TestGeneratorsImportOEDB:
         )
 
         # check that all old generators still exist
-        assert gens_before.index.isin(
-            edisgo.topology.generators_df.index
-        ).all()
+        assert gens_before.index.isin(edisgo.topology.generators_df.index).all()
 
         # check that installed capacity of types, for which no target capacity
         # was specified, remained the same

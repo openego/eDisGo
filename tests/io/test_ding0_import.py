@@ -28,9 +28,7 @@ class TestImportFromDing0:
 
         # grid district
         assert self.topology.grid_district["population"] == 23358
-        assert isinstance(
-            self.topology.grid_district["geom"], shapely.geometry.Polygon
-        )
+        assert isinstance(self.topology.grid_district["geom"], shapely.geometry.Polygon)
 
         # grids
         assert isinstance(self.topology.mv_grid, MVGrid)
@@ -58,9 +56,7 @@ class TestImportFromDing0:
         for comp, name in comps_dict.items():
             new_comp = getattr(self.topology, "_{}_df".format(comp)).loc[name]
             comps = getattr(self.topology, "_{}_df".format(comp))
-            setattr(
-                self.topology, "_{}_df".format(comp), comps.append(new_comp)
-            )
+            setattr(self.topology, "_{}_df".format(comp), comps.append(new_comp))
             try:
                 ding0_import._validate_ding0_grid_import(self.topology)
                 raise Exception(
@@ -165,19 +161,15 @@ class TestImportFromDing0:
         self.topology.buses_df = self.topology.buses_df.append(bus)
         try:
             ding0_import._validate_ding0_grid_import(self.topology)
-            raise Exception(
-                "Appending components buses did not work " "properly."
-            )
+            raise Exception("Appending components buses did not work " "properly.")
         except ValueError as e:
-            assert e.args[
-                0
-            ] == "The following buses are isolated: " "{}.".format(bus.name)
+            assert e.args[0] == "The following buses are isolated: " "{}.".format(
+                bus.name
+            )
 
     def test_transformer_buses(self):
         assert (
-            self.topology.buses_df.loc[
-                self.topology.transformers_df.bus1
-            ].v_nom.values
+            self.topology.buses_df.loc[self.topology.transformers_df.bus1].v_nom.values
             < self.topology.buses_df.loc[
                 self.topology.transformers_df.bus0
             ].v_nom.values

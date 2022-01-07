@@ -81,10 +81,7 @@ def _get_griddistrict(ding0_filepath):
 
 
 def run_edisgo_basic(
-    ding0_filepath,
-    generator_scenario=None,
-    analysis="worst-case",
-    *edisgo_grid
+    ding0_filepath, generator_scenario=None, analysis="worst-case", *edisgo_grid
 ):
     """
     Analyze edisgo network extension cost as reference scenario
@@ -121,13 +118,9 @@ def run_edisgo_basic(
 
     grid_issues = {}
 
-    logging.info(
-        "Grid expansion for MV network district {}".format(grid_district)
-    )
+    logging.info("Grid expansion for MV network district {}".format(grid_district))
 
-    if (
-        edisgo_grid
-    ):  # if an edisgo_grid is passed in arg then ignore everything else
+    if edisgo_grid:  # if an edisgo_grid is passed in arg then ignore everything else
         edisgo_grid = edisgo_grid[0]
     else:
         try:
@@ -150,25 +143,19 @@ def run_edisgo_basic(
 
     # Import generators
     if generator_scenario:
-        logging.info(
-            "Grid expansion for scenario '{}'.".format(generator_scenario)
-        )
+        logging.info("Grid expansion for scenario '{}'.".format(generator_scenario))
         edisgo_grid.import_generators(generator_scenario=generator_scenario)
     else:
-        logging.info(
-            "Grid expansion with no generator imports based on scenario"
-        )
+        logging.info("Grid expansion with no generator imports based on scenario")
 
     try:
         # Do network reinforcement
         edisgo_grid.reinforce()
 
         # Get costs
-        costs_grouped = (
-            edisgo_grid.network.results.grid_expansion_costs.groupby(
-                ["type"]
-            ).sum()
-        )
+        costs_grouped = edisgo_grid.network.results.grid_expansion_costs.groupby(
+            ["type"]
+        ).sum()
         costs = pd.DataFrame(
             costs_grouped.values,
             columns=costs_grouped.columns,
@@ -558,19 +545,15 @@ def edisgo_run():
         with open(args.ding0_dir_select[1], "r") as file_handle:
             ding0_file_list_grid_district_numbers = list(file_handle)
             ding0_file_list_grid_district_numbers = [
-                _.splitlines()[0]
-                for _ in ding0_file_list_grid_district_numbers
+                _.splitlines()[0] for _ in ding0_file_list_grid_district_numbers
             ]
 
         ding0_file_list = map(
-            lambda x: args.ding0_dir_select[0]
-            + args.ding0_dir_select[2].format(x),
+            lambda x: args.ding0_dir_select[0] + args.ding0_dir_select[2].format(x),
             ding0_file_list_grid_district_numbers,
         )
     else:
-        raise FileNotFoundError(
-            "Some of the Arguments for input files are missing."
-        )
+        raise FileNotFoundError("Some of the Arguments for input files are missing.")
 
     # this is the serial version of the run system
     run_func = run_edisgo_basic
@@ -633,9 +616,7 @@ def edisgo_run():
     all_costs = pd.concat(all_costs, ignore_index=True)
 
     # write costs and error messages to csv files
-    pd.DataFrame(all_grid_issues_before_geno_import).dropna(
-        axis=0, how="all"
-    ).to_csv(
+    pd.DataFrame(all_grid_issues_before_geno_import).dropna(axis=0, how="all").to_csv(
         args.out_dir + exec_time + "_" + "grid_issues_before_geno_import.csv",
         index=False,
     )

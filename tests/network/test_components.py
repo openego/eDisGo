@@ -18,9 +18,7 @@ class TestComponents:
     def test_load_class(self):
         """Test Load class getter, setter, methods"""
 
-        load = Load(
-            id="Load_agricultural_LVGrid_1_1", edisgo_obj=self.edisgo_obj
-        )
+        load = Load(id="Load_agricultural_LVGrid_1_1", edisgo_obj=self.edisgo_obj)
 
         # test getter
         assert load.id == "Load_agricultural_LVGrid_1_1"
@@ -53,9 +51,7 @@ class TestComponents:
     def test_generator_class(self):
         """Test Generator class getter, setter, methods"""
 
-        gen = Generator(
-            id="GeneratorFluctuating_7", edisgo_obj=self.edisgo_obj
-        )
+        gen = Generator(id="GeneratorFluctuating_7", edisgo_obj=self.edisgo_obj)
         # GeneratorFluctuating_7,Bus_GeneratorFluctuating_7,PQ,3,wind,1122075,wind_wind_onshore
         # test getter
         assert gen.id == "GeneratorFluctuating_7"

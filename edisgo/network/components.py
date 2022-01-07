@@ -156,9 +156,7 @@ class Component(BasicComponent):
         if math.isnan(grid.lv_grid_id):
             return self.topology.mv_grid
         else:
-            return self.topology._grids[
-                "LVGrid_{}".format(int(grid.lv_grid_id))
-            ]
+            return self.topology._grids["LVGrid_{}".format(int(grid.lv_grid_id))]
 
     @property
     def geom(self):
@@ -315,9 +313,7 @@ class Load(Component):
 
     @annual_consumption.setter
     def annual_consumption(self, annual_consumption):
-        self.topology._loads_df.at[
-            self.id, "annual_consumption"
-        ] = annual_consumption
+        self.topology._loads_df.at[self.id, "annual_consumption"] = annual_consumption
 
     @property
     def sector(self):
@@ -490,9 +486,7 @@ class Generator(Component):
             Active power time series of generator in MW.
 
         """
-        return self.edisgo_obj.timeseries.generators_active_power.loc[
-            :, self.id
-        ]
+        return self.edisgo_obj.timeseries.generators_active_power.loc[:, self.id]
 
     @property
     def reactive_power_timeseries(self):
@@ -505,9 +499,7 @@ class Generator(Component):
             Reactive power time series of generator in Mvar.
 
         """
-        return self.edisgo_obj.timeseries.generators_reactive_power.loc[
-            :, self.id
-        ]
+        return self.edisgo_obj.timeseries.generators_reactive_power.loc[:, self.id]
 
     @property
     def weather_cell_id(self):
@@ -532,9 +524,7 @@ class Generator(Component):
 
     @weather_cell_id.setter
     def weather_cell_id(self, weather_cell_id):
-        self.topology._generators_df.at[
-            self.id, "weather_cell_id"
-        ] = weather_cell_id
+        self.topology._generators_df.at[self.id, "weather_cell_id"] = weather_cell_id
 
     def _set_bus(self, bus):
         # check if bus is valid
@@ -620,13 +610,9 @@ class Storage(Component):
             return self._timeseries
         else:
             self._timeseries["q"] = (
-                abs(self._timeseries.p)
-                * self.q_sign
-                * tan(acos(self.power_factor))
+                abs(self._timeseries.p) * self.q_sign * tan(acos(self.power_factor))
             )
-            return self._timeseries.loc[
-                self.grid.edisgo_obj.timeseries.timeindex, :
-            ]
+            return self._timeseries.loc[self.grid.edisgo_obj.timeseries.timeindex, :]
 
     @property
     def nominal_power(self):
@@ -937,9 +923,7 @@ class Switch(BasicComponent):
             elif col_closed is not None and col_open is None:
                 self._state = "closed"
             else:
-                raise AttributeError(
-                    "State of switch could not be determined."
-                )
+                raise AttributeError("State of switch could not be determined.")
         return self._state
 
     @property
@@ -966,15 +950,11 @@ class Switch(BasicComponent):
             Grid switch is in.
 
         """
-        grid = self.topology.buses_df.loc[
-            self.bus_closed, ["mv_grid_id", "lv_grid_id"]
-        ]
+        grid = self.topology.buses_df.loc[self.bus_closed, ["mv_grid_id", "lv_grid_id"]]
         if math.isnan(grid.lv_grid_id):
             return self.topology.mv_grid
         else:
-            return self.topology._grids[
-                "LVGrid_{}".format(int(grid.lv_grid_id))
-            ]
+            return self.topology._grids["LVGrid_{}".format(int(grid.lv_grid_id))]
 
     def open(self):
         """

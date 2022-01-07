@@ -167,9 +167,7 @@ def calc_geo_dist_vincenty(
     # notice: vincenty takes (lat,lon)
     branch_length = (
         branch_detour_factor
-        * geodesic(
-            (bus_source.y, bus_source.x), (bus_target.y, bus_target.x)
-        ).m
+        * geodesic((bus_source.y, bus_source.x), (bus_target.y, bus_target.x)).m
     )
 
     # ========= BUG: LINE LENGTH=0 WHEN CONNECTING GENERATORS ===========
@@ -180,8 +178,7 @@ def calc_geo_dist_vincenty(
     if branch_length == 0:
         branch_length = 1
         logger.debug(
-            "Geo distance is zero, check objects' positions. "
-            "Distance is set to 1m."
+            "Geo distance is zero, check objects' positions. " "Distance is set to 1m."
         )
     # ===================================================================
 
@@ -215,9 +212,7 @@ def find_nearest_bus(point, bus_target):
     return bus_target["dist"].idxmin(), bus_target["dist"].min()
 
 
-def find_nearest_conn_objects(
-    grid_topology, bus, lines, conn_diff_tolerance=0.0001
-):
+def find_nearest_conn_objects(grid_topology, bus, lines, conn_diff_tolerance=0.0001):
     """
     Searches all lines for the nearest possible connection object per line.
 
@@ -256,12 +251,8 @@ def find_nearest_conn_objects(
     projection = proj2equidistant(srid)
     for line in lines:
 
-        line_bus0 = grid_topology.buses_df.loc[
-            grid_topology.lines_df.loc[line, "bus0"]
-        ]
-        line_bus1 = grid_topology.buses_df.loc[
-            grid_topology.lines_df.loc[line, "bus1"]
-        ]
+        line_bus0 = grid_topology.buses_df.loc[grid_topology.lines_df.loc[line, "bus0"]]
+        line_bus1 = grid_topology.buses_df.loc[grid_topology.lines_df.loc[line, "bus1"]]
 
         # create shapely objects for 2 buses and line between them,
         # transform to equidistant CRS
@@ -301,15 +292,9 @@ def find_nearest_conn_objects(
             del conn_objects["b"]
 
         # remove MV station as possible connection point
-        if (
-            conn_objects["s1"]["repr"]
-            == grid_topology.mv_grid.station.index[0]
-        ):
+        if conn_objects["s1"]["repr"] == grid_topology.mv_grid.station.index[0]:
             del conn_objects["s1"]
-        elif (
-            conn_objects["s2"]["repr"]
-            == grid_topology.mv_grid.station.index[0]
-        ):
+        elif conn_objects["s2"]["repr"] == grid_topology.mv_grid.station.index[0]:
             del conn_objects["s2"]
 
         # find nearest connection point in conn_objects

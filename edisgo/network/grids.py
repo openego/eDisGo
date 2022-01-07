@@ -81,9 +81,7 @@ class Grid(ABC):
         side bus information.
 
         """
-        return (
-            self.buses_df.loc[self.transformers_df.iloc[0].bus1].to_frame().T
-        )
+        return self.buses_df.loc[self.transformers_df.iloc[0].bus1].to_frame().T
 
     @property
     def generators_df(self):
@@ -99,9 +97,7 @@ class Grid(ABC):
 
         """
         return self.edisgo_obj.topology.generators_df[
-            self.edisgo_obj.topology.generators_df.bus.isin(
-                self.buses_df.index
-            )
+            self.edisgo_obj.topology.generators_df.bus.isin(self.buses_df.index)
         ]
 
     @property
@@ -162,9 +158,7 @@ class Grid(ABC):
 
         """
         return self.edisgo_obj.topology.storage_units_df[
-            self.edisgo_obj.topology.storage_units_df.bus.isin(
-                self.buses_df.index
-            )
+            self.edisgo_obj.topology.storage_units_df.bus.isin(self.buses_df.index)
         ]
 
     @property
@@ -181,9 +175,7 @@ class Grid(ABC):
 
         """
         return self.edisgo_obj.topology.charging_points_df[
-            self.edisgo_obj.topology.charging_points_df.bus.isin(
-                self.buses_df.index
-            )
+            self.edisgo_obj.topology.charging_points_df.bus.isin(self.buses_df.index)
         ]
 
     @property
@@ -203,13 +195,8 @@ class Grid(ABC):
 
         """
         return self.edisgo_obj.topology.switches_df[
-            self.edisgo_obj.topology.switches_df.bus_closed.isin(
-                self.buses_df.index
-            )
-        ][
-            self.edisgo_obj.topology.switches_df.type_info
-            == "Switch Disconnector"
-        ]
+            self.edisgo_obj.topology.switches_df.bus_closed.isin(self.buses_df.index)
+        ][self.edisgo_obj.topology.switches_df.type_info == "Switch Disconnector"]
 
     @property
     def switch_disconnectors(self):
@@ -441,9 +428,7 @@ class LVGrid(Grid):
 
         """
         return self.edisgo_obj.topology.transformers_df[
-            self.edisgo_obj.topology.transformers_df.bus1.isin(
-                self.buses_df.index
-            )
+            self.edisgo_obj.topology.transformers_df.bus1.isin(self.buses_df.index)
         ]
 
     def draw(
@@ -494,8 +479,7 @@ class LVGrid(Grid):
         # assign edge width + color and node size + color
         top = self.edisgo_obj.topology
         edge_width = [
-            top.get_line_connecting_buses(u, v).s_nom.sum() * 10
-            for u, v in G.edges()
+            top.get_line_connecting_buses(u, v).s_nom.sum() * 10 for u, v in G.edges()
         ]
         if isinstance(edge_color, pd.Series):
             edge_color = [
@@ -507,9 +491,7 @@ class LVGrid(Grid):
             edge_color_is_sequence = False
 
         node_size = [
-            top.get_connected_components_from_bus(v)["loads"].p_nom.sum()
-            * 50000
-            + 10
+            top.get_connected_components_from_bus(v)["loads"].p_nom.sum() * 50000 + 10
             for v in G
         ]
         if isinstance(node_color, pd.Series):

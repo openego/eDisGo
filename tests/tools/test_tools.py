@@ -82,18 +82,14 @@ class TestTools:
         assert np.isclose(data, 1039.23)
         data = tools.calculate_apparent_power(30, np.array([20, 30]), 1)
         assert_allclose(data, np.array([1039.23, 1558.84]), rtol=1e-5)
-        data = tools.calculate_apparent_power(
-            np.array([30, 30]), np.array([20, 30]), 1
-        )
+        data = tools.calculate_apparent_power(np.array([30, 30]), np.array([20, 30]), 1)
         assert_allclose(data, np.array([1039.23, 1558.84]), rtol=1e-5)
         # test parallel line
         data = tools.calculate_apparent_power(20, 30, 2)
         assert np.isclose(data, 1039.23 * 2)
         data = tools.calculate_apparent_power(30, np.array([20, 30]), 3)
         assert_allclose(data, np.array([1039.23 * 3, 1558.84 * 3]), rtol=1e-5)
-        data = tools.calculate_apparent_power(
-            np.array([30, 30]), np.array([20, 30]), 2
-        )
+        data = tools.calculate_apparent_power(np.array([30, 30]), np.array([20, 30]), 2)
         assert_allclose(data, np.array([1039.23 * 2, 1558.84 * 2]), rtol=1e-5)
         data = tools.calculate_apparent_power(
             np.array([30, 30]), np.array([20, 30]), np.array([2, 3])
@@ -101,21 +97,15 @@ class TestTools:
         assert_allclose(data, np.array([1039.23 * 2, 1558.84 * 3]), rtol=1e-5)
 
     def test_select_cable(self):
-        cable_data, num_parallel_cables = tools.select_cable(
-            self.edisgo, "mv", 5.1
-        )
+        cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "mv", 5.1)
         assert cable_data.name == "NA2XS2Y 3x1x150 RE/25"
         assert num_parallel_cables == 1
 
-        cable_data, num_parallel_cables = tools.select_cable(
-            self.edisgo, "mv", 40
-        )
+        cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "mv", 40)
         assert cable_data.name == "NA2XS(FL)2Y 3x1x500 RM/35"
         assert num_parallel_cables == 2
 
-        cable_data, num_parallel_cables = tools.select_cable(
-            self.edisgo, "lv", 0.18
-        )
+        cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "lv", 0.18)
         assert cable_data.name == "NAYY 4x1x150"
         assert num_parallel_cables == 1
 
@@ -131,9 +121,7 @@ class TestTools:
         assert not topo.lines_df.mv_feeder.isna().any()
         mv_station = topo.mv_grid.station.index[0]
         buses_aggr_la = list(
-            topo.transformers_df[
-                topo.transformers_df.bus0 == mv_station
-            ].bus1.unique()
+            topo.transformers_df[topo.transformers_df.bus0 == mv_station].bus1.unique()
         )
         buses_aggr_la.append(mv_station)
         assert (
@@ -159,10 +147,7 @@ class TestTools:
         )
 
         # check specific lines
-        assert (
-            topo.lines_df.at["Line_10003", "mv_feeder"]
-            == "Bus_BranchTee_MVGrid_1_1"
-        )
+        assert topo.lines_df.at["Line_10003", "mv_feeder"] == "Bus_BranchTee_MVGrid_1_1"
 
         # ######## test LV feeder mode ########
         tools.assign_feeder(self.edisgo, mode="lv_feeder")
@@ -197,8 +182,7 @@ class TestTools:
 
         # check specific lines
         assert (
-            topo.lines_df.at["Line_30000005", "lv_feeder"]
-            == "Bus_BranchTee_LVGrid_3_3"
+            topo.lines_df.at["Line_30000005", "lv_feeder"] == "Bus_BranchTee_LVGrid_3_3"
         )
         assert (
             topo.lines_df.at["Line_40000001", "lv_feeder"]
@@ -219,9 +203,7 @@ class TestTools:
         assert not topo.lines_df.mv_feeder.isna().any()
         mv_station = topo.mv_grid.station.index[0]
         buses_aggr_la = list(
-            topo.transformers_df[
-                topo.transformers_df.bus0 == mv_station
-            ].bus1.unique()
+            topo.transformers_df[topo.transformers_df.bus0 == mv_station].bus1.unique()
         )
         buses_aggr_la.append(mv_station)
         assert (
@@ -248,10 +230,8 @@ class TestTools:
         )
 
     def test_get_weather_cells_intersecting_with_grid_district(self):
-        weather_cells = (
-            tools.get_weather_cells_intersecting_with_grid_district(
-                self.edisgo
-            )
+        weather_cells = tools.get_weather_cells_intersecting_with_grid_district(
+            self.edisgo
         )
         assert len(weather_cells) == 4
         assert 1123075 in weather_cells

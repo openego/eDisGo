@@ -142,12 +142,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         slack_df = _set_slack(edisgo_obj.topology.mv_grid)
 
         components = {
-            "Load": grid_object.topology.loads_df.loc[:, ["bus", "p_nom"]]
-            .rename(columns={"p_nom": "p_set"})
-            .append(
-                grid_object.topology.charging_points_df.loc[
-                    :, ["bus", "p_nom"]
-                ].rename(columns={"p_nom": "p_set"})
+            "Load": grid_object.topology.loads_df.loc[:, ["bus", "p_nom"]].rename(
+                columns={"p_nom": "p_set"}
             ),
             "Generator": grid_object.topology.generators_df.loc[
                 :, ["bus", "control", "p_nom"]
@@ -174,33 +170,27 @@ def to_pypsa(grid_object, timesteps, **kwargs):
 
         # MV components
         mv_components = _get_grid_component_dict(grid_object)
-        mv_components["Generator"][
-            "fluctuating"
-        ] = grid_object.generators_df.type.isin(["solar", "wind"])
+        mv_components["Generator"]["fluctuating"] = grid_object.generators_df.type.isin(
+            ["solar", "wind"]
+        )
 
         if mode == "mv":
             mv_components["Transformer"] = pd.DataFrame()
         elif mode == "mvlv":
             # get all MV/LV transformers
-            mv_components[
-                "Transformer"
-            ] = edisgo_obj.topology.transformers_df.loc[
+            mv_components["Transformer"] = edisgo_obj.topology.transformers_df.loc[
                 :, ["bus0", "bus1", "x_pu", "r_pu", "type_info", "s_nom"]
-            ].rename(
-                columns={"r_pu": "r", "x_pu": "x"}
-            )
+            ].rename(columns={"r_pu": "r", "x_pu": "x"})
         else:
             raise ValueError("Provide proper mode for mv network export.")
 
         # LV components
         lv_components_to_aggregate = {
-            "Load": ["loads_df", "charging_points_df"],
+            "Load": ["loads_df"],
             "Generator": ["generators_df"],
             "StorageUnit": ["storage_units_df"],
         }
-        lv_components = {
-            key: pd.DataFrame() for key in lv_components_to_aggregate
-        }
+        lv_components = {key: pd.DataFrame() for key in lv_components_to_aggregate}
 
         for lv_grid in grid_object.lv_grids:
             if mode == "mv":
@@ -504,16 +494,10 @@ def _get_grid_component_dict(grid_object):
         and "Line"
     """
     components = {
-        "Load": grid_object.loads_df.loc[:, ["bus", "p_nom"]]
-        .rename(columns={"p_nom": "p_set"})
-        .append(
-            grid_object.charging_points_df.loc[:, ["bus", "p_nom"]].rename(
-                columns={"p_nom": "p_set"}
-            )
+        "Load": grid_object.loads_df.loc[:, ["bus", "p_nom"]].rename(
+            columns={"p_nom": "p_set"}
         ),
-        "Generator": grid_object.generators_df.loc[
-            :, ["bus", "control", "p_nom"]
-        ],
+        "Generator": grid_object.generators_df.loc[:, ["bus", "control", "p_nom"]],
         "StorageUnit": grid_object.storage_units_df.loc[:, ["bus", "control"]],
         "Line": grid_object.lines_df.loc[
             :,
@@ -618,9 +602,7 @@ def _append_lv_components(
             comps_aggr["fluctuating"] = comps.type.isin(flucts)
         elif aggregate_generators == "type":
             comps_aggr = (
-                comps.groupby("type")
-                .sum()
-                .reindex(columns=["bus", "control", "p_nom"])
+                comps.groupby("type").sum().reindex(columns=["bus", "control", "p_nom"])
             )
             comps_aggr.bus = bus
             comps_aggr.control = "PQ"
@@ -680,9 +662,7 @@ def _append_lv_components(
                 },
                 index=[lv_grid_name + "_generators"],
             )
-            aggregated_elements[
-                lv_grid_name + "_generators"
-            ] = comps.index.values
+            aggregated_elements[lv_grid_name + "_generators"] = comps.index.values
         else:
             raise ValueError("Aggregation type for generators invalid.")
         lv_components[comp] = lv_components[comp].append(comps_aggr)
@@ -694,9 +674,7 @@ def _append_lv_components(
                 {"bus": [bus], "control": ["PQ"]},
                 index=[lv_grid_name + "_storages"],
             )
-            aggregated_elements[
-                lv_grid_name + "_storages"
-            ] = comps.index.values
+            aggregated_elements[lv_grid_name + "_storages"] = comps.index.values
         else:
             raise ValueError("Aggregation type for storages invalid.")
         lv_components[comp] = lv_components[comp].append(comps_aggr)
@@ -749,9 +727,7 @@ def _get_timeseries_with_aggregated_elements(
         elements_timeseries_reactive_all = pd.concat(
             [
                 elements_timeseries_reactive_all,
-                getattr(
-                    edisgo_obj.timeseries, element_type + "_reactive_power"
-                ),
+                getattr(edisgo_obj.timeseries, element_type + "_reactive_power"),
             ],
             axis=1,
         )
@@ -766,21 +742,13 @@ def _get_timeseries_with_aggregated_elements(
     ]
     # append timeseries for aggregated elements
     for aggr_gen in aggr_dict.keys():
-        elements_timeseries_active[
-            aggr_gen
-        ] = elements_timeseries_active_all.loc[
+        elements_timeseries_active[aggr_gen] = elements_timeseries_active_all.loc[
             timesteps, aggr_dict[aggr_gen]
-        ].sum(
-            axis=1
-        )
+        ].sum(axis=1)
 
-        elements_timeseries_reactive[
-            aggr_gen
-        ] = elements_timeseries_reactive_all.loc[
+        elements_timeseries_reactive[aggr_gen] = elements_timeseries_reactive_all.loc[
             timesteps, aggr_dict[aggr_gen]
-        ].sum(
-            axis=1
-        )
+        ].sum(axis=1)
     return elements_timeseries_active, elements_timeseries_reactive
 
 
@@ -818,17 +786,13 @@ def _buses_voltage_set_point(edisgo_obj, buses, slack_bus, timesteps):
 
     # set slack bus to operational voltage (includes offset and control
     # deviation)
-    control_deviation = edisgo_obj.config[
-        "grid_expansion_allowed_voltage_deviations"
-    ]["hv_mv_trafo_control_deviation"]
+    control_deviation = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+        "hv_mv_trafo_control_deviation"
+    ]
     if control_deviation != 0:
-        control_deviation_ts = (
-            edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
-                lambda _: control_deviation
-                if _ == "feedin_case"
-                else -control_deviation
-            ).loc[timesteps]
-        )
+        control_deviation_ts = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
+            lambda _: control_deviation if _ == "feedin_case" else -control_deviation
+        ).loc[timesteps]
     else:
         control_deviation_ts = pd.Series(0, index=timesteps)
 
@@ -891,9 +855,7 @@ def _check_integrity_of_pypsa(pypsa_network):
     # check consistency of topology and time series data
     comp_df_dict = {
         # exclude Slack from check
-        "gens": pypsa_network.generators[
-            pypsa_network.generators.control != "Slack"
-        ],
+        "gens": pypsa_network.generators[pypsa_network.generators.control != "Slack"],
         "loads": pypsa_network.loads,
         "storage_units": pypsa_network.storage_units,
     }
@@ -905,9 +867,7 @@ def _check_integrity_of_pypsa(pypsa_network):
     for comp_type, ts in comp_ts_dict.items():
         for i in ["p_set", "q_set"]:
             missing = comp_df_dict[comp_type].loc[
-                ~comp_df_dict[comp_type].index.isin(
-                    ts[i].dropna(axis=1).columns
-                )
+                ~comp_df_dict[comp_type].index.isin(ts[i].dropna(axis=1).columns)
             ]
             if not missing.empty:
                 raise ValueError(
@@ -984,21 +944,13 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     # subtracting total generation (including slack) from total load
     grid_losses = {
         "p": (
-            abs(
-                pypsa.generators_t["p"].sum(axis=1)
-                - pypsa.loads_t["p"].sum(axis=1)
-            )
+            abs(pypsa.generators_t["p"].sum(axis=1) - pypsa.loads_t["p"].sum(axis=1))
         ),
         "q": (
-            abs(
-                pypsa.generators_t["q"].sum(axis=1)
-                - pypsa.loads_t["q"].sum(axis=1)
-            )
+            abs(pypsa.generators_t["q"].sum(axis=1) - pypsa.loads_t["q"].sum(axis=1))
         ),
     }
-    edisgo.results.grid_losses = pd.DataFrame(grid_losses).reindex(
-        index=timesteps
-    )
+    edisgo.results.grid_losses = pd.DataFrame(grid_losses).reindex(index=timesteps)
 
     # get slack results in MW and Mvar
     pfa_slack = {
@@ -1037,9 +989,7 @@ def process_pfa_results(edisgo, pypsa, timesteps):
 
     # calculate line currents in kA
     lines_bus0 = pypsa.lines["bus0"].to_dict()
-    bus0_v_mag_pu = (
-        pypsa.buses_t["v_mag_pu"].T.loc[list(lines_bus0.values()), :].copy()
-    )
+    bus0_v_mag_pu = pypsa.buses_t["v_mag_pu"].T.loc[list(lines_bus0.values()), :].copy()
     bus0_v_mag_pu.index = list(lines_bus0.keys())
     current = np.hypot(pypsa.lines_t["p0"], pypsa.lines_t["q0"]).truediv(
         pypsa.lines["v_nom"] * bus0_v_mag_pu.T, axis="columns"

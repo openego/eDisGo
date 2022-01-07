@@ -54,9 +54,7 @@ def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):
     if transformers_changes["added"]:
         logger.debug(
             "==> {} LV station(s) has/have been reinforced due to "
-            "overloading issues.".format(
-                str(len(transformers_changes["added"]))
-            )
+            "overloading issues.".format(str(len(transformers_changes["added"])))
         )
 
     return transformers_changes
@@ -101,9 +99,7 @@ def reinforce_hv_mv_station_overloading(edisgo_obj, critical_stations):
     )
 
     if transformers_changes["added"]:
-        logger.debug(
-            "==> MV station has been reinforced due to overloading issues."
-        )
+        logger.debug("==> MV station has been reinforced due to overloading issues.")
 
     return transformers_changes
 
@@ -155,9 +151,7 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
                 ]
             ]
         except KeyError:
-            raise KeyError(
-                "Standard MV/LV transformer is not in equipment list."
-            )
+            raise KeyError("Standard MV/LV transformer is not in equipment list.")
     elif voltage_level == "mv":
         try:
             standard_transformer = edisgo_obj.topology.equipment_data[
@@ -168,9 +162,7 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
                 ]
             ]
         except KeyError:
-            raise KeyError(
-                "Standard HV/MV transformer is not in equipment list."
-            )
+            raise KeyError("Standard HV/MV transformer is not in equipment list.")
     else:
         raise ValueError(
             "{} is not a valid option for input variable 'voltage_level' in "
@@ -218,21 +210,16 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
 
             # set up as many new transformers as needed
             number_transformers = math.ceil(
-                (s_trafo_missing + s_max_per_trafo.sum())
-                / standard_transformer.S_nom
+                (s_trafo_missing + s_max_per_trafo.sum()) / standard_transformer.S_nom
             )
             new_transformers = pd.DataFrame()
             for i in range(number_transformers):
                 name[-1] = i + 1
                 duplicated_transformer.name = "_".join([str(_) for _ in name])
-                new_transformers = new_transformers.append(
-                    duplicated_transformer
-                )
+                new_transformers = new_transformers.append(duplicated_transformer)
 
             # add new transformer to list of added transformers
-            transformers_changes["added"][
-                grid_name
-            ] = new_transformers.index.values
+            transformers_changes["added"][grid_name] = new_transformers.index.values
             # add previous transformers to list of removed transformers
             transformers_changes["removed"][
                 grid_name
@@ -254,9 +241,7 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
             )
         else:
             edisgo_obj.topology.transformers_hvmv_df = (
-                edisgo_obj.topology.transformers_hvmv_df.append(
-                    new_transformers
-                )
+                edisgo_obj.topology.transformers_hvmv_df.append(new_transformers)
             )
     return transformers_changes
 
@@ -298,9 +283,7 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         standard_transformer = edisgo_obj.topology.equipment_data[
             "lv_transformers"
         ].loc[
-            edisgo_obj.config["grid_expansion_standard_equipment"][
-                "mv_lv_transformer"
-            ]
+            edisgo_obj.config["grid_expansion_standard_equipment"]["mv_lv_transformer"]
         ]
     except KeyError:
         raise KeyError("Standard MV/LV transformer is not in equipment list.")
@@ -323,9 +306,7 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         edisgo_obj.topology.transformers_df = (
             edisgo_obj.topology.transformers_df.append(duplicated_transformer)
         )
-        transformers_changes["added"][grid_repr] = [
-            duplicated_transformer.name
-        ]
+        transformers_changes["added"][grid_repr] = [duplicated_transformer.name]
 
     if transformers_changes["added"]:
         logger.debug(
@@ -432,9 +413,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
         # find first node in path that exceeds 2/3 of the line length
         # from station to critical node farthest away from the station
         node_2_3 = next(
-            j
-            for j in path
-            if path_length_dict[j] >= path_length_dict[node] * 2 / 3
+            j for j in path if path_length_dict[j] >= path_length_dict[node] * 2 / 3
         )
 
         # if LVGrid: check if node_2_3 is outside of a house
@@ -453,9 +432,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
         # if MVGrid: check if node_2_3 is LV station and if not find
         # next LV station
         else:
-            while (
-                node_2_3 not in edisgo_obj.topology.transformers_df.bus0.values
-            ):
+            while node_2_3 not in edisgo_obj.topology.transformers_df.bus0.values:
                 try:
                     # try to find LVStation behind node_2_3
                     node_2_3 = path[path.index(node_2_3) + 1]
@@ -470,9 +447,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
         # directly connected to the station), line cannot be
         # disconnected and must therefore be reinforced
         if node_2_3 in nodes_feeder.keys():
-            crit_line_name = graph.get_edge_data(station_node, node_2_3)[
-                "branch_name"
-            ]
+            crit_line_name = graph.get_edge_data(station_node, node_2_3)["branch_name"]
             crit_line = grid.lines_df.loc[crit_line_name]
 
             # if critical line is already a standard line install one
@@ -497,9 +472,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
                 # number of parallel standard lines could be calculated
                 # following [2] p.103; for now number of parallel
                 # standard lines is iterated
-                edisgo_obj.topology.change_line_type(
-                    [crit_line_name], standard_line
-                )
+                edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
                 lines_changes[crit_line_name] = 1
 
         # if node_2_3 is not a representative, disconnect line
@@ -507,26 +480,18 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
             # get line between node_2_3 and predecessor node (that is
             # closer to the station)
             pred_node = path[path.index(node_2_3) - 1]
-            crit_line_name = graph.get_edge_data(node_2_3, pred_node)[
-                "branch_name"
-            ]
+            crit_line_name = graph.get_edge_data(node_2_3, pred_node)["branch_name"]
             if grid.lines_df.at[crit_line_name, "bus0"] == pred_node:
-                edisgo_obj.topology._lines_df.at[
-                    crit_line_name, "bus0"
-                ] = station_node
+                edisgo_obj.topology._lines_df.at[crit_line_name, "bus0"] = station_node
             elif grid.lines_df.at[crit_line_name, "bus1"] == pred_node:
-                edisgo_obj.topology._lines_df.at[
-                    crit_line_name, "bus1"
-                ] = station_node
+                edisgo_obj.topology._lines_df.at[crit_line_name, "bus1"] = station_node
             else:
                 raise ValueError("Bus not in line buses. " "Please check.")
             # change line length and type
             edisgo_obj.topology._lines_df.at[
                 crit_line_name, "length"
             ] = path_length_dict[node_2_3]
-            edisgo_obj.topology.change_line_type(
-                [crit_line_name], standard_line
-            )
+            edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
             lines_changes[crit_line_name] = 1
 
     if not lines_changes:
@@ -577,15 +542,11 @@ def reinforce_lines_overloading(edisgo_obj, crit_lines):
     lines_changes = {}
     # reinforce mv lines
     lines_changes.update(
-        _reinforce_lines_overloading_per_grid_level(
-            edisgo_obj, "mv", crit_lines
-        )
+        _reinforce_lines_overloading_per_grid_level(edisgo_obj, "mv", crit_lines)
     )
     # reinforce lv lines
     lines_changes.update(
-        _reinforce_lines_overloading_per_grid_level(
-            edisgo_obj, "lv", crit_lines
-        )
+        _reinforce_lines_overloading_per_grid_level(edisgo_obj, "lv", crit_lines)
     )
 
     if not crit_lines.empty:
@@ -597,9 +558,7 @@ def reinforce_lines_overloading(edisgo_obj, crit_lines):
     return lines_changes
 
 
-def _reinforce_lines_overloading_per_grid_level(
-    edisgo_obj, voltage_level, crit_lines
-):
+def _reinforce_lines_overloading_per_grid_level(edisgo_obj, voltage_level, crit_lines):
     """
     Reinforce lines in MV or LV topology due to overloading.
 
@@ -655,9 +614,7 @@ def _reinforce_lines_overloading_per_grid_level(
         )
 
         # update number of parallel lines and line accordingly attributes
-        edisgo_obj.topology.update_number_of_parallel_lines(
-            number_parallel_lines
-        )
+        edisgo_obj.topology.update_number_of_parallel_lines(number_parallel_lines)
 
     def _add_one_parallel_line_of_same_type(lines):
         """
@@ -672,9 +629,7 @@ def _reinforce_lines_overloading_per_grid_level(
 
         """
         # add number of added lines to lines_changes
-        lines_changes.update(
-            pd.Series(index=lines, data=[1] * len(lines)).to_dict()
-        )
+        lines_changes.update(pd.Series(index=lines, data=[1] * len(lines)).to_dict())
 
         # update number of lines and accordingly line attributes
         edisgo_obj.topology.update_number_of_parallel_lines(
@@ -705,15 +660,13 @@ def _reinforce_lines_overloading_per_grid_level(
             * crit_lines.loc[lines, "max_rel_overload"]
             / edisgo_obj.topology.lines_df.loc[lines, "s_nom"]
         )
-        edisgo_obj.topology.update_number_of_parallel_lines(
-            number_parallel_lines
-        )
+        edisgo_obj.topology.update_number_of_parallel_lines(number_parallel_lines)
 
         lines_changes.update(number_parallel_lines.to_dict())
 
-    standard_line_type = edisgo_obj.config[
-        "grid_expansion_standard_equipment"
-    ]["{}_line".format(voltage_level)]
+    standard_line_type = edisgo_obj.config["grid_expansion_standard_equipment"][
+        "{}_line".format(voltage_level)
+    ]
 
     lines_changes = {}
 
@@ -723,9 +676,7 @@ def _reinforce_lines_overloading_per_grid_level(
     ]
 
     # handling of standard lines
-    lines_standard = relevant_lines.loc[
-        relevant_lines.type_info == standard_line_type
-    ]
+    lines_standard = relevant_lines.loc[relevant_lines.type_info == standard_line_type]
     if not lines_standard.empty:
         _add_parallel_standard_lines(lines_standard.index)
 
@@ -745,9 +696,7 @@ def _reinforce_lines_overloading_per_grid_level(
 
     # handle rest of lines (replace by as many parallel standard lines as
     # needed)
-    relevant_lines = relevant_lines.loc[
-        ~relevant_lines.index.isin(lines_single.index)
-    ]
+    relevant_lines = relevant_lines.loc[~relevant_lines.index.isin(lines_single.index)]
     if not relevant_lines.empty:
         _replace_by_parallel_standard_lines(relevant_lines.index)
 

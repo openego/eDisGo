@@ -52,9 +52,7 @@ def add_storage_from_edisgo(edisgo_obj, psa_net, pm_dict):
     Read static storage data (position and capacity) from eDisGo and export to Powermodels dict
     """
     # Drop values that are not available
-    storage = pd.DataFrame(
-        edisgo_obj.topology.storage_units_df[["bus", "p_nom"]]
-    )
+    storage = pd.DataFrame(edisgo_obj.topology.storage_units_df[["bus", "p_nom"]])
 
     # Rename storage parameters to PowerModels naming convention
     storage.columns = ["storage_bus", "energy_rating"]
@@ -130,9 +128,7 @@ def pypsa2ppc(psa_net):
             )
         )
     except IndexError as e:
-        print(
-            "No load timeseries. Create empty dicts " "for timeseries of load"
-        )
+        print("No load timeseries. Create empty dicts " "for timeseries of load")
         load_dict = dict()
     try:
         gen_dict = _build_generator_dict(psa_net, ppc)
@@ -225,9 +221,7 @@ def ppc2pm(ppc, psa_net):  # pragma: no cover
         branch["g_to"] = -row[BR_B].imag / 2.0
         branch["b_fr"] = row[BR_B].real / 2.0
         branch["b_to"] = row[BR_B].real / 2.0
-        branch["rate_a"] = (
-            row[RATE_A].real if row[RATE_A] > 0 else row[RATE_B].real
-        )
+        branch["rate_a"] = row[RATE_A].real if row[RATE_A] > 0 else row[RATE_B].real
         branch["rate_b"] = row[RATE_B].real
         branch["rate_c"] = row[RATE_C].real
         branch["f_bus"] = int(row[F_BUS].real) + 1
@@ -263,9 +257,7 @@ def ppc2pm(ppc, psa_net):  # pragma: no cover
 
     for idx, row in enumerate(psa_net.generators["fluctuating"], start=1):
         # convert boolean to 0 and 1, check if row is nan, e.g. slack bus
-        pm["gen"][str(idx)]["fluctuating"] = (
-            not (math.isnan(row)) and row
-        ) * 1
+        pm["gen"][str(idx)]["fluctuating"] = (not (math.isnan(row)) and row) * 1
 
     if len(ppc["gencost"]) > len(ppc["gen"]):
         ppc["gencost"] = ppc["gencost"][: ppc["gen"].shape[0], :]
@@ -342,16 +334,11 @@ def _build_bus(psa_net, ppc):
     )
     bus_cols = len(col_names)
     ppc["bus"] = np.zeros(shape=(n_bus, bus_cols), dtype=float)
-    ppc["bus"][:, :bus_cols] = np.array(
-        [0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1.05, 0.95]
-    )
+    ppc["bus"][:, :bus_cols] = np.array([0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1.05, 0.95])
     ppc["bus"][:, BUS_I] = np.arange(n_bus)
     bus_types = ["PQ", "PV", "Slack", "None"]
     bus_types_int = np.array(
-        [
-            bus_types.index(b_type) + 1
-            for b_type in psa_net.buses["control"].values
-        ],
+        [bus_types.index(b_type) + 1 for b_type in psa_net.buses["control"].values],
         dtype=int,
     )
     ppc["bus"][:, BUS_TYPE] = bus_types_int
@@ -434,16 +421,10 @@ def _build_branch(psa_net, ppc):
     branch_cols = len(col_names)
     ppc["branch"] = np.zeros(shape=(n_branch, branch_cols), dtype=float)
     from_bus = np.array(
-        [
-            psa_net.buses.index.get_loc(bus_name)
-            for bus_name in psa_net.lines["bus0"]
-        ]
+        [psa_net.buses.index.get_loc(bus_name) for bus_name in psa_net.lines["bus0"]]
     )
     to_bus = np.array(
-        [
-            psa_net.buses.index.get_loc(bus_name)
-            for bus_name in psa_net.lines["bus1"]
-        ]
+        [psa_net.buses.index.get_loc(bus_name) for bus_name in psa_net.lines["bus1"]]
     )
     ppc["branch"][:, F_BUS] = from_bus
     ppc["branch"][:, T_BUS] = to_bus
@@ -494,9 +475,7 @@ def _build_transformers(psa_net, ppc):
         ", "
     )
 
-    transformers = np.zeros(
-        shape=(n_transformers, len(col_names)), dtype=float
-    )
+    transformers = np.zeros(shape=(n_transformers, len(col_names)), dtype=float)
     from_bus = np.array(
         [
             psa_net.buses.index.get_loc(bus_name)
@@ -543,10 +522,7 @@ def _build_transformers(psa_net, ppc):
 def _build_load(psa_net, ppc):
     n_load = psa_net.loads.shape[0]
     load_buses = np.array(
-        [
-            psa_net.buses.index.get_loc(bus_name)
-            for bus_name in psa_net.loads["bus"]
-        ]
+        [psa_net.buses.index.get_loc(bus_name) for bus_name in psa_net.loads["bus"]]
     )
     print(
         "build {} loads, distributed on {} buses".format(
@@ -588,10 +564,7 @@ def _build_load_dict(psa_net, ppc):
     """
     load_dict = {"load_data": dict()}
     load_buses = np.array(
-        [
-            psa_net.buses.index.get_loc(bus_name)
-            for bus_name in psa_net.loads["bus"]
-        ]
+        [psa_net.buses.index.get_loc(bus_name) for bus_name in psa_net.loads["bus"]]
     )
     time_horizon = len(psa_net.loads_t["p_set"])
 
@@ -621,20 +594,15 @@ def _build_generator_dict(psa_net, ppc):
     # buses_with_gens = [psa_net.generators.loc[busname]["bus"] for busname in psa_net.generators_t["p_set"].columns]
     # gen_buses = np.array([psa_net.buses.index.get_loc(bus_name) for bus_name in buses_with_gens])
     gen_buses = [
-        psa_net.buses.index.get_loc(bus_name)
-        for bus_name in psa_net.generators["bus"]
+        psa_net.buses.index.get_loc(bus_name) for bus_name in psa_net.generators["bus"]
     ]
     for t in range(time_horizon):
         generator_dict["gen_data"][str(t + 1)] = dict()
         for (gen_idx, bus_idx) in enumerate(gen_buses):
             # pg = psa_net.generators_t["p_set"].values[t, gen_idx]
             # qg = psa_net.generators_t["q_set"].values[t, gen_idx]
-            pg = psa_net.generators_t["p_set"][
-                psa_net.generators.index[gen_idx]
-            ][t]
-            qg = psa_net.generators_t["q_set"][
-                psa_net.generators.index[gen_idx]
-            ][t]
+            pg = psa_net.generators_t["p_set"][psa_net.generators.index[gen_idx]][t]
+            qg = psa_net.generators_t["q_set"][psa_net.generators.index[gen_idx]][t]
             # if no value is set, set pg and qg to large value, e.g. representing slack
             # TODO verify or find another solution not using "large" value
             if np.isnan(pg):

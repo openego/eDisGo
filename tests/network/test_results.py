@@ -78,9 +78,7 @@ class TestResults:
         assert len(files_in_powerflow_results) == 1
         assert "voltages_pu.csv" in files_in_powerflow_results
         assert not os.path.isfile(
-            os.path.join(
-                cur_dir, "grid_expansion_results", "grid_expansion_costs.csv"
-            )
+            os.path.join(cur_dir, "grid_expansion_results", "grid_expansion_costs.csv")
         )
         assert self.results.v_res.bus1.dtype == "float32"
 
@@ -133,9 +131,7 @@ class TestResults:
         self.results = Results(self)
 
         # test with given parameters
-        self.results.from_csv(
-            cur_dir, parameters={"powerflow_results": ["v_res"]}
-        )
+        self.results.from_csv(cur_dir, parameters={"powerflow_results": ["v_res"]})
 
         pd.testing.assert_frame_equal(
             self.results.v_res, pfa_v_mag_pu_seed, check_freq=False
