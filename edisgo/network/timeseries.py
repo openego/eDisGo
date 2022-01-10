@@ -6,7 +6,7 @@ import os
 
 from workalendar.europe import Germany
 from demandlib import bdew as bdew, particular_profiles as profiles
-from edisgo.io.timeseries_import import import_feedin_timeseries
+from edisgo.io import timeseries_import
 from edisgo.tools.tools import assign_voltage_level_to_component,\
     drop_duplicated_columns, get_weather_cells_intersecting_with_grid_district
 
@@ -656,7 +656,7 @@ def get_component_timeseries(edisgo_obj, **kwargs):
             edisgo_obj.timeseries.generation_fluctuating = ts
         elif isinstance(ts, str) and ts == "oedb":
             edisgo_obj.timeseries.generation_fluctuating = \
-                import_feedin_timeseries(
+                timeseries_import.feedin_oedb(
                     config_data, weather_cell_ids, kwargs.get(
                         "timeindex", None))
         else:

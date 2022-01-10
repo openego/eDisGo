@@ -6,24 +6,27 @@ if "READTHEDOCS" not in os.environ:
     from egoio.db_tables import model_draft, supply
 
 
-def import_feedin_timeseries(config_data, weather_cell_ids, timeindex):
+def feedin_oedb(config_data, weather_cell_ids, timeindex):
     """
-    Import RES feed-in time series data and process
-
-    ToDo: Update docstring.
+    Import feed-in time series data for wind and solar power plants from oedb.
 
     Parameters
     ----------
-    config_data : dict
-        Dictionary containing config data from config files.
+    config_data : :class:`~.tools.config.Config`
+        Configuration data from config files, relevant for information of
+        which data base table to retrieve feed-in data for.
     weather_cell_ids : :obj:`list`
         List of weather cell id's (integers) to obtain feed-in data for.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Feed-in data is currently only provided for weather year 2011. If
+        timeindex contains a different year, the data is reindexed.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        DataFrame with time series for active power feed-in, normalized to
-        a capacity of 1 MW.
+        DataFrame with hourly time series for active power feed-in per
+        generator type (wind or solar, in column level 0) and weather cell
+        (in column level 1), normalized to a capacity of 1 MW.
 
     """
 
@@ -31,7 +34,8 @@ def import_feedin_timeseries(config_data, weather_cell_ids, timeindex):
         """Retrieve time series from oedb
 
         """
-        # ToDo: add option to retrieve subset of time series
+        # ToDo: add option to retrieve subset of time series instead of whole
+        #  year
         # ToDo: find the reference power class for mvgrid/w_id and insert
         #  instead of 4
         feedin_sqla = (
