@@ -695,9 +695,11 @@ def get_component_timeseries(edisgo_obj, **kwargs):
         if isinstance(ts, pd.DataFrame):
             edisgo_obj.timeseries.load = ts
         elif ts == "demandlib":
-            edisgo_obj.timeseries.load = import_load_timeseries(
-                config_data, ts, year=edisgo_obj.timeseries.timeindex[0].year
-            )
+            edisgo_obj.timeseries.load = \
+                timeseries_import.load_time_series_demandlib(
+                    config_data, ts,
+                    year=edisgo_obj.timeseries.timeindex[0].year
+                )
         else:
             raise ValueError(
                 'Your input for "timeseries_load" is not '
@@ -1679,129 +1681,6 @@ def check_timeseries_for_index_and_cols(
             "for the following components were tried to be "
             "added: {}".format(component_names)
         )
-
-
-def import_load_timeseries(config_data, data_source, year=2018):
-    """
-    Import load time series
-
-    Parameters
-    ----------
-    config_data : dict
-        Dictionary containing config data from config files.
-    data_source : str
-        Specify type of data source. Available data sources are
-
-         * 'demandlib'
-            Determine a load time series with the use of the demandlib.
-            This calculates standard load profiles for 4 different sectors.
-
-    mv_grid_id : :obj:`str`
-        MV grid ID as used in oedb. Provide this if `data_source` is 'oedb'.
-        Default: None.
-    year : int
-        Year for which to generate load time series. Provide this if
-        `data_source` is 'demandlib'. Default: None.
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Load time series
-
-    """
-
-    def _load_timeseries_demandlib(config_data, year):
-        """
-        Get normalized sectoral load time series
-
-        Time series are normalized to 1 MWh consumption per year
-
-        Todo: Move to io.
-        ToDo: Update docstring.
-
-        Parameters
-        ----------
-        config_data : dict
-            Dictionary containing config data from config files.
-        year : int
-            Year for which to generate load time series.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Load time series
-
-        """
-
-        sectoral_consumption = {"h0": 1, "g0": 1, "i0": 1, "l0": 1}
-
-        cal = Germany()
-        holidays = dict(cal.holidays(year))
-
-        e_slp = bdew.ElecSlp(year, holidays=holidays)
-
-        # multiply given annual demand with timeseries
-        elec_demand = e_slp.get_profile(sectoral_consumption)
-
-        # Add the slp for the industrial group
-        ilp = profiles.IndustrialLoadProfile(
-            e_slp.date_time_index, holidays=holidays
-        )
-
-        # Beginning and end of workday, weekdays and weekend days, and scaling
-        # factors by default
-        elec_demand["i0"] = ilp.simple_profile(
-            sectoral_consumption["i0"],
-            am=datetime.time(
-                config_data["demandlib"]["day_start"].hour,
-                config_data["demandlib"]["day_start"].minute,
-                0,
-            ),
-            pm=datetime.time(
-                config_data["demandlib"]["day_end"].hour,
-                config_data["demandlib"]["day_end"].minute,
-                0,
-            ),
-            profile_factors={
-                "week": {
-                    "day": config_data["demandlib"]["week_day"],
-                    "night": config_data["demandlib"]["week_night"],
-                },
-                "weekend": {
-                    "day": config_data["demandlib"]["weekend_day"],
-                    "night": config_data["demandlib"]["weekend_night"],
-                },
-            },
-        )
-
-        # Resample 15-minute values to hourly values and sum across sectors
-        elec_demand = elec_demand.resample("H").mean()
-
-        return elec_demand
-
-    if data_source == "demandlib":
-        try:
-            float(year)
-            if year > datetime.date.today().year:
-                raise TypeError
-        except TypeError:
-            year = datetime.date.today().year - 1
-            logger.warning(
-                "No valid year inserted. Year set to previous year."
-            )
-        load = _load_timeseries_demandlib(config_data, year)
-        load.rename(
-            columns={
-                "g0": "retail",
-                "h0": "residential",
-                "l0": "agricultural",
-                "i0": "industrial",
-            },
-            inplace=True,
-        )
-    else:
-        raise NotImplementedError
-    return load
 
 
 def _get_worst_case_modes(mode):

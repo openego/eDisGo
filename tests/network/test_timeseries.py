@@ -173,19 +173,6 @@ class Test_get_component_timeseries:
         self.topology.remove_storage_unit(storage_2)
         self.topology.remove_storage_unit(storage_3)
 
-    def test_import_load_timeseries(self):
-        with pytest.raises(NotImplementedError):
-            timeseries.import_load_timeseries(self.config, '')
-        timeindex = pd.date_range('1/1/2018', periods=8760, freq='H')
-        load = timeseries.import_load_timeseries(self.config, 'demandlib',
-                                      timeindex[0].year)
-        assert (load.columns == ['retail', 'residential',
-                                 'agricultural', 'industrial']).all()
-        assert load.loc[timeindex[453], 'retail'] == 8.33507681075118e-05
-        assert load.loc[timeindex[13], 'residential'] == 0.00017315167492271174
-        assert load.loc[timeindex[6328], 'agricultural'] == 0.00010134645909959971
-        assert load.loc[timeindex[4325], 'industrial'] == 9.91768322919766e-05
-
     def test_worst_case(self):
         """Test creation of worst case time series"""
         # test storage ts

@@ -38,3 +38,18 @@ class TestTimeseriesImport:
         with pytest.raises(ValueError, match=msg):
             feedin = timeseries_import.feedin_oedb(
                 config, weather_cells, timeindex)
+
+    def test_import_load_timeseries(self):
+        timeindex = pd.date_range('1/1/2018', periods=8760, freq='H')
+        load = timeseries_import.load_time_series_demandlib(
+            self.config, timeindex[0].year)
+        assert (load.columns == ['retail', 'residential',
+                                 'agricultural', 'industrial']).all()
+        assert np.isclose(load.loc[timeindex[453], 'retail'],
+                          8.33507e-05)
+        assert np.isclose(load.loc[timeindex[13], 'residential'],
+                          1.73151e-04)
+        assert np.isclose(load.loc[timeindex[6328], 'agricultural'],
+                          1.01346e-04)
+        assert np.isclose(load.loc[timeindex[4325], 'industrial'],
+                          9.91768e-05)

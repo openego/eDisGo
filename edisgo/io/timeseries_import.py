@@ -1,5 +1,9 @@
 import os
 import pandas as pd
+import datetime
+from workalendar.europe import Germany
+from demandlib import bdew as bdew, particular_profiles as profiles
+
 from edisgo.tools import session_scope
 
 if "READTHEDOCS" not in os.environ:
@@ -100,3 +104,88 @@ def feedin_oedb(config_data, weather_cell_ids, timeindex):
     feedin.columns.rename("weather_cell_id", level=1, inplace=True)
 
     return feedin.loc[timeindex]
+
+
+def load_time_series_demandlib(config_data, year):
+    """
+    Get normalized sectoral electricity load time series using the
+    `demandlib <https://github.com/oemof/demandlib/>`_.
+
+    Resulting electricity load profiles hold time series of hourly conventional
+    electricity demand for the sectors residential, retail, agricultural
+    and industrial. Time series are normalized to a consumption of 1 MWh per
+    year.
+
+    Parameters
+    ----------
+    config_data : :class:`~.tools.config.Config`
+        Configuration data from config files, relevant for industrial load
+        profiles.
+    year : int
+        Year for which to generate load time series.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with conventional electricity load time series for sectors
+        residential, retail, agricultural and industrial.
+        Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`. Columns
+        hold the sector type.
+
+    """
+
+    sectoral_consumption = {"h0": 1, "g0": 1, "i0": 1, "l0": 1}
+
+    cal = Germany()
+    holidays = dict(cal.holidays(year))
+
+    e_slp = bdew.ElecSlp(year, holidays=holidays)
+
+    # multiply given annual demand with timeseries
+    elec_demand = e_slp.get_profile(sectoral_consumption)
+
+    # Add the slp for the industrial group
+    ilp = profiles.IndustrialLoadProfile(
+        e_slp.date_time_index, holidays=holidays
+    )
+
+    # Beginning and end of workday, weekdays and weekend days, and scaling
+    # factors by default
+    elec_demand["i0"] = ilp.simple_profile(
+        sectoral_consumption["i0"],
+        am=datetime.time(
+            config_data["demandlib"]["day_start"].hour,
+            config_data["demandlib"]["day_start"].minute,
+            0,
+        ),
+        pm=datetime.time(
+            config_data["demandlib"]["day_end"].hour,
+            config_data["demandlib"]["day_end"].minute,
+            0,
+        ),
+        profile_factors={
+            "week": {
+                "day": config_data["demandlib"]["week_day"],
+                "night": config_data["demandlib"]["week_night"],
+            },
+            "weekend": {
+                "day": config_data["demandlib"]["weekend_day"],
+                "night": config_data["demandlib"]["weekend_night"],
+            },
+        },
+    )
+
+    # Resample 15-minute values to hourly values and sum across sectors
+    elec_demand = elec_demand.resample("H").mean()
+
+    elec_demand.rename(
+        columns={
+            "g0": "retail",
+            "h0": "residential",
+            "l0": "agricultural",
+            "i0": "industrial",
+        },
+        inplace=True,
+    )
+
+    return elec_demand
