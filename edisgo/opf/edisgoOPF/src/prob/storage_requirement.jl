@@ -62,7 +62,7 @@ function post_method_edisgo(pm)
             add_var_charging_rate(pm,nw=t,bounded=false)
         end
     end
-    
+
     #### Network expansion variables
     add_var_max_current(pm)
     add_var_resistance(pm)
@@ -101,28 +101,28 @@ function post_method_edisgo(pm)
                     break
                 end
             end
-        end    
+        end
     end
     maxexp = pm.data["max_exp"]
     set_ub_flows(pm,maxexp)
 
     socp = false
     cr =  false
-    
+
     #### Power flow equations
     for (t,network) in nws(pm)
         if haskey(pm.data["clusters"], t)
             continue
         end
         constraint_current_rating(pm,t)
-    
+
         # adding constraint for branch flow model
         # Power Balance for each bus
         for i in ids(pm, :bus)
             constraint_power_balance(pm,i,t)
         end
         # Ohms Law and branch flow over each line
-        for i in ids(pm, :branch)        
+        for i in ids(pm, :branch)
             constraint_branch_flow(pm,i,t,pm.ccnd,socp)
             constraint_ohms_law(pm,i,t)
         end
@@ -169,5 +169,3 @@ function post_method_edisgo(pm)
     end
 
 end
-
-

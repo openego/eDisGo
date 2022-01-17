@@ -231,7 +231,7 @@ time series:
     import pandas as pd
     from edisgo import EDisGo
 
-    # Set up the EDisGo object with your own time series 
+    # Set up the EDisGo object with your own time series
     # (these are dummy time series!)
     # timeindex specifies which time steps to consider in power flow
     timeindex = pd.date_range('1/1/2011', periods=4, freq='H')

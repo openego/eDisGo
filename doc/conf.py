@@ -30,6 +30,7 @@ __author__ = "nesnoj, gplssm"
 import os
 import shlex
 import sys
+
 from unittest.mock import MagicMock
 
 # If extensions (or modules to document with autodoc) are in another directory,

@@ -71,7 +71,7 @@ def _get_griddistrict(ding0_filepath):
         grid_district number
     """
     grid_district = os.path.basename(ding0_filepath)
-    grid_district_search = re.search("[_]+\d+", grid_district)
+    grid_district_search = re.search(r"[_]+\d+", grid_district)
     if grid_district_search:
         grid_district = int(grid_district_search.group(0)[2:])
         return grid_district
@@ -389,17 +389,17 @@ def run_edisgo_pool_flexible(
 def edisgo_run():
     # create the argument parser
     example_text = """Examples
-    
+
     ...assumes all files located in PWD.
-    
+
     Analyze a single network in 'worst-case'
-    
+
          edisgo_run -f ding0_grids__997.pkl -wc
-         
-         
-    Analyze multiple grids in 'worst-case' using parallelization. Grid IDs are 
+
+
+    Analyze multiple grids in 'worst-case' using parallelization. Grid IDs are
     specified by the grids_list.txt.
-    
+
          edisgo_run -ds '' grids_list.txt ding0_grids__{}.pkl -wc --parallel
          """
     parser = argparse.ArgumentParser(

@@ -1,11 +1,14 @@
 import logging
+
 from math import ceil, sqrt
 
 import networkx as nx
 import numpy as np
 import pandas as pd
-from networkx.algorithms.shortest_paths.weighted import \
-    _dijkstra as dijkstra_shortest_path_length
+
+from networkx.algorithms.shortest_paths.weighted import (
+    _dijkstra as dijkstra_shortest_path_length,
+)
 
 from edisgo.flex_opt import check_tech_constraints, costs
 from edisgo.tools import plots, tools

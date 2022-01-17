@@ -5,4 +5,3 @@ Release date: <Month> <Day>, <Year>
 
 Changes
 -------
-

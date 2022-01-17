@@ -2,16 +2,21 @@ import json
 import logging
 import os
 import subprocess
+
 from timeit import default_timer as timer
 
 import numpy as np
 
 from edisgo.opf.util.scenario_settings import opf_settings
-from edisgo.tools.powermodels_io import (add_storage_from_edisgo,
-                                         convert_storage_series,
-                                         to_powermodels)
+from edisgo.tools.powermodels_io import (
+    add_storage_from_edisgo,
+    convert_storage_series,
+    to_powermodels,
+)
 from edisgo.tools.preprocess_pypsa_opf_structure import (
-    aggregate_fluct_generators, preprocess_pypsa_opf_structure)
+    aggregate_fluct_generators,
+    preprocess_pypsa_opf_structure,
+)
 
 logger = logging.getLogger(__name__)
 

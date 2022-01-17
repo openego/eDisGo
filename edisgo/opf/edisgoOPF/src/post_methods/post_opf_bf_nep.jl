@@ -5,7 +5,7 @@ multiperiod optimal power flow as branch flow model including network expansion
 - `pm::GenericPowerModel{T} where T <: PowerModels.AbstractBFForm`
 ### optional
 - `maxexp::Integer` maximal allowed expansion of lines, DEFAULT = `10`
-- `obj::String` choose objective function between `both`,`onlyGen`,`onlyExp` 
+- `obj::String` choose objective function between `both`,`onlyGen`,`onlyExp`
     for minimizing generation and expansion or one of them
 ### setup:
 `` \\begin{equation}
@@ -27,7 +27,7 @@ function post_opf_bf_nep(pm::GenericPowerModel{T};maxexp::Integer=10,obj::String
         add_var_max_current(pm)
         add_var_resistance(pm)
         constraint_network_expansion(pm)
-        
+
         # add voltage and flow variebls for each time step in timehorizon
         for (t,network) in nws(pm)
                 add_var_sqr_voltage(pm,t)
@@ -74,14 +74,14 @@ function post_opf_bf_nep(pm::GenericPowerModel{T};maxexp::Integer=10,obj::String
         for (t,network) in nws(pm)
                 # current limit depending on maximal allowed current I_max variable
                 constraint_current_rating(pm,t)
-                
+
                 # adding constraint for branch flow model
                 # Power Balance for each bus
                 for i in ids(pm, :bus)
                 constraint_power_balance(pm,i,t)
                 end
                 # Ohms Law and branch flow over each line
-                for i in ids(pm, :branch)        
+                for i in ids(pm, :branch)
                 constraint_branch_flow(pm,i,t)
                 constraint_ohms_law(pm,i,t)
                 end
@@ -89,4 +89,3 @@ function post_opf_bf_nep(pm::GenericPowerModel{T};maxexp::Integer=10,obj::String
         # add objective scenario chosen with obj
         add_objective(pm,ismultinetwork=ismultinetwork(pm),cost_factor=costfactor,scenario=obj)
 end
-

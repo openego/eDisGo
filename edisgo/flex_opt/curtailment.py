@@ -1,8 +1,16 @@
 import logging
 
 import pandas as pd
-from pyomo.environ import (ConcreteModel, Constraint, Objective, Param, Set,
-                           Var, minimize)
+
+from pyomo.environ import (
+    ConcreteModel,
+    Constraint,
+    Objective,
+    Param,
+    Set,
+    Var,
+    minimize,
+)
 from pyomo.opt import SolverFactory
 
 from edisgo.io import pypsa_io
@@ -583,7 +591,7 @@ class CurtailmentControl:
             )
 
         # check if provided mode is valid
-        if mode and mode is not "mv":
+        if mode and mode != "mv":
             raise ValueError("Provided mode {} is not a valid mode.")
 
         # get all fluctuating generators and their attributes (weather ID,

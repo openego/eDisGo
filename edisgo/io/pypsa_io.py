@@ -5,10 +5,12 @@ container.
 """
 
 import collections
+
 from math import sqrt
 
 import numpy as np
 import pandas as pd
+
 from networkx import connected_components
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
@@ -931,7 +933,7 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     apparent power S, exemplary written as
 
     .. math::
-        S_{max} = max(\sqrt{P_0^2 + Q_0^2}, \sqrt{P_1^2 + Q_1^2}) \\
+        S_{max} = max(\\sqrt{P_0^2 + Q_0^2}, \\sqrt{P_1^2 + Q_1^2}) \\
         P = P_0 P_1(S_{max}) \\
         Q = Q_0 Q_1(S_{max})
 

@@ -3,6 +3,7 @@ import math
 import numpy as np
 import pandas as pd
 import pypsa
+
 from pypower.idx_brch import *
 from pypower.idx_bus import *
 from pypower.idx_cost import *
@@ -444,10 +445,8 @@ def _build_branch(psa_net, ppc):
     # TODO BRANCHCOSTS!
     # check which branch costs are given in psa_net,
     ncost = sum(
-        [
-            (colName in psa_net.lines.columns) * 1
-            for colName in ["costs_earthworks", "costs_cable"]
-        ]
+        (colName in psa_net.lines.columns) * 1
+        for colName in ["costs_earthworks", "costs_cable"]
     )
     if ncost == 0:
         print("no branch costs are given in pypsa network")

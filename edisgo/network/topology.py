@@ -8,13 +8,17 @@ import numpy as np
 import pandas as pd
 
 import edisgo
+
 from edisgo.io.ding0_import import _validate_ding0_grid_import
 from edisgo.network.components import Switch
 from edisgo.network.grids import LVGrid, MVGrid
 from edisgo.tools import geo, networkx_helper
-from edisgo.tools.tools import (calculate_apparent_power,
-                                calculate_line_reactance,
-                                calculate_line_resistance, select_cable)
+from edisgo.tools.tools import (
+    calculate_apparent_power,
+    calculate_line_reactance,
+    calculate_line_resistance,
+    select_cable,
+)
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import LineString, Point
@@ -114,7 +118,7 @@ class Topology:
 
         with
 
-        .. math:: Z = \frac{u_{kr}}{100} \cdot \frac{U_n^2}{S_{nom}}
+        .. math:: Z = \frac{u_{kr}}{100} \\cdot \frac{U_n^2}{S_{nom}}
 
         and
 
@@ -130,11 +134,11 @@ class Topology:
 
         with
 
-        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \cdot \frac{U_{nom}^2}{S_{nom}^2}
+        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \\cdot \frac{U_{nom}^2}{S_{nom}^2}
 
         $x_{pu}$ is calculated as follows:
 
-        .. math::  x_{pu} = \sqrt(z_{pu}^2-r_{pu}^2)
+        .. math::  x_{pu} = \\sqrt(z_{pu}^2-r_{pu}^2)
 
         """
 

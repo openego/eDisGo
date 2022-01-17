@@ -4,7 +4,9 @@ import logging
 import pandas as pd
 
 from edisgo.tools.preprocess_pypsa_opf_structure import (
-    aggregate_fluct_generators, preprocess_pypsa_opf_structure)
+    aggregate_fluct_generators,
+    preprocess_pypsa_opf_structure,
+)
 
 logger = logging.getLogger("edisgo")
 

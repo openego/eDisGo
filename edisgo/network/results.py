@@ -90,7 +90,7 @@ class Results:
 
     @property
     def pfa_p(self):
-        """
+        r"""
         Active power over components in MW from last power flow analysis.
 
         The given active power for each line / transformer is the
@@ -135,7 +135,7 @@ class Results:
 
     @property
     def pfa_q(self):
-        """
+        r"""
         Active power over components in Mvar from last power flow analysis.
 
         The given reactive power over each line / transformer is the
@@ -249,7 +249,7 @@ class Results:
 
     @property
     def s_res(self):
-        """
+        r"""
         Apparent power over components in MVA from last power flow analysis.
 
         The given apparent power over each line / transformer is the
@@ -396,7 +396,7 @@ class Results:
 
     @property
     def grid_losses(self):
-        """
+        r"""
         Active and reactive network losses in MW and Mvar, respectively.
 
         Parameters
