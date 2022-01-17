@@ -1,7 +1,7 @@
-from pyproj import Transformer
-from geopy.distance import geodesic
-
 import os
+
+from geopy.distance import geodesic
+from pyproj import Transformer
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import LineString, Point

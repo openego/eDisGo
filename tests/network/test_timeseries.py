@@ -1,15 +1,16 @@
 import os
-import pandas as pd
-from pandas.util.testing import assert_series_equal, assert_frame_equal
-from math import tan, acos
-import pytest
 import shutil
-import numpy as np
+from math import acos, tan
 
+import numpy as np
+import pandas as pd
+import pytest
+from pandas.util.testing import assert_frame_equal, assert_series_equal
+
+from edisgo.io import ding0_import
+from edisgo.network import timeseries
 from edisgo.network.topology import Topology
 from edisgo.tools.config import Config
-from edisgo.network import timeseries
-from edisgo.io import ding0_import
 
 
 class TestTimeSeries:

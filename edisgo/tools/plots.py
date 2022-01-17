@@ -1,15 +1,14 @@
-import os
-import pandas as pd
-import numpy as np
 import logging
+import os
+
+import matplotlib
+import numpy as np
+import pandas as pd
 from matplotlib import pyplot as plt
+from pyproj import Proj, Transformer
 from pypsa import Network as PyPSANetwork
 
-from pyproj import Proj
-from pyproj import Transformer
-import matplotlib
-
-from edisgo.tools import tools, session_scope
+from edisgo.tools import session_scope, tools
 
 if "READTHEDOCS" not in os.environ:
 

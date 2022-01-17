@@ -1,8 +1,9 @@
-import pandas as pd
+import itertools
 import logging
 from math import sqrt
+
 import numpy as np
-import itertools
+import pandas as pd
 
 from edisgo.network.grids import LVGrid, MVGrid
 

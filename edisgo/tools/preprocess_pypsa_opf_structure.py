@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
-from edisgo.flex_opt.costs import line_expansion_costs
 from pypsa.descriptors import Dict
+
+from edisgo.flex_opt.costs import line_expansion_costs
 
 
 def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):

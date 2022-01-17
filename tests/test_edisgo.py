@@ -1,11 +1,12 @@
 import os
-import pandas as pd
-import numpy as np
-import pytest
 import shutil
-from math import tan, acos
-from shapely.geometry import Point
+from math import acos, tan
+
+import numpy as np
+import pandas as pd
+import pytest
 from matplotlib import pyplot as plt
+from shapely.geometry import Point
 
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints as checks

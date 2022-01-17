@@ -1,8 +1,8 @@
-import os
-import math
 import logging
-from math import acos, tan
+import math
+import os
 from abc import ABC, abstractmethod
+from math import acos, tan
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point

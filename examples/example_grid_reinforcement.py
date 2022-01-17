@@ -25,14 +25,14 @@ grids.
 
 """
 
+import logging
 import os
+
 import pandas as pd
 import requests
 
 from edisgo import EDisGo
 from edisgo.network.results import Results
-
-import logging
 
 logger = logging.getLogger("edisgo")
 logger.setLevel(logging.DEBUG)

@@ -1,8 +1,8 @@
-import pytest
 import pandas as pd
+import pytest
 
 from edisgo import EDisGo
-from edisgo.network.components import Load, Generator, Storage, Switch
+from edisgo.network.components import Generator, Load, Storage, Switch
 
 
 class TestComponents:

@@ -1,8 +1,9 @@
-import os
-import logging
 import csv
-import pandas as pd
+import logging
+import os
+
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger("edisgo")
 

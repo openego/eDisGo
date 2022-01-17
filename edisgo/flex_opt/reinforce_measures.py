@@ -1,14 +1,13 @@
+import logging
 import math
+
 import networkx as nx
-from networkx.algorithms.shortest_paths.weighted import (
-    _dijkstra as dijkstra_shortest_path_length,
-)
-import pandas as pd
 import numpy as np
+import pandas as pd
+from networkx.algorithms.shortest_paths.weighted import \
+    _dijkstra as dijkstra_shortest_path_length
 
 from edisgo.network.grids import LVGrid, MVGrid
-
-import logging
 
 logger = logging.getLogger("edisgo")
 

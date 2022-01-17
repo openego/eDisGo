@@ -1,12 +1,12 @@
 import os
+from math import pi, sqrt
+
+import networkx as nx
 import numpy as np
 import pandas as pd
-import networkx as nx
-from math import pi, sqrt
 from sqlalchemy import func
 
-from edisgo.flex_opt import exceptions
-from edisgo.flex_opt import check_tech_constraints
+from edisgo.flex_opt import check_tech_constraints, exceptions
 from edisgo.network.grids import LVGrid
 from edisgo.tools import session_scope
 
@@ -14,7 +14,6 @@ if "READTHEDOCS" not in os.environ:
 
     from egoio.db_tables import climate
     from egoio.tools.db import connection
-
     from shapely.geometry.multipolygon import MultiPolygon
     from shapely.wkt import loads as wkt_loads
 

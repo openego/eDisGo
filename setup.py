@@ -1,7 +1,8 @@
-from setuptools import find_packages, setup
-from setuptools.command.install import install
 import os
 import sys
+
+from setuptools import find_packages, setup
+from setuptools.command.install import install
 
 BASEPATH = ".eDisGo"
 

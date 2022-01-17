@@ -1,14 +1,13 @@
+import logging
 import os
+import random
+
 import pandas as pd
 from sqlalchemy import func
-import random
-import logging
 
 from edisgo.network.timeseries import add_generators_timeseries
 from edisgo.tools import session_scope
-from edisgo.tools.geo import (
-    proj2equidistant,
-)
+from edisgo.tools.geo import proj2equidistant
 
 logger = logging.getLogger("edisgo")
 

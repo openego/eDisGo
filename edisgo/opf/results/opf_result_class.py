@@ -1,11 +1,10 @@
 import json
-import pandas as pd
 import logging
 
+import pandas as pd
+
 from edisgo.tools.preprocess_pypsa_opf_structure import (
-    preprocess_pypsa_opf_structure,
-    aggregate_fluct_generators,
-)
+    aggregate_fluct_generators, preprocess_pypsa_opf_structure)
 
 logger = logging.getLogger("edisgo")
 

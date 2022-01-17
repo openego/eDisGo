@@ -1,15 +1,8 @@
-import pandas as pd
 import logging
 
-from pyomo.environ import (
-    ConcreteModel,
-    Set,
-    Param,
-    Objective,
-    Constraint,
-    minimize,
-    Var,
-)
+import pandas as pd
+from pyomo.environ import (ConcreteModel, Constraint, Objective, Param, Set,
+                           Var, minimize)
 from pyomo.opt import SolverFactory
 
 from edisgo.io import pypsa_io

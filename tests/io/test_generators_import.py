@@ -1,11 +1,11 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pytest
 from shapely.geometry import Point
 
 from edisgo import EDisGo
-from edisgo.network.grids import LVGrid
 from edisgo.io import generators_import as generators_import
+from edisgo.network.grids import LVGrid
 
 
 class TestGeneratorsImport:

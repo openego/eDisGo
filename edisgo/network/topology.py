@@ -1,28 +1,25 @@
 import logging
-import random
-import pandas as pd
-import numpy as np
 import os
+import random
 import warnings
+
 import networkx as nx
+import numpy as np
+import pandas as pd
 
 import edisgo
-from edisgo.network.grids import MVGrid, LVGrid
-from edisgo.network.components import Switch
-from edisgo.tools.tools import (
-    calculate_line_resistance,
-    calculate_line_reactance,
-    calculate_apparent_power,
-    select_cable,
-)
-from edisgo.tools import networkx_helper
-from edisgo.tools import geo
 from edisgo.io.ding0_import import _validate_ding0_grid_import
+from edisgo.network.components import Switch
+from edisgo.network.grids import LVGrid, MVGrid
+from edisgo.tools import geo, networkx_helper
+from edisgo.tools.tools import (calculate_apparent_power,
+                                calculate_line_reactance,
+                                calculate_line_resistance, select_cable)
 
 if "READTHEDOCS" not in os.environ:
-    from shapely.wkt import loads as wkt_loads
-    from shapely.geometry import Point, LineString
+    from shapely.geometry import LineString, Point
     from shapely.ops import transform
+    from shapely.wkt import loads as wkt_loads
 
 logger = logging.getLogger("edisgo")
 

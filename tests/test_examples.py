@@ -1,6 +1,7 @@
 import os
-import numpy as np
 import shutil
+
+import numpy as np
 import pytest
 
 from examples import example_grid_reinforcement

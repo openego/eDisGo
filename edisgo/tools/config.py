@@ -18,12 +18,13 @@ __url__ = "https://github.com/openego/edisgo/blob/master/LICENSE"
 __author__ = "nesnoj, gplssm"
 
 
-import os
-from glob import glob
-import shutil
-import edisgo
-import logging
 import datetime
+import logging
+import os
+import shutil
+from glob import glob
+
+import edisgo
 
 logger = logging.getLogger("edisgo")
 

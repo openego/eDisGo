@@ -4,13 +4,14 @@ topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA networ
 container.
 """
 
+import collections
+from math import sqrt
+
 import numpy as np
 import pandas as pd
-from math import sqrt
+from networkx import connected_components
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
-from networkx import connected_components
-import collections
 
 
 def to_pypsa(grid_object, timesteps, **kwargs):
