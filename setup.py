@@ -75,7 +75,7 @@ requirements = [
     "pypower",
     "sklearn",
     "pydot",
-    "Rtree",
+    "pygeos",
 ]
 
 geo_plot_requirements = ["contextily", "descartes"]
