@@ -4,13 +4,16 @@ topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA networ
 container.
 """
 
+import collections
+
+from math import sqrt
+
 import numpy as np
 import pandas as pd
-from math import sqrt
+
+from networkx import connected_components
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
-from networkx import connected_components
-import collections
 
 
 def to_pypsa(grid_object, timesteps, **kwargs):
@@ -142,12 +145,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         slack_df = _set_slack(edisgo_obj.topology.mv_grid)
 
         components = {
-            "Load": grid_object.topology.loads_df.loc[:, ["bus", "peak_load"]]
-            .rename(columns={"peak_load": "p_set"})
-            .append(
-                grid_object.topology.charging_points_df.loc[:, ["bus", "p_nom"]].rename(
-                    columns={"p_nom": "p_set"}
-                )
+            "Load": grid_object.topology.loads_df.loc[:, ["bus", "p_nom"]].rename(
+                columns={"p_nom": "p_set"}
             ),
             "Generator": grid_object.topology.generators_df.loc[
                 :, ["bus", "control", "p_nom"]
@@ -178,9 +177,9 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             ["solar", "wind"]
         )
 
-        if mode is "mv":
+        if mode == "mv":
             mv_components["Transformer"] = pd.DataFrame()
-        elif mode is "mvlv":
+        elif mode == "mvlv":
             # get all MV/LV transformers
             mv_components["Transformer"] = edisgo_obj.topology.transformers_df.loc[
                 :, ["bus0", "bus1", "x_pu", "r_pu", "type_info", "s_nom"]
@@ -190,19 +189,19 @@ def to_pypsa(grid_object, timesteps, **kwargs):
 
         # LV components
         lv_components_to_aggregate = {
-            "Load": ["loads_df", "charging_points_df"],
+            "Load": ["loads_df"],
             "Generator": ["generators_df"],
             "StorageUnit": ["storage_units_df"],
         }
         lv_components = {key: pd.DataFrame() for key in lv_components_to_aggregate}
 
         for lv_grid in grid_object.lv_grids:
-            if mode is "mv":
+            if mode == "mv":
                 # get primary side of station to append loads and generators to
                 station_bus = grid_object.buses_df.loc[
                     lv_grid.transformers_df.bus0.unique()
                 ]
-            elif mode is "mvlv":
+            elif mode == "mvlv":
                 # get secondary side of station to append loads and generators
                 # to
                 station_bus = lv_grid.buses_df.loc[
@@ -214,9 +213,6 @@ def to_pypsa(grid_object, timesteps, **kwargs):
                 comps = pd.DataFrame()
                 for df in dfs:
                     comps_tmp = getattr(lv_grid, df).copy()
-                    if df == "charging_points_df":
-                        comps_tmp["sector"] = "EV_charging"
-                        comps_tmp = comps_tmp.rename(columns={"p_nom": "peak_load"})
                     comps = comps.append(comps_tmp)
                 comps.bus = station_bus.index.values[0]
                 aggregated_lv_components[comp].update(
@@ -237,7 +233,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             for key, value in comps.items():
                 components[key] = components[key].append(value)
 
-    elif mode is "lv":
+    elif mode == "lv":
 
         pypsa_network.mode = "lv"
 
@@ -501,12 +497,8 @@ def _get_grid_component_dict(grid_object):
         and "Line"
     """
     components = {
-        "Load": grid_object.loads_df.loc[:, ["bus", "peak_load"]]
-        .rename(columns={"peak_load": "p_set"})
-        .append(
-            grid_object.charging_points_df.loc[:, ["bus", "p_nom"]].rename(
-                columns={"p_nom": "p_set"}
-            )
+        "Load": grid_object.loads_df.loc[:, ["bus", "p_nom"]].rename(
+            columns={"p_nom": "p_set"}
         ),
         "Generator": grid_object.generators_df.loc[:, ["bus", "control", "p_nom"]],
         "StorageUnit": grid_object.storage_units_df.loc[:, ["bus", "control"]],
@@ -578,17 +570,17 @@ def _append_lv_components(
         bus = comps.bus.unique()[0]
     else:
         return {}
-    if comp is "Load":
+    if comp == "Load":
         if aggregate_loads is None:
-            comps_aggr = comps.loc[:, ["bus", "peak_load"]].rename(
-                columns={"peak_load": "p_set"}
+            comps_aggr = comps.loc[:, ["bus", "p_nom"]].rename(
+                columns={"p_nom": "p_set"}
             )
         elif aggregate_loads == "sectoral":
             comps_aggr = (
-                comps.loc[:, ["peak_load", "sector"]]
+                comps.loc[:, ["p_nom", "sector"]]
                 .groupby("sector")
                 .sum()
-                .rename(columns={"peak_load": "p_set"})
+                .rename(columns={"p_nom": "p_set"})
                 .loc[:, ["p_set"]]
             )
             for sector in comps_aggr.index.values:
@@ -599,14 +591,14 @@ def _append_lv_components(
             comps_aggr["bus"] = bus
         elif aggregate_loads == "all":
             comps_aggr = pd.DataFrame(
-                {"bus": [bus], "p_set": [sum(comps.peak_load)]},
+                {"bus": [bus], "p_set": [sum(comps.p_nom)]},
                 index=[lv_grid_name + "_loads"],
             )
             aggregated_elements[lv_grid_name + "_loads"] = comps.index.values
         else:
             raise ValueError("Aggregation type for loads invalid.")
         lv_components[comp] = lv_components[comp].append(comps_aggr)
-    elif comp is "Generator":
+    elif comp == "Generator":
         flucts = ["wind", "solar"]
         if aggregate_generators is None:
             comps_aggr = comps.loc[:, ["bus", "control", "p_nom"]]
@@ -677,7 +669,7 @@ def _append_lv_components(
         else:
             raise ValueError("Aggregation type for generators invalid.")
         lv_components[comp] = lv_components[comp].append(comps_aggr)
-    elif comp is "StorageUnit":
+    elif comp == "StorageUnit":
         if aggregate_storages == None:
             comps_aggr = comps.loc[:, ["bus", "control"]]
         elif aggregate_storages == "all":
@@ -941,7 +933,7 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     apparent power S, exemplary written as
 
     .. math::
-        S_{max} = max(\sqrt{P_0^2 + Q_0^2}, \sqrt{P_1^2 + Q_1^2}) \\
+        S_{max} = max(\\sqrt{P_0^2 + Q_0^2}, \\sqrt{P_1^2 + Q_1^2}) \\
         P = P_0 P_1(S_{max}) \\
         Q = Q_0 Q_1(S_{max})
 
@@ -1022,7 +1014,10 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     ].fillna(1)
 
     edisgo.results.pfa_v_ang_seed = pd.concat(
-        [edisgo.results.pfa_v_ang_seed, pypsa.buses_t["v_ang"].reindex(index=timesteps)]
+        [
+            edisgo.results.pfa_v_ang_seed,
+            pypsa.buses_t["v_ang"].reindex(index=timesteps),
+        ]
     )
     edisgo.results.pfa_v_ang_seed = edisgo.results.pfa_v_ang_seed[
         ~edisgo.results.pfa_v_ang_seed.index.duplicated(keep="last")

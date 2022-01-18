@@ -1,15 +1,18 @@
 import os
-import pandas as pd
-from pandas.util.testing import assert_series_equal, assert_frame_equal
-from math import tan, acos
-import pytest
 import shutil
-import numpy as np
 
+from math import acos, tan
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from pandas.util.testing import assert_frame_equal, assert_series_equal
+
+from edisgo.io import ding0_import
+from edisgo.network import timeseries
 from edisgo.network.topology import Topology
 from edisgo.tools.config import Config
-from edisgo.network import timeseries
-from edisgo.io import ding0_import
 
 
 class TestTimeSeries:
@@ -84,7 +87,9 @@ class TestTimeSeries:
         timeseries_obj.from_csv(dir)
 
         pd.testing.assert_frame_equal(
-            timeseries_obj.loads_active_power, loads_active_power, check_freq=False
+            timeseries_obj.loads_active_power,
+            loads_active_power,
+            check_freq=False,
         )
         pd.testing.assert_frame_equal(
             timeseries_obj.generators_reactive_power,
@@ -149,7 +154,9 @@ class Test_get_component_timeseries:
             )
 
         storage_ts = pd.concat(
-            [self.topology.storage_units_df.p_nom] * 8760, axis=1, keys=timeindex
+            [self.topology.storage_units_df.p_nom] * 8760,
+            axis=1,
+            keys=timeindex,
         ).T
         timeseries.get_component_timeseries(
             edisgo_obj=self,
@@ -232,7 +239,9 @@ class Test_get_component_timeseries:
         # value
         gen = "Generator_1"  # gas, mv
         exp = pd.Series(
-            data=[1 * 0.775, 0 * 0.775], name=gen, index=self.timeseries.timeindex
+            data=[1 * 0.775, 0 * 0.775],
+            name=gen,
+            index=self.timeseries.timeindex,
         )
         assert_series_equal(self.timeseries.generators_active_power.loc[:, gen], exp)
         pf = -tan(acos(0.9))
@@ -252,7 +261,9 @@ class Test_get_component_timeseries:
 
         gen = "GeneratorFluctuating_3"  # solar, mv
         exp = pd.Series(
-            data=[0.85 * 2.67, 0 * 2.67], name=gen, index=self.timeseries.timeindex
+            data=[0.85 * 2.67, 0 * 2.67],
+            name=gen,
+            index=self.timeseries.timeindex,
         )
         assert_series_equal(self.timeseries.generators_active_power.loc[:, gen], exp)
         pf = -tan(acos(0.9))
@@ -262,7 +273,9 @@ class Test_get_component_timeseries:
 
         gen = "GeneratorFluctuating_20"  # solar, lv
         exp = pd.Series(
-            data=[0.85 * 0.005, 0 * 0.005], name=gen, index=self.timeseries.timeindex
+            data=[0.85 * 0.005, 0 * 0.005],
+            name=gen,
+            index=self.timeseries.timeindex,
         )
         assert_series_equal(self.timeseries.generators_active_power.loc[:, gen], exp)
         pf = -tan(acos(0.95))
@@ -272,7 +285,9 @@ class Test_get_component_timeseries:
 
         load = "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"  # retail, mv
         exp = pd.Series(
-            data=[0.1 * 0.31, 1.0 * 0.31], name=load, index=self.timeseries.timeindex
+            data=[0.1 * 0.31, 1.0 * 0.31],
+            name=load,
+            index=self.timeseries.timeindex,
         )
         assert_series_equal(
             self.timeseries.loads_active_power.loc[:, load],
@@ -330,7 +345,9 @@ class Test_get_component_timeseries:
 
         storage = storage_1  # storage, mv
         exp = pd.Series(
-            data=[1 * 0.3, -1 * 0.3], name=storage, index=self.timeseries.timeindex
+            data=[1 * 0.3, -1 * 0.3],
+            name=storage,
+            index=self.timeseries.timeindex,
         )
 
         assert_series_equal(
@@ -349,7 +366,9 @@ class Test_get_component_timeseries:
 
         storage = storage_3  # storage, lv
         exp = pd.Series(
-            data=[1 * 0.05, -1 * 0.05], name=storage, index=self.timeseries.timeindex
+            data=[1 * 0.05, -1 * 0.05],
+            name=storage,
+            index=self.timeseries.timeindex,
         )
 
         assert_series_equal(
@@ -443,17 +462,17 @@ class Test_get_component_timeseries:
             timeseries._worst_case_generation(self, modes=None)
         self.topology._generators_df.at[gen, "p_nom"] = val_pre
         load = "Load_agricultural_LVGrid_1_1"
-        val_pre = self.topology._loads_df.at[load, "peak_load"]
-        self.topology._loads_df.at[load, "peak_load"] = None
+        val_pre = self.topology._loads_df.at[load, "p_nom"]
+        self.topology._loads_df.at[load, "p_nom"] = None
         with pytest.raises(AttributeError, match=load):
             timeseries._worst_case_load(self, modes=None)
-        self.topology._loads_df.at[load, "peak_load"] = val_pre
+        self.topology._loads_df.at[load, "p_nom"] = val_pre
 
         # test no other generators
 
     def test_add_loads_timeseries(self):
         """Test method add_loads_timeseries"""
-        peak_load = 2.3
+        p_nom = 2.3
         annual_consumption = 3.4
         num_loads = len(self.topology.loads_df)
         # add single load for which timeseries is added
@@ -462,7 +481,7 @@ class Test_get_component_timeseries:
         load_name = self.topology.add_load(
             load_id=4,
             bus="Bus_MVStation_1",
-            peak_load=peak_load,
+            p_nom=p_nom,
             annual_consumption=annual_consumption,
             sector="retail",
         )
@@ -475,9 +494,9 @@ class Test_get_component_timeseries:
         assert self.timeseries.loads_reactive_power.shape == (2, num_loads + 1)
         assert (active_power_new_load.index == timeindex).all()
         assert np.isclose(
-            active_power_new_load.loc[timeindex[0], load_name], (0.15 * peak_load)
+            active_power_new_load.loc[timeindex[0], load_name], (0.15 * p_nom)
         )
-        assert np.isclose(active_power_new_load.loc[timeindex[1], load_name], peak_load)
+        assert np.isclose(active_power_new_load.loc[timeindex[1], load_name], p_nom)
         self.topology.remove_load(load_name)
 
         # test manual
@@ -506,17 +525,19 @@ class Test_get_component_timeseries:
         load_name = self.topology.add_load(
             load_id=4,
             bus="Bus_MVStation_1",
-            peak_load=peak_load,
+            p_nom=p_nom,
             annual_consumption=annual_consumption,
             sector="retail",
         )
         new_load_active_power = pd.DataFrame(
-            index=timeindex, columns=[load_name], data=([peak_load] * len(timeindex))
+            index=timeindex,
+            columns=[load_name],
+            data=([p_nom] * len(timeindex)),
         )
         new_load_reactive_power = pd.DataFrame(
             index=timeindex,
             columns=[load_name],
-            data=([peak_load * 0.5] * len(timeindex)),
+            data=([p_nom * 0.5] * len(timeindex)),
         )
         timeseries.add_loads_timeseries(
             self,
@@ -526,10 +547,13 @@ class Test_get_component_timeseries:
         )
         active_power = self.timeseries.loads_active_power[load_name]
         reactive_power = self.timeseries.loads_reactive_power[load_name]
-        assert (active_power.values == peak_load).all()
-        assert (reactive_power.values == peak_load * 0.5).all()
+        assert (active_power.values == p_nom).all()
+        assert (reactive_power.values == p_nom * 0.5).all()
         assert self.timeseries.loads_active_power.shape == (24, num_loads + 1)
-        assert self.timeseries.loads_reactive_power.shape == (24, num_loads + 1)
+        assert self.timeseries.loads_reactive_power.shape == (
+            24,
+            num_loads + 1,
+        )
 
         self.topology.remove_load(load_name)
 
@@ -549,7 +573,7 @@ class Test_get_component_timeseries:
         load_name = self.topology.add_load(
             load_id=4,
             bus="Bus_MVStation_1",
-            peak_load=peak_load,
+            p_nom=p_nom,
             annual_consumption=annual_consumption,
             sector="retail",
         )
@@ -565,7 +589,10 @@ class Test_get_component_timeseries:
         )
 
         assert self.timeseries.loads_active_power.shape == (24, num_loads + 1)
-        assert self.timeseries.loads_reactive_power.shape == (24, num_loads + 1)
+        assert self.timeseries.loads_reactive_power.shape == (
+            24,
+            num_loads + 1,
+        )
         self.topology.remove_load(load_name)
         # Todo: add more than one load
 
@@ -584,8 +611,14 @@ class Test_get_component_timeseries:
             generator_type="solar",
         )
         timeseries.add_generators_timeseries(self, gen_name)
-        assert self.timeseries.generators_active_power.shape == (2, num_gens + 1)
-        assert self.timeseries.generators_reactive_power.shape == (2, num_gens + 1)
+        assert self.timeseries.generators_active_power.shape == (
+            2,
+            num_gens + 1,
+        )
+        assert self.timeseries.generators_reactive_power.shape == (
+            2,
+            num_gens + 1,
+        )
         assert (self.timeseries.generators_active_power.index == timeindex).all()
         assert (
             self.timeseries.generators_active_power.loc[timeindex, gen_name].values
@@ -603,7 +636,10 @@ class Test_get_component_timeseries:
         # add multiple generators and check
         p_nom2 = 1.3
         gen_name2 = self.topology.add_generator(
-            generator_id=2, p_nom=p_nom2, bus="Bus_Generator_1", generator_type="gas"
+            generator_id=2,
+            p_nom=p_nom2,
+            bus="Bus_Generator_1",
+            generator_type="gas",
         )
         p_nom3 = 2.4
         gen_name3 = self.topology.add_generator(
@@ -614,8 +650,14 @@ class Test_get_component_timeseries:
         )
         timeseries.add_generators_timeseries(self, [gen_name2, gen_name3])
         # check expected values
-        assert self.timeseries.generators_active_power.shape == (2, num_gens + 3)
-        assert self.timeseries.generators_reactive_power.shape == (2, num_gens + 3)
+        assert self.timeseries.generators_active_power.shape == (
+            2,
+            num_gens + 3,
+        )
+        assert self.timeseries.generators_reactive_power.shape == (
+            2,
+            num_gens + 3,
+        )
         assert np.isclose(
             np.array(
                 self.timeseries.generators_active_power.loc[
@@ -668,10 +710,14 @@ class Test_get_component_timeseries:
             generator_type="solar",
         )
         new_gen_active_power = pd.DataFrame(
-            index=timeindex, columns=[gen_name], data=([p_nom * 0.97] * len(timeindex))
+            index=timeindex,
+            columns=[gen_name],
+            data=([p_nom * 0.97] * len(timeindex)),
         )
         new_gen_reactive_power = pd.DataFrame(
-            index=timeindex, columns=[gen_name], data=([p_nom * 0.5] * len(timeindex))
+            index=timeindex,
+            columns=[gen_name],
+            data=([p_nom * 0.5] * len(timeindex)),
         )
         timeseries.add_generators_timeseries(
             self,
@@ -680,8 +726,14 @@ class Test_get_component_timeseries:
             generators_reactive_power=new_gen_reactive_power,
         )
         # check expected values
-        assert self.timeseries.generators_active_power.shape == (24, num_gens + 1)
-        assert self.timeseries.generators_reactive_power.shape == (24, num_gens + 1)
+        assert self.timeseries.generators_active_power.shape == (
+            24,
+            num_gens + 1,
+        )
+        assert self.timeseries.generators_reactive_power.shape == (
+            24,
+            num_gens + 1,
+        )
         assert (self.timeseries.generators_active_power.index == timeindex).all()
         assert (
             self.timeseries.generators_active_power.loc[timeindex, gen_name].values
@@ -694,7 +746,10 @@ class Test_get_component_timeseries:
         # add multiple generators and check
         p_nom2 = 1.3
         gen_name2 = self.topology.add_generator(
-            generator_id=2, p_nom=p_nom2, bus="Bus_Generator_1", generator_type="gas"
+            generator_id=2,
+            p_nom=p_nom2,
+            bus="Bus_Generator_1",
+            generator_type="gas",
         )
         p_nom3 = 2.4
         gen_name3 = self.topology.add_generator(
@@ -728,8 +783,14 @@ class Test_get_component_timeseries:
             generators_reactive_power=new_gens_reactive_power,
         )
         # check expected values
-        assert self.timeseries.generators_active_power.shape == (24, num_gens + 3)
-        assert self.timeseries.generators_reactive_power.shape == (24, num_gens + 3)
+        assert self.timeseries.generators_active_power.shape == (
+            24,
+            num_gens + 3,
+        )
+        assert self.timeseries.generators_reactive_power.shape == (
+            24,
+            num_gens + 3,
+        )
         assert np.isclose(
             self.timeseries.generators_active_power.loc[
                 timeindex, [gen_name2, gen_name3]
@@ -769,14 +830,23 @@ class Test_get_component_timeseries:
             weather_cell_id=1122075,
         )
         timeseries.add_generators_timeseries(self, gen_name)
-        assert self.timeseries.generators_active_power.shape == (24, num_gens + 1)
-        assert self.timeseries.generators_reactive_power.shape == (24, num_gens + 1)
+        assert self.timeseries.generators_active_power.shape == (
+            24,
+            num_gens + 1,
+        )
+        assert self.timeseries.generators_reactive_power.shape == (
+            24,
+            num_gens + 1,
+        )
         # Todo: check values
 
         # add multiple generators and check
         p_nom2 = 1.3
         gen_name2 = self.topology.add_generator(
-            generator_id=2, p_nom=p_nom2, bus="Bus_Generator_1", generator_type="gas"
+            generator_id=2,
+            p_nom=p_nom2,
+            bus="Bus_Generator_1",
+            generator_type="gas",
         )
         p_nom3 = 2.4
         gen_name3 = self.topology.add_generator(
@@ -795,8 +865,14 @@ class Test_get_component_timeseries:
             ),
         )
         timeseries.add_generators_timeseries(self, [gen_name2, gen_name3])
-        assert self.timeseries.generators_active_power.shape == (24, num_gens + 3)
-        assert self.timeseries.generators_reactive_power.shape == (24, num_gens + 3)
+        assert self.timeseries.generators_active_power.shape == (
+            24,
+            num_gens + 3,
+        )
+        assert self.timeseries.generators_reactive_power.shape == (
+            24,
+            num_gens + 3,
+        )
         assert np.isclose(
             self.timeseries.generators_active_power.loc[
                 timeindex, [gen_name2, gen_name3]
@@ -807,7 +883,10 @@ class Test_get_component_timeseries:
             self.timeseries.generators_reactive_power.loc[
                 timeindex, [gen_name2, gen_name3]
             ].values,
-            [-tan(acos(0.9)) * p_nom2 * 0.775, -tan(acos(0.95)) * p_nom3 * 0.775],
+            [
+                -tan(acos(0.9)) * p_nom2 * 0.775,
+                -tan(acos(0.95)) * p_nom3 * 0.775,
+            ],
         ).all()
         # check values when reactive power is inserted as timeseries
         new_gens_reactive_power = pd.DataFrame(
@@ -825,8 +904,14 @@ class Test_get_component_timeseries:
             timeseries_generation_dispatchable=new_gens_active_power,
             generation_reactive_power=new_gens_reactive_power,
         )
-        assert self.timeseries.generators_active_power.shape == (24, num_gens + 3)
-        assert self.timeseries.generators_reactive_power.shape == (24, num_gens + 3)
+        assert self.timeseries.generators_active_power.shape == (
+            24,
+            num_gens + 3,
+        )
+        assert self.timeseries.generators_reactive_power.shape == (
+            24,
+            num_gens + 3,
+        )
         assert np.isclose(
             self.timeseries.generators_active_power.loc[
                 timeindex, [gen_name2, gen_name3]
@@ -1134,7 +1219,10 @@ class Test_get_component_timeseries:
                 ].values,
                 dtype=float,
             ),
-            [-tan(acos(0.95)) * p_nom2 * 0.97, -tan(acos(0.9)) * p_nom3 * 0.98],
+            [
+                -tan(acos(0.95)) * p_nom2 * 0.97,
+                -tan(acos(0.9)) * p_nom3 * 0.98,
+            ],
         ).all()
         # check values when reactive power is inserted as timeseries
         timeseries.add_storage_units_timeseries(
@@ -1211,7 +1299,7 @@ class Test_get_component_timeseries:
             columns=load_names,
             data=np.multiply(
                 np.random.rand(len(timeindex), len(load_names)),
-                ([self.topology.loads_df.peak_load] * len(timeindex)),
+                ([self.topology.loads_df.p_nom] * len(timeindex)),
             ),
         )
         loads_reactive_power = pd.DataFrame(
@@ -1219,7 +1307,7 @@ class Test_get_component_timeseries:
             columns=load_names,
             data=np.multiply(
                 np.random.rand(len(timeindex), len(load_names)),
-                ([self.topology.loads_df.peak_load] * len(timeindex)),
+                ([self.topology.loads_df.p_nom] * len(timeindex)),
             ),
         )
         generator_names = self.topology.generators_df.index
@@ -1275,7 +1363,8 @@ class Test_get_component_timeseries:
             self.timeseries.loads_active_power, "Load_agricultural_LVGrid_1_1"
         )
         assert hasattr(
-            self.timeseries.loads_reactive_power, "Load_agricultural_LVGrid_1_1"
+            self.timeseries.loads_reactive_power,
+            "Load_agricultural_LVGrid_1_1",
         )
         timeseries._drop_existing_component_timeseries(
             self, "loads", ["Load_agricultural_LVGrid_1_1"]
@@ -1326,7 +1415,9 @@ class TestReactivePowerTimeSeriesFunctions:
         ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
         self.timeseries.timeindex = pd.date_range("1/1/1970", periods=2, freq="H")
 
-    def test_set_reactive_power_time_series_for_fixed_cosphi_using_config(self):
+    def test_set_reactive_power_time_series_for_fixed_cosphi_using_config(
+        self,
+    ):
 
         # test for component_type="generators"
         comp_mv_1 = "Generator_1"
@@ -1401,7 +1492,9 @@ class TestReactivePowerTimeSeriesFunctions:
         self.timeseries.loads_active_power = active_power_ts
 
         timeseries._set_reactive_power_time_series_for_fixed_cosphi_using_config(
-            self, self.topology.loads_df.loc[[comp_mv_1, comp_lv_1], :], "loads"
+            self,
+            self.topology.loads_df.loc[[comp_mv_1, comp_lv_1], :],
+            "loads",
         )
 
         assert self.timeseries.loads_reactive_power.shape == (2, 2)
@@ -1433,7 +1526,9 @@ class TestReactivePowerTimeSeriesFunctions:
         self.timeseries.storage_units_active_power = active_power_ts
 
         timeseries._set_reactive_power_time_series_for_fixed_cosphi_using_config(
-            self, self.topology.storage_units_df.loc[[comp_mv_1], :], "storage_units"
+            self,
+            self.topology.storage_units_df.loc[[comp_mv_1], :],
+            "storage_units",
         )
 
         assert self.timeseries.storage_units_reactive_power.shape == (2, 1)

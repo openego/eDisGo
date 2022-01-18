@@ -1,5 +1,5 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pytest
 
 from edisgo import EDisGo
@@ -10,7 +10,8 @@ class TestCosts:
     @classmethod
     def setup_class(self):
         self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path, worst_case_analysis="worst-case"
+            ding0_grid=pytest.ding0_test_network_path,
+            worst_case_analysis="worst-case",
         )
         self.edisgo.analyze()
 

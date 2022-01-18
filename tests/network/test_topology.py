@@ -1,16 +1,17 @@
-import pytest
-import shutil
-import pandas as pd
-import numpy as np
 import os
+import shutil
+
+import numpy as np
+import pandas as pd
+import pytest
+
 from shapely.geometry import Point
 
-from edisgo.network.topology import Topology
-from edisgo.io import ding0_import
 from edisgo import EDisGo
-from edisgo.network.grids import LVGrid
-
+from edisgo.io import ding0_import
 from edisgo.network.components import Switch
+from edisgo.network.grids import LVGrid
+from edisgo.network.topology import Topology
 
 
 class TestTopology:
@@ -98,7 +99,6 @@ class TestTopology:
         assert "Line_30000007" in components["lines"].index
 
         assert components["generators"].empty
-        assert components["charging_points"].empty
         assert components["storage_units"].empty
         assert components["transformers"].empty
         assert components["transformers_hvmv"].empty
@@ -113,7 +113,6 @@ class TestTopology:
         assert "Line_10000007" in components["lines"].index
         assert "Load_residential_LVGrid_1_5" in components["loads"].index
 
-        assert components["charging_points"].empty
         assert components["storage_units"].empty
         assert components["transformers"].empty
         assert components["transformers_hvmv"].empty
@@ -132,7 +131,6 @@ class TestTopology:
 
         assert components["generators"].empty
         assert components["loads"].empty
-        assert components["charging_points"].empty
         assert components["switches"].empty
 
         # test if lines, transformers and switches are found at the bus for a
@@ -152,7 +150,6 @@ class TestTopology:
 
         assert components["generators"].empty
         assert components["loads"].empty
-        assert components["charging_points"].empty
         assert components["storage_units"].empty
         assert components["transformers_hvmv"].empty
 
@@ -170,7 +167,6 @@ class TestTopology:
 
         assert components["generators"].empty
         assert components["loads"].empty
-        assert components["charging_points"].empty
         assert components["storage_units"].empty
         assert components["transformers_hvmv"].empty
 
@@ -202,38 +198,40 @@ class TestTopology:
     def test_add_load(self):
         """Test add_load method"""
 
+	# test adding conventional load
+
         len_df_before = len(self.topology.loads_df)
 
         # test with kwargs
         name = self.topology.add_load(
             load_id=10,
             bus="Bus_BranchTee_LVGrid_1_4",
-            peak_load=1,
+            p_nom=1,
             annual_consumption=2,
             sector="residential",
             test_info="test",
         )
         assert len_df_before + 1 == len(self.topology.loads_df)
         assert name == "Load_LVGrid_1_residential_10"
-        assert self.topology.loads_df.at[name, "peak_load"] == 1
+        assert self.topology.loads_df.at[name, "p_nom"] == 1
         assert self.topology.loads_df.at[name, "test_info"] == "test"
 
         # test without kwargs
         name = self.topology.add_load(
-            bus="Bus_BranchTee_LVGrid_1_4", peak_load=2, annual_consumption=1
+            bus="Bus_BranchTee_LVGrid_1_4", p_nom=2, annual_consumption=1
         )
         assert len_df_before + 2 == len(self.topology.loads_df)
-        assert name == "Load_LVGrid_1"
-        assert self.topology.loads_df.loc[name, "peak_load"] == 2
+        assert name == "Load_LVGrid_1_1"
+        assert self.topology.loads_df.loc[name, "p_nom"] == 2
         assert self.topology.loads_df.loc[name, "sector"] is np.nan
 
         # test without kwargs (name created using number of loads in grid)
         name = self.topology.add_load(
-            bus="Bus_BranchTee_LVGrid_1_4", peak_load=3, annual_consumption=1
+            bus="Bus_BranchTee_LVGrid_1_4", p_nom=3, annual_consumption=1
         )
         assert len_df_before + 3 == len(self.topology.loads_df)
-        assert name == "Load_LVGrid_1_9"
-        assert self.topology.loads_df.loc[name, "peak_load"] == 3
+        assert name == "Load_LVGrid_1_2"
+        assert self.topology.loads_df.loc[name, "p_nom"] == 3
 
         # test error raising if bus is not valid
         msg = (
@@ -244,10 +242,47 @@ class TestTopology:
             self.topology.add_load(
                 load_id=8,
                 bus="Unknown_bus",
-                peak_load=1,
+                p_nom=1,
                 annual_consumption=1,
                 sector="retail",
             )
+
+	# test adding charging point
+
+        len_df_before = len(self.topology.charging_points_df)
+
+        # test with kwargs
+        name = self.topology.add_load(
+            bus="Bus_BranchTee_MVGrid_1_8",
+            p_nom=1,
+            type="charging_point",
+            sector="home",
+            number=2,
+            test_info="test",
+        )
+        assert len_df_before + 1 == len(self.topology.charging_points_df)
+        assert name == "ChargingPoint_MVGrid_1_home_0"
+        assert self.topology.charging_points_df.at[name, "sector"] == "home"
+        assert self.topology.charging_points_df.at[name, "test_info"] == "test"
+
+        # test without kwargs
+        name = self.topology.add_load(
+            bus="Bus_BranchTee_LVGrid_1_2",
+            type="charging_point",
+            p_nom=0.5,
+            sector="work",
+        )
+        assert len_df_before + 2 == len(self.topology.charging_points_df)
+        assert name == "ChargingPoint_LVGrid_1_work_0"
+        assert self.topology.charging_points_df.at[name, "p_nom"] == 0.5
+
+        # test error raising if bus is not valid
+        msg = (
+            "Specified bus Unknown_bus is not valid as it is not defined in "
+            "buses_df."
+        )
+        with pytest.raises(ValueError, match=msg):
+            self.topology.add_load(bus="Unknown_bus", p_nom=0.5, sector="work")
 
     def test_add_generator(self):
         """Test add_generator method"""
@@ -289,48 +324,6 @@ class TestTopology:
                 bus="Unknown_bus", p_nom=0.5, generator_type="solar"
             )
 
-    def test_add_charging_point(self):
-        """
-        Test add_charging_point method.
-
-        Added charging points are used to later on test remove_charging_points
-        method.
-
-        """
-
-        len_df_before = len(self.topology.charging_points_df)
-
-        # test with kwargs
-        name = self.topology.add_charging_point(
-            bus="Bus_BranchTee_MVGrid_1_8",
-            p_nom=1,
-            use_case="home",
-            number=2,
-            test_info="test",
-        )
-        assert len_df_before + 1 == len(self.topology.charging_points_df)
-        assert name == "ChargingPoint_MVGrid_1_0"
-        assert self.topology.charging_points_df.at[name, "use_case"] == "home"
-        assert self.topology.charging_points_df.at[name, "test_info"] == "test"
-
-        # test without kwargs
-        name = self.topology.add_charging_point(
-            bus="Bus_BranchTee_LVGrid_1_2", p_nom=0.5, use_case="work"
-        )
-        assert len_df_before + 2 == len(self.topology.charging_points_df)
-        assert name == "ChargingPoint_LVGrid_1_0"
-        assert self.topology.charging_points_df.at[name, "p_nom"] == 0.5
-
-        # test error raising if bus is not valid
-        msg = (
-            "Specified bus Unknown_bus is not valid as it is not defined in "
-            "buses_df."
-        )
-        with pytest.raises(ValueError, match=msg):
-            self.topology.add_charging_point(
-                bus="Unknown_bus", p_nom=0.5, use_case="work"
-            )
-
     def test_add_storage_unit(self):
         """Test add_storage_unit method"""
 
@@ -338,7 +331,10 @@ class TestTopology:
 
         # test with kwargs
         name = self.topology.add_storage_unit(
-            bus="Bus_BranchTee_LVGrid_1_3", p_nom=1, control="Test", test_info="test"
+            bus="Bus_BranchTee_LVGrid_1_3",
+            p_nom=1,
+            control="Test",
+            test_info="test",
         )
         assert len_df_before + 1 == len(self.topology.storage_units_df)
         assert name == "StorageUnit_LVGrid_1_0"
@@ -415,7 +411,7 @@ class TestTopology:
         )
 
         # test error raising when given buses are not valid
-        msg = "Specified bus Testbus is not valid as it is not defined in " "buses_df."
+        msg = "Specified bus Testbus is not valid as it is not defined in buses_df."
         with pytest.raises(ValueError, match=msg):
             self.topology.add_line(
                 bus0="Testbus",
@@ -425,7 +421,7 @@ class TestTopology:
                 type_info="NA2XS2Y 3x1x185 RM/25",
                 x=2,
             )
-        msg = "Specified bus Testbus1 is not valid as it is not defined in " "buses_df."
+        msg = "Specified bus Testbus1 is not valid as it is not defined in buses_df."
         with pytest.raises(ValueError, match=msg):
             self.topology.add_line(
                 bus0=bus0,
@@ -532,6 +528,8 @@ class TestTopology:
     def test_remove_load(self):
         """Test remove_load method"""
 
+	# test removing conventional load
+
         # check case where only load is connected to line,
         # line and bus are therefore removed as well
         name = "Load_residential_LVGrid_1_4"
@@ -544,7 +542,7 @@ class TestTopology:
 
         # check case where load is not the only connected element
         name = "Load_residential_LVGrid_1_6"
-        self.topology.add_load("Bus_BranchTee_LVGrid_1_12", 2, 3)
+        self.topology.add_load("Bus_BranchTee_LVGrid_1_12", 2, annual_consumption=3)
         # get connected line
         connected_lines = self.topology.get_connected_lines_from_bus(
             "Bus_BranchTee_LVGrid_1_12"
@@ -552,6 +550,31 @@ class TestTopology:
         self.topology.remove_load(name)
         assert name not in self.topology.loads_df.index
         assert "Bus_BranchTee_LVGrid_1_12" in self.topology.buses_df.index
+        assert (connected_lines.index.isin(self.topology.lines_df.index)).all()
+
+	# test removing charging point
+
+        # check case where only charging point is connected to line,
+        # line and bus are therefore removed as well
+        name = "ChargingPoint_LVGrid_1_0"
+        bus = "Bus_Load_agricultural_LVGrid_1_1"
+        # get connected line
+        connected_lines = self.topology.get_connected_lines_from_bus(bus)
+        # remove load
+        self.topology.remove_load("Load_agricultural_LVGrid_1_1")
+        self.topology.remove_load(name)
+        assert name not in self.topology.charging_points_df.index
+        assert bus not in self.topology.buses_df.index
+        assert ~(connected_lines.index.isin(self.topology.lines_df.index)).any()
+
+        # check case where charging point is not the only connected element
+        name = "ChargingPoint_MVGrid_1_0"
+        bus = "Bus_BranchTee_MVGrid_1_8"
+        # get connected lines
+        connected_lines = self.topology.get_connected_lines_from_bus(bus)
+        self.topology.remove_load(name)
+        assert name not in self.topology.charging_points_df.index
+        assert bus in self.topology.buses_df.index
         assert (connected_lines.index.isin(self.topology.lines_df.index)).all()
 
     def test_remove_generator(self):
@@ -569,7 +592,7 @@ class TestTopology:
 
         # check case where generator is not the only connected element
         name = "GeneratorFluctuating_18"
-        self.topology.add_load("Bus_BranchTee_LVGrid_4_2", 2, 3)
+        self.topology.add_load("Bus_BranchTee_LVGrid_4_2", 2, annual_consumption=3)
         # get connected line
         connected_lines = self.topology.get_connected_lines_from_bus(
             "Bus_BranchTee_LVGrid_4_2"
@@ -577,32 +600,6 @@ class TestTopology:
         self.topology.remove_generator(name)
         assert name not in self.topology.generators_df.index
         assert "Bus_BranchTee_LVGrid_4_2" in self.topology.buses_df.index
-        assert (connected_lines.index.isin(self.topology.lines_df.index)).all()
-
-    def test_remove_charging_point(self):
-        """Test remove_charging_point method"""
-
-        # check case where only charging point is connected to line,
-        # line and bus are therefore removed as well
-        name = "ChargingPoint_LVGrid_1_0"
-        bus = "Bus_Load_agricultural_LVGrid_1_1"
-        # get connected line
-        connected_lines = self.topology.get_connected_lines_from_bus(bus)
-        # remove load
-        self.topology.remove_load("Load_agricultural_LVGrid_1_1")
-        self.topology.remove_charging_point(name)
-        assert name not in self.topology.charging_points_df.index
-        assert bus not in self.topology.buses_df.index
-        assert ~(connected_lines.index.isin(self.topology.lines_df.index)).any()
-
-        # check case where charging point is not the only connected element
-        name = "ChargingPoint_MVGrid_1_0"
-        bus = "Bus_BranchTee_MVGrid_1_8"
-        # get connected lines
-        connected_lines = self.topology.get_connected_lines_from_bus(bus)
-        self.topology.remove_charging_point(name)
-        assert name not in self.topology.charging_points_df.index
-        assert bus in self.topology.buses_df.index
         assert (connected_lines.index.isin(self.topology.lines_df.index)).all()
 
     def test_remove_storage_unit(self):
@@ -806,7 +803,8 @@ class TestTopologyWithEdisgoObject:
     @pytest.yield_fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path, worst_case_analysis="worst-case"
+            ding0_grid=pytest.ding0_test_network_path,
+            worst_case_analysis="worst-case",
         )
 
     def test_from_csv(self):
@@ -987,7 +985,7 @@ class TestTopologyWithEdisgoObject:
         test_gen = {
             "geom": geom,
             "p_nom": 2.5,
-            "use_case": "fast",
+            "sector": "fast",
             "number": 10,
             "voltage_level": 4,
         }
@@ -1271,7 +1269,7 @@ class TestTopologyWithEdisgoObject:
         test_cp = {
             "p_nom": 0.01,
             "geom": geom,
-            "use_case": "home",
+            "sector": "home",
             "voltage_level": 7,
             "mvlv_subst_id": 3,
         }
@@ -1305,7 +1303,7 @@ class TestTopologyWithEdisgoObject:
             "p_nom": 0.02,
             "number": 2,
             "geom": geom,
-            "use_case": "work",
+            "sector": "work",
             "voltage_level": 7,
             "mvlv_subst_id": 3,
         }
@@ -1340,7 +1338,7 @@ class TestTopologyWithEdisgoObject:
             "p_nom": 0.02,
             "number": 2,
             "geom": geom,
-            "use_case": "public",
+            "sector": "public",
             "voltage_level": 7,
             "mvlv_subst_id": 3,
         }

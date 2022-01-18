@@ -1,18 +1,17 @@
-import os
-import sys
+import argparse
 import glob
+import logging
+import multiprocessing as mp
+import os
 import re
+import sys
 
 import multiprocess as mp2
-import multiprocessing as mp
-
-import argparse
-import logging
-
 import pandas as pd
+
 from edisgo import EDisGo
-from edisgo.network.results import Results
 from edisgo.flex_opt.exceptions import MaximumIterationError
+from edisgo.network.results import Results
 
 
 def setup_logging(
@@ -364,17 +363,17 @@ def run_edisgo_pool_flexible(
 def edisgo_run():
     # create the argument parser
     example_text = """Examples
-    
+
     ...assumes all files located in PWD.
-    
+
     Analyze a single network in 'worst-case'
-    
+
          edisgo_run -f ding0_grids__997.pkl -wc
-         
-         
-    Analyze multiple grids in 'worst-case' using parallelization. Grid IDs are 
+
+
+    Analyze multiple grids in 'worst-case' using parallelization. Grid IDs are
     specified by the grids_list.txt.
-    
+
          edisgo_run -ds '' grids_list.txt ding0_grids__{}.pkl -wc --parallel
          """
     parser = argparse.ArgumentParser(

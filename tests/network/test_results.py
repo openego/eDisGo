@@ -1,5 +1,6 @@
 import os
 import shutil
+
 import pandas as pd
 
 from edisgo.network.results import Results
@@ -67,7 +68,9 @@ class TestResults:
         # test with provided parameters and reduce memory True
         self.results.pfa_p = self.results.v_res
         self.results.to_csv(
-            cur_dir, parameters={"powerflow_results": ["v_res"]}, reduce_memory=True
+            cur_dir,
+            parameters={"powerflow_results": ["v_res"]},
+            reduce_memory=True,
         )
 
         files_in_powerflow_results = os.listdir(

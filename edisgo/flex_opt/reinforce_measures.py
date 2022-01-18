@@ -1,14 +1,15 @@
+import logging
 import math
+
 import networkx as nx
+import numpy as np
+import pandas as pd
+
 from networkx.algorithms.shortest_paths.weighted import (
     _dijkstra as dijkstra_shortest_path_length,
 )
-import pandas as pd
-import numpy as np
 
 from edisgo.network.grids import LVGrid, MVGrid
-
-import logging
 
 logger = logging.getLogger("edisgo")
 
@@ -486,7 +487,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
             elif grid.lines_df.at[crit_line_name, "bus1"] == pred_node:
                 edisgo_obj.topology._lines_df.at[crit_line_name, "bus1"] = station_node
             else:
-                raise ValueError("Bus not in line buses. " "Please check.")
+                raise ValueError("Bus not in line buses. Please check.")
             # change line length and type
             edisgo_obj.topology._lines_df.at[
                 crit_line_name, "length"

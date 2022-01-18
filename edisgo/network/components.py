@@ -1,8 +1,9 @@
-import os
-import math
 import logging
-from math import acos, tan
+import math
+import os
+
 from abc import ABC, abstractmethod
+from math import acos, tan
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
@@ -272,13 +273,13 @@ class Load(Component):
         return self.topology.loads_df
 
     @property
-    def peak_load(self):
+    def p_nom(self):
         """
         Peak load in MW.
 
         Parameters
         -----------
-        peak_load : :obj:`float`
+        p_nom : :obj:`float`
             Peak load in MW.
 
         Returns
@@ -287,12 +288,11 @@ class Load(Component):
             Peak load in MW.
 
         """
-        return self.topology.loads_df.at[self.id, "peak_load"]
+        return self.topology.loads_df.at[self.id, "p_nom"]
 
-    @peak_load.setter
-    def peak_load(self, peak_load):
-        # ToDo: Maybe perform type check before setting it.
-        self.topology._loads_df.at[self.id, "peak_load"] = peak_load
+    @p_nom.setter
+    def p_nom(self, p_nom):
+        self.topology._loads_df.at[self.id, "p_nom"] = float(p_nom)
 
     @property
     def annual_consumption(self):

@@ -1,9 +1,11 @@
-import pandas as pd
 import os
+
 import numpy as np
+import pandas as pd
+
 from pypsa import Network as PyPSANetwork
 
-from edisgo.network.grids import MVGrid, LVGrid
+from edisgo.network.grids import LVGrid, MVGrid
 
 if "READTHEDOCS" not in os.environ:
     from shapely.wkt import loads as wkt_loads
@@ -68,6 +70,8 @@ def import_ding0_grid(path, edisgo_obj):
     # write dataframes to edisgo_obj
     edisgo_obj.topology.buses_df = grid.buses[edisgo_obj.topology.buses_df.columns]
     edisgo_obj.topology.lines_df = grid.lines[edisgo_obj.topology.lines_df.columns]
+
+    grid.loads = grid.loads.rename(columns={"peak_load": "p_nom"})
 
     edisgo_obj.topology.loads_df = grid.loads[edisgo_obj.topology.loads_df.columns]
     # drop slack generator from generators
@@ -174,7 +178,11 @@ def _validate_ding0_grid_import(topology):
     # check for isolated or not defined buses
     buses = []
 
-    for nodal_component in ["loads", "generators", "charging_points", "storage_units"]:
+    for nodal_component in [
+        "loads",
+        "generators",
+        "storage_units",
+    ]:
         df = getattr(topology, nodal_component + "_df")
         missing = df.index[~df.bus.isin(topology.buses_df.index)]
         buses.append(df.bus.values)

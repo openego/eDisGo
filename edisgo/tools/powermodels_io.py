@@ -1,11 +1,13 @@
+import math
+
 import numpy as np
 import pandas as pd
-import math
+import pypsa
+
 from pypower.idx_brch import *
 from pypower.idx_bus import *
-from pypower.idx_gen import *
 from pypower.idx_cost import *
-import pypsa
+from pypower.idx_gen import *
 
 
 def to_powermodels(pypsa_net):
@@ -128,7 +130,7 @@ def pypsa2ppc(psa_net):
             )
         )
     except IndexError as e:
-        print("No load timeseries. Create empty dicts " "for timeseries of load")
+        print("No load timeseries. Create empty dicts for timeseries of load")
         load_dict = dict()
     try:
         gen_dict = _build_generator_dict(psa_net, ppc)
@@ -443,10 +445,8 @@ def _build_branch(psa_net, ppc):
     # TODO BRANCHCOSTS!
     # check which branch costs are given in psa_net,
     ncost = sum(
-        [
-            (colName in psa_net.lines.columns) * 1
-            for colName in ["costs_earthworks", "costs_cable"]
-        ]
+        (colName in psa_net.lines.columns) * 1
+        for colName in ["costs_earthworks", "costs_cable"]
     )
     if ncost == 0:
         print("no branch costs are given in pypsa network")

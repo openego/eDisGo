@@ -1,20 +1,21 @@
-import os
 import logging
-import pandas as pd
+import os
 import pickle
 
-from edisgo.network.topology import Topology
-from edisgo.network.results import Results
-from edisgo.network import timeseries
-from edisgo.io import pypsa_io
-from edisgo.tools import plots, tools
+import pandas as pd
+
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
+from edisgo.io import pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.generators_import import oedb as import_generators_oedb
+from edisgo.network import timeseries
+from edisgo.network.results import Results
+from edisgo.network.topology import Topology
+from edisgo.opf.results.opf_result_class import OPFResults
+from edisgo.opf.run_mp_opf import run_mp_opf
+from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
-from edisgo.opf.run_mp_opf import run_mp_opf
-from edisgo.opf.results.opf_result_class import OPFResults
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
@@ -269,7 +270,8 @@ class EDisGo:
         if kwargs.get("import_timeseries", True):
             if kwargs.get("worst_case_analysis", None):
                 timeseries.get_component_timeseries(
-                    edisgo_obj=self, mode=kwargs.get("worst_case_analysis", None)
+                    edisgo_obj=self,
+                    mode=kwargs.get("worst_case_analysis", None),
                 )
             else:
                 timeseries.get_component_timeseries(edisgo_obj=self, **kwargs)
@@ -342,10 +344,12 @@ class EDisGo:
             lv_grid_name = kwargs.get("lv_grid_name", None)
             if not lv_grid_name:
                 raise ValueError(
-                    "For exporting lv grids, name of lv_grid has " "to be provided."
+                    "For exporting lv grids, name of lv_grid has to be provided."
                 )
             return pypsa_io.to_pypsa(
-                self.topology._grids[lv_grid_name], mode=mode, timesteps=timesteps
+                self.topology._grids[lv_grid_name],
+                mode=mode,
+                timesteps=timesteps,
             )
         else:
             raise ValueError("The entered mode is not a valid option.")
@@ -575,7 +579,7 @@ class EDisGo:
 
         """
         # aggregate generators at the same bus
-        if mode is "by_component_type" or "by_load_and_generation":
+        if mode == "by_component_type" or mode == "by_load_and_generation":
             if not self.topology.generators_df.empty:
                 gens_groupby = self.topology.generators_df.groupby(
                     aggregate_generators_by_cols
@@ -669,21 +673,34 @@ class EDisGo:
 
         # aggregate conventional loads at the same bus and charging points
         # at the same bus separately
-        if mode is "by_component_type":
+        if mode == "by_component_type":
 
             # conventional loads
             if not self.topology.loads_df.empty:
-                loads_groupby = self.topology.loads_df.groupby(aggregate_loads_by_cols)
+                loads_df = self.topology.loads_df.loc[
+                    self.topology.loads_df.type.isin(["load", ""])
+                ]
+                loads_groupby = loads_df.groupby(aggregate_loads_by_cols)
                 naming = "Loads_{}"
+
                 # set up new loads_df
                 loads_df_grouped = loads_groupby.sum().reset_index()
                 loads_df_grouped["name"] = loads_df_grouped.apply(
                     lambda _: naming.format("_".join(_.loc[aggregate_loads_by_cols])),
                     axis=1,
                 )
-                self.topology.loads_df = loads_df_grouped.set_index("name")
+
+                loads_df_grouped = loads_df_grouped.assign(type="load")
+
+                self.topology.loads_df.drop(index=loads_df.index, inplace=True)
+
+                self.topology.loads_df = self.topology.loads_df.append(
+                    loads_df_grouped.set_index("name")
+                )
+
                 # set up new loads time series
                 groups = loads_groupby.groups
+
                 if isinstance(list(groups.keys())[0], tuple):
                     self.timeseries.loads_active_power = pd.concat(
                         [
@@ -756,7 +773,8 @@ class EDisGo:
                 loads_groupby = self.topology.charging_points_df.groupby(
                     aggregate_charging_points_by_cols
                 )
-                naming = "Charging_points_{}"
+                naming = "ChargingPoints_{}"
+
                 # set up new charging_points_df
                 loads_df_grouped = loads_groupby.sum().reset_index()
                 loads_df_grouped["name"] = loads_df_grouped.apply(
@@ -765,9 +783,20 @@ class EDisGo:
                     ),
                     axis=1,
                 )
-                self.topology.charging_points_df = loads_df_grouped.set_index("name")
+
+                loads_df_grouped = loads_df_grouped.assign(type="charging_point")
+
+                self.topology.loads_df.drop(
+                    index=self.topology.charging_points_df.index, inplace=True
+                )
+
+                self.topology.loads_df = self.topology.loads_df.append(
+                    loads_df_grouped.set_index("name")
+                )
+
                 # set up new charging points time series
                 groups = loads_groupby.groups
+
                 if isinstance(list(groups.keys())[0], tuple):
                     self.timeseries.charging_points_active_power = pd.concat(
                         [
@@ -841,16 +870,12 @@ class EDisGo:
 
         # aggregate all loads (conventional loads and charging points) at the
         # same bus
-        elif mode is "by_load_and_generation":
+        elif mode == "by_load_and_generation":
             aggregate_loads_by_cols = ["bus"]
-            loads_groupby = pd.concat(
-                [
-                    self.topology.loads_df.loc[:, ["bus", "peak_load"]],
-                    self.topology.charging_points_df.loc[:, ["bus", "p_nom"]].rename(
-                        columns={"p_nom": "peak_load"}
-                    ),
-                ]
-            ).groupby(aggregate_loads_by_cols)
+            loads_groupby = self.topology.loads_df.loc[:, ["bus", "p_nom"]].groupby(
+                aggregate_loads_by_cols
+            )
+
             naming = "Loads_{}"
             # set up new loads_df
             loads_df_grouped = loads_groupby.sum().reset_index()
@@ -858,7 +883,11 @@ class EDisGo:
                 lambda _: naming.format("_".join(_.loc[aggregate_loads_by_cols])),
                 axis=1,
             )
+
+            loads_df_grouped = loads_df_grouped.assign(type="load")
+
             self.topology.loads_df = loads_df_grouped.set_index("name")
+
             # set up new loads time series
             groups = loads_groupby.groups
             ts_active = pd.concat(
@@ -923,9 +952,6 @@ class EDisGo:
                     axis=1,
                 )
             # overwrite charging points
-            self.topology.charging_points_df = pd.DataFrame(
-                columns=["bus", "p_nom", "use_case"]
-            )
             self.timeseries.charging_points_active_power = pd.DataFrame(
                 index=self.timeseries.timeindex
             )
@@ -1119,7 +1145,7 @@ class EDisGo:
                 return
         except AttributeError:
             logger.warning(
-                "Results are required for " "voltage histogramm. Please analyze first."
+                "Results are required for voltage histogramm. Please analyze first."
             )
             return
 
@@ -1298,7 +1324,8 @@ class EDisGo:
         ----------
         comp_type : str
             Type of added component. Can be 'Bus', 'Line', 'Load', 'Generator',
-            'StorageUnit', 'Transformer' or 'ChargingPoint'.
+            'StorageUnit', 'Transformer' or 'ChargingPoint'. Everything else is added as
+            load.
         add_ts : bool
             Indicator if time series for component are added as well.
         ts_active_power : :pandas:`pandas.Series<series>`
@@ -1323,14 +1350,9 @@ class EDisGo:
         """
         if comp_type == "Bus":
             comp_name = self.topology.add_bus(**kwargs)
+
         elif comp_type == "Line":
             comp_name = self.topology.add_line(**kwargs)
-        elif comp_type == "Load" or comp_type == "charging_park":
-            comp_name = self.topology.add_load(**kwargs)
-            if add_ts:
-                timeseries.add_loads_timeseries(
-                    edisgo_obj=self, load_names=comp_name, **kwargs
-                )
 
         elif comp_type == "Generator":
             comp_name = self.topology.add_generator(**kwargs)
@@ -1338,21 +1360,6 @@ class EDisGo:
                 timeseries.add_generators_timeseries(
                     edisgo_obj=self, generator_names=comp_name, **kwargs
                 )
-
-        elif comp_type == "ChargingPoint":
-            comp_name = self.topology.add_charging_point(**kwargs)
-            if add_ts:
-                if ts_active_power is not None and ts_reactive_power is not None:
-                    timeseries.add_charging_points_timeseries(
-                        self,
-                        [comp_name],
-                        ts_active_power=pd.DataFrame({comp_name: ts_active_power}),
-                        ts_reactive_power=pd.DataFrame({comp_name: ts_reactive_power}),
-                    )
-                else:
-                    raise ValueError(
-                        "Time series for charging points need " "to be provided."
-                    )
 
         elif comp_type == "StorageUnit":
             comp_name = self.topology.add_storage_unit(
@@ -1370,8 +1377,41 @@ class EDisGo:
                     timeseries_storage_units_reactive_power=ts_reactive_power,
                     **kwargs,
                 )
+
         else:
-            raise ValueError("Component type is not correct.")
+            if "charging" in comp_type.lower():
+                type = "charging_point"
+            elif "heat" in comp_type.lower():
+                type = "heat_pump"
+            else:
+                type = "load"
+
+            kwargs["type"] = type
+
+            comp_name = self.topology.add_load(**kwargs)
+
+            if add_ts:
+                if "charging" in comp_type.lower():
+                    if ts_active_power is not None and ts_reactive_power is not None:
+                        timeseries.add_charging_points_timeseries(
+                            self,
+                            [comp_name],
+                            ts_active_power=pd.DataFrame({comp_name: ts_active_power}),
+                            ts_reactive_power=pd.DataFrame(
+                                {comp_name: ts_reactive_power}
+                            ),
+                        )
+
+                    else:
+                        raise ValueError(
+                            "Time series for charging points need to be provided."
+                        )
+
+                else:
+                    timeseries.add_loads_timeseries(
+                        edisgo_obj=self, load_names=comp_name, **kwargs
+                    )
+
         return comp_name
 
     def integrate_component(
@@ -1545,10 +1585,12 @@ class EDisGo:
                     comp_names=comp_name,
                 )
         elif comp_type == "ChargingPoint":
-            self.topology.remove_charging_point(comp_name)
+            self.topology.remove_load(comp_name)
             if drop_ts:
                 timeseries._drop_existing_component_timeseries(
-                    edisgo_obj=self, comp_type="charging_points", comp_names=comp_name
+                    edisgo_obj=self,
+                    comp_type="charging_points",
+                    comp_names=comp_name,
                 )
         else:
             raise ValueError("Component type is not correct.")

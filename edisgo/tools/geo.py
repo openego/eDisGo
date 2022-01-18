@@ -1,7 +1,7 @@
-from pyproj import Transformer
-from geopy.distance import geodesic
-
 import os
+
+from geopy.distance import geodesic
+from pyproj import Transformer
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import LineString, Point
@@ -178,7 +178,7 @@ def calc_geo_dist_vincenty(
     if branch_length == 0:
         branch_length = 1
         logger.debug(
-            "Geo distance is zero, check objects' positions. " "Distance is set to 1m."
+            "Geo distance is zero, check objects' positions. Distance is set to 1m."
         )
     # ===================================================================
 

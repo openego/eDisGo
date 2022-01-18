@@ -1,8 +1,8 @@
-import pytest
 import pandas as pd
+import pytest
 
 from edisgo import EDisGo
-from edisgo.network.components import Load, Generator, Storage, Switch
+from edisgo.network.components import Generator, Load, Storage, Switch
 
 
 class TestComponents:
@@ -11,7 +11,8 @@ class TestComponents:
     @classmethod
     def setup_class(self):
         self.edisgo_obj = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path, worst_case_analysis="worst-case"
+            ding0_grid=pytest.ding0_test_network_path,
+            worst_case_analysis="worst-case",
         )
 
     def test_load_class(self):
@@ -21,7 +22,7 @@ class TestComponents:
 
         # test getter
         assert load.id == "Load_agricultural_LVGrid_1_1"
-        assert load.peak_load == 0.0523
+        assert load.p_nom == 0.0523
         assert load.annual_consumption == 238
         assert load.sector == "agricultural"
         assert load.bus == "Bus_BranchTee_LVGrid_1_2"
@@ -32,8 +33,8 @@ class TestComponents:
         assert isinstance(load.reactive_power_timeseries, pd.Series)
 
         # test setter
-        load.peak_load = 0.06
-        assert load.peak_load == 0.06
+        load.p_nom = 0.06
+        assert load.p_nom == 0.06
         load.annual_consumption = 4
         assert load.annual_consumption == 4
         load.sector = "residential"

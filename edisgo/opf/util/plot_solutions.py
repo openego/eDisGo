@@ -1,5 +1,6 @@
-from matplotlib import pyplot as plt
 import numpy as np
+
+from matplotlib import pyplot as plt
 
 
 def plot_line_expansion(edisgo_obj, timesteps):

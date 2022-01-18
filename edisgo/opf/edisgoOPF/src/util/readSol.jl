@@ -7,7 +7,7 @@ using PowerModels
 
 function readSol(filename::String)
     @warn("There is still a bug in function readSol")
-    df = CSV.read(filename,delim=" ", datarow=3,ignorerepeated=true, 
+    df = CSV.read(filename,delim=" ", datarow=3,ignorerepeated=true,
         silencewarnings=true,types=[String,Float64,String,String,String])[1:2]
     names!(df,[:vars,:val])
     df_new = DataFrame()
@@ -53,7 +53,7 @@ function readSol(filename::String)
         push!(df_new.to_bus,t_bus)
         push!(df_new.vals,val)
     end
-    n_vars = findfirst(df_new.vars.==Symbol(""))-1      
+    n_vars = findfirst(df_new.vars.==Symbol(""))-1
     df_new = sort(df_new[1:n_vars,:])
     return df_new
 end
@@ -63,7 +63,7 @@ function fix_var_values_in_pm(pm::GenericPowerModel, df::DataFrame)
         varSymbol = df.vars[j]
         if varSymbol == :quadobjvar
             quadobjvar = df.vals[j]
-    
+
         elseif haskey(PowerModels.var(pm),varSymbol)
             i = df.index[j]
             if isnan(df.from_bus[j])
@@ -77,7 +77,7 @@ function fix_var_values_in_pm(pm::GenericPowerModel, df::DataFrame)
             println("variable $(varSymbol) doesnt exist in model")
         end
     end
-    
+
     for (varSym, varVal) in var(pm)
         for idx in varVal.indexsets[1]
             val = getvalue(var(pm,varSym,idx))

@@ -1,14 +1,14 @@
-import os
-import pandas as pd
-from sqlalchemy import func
-import random
 import logging
+import os
+import random
+
+import pandas as pd
+
+from sqlalchemy import func
 
 from edisgo.network.timeseries import add_generators_timeseries
 from edisgo.tools import session_scope
-from edisgo.tools.geo import (
-    proj2equidistant,
-)
+from edisgo.tools.geo import proj2equidistant
 
 logger = logging.getLogger("edisgo")
 
@@ -612,7 +612,8 @@ def _update_grids(
         for gen_type in new_gens.generator_type.unique():
             if not gen_type in p_target.keys():
                 new_gens.drop(
-                    new_gens[new_gens["generator_type"] == gen_type].index, inplace=True
+                    new_gens[new_gens["generator_type"] == gen_type].index,
+                    inplace=True,
                 )
 
         new_gens_lv = new_gens[new_gens.voltage_level.isin([6, 7])]
@@ -625,7 +626,7 @@ def _update_grids(
         geom = _check_mv_generator_geom(new_gens_mv.loc[id, :])
         if geom is None:
             logger.warning(
-                "Generator {} has no geom entry and will " "not be imported!".format(id)
+                "Generator {} has no geom entry and will not be imported!".format(id)
             )
             new_gens_mv.drop(id)
             continue

@@ -1,9 +1,9 @@
 import pytest
 
-from edisgo.network.topology import Topology
 from edisgo.io import ding0_import
 from edisgo.network.components import Generator, Load, Switch
 from edisgo.network.grids import LVGrid
+from edisgo.network.topology import Topology
 
 
 class TestGrids:
@@ -46,7 +46,7 @@ class TestGrids:
         assert sorted(mv_grid.weather_cells) == [1122074, 1122075]
         assert mv_grid.peak_generation_capacity == 19.025
         assert mv_grid.peak_generation_capacity_per_technology["solar"] == 4.6
-        assert mv_grid.peak_load == 0.0
+        assert mv_grid.p_nom == 0.0
 
     def test_lv_grid(self):
         """Test LVGrid class getter, setter, methods"""
@@ -79,5 +79,5 @@ class TestGrids:
         assert sorted(lv_grid.weather_cells) == []
         assert lv_grid.peak_generation_capacity == 0
         assert lv_grid.peak_generation_capacity_per_technology.empty
-        assert lv_grid.peak_load == 0.054627
-        assert lv_grid.peak_load_per_sector["agricultural"] == 0.051
+        assert lv_grid.p_nom == 0.054627
+        assert lv_grid.p_nom_per_sector["agricultural"] == 0.051

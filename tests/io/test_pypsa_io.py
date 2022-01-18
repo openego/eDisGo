@@ -1,10 +1,11 @@
-import pytest
-import pandas as pd
-from pandas.util.testing import assert_frame_equal
 import numpy as np
+import pandas as pd
+import pytest
 
-from edisgo.io.pypsa_io import _append_lv_components, set_seed, process_pfa_results
+from pandas.util.testing import assert_frame_equal
+
 from edisgo import EDisGo
+from edisgo.io.pypsa_io import _append_lv_components, process_pfa_results, set_seed
 from edisgo.network.results import Results
 
 
@@ -26,7 +27,11 @@ class TestPypsaIO:
         msg = "Aggregation type for loads invalid."
         with pytest.raises(ValueError, match=msg):
             _append_lv_components(
-                "Load", comps, lv_components, "TestGrid", aggregate_loads="unknown"
+                "Load",
+                comps,
+                lv_components,
+                "TestGrid",
+                aggregate_loads="unknown",
             )
         msg = "Aggregation type for generators invalid."
         with pytest.raises(ValueError, match=msg):
@@ -56,11 +61,22 @@ class TestPypsaIO:
                 "p_nom": [0.05, 0.23, 0.04, 0.2, 0.1, 0.4],
                 "type": ["solar", "wind", "solar", "solar", "gas", "wind"],
             },
-            index=["Solar_1", "Wind_1", "Solar_2", "Solar_3", "Gas_1", "Wind_2"],
+            index=[
+                "Solar_1",
+                "Wind_1",
+                "Solar_2",
+                "Solar_3",
+                "Gas_1",
+                "Wind_2",
+            ],
         )
         # check not aggregated generators
         aggr_dict = _append_lv_components(
-            "Generator", gens, lv_components, "TestGrid", aggregate_generators=None
+            "Generator",
+            gens,
+            lv_components,
+            "TestGrid",
+            aggregate_generators=None,
         )
         assert len(aggr_dict) == 0
         assert len(lv_components["Generator"]) == 6
@@ -75,7 +91,11 @@ class TestPypsaIO:
         # check aggregation of generators by type
         lv_components["Generator"] = pd.DataFrame()
         aggr_dict = _append_lv_components(
-            "Generator", gens, lv_components, "TestGrid", aggregate_generators="type"
+            "Generator",
+            gens,
+            lv_components,
+            "TestGrid",
+            aggregate_generators="type",
         )
         assert len(aggr_dict) == 3
         assert (aggr_dict["TestGrid_gas"] == ["Gas_1"]).all()
@@ -165,7 +185,11 @@ class TestPypsaIO:
         # check aggregation of all generators
         lv_components["Generator"] = pd.DataFrame()
         aggr_dict = _append_lv_components(
-            "Generator", gens, lv_components, "TestGrid", aggregate_generators="all"
+            "Generator",
+            gens,
+            lv_components,
+            "TestGrid",
+            aggregate_generators="all",
         )
         assert len(aggr_dict) == 1
         assert (
@@ -226,7 +250,7 @@ class TestPypsaIO:
         loads = pd.DataFrame(
             {
                 "bus": ["LVStation"] * 6,
-                "peak_load": [0.05, 0.23, 0.04, 0.2, 0.1, 0.4],
+                "p_nom": [0.05, 0.23, 0.04, 0.2, 0.1, 0.4],
                 "sector": [
                     "retail",
                     "agricultural",
@@ -251,13 +275,17 @@ class TestPypsaIO:
         )
         assert len(aggr_dict) == 0
         assert len(lv_components["Load"]) == 6
-        assert (loads.peak_load.values == lv_components["Load"].p_set.values).all()
+        assert (loads.p_nom.values == lv_components["Load"].p_set.values).all()
         assert (lv_components["Load"].bus == "LVStation").all()
         assert (lv_components["Load"].index == loads.index).all()
         # check aggregate loads by sector
         lv_components["Load"] = pd.DataFrame()
         aggr_dict = _append_lv_components(
-            "Load", loads, lv_components, "TestGrid", aggregate_loads="sectoral"
+            "Load",
+            loads,
+            lv_components,
+            "TestGrid",
+            aggregate_loads="sectoral",
         )
         assert len(aggr_dict) == 3
         assert (
@@ -271,7 +299,11 @@ class TestPypsaIO:
         assert (lv_components["Load"].bus == "LVStation").all()
         assert (
             lv_components["Load"].index.values
-            == ["TestGrid_agricultural", "TestGrid_industrial", "TestGrid_retail"]
+            == [
+                "TestGrid_agricultural",
+                "TestGrid_industrial",
+                "TestGrid_retail",
+            ]
         ).all()
         assert np.isclose(lv_components["Load"].p_set, [0.63, 0.1, 0.29]).all()
         # check if only one sector exists
@@ -318,7 +350,11 @@ class TestPypsaIO:
         )
         # check appending without aggregation
         aggr_dict = _append_lv_components(
-            "StorageUnit", storages, lv_components, "TestGrid", aggregate_storages=None
+            "StorageUnit",
+            storages,
+            lv_components,
+            "TestGrid",
+            aggregate_storages=None,
         )
         assert len(aggr_dict) == 0
         assert len(lv_components["StorageUnit"]) == 2
@@ -330,7 +366,11 @@ class TestPypsaIO:
         # check aggregration of all storages
         lv_components["StorageUnit"] = pd.DataFrame()
         aggr_dict = _append_lv_components(
-            "StorageUnit", storages, lv_components, "TestGrid", aggregate_storages="all"
+            "StorageUnit",
+            storages,
+            lv_components,
+            "TestGrid",
+            aggregate_storages="all",
         )
         assert len(aggr_dict) == 1
         assert (aggr_dict["TestGrid_storages"] == ["Storage_1", "Storage_2"]).all()
@@ -344,7 +384,8 @@ class TestPypsaIO:
 
     def test_set_seed(self):
         self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path, worst_case_analysis="worst-case"
+            ding0_grid=pytest.ding0_test_network_path,
+            worst_case_analysis="worst-case",
         )
         timeindex = self.edisgo.timeseries.timeindex
 

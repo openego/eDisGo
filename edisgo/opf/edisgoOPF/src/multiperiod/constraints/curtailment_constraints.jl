@@ -1,5 +1,5 @@
 """
-constraint for curtailment requirements for a single timestep `t` 
+constraint for curtailment requirements for a single timestep `t`
 for collection of fluctuating generetors `RES`
 
 - ``\\sum_{\\forall i \\in RES}\\left(\\boldsymbol{p_{i,g}}^t-p_{i,g}^t\\right)= \\boldsymbol{P^t_{curtail}}``

@@ -1,18 +1,20 @@
-import logging
-import pandas as pd
-import numpy as np
 import datetime
+import logging
 import os
 
+import numpy as np
+import pandas as pd
+
+from demandlib import bdew as bdew
+from demandlib import particular_profiles as profiles
 from workalendar.europe import Germany
-from demandlib import bdew as bdew, particular_profiles as profiles
+
 from edisgo.io.timeseries_import import import_feedin_timeseries
 from edisgo.tools.tools import (
     assign_voltage_level_to_component,
     drop_duplicated_columns,
     get_weather_cells_intersecting_with_grid_district,
 )
-
 
 logger = logging.getLogger("edisgo")
 
@@ -430,7 +432,11 @@ class TimeSeries:
                 "storage_units_reactive_power",
             ]
         for attr in attr_to_reduce:
-            setattr(self, attr, getattr(self, attr).apply(lambda _: _.astype(to_type)))
+            setattr(
+                self,
+                attr,
+                getattr(self, attr).apply(lambda _: _.astype(to_type)),
+            )
 
     def to_csv(self, directory, reduce_memory=False, **kwargs):
         """
@@ -491,7 +497,11 @@ class TimeSeries:
         for attr in _get_attributes_to_save():
             path = os.path.join(directory, "{}.csv".format(attr))
             if os.path.exists(path):
-                setattr(self, attr, pd.read_csv(path, index_col=0, parse_dates=True))
+                setattr(
+                    self,
+                    attr,
+                    pd.read_csv(path, index_col=0, parse_dates=True),
+                )
                 if timeindex is None:
                     timeindex = getattr(self, "_{}".format(attr)).index
         if timeindex is None:
@@ -655,7 +665,9 @@ def get_component_timeseries(edisgo_obj, **kwargs):
             edisgo_obj.timeseries.generation_fluctuating = ts
         elif isinstance(ts, str) and ts == "oedb":
             edisgo_obj.timeseries.generation_fluctuating = import_feedin_timeseries(
-                config_data, weather_cell_ids, kwargs.get("timeindex", None)
+                config_data,
+                weather_cell_ids,
+                kwargs.get("timeindex", None),
             )
         else:
             raise ValueError(
@@ -1025,7 +1037,9 @@ def _worst_case_generation(edisgo_obj, modes, generator_names=None):
     cols_wind = gen_ts[gens_df.index[gens_df.type == "wind"]].columns
     if len(cols_wind) > 0:
         gen_ts[cols_wind] = pd.concat(
-            [worst_case_ts.loc[:, ["wind"]]] * len(cols_wind), axis=1, sort=True
+            [worst_case_ts.loc[:, ["wind"]]] * len(cols_wind),
+            axis=1,
+            sort=True,
         )
     # assign normalized active power time series to other generators
     cols = gen_ts.columns[~gen_ts.columns.isin(cols_pv.append(cols_wind))]
@@ -1039,7 +1053,10 @@ def _worst_case_generation(edisgo_obj, modes, generator_names=None):
 
     # multiply normalized time series by nominal power of generator
     edisgo_obj.timeseries.generators_active_power = pd.concat(
-        [edisgo_obj.timeseries.generators_active_power, gen_ts.mul(gens_df.p_nom)],
+        [
+            edisgo_obj.timeseries.generators_active_power,
+            gen_ts.mul(gens_df.p_nom),
+        ],
         axis=1,
     )
 
@@ -1070,9 +1087,7 @@ def _worst_case_load(edisgo_obj, modes, load_names=None):
 
     if load_names is None:
         load_names = edisgo_obj.topology.loads_df.index
-    loads_df = edisgo_obj.topology.loads_df.loc[
-        load_names, ["bus", "sector", "peak_load"]
-    ]
+    loads_df = edisgo_obj.topology.loads_df.loc[load_names, ["bus", "sector", "p_nom"]]
 
     # check that all loads have bus, sector, annual consumption
     check_loads = loads_df.isnull().any(axis=1)
@@ -1121,7 +1136,7 @@ def _worst_case_load(edisgo_obj, modes, load_names=None):
     edisgo_obj.timeseries.loads_active_power = pd.concat(
         [
             edisgo_obj.timeseries.loads_active_power,
-            (power_scaling_df * loads_df.loc[:, "peak_load"]),
+            (power_scaling_df * loads_df.loc[:, "p_nom"]),
         ],
         axis=1,
     )
@@ -1199,7 +1214,9 @@ def _worst_case_storage(edisgo_obj, modes, storage_names=None):
         )
 
         _set_reactive_power_time_series_for_fixed_cosphi_using_config(
-            edisgo_obj=edisgo_obj, df=storage_df, component_type="storage_units"
+            edisgo_obj=edisgo_obj,
+            df=storage_df,
+            component_type="storage_units",
         )
 
 
@@ -1229,7 +1246,7 @@ def _check_timeindex(edisgo_obj):
             edisgo_obj.timeseries.storage_units_active_power.index
         ).all()
     except:
-        message = "Time index of feed-in and load time series does " "not match."
+        message = "Time index of feed-in and load time series does not match."
         logging.error(message)
         raise KeyError(message)
 
@@ -1471,7 +1488,10 @@ def add_charging_points_timeseries(edisgo_obj, charging_point_names, **kwargs):
         sort=False,
     )
     edisgo_obj.timeseries.charging_points_reactive_power = pd.concat(
-        [edisgo_obj.timeseries.charging_points_reactive_power, ts_reactive_power],
+        [
+            edisgo_obj.timeseries.charging_points_reactive_power,
+            ts_reactive_power,
+        ],
         axis=1,
         sort=False,
     )
@@ -1957,5 +1977,7 @@ def _set_reactive_power_time_series_for_fixed_cosphi_using_config(
     )
 
     setattr(
-        edisgo_obj.timeseries, component_type + "_reactive_power", reactive_power_df
+        edisgo_obj.timeseries,
+        component_type + "_reactive_power",
+        reactive_power_df,
     )

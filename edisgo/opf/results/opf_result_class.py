@@ -1,10 +1,11 @@
 import json
-import pandas as pd
 import logging
 
+import pandas as pd
+
 from edisgo.tools.preprocess_pypsa_opf_structure import (
-    preprocess_pypsa_opf_structure,
     aggregate_fluct_generators,
+    preprocess_pypsa_opf_structure,
 )
 
 logger = logging.getLogger("edisgo")
@@ -194,7 +195,7 @@ class OPFResults:
                 self.generators_t.qg = qg_t
             except:
                 logger.warning(
-                    "Error in writing OPF solutions for slack time " "series."
+                    "Error in writing OPF solutions for slack time series."
                 )
         else:
             try:
@@ -211,7 +212,7 @@ class OPFResults:
                 self.generators_t.qg = qg_t
             except:
                 logger.warning(
-                    "Error in writing OPF solutions for generator time " "series."
+                    "Error in writing OPF solutions for generator time series."
                 )
 
     def set_load_variables(self, pypsa_net):
@@ -220,10 +221,12 @@ class OPFResults:
         ts = pypsa_net.snapshots.sort_values()
 
         pd_t = pd.DataFrame(
-            index=ts, columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()]
+            index=ts,
+            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()],
         )
         qd_t = pd.DataFrame(
-            index=ts, columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()]
+            index=ts,
+            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()],
         )
         for (t, date_idx) in enumerate(ts):
             load_t = pd.DataFrame(load_solution_data[str(t + 1)])

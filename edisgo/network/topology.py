@@ -1,35 +1,43 @@
 import logging
-import random
-import pandas as pd
-import numpy as np
 import os
+import random
 import warnings
+
 import networkx as nx
+import numpy as np
+import pandas as pd
 
 import edisgo
-from edisgo.network.grids import MVGrid, LVGrid
+
+from edisgo.io.ding0_import import _validate_ding0_grid_import
 from edisgo.network.components import Switch
+from edisgo.network.grids import LVGrid, MVGrid
+from edisgo.tools import geo, networkx_helper
 from edisgo.tools.tools import (
-    calculate_line_resistance,
-    calculate_line_reactance,
     calculate_apparent_power,
+    calculate_line_reactance,
+    calculate_line_resistance,
     select_cable,
 )
-from edisgo.tools import networkx_helper
-from edisgo.tools import geo
-from edisgo.io.ding0_import import _validate_ding0_grid_import
 
 if "READTHEDOCS" not in os.environ:
-    from shapely.wkt import loads as wkt_loads
-    from shapely.geometry import Point, LineString
+    from shapely.geometry import LineString, Point
     from shapely.ops import transform
+    from shapely.wkt import loads as wkt_loads
 
 logger = logging.getLogger("edisgo")
 
 COLUMNS = {
-    "loads_df": ["bus", "peak_load", "annual_consumption", "sector"],
-    "generators_df": ["bus", "p_nom", "type", "control", "weather_cell_id", "subtype"],
-    "charging_points_df": ["bus", "p_nom", "use_case"],
+    "loads_df": ["bus", "p_nom", "type", "annual_consumption", "sector"],
+    "generators_df": [
+        "bus",
+        "p_nom",
+        "type",
+        "control",
+        "weather_cell_id",
+        "subtype",
+    ],
+    "charging_points_df": ["bus", "p_nom", "type", "sector"],
     "storage_units_df": ["bus", "control", "p_nom"],
     "transformers_df": ["bus0", "bus1", "x_pu", "r_pu", "s_nom", "type_info"],
     "lines_df": [
@@ -110,7 +118,7 @@ class Topology:
 
         with
 
-        .. math:: Z = \frac{u_{kr}}{100} \cdot \frac{U_n^2}{S_{nom}}
+        .. math:: Z = \frac{u_{kr}}{100} \\cdot \frac{U_n^2}{S_{nom}}
 
         and
 
@@ -126,11 +134,11 @@ class Topology:
 
         with
 
-        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \cdot \frac{U_{nom}^2}{S_{nom}^2}
+        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \\cdot \frac{U_{nom}^2}{S_{nom}^2}
 
         $x_{pu}$ is calculated as follows:
 
-        .. math::  x_{pu} = \sqrt(z_{pu}^2-r_{pu}^2)
+        .. math::  x_{pu} = \\sqrt(z_{pu}^2-r_{pu}^2)
 
         """
 
@@ -190,15 +198,18 @@ class Topology:
         Parameters
         ----------
         df : :pandas:`pandas.DataFrame<DataFrame>`
-            Dataframe with all loads in MV network and underlying LV grids.
-            Index of the dataframe are load names as string. Columns of the
-            dataframe are:
+            Dataframe with all loads (incl. charging points, heat pumps, etc.) in MV
+            network and underlying LV grids. Index of the dataframe are load names as
+            string. Columns of the dataframe are:
 
             bus : str
                 Identifier of bus load is connected to.
 
-            peak_load : float
-                Peak load in MW.
+            p_nom : float
+                Peak load or nominal capacity in MW.
+
+            type : str
+                Load type. E.g. 'load', 'charging_point' or 'heat_pump'
 
             annual_consumption : float
                 Annual consumption in MWh.
@@ -207,7 +218,9 @@ class Topology:
                 Specifies type of load. If demandlib is used to generate
                 sector-specific time series, the sector needs to either be
                 'agricultural', 'industrial', 'residential' or 'retail'.
-                Otherwise sector can be chosen freely.
+                Otherwise sector can be chosen freely. This also includes
+                the charging point use cases 'home', 'work', 'public' and
+                'hpc'.
 
         Returns
         --------
@@ -280,48 +293,6 @@ class Topology:
     @generators_df.setter
     def generators_df(self, df):
         self._generators_df = df
-
-    @property
-    def charging_points_df(self):
-        """
-        Dataframe with all charging points in MV grid and underlying LV grids.
-
-        Parameters
-        ----------
-        df : :pandas:`pandas.DataFrame<DataFrame>`
-            Dataframe with all charging points in MV grid and underlying LV
-            grids. Index of the dataframe are charging point names as string.
-            Columns of the dataframe are:
-
-            bus : str
-              Identifier of bus charging point is connected to.
-
-            p_nom : float
-                Maximum charging power in MW.
-
-            use_case : str
-              Specifies if charging point is e.g. for charging at
-              home, at work, in public, or public fast charging. Used in
-              charging point integration (:attr:`~.EDisGo.integrate_component`)
-              to determine possible grid connection points, in which case use
-              cases 'home', 'work', 'public', and 'fast' are distinguished.
-
-        Returns
-        --------
-        :pandas:`pandas.DataFrame<DataFrame>`
-            Dataframe with all charging points in MV network and underlying LV
-            grids. For more information on the dataframe see input parameter
-            `df`.
-
-        """
-        try:
-            return self._charging_points_df
-        except:
-            return pd.DataFrame(columns=COLUMNS["charging_points_df"])
-
-    @charging_points_df.setter
-    def charging_points_df(self, df):
-        self._charging_points_df = df
 
     @property
     def storage_units_df(self):
@@ -595,6 +566,29 @@ class Topology:
         self._switches_df = df
 
     @property
+    def charging_points_df(self, type="charging_point"):
+        """
+        Returns a subset from :py:attr:`~loads_df` containing only charging points.
+
+        Parameters
+        ----------
+        type : str
+            Load type. Default: "charging_point"
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Pandas DataFrame with all loads of the given type.
+
+        """
+        if type in self.loads_df.type.unique():
+            return self.loads_df.loc[self.loads_df.type == type].dropna(
+                axis=1, how="all"
+            )
+        else:
+            return pd.DataFrame(columns=COLUMNS["charging_points_df"])
+
+    @property
     def id(self):
         """
         MV network ID.
@@ -777,10 +771,9 @@ class Topology:
         -------
          dict of :pandas:`pandas.DataFrame<DataFrame>`
             Dictionary of connected components with keys 'generators', 'loads',
-            'charging_points', 'storage_units', 'lines', 'transformers',
-            'transformers_hvmv', 'switches'. Corresponding values are component
-            dataframes containing only components that are connected to the
-            given bus.
+            'storage_units', 'lines', 'transformers', 'transformers_hvmv', 'switches'.
+            Corresponding values are component dataframes containing only components
+            that are connected to the given bus.
 
         """
         components = {}
@@ -788,9 +781,6 @@ class Topology:
             self.generators_df.bus == bus_name
         ]
         components["loads"] = self.loads_df.loc[self.loads_df.bus == bus_name]
-        components["charging_points"] = self.charging_points_df.loc[
-            self.charging_points_df.bus == bus_name
-        ]
         components["storage_units"] = self.storage_units_df.loc[
             self.storage_units_df.bus == bus_name
         ]
@@ -853,7 +843,7 @@ class Topology:
         # check if bus is part of topology
         if bus_name not in self.buses_df.index:
             warnings.warn(
-                "Bus of name {} not in Topology. Cannot be " "removed.".format(bus_name)
+                "Bus of name {} not in Topology. Cannot be removed.".format(bus_name)
             )
             return False
 
@@ -915,7 +905,9 @@ class Topology:
                 return True
         return False
 
-    def add_load(self, bus, peak_load, annual_consumption, **kwargs):
+    def add_load(
+        self, bus, p_nom, type="load", **kwargs
+    ):
         """
         Adds load to topology.
 
@@ -925,10 +917,11 @@ class Topology:
         ----------
         bus : str
             See :py:attr:`~loads_df` for more information.
-        peak_load : float
+        p_nom : float
             See :py:attr:`~loads_df` for more information.
-        annual_consumption : float
+        type : str
             See :py:attr:`~loads_df` for more information.
+            Default: "load"
 
         Other Parameters
         -----------------
@@ -947,7 +940,7 @@ class Topology:
 
         """
         try:
-            bus_df = self.buses_df.loc[bus]
+            bus_s = self.buses_df.loc[bus]
         except KeyError:
             raise ValueError(
                 "Specified bus {} is not valid as it is not defined in "
@@ -955,32 +948,43 @@ class Topology:
             )
 
         # generate load name and check uniqueness
-        if bus_df.lv_grid_id is not None and not np.isnan(bus_df.lv_grid_id):
-            grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
+        if bus_s.lv_grid_id is not None and not np.isnan(bus_s.lv_grid_id):
+            grid_name = "LVGrid_" + str(int(bus_s.lv_grid_id))
         else:
-            grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
-        tmp = grid_name
-        sector = kwargs.get("sector", None)
-        if sector is not None:
-            tmp = tmp + "_" + sector
+            grid_name = "MVGrid_" + str(int(bus_s.mv_grid_id))
+
+        type_name = "".join([val.capitalize() for val in type.split("_")])
+
+        tmp = f"{type_name}_{grid_name}"
+
+        if kwargs.get("sector", None) is not None:
+            tmp = tmp + "_" + kwargs.get("sector")
+
         load_id = kwargs.pop("load_id", None)
-        if load_id is not None:
-            tmp = tmp + "_" + str(load_id)
-        load_name = "Load_{}".format(tmp)
+
+        if load_id is None:
+            type_df = self._grids[grid_name].loads_df.loc[
+                self._grids[grid_name].loads_df.type == type
+            ]
+
+            load_id = len(type_df)
+
+        load_name = f"{tmp}_{load_id}"
+
         if load_name in self.loads_df.index:
-            nr_loads = len(self._grids[grid_name].loads_df)
-            load_name = "Load_{}_{}".format(tmp, nr_loads)
+            random.seed(a=int(load_id))
+
             while load_name in self.loads_df.index:
-                random.seed(a=load_name)
-                load_name = "Load_{}_{}".format(tmp, random.randint(10 ** 8, 10 ** 9))
+                load_name = f"{tmp}_{random.randint(10**8, 10**9)}"
 
         # create new load dataframe
         data = {
             "bus": bus,
-            "peak_load": peak_load,
-            "annual_consumption": annual_consumption,
+            "p_nom": p_nom,
+            "type": type,
         }
         data.update(kwargs)
+
         new_df = (
             pd.Series(
                 data,
@@ -989,7 +993,14 @@ class Topology:
             .to_frame()
             .T
         )
+
+        # FIXME: casting non-numeric values with numeric values into one series changes
+        #  the data type to 'Object'. Change the data type to numeric if possible
+        for col in new_df.columns:
+            new_df[col] = pd.to_numeric(new_df[col], errors="ignore")
+
         self._loads_df = self.loads_df.append(new_df)
+
         return load_name
 
     def add_generator(self, bus, p_nom, generator_type, control="PQ", **kwargs):
@@ -1029,7 +1040,7 @@ class Topology:
         """
         # check if bus exists
         try:
-            bus_df = self.buses_df.loc[bus]
+            bus_s = self.buses_df.loc[bus]
         except KeyError:
             raise ValueError(
                 "Specified bus {} is not valid as it is not defined in "
@@ -1037,10 +1048,10 @@ class Topology:
             )
 
         # generate generator name and check uniqueness
-        if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
-            tmp = "LVGrid_" + str(int(bus_df.lv_grid_id))
+        if not np.isnan(bus_s.lv_grid_id) and bus_s.lv_grid_id is not None:
+            tmp = "LVGrid_" + str(int(bus_s.lv_grid_id))
         else:
-            tmp = "MVGrid_" + str(int(bus_df.mv_grid_id))
+            tmp = "MVGrid_" + str(int(bus_s.mv_grid_id))
         tmp = tmp + "_" + generator_type
         generator_id = kwargs.pop("generator_id", None)
         if generator_id is not None:
@@ -1053,7 +1064,12 @@ class Topology:
             )
 
         # create new generator dataframe
-        data = {"bus": bus, "p_nom": p_nom, "type": generator_type, "control": control}
+        data = {
+            "bus": bus,
+            "p_nom": p_nom,
+            "type": generator_type,
+            "control": control,
+        }
         data.update(kwargs)
         new_df = (
             pd.Series(
@@ -1064,65 +1080,13 @@ class Topology:
             .T
         )
 
+        # FIXME: casting non-numeric values with numeric values into one series changes
+        #  the data type to 'Object'. Change the data type to numeric if possible
+        for col in new_df.columns:
+            new_df[col] = pd.to_numeric(new_df[col], errors="ignore")
+
         self.generators_df = self.generators_df.append(new_df)
         return generator_name
-
-    def add_charging_point(self, bus, p_nom, use_case, **kwargs):
-        """
-        Adds charging point to topology.
-
-        Charging point identifier is generated automatically.
-
-        Parameters
-        ----------
-        bus : str
-            See :py:attr:`~charging_points_df` for more information.
-        p_nom : float
-            See :py:attr:`~charging_points_df` for more information.
-        use_case : str
-            See :py:attr:`~charging_points_df` for more information.
-
-        Other Parameters
-        -----------------
-        kwargs :
-            Kwargs may contain any further attributes you want to specify.
-
-        """
-        try:
-            bus_df = self.buses_df.loc[bus]
-        except KeyError:
-            raise ValueError(
-                "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus)
-            )
-
-        # generate charging point identifier and check uniqueness
-        if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
-            grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
-        else:
-            grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
-        id = len(self._grids[grid_name].charging_points_df)
-        name = "ChargingPoint_{}_{}".format(grid_name, id)
-        if name in self.charging_points_df.index:
-            name = "ChargingPoint_{}_{}".format(grid_name, id + 1)
-            while name in self.charging_points_df.index:
-                random.seed(a=name)
-                name = "ChargingPoint_{}_{}".format(
-                    grid_name, random.randint(10 ** 8, 10 ** 9)
-                )
-
-        data = {"bus": bus, "p_nom": p_nom, "use_case": use_case}
-        data.update(kwargs)
-        new_df = (
-            pd.Series(
-                data,
-                name=name,
-            )
-            .to_frame()
-            .T
-        )
-        self.charging_points_df = self.charging_points_df.append(new_df)
-        return name
 
     def add_storage_unit(self, bus, p_nom, control="PQ", **kwargs):
         """
@@ -1147,7 +1111,7 @@ class Topology:
 
         """
         try:
-            bus_df = self.buses_df.loc[bus]
+            bus_s = self.buses_df.loc[bus]
         except KeyError:
             raise ValueError(
                 "Specified bus {} is not valid as it is not defined in "
@@ -1155,10 +1119,10 @@ class Topology:
             )
 
         # generate storage name and check uniqueness
-        if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
-            grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
+        if not np.isnan(bus_s.lv_grid_id) and bus_s.lv_grid_id is not None:
+            grid_name = "LVGrid_" + str(int(bus_s.lv_grid_id))
         else:
-            grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
+            grid_name = "MVGrid_" + str(int(bus_s.mv_grid_id))
         storage_id = len(self._grids[grid_name].storage_units_df)
         storage_name = "StorageUnit_{}_{}".format(grid_name, storage_id)
         if storage_name in self.storage_units_df.index:
@@ -1180,6 +1144,12 @@ class Topology:
             .to_frame()
             .T
         )
+
+        # FIXME: casting non-numeric values with numeric values into one series changes
+        #  the data type to 'Object'. Change the data type to numeric if possible
+        for col in new_df.columns:
+            new_df[col] = pd.to_numeric(new_df[col], errors="ignore")
+
         self.storage_units_df = self.storage_units_df.append(new_df)
         return storage_name
 
@@ -1429,31 +1399,6 @@ class Topology:
                     )
                 )
 
-    def remove_charging_point(self, name):
-        """
-        Removes charging point from topology.
-
-        Parameters
-        ----------
-        name : str
-            Identifier of charging point as specified in index of
-            :py:attr:`~charging_points_df`.
-
-        """
-        if name in self.charging_points_df.index:
-            bus = self.charging_points_df.at[name, "bus"]
-            self._charging_points_df.drop(name, inplace=True)
-
-            # if no other elements are connected, remove line and bus as well
-            if self._check_bus_for_removal(bus):
-                line_name = self.get_connected_lines_from_bus(bus).index[0]
-                self.remove_line(line_name)
-                logger.debug(
-                    "Line {} removed together with charging point {}.".format(
-                        line_name, name
-                    )
-                )
-
     def remove_storage_unit(self, name):
         """
         Removes storage with given name from topology.
@@ -1492,7 +1437,7 @@ class Topology:
         """
         if not self._check_line_for_removal(name):
             raise AssertionError(
-                "Removal of line {} would create isolated " "node.".format(name)
+                "Removal of line {} would create isolated node.".format(name)
             )
 
         # backup buses of line and check if buses can be removed as well
@@ -1668,7 +1613,7 @@ class Topology:
             The dictionary must contain all required arguments
             of method :attr:`~.network.topology.Topology.add_generator`
             respectively
-            :attr:`~.network.topology.Topology.add_charging_point`, except the
+            :attr:`~.network.topology.Topology.add_load`, except the
             `bus` that is assigned in this function, and may contain all other
             parameters of those methods. Additionally, the dictionary must
             contain the voltage level to connect in in key 'voltage_level' and
@@ -1715,7 +1660,7 @@ class Topology:
         if comp_type == "Generator":
             comp_name = self.add_generator(bus=bus, **comp_data)
         else:
-            comp_name = self.add_charging_point(bus=bus, **comp_data)
+            comp_name = self.add_load(bus=bus, type="charging_point", **comp_data)
 
         # ===== voltage level 4: component is connected to MV station =====
         if comp_data["voltage_level"] == 4:
@@ -1871,7 +1816,7 @@ class Topology:
             The dictionary must contain all required arguments
             of method :attr:`~.network.topology.Topology.add_generator`
             respectively
-            :attr:`~.network.topology.Topology.add_charging_point`, except the
+            :attr:`~.network.topology.Topology.add_load`, except the
             `bus` that is assigned in this function, and may contain all other
             parameters of those methods.
             Additionally, the dictionary must contain the voltage level to
@@ -1987,7 +1932,8 @@ class Topology:
         if comp_type == "Generator":
             add_func = self.add_generator
         elif comp_type == "ChargingPoint":
-            add_func = self.add_charging_point
+            add_func = self.add_load
+            comp_data["type"] = "charging_point"
         else:
             logger.error("Component type {} is not a valid option.".format(comp_type))
 
@@ -2058,10 +2004,10 @@ class Topology:
                     ]
                     target_buses = tmp.bus.values
             else:
-                if comp_data["use_case"] is "home":
+                if comp_data["sector"] == "home":
                     tmp = lv_loads[lv_loads.sector == "residential"]
                     target_buses = tmp.bus.values
-                elif comp_data["use_case"] is "work":
+                elif comp_data["sector"] == "work":
                     tmp = lv_loads[
                         lv_loads.sector.isin(["industrial", "agricultural", "retail"])
                     ]
@@ -2078,7 +2024,7 @@ class Topology:
             else:
                 random.seed(
                     a="{}_{}_{}".format(
-                        comp_data["use_case"],
+                        comp_data["sector"],
                         comp_data["p_nom"],
                         len(lv_grid.charging_points_df),
                     )
@@ -2367,8 +2313,6 @@ class Topology:
           `loads.csv`.
         * 'generators_df' : Attribute :py:attr:`~generators_df` is saved to
           `generators.csv`.
-        * 'charging_points_df' : Attribute :py:attr:`~charging_points_df` is
-          saved to `charging_points.csv`.
         * 'storage_units_df' : Attribute :py:attr:`~storage_units_df` is
           saved to `storage_units.csv`.
         * 'transformers_df' : Attribute :py:attr:`~transformers_df` is saved to
@@ -2398,10 +2342,6 @@ class Topology:
             self.loads_df.to_csv(os.path.join(directory, "loads.csv"))
         if not self.generators_df.empty:
             self.generators_df.to_csv(os.path.join(directory, "generators.csv"))
-        if not self.charging_points_df.empty:
-            self.charging_points_df.to_csv(
-                os.path.join(directory, "charging_points.csv")
-            )
         if not self.storage_units_df.empty:
             self.storage_units_df.to_csv(os.path.join(directory, "storage_units.csv"))
         if not self.transformers_df.empty:
@@ -2450,10 +2390,6 @@ class Topology:
             # delete slack if it was included
             slack = generators_df.loc[generators_df.control == "Slack"].index
             self.generators_df = generators_df.drop(slack)
-        if os.path.exists(os.path.join(directory, "charging_points.csv")):
-            self.charging_points_df = pd.read_csv(
-                os.path.join(directory, "charging_points.csv"), index_col=0
-            )
         if os.path.exists(os.path.join(directory, "storage_units.csv")):
             self.storage_units_df = pd.read_csv(
                 os.path.join(directory, "storage_units.csv"), index_col=0

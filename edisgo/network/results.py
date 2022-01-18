@@ -1,8 +1,9 @@
-import os
-import logging
 import csv
-import pandas as pd
+import logging
+import os
+
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger("edisgo")
 
@@ -89,7 +90,7 @@ class Results:
 
     @property
     def pfa_p(self):
-        """
+        r"""
         Active power over components in MW from last power flow analysis.
 
         The given active power for each line / transformer is the
@@ -134,7 +135,7 @@ class Results:
 
     @property
     def pfa_q(self):
-        """
+        r"""
         Active power over components in Mvar from last power flow analysis.
 
         The given reactive power over each line / transformer is the
@@ -248,7 +249,7 @@ class Results:
 
     @property
     def s_res(self):
-        """
+        r"""
         Apparent power over components in MVA from last power flow analysis.
 
         The given apparent power over each line / transformer is the
@@ -395,7 +396,7 @@ class Results:
 
     @property
     def grid_losses(self):
-        """
+        r"""
         Active and reactive network losses in MW and Mvar, respectively.
 
         Parameters
@@ -789,9 +790,19 @@ class Results:
 
         """
         if attr_to_reduce is None:
-            attr_to_reduce = ["pfa_p", "pfa_q", "v_res", "i_res", "grid_losses"]
+            attr_to_reduce = [
+                "pfa_p",
+                "pfa_q",
+                "v_res",
+                "i_res",
+                "grid_losses",
+            ]
         for attr in attr_to_reduce:
-            setattr(self, attr, getattr(self, attr).apply(lambda _: _.astype(to_type)))
+            setattr(
+                self,
+                attr,
+                getattr(self, attr).apply(lambda _: _.astype(to_type)),
+            )
 
     def to_csv(
         self, directory, parameters=None, reduce_memory=False, save_seed=False, **kwargs
@@ -891,7 +902,8 @@ class Results:
                 if not getattr(self, attr).empty:
                     getattr(self, attr).to_csv(
                         os.path.join(
-                            target_dir, "{}.csv".format(power_flow_results_dict[attr])
+                            target_dir,
+                            "{}.csv".format(power_flow_results_dict[attr]),
                         )
                     )
 
@@ -1075,7 +1087,9 @@ class Results:
                 )
                 if os.path.exists(path):
                     setattr(
-                        self, attr, pd.read_csv(path, index_col=0, parse_dates=True)
+                        self,
+                        attr,
+                        pd.read_csv(path, index_col=0, parse_dates=True),
                     )
 
         # import grid expansion results

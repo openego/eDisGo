@@ -25,14 +25,14 @@ grids.
 
 """
 
+import logging
 import os
+
 import pandas as pd
 import requests
 
 from edisgo import EDisGo
 from edisgo.network.results import Results
-
-import logging
 
 logger = logging.getLogger("edisgo")
 logger.setLevel(logging.DEBUG)
@@ -73,7 +73,7 @@ def run_example():
     edisgo = EDisGo(ding0_grid=dingo_grid_path, worst_case_analysis="worst-case")
 
     # Reinforce ding0 grid to obtain a stable status quo grid
-    logging.info("Conduct grid reinforcement to obtain stable " "status quo grid.")
+    logging.info("Conduct grid reinforcement to obtain stable status quo grid.")
     # Overwrite config parameters for allowed voltage deviations in
     # initial topology reinforcement to better represent currently used limits
     edisgo.config["grid_expansion_allowed_voltage_deviations"] = {

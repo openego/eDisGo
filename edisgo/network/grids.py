@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
-import pandas as pd
-import networkx as nx
-from networkx.drawing.nx_pydot import graphviz_layout
+
 import matplotlib.pyplot as plt
+import networkx as nx
+import pandas as pd
+
+from networkx.drawing.nx_pydot import graphviz_layout
 
 from edisgo.network.components import Generator, Load, Switch
 from edisgo.tools.networkx_helper import translate_df_to_graph
@@ -286,7 +288,7 @@ class Grid(ABC):
         return self.generators_df.groupby(["type"]).sum()["p_nom"]
 
     @property
-    def peak_load(self):
+    def p_nom(self):
         """
         Cumulative peak load of loads in the network in MW.
 
@@ -296,10 +298,10 @@ class Grid(ABC):
             Cumulative peak load of loads in the network in MW.
 
         """
-        return self.loads_df.peak_load.sum()
+        return self.loads_df.p_nom.sum()
 
     @property
-    def peak_load_per_sector(self):
+    def p_nom_per_sector(self):
         """
         Cumulative peak load of loads in the network per sector in MW.
 
@@ -309,7 +311,7 @@ class Grid(ABC):
             Cumulative peak load of loads in the network per sector in MW.
 
         """
-        return self.loads_df.groupby(["sector"]).sum()["peak_load"]
+        return self.loads_df.groupby(["sector"]).sum()["p_nom"]
 
     def __repr__(self):
         return "_".join([self.__class__.__name__, str(self.id)])
@@ -491,8 +493,7 @@ class LVGrid(Grid):
             edge_color_is_sequence = False
 
         node_size = [
-            top.get_connected_components_from_bus(v)["loads"].peak_load.sum() * 50000
-            + 10
+            top.get_connected_components_from_bus(v)["loads"].p_nom.sum() * 50000 + 10
             for v in G
         ]
         if isinstance(node_color, pd.Series):
@@ -522,7 +523,11 @@ class LVGrid(Grid):
             # ToDo find nicer way to display bus names
             label_options = {"ec": "k", "fc": "white", "alpha": 0.7}
             nx.draw_networkx_labels(
-                G, pos, font_size=8, bbox=label_options, horizontalalignment="right"
+                G,
+                pos,
+                font_size=8,
+                bbox=label_options,
+                horizontalalignment="right",
             )
 
         if filename is None:

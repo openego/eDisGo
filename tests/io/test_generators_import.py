@@ -1,11 +1,12 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pytest
+
 from shapely.geometry import Point
 
 from edisgo import EDisGo
-from edisgo.network.grids import LVGrid
 from edisgo.io import generators_import as generators_import
+from edisgo.network.grids import LVGrid
 
 
 class TestGeneratorsImport:
@@ -19,7 +20,8 @@ class TestGeneratorsImport:
     @pytest.yield_fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path, worst_case_analysis="worst-case"
+            ding0_grid=pytest.ding0_test_network_path,
+            worst_case_analysis="worst-case",
         )
 
     def test_update_grids(self):
@@ -133,7 +135,11 @@ class TestGeneratorsImport:
         generators_mv = pd.DataFrame(
             data={
                 "generator_id": [321, 3456, 345],
-                "geom": [str(geom_gen_new), str(geom_gen_new), str(geom_gen_new)],
+                "geom": [
+                    str(geom_gen_new),
+                    str(geom_gen_new),
+                    str(geom_gen_new),
+                ],
                 "p_nom": [3.0, 2.67, 2.5],
                 "generator_type": ["wind", "solar", "solar"],
                 "subtype": ["wind", "solar", "solar"],
@@ -404,7 +410,8 @@ class TestGeneratorsImportOEDB:
             {"other": [0.775] * 3, "gas": [0.9] * 3}, index=timeindex
         )
         ts_gen_fluctuating = pd.DataFrame(
-            {"wind": [0.1, 0.2, 0.15], "solar": [0.4, 0.5, 0.45]}, index=timeindex
+            {"wind": [0.1, 0.2, 0.15], "solar": [0.4, 0.5, 0.45]},
+            index=timeindex,
         )
 
         edisgo = EDisGo(
@@ -530,7 +537,10 @@ class TestGeneratorsImportOEDB:
             edisgo.topology.generators_df["type"] == "biomass"
         ].p_nom.sum()
 
-        p_target = {"wind": p_wind_before * 1.6, "biomass": p_biomass_before * 1.0}
+        p_target = {
+            "wind": p_wind_before * 1.6,
+            "biomass": p_biomass_before * 1.0,
+        }
 
         edisgo.import_generators(
             generator_scenario="nep2035",

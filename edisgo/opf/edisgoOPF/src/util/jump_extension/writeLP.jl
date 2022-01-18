@@ -73,7 +73,7 @@ function writeLP(m::Model, fname::AbstractString; genericnames=true, quadobj=!is
             else
                 print_shortest(f, 2*abs(qc[ind]))
             end
-                    
+
             if qv1[ind] == qv2[ind]
                 @printf(f," %s ^2 %s ",varname(m,qv1[ind].col),
                     (qc[ind+1] < 0) ? "-" : "+")
@@ -88,7 +88,7 @@ function writeLP(m::Model, fname::AbstractString; genericnames=true, quadobj=!is
             else
                 print_shortest(f, 2*abs(qc[nnz]))
             end
-                    
+
             if qv1[nnz] == qv2[nnz]
                 @printf(f," %s ^2 ",varname(m,qv1[nnz].col))
             else
@@ -134,7 +134,7 @@ function writeLP(m::Model, fname::AbstractString; genericnames=true, quadobj=!is
             else
                 print_shortest(f, abs(c.terms.qcoeffs[ind]))
             end
-                    
+
             if c.terms.qvars1[ind] == c.terms.qvars2[ind]
                 @printf(f," %s ^2 %s ",varname(m,c.terms.qvars1[ind].col),
                     (c.terms.qcoeffs[ind+1] < 0) ? "-" : "+")
@@ -151,7 +151,7 @@ function writeLP(m::Model, fname::AbstractString; genericnames=true, quadobj=!is
             else
                 print_shortest(f, abs(c.terms.qcoeffs[nnz]))
             end
-                    
+
             if c.terms.qvars1[nnz] == c.terms.qvars2[nnz]
                 @printf(f," %s ^2 ",varname(m,c.terms.qvars1[nnz].col))
             else
@@ -166,7 +166,7 @@ function writeLP(m::Model, fname::AbstractString; genericnames=true, quadobj=!is
         for ind in 1:length(c.terms.aff.vars)
             @printf(f,"+ %s %s ",c.terms.aff.coeffs[ind], varname(m,c.terms.aff.vars[ind].col))
         end
-        
+
         if c.sense == :(==)
             @printf(f,"=")
         elseif c.sense == :(<=)

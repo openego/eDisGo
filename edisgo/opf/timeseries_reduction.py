@@ -1,11 +1,12 @@
 import logging
-import pandas as pd
+
 import numpy as np
+import pandas as pd
+
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 
 from edisgo.flex_opt import check_tech_constraints
-
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
 
 logger = logging.getLogger(__name__)
 

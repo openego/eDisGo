@@ -8,13 +8,13 @@ function read_statics(network_name::String)
     data_string=read(io,String)
     network_data = JSON.parse(data_string)
     close(io)
-    
+
     PowerModels.check_network_data(network_data)
 
     return network_data
 end
 
-function read_setting_file(network_name::String)    
+function read_setting_file(network_name::String)
     setting_file = "$(network_name)_opf_setting.json"
     io = open(setting_file, "r");
     data_string=read(io,String)
@@ -22,7 +22,7 @@ function read_setting_file(network_name::String)
     close(io)
     return opf_settings
 end
-    
+
 function read_load_timeseries(network_name::String)
     filename = "$(network_name)_loads.json"
     io = open(filename, "r");
@@ -34,14 +34,14 @@ function read_load_timeseries(network_name::String)
                     (load_file["load_data"],!isempty(load_file["load_data"]["1"])) : (Dict(),false)
     return load_data, isloads
 end
-        
+
 function read_gen_timeseries(network_name::String)
     filename = "$(network_name)_gens.json"
     io = open(filename, "r");
     data_string=read(io,String)
     gen_file = JSON.parse(data_string)
     close(io)
-    gen_data,isgens = haskey(gen_file,"time_horizon") ? 
+    gen_data,isgens = haskey(gen_file,"time_horizon") ?
                     (gen_file["gen_data"],!isempty(gen_file["gen_data"]["1"])) : (Dict(),false)
     return gen_data, isgens
 end
@@ -106,7 +106,7 @@ function read_data(network_name::String)
     load_data, isloads = read_load_timeseries(network_name)
     gen_data, isgens = read_gen_timeseries(network_name)
     storage_data, isstorage = read_storage_timeseries(network_name)
-    
+
     # replicate static network_data if time horizon is given
     if isgens || isloads
         thorizon = isgens ? length(gen_data) : length(load_data)
@@ -115,12 +115,12 @@ function read_data(network_name::String)
         thorizon = 0
     end
 
-    if thorizon == 0 
+    if thorizon == 0
         data = network_data
     else
         data = PowerModels.replicate(network_data,thorizon)
     end
-    
+
     # write timeseries on replicated data
     if isloads
         add_load_timeseries(data,load_data)
@@ -153,7 +153,7 @@ function read_data(network_name::String)
     else
         println("no gens given")
     end
-    
+
     return data
 end
 
@@ -201,7 +201,7 @@ function read_edisgo_problem(network_name::String;timehorizon::Int=-1)
     opf_settings = read_setting_file(network_name)
 
     # =======================================
-    # ADD OPF SETTINGS to network_data and to global keys of data, 
+    # ADD OPF SETTINGS to network_data and to global keys of data,
     # i.e.:
     #    global_keys=Set(["max_exp","curtailment_total", "time_elapsed",...])
     #    DEFAUL SETTING: Set(["time_elapsed", "baseMVA", "per_unit"])
@@ -221,7 +221,7 @@ function read_edisgo_problem(network_name::String;timehorizon::Int=-1)
 
     #= Cast cluster IDs to Int explicitly=#
     network_data["clusters"] = Dict(parse(Int64,k) => Int64(v) for (k,v) in network_data["clusters"])
-    
+
     # read time series for demand and generation
     load_data,_ = read_load_timeseries(network_name)
     gen_data,_ = read_gen_timeseries(network_name)

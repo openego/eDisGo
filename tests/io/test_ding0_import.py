@@ -1,9 +1,9 @@
 import pytest
 import shapely
 
-from edisgo.network.topology import Topology
-from edisgo.network.grids import MVGrid, LVGrid
 from edisgo.io import ding0_import
+from edisgo.network.grids import LVGrid, MVGrid
+from edisgo.network.topology import Topology
 
 
 class TestImportFromDing0:
@@ -66,7 +66,7 @@ class TestImportFromDing0:
             except ValueError as e:
                 assert e.args[
                     0
-                ] == "{} have duplicate entry in one " "of the components dataframes.".format(
+                ] == "{} have duplicate entry in one of the components dataframes.".format(
                     name
                 )
             # reset dataframe
@@ -80,7 +80,9 @@ class TestImportFromDing0:
             new_comp.name = "new_nodal_component"
             new_comp.bus = "Non_existent_bus_" + nodal_component
             setattr(
-                self.topology, "_{}_df".format(nodal_component), comps.append(new_comp)
+                self.topology,
+                "_{}_df".format(nodal_component),
+                comps.append(new_comp),
             )
             try:
                 ding0_import._validate_ding0_grid_import(self.topology)
@@ -91,7 +93,7 @@ class TestImportFromDing0:
             except ValueError as e:
                 assert e.args[
                     0
-                ] == "The following {} have buses which are " "not defined: {}.".format(
+                ] == "The following {} have buses which are not defined: {}.".format(
                     nodal_component, new_comp.name
                 )
             # reset dataframe
@@ -104,9 +106,15 @@ class TestImportFromDing0:
             comps = getattr(self.topology, "_{}_df".format(branch_component))
             new_comp = comps.loc[comps_dict[branch_component]]
             new_comp.name = "new_branch_component"
-            setattr(new_comp, "bus" + str(i), "Non_existent_bus_" + branch_component)
             setattr(
-                self.topology, "_{}_df".format(branch_component), comps.append(new_comp)
+                new_comp,
+                "bus" + str(i),
+                "Non_existent_bus_" + branch_component,
+            )
+            setattr(
+                self.topology,
+                "_{}_df".format(branch_component),
+                comps.append(new_comp),
             )
             try:
                 ding0_import._validate_ding0_grid_import(self.topology)
@@ -117,7 +125,7 @@ class TestImportFromDing0:
             except ValueError as e:
                 assert e.args[
                     0
-                ] == "The following {} have bus{} which are " "not defined: {}.".format(
+                ] == "The following {} have bus{} which are not defined: {}.".format(
                     branch_component, i, new_comp.name
                 )
             # reset dataframe
@@ -136,12 +144,12 @@ class TestImportFromDing0:
             try:
                 ding0_import._validate_ding0_grid_import(self.topology)
                 raise Exception(
-                    "Appending components switches did not work " "properly."
+                    "Appending components switches did not work properly."
                 )
             except ValueError as e:
                 assert e.args[
                     0
-                ] == "The following switches have {} which " "are not defined: {}.".format(
+                ] == "The following switches have {} which are not defined: {}.".format(
                     attr, new_comp.name
                 )
             self.topology.switches_df = comps
@@ -153,9 +161,9 @@ class TestImportFromDing0:
         self.topology.buses_df = self.topology.buses_df.append(bus)
         try:
             ding0_import._validate_ding0_grid_import(self.topology)
-            raise Exception("Appending components buses did not work " "properly.")
+            raise Exception("Appending components buses did not work properly.")
         except ValueError as e:
-            assert e.args[0] == "The following buses are isolated: " "{}.".format(
+            assert e.args[0] == "The following buses are isolated: {}.".format(
                 bus.name
             )
 

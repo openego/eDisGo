@@ -1,12 +1,14 @@
 import os
+
+from math import pi, sqrt
+
+import networkx as nx
 import numpy as np
 import pandas as pd
-import networkx as nx
-from math import pi, sqrt
+
 from sqlalchemy import func
 
-from edisgo.flex_opt import exceptions
-from edisgo.flex_opt import check_tech_constraints
+from edisgo.flex_opt import check_tech_constraints, exceptions
 from edisgo.network.grids import LVGrid
 from edisgo.tools import session_scope
 
@@ -246,7 +248,7 @@ def select_cable(edisgo_obj, level, apparent_power):
         available_cables = edisgo_obj.topology.equipment_data["lv_cables"]
     else:
         raise ValueError(
-            "Specified voltage level is not valid. Must " "either be 'mv' or 'lv'."
+            "Specified voltage level is not valid. Must either be 'mv' or 'lv'."
         )
 
     suitable_cables = available_cables[
@@ -261,7 +263,9 @@ def select_cable(edisgo_obj, level, apparent_power):
         cable_count += 1
         suitable_cables = available_cables[
             calculate_apparent_power(
-                available_cables["U_n"], available_cables["I_max_th"], cable_count
+                available_cables["U_n"],
+                available_cables["I_max_th"],
+                cable_count,
             )
             > apparent_power
         ]
@@ -349,7 +353,7 @@ def assign_feeder(edisgo_obj, mode="mv_feeder"):
 
     else:
         raise ValueError(
-            "Invalid mode. Mode must either be 'mv_feeder' or " "'lv_feeder'."
+            "Invalid mode. Mode must either be 'mv_feeder' or 'lv_feeder'."
         )
 
 
