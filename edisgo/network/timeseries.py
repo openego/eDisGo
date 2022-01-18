@@ -701,7 +701,7 @@ def get_component_timeseries(edisgo_obj, **kwargs):
         elif ts == "demandlib":
             edisgo_obj.timeseries.load = \
                 timeseries_import.load_time_series_demandlib(
-                    config_data, ts,
+                    config_data,
                     year=edisgo_obj.timeseries.timeindex[0].year
                 )
         else:

@@ -123,7 +123,7 @@ class Test_get_component_timeseries:
                 edisgo_obj=self, timeseries_generation_fluctuating="oedb"
             )
         # test error raising in case of missing ts for loads
-        msg = 'Your input for "timeseries_load" is not valid.'
+        msg = "Your input for 'timeseries_load' is not valid."
         with pytest.raises(ValueError, match=msg):
             timeseries.get_component_timeseries(
                 edisgo_obj=self,
