@@ -957,8 +957,8 @@ class Topology:
 
         tmp = f"{type_name}_{grid_name}"
 
-        if sector is not None:
-            tmp = tmp + "_" + sector
+        if kwargs.get("sector", None) is not None:
+            tmp = tmp + "_" + kwargs.get("sector")
 
         load_id = kwargs.pop("load_id", None)
 
