@@ -1145,7 +1145,7 @@ class EDisGo:
                 return
         except AttributeError:
             logger.warning(
-                "Results are required for " "voltage histogramm. Please analyze first."
+                "Results are required for voltage histogramm. Please analyze first."
             )
             return
 

@@ -1246,7 +1246,7 @@ def _check_timeindex(edisgo_obj):
             edisgo_obj.timeseries.storage_units_active_power.index
         ).all()
     except:
-        message = "Time index of feed-in and load time series does " "not match."
+        message = "Time index of feed-in and load time series does not match."
         logging.error(message)
         raise KeyError(message)
 

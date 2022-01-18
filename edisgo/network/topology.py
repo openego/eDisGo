@@ -198,7 +198,7 @@ class Topology:
         Parameters
         ----------
         df : :pandas:`pandas.DataFrame<DataFrame>`
-            Dataframe with all loads (incl. charging points and heat pumps) in MV
+            Dataframe with all loads (incl. charging points, heat pumps, etc.) in MV
             network and underlying LV grids. Index of the dataframe are load names as
             string. Columns of the dataframe are:
 
@@ -212,7 +212,7 @@ class Topology:
                 Load type. E.g. 'load', 'charging_point' or 'heat_pump'
 
             annual_consumption : float
-                Annual consumption in MWh (only added for consumers).
+                Annual consumption in MWh.
 
             sector : str
                 Specifies type of load. If demandlib is used to generate
@@ -843,7 +843,7 @@ class Topology:
         # check if bus is part of topology
         if bus_name not in self.buses_df.index:
             warnings.warn(
-                "Bus of name {} not in Topology. Cannot be " "removed.".format(bus_name)
+                "Bus of name {} not in Topology. Cannot be removed.".format(bus_name)
             )
             return False
 
@@ -906,7 +906,7 @@ class Topology:
         return False
 
     def add_load(
-        self, bus, p_nom, type="load", annual_consumption=None, sector=None, **kwargs
+        self, bus, p_nom, type="load", **kwargs
     ):
         """
         Adds load to topology.
@@ -922,12 +922,6 @@ class Topology:
         type : str
             See :py:attr:`~loads_df` for more information.
             Default: "load"
-        annual_consumption : float
-            See :py:attr:`~loads_df` for more information.
-            Default: None
-        sector : str
-            See :py:attr:`~loads_df` for more information.
-            Default: None
 
         Other Parameters
         -----------------
@@ -989,13 +983,6 @@ class Topology:
             "p_nom": p_nom,
             "type": type,
         }
-
-        if annual_consumption is not None:
-            data["annual_consumption"] = annual_consumption
-
-        if sector is not None:
-            data["sector"] = sector
-
         data.update(kwargs)
 
         new_df = (
@@ -1366,8 +1353,7 @@ class Topology:
 
     def remove_load(self, name):
         """
-        Removes load (incl. charging points and heat pumps) with given name from
-        topology.
+        Removes load with given name from topology.
 
         Parameters
         ----------

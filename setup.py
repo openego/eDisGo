@@ -17,7 +17,7 @@ if sys.version_info[:2] < (3, 7):
 
 def read(fname):
     """
-    Read a text file
+    Read a text file.
 
     Parameters
     ----------
@@ -35,7 +35,7 @@ def read(fname):
 
 class InstallSetup(install):
     """
-    Run setup installation
+    Run setup installation.
     """
 
     def run(self):
@@ -45,7 +45,7 @@ class InstallSetup(install):
     @staticmethod
     def create_edisgo_path():
         """
-        Create edisgo path if missing
+        Create edisgo path if missing.
         """
         edisgo_path = os.path.join(os.path.expanduser("~"), BASEPATH)
         data_path = os.path.join(edisgo_path, "data")

@@ -93,7 +93,7 @@ class TestImportFromDing0:
             except ValueError as e:
                 assert e.args[
                     0
-                ] == "The following {} have buses which are " "not defined: {}.".format(
+                ] == "The following {} have buses which are not defined: {}.".format(
                     nodal_component, new_comp.name
                 )
             # reset dataframe
@@ -144,12 +144,12 @@ class TestImportFromDing0:
             try:
                 ding0_import._validate_ding0_grid_import(self.topology)
                 raise Exception(
-                    "Appending components switches did not work " "properly."
+                    "Appending components switches did not work properly."
                 )
             except ValueError as e:
                 assert e.args[
                     0
-                ] == "The following switches have {} which " "are not defined: {}.".format(
+                ] == "The following switches have {} which are not defined: {}.".format(
                     attr, new_comp.name
                 )
             self.topology.switches_df = comps
@@ -161,7 +161,7 @@ class TestImportFromDing0:
         self.topology.buses_df = self.topology.buses_df.append(bus)
         try:
             ding0_import._validate_ding0_grid_import(self.topology)
-            raise Exception("Appending components buses did not work " "properly.")
+            raise Exception("Appending components buses did not work properly.")
         except ValueError as e:
             assert e.args[0] == "The following buses are isolated: " "{}.".format(
                 bus.name

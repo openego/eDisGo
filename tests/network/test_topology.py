@@ -198,6 +198,8 @@ class TestTopology:
     def test_add_load(self):
         """Test add_load method"""
 
+	# test adding conventional load
+
         len_df_before = len(self.topology.loads_df)
 
         # test with kwargs
@@ -245,6 +247,43 @@ class TestTopology:
                 sector="retail",
             )
 
+	# test adding charging point
+
+        len_df_before = len(self.topology.charging_points_df)
+
+        # test with kwargs
+        name = self.topology.add_load(
+            bus="Bus_BranchTee_MVGrid_1_8",
+            p_nom=1,
+            type="charging_point",
+            sector="home",
+            number=2,
+            test_info="test",
+        )
+        assert len_df_before + 1 == len(self.topology.charging_points_df)
+        assert name == "ChargingPoint_MVGrid_1_home_0"
+        assert self.topology.charging_points_df.at[name, "sector"] == "home"
+        assert self.topology.charging_points_df.at[name, "test_info"] == "test"
+
+        # test without kwargs
+        name = self.topology.add_load(
+            bus="Bus_BranchTee_LVGrid_1_2",
+            type="charging_point",
+            p_nom=0.5,
+            sector="work",
+        )
+        assert len_df_before + 2 == len(self.topology.charging_points_df)
+        assert name == "ChargingPoint_LVGrid_1_work_0"
+        assert self.topology.charging_points_df.at[name, "p_nom"] == 0.5
+
+        # test error raising if bus is not valid
+        msg = (
+            "Specified bus Unknown_bus is not valid as it is not defined in "
+            "buses_df."
+        )
+        with pytest.raises(ValueError, match=msg):
+            self.topology.add_load(bus="Unknown_bus", p_nom=0.5, sector="work")
+
     def test_add_generator(self):
         """Test add_generator method"""
 
@@ -284,50 +323,6 @@ class TestTopology:
             self.topology.add_generator(
                 bus="Unknown_bus", p_nom=0.5, generator_type="solar"
             )
-
-    def test_add_charging_point(self):
-        """
-        Test add_load method.
-
-        Added charging points are used to later on test remove_charging_points
-        method.
-
-        """
-
-        len_df_before = len(self.topology.charging_points_df)
-
-        # test with kwargs
-        name = self.topology.add_load(
-            bus="Bus_BranchTee_MVGrid_1_8",
-            p_nom=1,
-            type="charging_point",
-            sector="home",
-            number=2,
-            test_info="test",
-        )
-        assert len_df_before + 1 == len(self.topology.charging_points_df)
-        assert name == "ChargingPoint_MVGrid_1_home_0"
-        assert self.topology.charging_points_df.at[name, "sector"] == "home"
-        assert self.topology.charging_points_df.at[name, "test_info"] == "test"
-
-        # test without kwargs
-        name = self.topology.add_load(
-            bus="Bus_BranchTee_LVGrid_1_2",
-            type="charging_point",
-            p_nom=0.5,
-            sector="work",
-        )
-        assert len_df_before + 2 == len(self.topology.charging_points_df)
-        assert name == "ChargingPoint_LVGrid_1_work_0"
-        assert self.topology.charging_points_df.at[name, "p_nom"] == 0.5
-
-        # test error raising if bus is not valid
-        msg = (
-            "Specified bus Unknown_bus is not valid as it is not defined in "
-            "buses_df."
-        )
-        with pytest.raises(ValueError, match=msg):
-            self.topology.add_load(bus="Unknown_bus", p_nom=0.5, sector="work")
 
     def test_add_storage_unit(self):
         """Test add_storage_unit method"""
@@ -533,6 +528,8 @@ class TestTopology:
     def test_remove_load(self):
         """Test remove_load method"""
 
+	# test removing conventional load
+
         # check case where only load is connected to line,
         # line and bus are therefore removed as well
         name = "Load_residential_LVGrid_1_4"
@@ -553,6 +550,31 @@ class TestTopology:
         self.topology.remove_load(name)
         assert name not in self.topology.loads_df.index
         assert "Bus_BranchTee_LVGrid_1_12" in self.topology.buses_df.index
+        assert (connected_lines.index.isin(self.topology.lines_df.index)).all()
+
+	# test removing charging point
+
+        # check case where only charging point is connected to line,
+        # line and bus are therefore removed as well
+        name = "ChargingPoint_LVGrid_1_0"
+        bus = "Bus_Load_agricultural_LVGrid_1_1"
+        # get connected line
+        connected_lines = self.topology.get_connected_lines_from_bus(bus)
+        # remove load
+        self.topology.remove_load("Load_agricultural_LVGrid_1_1")
+        self.topology.remove_load(name)
+        assert name not in self.topology.charging_points_df.index
+        assert bus not in self.topology.buses_df.index
+        assert ~(connected_lines.index.isin(self.topology.lines_df.index)).any()
+
+        # check case where charging point is not the only connected element
+        name = "ChargingPoint_MVGrid_1_0"
+        bus = "Bus_BranchTee_MVGrid_1_8"
+        # get connected lines
+        connected_lines = self.topology.get_connected_lines_from_bus(bus)
+        self.topology.remove_load(name)
+        assert name not in self.topology.charging_points_df.index
+        assert bus in self.topology.buses_df.index
         assert (connected_lines.index.isin(self.topology.lines_df.index)).all()
 
     def test_remove_generator(self):
@@ -578,32 +600,6 @@ class TestTopology:
         self.topology.remove_generator(name)
         assert name not in self.topology.generators_df.index
         assert "Bus_BranchTee_LVGrid_4_2" in self.topology.buses_df.index
-        assert (connected_lines.index.isin(self.topology.lines_df.index)).all()
-
-    def test_remove_charging_point(self):
-        """Test remove_load method"""
-
-        # check case where only charging point is connected to line,
-        # line and bus are therefore removed as well
-        name = "ChargingPoint_LVGrid_1_0"
-        bus = "Bus_Load_agricultural_LVGrid_1_1"
-        # get connected line
-        connected_lines = self.topology.get_connected_lines_from_bus(bus)
-        # remove load
-        self.topology.remove_load("Load_agricultural_LVGrid_1_1")
-        self.topology.remove_load(name)
-        assert name not in self.topology.charging_points_df.index
-        assert bus not in self.topology.buses_df.index
-        assert ~(connected_lines.index.isin(self.topology.lines_df.index)).any()
-
-        # check case where charging point is not the only connected element
-        name = "ChargingPoint_MVGrid_1_0"
-        bus = "Bus_BranchTee_MVGrid_1_8"
-        # get connected lines
-        connected_lines = self.topology.get_connected_lines_from_bus(bus)
-        self.topology.remove_load(name)
-        assert name not in self.topology.charging_points_df.index
-        assert bus in self.topology.buses_df.index
         assert (connected_lines.index.isin(self.topology.lines_df.index)).all()
 
     def test_remove_storage_unit(self):

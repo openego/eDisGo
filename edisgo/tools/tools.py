@@ -16,6 +16,7 @@ if "READTHEDOCS" not in os.environ:
 
     from egoio.db_tables import climate
     from egoio.tools.db import connection
+
     from shapely.geometry.multipolygon import MultiPolygon
     from shapely.wkt import loads as wkt_loads
 
@@ -352,7 +353,7 @@ def assign_feeder(edisgo_obj, mode="mv_feeder"):
 
     else:
         raise ValueError(
-            "Invalid mode. Mode must either be 'mv_feeder' or " "'lv_feeder'."
+            "Invalid mode. Mode must either be 'mv_feeder' or 'lv_feeder'."
         )
 
 
