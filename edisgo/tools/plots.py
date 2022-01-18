@@ -126,9 +126,7 @@ def histogram(data, **kwargs):
         bins = 10
 
     plt.figure(figsize=fig_size)
-    ax = plot_data.hist(
-        density=normed, color=color, alpha=alpha, bins=bins, grid=True
-    )
+    ax = plot_data.hist(density=normed, color=color, alpha=alpha, bins=bins, grid=True)
     plt.minorticks_on()
 
     if x_limits is not None:
@@ -157,9 +155,7 @@ def add_basemap(ax, zoom=12):
     """
     url = ctx.sources.ST_TONER_LITE
     xmin, xmax, ymin, ymax = ax.axis()
-    basemap, extent = ctx.bounds2img(
-        xmin, ymin, xmax, ymax, zoom=zoom, source=url
-    )
+    basemap, extent = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=url)
     ax.imshow(basemap, extent=extent, interpolation="bilinear")
     # restore original x/y limits
     ax.axis((xmin, xmax, ymin, ymax))
@@ -199,9 +195,7 @@ def get_grid_district_polygon(config, subst_id=None, projection=4326):
             ]
 
     crs = {"init": "epsg:3035"}
-    region = gpd.GeoDataFrame(
-        Regions, columns=["subst_id", "geometry"], crs=crs
-    )
+    region = gpd.GeoDataFrame(Regions, columns=["subst_id", "geometry"], crs=crs)
     region = region.to_crs(epsg=projection)
 
     return region
@@ -360,9 +354,7 @@ def mv_grid_topology(
             and connected_components["charging_points"].empty
             and connected_components["storage_units"].empty
         ):
-            if (
-                connected_components["generators"].type.isin(["wind", "solar"])
-            ).all():
+            if (connected_components["generators"].type.isin(["wind", "solar"])).all():
                 return (
                     colors_dict["GeneratorFluctuating"],
                     sizes_dict["GeneratorFluctuating"],
@@ -370,10 +362,12 @@ def mv_grid_topology(
             else:
                 return colors_dict["Generator"], sizes_dict["Generator"]
         elif (
-                (not connected_components["loads"].empty
-                 or not connected_components["charging_points"].empty)
-                and connected_components["generators"].empty
-                and connected_components["storage_units"].empty
+            (
+                not connected_components["loads"].empty
+                or not connected_components["charging_points"].empty
+            )
+            and connected_components["generators"].empty
+            and connected_components["storage_units"].empty
         ):
             return colors_dict["Load"], sizes_dict["Load"]
         elif not connected_components["switches"].empty:
@@ -419,8 +413,8 @@ def mv_grid_topology(
             "else": 200000,
         }
         for bus in buses:
-            connected_components = edisgo_obj.topology.get_connected_components_from_bus(
-                bus
+            connected_components = (
+                edisgo_obj.topology.get_connected_components_from_bus(bus)
             )
             bus_colors[bus], bus_sizes[bus] = get_color_and_size(
                 connected_components, colors_dict, sizes_dict
@@ -452,21 +446,11 @@ def mv_grid_topology(
         bus_colors_dict = {}
         bus_sizes_dict = {}
         if timestep is not None:
-            bus_colors_dict.update(
-                {
-                    bus: voltages.loc[timestep, bus]
-                    for bus in buses
-                }
-            )
+            bus_colors_dict.update({bus: voltages.loc[timestep, bus] for bus in buses})
         else:
-            bus_colors_dict.update(
-                {
-                    bus: max(voltages.loc[:, bus])
-                    for bus in buses
-                }
-            )
+            bus_colors_dict.update({bus: max(voltages.loc[:, bus]) for bus in buses})
 
-        bus_sizes_dict.update({bus: 100000^2 for bus in buses})
+        bus_sizes_dict.update({bus: 100000 ^ 2 for bus in buses})
         return bus_sizes_dict, bus_colors_dict
 
     def nodes_by_voltage_deviation(buses, voltages):
@@ -474,21 +458,14 @@ def mv_grid_topology(
         bus_sizes_dict = {}
         if timestep is not None:
             bus_colors_dict.update(
-                {
-                    bus: 100
-                    * abs(1 - voltages.loc[timestep, bus])
-                    for bus in buses
-                }
+                {bus: 100 * abs(1 - voltages.loc[timestep, bus]) for bus in buses}
             )
         else:
             bus_colors_dict.update(
-                {
-                    bus: 100 * max(abs(1 - voltages.loc[:, bus]))
-                    for bus in buses
-                }
+                {bus: 100 * max(abs(1 - voltages.loc[:, bus])) for bus in buses}
             )
 
-        bus_sizes_dict.update({bus: 100000^2 for bus in buses})
+        bus_sizes_dict.update({bus: 100000 ^ 2 for bus in buses})
         return bus_sizes_dict, bus_colors_dict
 
     def nodes_storage_integration(buses, edisgo_obj):
@@ -501,9 +478,9 @@ def mv_grid_topology(
         # size nodes such that 300 kW storage equals size 100
         bus_sizes.update(
             {
-                bus: edisgo_obj.topology.get_connected_components_from_bus(
-                    bus
-                )["storage_units"].p_nom.values.sum()
+                bus: edisgo_obj.topology.get_connected_components_from_bus(bus)[
+                    "storage_units"
+                ].p_nom.values.sum()
                 * 1000
                 / 3
                 for bus in buses_with_storages
@@ -520,9 +497,7 @@ def mv_grid_topology(
         # size nodes such that 100% curtailment share equals size 1000
         bus_sizes.update(
             {
-                bus: curtailment_df.loc[:, bus].sum()
-                / curtailment_total
-                * 2000
+                bus: curtailment_df.loc[:, bus].sum() / curtailment_total * 2000
                 for bus in buses_with_curtailment
             }
         )
@@ -531,9 +506,7 @@ def mv_grid_topology(
     def nodes_by_costs(buses, grid_expansion_costs, edisgo_obj):
         # sum costs for each station
         costs_lv_stations = grid_expansion_costs[
-            grid_expansion_costs.index.isin(
-                edisgo_obj.topology.transformers_df.index
-            )
+            grid_expansion_costs.index.isin(edisgo_obj.topology.transformers_df.index)
         ]
         costs_lv_stations["station"] = edisgo_obj.topology.transformers_df.loc[
             costs_lv_stations.index, "bus0"
@@ -544,9 +517,7 @@ def mv_grid_topology(
                 edisgo_obj.topology.transformers_hvmv_df.index
             )
         ]
-        costs_mv_station[
-            "station"
-        ] = edisgo_obj.topology.transformers_hvmv_df.loc[
+        costs_mv_station["station"] = edisgo_obj.topology.transformers_hvmv_df.loc[
             costs_mv_station.index, "bus1"
         ]
         costs_mv_station = costs_mv_station.groupby("station").sum()
@@ -586,9 +557,7 @@ def mv_grid_topology(
         edisgo_obj.topology.buses_df.v_nom > 1
     ].loc[:, ["x", "y"]]
     # filter buses of aggregated loads and generators
-    pypsa_plot.buses = pypsa_plot.buses[
-        ~pypsa_plot.buses.index.str.contains("agg")
-    ]
+    pypsa_plot.buses = pypsa_plot.buses[~pypsa_plot.buses.index.str.contains("agg")]
     pypsa_plot.lines = edisgo_obj.topology.lines_df[
         edisgo_obj.topology.lines_df.bus0.isin(pypsa_plot.buses.index)
     ][edisgo_obj.topology.lines_df.bus1.isin(pypsa_plot.buses.index)].loc[
@@ -611,14 +580,10 @@ def mv_grid_topology(
 
     # bus colors and sizes
     if node_color == "technology":
-        bus_sizes, bus_colors = nodes_by_technology(
-            pypsa_plot.buses.index, edisgo_obj
-        )
+        bus_sizes, bus_colors = nodes_by_technology(pypsa_plot.buses.index, edisgo_obj)
         bus_cmap = None
     elif node_color == "voltage":
-        bus_sizes, bus_colors = nodes_by_voltage(
-            pypsa_plot.buses.index, voltage
-        )
+        bus_sizes, bus_colors = nodes_by_voltage(pypsa_plot.buses.index, voltage)
         bus_cmap = plt.cm.Blues
     elif node_color == "voltage_deviation":
         bus_sizes, bus_colors = nodes_by_voltage_deviation(
@@ -626,9 +591,7 @@ def mv_grid_topology(
         )
         bus_cmap = plt.cm.Blues
     elif node_color == "storage_integration":
-        bus_sizes = nodes_storage_integration(
-            pypsa_plot.buses.index, edisgo_obj
-        )
+        bus_sizes = nodes_storage_integration(pypsa_plot.buses.index, edisgo_obj)
         bus_colors = "orangered"
         bus_cmap = None
     elif node_color == "expansion_costs":
@@ -641,9 +604,7 @@ def mv_grid_topology(
         bus_colors = "orangered"
         bus_cmap = None
     elif node_color == "charging_park":
-        bus_sizes, bus_colors = nodes_charging_park(
-            pypsa_plot.buses.index, edisgo_obj
-        )
+        bus_sizes, bus_colors = nodes_charging_park(pypsa_plot.buses.index, edisgo_obj)
         bus_cmap = None
     elif node_color is None:
         bus_sizes = 0
@@ -651,8 +612,7 @@ def mv_grid_topology(
         bus_cmap = None
     else:
         if kwargs.get("bus_colors", None):
-            bus_colors = pd.Series(kwargs.get("bus_colors")).loc[
-                pypsa_plot.buses]
+            bus_colors = pd.Series(kwargs.get("bus_colors")).loc[pypsa_plot.buses]
         else:
             logging.warning(
                 "Choice for `node_color` is not valid. Default bus colors are "
@@ -660,8 +620,7 @@ def mv_grid_topology(
             )
             bus_colors = "r"
         if kwargs.get("bus_sizes", None):
-            bus_sizes = pd.Series(kwargs.get("bus_sizes")).loc[
-                pypsa_plot.buses]
+            bus_sizes = pd.Series(kwargs.get("bus_sizes")).loc[pypsa_plot.buses]
         else:
             logging.warning(
                 "Choice for `node_color` is not valid. Default bus sizes are "
@@ -681,8 +640,7 @@ def mv_grid_topology(
     if contextily and background_map:
         transformer = Transformer.from_crs("epsg:4326", "epsg:3857", always_xy=True)
         x2, y2 = transformer.transform(
-            list(pypsa_plot.buses.loc[:, "x"]),
-            list(pypsa_plot.buses.loc[:, "y"])
+            list(pypsa_plot.buses.loc[:, "x"]), list(pypsa_plot.buses.loc[:, "y"])
         )
         pypsa_plot.buses.loc[:, "x"] = x2
         pypsa_plot.buses.loc[:, "y"] = y2
@@ -696,9 +654,7 @@ def mv_grid_topology(
         try:
             projection = 3857 if contextily and background_map else 4326
             crs = {
-                "init": "epsg:{}".format(
-                    int(edisgo_obj.topology.grid_district["srid"])
-                )
+                "init": "epsg:{}".format(int(edisgo_obj.topology.grid_district["srid"]))
             }
             region = gpd.GeoDataFrame(
                 {"geometry": [edisgo_obj.topology.grid_district["geom"]]},
@@ -706,9 +662,7 @@ def mv_grid_topology(
             )
             if projection != int(edisgo_obj.topology.grid_district["srid"]):
                 region = region.to_crs(epsg=projection)
-            region.plot(
-                ax=ax, color="white", alpha=0.2, edgecolor="red", linewidth=2
-            )
+            region.plot(ax=ax, color="white", alpha=0.2, edgecolor="red", linewidth=2)
         except Exception as e:
             logging.warning(
                 "Grid district geometry could not be plotted due "
@@ -766,7 +720,7 @@ def mv_grid_topology(
         v_voltage = np.linspace(limits_cb_nodes[0], limits_cb_nodes[1], 101)
         # for some reason, the cmap given to pypsa plot is overwritten and
         # needs to be set again
-        ll[0].set(cmap='Blues')
+        ll[0].set(cmap="Blues")
         cb_voltage = plt.colorbar(
             ll[0], boundaries=v_voltage, ticks=v_voltage[0:101:10]
         )

@@ -100,19 +100,11 @@ def one_storage_per_feeder(
 
     def _shortest_path(node):
         if isinstance(node, LVStation):
-            return len(
-                nx.shortest_path(
-                    node.mv_grid.graph, node.mv_grid.station, node
-                )
-            )
+            return len(nx.shortest_path(node.mv_grid.graph, node.mv_grid.station, node))
         else:
-            return len(
-                nx.shortest_path(node.grid.graph, node.grid.station, node)
-            )
+            return len(nx.shortest_path(node.grid.graph, node.grid.station, node))
 
-    def _find_battery_node(
-        edisgo, critical_lines_feeder, critical_nodes_feeder
-    ):
+    def _find_battery_node(edisgo, critical_lines_feeder, critical_nodes_feeder):
         """
         Evaluates where to install the storage.
 
@@ -176,9 +168,7 @@ def one_storage_per_feeder(
                 edisgo.network.mv_grid.station,
                 node,
             )
-            return next(
-                j for j in path if path_length[j] >= path_length[node] * 2 / 3
-            )
+            return next(j for j in path if path_length[j] >= path_length[node] * 2 / 3)
 
         return None
 
@@ -202,22 +192,17 @@ def one_storage_per_feeder(
         """
         step_size = 200
         sizes = [0] + list(
-            np.arange(
-                p_storage_min, max_storage_size + 0.5 * step_size, step_size
-            )
+            np.arange(p_storage_min, max_storage_size + 0.5 * step_size, step_size)
         )
         p_feeder = edisgo.network.results.pfa_p.loc[:, repr(feeder)]
         q_feeder = edisgo.network.results.pfa_q.loc[:, repr(feeder)]
-        p_slack = (
-            edisgo.network.pypsa.generators_t.p.loc[:, "Generator_slack"] * 1e3
-        )
+        p_slack = edisgo.network.pypsa.generators_t.p.loc[:, "Generator_slack"] * 1e3
 
         # get sign of p and q
         l = edisgo.network.pypsa.lines.loc[repr(feeder), :]
         mv_station_bus = (
             "bus0"
-            if l.loc["bus0"]
-            == "Bus_".format(repr(edisgo.network.mv_grid.station))
+            if l.loc["bus0"] == "Bus_".format(repr(edisgo.network.mv_grid.station))
             else "bus1"
         )
         if mv_station_bus == "bus0":
@@ -238,18 +223,14 @@ def one_storage_per_feeder(
                 edisgo.network.pypsa.lines_t.q0.loc[:, repr(feeder)]
                 - edisgo.network.pypsa.lines_t.q1.loc[:, repr(feeder)]
             )
-        p_sign = pd.Series(
-            [-1 if _ < 0 else 1 for _ in diff], index=p_feeder.index
-        )
-        q_sign = pd.Series(
-            [-1 if _ < 0 else 1 for _ in diff_q], index=p_feeder.index
-        )
+        p_sign = pd.Series([-1 if _ < 0 else 1 for _ in diff], index=p_feeder.index)
+        q_sign = pd.Series([-1 if _ < 0 else 1 for _ in diff_q], index=p_feeder.index)
 
         # get allowed load factors per case
         lf = {
-            "feedin_case": edisgo.network.config[
-                "grid_expansion_load_factors"
-            ]["mv_feedin_case_line"],
+            "feedin_case": edisgo.network.config["grid_expansion_load_factors"][
+                "mv_feedin_case_line"
+            ],
             "load_case": network.config["grid_expansion_load_factors"][
                 "mv_load_case_line"
             ],
@@ -390,9 +371,11 @@ def one_storage_per_feeder(
         )
         return
     else:
-        equipment_changes_reinforcement_init = grid_expansion_results_init.equipment_changes.loc[
-            grid_expansion_results_init.equipment_changes.iteration_step > 0
-        ]
+        equipment_changes_reinforcement_init = (
+            grid_expansion_results_init.equipment_changes.loc[
+                grid_expansion_results_init.equipment_changes.iteration_step > 0
+            ]
+        )
         total_grid_expansion_costs = (
             grid_expansion_results_init.grid_expansion_costs.total_costs.sum()
         )
@@ -403,9 +386,7 @@ def one_storage_per_feeder(
             )
             return
         else:
-            network = equipment_changes_reinforcement_init.index[
-                0
-            ].grid.network
+            network = equipment_changes_reinforcement_init.index[0].grid.network
 
     # calculate network expansion costs without costs for new generators
     # to be used in feeder ranking
@@ -468,13 +449,8 @@ def one_storage_per_feeder(
                 # get new storage object
                 storage_obj = [
                     _
-                    for _ in edisgo.network.mv_grid.graph.nodes_by_attribute(
-                        "storage"
-                    )
-                    if _
-                    in list(
-                        edisgo.network.mv_grid.graph.neighbors(battery_node)
-                    )
+                    for _ in edisgo.network.mv_grid.graph.nodes_by_attribute("storage")
+                    if _ in list(edisgo.network.mv_grid.graph.neighbors(battery_node))
                 ][0]
                 storage_obj_list.append(storage_obj)
 
@@ -507,25 +483,20 @@ def one_storage_per_feeder(
                     )
 
                     costs_diff = (
-                        total_grid_expansion_costs
-                        - total_grid_expansion_costs_new
+                        total_grid_expansion_costs - total_grid_expansion_costs_new
                     )
 
                     if costs_diff > 0:
                         logger.debug(
                             "Storage integration in feeder {} reduced network "
-                            "expansion costs by {} kEuro.".format(
-                                feeder, costs_diff
-                            )
+                            "expansion costs by {} kEuro.".format(feeder, costs_diff)
                         )
 
                         if debug:
                             storage_repr.append(repr(storage_obj))
                             storage_size.append(storage_obj.nominal_power)
 
-                        total_grid_expansion_costs = (
-                            total_grid_expansion_costs_new
-                        )
+                        total_grid_expansion_costs = total_grid_expansion_costs_new
 
                     else:
                         logger.debug(
@@ -545,24 +516,17 @@ def one_storage_per_feeder(
                                 timeseries=storage_timeseries.p * 0,
                                 position=battery_node,
                                 voltage_level="mv",
-                                timeseries_reactive_power=storage_timeseries.q
-                                * 0,
+                                timeseries_reactive_power=storage_timeseries.q * 0,
                             )
-                            tools.assign_mv_feeder_to_nodes(
-                                edisgo.network.mv_grid
-                            )
+                            tools.assign_mv_feeder_to_nodes(edisgo.network.mv_grid)
 
                 else:
                     number_parallel_lines_before = _estimate_new_number_of_lines(
                         critical_lines_feeder
                     )
                     edisgo.analyze()
-                    critical_lines_feeder_new = _critical_lines_feeder(
-                        edisgo, feeder
-                    )
-                    critical_nodes_feeder_new = _critical_nodes_feeder(
-                        edisgo, feeder
-                    )
+                    critical_lines_feeder_new = _critical_lines_feeder(edisgo, feeder)
+                    critical_nodes_feeder_new = _critical_nodes_feeder(edisgo, feeder)
                     number_parallel_lines = _estimate_new_number_of_lines(
                         critical_lines_feeder_new
                     )
@@ -571,8 +535,7 @@ def one_storage_per_feeder(
                     # lines was reduced
                     if not critical_lines_feeder.empty:
                         diff_lines = (
-                            number_parallel_lines_before
-                            - number_parallel_lines
+                            number_parallel_lines_before - number_parallel_lines
                         )
                         # if it was not reduced check if there are critical
                         # nodes and if the number was reduced
@@ -583,14 +546,10 @@ def one_storage_per_feeder(
                                     "Storage integration in feeder {} did not "
                                     "reduce number of critical lines (number "
                                     "increased by {}), storage "
-                                    "is therefore removed.".format(
-                                        feeder, -diff_lines
-                                    )
+                                    "is therefore removed.".format(feeder, -diff_lines)
                                 )
 
-                                tools.disconnect_storage(
-                                    edisgo.network, storage_obj
-                                )
+                                tools.disconnect_storage(edisgo.network, storage_obj)
                                 p_storage = 0
 
                                 if debug:
@@ -619,9 +578,7 @@ def one_storage_per_feeder(
                                 )
                                 if debug:
                                     storage_repr.append(repr(storage_obj))
-                                    storage_size.append(
-                                        storage_obj.nominal_power
-                                    )
+                                    storage_size.append(storage_obj.nominal_power)
                         else:
                             logger.debug(
                                 "Storage integration in feeder {} reduced "
@@ -655,9 +612,7 @@ def one_storage_per_feeder(
                     break
 
             else:
-                logger.debug(
-                    "No storage integration in feeder {}.".format(feeder)
-                )
+                logger.debug("No storage integration in feeder {}.".format(feeder))
 
                 if debug:
                     storage_repr.append(None)
@@ -693,16 +648,12 @@ def one_storage_per_feeder(
             grid_expansion_results_new.grid_expansion_costs.total_costs.sum()
         )
 
-        costs_diff = (
-            total_grid_expansion_costs - total_grid_expansion_costs_new
-        )
+        costs_diff = total_grid_expansion_costs - total_grid_expansion_costs_new
 
         if costs_diff > 0:
             logger.info(
                 "Storage integration in network {} reduced network "
-                "expansion costs by {} kEuro.".format(
-                    edisgo.network.id, costs_diff
-                )
+                "expansion costs by {} kEuro.".format(edisgo.network.id, costs_diff)
             )
         else:
             logger.info(
@@ -722,15 +673,11 @@ def one_storage_per_feeder(
             total_grid_expansion_costs = (
                 grid_expansion_results_init.grid_expansion_costs.total_costs.sum()
             )
-            costs_diff = (
-                total_grid_expansion_costs - total_grid_expansion_costs_new
-            )
+            costs_diff = total_grid_expansion_costs - total_grid_expansion_costs_new
 
         logger.info(
             "Storage integration in network {} reduced network "
-            "expansion costs by {} kEuro.".format(
-                edisgo.network.id, costs_diff
-            )
+            "expansion costs by {} kEuro.".format(edisgo.network.id, costs_diff)
         )
 
     if debug:

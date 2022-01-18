@@ -8,9 +8,7 @@ if "READTHEDOCS" not in os.environ:
 from edisgo.tools.geo import proj2equidistant
 
 
-def grid_expansion_costs(
-    edisgo_obj, without_generator_import=False
-):
+def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     """
     Calculates topology expansion costs for each reinforced transformer and line
     in kEUR.
@@ -116,19 +114,13 @@ def grid_expansion_costs(
             equipment_changes.index.isin(edisgo_obj.topology._grids)
         ]
         added_transformers = transformers[transformers["change"] == "added"]
-        removed_transformers = transformers[
-            transformers["change"] == "removed"
-        ]
+        removed_transformers = transformers[transformers["change"] == "removed"]
         # check if any of the added transformers were later removed
         added_removed_transformers = added_transformers.loc[
-            added_transformers["equipment"].isin(
-                removed_transformers["equipment"]
-            )
+            added_transformers["equipment"].isin(removed_transformers["equipment"])
         ]
         added_transformers = added_transformers[
-            ~added_transformers["equipment"].isin(
-                added_removed_transformers.equipment
-            )
+            ~added_transformers["equipment"].isin(added_removed_transformers.equipment)
         ]
         # calculate costs for transformers
         all_trafos = edisgo_obj.topology.transformers_hvmv_df.append(
@@ -177,9 +169,7 @@ def grid_expansion_costs(
                             lines_added.index, "type_info"
                         ].values,
                         "total_costs": line_costs.costs.values,
-                        "length": (
-                            lines_added.quantity * lines_added.length
-                        ).values,
+                        "length": (lines_added.quantity * lines_added.length).values,
                         "quantity": lines_added.quantity.values,
                         "voltage_level": line_costs.voltage_level.values,
                     },
@@ -236,8 +226,7 @@ def line_expansion_costs(edisgo_obj, lines_names):
     projection = proj2equidistant(int(edisgo_obj.config["geo"]["srid"]))
     sqm2sqkm = 1e6
     population_density = edisgo_obj.topology.grid_district["population"] / (
-        transform(projection, edisgo_obj.topology.grid_district["geom"]).area
-        / sqm2sqkm
+        transform(projection, edisgo_obj.topology.grid_district["geom"]).area / sqm2sqkm
     )
     if population_density <= 500:
         population_density = "rural"
