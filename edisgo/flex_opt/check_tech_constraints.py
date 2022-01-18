@@ -1,8 +1,10 @@
-import pandas as pd
-import logging
-from math import sqrt
-import numpy as np
 import itertools
+import logging
+
+from math import sqrt
+
+import numpy as np
+import pandas as pd
 
 from edisgo.network.grids import LVGrid, MVGrid
 
@@ -147,14 +149,18 @@ def lines_allowed_load(edisgo_obj, voltage_level):
 
     # adapt i_lines_allowed for radial feeders
     buses_in_cycles = list(
-        set(itertools.chain.from_iterable(edisgo_obj.topology.rings)))
+        set(itertools.chain.from_iterable(edisgo_obj.topology.rings))
+    )
 
     # Find lines in cycles
     lines_in_cycles = list(
-        lines_df.loc[lines_df[[
-            'bus0', 'bus1']].isin(buses_in_cycles).all(axis=1)].index.values)
+        lines_df.loc[
+            lines_df[["bus0", "bus1"]].isin(buses_in_cycles).all(axis=1)
+        ].index.values
+    )
     lines_radial_feeders = list(
-        lines_df.loc[~lines_df.index.isin(lines_in_cycles)].index.values)
+        lines_df.loc[~lines_df.index.isin(lines_in_cycles)].index.values
+    )
 
     # lines in cycles have to be n-1 secure
     i_lines_allowed_per_case["load_case"] = (
@@ -167,9 +173,9 @@ def lines_allowed_load(edisgo_obj, voltage_level):
     )
 
     # lines in radial feeders are not n-1 secure anyways
-    i_lines_allowed_per_case["load_case"] = \
-        i_lines_allowed_per_case["load_case"].append(
-            lines_df.loc[lines_radial_feeders].s_nom / sqrt(3) / nominal_voltage)
+    i_lines_allowed_per_case["load_case"] = i_lines_allowed_per_case[
+        "load_case"
+    ].append(lines_df.loc[lines_radial_feeders].s_nom / sqrt(3) / nominal_voltage)
 
     i_lines_allowed = edisgo_obj.timeseries.timesteps_load_feedin_case.loc[
         edisgo_obj.results.i_res.index
@@ -198,8 +204,9 @@ def lines_relative_load(edisgo_obj, lines_allowed_load):
 
     """
     # get line load from power flow analysis
-    i_lines_pfa = edisgo_obj.results.i_res.loc[lines_allowed_load.index,
-                                               lines_allowed_load.columns]
+    i_lines_pfa = edisgo_obj.results.i_res.loc[
+        lines_allowed_load.index, lines_allowed_load.columns
+    ]
 
     return i_lines_pfa / lines_allowed_load
 
@@ -241,9 +248,7 @@ def _line_load(edisgo_obj, voltage_level):
     # calculate relative line load and keep maximum over-load of each line
     relative_i_res = lines_relative_load(edisgo_obj, i_lines_allowed)
 
-    crit_lines_relative_load = (
-        relative_i_res[relative_i_res > 1].max().dropna()
-    )
+    crit_lines_relative_load = relative_i_res[relative_i_res > 1].max().dropna()
     if len(crit_lines_relative_load) > 0:
         crit_lines = pd.concat(
             [
@@ -252,7 +257,7 @@ def _line_load(edisgo_obj, voltage_level):
             ],
             axis=1,
             keys=["max_rel_overload", "time_index"],
-            sort=True
+            sort=True,
         )
         crit_lines.loc[:, "voltage_level"] = voltage_level
     else:
@@ -325,9 +330,7 @@ def mv_lv_station_load(edisgo_obj):
 
     crit_stations = pd.DataFrame()
     for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
-        crit_stations = crit_stations.append(
-            _station_load(edisgo_obj, lv_grid)
-        )
+        crit_stations = crit_stations.append(_station_load(edisgo_obj, lv_grid))
     if not crit_stations.empty:
         logger.debug(
             "==> {} MV/LV station(s) has/have load issues.".format(
@@ -365,9 +368,9 @@ def _station_load(edisgo_obj, grid):
     if isinstance(grid, LVGrid):
         voltage_level = "lv"
         transformers_df = grid.transformers_df
-        s_station_pfa = edisgo_obj.results.s_res.loc[
-            :, transformers_df.index
-        ].sum(axis=1)
+        s_station_pfa = edisgo_obj.results.s_res.loc[:, transformers_df.index].sum(
+            axis=1
+        )
     elif isinstance(grid, MVGrid):
         voltage_level = "mv"
         transformers_df = edisgo_obj.topology.transformers_hvmv_df
@@ -376,7 +379,8 @@ def _station_load(edisgo_obj, grid):
         if not any(mv_lines.isin(edisgo_obj.results.i_res.columns)):
             raise ValueError(
                 "MV was not included in power flow analysis, wherefore load "
-                "of HV/MV station cannot be calculated.")
+                "of HV/MV station cannot be calculated."
+            )
         s_station_pfa = np.hypot(
             edisgo_obj.results.pfa_slack.p,
             edisgo_obj.results.pfa_slack.q,
@@ -533,9 +537,7 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
     crit_buses = {}
 
     if voltage_levels == "mv_lv":
-        v_limits_upper, v_limits_lower = _mv_allowed_voltage_limits(
-            edisgo_obj, "mv_lv"
-        )
+        v_limits_upper, v_limits_lower = _mv_allowed_voltage_limits(edisgo_obj, "mv_lv")
     elif not "lv" == voltage_levels:
         raise ValueError(
             "{} is not a valid option for input variable 'voltage_levels' in "
@@ -572,15 +574,11 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
     if crit_buses:
         if mode == "stations":
             logger.debug(
-                "==> {} LV station(s) has/have voltage issues.".format(
-                    len(crit_buses)
-                )
+                "==> {} LV station(s) has/have voltage issues.".format(len(crit_buses))
             )
         else:
             logger.debug(
-                "==> {} LV topology(s) has/have voltage issues.".format(
-                    len(crit_buses)
-                )
+                "==> {} LV topology(s) has/have voltage issues.".format(len(crit_buses))
             )
     else:
         if mode == "stations":
@@ -638,9 +636,9 @@ def _mv_allowed_voltage_limits(edisgo_obj, voltage_levels):
     offset = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
         "hv_mv_trafo_offset"
     ]
-    control_deviation = edisgo_obj.config[
-        "grid_expansion_allowed_voltage_deviations"
-    ]["hv_mv_trafo_control_deviation"]
+    control_deviation = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+        "hv_mv_trafo_control_deviation"
+    ]
 
     if voltage_levels == "mv_lv" or voltage_levels == "mv":
         v_allowed_per_case["feedin_case_upper"] = (
@@ -714,9 +712,7 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grid, mode):
         config_string = "mv_lv_station"
     else:
         # reference voltage is voltage at stations' secondary side
-        voltage_base = edisgo_obj.results.v_res.loc[
-            :, lv_grid.station.index.values[0]
-        ]
+        voltage_base = edisgo_obj.results.v_res.loc[:, lv_grid.station.index.values[0]]
         config_string = "lv"
 
     # calculate upper voltage limit in feed-in case and lower voltage limit in
@@ -754,12 +750,8 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grid, mode):
     load_feedin_case = edisgo_obj.timeseries.timesteps_load_feedin_case
     for t in timeindex:
         case = load_feedin_case.loc[t]
-        v_limits_upper.append(
-            v_allowed_per_case["{}_upper".format(case)].loc[t]
-        )
-        v_limits_lower.append(
-            v_allowed_per_case["{}_lower".format(case)].loc[t]
-        )
+        v_limits_upper.append(v_allowed_per_case["{}_upper".format(case)].loc[t])
+        v_limits_lower.append(v_allowed_per_case["{}_lower".format(case)].loc[t])
     v_limits_upper = pd.Series(v_limits_upper, index=timeindex)
     v_limits_lower = pd.Series(v_limits_lower, index=timeindex)
 
@@ -819,23 +811,19 @@ def voltage_diff(edisgo_obj, buses, v_dev_allowed_upper, v_dev_allowed_lower):
         (v_dev_allowed_lower.loc[v_mag_pu_pfa.index]).values,
         (v_mag_pu_pfa.shape[1], 1),
     )
-    overvoltage = v_mag_pu_pfa.T[
-        v_mag_pu_pfa.T > v_dev_allowed_upper_format
-    ].dropna(how="all")
-    undervoltage = v_mag_pu_pfa.T[
-        v_mag_pu_pfa.T < v_dev_allowed_lower_format
-    ].dropna(how="all")
+    overvoltage = v_mag_pu_pfa.T[v_mag_pu_pfa.T > v_dev_allowed_upper_format].dropna(
+        how="all"
+    )
+    undervoltage = v_mag_pu_pfa.T[v_mag_pu_pfa.T < v_dev_allowed_lower_format].dropna(
+        how="all"
+    )
     # sort buses with under- and overvoltage issues in a way that
     # worst case is saved
     buses_both = v_mag_pu_pfa[
         overvoltage[overvoltage.index.isin(undervoltage.index)].index
     ]
-    voltage_diff_ov = (
-        buses_both.T - v_dev_allowed_upper.loc[v_mag_pu_pfa.index].values
-    )
-    voltage_diff_uv = (
-        -buses_both.T + v_dev_allowed_lower.loc[v_mag_pu_pfa.index].values
-    )
+    voltage_diff_ov = buses_both.T - v_dev_allowed_upper.loc[v_mag_pu_pfa.index].values
+    voltage_diff_uv = -buses_both.T + v_dev_allowed_lower.loc[v_mag_pu_pfa.index].values
     voltage_diff_ov = voltage_diff_ov.loc[
         voltage_diff_ov.max(axis=1) > voltage_diff_uv.max(axis=1)
     ]
@@ -913,18 +901,12 @@ def _voltage_deviation(edisgo_obj, buses, v_limits_upper, v_limits_lower):
 
     # append to crit buses dataframe
     if not voltage_diff_ov.empty:
-        crit_buses_grid = crit_buses_grid.append(
-            _append_crit_buses(voltage_diff_ov)
-        )
+        crit_buses_grid = crit_buses_grid.append(_append_crit_buses(voltage_diff_ov))
     if not voltage_diff_uv.empty:
-        crit_buses_grid = crit_buses_grid.append(
-            _append_crit_buses(voltage_diff_uv)
-        )
+        crit_buses_grid = crit_buses_grid.append(_append_crit_buses(voltage_diff_uv))
 
     if not crit_buses_grid.empty:
-        crit_buses_grid.sort_values(
-            by=["v_diff_max"], ascending=False, inplace=True
-        )
+        crit_buses_grid.sort_values(by=["v_diff_max"], ascending=False, inplace=True)
 
     return crit_buses_grid
 

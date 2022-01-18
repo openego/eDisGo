@@ -3,7 +3,7 @@
 name: "Tests & coverage"
 
 on: [push]
-  
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,7 +22,7 @@ jobs:
         pip3 install -e $GITHUB_WORKSPACE[full]
         pip3 install coveralls
     - name: Run coverage
-      run: |  
+      run: |
         coverage run --source=edisgo -m pytest --runslow -vv
       #continue-on-error: true
     - name: Run coveralls

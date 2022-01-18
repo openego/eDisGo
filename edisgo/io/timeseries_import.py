@@ -1,7 +1,8 @@
-import os
-import pandas as pd
 import datetime
+import os
 from workalendar.europe import Germany
+
+import pandas as pd
 from demandlib import bdew as bdew, particular_profiles as profiles
 
 from edisgo.tools import session_scope
@@ -35,23 +36,17 @@ def feedin_oedb(config_data, weather_cell_ids, timeindex):
     """
 
     def _retrieve_timeseries_from_oedb(session, timeindex):
-        """Retrieve time series from oedb
-
-        """
+        """Retrieve time series from oedb"""
         # ToDo: add option to retrieve subset of time series instead of whole
         #  year
         # ToDo: find the reference power class for mvgrid/w_id and insert
         #  instead of 4
         feedin_sqla = (
-            session.query(
-                orm_feedin.w_id, orm_feedin.source, orm_feedin.feedin
-            )
+            session.query(orm_feedin.w_id, orm_feedin.source, orm_feedin.feedin)
             .filter(orm_feedin.w_id.in_(weather_cell_ids))
             .filter(orm_feedin.power_class.in_([0, 4]))
             .filter(orm_feedin_version)
-            .filter(
-                orm_feedin.weather_year.in_(timeindex.year.unique().values)
-            )
+            .filter(orm_feedin.weather_year.in_(timeindex.year.unique().values))
         )
 
         feedin = pd.read_sql_query(
@@ -66,9 +61,7 @@ def feedin_oedb(config_data, weather_cell_ids, timeindex):
     else:
         orm_feedin_name = config_data["versioned"]["res_feedin_data"]
         orm_feedin = supply.__getattribute__(orm_feedin_name)
-        orm_feedin_version = (
-            orm_feedin.version == config_data["versioned"]["version"]
-        )
+        orm_feedin_version = orm_feedin.version == config_data["versioned"]["version"]
 
     if timeindex is None:
         timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
@@ -95,8 +88,7 @@ def feedin_oedb(config_data, weather_cell_ids, timeindex):
 
     # rename 'wind_onshore' and 'wind_offshore' to 'wind'
     new_level = [
-        _ if _ not in ["wind_onshore"] else "wind"
-        for _ in feedin.columns.levels[0]
+        _ if _ not in ["wind_onshore"] else "wind" for _ in feedin.columns.levels[0]
     ]
     feedin.columns.set_levels(new_level, level=0, inplace=True)
 

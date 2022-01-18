@@ -10,20 +10,20 @@ function add_var_ne(pm, mip=true;maxexp=10)
         var(pm)[:ne] = @variable(pm.model,[i in ids(pm,:branch)], basename="ne",
             lowerbound = 1, upperbound=maxexp)
     end
-end 
+end
 
 function add_var_ne_continuous(pm)
     max_exp = ref(pm,:maxexp)
     var(pm)[:ne] = @variable(pm.model,[i in ids(pm,:branch)], basename="ne",
         lowerbound = 1, upperbound=max_exp)
-end 
+end
 
 function add_var_power_flow_ne(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd,bounded::Bool=false)
     """
     adds variable of active and reactive power flow for each branch to a power model
-    input: 
+    input:
         pm:: GenericPowerModel
-    
+
     """
     flow_lb, flow_ub = PowerModels.calc_branch_flow_bounds(ref(pm, nw, :branch), ref(pm, nw, :bus), cnd)
     n_branches = length(ref(pm,:branch))
@@ -44,12 +44,12 @@ function add_var_power_flow_ne(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd,bounded::Bool
 end
 
 
-function add_var_sqr_current_magnitude_ne(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd, bounded::Bool=false)  
+function add_var_sqr_current_magnitude_ne(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd, bounded::Bool=false)
     """
     adds variable of squared magnitude of current for each branch to a power model, can be bounded or not
-    input: 
+    input:
         pm:: GenericPowerModel
-    
+
     """
     buses = ref(pm,nw)[:bus]
     b = ref(pm,nw)[:branch]
@@ -64,17 +64,17 @@ function set_ub_flows_ne(pm,max_exp::Int,br_list::Array=[])
     """
         Function that sets upper bounds for the branch flow variables such as power flow, current flow
         If I_max is not a variable, get upperbounds from power rating Rate A in ref(pm), transform power rating into current rating
-        
+
         ------Input-----
         pm: GenericPowerModel, containing an JuMP model with the variables for the Branch Flow Model
         max_exp: maximal allowed line expansion
         br: List of branch numbers which are candidates for line expansion
-    
+
     """
     if isempty(br_list)
         br_list = [i for i in 1:length(ids(pm,:branch))]
     end
-    
+
     for (i,br) in ref(pm,:branch)
         f_bus = br["f_bus"]
         t_bus = br["t_bus"]
@@ -100,7 +100,7 @@ function set_ub_flows_ne(pm,max_exp::Int,br_list::Array=[])
                 ub_current_rating = ref(pm,:branch,i)["rate_a"] * lb_voltage
             end
         end
-        
+
         for (nw,network) in nws(pm)
             setupperbound(var(pm,nw,:cm,i),ub_current_rating^2)
             setupperbound(var(pm,nw,:p,idx),ub_power_rating)

@@ -84,7 +84,7 @@ function post_method_edisgo(pm)
                     break
                 end
             end
-        end    
+        end
     end
     maxexp = pm.data["max_exp"]
     set_ub_flows(pm,maxexp)
@@ -104,8 +104,8 @@ function post_method_edisgo(pm)
         socp = true
         cr = true
     else
-        @warn("relaxation scheme $(pm.data["relaxation"]) is not supported, 
-        choose from 
+        @warn("relaxation scheme $(pm.data["relaxation"]) is not supported,
+        choose from
             'none',
             'cr',
             'soc',
@@ -122,18 +122,18 @@ function post_method_edisgo(pm)
         end
         # current limit depending on maximal allowed current I_max variable
         if cr
-            constraint_current_rating_relaxed(pm,t)    
+            constraint_current_rating_relaxed(pm,t)
         else
             constraint_current_rating(pm,t)
         end
-    
+
         # adding constraint for branch flow model
         # Power Balance for each bus
         for i in ids(pm, :bus)
             constraint_power_balance(pm,i,t)
         end
         # Ohms Law and branch flow over each line
-        for i in ids(pm, :branch)        
+        for i in ids(pm, :branch)
             constraint_branch_flow(pm,i,t,pm.ccnd,socp)
             constraint_ohms_law(pm,i,t)
         end
@@ -161,7 +161,7 @@ function post_method_edisgo(pm)
     for (t,network) in nws(pm)
         constraint_curtailment_single(pm,nw=t)
     end
-    
+
     if pm.data["curtailment_allowance"]
         constraint_curtailment_allowed(pm)
     end
@@ -172,5 +172,3 @@ function post_method_edisgo(pm)
     end
 
 end
-
-

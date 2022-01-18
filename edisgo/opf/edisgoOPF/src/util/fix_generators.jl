@@ -12,7 +12,7 @@ function fix_generators(pm,scalefactor,gen2fix)
             pg_g = var(pm,n,:pg,g)
             ub_pg =  getupperbound(pg_g)
             JuMP.fix(pg_g,rand_vals[n]*ub_pg)
-            
+
             #lin_arr = pm.model.obj.aff.vars.==pg_g
             #aff_coeff = pm.model.obj.aff.coeffs[lin_arr][1]
             #new_obj -= aff_coeff*pg_g

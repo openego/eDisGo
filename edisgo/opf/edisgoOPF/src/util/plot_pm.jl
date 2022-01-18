@@ -5,7 +5,7 @@ using GraphPlot
 using Compose
 
 function plot_pm(pm,label=true)
-    
+
     ub_Imax = Dict()
     for (i, b) in ref(pm)[:branch]
         ub_Imax[i] = ((b["rate_a"]*b["tap"])/(ref(pm)[:bus][b["f_bus"]]["vmin"]))
@@ -44,14 +44,14 @@ function plot_pm(pm,label=true)
     nodecolor = [colorant"lightseagreen", colorant"lightblue",colorant"yellow",colorant"grey"]
     # membership color
     nodefillc = nodecolor[membership]
-    
+
     cmVal = Int[]
     label_edge = Int[]
     for i in 1:n_branches
         branch = ref(pm,:branch,i)
         f_bus = branch["f_bus"]
         t_bus = branch["t_bus"]
-        add_edge!(G,f_bus,t_bus) 
+        add_edge!(G,f_bus,t_bus)
     end
     # iterate over all edges, set labels and color category
     bus_keys = keys(ref(pm,:buspairs))
@@ -59,7 +59,7 @@ function plot_pm(pm,label=true)
         pair = (src(e),dst(e)) in bus_keys ? (src(e),dst(e)) : (dst(e),src(e))
         br = ref(pm,:buspairs)[pair]["branch"]
         push!(label_edge,br)
-        if haskey(var(pm),:I_max)       
+        if haskey(var(pm),:I_max)
             if solved
                 cmi = ceil(Int,round(getvalue(var(pm,:I_max,br))/ub_Imax[br]*100)/100)#getlowerbound(var(pm,:I_max,br))
                 if cmi >= 4
@@ -70,9 +70,9 @@ function plot_pm(pm,label=true)
                         cmi = ceil(Int,round(getlowerbound(var(pm,:I_max,br))/ub_Imax[br]*1000)/1000)
                     else
                         cmi = 5
-                    end   
+                    end
             end
-            push!(cmVal,cmi) 
+            push!(cmVal,cmi)
         end
     end
     # edgecolor: no expansion, 2x, 3x, 4x, edge is a free variable
@@ -94,7 +94,7 @@ function plot_pm(pm,label=true)
         # set color to grey for all edges if opt model is not set up
         edgestrokec = colorant"grey"
     end
-    
+
     xcor = zeros(n_vertices)
     ycor = zeros(n_vertices)
     visit_nodes = []
@@ -116,7 +116,7 @@ function coor_next_node(G,xcor,ycor,current_node,last_node,visit_nodes,n_vertice
     if length(visit_nodes)==n_vertices
         return
     elseif current_node in visit_nodes
-        return     
+        return
     else
         push!(visit_nodes,current_node)
 
@@ -127,17 +127,17 @@ function coor_next_node(G,xcor,ycor,current_node,last_node,visit_nodes,n_vertice
                 continue
             end
             current_x +=1
-            xcor[next_node] = current_x   
+            xcor[next_node] = current_x
             while length(findall((xcor.==current_x).&(ycor.==current_y)))>=1
                 current_y +=1
             end
             ycor[next_node] = current_y
-            
+
             coor_next_node(G,xcor,ycor,next_node,current_node,visit_nodes,n_vertices)
             current_x = xcor[last_node] + 1
-            current_y +=1    
+            current_y +=1
         end
-   
+
     end
 end
 function create_node_membership(pm)
@@ -170,7 +170,7 @@ function create_node_membership(pm,fixGen::Bool)
                 bus_type = 5
             else
                 bus_type = bus["bus_type"]
-            end    
+            end
         elseif length(ref(pm, :bus_loads, i)) > 0
             bus_type = 4
         else
@@ -234,4 +234,3 @@ function create_legend(G,xcor,ycor,fixGen::Bool,membership)
     append!(nodelab,["bus","gen","slack","load","fixGen"])
     return G_copy,xcor_copy,ycor_copy,nodefillc_copy,nodelab
 end
-

@@ -1,5 +1,5 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pytest
 
 from edisgo.io import timeseries_import
@@ -17,24 +17,26 @@ class TestTimeseriesImport:
         timeindex = pd.date_range('1/1/2011', periods=8760, freq='H')
         feedin = timeseries_import.feedin_oedb(
             self.config, weather_cells, timeindex)
-        assert len(feedin['solar'][1122074]) == 8760
-        assert len(feedin['solar'][1122075]) == 8760
-        assert len(feedin['wind'][1122074]) == 8760
-        assert len(feedin['wind'][1122075]) == 8760
+        assert len(feedin["solar"][1122074]) == 8760
+        assert len(feedin["solar"][1122075]) == 8760
+        assert len(feedin["wind"][1122074]) == 8760
+        assert len(feedin["wind"][1122075]) == 8760
         assert np.isclose(
-            feedin['solar'][1122074][timeindex[13]], 0.07494)
+            feedin["solar"][1122074][timeindex[13]], 0.07494)
         assert np.isclose(
-            feedin['wind'][1122074][timeindex[37]], 0.03978)
+            feedin["wind"][1122074][timeindex[37]], 0.03978)
         assert np.isclose(
-            feedin['solar'][1122075][timeindex[61]], 0.42382)
+            feedin["solar"][1122075][timeindex[61]], 0.42382)
         assert np.isclose(
-            feedin['wind'][1122075][timeindex[1356]], 0.10636)
+            feedin["wind"][1122075][timeindex[1356]], 0.10636)
 
         # check trying to import different year
-        msg = "The year you inserted could not be imported from " \
-              "the oedb. So far only 2011 is provided. Please " \
-              "check website for updates."
-        timeindex = pd.date_range('1/1/2018', periods=8760, freq='H')
+        msg = (
+            "The year you inserted could not be imported from "
+            "the oedb. So far only 2011 is provided. Please "
+            "check website for updates."
+        )
+        timeindex = pd.date_range("1/1/2018", periods=8760, freq="H")
         with pytest.raises(ValueError, match=msg):
             feedin = timeseries_import.feedin_oedb(
                 config, weather_cells, timeindex)

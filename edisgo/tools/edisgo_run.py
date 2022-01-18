@@ -1,18 +1,17 @@
-import os
-import sys
+import argparse
 import glob
+import logging
+import multiprocessing as mp
+import os
 import re
+import sys
 
 import multiprocess as mp2
-import multiprocessing as mp
-
-import argparse
-import logging
-
 import pandas as pd
+
 from edisgo import EDisGo
-from edisgo.network.results import Results
 from edisgo.flex_opt.exceptions import MaximumIterationError
+from edisgo.network.results import Results
 
 
 def setup_logging(
@@ -57,87 +56,53 @@ def setup_logging(
     return root_logger
 
 
-def _get_griddistrict(ding0_filepath):
-    """
-    Just get the network district number from ding0 data file path
-
-    Parameters
-    ----------
-    ding0_filepath : str
-        Path to ding0 data ending typically
-        `/path/to/ding0_data/"ding0_grids__" + str(``grid_district``) + ".xxx"`
-    Returns
-    -------
-    int
-        grid_district number
-    """
-    grid_district = os.path.basename(ding0_filepath)
-    grid_district_search = re.search("[_]+\d+", grid_district)
-    if grid_district_search:
-        grid_district = int(grid_district_search.group(0)[2:])
-        return grid_district
-    else:
-        raise (KeyError("Grid District not found in ".format(grid_district)))
-
-
 def run_edisgo_basic(
-    ding0_filepath,
-    generator_scenario=None,
-    analysis="worst-case",
-    *edisgo_grid
+    ding0_path, generator_scenario=None, analysis="worst-case", *edisgo_grid
 ):
     """
-    Analyze edisgo network extension cost as reference scenario
-
-    ToDo: adapt to refactored code!
+    Determine network expansion costs for given ding0 grid and scenario.
 
     Parameters
     ----------
-    ding0_filepath : str
-        Path to ding0 data ending typically
-        `/path/to/ding0_data/"ding0_grids__" + str(``grid_district``) + ".xxx"`
+    ding0_path : str
+        Path to ding0 network csv data.
 
     analysis : str
-        Either 'worst-case' or 'timeseries'
+        Either 'worst-case' or 'timeseries'.
 
     generator_scenario : None or :obj:`str`
         If provided defines which scenario of future generator park to use
         and invokes import of these generators. Possible options are 'nep2035'
         and 'ego100'.
 
+    edisgo_grid : :class:`~.EDisGo` (optional)
+        If an EDisGo object is provided it is used instead of creating a new
+        object using parameters `ding0_path` and `analysis`.
+
     Returns
     -------
-    edisgo_grid : :class:`~.network.network.EDisGo`
-        eDisGo network container
-    costs : :pandas:`pandas.Dataframe<DataFrame>`
-        Cost of network extension
+    edisgo_grid : :class:`~.EDisGo`
+    costs : :pandas:`pandas.DataFrame<DataFrame>`
+        Costs of network expansion
     grid_issues : dict
-        Grids resulting in an error including error message
+        Log for remaining grid issues after network expansion. For grids
+        resulting in an error this gives the error message.
 
     """
-    raise NotImplementedError
-
-    grid_district = _get_griddistrict(ding0_filepath)
 
     grid_issues = {}
 
-    logging.info(
-        "Grid expansion for MV network district {}".format(grid_district)
-    )
-
-    if (
-        edisgo_grid
-    ):  # if an edisgo_grid is passed in arg then ignore everything else
+    if edisgo_grid:  # if an edisgo_grid is passed in arg then ignore everything else
         edisgo_grid = edisgo_grid[0]
     else:
         try:
             if "worst-case" in analysis:
                 edisgo_grid = EDisGo(
-                    ding0_grid=ding0_filepath, worst_case_analysis=analysis
+                    ding0_grid=ding0_path, worst_case_analysis=analysis
                 )
             elif "timeseries" in analysis:
                 edisgo_grid = EDisGo(
-                    ding0_grid=ding0_filepath,
+                    ding0_grid=ding0_path,
                     timeseries_generation_fluctuating="oedb",
                     timeseries_load="demandlib",
                 )
@@ -148,16 +113,14 @@ def run_edisgo_basic(
                 {"network": grid_district, "msg": str(e)},
             )
 
+    logging.info("Grid expansion for MV network {}".format(edisgo_grid.topology.id))
+
     # Import generators
     if generator_scenario:
-        logging.info(
-            "Grid expansion for scenario '{}'.".format(generator_scenario)
-        )
+        logging.info("Grid expansion for scenario '{}'.".format(generator_scenario))
         edisgo_grid.import_generators(generator_scenario=generator_scenario)
     else:
-        logging.info(
-            "Grid expansion with no generator imports based on scenario"
-        )
+        logging.info("Grid expansion with status quo generator capacities.")
 
     try:
         # Do network reinforcement
@@ -221,7 +184,6 @@ def run_edisgo_twice(run_args):
     all_grid_issues : dict
         Remaining overloading or over-voltage issues in network
     """
-    raise NotImplementedError
 
     # base case with no generator import
     (
@@ -231,9 +193,9 @@ def run_edisgo_twice(run_args):
     ) = run_edisgo_basic(*run_args)
 
     if edisgo_grid:
-        # clear the pypsa object and results from edisgo_grid
-        edisgo_grid.network.results = Results(edisgo_grid.network)
-        edisgo_grid.network.pypsa = None
+        # clear the results object
+        edisgo_grid.results = Results(edisgo_grid)
+        edisgo_grid.config = None
 
         # case after generator import
         # run_args = [ding0_filename]
@@ -401,17 +363,17 @@ def run_edisgo_pool_flexible(
 def edisgo_run():
     # create the argument parser
     example_text = """Examples
-    
+
     ...assumes all files located in PWD.
-    
+
     Analyze a single network in 'worst-case'
-    
+
          edisgo_run -f ding0_grids__997.pkl -wc
-         
-         
-    Analyze multiple grids in 'worst-case' using parallelization. Grid IDs are 
+
+
+    Analyze multiple grids in 'worst-case' using parallelization. Grid IDs are
     specified by the grids_list.txt.
-    
+
          edisgo_run -ds '' grids_list.txt ding0_grids__{}.pkl -wc --parallel
          """
     parser = argparse.ArgumentParser(
@@ -556,19 +518,15 @@ def edisgo_run():
         with open(args.ding0_dir_select[1], "r") as file_handle:
             ding0_file_list_grid_district_numbers = list(file_handle)
             ding0_file_list_grid_district_numbers = [
-                _.splitlines()[0]
-                for _ in ding0_file_list_grid_district_numbers
+                _.splitlines()[0] for _ in ding0_file_list_grid_district_numbers
             ]
 
         ding0_file_list = map(
-            lambda x: args.ding0_dir_select[0]
-            + args.ding0_dir_select[2].format(x),
+            lambda x: args.ding0_dir_select[0] + args.ding0_dir_select[2].format(x),
             ding0_file_list_grid_district_numbers,
         )
     else:
-        raise FileNotFoundError(
-            "Some of the Arguments for input files are missing."
-        )
+        raise FileNotFoundError("Some of the Arguments for input files are missing.")
 
     # this is the serial version of the run system
     run_func = run_edisgo_basic
@@ -631,9 +589,7 @@ def edisgo_run():
     all_costs = pd.concat(all_costs, ignore_index=True)
 
     # write costs and error messages to csv files
-    pd.DataFrame(all_grid_issues_before_geno_import).dropna(
-        axis=0, how="all"
-    ).to_csv(
+    pd.DataFrame(all_grid_issues_before_geno_import).dropna(axis=0, how="all").to_csv(
         args.out_dir + exec_time + "_" + "grid_issues_before_geno_import.csv",
         index=False,
     )
