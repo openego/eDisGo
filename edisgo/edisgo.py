@@ -344,7 +344,7 @@ class EDisGo:
             lv_grid_name = kwargs.get("lv_grid_name", None)
             if not lv_grid_name:
                 raise ValueError(
-                    "For exporting lv grids, name of lv_grid has " "to be provided."
+                    "For exporting lv grids, name of lv_grid has to be provided."
                 )
             return pypsa_io.to_pypsa(
                 self.topology._grids[lv_grid_name],
@@ -1404,7 +1404,7 @@ class EDisGo:
 
                     else:
                         raise ValueError(
-                            "Time series for charging points need " "to be provided."
+                            "Time series for charging points need to be provided."
                         )
 
                 else:

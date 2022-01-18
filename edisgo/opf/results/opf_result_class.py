@@ -195,7 +195,7 @@ class OPFResults:
                 self.generators_t.qg = qg_t
             except:
                 logger.warning(
-                    "Error in writing OPF solutions for slack time " "series."
+                    "Error in writing OPF solutions for slack time series."
                 )
         else:
             try:
@@ -212,7 +212,7 @@ class OPFResults:
                 self.generators_t.qg = qg_t
             except:
                 logger.warning(
-                    "Error in writing OPF solutions for generator time " "series."
+                    "Error in writing OPF solutions for generator time series."
                 )
 
     def set_load_variables(self, pypsa_net):

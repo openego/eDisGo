@@ -66,7 +66,7 @@ class TestImportFromDing0:
             except ValueError as e:
                 assert e.args[
                     0
-                ] == "{} have duplicate entry in one " "of the components dataframes.".format(
+                ] == "{} have duplicate entry in one of the components dataframes.".format(
                     name
                 )
             # reset dataframe
@@ -125,7 +125,7 @@ class TestImportFromDing0:
             except ValueError as e:
                 assert e.args[
                     0
-                ] == "The following {} have bus{} which are " "not defined: {}.".format(
+                ] == "The following {} have bus{} which are not defined: {}.".format(
                     branch_component, i, new_comp.name
                 )
             # reset dataframe
@@ -163,7 +163,7 @@ class TestImportFromDing0:
             ding0_import._validate_ding0_grid_import(self.topology)
             raise Exception("Appending components buses did not work properly.")
         except ValueError as e:
-            assert e.args[0] == "The following buses are isolated: " "{}.".format(
+            assert e.args[0] == "The following buses are isolated: {}.".format(
                 bus.name
             )
 

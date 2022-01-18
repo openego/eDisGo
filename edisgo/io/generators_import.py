@@ -626,7 +626,7 @@ def _update_grids(
         geom = _check_mv_generator_geom(new_gens_mv.loc[id, :])
         if geom is None:
             logger.warning(
-                "Generator {} has no geom entry and will " "not be imported!".format(id)
+                "Generator {} has no geom entry and will not be imported!".format(id)
             )
             new_gens_mv.drop(id)
             continue

@@ -248,7 +248,7 @@ def select_cable(edisgo_obj, level, apparent_power):
         available_cables = edisgo_obj.topology.equipment_data["lv_cables"]
     else:
         raise ValueError(
-            "Specified voltage level is not valid. Must " "either be 'mv' or 'lv'."
+            "Specified voltage level is not valid. Must either be 'mv' or 'lv'."
         )
 
     suitable_cables = available_cables[

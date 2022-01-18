@@ -487,7 +487,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
             elif grid.lines_df.at[crit_line_name, "bus1"] == pred_node:
                 edisgo_obj.topology._lines_df.at[crit_line_name, "bus1"] = station_node
             else:
-                raise ValueError("Bus not in line buses. " "Please check.")
+                raise ValueError("Bus not in line buses. Please check.")
             # change line length and type
             edisgo_obj.topology._lines_df.at[
                 crit_line_name, "length"

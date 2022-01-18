@@ -130,7 +130,7 @@ def pypsa2ppc(psa_net):
             )
         )
     except IndexError as e:
-        print("No load timeseries. Create empty dicts " "for timeseries of load")
+        print("No load timeseries. Create empty dicts for timeseries of load")
         load_dict = dict()
     try:
         gen_dict = _build_generator_dict(psa_net, ppc)

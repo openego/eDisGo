@@ -1437,7 +1437,7 @@ class Topology:
         """
         if not self._check_line_for_removal(name):
             raise AssertionError(
-                "Removal of line {} would create isolated " "node.".format(name)
+                "Removal of line {} would create isolated node.".format(name)
             )
 
         # backup buses of line and check if buses can be removed as well

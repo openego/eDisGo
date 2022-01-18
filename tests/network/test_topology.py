@@ -411,7 +411,7 @@ class TestTopology:
         )
 
         # test error raising when given buses are not valid
-        msg = "Specified bus Testbus is not valid as it is not defined in " "buses_df."
+        msg = "Specified bus Testbus is not valid as it is not defined in buses_df."
         with pytest.raises(ValueError, match=msg):
             self.topology.add_line(
                 bus0="Testbus",
@@ -421,7 +421,7 @@ class TestTopology:
                 type_info="NA2XS2Y 3x1x185 RM/25",
                 x=2,
             )
-        msg = "Specified bus Testbus1 is not valid as it is not defined in " "buses_df."
+        msg = "Specified bus Testbus1 is not valid as it is not defined in buses_df."
         with pytest.raises(ValueError, match=msg):
             self.topology.add_line(
                 bus0=bus0,

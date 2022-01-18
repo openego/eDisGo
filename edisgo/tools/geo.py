@@ -178,7 +178,7 @@ def calc_geo_dist_vincenty(
     if branch_length == 0:
         branch_length = 1
         logger.debug(
-            "Geo distance is zero, check objects' positions. " "Distance is set to 1m."
+            "Geo distance is zero, check objects' positions. Distance is set to 1m."
         )
     # ===================================================================
 
