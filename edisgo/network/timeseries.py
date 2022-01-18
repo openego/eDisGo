@@ -1,11 +1,8 @@
-import datetime
 import logging
 import os
 
 import numpy as np
 import pandas as pd
-
-from workalendar.europe import Germany
 
 from edisgo.io import timeseries_import
 from edisgo.tools.tools import (
