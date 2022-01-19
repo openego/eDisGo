@@ -1,6 +1,7 @@
 import logging
 import os
 
+import geopandas as gpd
 import matplotlib
 import numpy as np
 import pandas as pd
@@ -17,11 +18,6 @@ if "READTHEDOCS" not in os.environ:
     from egoio.db_tables.model_draft import EgoGridMvGriddistrict
     from geoalchemy2 import shape
 
-    geopandas = True
-    try:
-        import geopandas as gpd
-    except Exception:
-        geopandas = False
     contextily = True
     try:
         import contextily as ctx
@@ -301,8 +297,7 @@ def mv_grid_topology(
         is given.
         Default: False.
     grid_district_geom : :obj:`Boolean`
-        If True network district polygon is plotted in the background. This also
-        requires the geopandas package to be installed. Default: True.
+        If True network district polygon is plotted in the background. Default: True.
     background_map : :obj:`Boolean`
         If True map is drawn in the background. This also requires the
         contextily package to be installed. Default: True.
@@ -647,7 +642,7 @@ def mv_grid_topology(
     ax = plt.gca()
 
     # plot network district
-    if grid_district_geom and geopandas:
+    if grid_district_geom:
         try:
             projection = 3857 if contextily and background_map else 4326
             crs = {

@@ -2,6 +2,7 @@ import os
 
 from math import pi, sqrt
 
+import geopandas as gpd
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -17,12 +18,6 @@ if "READTHEDOCS" not in os.environ:
     from egoio.db_tables import climate
     from shapely.geometry.multipolygon import MultiPolygon
     from shapely.wkt import loads as wkt_loads
-
-    geopandas = True
-    try:
-        import geopandas as gpd
-    except Exception:
-        geopandas = False
 
 
 def select_worstcase_snapshots(edisgo_obj):
