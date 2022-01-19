@@ -117,7 +117,10 @@ class Test_get_component_timeseries:
         timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
         ts_gen_dispatchable = pd.DataFrame({"other": [0.775] * 8760}, index=timeindex)
         # test error raising in case of missing ts for dispatchable gens
-        msg = 'Your input for "timeseries_generation_dispatchable" is not valid.'
+        msg = (
+            "Your input for 'timeseries_generation_dispatchable' is not valid. Mode: "
+            "None"
+        )
         with pytest.raises(ValueError, match=msg):
             timeseries.get_component_timeseries(
                 edisgo_obj=self, timeseries_generation_fluctuating="oedb"
