@@ -126,7 +126,7 @@ class Results:
         """
         try:
             return self._pfa_p
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @pfa_p.setter
@@ -171,7 +171,7 @@ class Results:
         """
         try:
             return self._pfa_q
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @pfa_q.setter
@@ -205,7 +205,7 @@ class Results:
         """
         try:
             return self._v_res
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @v_res.setter
@@ -240,7 +240,7 @@ class Results:
         """
         try:
             return self._i_res
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @i_res.setter
@@ -328,7 +328,7 @@ class Results:
         """
         try:
             return self._equipment_changes
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @equipment_changes.setter
@@ -387,7 +387,7 @@ class Results:
         """
         try:
             return self._grid_expansion_costs
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @grid_expansion_costs.setter
@@ -437,7 +437,7 @@ class Results:
         """
         try:
             return self._grid_losses
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @grid_losses.setter
@@ -477,7 +477,7 @@ class Results:
         """
         try:
             return self._pfa_slack
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @pfa_slack.setter
@@ -514,7 +514,7 @@ class Results:
         """
         try:
             return self._pfa_v_mag_pu_seed
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @pfa_v_mag_pu_seed.setter
@@ -552,7 +552,7 @@ class Results:
         """
         try:
             return self._pfa_v_ang_seed
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @pfa_v_ang_seed.setter
@@ -709,7 +709,7 @@ class Results:
         """
         try:
             return self._unresolved_issues
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @unresolved_issues.setter
@@ -988,7 +988,7 @@ class Results:
             }
             if not save_seed:
                 parameters["powerflow_results"] = [
-                    _ for _ in parameters["powerflow_results"] if not "seed" in _
+                    _ for _ in parameters["powerflow_results"] if "seed" not in _
                 ]
 
         if not isinstance(parameters, dict):
@@ -1010,8 +1010,8 @@ class Results:
                 )
                 logger.error(message)
                 raise KeyError(message)
-            except:
-                raise
+            except Exception:
+                raise Exception
 
         # save measures
         pd.DataFrame(data={"measure": self.measures}).to_csv(

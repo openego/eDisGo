@@ -147,7 +147,7 @@ class TimeSeries:
         """
         try:
             return self._generators_active_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @generators_active_power.setter
@@ -167,7 +167,7 @@ class TimeSeries:
         """
         try:
             return self._generators_reactive_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @generators_reactive_power.setter
@@ -187,7 +187,7 @@ class TimeSeries:
         """
         try:
             return self._loads_active_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @loads_active_power.setter
@@ -207,7 +207,7 @@ class TimeSeries:
         """
         try:
             return self._loads_reactive_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @loads_reactive_power.setter
@@ -227,7 +227,7 @@ class TimeSeries:
         """
         try:
             return self._storage_units_active_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @storage_units_active_power.setter
@@ -247,7 +247,7 @@ class TimeSeries:
         """
         try:
             return self._storage_units_reactive_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @storage_units_reactive_power.setter
@@ -267,7 +267,7 @@ class TimeSeries:
         """
         try:
             return self._charging_points_active_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @charging_points_active_power.setter
@@ -287,7 +287,7 @@ class TimeSeries:
         """
         try:
             return self._charging_points_reactive_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @charging_points_reactive_power.setter
@@ -519,7 +519,8 @@ def get_component_timeseries(edisgo_obj, **kwargs):
         parameters except of `config-data` will be ignored. Default: None.
         Mode can also be set to manual in order to give standard timeseries,
         that are not obtained from oedb or demandlib.
-    timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
+    timeseries_generation_fluctuating : :obj:`str` or \
+        :pandas:`pandas.DataFrame<dataframe>`, optional
         Parameter used to obtain time series for active power feed-in of
         fluctuating renewables wind and solar.
         Possible options are:
@@ -548,7 +549,8 @@ def get_component_timeseries(edisgo_obj, **kwargs):
 
         Use 'other' if you don't want to explicitly provide every possible
         type. Default: None.
-    timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
+    timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, \
+        optional
         DataFrame with time series of normalized reactive power (normalized by
         the rated nominal active power) per technology and weather cell. Index
         needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
@@ -659,15 +661,15 @@ def get_component_timeseries(edisgo_obj, **kwargs):
         if isinstance(ts, pd.DataFrame):
             edisgo_obj.timeseries.generation_fluctuating = ts
         elif isinstance(ts, str) and ts == "oedb":
-            edisgo_obj.timeseries.generation_fluctuating = \
+            edisgo_obj.timeseries.generation_fluctuating = (
                 timeseries_import.feedin_oedb(
-                    config_data, weather_cell_ids, kwargs.get(
-                        "timeindex", None))
+                    config_data, weather_cell_ids, kwargs.get("timeindex", None)
+                )
+            )
         else:
             raise ValueError(
-                "Your input for "
-                '"timeseries_generation_fluctuating" is not '
-                "valid.".format(mode)
+                "Your input for 'timeseries_generation_fluctuating' is not valid. "
+                f"Mode: {mode}"
             )
         # feed-in time series for dispatchable generators
         ts = kwargs.get("timeseries_generation_dispatchable", None)
@@ -679,8 +681,8 @@ def get_component_timeseries(edisgo_obj, **kwargs):
             gens = edisgo_obj.topology.generators_df
             if not (gens.type.isin(["solar", "wind"])).all():
                 raise ValueError(
-                    'Your input for "timeseries_generation_dispatchable" '
-                    "is not valid.".format(mode)
+                    "Your input for 'timeseries_generation_dispatchable' "
+                    f"is not valid. Mode: {mode}"
                 )
         # reactive power time series for all generators
         ts = kwargs.get("timeseries_generation_reactive_power", None)
@@ -699,14 +701,12 @@ def get_component_timeseries(edisgo_obj, **kwargs):
         if isinstance(ts, pd.DataFrame):
             edisgo_obj.timeseries.load = ts
         elif ts == "demandlib":
-            edisgo_obj.timeseries.load = \
-                timeseries_import.load_time_series_demandlib(
-                    config_data,
-                    year=edisgo_obj.timeseries.timeindex[0].year
-                )
+            edisgo_obj.timeseries.load = timeseries_import.load_time_series_demandlib(
+                config_data, year=edisgo_obj.timeseries.timeindex[0].year
+            )
         else:
             raise ValueError(
-                "Your input for 'timeseries_load' is not valid.".format(mode)
+                f"Your input for 'timeseries_load' is not valid. Mode: {mode}"
             )
         # reactive power timeseries for loads
         ts = kwargs.get("timeseries_load_reactive_power", None)
@@ -1241,7 +1241,7 @@ def _check_timeindex(edisgo_obj):
         assert edisgo_obj.timeseries.timeindex.isin(
             edisgo_obj.timeseries.storage_units_active_power.index
         ).all()
-    except:
+    except Exception:
         message = "Time index of feed-in and load time series does not match."
         logging.error(message)
         raise KeyError(message)

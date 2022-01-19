@@ -610,7 +610,7 @@ def _update_grids(
 
         # drop types not in p_target from new_gens
         for gen_type in new_gens.generator_type.unique():
-            if not gen_type in p_target.keys():
+            if gen_type not in p_target.keys():
                 new_gens.drop(
                     new_gens[new_gens["generator_type"] == gen_type].index,
                     inplace=True,

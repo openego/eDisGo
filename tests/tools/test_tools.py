@@ -1,5 +1,3 @@
-import os
-
 from math import sqrt
 
 import numpy as np
@@ -8,8 +6,6 @@ import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
 from edisgo import EDisGo
-from edisgo.io import ding0_import
-from edisgo.network.topology import Topology
 from edisgo.tools import tools
 
 

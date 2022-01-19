@@ -421,7 +421,8 @@ class Generator(Component):
             Nominal power of generator in MW.
 
         """
-        # ToDo: Should this change the time series as well? (same for loads, and type setter...)
+        # TODO: Should this change the time series as well?
+        #  (same for loads, and type setter...)
         return self.topology.generators_df.at[self.id, "p_nom"]
 
     @nominal_power.setter

@@ -15,15 +15,13 @@ from edisgo.tools import session_scope
 if "READTHEDOCS" not in os.environ:
 
     from egoio.db_tables import climate
-    from egoio.tools.db import connection
-
     from shapely.geometry.multipolygon import MultiPolygon
     from shapely.wkt import loads as wkt_loads
 
     geopandas = True
     try:
         import geopandas as gpd
-    except:
+    except Exception:
         geopandas = False
 
 
@@ -78,7 +76,8 @@ def calculate_relative_line_load(edisgo_obj, lines=None, timesteps=None):
         Line names/representatives of lines to calculate line loading for. If
         None, line loading is calculated for all lines in the network.
         Default: None.
-    timesteps : :pandas:`pandas.Timestamp<Timestamp>` or list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
+    timesteps : :pandas:`pandas.Timestamp<Timestamp>` or \
+        list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
         Specifies time steps to calculate line loading for. If timesteps is
         None, all time steps power flow analysis was conducted for are used.
         Default: None.

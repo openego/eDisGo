@@ -74,7 +74,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         * 'mvlv' to export MV network level only. This includes cumulative load
           and generation from underlying LV network aggregated at respective LV
           station's secondary side.
-          #ToDo change name of this mode or use kwarg to define where to aggregate lv loads and generation
+          TODO: change name of this mode or use kwarg to define where to aggregate lv
+           loads and generation
         * 'lv' to export specified LV network only.
     timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
         :pandas:`pandas.Timestamp<Timestamp>`
@@ -670,7 +671,7 @@ def _append_lv_components(
             raise ValueError("Aggregation type for generators invalid.")
         lv_components[comp] = lv_components[comp].append(comps_aggr)
     elif comp == "StorageUnit":
-        if aggregate_storages == None:
+        if aggregate_storages is None:
             comps_aggr = comps.loc[:, ["bus", "control"]]
         elif aggregate_storages == "all":
             comps_aggr = pd.DataFrame(
@@ -817,8 +818,9 @@ def _check_integrity_of_pypsa(pypsa_network):
     Checks whether the provided pypsa network is calculable.
 
     Isolated nodes,
-    duplicate labels, that every load, generator and storage unit has a
-    time series for active and reactive power, and completeness of buses and branch elements are checked.
+    duplicate labels, that every load, generator and storage unit has a time series for
+    active and reactive power, and completeness of buses and branch elements are
+    checked.
 
     Parameters
     ----------
@@ -874,8 +876,8 @@ def _check_integrity_of_pypsa(pypsa_network):
             ]
             if not missing.empty:
                 raise ValueError(
-                    "The following components have no `{}` time "
-                    "series.".format(missing.index, i)
+                    f"The following components have no '{i}' time "
+                    f"series. Components: {missing.index}"
                 )
 
     missing = pypsa_network.buses.loc[
@@ -886,7 +888,7 @@ def _check_integrity_of_pypsa(pypsa_network):
     if not missing.empty:
         raise ValueError(
             "The following components have no `v_mag_pu_set` time "
-            "series.".format(missing.index)
+            f"series. Components: {missing.index}"
         )
 
     # check for duplicates in p_set and q_set
@@ -923,7 +925,8 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     pypsa : :pypsa:`pypsa.Network<network>`
         The PyPSA `Network container
         <https://www.pypsa.org/doc/components.html#network>`_
-    timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or :pandas:`pandas.Timestamp<Timestamp>`
+    timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+        :pandas:`pandas.Timestamp<Timestamp>`
         Time steps for which latest power flow analysis was conducted and
         for which to retrieve pypsa results.
 

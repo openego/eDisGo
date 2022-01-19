@@ -100,7 +100,9 @@ def one_storage_per_feeder(
         )
 
     def _shortest_path(node):
-        if isinstance(node, LVStation):
+        # TODO: LVStation class is not used anymore
+        #  resolve this when storage positioning is refactored
+        if isinstance(node, LVStation):  # noqa: F821
             return len(nx.shortest_path(node.mv_grid.graph, node.mv_grid.station, node))
         else:
             return len(nx.shortest_path(node.grid.graph, node.grid.station, node))
@@ -135,8 +137,8 @@ def one_storage_per_feeder(
             # dictionary with nodes and their corresponding path length to
             # MV station
             path_length_dict = {}
-            for l in critical_lines_feeder.index:
-                nodes = l.grid.graph.nodes_from_line(l)
+            for line in critical_lines_feeder.index:
+                nodes = line.grid.graph.nodes_from_line(line)
                 for node in nodes:
                     path_length_dict[node] = _shortest_path(node)
             # return node farthest away
@@ -154,7 +156,7 @@ def one_storage_per_feeder(
             node = critical_nodes_feeder[0]
 
             # get path length from station to critical node
-            get_weight = lambda u, v, data: data["line"].length
+            get_weight = lambda u, v, data: data["line"].length  # noqa: E731
             path_length = dijkstra_shortest_path_length(
                 edisgo.network.mv_grid.graph,
                 edisgo.network.mv_grid.station,
@@ -200,10 +202,11 @@ def one_storage_per_feeder(
         p_slack = edisgo.network.pypsa.generators_t.p.loc[:, "Generator_slack"] * 1e3
 
         # get sign of p and q
-        l = edisgo.network.pypsa.lines.loc[repr(feeder), :]
+        lines = edisgo.network.pypsa.lines.loc[repr(feeder), :]
         mv_station_bus = (
             "bus0"
-            if l.loc["bus0"] == "Bus_".format(repr(edisgo.network.mv_grid.station))
+            if lines.loc["bus0"]
+            == "Bus_{}".format(repr(edisgo.network.mv_grid.station))
             else "bus1"
         )
         if mv_station_bus == "bus0":
@@ -318,9 +321,9 @@ def one_storage_per_feeder(
         critical_lines = check_tech_constraints.mv_line_load(edisgo.network)
         # filter overloaded lines in feeder
         critical_lines_feeder = []
-        for l in critical_lines.index:
-            if repr(tools.get_mv_feeder_from_line(l)) == repr(feeder):
-                critical_lines_feeder.append(l)
+        for line in critical_lines.index:
+            if repr(tools.get_mv_feeder_from_line(line)) == repr(feeder):
+                critical_lines_feeder.append(line)
         return critical_lines.loc[critical_lines_feeder, :]
 
     def _estimate_new_number_of_lines(critical_lines_feeder):

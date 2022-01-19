@@ -821,7 +821,7 @@ class EDisGo:
                                 {
                                     naming.format(
                                         "_".join(k)
-                                    ): self.timeseries.charging_points_reactive_power.loc[
+                                    ): self.timeseries.charging_points_reactive_power.loc[  # noqa: E501
                                         :, v
                                     ].sum(
                                         axis=1
@@ -856,7 +856,7 @@ class EDisGo:
                                 {
                                     naming.format(
                                         k
-                                    ): self.timeseries.charging_points_reactive_power.loc[
+                                    ): self.timeseries.charging_points_reactive_power.loc[  # noqa: E501
                                         :, v
                                     ].sum(
                                         axis=1
@@ -1127,7 +1127,8 @@ class EDisGo:
 
         Parameters
         ----------
-        timestep : :pandas:`pandas.Timestamp<Timestamp>` or list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
+        timestep : :pandas:`pandas.Timestamp<Timestamp>` or \
+            list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
             Specifies time steps histogram is plotted for. If timestep is None
             all time steps voltages are calculated for are used. Default: None.
         title : :obj:`str` or :obj:`bool`, optional
@@ -1179,7 +1180,8 @@ class EDisGo:
 
         Parameters
         ----------
-        timestep : :pandas:`pandas.Timestamp<Timestamp>` or list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
+        timestep : :pandas:`pandas.Timestamp<Timestamp>` or \
+            list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
             Specifies time step(s) histogram is plotted for. If `timestep` is
             None all time steps currents are calculated for are used.
             Default: None.

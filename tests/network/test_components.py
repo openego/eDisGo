@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from edisgo import EDisGo
-from edisgo.network.components import Generator, Load, Storage, Switch
+from edisgo.network.components import Generator, Load, Switch
 
 
 class TestComponents:
@@ -46,7 +46,8 @@ class TestComponents:
         msg = "Given bus ID does not exist."
         with pytest.raises(AttributeError, match=msg):
             load.bus = "None"
-        # ToDo add test for active_power_timeseries and reactive_power_timeseries once implemented
+        # TODO: add test for active_power_timeseries and reactive_power_timeseries once
+        #  implemented
 
     def test_generator_class(self):
         """Test Generator class getter, setter, methods"""
@@ -83,7 +84,8 @@ class TestComponents:
         msg = "Given bus ID does not exist."
         with pytest.raises(AttributeError, match=msg):
             gen.bus = "None"
-        # ToDo add test for active_power_timeseries and reactive_power_timeseries once implemented
+        # TODO: add test for active_power_timeseries and reactive_power_timeseries once
+        #  implemented
 
     def test_switch_class(self):
         """Test Switch class"""

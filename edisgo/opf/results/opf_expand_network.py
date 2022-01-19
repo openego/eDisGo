@@ -25,11 +25,10 @@ def expand_network(edisgo, tolerance=1e-6):
 
     nep_factor = edisgo.opf_results.lines.nep.values.astype("float")
 
-    # Only round up numbers that are reasonably far away from the nearest
-    # Integer
-    # ToDo: fix! if there was more than 1 line before the optimization this ceil
-    # will overestimate the number of added lines (np.ceil(nep_factor*lines.num_parallel - tolerance))
-    # this will give number of added lines
+    # Only round up numbers that are reasonably far away from the nearest Integer
+    # TODO: fix! if there was more than 1 line before the optimization this ceil will
+    # overestimate the number of added lines (np.ceil(nep_factor*lines.num_parallel -
+    # tolerance)) this will give number of added lines
     nep_factor = np.ceil(nep_factor - tolerance)
 
     # Get the names of all MV grid lines
@@ -73,58 +72,7 @@ def grid_expansion_costs(opf_results, tolerance=1e-6):
     )
     costs_cable = opf_results.pypsa.lines.loc[lines, "costs_cable"] * num_new_lines
 
-    earthworks = [1 if num_new_lines[l] > 0 else 0 for l in lines]
-    costs_earthwork = (
-        opf_results.pypsa.lines.loc[lines, "costs_earthworks"] * earthworks
-    )
-
-    total_costs = costs_cable + costs_earthwork
-    extended_lines = total_costs[total_costs > 0].index
-    costs_df = pd.DataFrame(
-        data={
-            "total_costs": total_costs.loc[extended_lines],
-            "type": ["line"] * len(extended_lines),
-            "length": opf_results.pypsa.lines.loc[extended_lines, "length"],
-            "quantity": num_new_lines.loc[extended_lines],
-            "voltage_level": ["mv"] * len(extended_lines),
-        },
-        index=extended_lines,
-    )
-
-    return costs_df
-
-
-def grid_expansion_costs(opf_results, tolerance=1e-6):
-    """
-    Calculates grid expansion costs from OPF.
-
-    As grid expansion is conducted continuously number of expanded lines is
-    determined by simply rounding up (including some tolerance).
-
-    Parameters
-    ---------
-    opf_results : OPFResults class
-    tolerance : float
-
-    Returns
-    --------
-    float
-        Grid expansion costs determined by OPF
-
-    """
-    # ToDo maybe choose differenct default tolerance
-    lines = opf_results.lines.index
-
-    num_new_lines = (
-        np.ceil(
-            opf_results.lines.nep * opf_results.pypsa.lines.loc[lines, "num_parallel"]
-            - tolerance
-        )
-        - opf_results.pypsa.lines.loc[lines, "num_parallel"]
-    )
-    costs_cable = opf_results.pypsa.lines.loc[lines, "costs_cable"] * num_new_lines
-
-    earthworks = [1 if num_new_lines[l] > 0 else 0 for l in lines]
+    earthworks = [1 if num_new_lines[line] > 0 else 0 for line in lines]
     costs_earthwork = (
         opf_results.pypsa.lines.loc[lines, "costs_earthworks"] * earthworks
     )
@@ -375,7 +323,7 @@ def integrate_curtailment_as_load(edisgo, curtailment_per_node):
 
     for n in active_power_ts.columns:
 
-        if not n in curtailment_loads.bus:
+        if n not in curtailment_loads.bus:
             # add load component
             load = edisgo.topology.add_load(
                 load_id=1,
