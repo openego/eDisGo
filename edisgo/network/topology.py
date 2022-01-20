@@ -7,6 +7,10 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
+from shapely.geometry import LineString, Point
+from shapely.ops import transform
+from shapely.wkt import loads as wkt_loads
+
 import edisgo
 
 from edisgo.io.ding0_import import _validate_ding0_grid_import
@@ -19,11 +23,6 @@ from edisgo.tools.tools import (
     calculate_line_resistance,
     select_cable,
 )
-
-if "READTHEDOCS" not in os.environ:
-    from shapely.geometry import LineString, Point
-    from shapely.ops import transform
-    from shapely.wkt import loads as wkt_loads
 
 logger = logging.getLogger("edisgo")
 
