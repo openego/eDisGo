@@ -520,305 +520,106 @@ def aggregate_components(
 
     """
     # aggregate generators at the same bus
-    if mode == "by_component_type" or mode == "by_load_and_generation":
-        if not edisgo_obj.topology.generators_df.empty:
-            gens_groupby = edisgo_obj.topology.generators_df.groupby(
-                aggregate_generators_by_cols
-            )
-            naming = "Generators_{}"
+    if mode not in ["by_component_type", "by_load_and_generation"]:
+        raise ValueError(
+            f"The given mode {mode} is not valid. Please see the docstring for more "
+            f"information."
+        )
 
-            # set up new generators_df
-            gens_df_grouped = gens_groupby.sum().reset_index()
-            gens_df_grouped["name"] = gens_df_grouped.apply(
-                lambda _: naming.format("_".join(_.loc[aggregate_generators_by_cols])),
+    if not edisgo_obj.topology.generators_df.empty:
+        gens_groupby = edisgo_obj.topology.generators_df.groupby(
+            aggregate_generators_by_cols
+        )
+        naming = "Generators_{}"
+
+        # set up new generators_df
+        gens_df_grouped = gens_groupby.sum().reset_index()
+        gens_df_grouped["name"] = gens_df_grouped.apply(
+            lambda _: naming.format("_".join(_.loc[aggregate_generators_by_cols])),
+            axis=1,
+        )
+        gens_df_grouped["control"] = "PQ"
+        gens_df_grouped["control"] = "misc"
+        if "weather_cell_id" in gens_df_grouped.columns:
+            gens_df_grouped.drop(columns=["weather_cell_id"], inplace=True)
+        edisgo_obj.topology.generators_df = gens_df_grouped.set_index("name")
+
+        # set up new generator time series
+        groups = gens_groupby.groups
+        if isinstance(list(groups.keys())[0], tuple):
+            edisgo_obj.timeseries.generators_active_power = pd.concat(
+                [
+                    pd.DataFrame(
+                        {
+                            naming.format(
+                                "_".join(k)
+                            ): edisgo_obj.timeseries.generators_active_power.loc[
+                                :, v
+                            ].sum(
+                                axis=1
+                            )
+                        }
+                    )
+                    for k, v in groups.items()
+                ],
                 axis=1,
             )
-            gens_df_grouped["control"] = "PQ"
-            gens_df_grouped["control"] = "misc"
-            if "weather_cell_id" in gens_df_grouped.columns:
-                gens_df_grouped.drop(columns=["weather_cell_id"], inplace=True)
-            edisgo_obj.topology.generators_df = gens_df_grouped.set_index("name")
-
-            # set up new generator time series
-            groups = gens_groupby.groups
-            if isinstance(list(groups.keys())[0], tuple):
-                edisgo_obj.timeseries.generators_active_power = pd.concat(
-                    [
-                        pd.DataFrame(
-                            {
-                                naming.format(
-                                    "_".join(k)
-                                ): edisgo_obj.timeseries.generators_active_power.loc[
-                                    :, v
-                                ].sum(
-                                    axis=1
-                                )
-                            }
-                        )
-                        for k, v in groups.items()
-                    ],
-                    axis=1,
-                )
-                edisgo_obj.timeseries.generators_reactive_power = pd.concat(
-                    [
-                        pd.DataFrame(
-                            {
-                                naming.format(
-                                    "_".join(k)
-                                ): edisgo_obj.timeseries.generators_reactive_power.loc[
-                                    :, v
-                                ].sum(
-                                    axis=1
-                                )
-                            }
-                        )
-                        for k, v in groups.items()
-                    ],
-                    axis=1,
-                )
-            else:
-                edisgo_obj.timeseries.generators_active_power = pd.concat(
-                    [
-                        pd.DataFrame(
-                            {
-                                naming.format(
-                                    k
-                                ): edisgo_obj.timeseries.generators_active_power.loc[
-                                    :, v
-                                ].sum(
-                                    axis=1
-                                )
-                            }
-                        )
-                        for k, v in groups.items()
-                    ],
-                    axis=1,
-                )
-                edisgo_obj.timeseries.generators_reactive_power = pd.concat(
-                    [
-                        pd.DataFrame(
-                            {
-                                naming.format(
-                                    k
-                                ): edisgo_obj.timeseries.generators_reactive_power.loc[
-                                    :, v
-                                ].sum(
-                                    axis=1
-                                )
-                            }
-                        )
-                        for k, v in groups.items()
-                    ],
-                    axis=1,
-                )
-
-    # aggregate conventional loads at the same bus and charging points
-    # at the same bus separately
-    if mode == "by_component_type":
-
-        # conventional loads
-        if not edisgo_obj.topology.loads_df.empty:
-            loads_df = edisgo_obj.topology.loads_df.loc[
-                edisgo_obj.topology.loads_df.type.isin(["load", ""])
-            ]
-            loads_groupby = loads_df.groupby(aggregate_loads_by_cols)
-            naming = "Loads_{}"
-
-            # set up new loads_df
-            loads_df_grouped = loads_groupby.sum().reset_index()
-            loads_df_grouped["name"] = loads_df_grouped.apply(
-                lambda _: naming.format("_".join(_.loc[aggregate_loads_by_cols])),
+            edisgo_obj.timeseries.generators_reactive_power = pd.concat(
+                [
+                    pd.DataFrame(
+                        {
+                            naming.format(
+                                "_".join(k)
+                            ): edisgo_obj.timeseries.generators_reactive_power.loc[
+                                :, v
+                            ].sum(
+                                axis=1
+                            )
+                        }
+                    )
+                    for k, v in groups.items()
+                ],
                 axis=1,
             )
-
-            loads_df_grouped = loads_df_grouped.assign(type="load")
-
-            edisgo_obj.topology.loads_df.drop(index=loads_df.index, inplace=True)
-
-            edisgo_obj.topology.loads_df = edisgo_obj.topology.loads_df.append(
-                loads_df_grouped.set_index("name")
-            )
-
-            # set up new loads time series
-            groups = loads_groupby.groups
-
-            if isinstance(list(groups.keys())[0], tuple):
-                edisgo_obj.timeseries.loads_active_power = pd.concat(
-                    [
-                        pd.DataFrame(
-                            {
-                                naming.format(
-                                    "_".join(k)
-                                ): edisgo_obj.timeseries.loads_active_power.loc[
-                                    :, v
-                                ].sum(
-                                    axis=1
-                                )
-                            }
-                        )
-                        for k, v in groups.items()
-                    ],
-                    axis=1,
-                )
-                edisgo_obj.timeseries.loads_reactive_power = pd.concat(
-                    [
-                        pd.DataFrame(
-                            {
-                                naming.format(
-                                    "_".join(k)
-                                ): edisgo_obj.timeseries.loads_reactive_power.loc[
-                                    :, v
-                                ].sum(
-                                    axis=1
-                                )
-                            }
-                        )
-                        for k, v in groups.items()
-                    ],
-                    axis=1,
-                )
-            else:
-                edisgo_obj.timeseries.loads_active_power = pd.concat(
-                    [
-                        pd.DataFrame(
-                            {
-                                naming.format(
-                                    k
-                                ): edisgo_obj.timeseries.loads_active_power.loc[
-                                    :, v
-                                ].sum(
-                                    axis=1
-                                )
-                            }
-                        )
-                        for k, v in groups.items()
-                    ],
-                    axis=1,
-                )
-                edisgo_obj.timeseries.loads_reactive_power = pd.concat(
-                    [
-                        pd.DataFrame(
-                            {
-                                naming.format(
-                                    k
-                                ): edisgo_obj.timeseries.loads_reactive_power.loc[
-                                    :, v
-                                ].sum(
-                                    axis=1
-                                )
-                            }
-                        )
-                        for k, v in groups.items()
-                    ],
-                    axis=1,
-                )
-
-        # charging points
-        if not edisgo_obj.topology.charging_points_df.empty:
-            loads_groupby = edisgo_obj.topology.charging_points_df.groupby(
-                aggregate_charging_points_by_cols
-            )
-            naming = "ChargingPoints_{}"
-
-            # set up new charging_points_df
-            loads_df_grouped = loads_groupby.sum().reset_index()
-            loads_df_grouped["name"] = loads_df_grouped.apply(
-                lambda _: naming.format(
-                    "_".join(_.loc[aggregate_charging_points_by_cols])
-                ),
+        else:
+            edisgo_obj.timeseries.generators_active_power = pd.concat(
+                [
+                    pd.DataFrame(
+                        {
+                            naming.format(
+                                k
+                            ): edisgo_obj.timeseries.generators_active_power.loc[
+                                :, v
+                            ].sum(
+                                axis=1
+                            )
+                        }
+                    )
+                    for k, v in groups.items()
+                ],
                 axis=1,
             )
-
-            loads_df_grouped = loads_df_grouped.assign(type="charging_point")
-
-            edisgo_obj.topology.loads_df.drop(
-                index=edisgo_obj.topology.charging_points_df.index, inplace=True
+            edisgo_obj.timeseries.generators_reactive_power = pd.concat(
+                [
+                    pd.DataFrame(
+                        {
+                            naming.format(
+                                k
+                            ): edisgo_obj.timeseries.generators_reactive_power.loc[
+                                :, v
+                            ].sum(
+                                axis=1
+                            )
+                        }
+                    )
+                    for k, v in groups.items()
+                ],
+                axis=1,
             )
-
-            edisgo_obj.topology.loads_df = edisgo_obj.topology.loads_df.append(
-                loads_df_grouped.set_index("name")
-            )
-
-            # set up new charging points time series
-            groups = loads_groupby.groups
-
-            if isinstance(list(groups.keys())[0], tuple):
-                edisgo_obj.timeseries.charging_points_active_power = pd.concat(
-                    [
-                        pd.DataFrame(
-                            {
-                                naming.format(
-                                    "_".join(k)
-                                ): edisgo_obj.timeseries.charging_points_active_power.loc[  # noqa: E501
-                                    :, v
-                                ].sum(
-                                    axis=1
-                                )
-                            }
-                        )
-                        for k, v in groups.items()
-                    ],
-                    axis=1,
-                )
-                edisgo_obj.timeseries.charging_points_reactive_power = pd.concat(
-                    [
-                        pd.DataFrame(
-                            {
-                                naming.format(
-                                    "_".join(k)
-                                ): edisgo_obj.timeseries.charging_points_reactive_power.loc[  # noqa: E501
-                                    # noqa: E501
-                                    :,
-                                    v,
-                                ].sum(
-                                    axis=1
-                                )
-                            }
-                        )
-                        for k, v in groups.items()
-                    ],
-                    axis=1,
-                )
-            else:
-                edisgo_obj.timeseries.charging_points_active_power = pd.concat(
-                    [
-                        pd.DataFrame(
-                            {
-                                naming.format(
-                                    k
-                                ): edisgo_obj.timeseries.charging_points_active_power.loc[  # noqa: E501
-                                    :, v
-                                ].sum(
-                                    axis=1
-                                )
-                            }
-                        )
-                        for k, v in groups.items()
-                    ],
-                    axis=1,
-                )
-                edisgo_obj.timeseries.charging_points_reactive_power = pd.concat(
-                    [
-                        pd.DataFrame(
-                            {
-                                naming.format(
-                                    k
-                                ): edisgo_obj.timeseries.charging_points_reactive_power.loc[  # noqa: E501
-                                    :,
-                                    v,
-                                ].sum(
-                                    axis=1
-                                )
-                            }
-                        )
-                        for k, v in groups.items()
-                    ],
-                    axis=1,
-                )
 
     # aggregate all loads (conventional loads and charging points) at the
     # same bus
-    elif mode == "by_load_and_generation":
+    if mode == "by_load_and_generation":
         aggregate_loads_by_cols = ["bus"]
         loads_groupby = edisgo_obj.topology.loads_df.loc[:, ["bus", "p_nom"]].groupby(
             aggregate_loads_by_cols
@@ -894,3 +695,197 @@ def aggregate_components(
         edisgo_obj.timeseries.charging_points_reactive_power = pd.DataFrame(
             index=edisgo_obj.timeseries.timeindex
         )
+
+        return
+
+    # aggregate conventional loads at the same bus and charging points
+    # at the same bus separately
+
+    # conventional loads
+    if not edisgo_obj.topology.loads_df.empty:
+        loads_df = edisgo_obj.topology.loads_df.loc[
+            edisgo_obj.topology.loads_df.type.isin(["load", ""])
+        ]
+        loads_groupby = loads_df.groupby(aggregate_loads_by_cols)
+        naming = "Loads_{}"
+
+        # set up new loads_df
+        loads_df_grouped = loads_groupby.sum().reset_index()
+        loads_df_grouped["name"] = loads_df_grouped.apply(
+            lambda _: naming.format("_".join(_.loc[aggregate_loads_by_cols])),
+            axis=1,
+        )
+
+        loads_df_grouped = loads_df_grouped.assign(type="load")
+
+        edisgo_obj.topology.loads_df.drop(index=loads_df.index, inplace=True)
+
+        edisgo_obj.topology.loads_df = edisgo_obj.topology.loads_df.append(
+            loads_df_grouped.set_index("name")
+        )
+
+        # set up new loads time series
+        groups = loads_groupby.groups
+
+        if isinstance(list(groups.keys())[0], tuple):
+            edisgo_obj.timeseries.loads_active_power = pd.concat(
+                [
+                    pd.DataFrame(
+                        {
+                            naming.format(
+                                "_".join(k)
+                            ): edisgo_obj.timeseries.loads_active_power.loc[:, v].sum(
+                                axis=1
+                            )
+                        }
+                    )
+                    for k, v in groups.items()
+                ],
+                axis=1,
+            )
+            edisgo_obj.timeseries.loads_reactive_power = pd.concat(
+                [
+                    pd.DataFrame(
+                        {
+                            naming.format(
+                                "_".join(k)
+                            ): edisgo_obj.timeseries.loads_reactive_power.loc[:, v].sum(
+                                axis=1
+                            )
+                        }
+                    )
+                    for k, v in groups.items()
+                ],
+                axis=1,
+            )
+        else:
+            edisgo_obj.timeseries.loads_active_power = pd.concat(
+                [
+                    pd.DataFrame(
+                        {
+                            naming.format(
+                                k
+                            ): edisgo_obj.timeseries.loads_active_power.loc[:, v].sum(
+                                axis=1
+                            )
+                        }
+                    )
+                    for k, v in groups.items()
+                ],
+                axis=1,
+            )
+            edisgo_obj.timeseries.loads_reactive_power = pd.concat(
+                [
+                    pd.DataFrame(
+                        {
+                            naming.format(
+                                k
+                            ): edisgo_obj.timeseries.loads_reactive_power.loc[:, v].sum(
+                                axis=1
+                            )
+                        }
+                    )
+                    for k, v in groups.items()
+                ],
+                axis=1,
+            )
+
+    # charging points
+    if not edisgo_obj.topology.charging_points_df.empty:
+        loads_groupby = edisgo_obj.topology.charging_points_df.groupby(
+            aggregate_charging_points_by_cols
+        )
+        naming = "ChargingPoints_{}"
+
+        # set up new charging_points_df
+        loads_df_grouped = loads_groupby.sum().reset_index()
+        loads_df_grouped["name"] = loads_df_grouped.apply(
+            lambda _: naming.format("_".join(_.loc[aggregate_charging_points_by_cols])),
+            axis=1,
+        )
+
+        loads_df_grouped = loads_df_grouped.assign(type="charging_point")
+
+        edisgo_obj.topology.loads_df.drop(
+            index=edisgo_obj.topology.charging_points_df.index, inplace=True
+        )
+
+        edisgo_obj.topology.loads_df = edisgo_obj.topology.loads_df.append(
+            loads_df_grouped.set_index("name")
+        )
+
+        # set up new charging points time series
+        groups = loads_groupby.groups
+
+        if isinstance(list(groups.keys())[0], tuple):
+            edisgo_obj.timeseries.charging_points_active_power = pd.concat(
+                [
+                    pd.DataFrame(
+                        {
+                            naming.format(
+                                "_".join(k)
+                            ): edisgo_obj.timeseries.charging_points_active_power.loc[
+                                :, v
+                            ].sum(
+                                axis=1
+                            )
+                        }
+                    )
+                    for k, v in groups.items()
+                ],
+                axis=1,
+            )
+            edisgo_obj.timeseries.charging_points_reactive_power = pd.concat(
+                [
+                    pd.DataFrame(
+                        {
+                            naming.format(
+                                "_".join(k)
+                            ): edisgo_obj.timeseries.charging_points_reactive_power.loc[
+                                :,
+                                v,
+                            ].sum(
+                                axis=1
+                            )
+                        }
+                    )
+                    for k, v in groups.items()
+                ],
+                axis=1,
+            )
+        else:
+            edisgo_obj.timeseries.charging_points_active_power = pd.concat(
+                [
+                    pd.DataFrame(
+                        {
+                            naming.format(
+                                k
+                            ): edisgo_obj.timeseries.charging_points_active_power.loc[
+                                :, v
+                            ].sum(
+                                axis=1
+                            )
+                        }
+                    )
+                    for k, v in groups.items()
+                ],
+                axis=1,
+            )
+            edisgo_obj.timeseries.charging_points_reactive_power = pd.concat(
+                [
+                    pd.DataFrame(
+                        {
+                            naming.format(
+                                k
+                            ): edisgo_obj.timeseries.charging_points_reactive_power.loc[
+                                :,
+                                v,
+                            ].sum(
+                                axis=1
+                            )
+                        }
+                    )
+                    for k, v in groups.items()
+                ],
+                axis=1,
+            )
