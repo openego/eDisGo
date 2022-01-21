@@ -13,15 +13,12 @@ from edisgo.tools import session_scope, tools
 
 if "READTHEDOCS" not in os.environ:
 
+    import geopandas as gpd
+
     from egoio.db_tables.grid import EgoDpMvGriddistrict
     from egoio.db_tables.model_draft import EgoGridMvGriddistrict
     from geoalchemy2 import shape
 
-    geopandas = True
-    try:
-        import geopandas as gpd
-    except:
-        geopandas = False
     contextily = True
     try:
         import contextily as ctx
@@ -646,7 +643,7 @@ def mv_grid_topology(
     ax = plt.gca()
 
     # plot network district
-    if grid_district_geom and geopandas:
+    if grid_district_geom:
         try:
             projection = 3857 if contextily and background_map else 4326
             crs = {

@@ -1,9 +1,11 @@
 import datetime
 import os
-from workalendar.europe import Germany
 
 import pandas as pd
-from demandlib import bdew as bdew, particular_profiles as profiles
+
+from demandlib import bdew as bdew
+from demandlib import particular_profiles as profiles
+from workalendar.europe import Germany
 
 from edisgo.tools import session_scope
 
@@ -137,9 +139,7 @@ def load_time_series_demandlib(config_data, year):
     elec_demand = e_slp.get_profile(sectoral_consumption)
 
     # Add the slp for the industrial group
-    ilp = profiles.IndustrialLoadProfile(
-        e_slp.date_time_index, holidays=holidays
-    )
+    ilp = profiles.IndustrialLoadProfile(e_slp.date_time_index, holidays=holidays)
 
     # Beginning and end of workday, weekdays and weekend days, and scaling
     # factors by default

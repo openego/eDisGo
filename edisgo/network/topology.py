@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 import random
@@ -905,9 +907,7 @@ class Topology:
                 return True
         return False
 
-    def add_load(
-        self, bus, p_nom, type="load", **kwargs
-    ):
+    def add_load(self, bus, p_nom, type="load", **kwargs):
         """
         Adds load to topology.
 
@@ -2302,6 +2302,36 @@ class Topology:
             self.transformers_df,
         )
         return graph
+
+    def to_geopandas(self, mode: str = "mv"):
+        """
+        Returns components as :geopandas:`GeoDataFrame`\\ s
+
+        Returns container with :geopandas:`GeoDataFrame`\\ s containing all
+        georeferenced components within the grid.
+
+        Parameters
+        ----------
+        mode : str
+            Return mode. If mode is "mv" the mv components are returned. If mode is "lv"
+            a generator with a container per lv grid is returned. Default: "mv"
+
+        Returns
+        -------
+        :class:`~.tools.geopandas_helper.GeoPandasGridContainer` or \
+            list(:class:`~.tools.geopandas_helper.GeoPandasGridContainer`)
+            Data container with GeoDataFrames containing all georeferenced components
+            within the grid(s).
+
+        """
+        if mode == "mv":
+            return self.mv_grid.geopandas
+        elif mode == "lv":
+            raise NotImplementedError("LV Grids are not georeferenced yet.")
+            # for lv_grid in self.mv_grid.lv_grids:
+            #     yield lv_grid.geopandas
+        else:
+            raise ValueError(f"{mode} is not valid. See docstring for more info.")
 
     def to_csv(self, directory):
         """

@@ -14,17 +14,12 @@ from edisgo.tools import session_scope
 
 if "READTHEDOCS" not in os.environ:
 
+    import geopandas as gpd
+
     from egoio.db_tables import climate
     from egoio.tools.db import connection
-
     from shapely.geometry.multipolygon import MultiPolygon
     from shapely.wkt import loads as wkt_loads
-
-    geopandas = True
-    try:
-        import geopandas as gpd
-    except:
-        geopandas = False
 
 
 def select_worstcase_snapshots(edisgo_obj):

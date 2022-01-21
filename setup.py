@@ -83,6 +83,7 @@ examples_requirements = ["jupyter"]
 dev_requirements = [
     "pytest",
     "sphinx_rtd_theme",
+    "sphinx-autodoc-typehints",
     "pre-commit",
     "black",
     "isort",

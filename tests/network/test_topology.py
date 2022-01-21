@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from geopandas import GeoDataFrame
+from pandas.testing import assert_frame_equal
 from shapely.geometry import Point
 
 from edisgo import EDisGo
@@ -12,6 +14,7 @@ from edisgo.io import ding0_import
 from edisgo.network.components import Switch
 from edisgo.network.grids import LVGrid
 from edisgo.network.topology import Topology
+from edisgo.tools.geopandas_helper import GeoPandasGridContainer
 
 
 class TestTopology:
@@ -198,7 +201,7 @@ class TestTopology:
     def test_add_load(self):
         """Test add_load method"""
 
-	# test adding conventional load
+        # test adding conventional load
 
         len_df_before = len(self.topology.loads_df)
 
@@ -247,7 +250,7 @@ class TestTopology:
                 sector="retail",
             )
 
-	# test adding charging point
+        # test adding charging point
 
         len_df_before = len(self.topology.charging_points_df)
 
@@ -528,7 +531,7 @@ class TestTopology:
     def test_remove_load(self):
         """Test remove_load method"""
 
-	# test removing conventional load
+        # test removing conventional load
 
         # check case where only load is connected to line,
         # line and bus are therefore removed as well
@@ -552,7 +555,7 @@ class TestTopology:
         assert "Bus_BranchTee_LVGrid_1_12" in self.topology.buses_df.index
         assert (connected_lines.index.isin(self.topology.lines_df.index)).all()
 
-	# test removing charging point
+        # test removing charging point
 
         # check case where only charging point is connected to line,
         # line and bus are therefore removed as well
@@ -806,6 +809,32 @@ class TestTopologyWithEdisgoObject:
             ding0_grid=pytest.ding0_test_network_path,
             worst_case_analysis="worst-case",
         )
+
+    def test_to_geopandas(self):
+        geopandas_container = self.edisgo.topology.to_geopandas()
+
+        assert isinstance(geopandas_container, GeoPandasGridContainer)
+
+        attrs = [
+            "buses_gdf",
+            "generators_gdf",
+            "lines_gdf",
+            "loads_gdf",
+            "storage_units_gdf",
+            "transformers_gdf",
+        ]
+
+        for attr_str in attrs:
+            attr = getattr(geopandas_container, attr_str)
+            grid_attr = getattr(
+                self.edisgo.topology.mv_grid, attr_str.replace("_gdf", "_df")
+            )
+
+            assert isinstance(attr, GeoDataFrame)
+
+            common_cols = set(attr.columns).intersection(grid_attr.columns)
+
+            assert_frame_equal(attr[common_cols], grid_attr[common_cols])
 
     def test_from_csv(self):
         """

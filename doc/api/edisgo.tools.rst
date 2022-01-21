@@ -57,6 +57,13 @@ edisgo.tools.tools module
     :undoc-members:
     :show-inheritance:
 
+edisgo.tools.geopandas\_helper module
+--------------------------------------
+
+.. automodule:: edisgo.tools.geopandas_helper
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 Module contents
 ---------------

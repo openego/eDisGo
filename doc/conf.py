@@ -55,6 +55,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",  # enable Napoleon Sphinx v>1.3
     "sphinx.ext.extlinks",  # enables external links with a key
+    "sphinx_autodoc_typehints",
 ]
 
 # Napoleon settings
@@ -75,6 +76,10 @@ extlinks = {
     "pandas": (
         "http://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.%s.html",
         "pandas.",
+    ),
+    "geopandas": (
+        "https://geopandas.org/en/stable/docs/reference/api/geopandas.%s.html",
+        "geopandas.",
     ),
     "networkx": (
         "https://networkx.github.io/documentation/stable/reference/classes/graph.html#%s",
