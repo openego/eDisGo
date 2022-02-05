@@ -101,6 +101,8 @@ class TestResults:
         )
         self.results.pfa_v_mag_pu_seed = pfa_v_mag_pu_seed
         self.results.v_res = self.results.pfa_v_mag_pu_seed.copy()
+        self.results.pfa_p = self.results.pfa_v_mag_pu_seed.copy()
+        self.results.pfa_q = self.results.pfa_v_mag_pu_seed.copy()
         grid_expansion_costs = pd.DataFrame(
             data={"total_costs": [2, 3], "quantity": [1, 1]},
             index=["line1", "transformer2"],
