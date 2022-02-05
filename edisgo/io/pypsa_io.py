@@ -875,7 +875,7 @@ def _check_integrity_of_pypsa(pypsa_network):
             if not missing.empty:
                 raise ValueError(
                     "The following components have no `{}` time "
-                    "series.".format(missing.index, i)
+                    "series: {}.".format(i, missing.index)
                 )
 
     missing = pypsa_network.buses.loc[
@@ -886,7 +886,7 @@ def _check_integrity_of_pypsa(pypsa_network):
     if not missing.empty:
         raise ValueError(
             "The following components have no `v_mag_pu_set` time "
-            "series.".format(missing.index)
+            "series: {}.".format(missing.index)
         )
 
     # check for duplicates in p_set and q_set
