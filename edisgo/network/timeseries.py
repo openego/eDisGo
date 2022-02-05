@@ -7,6 +7,7 @@ import pandas as pd
 from edisgo.io import timeseries_import
 from edisgo.flex_opt import q_control
 from edisgo.tools.tools import (
+    assign_voltage_level_to_component,
     drop_duplicated_columns,
     get_weather_cells_intersecting_with_grid_district,
 )
@@ -1667,3 +1668,61 @@ def _get_worst_case_modes(mode):
     return modes
 
 
+def _reactive_power_factor_and_mode_default(comp_df, component_type, configs):
+    """
+    Gets default values for sign of reactive power and power factor for each component.
+
+    Parameters
+    -----------
+    comp_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with component names (in the index) of all components
+        reactive power factor and mode needs to be set. Only required column is
+        column 'voltage_level', giving the voltage level the component is in (the
+        voltage level can be set using the function
+        :func:`~.tools.tools.assign_voltage_level_to_component`).
+        All components must have the same `component_type`.
+    component_type : str
+        The component type determines the reactive power factor and mode used.
+        Possible options are 'generators', 'storage_units' and 'loads'.
+    configs : :class:`~.tools.config.Config`
+        eDisGo configuration data.
+
+    Returns
+    --------
+    (:pandas:`pandas.Series<Series>`, :pandas:`pandas.Series<Series>`)
+        Series with sign of reactive power (positive or negative) and series with
+        reactive power factor are returned.
+
+    """
+    # get default configurations
+    reactive_power_mode = configs["reactive_power_mode"]
+    reactive_power_factor = configs["reactive_power_factor"]
+
+    # write series with sign of reactive power and power factor for each component
+    q_sign = pd.Series(index=comp_df.index)
+    power_factor = pd.Series(index=comp_df.index)
+    if component_type == "generators":
+        get_q_sign = q_control.get_q_sign_generator
+        comp = "gen"
+    elif component_type == "storage_units":
+        get_q_sign = q_control.get_q_sign_generator
+        comp = "storage"
+    elif component_type == "loads":
+        get_q_sign = q_control.get_q_sign_load
+        comp = "load"
+    else:
+        raise ValueError(
+            "Given 'component_type' is not valid. Valid options are "
+            "'generators','storage_units' and 'loads'.")
+    for voltage_level in comp_df.voltage_level.unique():
+        cols = comp_df.index[comp_df.voltage_level == voltage_level]
+        if len(cols) > 0:
+            q_sign[cols] = get_q_sign(
+                reactive_power_mode[
+                    "{}_{}".format(voltage_level, comp)
+                ]
+            )
+            power_factor[cols] = reactive_power_factor[
+                "{}_{}".format(voltage_level, comp)
+            ]
+    return q_sign, power_factor

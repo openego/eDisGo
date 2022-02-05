@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def _get_q_sign_generator(reactive_power_mode):
+def get_q_sign_generator(reactive_power_mode):
     """
     Get the sign of reactive power in generator sign convention.
 
@@ -31,7 +31,7 @@ def _get_q_sign_generator(reactive_power_mode):
         )
 
 
-def _get_q_sign_load(reactive_power_mode):
+def get_q_sign_load(reactive_power_mode):
     """
     Get the sign of reactive power in load sign convention.
 
