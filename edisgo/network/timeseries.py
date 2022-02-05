@@ -1539,80 +1539,12 @@ def _check_timeindex(edisgo_obj):
         raise KeyError(message)
 
 
-def add_loads_timeseries(edisgo_obj, load_names, **kwargs):
+def _drop_component_time_series(obj, df_name, comp_names):
     """
-    Define load time series for active and reactive power. For more information
-    on required and optional parameters see description of
-    :func:`get_component_timeseries`. The mode initially set within
-    get_component_timeseries is used here to set new timeseries. If a different
-    mode is required, change edisgo_obj.timeseries.mode to the desired mode and
-    provide respective parameters.
+    Drop component time series.
 
     Parameters
     ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    load_names: str or list of str
-        Names of loads to add timeseries for. Default None, timeseries
-        for all loads of edisgo_obj are set then.
-
-    """
-    # If timeseries have not yet been filled, it is not
-    # necessary to add timeseries
-    if not hasattr(edisgo_obj.timeseries, "mode"):
-        logger.debug(
-            "Timeseries have not been set yet. Please call"
-            "get_component_timeseries to create "
-            "timeseries."
-        )
-        return
-    # turn single name to list
-    if isinstance(load_names, str):
-        load_names = [load_names]
-    # append timeseries of respective mode
-    if edisgo_obj.timeseries.mode:
-        if "worst-case" in edisgo_obj.timeseries.mode:
-            modes = _get_worst_case_modes(edisgo_obj.timeseries.mode)
-            # set random timeindex
-            _worst_case_load(edisgo_obj=edisgo_obj, modes=modes, load_names=load_names)
-        elif edisgo_obj.timeseries.mode == "manual":
-            loads_active_power = kwargs.get("loads_active_power", None)
-            if loads_active_power is not None:
-                check_timeseries_for_index_and_cols(
-                    edisgo_obj, loads_active_power, load_names
-                )
-            loads_reactive_power = kwargs.get("loads_reactive_power", None)
-            if loads_reactive_power is not None:
-                check_timeseries_for_index_and_cols(
-                    edisgo_obj, loads_reactive_power, load_names
-                )
-            _drop_existing_component_timeseries(
-                edisgo_obj=edisgo_obj, comp_type="loads", comp_names=load_names
-            )
-            # add new load timeseries
-            edisgo_obj.timeseries.loads_active_power = pd.concat(
-                [
-                    edisgo_obj.timeseries.loads_active_power,
-                    loads_active_power.loc[:, load_names],
-                ],
-                axis=1,
-            )
-            edisgo_obj.timeseries.loads_reactive_power = pd.concat(
-                [
-                    edisgo_obj.timeseries.loads_reactive_power,
-                    loads_reactive_power.loc[:, load_names],
-                ],
-                axis=1,
-            )
-        else:
-            raise ValueError(
-                "{} is not a valid mode.".format(edisgo_obj.timeseries.mode)
-            )
-    else:
-        # create load active and reactive power timeseries
-        _load_from_timeseries(edisgo_obj=edisgo_obj, load_names=load_names)
-
-
 def _drop_existing_component_timeseries(edisgo_obj, comp_type, comp_names):
     """
     Drop columns of active and reactive power timeseries of 'comp_type'
