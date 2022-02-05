@@ -1559,45 +1559,58 @@ def _drop_component_time_series(obj, df_name, comp_names):
 
     Parameters
     ----------
-def _drop_existing_component_timeseries(edisgo_obj, comp_type, comp_names):
-    """
-    Drop columns of active and reactive power timeseries of 'comp_type'
-    components with names 'comp_names'.
-
-    Parameters
-    ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    comp_type: str
-        Specification of component type, either 'loads', 'generators' or
-        'storage_units'
-    comp_names: list of str
-        List of names of components that are to be dropped
+    obj : obj
+        Object with attr `df_name` to remove columns from. Can e.g. be
+        :class:`~.network.timeseries.TimeSeries`.
+    df_name : str
+        Name of attribute of given object holding the dataframe to remove columns from.
+        Can e.g. be "generators_active_power" if time series should be removed from
+        :attr:`~.network.timeseries.TimeSeries.generators_active_power`.
+    comp_names: str or list(str)
+        Names of components to drop.
 
     """
     if isinstance(comp_names, str):
         comp_names = [comp_names]
-    # drop existing timeseries of component
+    # drop existing time series of component
     setattr(
-        edisgo_obj.timeseries,
-        comp_type + "_active_power",
-        getattr(edisgo_obj.timeseries, comp_type + "_active_power").drop(
-            getattr(edisgo_obj.timeseries, comp_type + "_active_power").columns[
+        obj,
+        df_name,
+        getattr(obj, df_name).drop(
+            getattr(obj, df_name).columns[
                 getattr(
-                    edisgo_obj.timeseries, comp_type + "_active_power"
+                    obj, df_name
                 ).columns.isin(comp_names)
             ],
             axis=1,
         ),
     )
+
+
+def _add_component_time_series(obj, df_name, ts_new):
+    """
+    Add component time series.
+
+    Parameters
+    ----------
+    obj : obj
+        Object with attr `df_name` to add columns to. Can e.g. be
+        :class:`~.network.timeseries.TimeSeries`.
+    df_name : str
+        Name of attribute of given object holding the dataframe to add columns to.
+        Can e.g. be "generators_active_power" if time series should be added to
+        :attr:`~.network.timeseries.TimeSeries.generators_active_power`.
+    ts_new : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with new time series to add to existing time series dataframe.
+
+    """
     setattr(
-        edisgo_obj.timeseries,
-        comp_type + "_reactive_power",
-        getattr(edisgo_obj.timeseries, comp_type + "_reactive_power").drop(
-            getattr(edisgo_obj.timeseries, comp_type + "_reactive_power").columns[
-                getattr(
-                    edisgo_obj.timeseries, comp_type + "_reactive_power"
-                ).columns.isin(comp_names)
+        obj,
+        df_name,
+        pd.concat(
+            [
+                getattr(obj, df_name),
+                ts_new
             ],
             axis=1,
         ),
