@@ -633,6 +633,20 @@ class TimeSeriesRaw:
     technology-specific feed-in time series. Time series needed for
     flexibilities are e.g. heat time series or curtailment time series.
 
+    Attributes
+    ------------
+    loads_q_control : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with information on applied reactive power control or in case of
+        conventional loads assumed reactive power behavior. Index of the dataframe are
+        the load names. Columns are
+        "type" with the type of Q-control applied (can be "fixed_cosphi", "cosphi(P)",
+        or "Q(V)"),
+        "power_factor" with the (maximum) power factor,
+        "q_sign" giving the sign of the reactive power (only applicable to
+        "fixed_cosphi"),
+        "parametrisation" with the parametrisation of the
+        respective Q-control (only applicable to "cosphi(P)" and "Q(V)").
+
     Notes
     -----
     Can also hold the following attributes when specific mode of
