@@ -1067,6 +1067,8 @@ class Results:
                 "powerflow_results": list(power_flow_results_dict.keys()),
                 "grid_expansion_results": list(grid_expansion_results_dict.keys()),
             }
+        if "s_res" in parameters["powerflow_results"]:
+            parameters["powerflow_results"].remove("s_res")
 
         if not isinstance(parameters, dict):
             raise ValueError(
