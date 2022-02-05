@@ -13,7 +13,7 @@ class TestTimeseriesReactive:
     @classmethod
     def setup_class(self):
         self.topology = Topology()
-        self.timeseries = timeseries.TimeSeriesPowerFlow()
+        self.timeseries = timeseries.TimeSeries()
         self.config = Config()
         ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
         self.timeseries.timeindex = pd.date_range("1/1/1970", periods=2, freq="H")

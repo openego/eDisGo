@@ -103,13 +103,13 @@ def _set_reactive_power_time_series_for_fixed_cosphi_using_config(
     Calculates reactive power in Mvar for a fixed cosphi operation.
 
     This function adds the calculated reactive power time series to the
-    :class:`~.network.timeseries.TimeSeriesPowerFlow` object. For
+    :class:`~.network.timeseries.TimeSeries` object. For
     `component_type`='generators' time series is added to
-    :attr:`~.network.timeseries.TimeSeriesPowerFlow.generators_reactive_power`, for
+    :attr:`~.network.timeseries.TimeSeries.generators_reactive_power`, for
     `component_type`='storage_units' time series is added to
-    :attr:`~.network.timeseries.TimeSeriesPowerFlow.storage_units_reactive_power` and
+    :attr:`~.network.timeseries.TimeSeries.storage_units_reactive_power` and
     for `component_type`='loads' time series is added to
-    :attr:`~.network.timeseries.TimeSeriesPowerFlow.loads_reactive_power`.
+    :attr:`~.network.timeseries.TimeSeries.loads_reactive_power`.
 
     Parameters
     ----------
@@ -168,7 +168,7 @@ def _set_reactive_power_time_series_for_fixed_cosphi_using_config(
                 "{}_gen".format(voltage_level)
             ]
 
-    # calculate reactive power time series and append to TimeSeriesPowerFlow object
+    # calculate reactive power time series and append to TimeSeries object
     reactive_power_df = drop_duplicated_columns(
         pd.concat(
             [getattr(edisgo_obj.timeseries,

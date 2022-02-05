@@ -14,117 +14,59 @@ from edisgo.tools.tools import (
 logger = logging.getLogger("edisgo")
 
 
-def _get_attributes_to_save():
-    """
-    Helper function to specify which TimeSeries attributes to save and restore.
-
-    Is used in functions :attr:`~.network.timeseries.TimeSeries.to_csv`
-    and :attr:`~.network.timeseries.TimeSeries.from_csv`.
-
-    Returns
-    -------
-    list
-        List of TimeSeries attributes to save and restore.
-
-    """
-    return [
-        "loads_active_power",
-        "loads_reactive_power",
-        "generators_active_power",
-        "generators_reactive_power",
-        "charging_points_active_power",
-        "charging_points_reactive_power",
-        "storage_units_active_power",
-        "storage_units_reactive_power",
-    ]
-
-
 class TimeSeries:
     """
-    Defines time series for all loads, generators and storage units in network
-    (if set).
+    Holds component-specific active and reactive power time series.
 
-    Can also contain time series for loads (sector-specific), generators
-    (technology-specific), and curtailment (technology-specific).
+    All time series are fixed time series that in case of flexibilities result after
+    application of a heuristic or optimisation. They can be used for power flow
+    calculations.
 
-    Parameters
-    -----------
+    Also holds any raw time series data that was used to generate component-specific
+    time series in attribute `time_series_raw`. See
+    :class:`~.network.timeseries.TimeSeriesRaw` for more information.
+
+    Other Parameters
+    -----------------
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`, optional
         Can be used to define a time range for which to obtain the provided
         time series and run power flow analysis. Default: None.
-    generators_active_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        Active power timeseries of all generators in topology. Index of
-        DataFrame has to contain timeindex and column names are names of
-        generators.
-    generators_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        Reactive power timeseries of all generators in topology. Format is the
-        same as for generators_active power.
-    loads_active_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        Active power timeseries of all loads in topology. Index of DataFrame
-        has to contain timeindex and column names are names of loads.
-    loads_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        Reactive power timeseries of all loads in topology. Format is the
-        same as for loads_active power.
-    storage_units_active_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        Active power timeseries of all storage units in topology. Index of
-        DataFrame has to contain timeindex and column names are names of
-        storage units.
-    storage_units_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        Reactive power timeseries of all storage_units in topology. Format is
-        the same as for storage_units_active power.
-    curtailment : :pandas:`pandas.DataFrame<DataFrame>` or list, optional
-        In the case curtailment is applied to all fluctuating renewables
-        this needs to be a DataFrame with active power curtailment time series.
-        Time series can either be aggregated by technology type or by type
-        and weather cell ID. In the first case columns of the DataFrame are
-        'solar' and 'wind'; in the second case columns need to be a
-        :pandas:`pandas.MultiIndex<multiindex>` with the first level
-        containing the type and the second level the weather cell ID.
-        In the case curtailment is only applied to specific generators, this
-        parameter needs to be a list of all generators that are curtailed.
-        Default: None.
 
-    Notes
-    -----
-    Can also hold the following attributes when specific mode of
-    :meth:`get_component_timeseries` is called: mode, generation_fluctuating,
-    generation_dispatchable, generation_reactive_power, load,
-    load_reactive_power. See description of meth:`get_component_timeseries` for
-    format of these.
+    Attributes
+    -----------
+    time_series_raw : :class:`~.network.timeseries.TimeSeriesRaw`
+        Raw time series. See :class:`~.network.timeseries.TimeSeriesRaw` for  more
+        information.
 
     """
 
     def __init__(self, **kwargs):
 
         self._timeindex = kwargs.get("timeindex", pd.DatetimeIndex([]))
+        self.time_series_raw = TimeSeriesRaw()
 
     @property
     def timeindex(self):
         """
-        Defines analysed time steps.
+        Time index all time-dependent attributes are indexed by.
 
-        Can be used to define a time range for which to obtain the provided
-        time series and run power flow analysis.
+        Is used as default time steps in e.g. power flow analysis.
 
         Parameters
         -----------
-        ind : timestamp or list(timestamp)
+        ind : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+            Time index all time-dependent attributes are indexed by.
 
         Returns
         -------
         :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-            See class definition for details.
+            Time index all time-dependent attributes are indexed by.
 
         """
         return self._timeindex
 
     @timeindex.setter
     def timeindex(self, ind):
-        # make iterable
-        if not hasattr(ind, "__len__"):
-            ind = [ind]
-        # make datetime index
-        ind = pd.DatetimeIndex(ind)
         if len(self._timeindex) > 0:
             # check if new time index is subset of existing time index
             if not ind.isin(self._timeindex).all():
@@ -137,12 +79,20 @@ class TimeSeries:
     @property
     def generators_active_power(self):
         """
-        Active power time series of all generators in MW.
+        Active power time series of generators in MW.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series of all generators in topology in MW. Index of the
+            dataframe is a time index and column names are names of generators.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+            Active power time series of all generators in topology in MW for time steps
+            given in :py:attr:`~timeindex`. For more information on the dataframe see
+            input parameter `df`.
 
         """
         try:
@@ -151,18 +101,26 @@ class TimeSeries:
             return pd.DataFrame(index=self.timeindex)
 
     @generators_active_power.setter
-    def generators_active_power(self, generators_active_power_ts):
-        self._generators_active_power = generators_active_power_ts
+    def generators_active_power(self, df):
+        self._generators_active_power = df
 
     @property
     def generators_reactive_power(self):
         """
-        Reactive power timeseries of generators in MVA.
+        Reactive power time series of generators in MVA.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series of all generators in topology in MVA. Index of
+            the dataframe is a time index and column names are names of generators.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+            Reactive power time series of all generators in topology in MVA for time
+            steps given in :py:attr:`~timeindex`. For more information on the dataframe
+            see input parameter `df`.
 
         """
         try:
@@ -171,18 +129,26 @@ class TimeSeries:
             return pd.DataFrame(index=self.timeindex)
 
     @generators_reactive_power.setter
-    def generators_reactive_power(self, generators_reactive_power_ts):
-        self._generators_reactive_power = generators_reactive_power_ts
+    def generators_reactive_power(self, df):
+        self._generators_reactive_power = df
 
     @property
     def loads_active_power(self):
         """
-        Active power timeseries of loads in MW.
+        Active power time series of loads in MW.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series of all loads in topology in MW. Index of the
+            dataframe is a time index and column names are names of loads.
 
         Returns
         -------
-        dict or :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series of all loads in topology in MW for time steps
+            given in :py:attr:`~timeindex`. For more information on the dataframe see
+            input parameter `df`.
 
         """
         try:
@@ -191,18 +157,26 @@ class TimeSeries:
             return pd.DataFrame(index=self.timeindex)
 
     @loads_active_power.setter
-    def loads_active_power(self, loads_active_power_ts):
-        self._loads_active_power = loads_active_power_ts
+    def loads_active_power(self, df):
+        self._loads_active_power = df
 
     @property
     def loads_reactive_power(self):
         """
-        Reactive power timeseries in MVA.
+        Reactive power time series of loads in MVA.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series of all loads in topology in MVA. Index of
+            the dataframe is a time index and column names are names of loads.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+            Reactive power time series of all loads in topology in MVA for time
+            steps given in :py:attr:`~timeindex`. For more information on the dataframe
+            see input parameter `df`.
 
         """
         try:
@@ -211,18 +185,26 @@ class TimeSeries:
             return pd.DataFrame(index=self.timeindex)
 
     @loads_reactive_power.setter
-    def loads_reactive_power(self, loads_reactive_power_ts):
-        self._loads_reactive_power = loads_reactive_power_ts
+    def loads_reactive_power(self, df):
+        self._loads_reactive_power = df
 
     @property
     def storage_units_active_power(self):
         """
-        Active power timeseries of storage units in MW.
+        Active power time series of storage units in MW.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series of all storage units in topology in MW. Index of
+            the dataframe is a time index and column names are names of storage units.
 
         Returns
         -------
-        dict or :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series of all storage units in topology in MW for time
+            steps given in :py:attr:`~timeindex`. For more information on the dataframe
+            see input parameter `df`.
 
         """
         try:
@@ -231,18 +213,26 @@ class TimeSeries:
             return pd.DataFrame(index=self.timeindex)
 
     @storage_units_active_power.setter
-    def storage_units_active_power(self, storage_units_active_power_ts):
-        self._storage_units_active_power = storage_units_active_power_ts
+    def storage_units_active_power(self, df):
+        self._storage_units_active_power = df
 
     @property
     def storage_units_reactive_power(self):
         """
-        Reactive power timeseries of storage units in MVA.
+        Reactive power time series of storage units in MVA.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series of all storage units in topology in MVA. Index of
+            the dataframe is a time index and column names are names of storage units.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+            Reactive power time series of all storage units in topology in MVA for time
+            steps given in :py:attr:`~timeindex`. For more information on the dataframe
+            see input parameter `df`.
 
         """
         try:
@@ -251,104 +241,17 @@ class TimeSeries:
             return pd.DataFrame(index=self.timeindex)
 
     @storage_units_reactive_power.setter
-    def storage_units_reactive_power(self, storage_units_reactive_power_ts):
-        self._storage_units_reactive_power = storage_units_reactive_power_ts
-
-    @property
-    def charging_points_active_power(self):
-        """
-        Active power timeseries of charging points in MW.
-
-        Returns
-        -------
-        dict or :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
-
-        """
-        try:
-            return self._charging_points_active_power.loc[self.timeindex, :]
-        except:
-            return pd.DataFrame(index=self.timeindex)
-
-    @charging_points_active_power.setter
-    def charging_points_active_power(self, charging_points_active_power_ts):
-        self._charging_points_active_power = charging_points_active_power_ts
-
-    @property
-    def charging_points_reactive_power(self):
-        """
-        Reactive power timeseries of charging points in MVA.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
-
-        """
-        try:
-            return self._charging_points_reactive_power.loc[self.timeindex, :]
-        except:
-            return pd.DataFrame(index=self.timeindex)
-
-    @charging_points_reactive_power.setter
-    def charging_points_reactive_power(self, charging_points_reactive_power_ts):
-        self._charging_points_reactive_power = charging_points_reactive_power_ts
-
-    # @property
-    # def curtailment(self):
-    #     """
-    #     Get curtailment time series of dispatchable generators (only active
-    #     power)
-    #
-    #     Parameters
-    #     ----------
-    #     curtailment : list or :pandas:`pandas.DataFrame<DataFrame>`
-    #         See class definition for details.
-    #
-    #     Returns
-    #     -------
-    #     :pandas:`pandas.DataFrame<dataframe>`
-    #         In the case curtailment is applied to all solar and wind generators
-    #         curtailment time series either aggregated by technology type or by
-    #         type and weather cell ID are returnded. In the first case columns
-    #         of the DataFrame are 'solar' and 'wind'; in the second case columns
-    #         need to be a :pandas:`pandas.MultiIndex<multiindex>` with the
-    #         first level containing the type and the second level the weather
-    #         cell ID.
-    #         In the case curtailment is only applied to specific generators,
-    #         curtailment time series of all curtailed generators, specified in
-    #         by the column name are returned.
-    #
-    #     """
-    #     if self._curtailment is not None:
-    #         if isinstance(self._curtailment, pd.DataFrame):
-    #             try:
-    #                 return self._curtailment.loc[[self.timeindex], :]
-    #             except:
-    #                 return self._curtailment.loc[self.timeindex, :]
-    #         elif isinstance(self._curtailment, list):
-    #             try:
-    #                 curtailment = pd.DataFrame()
-    #                 for gen in self._curtailment:
-    #                     curtailment[gen] = gen.curtailment
-    #                 return curtailment
-    #             except:
-    #                 raise
-    #     else:
-    #         return None
-    #
-    # @curtailment.setter
-    # def curtailment(self, curtailment):
-    #     self._curtailment = curtailment
+    def storage_units_reactive_power(self, df):
+        self._storage_units_reactive_power = df
 
     @property
     def residual_load(self):
         """
-        Returns residual load.
+        Returns residual load in network.
 
         Residual load for each time step is calculated from total load
-        (including charging points) minus total generation minus
-        storage active power (discharge is positive).
+        minus total generation minus storage active power (discharge is
+        positive).
         A positive residual load represents a load case while a negative
         residual load here represents a feed-in case.
         Grid losses are not considered.
@@ -356,15 +259,13 @@ class TimeSeries:
         Returns
         -------
         :pandas:`pandas.Series<Series>`
-
             Series with residual load in MW.
 
         """
         return (
-            self.loads_active_power.sum(axis=1)
-            + self.charging_points_active_power.sum(axis=1)
-            - self.generators_active_power.sum(axis=1)
-            - self.storage_units_active_power.sum(axis=1)
+                self.loads_active_power.sum(axis=1) -
+                self.generators_active_power.sum(axis=1) -
+                self.storage_units_active_power.sum(axis=1)
         )
 
     @property
@@ -397,6 +298,288 @@ class TimeSeries:
             lambda _: "feedin_case" if _ < 0.0 else "load_case"
         )
 
+    @property
+    def _attributes(self):
+        return [
+            "loads_active_power", "loads_reactive_power",
+            "generators_active_power", "generators_reactive_power",
+            "storage_units_active_power", "storage_units_reactive_power"
+        ]
+
+    def reduce_memory(self, attr_to_reduce=None, to_type="float32",
+                      time_series_raw=True, **kwargs):
+        """
+        Reduces size of dataframes to save memory.
+
+        See :attr:`EDisGo.reduce_memory` for more information.
+
+        Parameters
+        -----------
+        attr_to_reduce : list(str), optional
+            List of attributes to reduce size for. Per default, all active
+            and reactive power time series of generators, loads, and storage units
+            are reduced.
+        to_type : str, optional
+            Data type to convert time series data to. This is a tradeoff
+            between precision and memory. Default: "float32".
+        time_series_raw : bool, optional
+            If True raw time series data in :py:attr:`~time_series_raw` is reduced
+            as well. Default: True.
+
+        Other Parameters
+        ------------------
+        attr_to_reduce_raw : list(str), optional
+            List of attributes in :class:`~.network.timeseries.TimeSeriesRaw` to reduce
+            size for. See :attr:`~.network.timeseries.TimeSeriesRaw.reduce_memory`
+            for default.
+
+        """
+        if attr_to_reduce is None:
+            attr_to_reduce = self._attributes
+        for attr in attr_to_reduce:
+            setattr(
+                self,
+                attr,
+                getattr(self, attr).apply(lambda _: _.astype(to_type)),
+            )
+        if time_series_raw:
+            self.time_series_raw.reduce_memory(
+                kwargs.get("attr_to_reduce_raw", None),
+                to_type=to_type
+            )
+
+    def to_csv(self, directory, reduce_memory=False, time_series_raw=False, **kwargs):
+        """
+        Saves component time series to csv.
+
+        Saves the following time series to csv files with the same file name
+        (if the time series dataframe is not empty):
+
+        * loads_active_power and loads_reactive_power
+        * generators_active_power and generators_reactive_power
+        * storage_units_active_power and  storage_units_reactive_power
+
+        If parameter `time_series_raw` is set to True, raw time series data is saved
+        to csv as well. See :attr:`~.network.timeseries.TimeSeriesRaw.to_csv`
+        for more information.
+
+        Parameters
+        ----------
+        directory : str
+            Directory to save time series in.
+        reduce_memory : bool, optional
+            If True, size of dataframes is reduced using
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory`.
+            Optional parameters of
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory`
+            can be passed as kwargs to this function. Default: False.
+        time_series_raw : bool, optional
+            If True raw time series data in :py:attr:`~time_series_raw` is saved to csv
+            as well. Per default all raw time series data is then stored in a
+            subdirectory of the specified `directory` called "time_series_raw". Further,
+            if `reduce_memory` is set to True, raw time series data is reduced as well.
+            To change this default behavior please call
+            :attr:`~.network.timeseries.TimeSeriesRaw.to_csv` separately.
+            Default: False.
+
+        Other Parameters
+        ------------------
+        kwargs :
+            Kwargs may contain arguments of
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory`.
+
+        """
+        if reduce_memory is True:
+            self.reduce_memory(**kwargs)
+
+        os.makedirs(directory, exist_ok=True)
+
+        for attr in self._attributes:
+            if not getattr(self, attr).empty:
+                getattr(self, attr).to_csv(
+                    os.path.join(directory, "{}.csv".format(attr))
+                )
+
+        if time_series_raw:
+            self.time_series_raw.to_csv(
+                directory=os.path.join(directory, "time_series_raw"),
+                reduce_memory=reduce_memory
+            )
+
+    def from_csv(self, directory, time_series_raw=False, **kwargs):
+        """
+        Restores time series from csv files.
+
+        See :func:`~to_csv` for more information on which time series can be saved and
+        thus restored.
+
+        Parameters
+        ----------
+        directory : str
+            Directory time series are saved in.
+        time_series_raw : bool, optional
+            If True raw time series data is as well read in (see
+            :attr:`~.network.timeseries.TimeSeriesRaw.from_csv` for further
+            information). Directory data is restored from can be specified through
+            kwargs.
+            Default: False.
+
+        Other Parameters
+        ------------------
+        directory_raw : str, optional
+            Directory to read raw time series data from. Per default this is a
+            subdirectory of the specified `directory` called "time_series_raw".
+
+        """
+        timeindex = None
+        for attr in self._attributes:
+            path = os.path.join(directory, "{}.csv".format(attr))
+            if os.path.exists(path):
+                setattr(
+                    self,
+                    attr,
+                    pd.read_csv(path, index_col=0, parse_dates=True),
+                )
+                if timeindex is None:
+                    timeindex = getattr(self, "_{}".format(attr)).index
+        if timeindex is None:
+            timeindex = pd.DatetimeIndex([])
+        self._timeindex = timeindex
+
+        if time_series_raw:
+            self.time_series_raw.from_csv(
+                directory=kwargs.get(
+                    "directory_raw", os.path.join(directory, "time_series_raw"))
+            )
+
+
+class TimeSeriesRaw:
+    """
+    Holds raw time series data, e.g. sector-specific demand and standing times of EV.
+
+    Normalised time series are e.g. sector-specific demand time series or
+    technology-specific feed-in time series. Time series needed for
+    flexibilities are e.g. heat time series or curtailment time series.
+
+    Notes
+    -----
+    Can also hold the following attributes when specific mode of
+    :meth:`get_component_timeseries` is called: mode, generation_fluctuating,
+    generation_dispatchable, generation_reactive_power, load,
+    load_reactive_power. See description of meth:`get_component_timeseries` for
+    format of these.
+
+    """
+
+    def __init__(self, **kwargs):
+        pass
+
+    @property
+    def _attributes(self):
+        return [
+            "curtailment_target",
+            "generators_active_power_normalised"
+        ]
+
+    @property
+    def curtailment_target(self):
+        """
+        Generator- or technology-specific active power curtailment target.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with generator- or technology-specific curtailment
+            target in MW.
+            In the case of generator-specific curtailment targets columns
+            of the DataFrame hold the generator name.
+            In the case of technology-specific curtailment targets columns
+            hold the technology type. It is also possible to provide
+            curtailment targets by generator type and weather cell ID, in which
+            case columns are a :pandas:`pandas.MultiIndex<multiindex>`
+            with the first level containing the technology type and the second
+            level the weather cell ID.
+            Index of the DataFrame is a time index.
+
+        """
+        try:
+            return self._curtailment_target
+        except:
+            return pd.DataFrame()
+
+    @curtailment_target.setter
+    def curtailment_target(self, curtailment_target):
+        self._curtailment_target = curtailment_target
+
+    @property
+    def generators_active_power_normalised(self):
+        """
+        Technology-specific active power feed-in time series.
+
+        In case of wind and solar generators time series can further be
+        specified by weather cell ID, in which case columns of the DataFrame
+        are a :pandas:`pandas.MultiIndex<multiindex>` with
+        the first level containing the technology type and the second level
+        the weather cell ID.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with technology-specific active power feed-in time series
+            in MW.
+            In the case of only technology-specific time series columns
+            hold the technology type. In the case of technology- and weather
+            cell-specific time series columns are a
+            :pandas:`pandas.MultiIndex<multiindex>` with the first level
+            containing the technology type and the second level
+            the weather cell ID.
+            Index of the DataFrame is a time index.
+
+        """
+        try:
+            return self._generators_active_power_normalised
+        except:
+            return pd.DataFrame()
+
+    @generators_active_power_normalised.setter
+    def generators_active_power_normalised(
+            self, generators_active_power_normalised):
+        self._generators_active_power_normalised = \
+            generators_active_power_normalised
+
+    @property
+    def loads_active_power_normalised(self):
+        """
+        Sector-specific active power demand time series.
+
+        Holds e.g. sector-specific electricity demand time series as generated
+        using the demandlib (see .
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with technology-specific active power feed-in time series
+            in MW.
+            In the case of only technology-specific time series columns
+            hold the technology type. In the case of technology- and weather
+            cell-specific time series columns are a
+            :pandas:`pandas.MultiIndex<multiindex>` with the first level
+            containing the technology type and the second level
+            the weather cell ID.
+            Index of the DataFrame is a time index.
+
+        """
+        try:
+            return self._generators_active_power_normalised
+        except:
+            return pd.DataFrame()
+
+    @generators_active_power_normalised.setter
+    def generators_active_power_normalised(
+            self, generators_active_power_normalised):
+        self._generators_active_power_normalised = \
+            generators_active_power_normalised
+
     def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
         """
         Reduces size of dataframes to save memory.
@@ -415,35 +598,26 @@ class TimeSeries:
             between precision and memory. Default: "float32".
 
         """
+        # ToDo: Adapt once format of raw data is defined
         if attr_to_reduce is None:
-            attr_to_reduce = [
-                "generators_active_power",
-                "generators_reactive_power",
-                "loads_active_power",
-                "loads_reactive_power",
-                "charging_points_active_power",
-                "charging_points_reactive_power",
-                "storage_units_active_power",
-                "storage_units_reactive_power",
-            ]
+            attr_to_reduce = self._attributes
         for attr in attr_to_reduce:
             setattr(
                 self,
                 attr,
-                getattr(self, attr).apply(lambda _: _.astype(to_type)),
+                getattr(self, attr).apply(
+                    lambda _: _.astype(to_type)
+                )
             )
 
     def to_csv(self, directory, reduce_memory=False, **kwargs):
         """
-        Saves component time series to csv.
+        Saves time series to csv.
 
         Saves the following time series to csv files with the same file name
         (if the time series dataframe is not empty):
 
-        * loads_active_power and loads_reactive_power
-        * generators_active_power and generators_reactive_power
-        * charging_points_active_power and charging_points_reactive_power
-        * storage_units_active_power and  storage_units_reactive_power
+        * curtailment
 
         Parameters
         ----------
@@ -451,25 +625,24 @@ class TimeSeries:
             Directory to save time series in.
         reduce_memory : bool, optional
             If True, size of dataframes is reduced using
-            :attr:`~.network.timeseries.TimeSeries.reduce_memory`. Optional
-            parameters of :attr:`~.network.timeseries.TimeSeries.reduce_memory`
+            :attr:`~.network.timeseries.TimeSeriesRaw.reduce_memory`. Optional
+            parameters of
+            :attr:`~.network.timeseries.TimeSeriesRaw.reduce_memory`
             can be passed as kwargs to this function. Default: False.
 
         Other Parameters
         ------------------
         kwargs :
             Kwargs may contain optional arguments of
-            :attr:`~.network.timeseries.TimeSeries.reduce_memory`.
+            :attr:`~.network.timeseries.TimeSeriesRaw.reduce_memory`.
 
         """
-        save_attributes = _get_attributes_to_save()
-
         if reduce_memory is True:
             self.reduce_memory(**kwargs)
 
         os.makedirs(directory, exist_ok=True)
 
-        for attr in save_attributes:
+        for attr in self._attributes:
             if not getattr(self, attr).empty:
                 getattr(self, attr).to_csv(
                     os.path.join(directory, "{}.csv".format(attr))
@@ -489,7 +662,7 @@ class TimeSeries:
 
         """
         timeindex = None
-        for attr in _get_attributes_to_save():
+        for attr in self._attributes:
             path = os.path.join(directory, "{}.csv".format(attr))
             if os.path.exists(path):
                 setattr(
@@ -598,7 +771,8 @@ def get_component_timeseries(edisgo_obj, **kwargs):
     mode = kwargs.get("mode", None)
     timeindex = kwargs.get("timeindex", edisgo_obj.timeseries.timeindex)
     # reset TimeSeries
-    edisgo_obj.timeseries = TimeSeries(timeindex=timeindex)
+    edisgo_obj.timeseries = TimeSeries(
+        timeindex=timeindex)
     edisgo_obj.timeseries.mode = mode
     if mode:
         if "worst-case" in mode:
