@@ -244,6 +244,119 @@ class TimeSeries:
     def storage_units_reactive_power(self, df):
         self._storage_units_reactive_power = df
 
+    def set_active_power_manual(self, ts_generators=None, ts_loads=None,
+                                ts_storage_units=None):
+        """
+        Sets given component active power time series.
+
+        If time series for a component were already set before, they are overwritten.
+
+        Parameters
+        ----------
+        ts_generators : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series in MW of generators. Index of the data frame is
+            a datetime index. Columns contain generators names of generators to set
+            time series for.
+        ts_loads : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series in MW of loads. Index of the data frame is
+            a datetime index. Columns contain load names of loads to set
+            time series for.
+        ts_storage_units : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series in MW of storage units. Index of the data frame is
+            a datetime index. Columns contain storage unit names of storage units to set
+            time series for.
+
+        """
+        self._set_manual("active", ts_generators=ts_generators, ts_loads=ts_loads,
+                         ts_storage_units=ts_storage_units)
+
+    def set_reactive_power_manual(self, ts_generators=None, ts_loads=None,
+                                  ts_storage_units=None):
+        """
+        Sets given component reactive power time series.
+
+        If time series for a component were already set before, they are overwritten.
+
+        Parameters
+        ----------
+        ts_generators : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series in MVA of generators. Index of the data frame is
+            a datetime index. Columns contain generators names of generators to set
+            time series for.
+        ts_loads : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series in MVA of loads. Index of the data frame is
+            a datetime index. Columns contain load names of loads to set
+            time series for.
+        ts_storage_units : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series in MVA of storage units. Index of the data frame
+            is a datetime index. Columns contain storage unit names of storage units to
+            set time series for.
+
+        """
+        self._set_manual("reactive", ts_generators=ts_generators, ts_loads=ts_loads,
+                         ts_storage_units=ts_storage_units)
+
+    def _set_manual(self, mode, ts_generators=None, ts_loads=None,
+                    ts_storage_units=None):
+        """
+        Sets given component time series.
+
+        If time series for a component were already set before, they are overwritten.
+
+        Parameters
+        ----------
+        mode : str
+            Defines whether to set active or reactive power time series. Possible
+            options are "active" and "reactive".
+        ts_generators : :pandas:`pandas.DataFrame<DataFrame>`
+            Active or reactive power time series in MW or MVA of generators.
+            Index of the data frame is a datetime index. Columns contain generator
+            names of generators to set time series for.
+        ts_loads : :pandas:`pandas.DataFrame<DataFrame>`
+            Active or reactive power time series in MW or MVA of loads.
+            Index of the data frame is a datetime index. Columns contain load names of
+            loads to set time series for.
+        ts_storage_units : :pandas:`pandas.DataFrame<DataFrame>`
+            Active or reactive power time series in MW or MVA of storage units.
+            Index of the data frame is a datetime index. Columns contain storage unit
+            names of storage units to set time series for.
+
+        """
+        if ts_generators is not None:
+            df_name = "generators_{}_power".format(mode)
+            # drop generators time series from self.generators_(re)active_power that may
+            # already exist for some of the given generators
+            _drop_component_time_series(
+                obj=self, df_name=df_name,
+                comp_names=ts_generators.columns
+            )
+            # set (re)active power
+            _add_component_time_series(obj=self, df_name=df_name,
+                                       ts_new=ts_generators)
+
+        if ts_loads is not None:
+            df_name = "loads_{}_power".format(mode)
+            # drop load time series from self.loads_(re)active_power that may
+            # already exist for some of the given loads
+            _drop_component_time_series(
+                obj=self, df_name=df_name, comp_names=ts_loads.columns
+            )
+            # set (re)active power
+            _add_component_time_series(obj=self, df_name=df_name,
+                                       ts_new=ts_loads)
+
+        if ts_storage_units is not None:
+            df_name = "storage_units_{}_power".format(mode)
+            # drop storage unit time series from self.storage_units_(re)active_power
+            # that may already exist for some of the given storage units
+            _drop_component_time_series(
+                obj=self, df_name=df_name,
+                comp_names=ts_storage_units.columns
+            )
+            # set (re)active power
+            _add_component_time_series(obj=self, df_name=df_name,
+                                       ts_new=ts_storage_units)
+
     @property
     def residual_load(self):
         """
