@@ -357,6 +357,65 @@ class TimeSeries:
             _add_component_time_series(obj=self, df_name=df_name,
                                        ts_new=ts_storage_units)
 
+    def _worst_case_conventional_load(self, modes, loads_df, configs):
+        """
+        Define worst case load time series for each conventional load by whether it
+        is a load or feed-in case and whether it used to analyse the MV or LV.
+
+        For reactive power a fixed cosphi is assumed.
+
+        Parameters
+        ----------
+        edisgo_obj: :class:`~.self.edisgo.EDisGo`
+            The eDisGo model overall container
+        modes : list
+            List with worst-cases to generate time series for. Can be
+            'feedin_case', 'load_case' or both.
+        loads_df : :pandas:`pandas.DataFrame<DataFrame>`
+            additional column voltage level
+
+        """
+        # check that all loads have information on nominal power (grid connection power)
+        # and voltage level they are in
+        loads_df = loads_df.loc[:, ["p_nom", "voltage_level"]]
+        check_loads = loads_df.isnull().any(axis=1)
+        if check_loads.any():
+            raise AttributeError(
+                "The following loads have missing information on "
+                "grid connection power or voltage level: {}.".format(
+                    check_loads[check_loads].index.values)
+            )
+
+        # active power
+        # get worst case configurations
+        worst_case_scale_factors = configs["worst_case_scale_factor"]
+        # get power scaling factors for different voltage levels and feed-in/load case
+        power_scaling = pd.Series()
+        for mode in modes:
+            for voltage_level in ["mv", "lv"]:
+                power_scaling.at["{}_{}".format(mode, voltage_level)] = (
+                    worst_case_scale_factors[
+                        "{}_{}_load".format(voltage_level, mode)]
+                )
+        # calculate active power of loads
+        self.loads_active_power = power_scaling.to_frame("p_nom").dot(
+            loads_df.loc[:, ["p_nom"]].T)
+
+        # reactive power
+        # get worst case configurations for each load
+        q_sign, power_factor = _reactive_power_factor_and_mode_default(
+            loads_df, "loads", configs)
+        # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.loads_q_control = pd.DataFrame(
+            index=loads_df.index,
+            data={"type": "fixed_cosphi",
+                  "q_sign": q_sign,
+                  "power_factor": power_factor
+                  }
+        )
+        self.loads_reactive_power = q_control.fixed_cosphi(
+            self._loads_active_power, q_sign, power_factor)
+
     @property
     def residual_load(self):
         """
