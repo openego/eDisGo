@@ -946,139 +946,75 @@ def get_component_timeseries(edisgo_obj, **kwargs):
     edisgo_obj.timeseries = TimeSeries(
         timeindex=timeindex)
     edisgo_obj.timeseries.mode = mode
-    if mode:
-        if "worst-case" in mode:
-            modes = _get_worst_case_modes(mode)
-            # set random timeindex
-            edisgo_obj.timeseries.timeindex = pd.date_range(
-                "1/1/1970", periods=len(modes), freq="H"
-            )
-            _worst_case_generation(edisgo_obj=edisgo_obj, modes=modes)
-            _worst_case_load(edisgo_obj=edisgo_obj, modes=modes)
-            _worst_case_storage(edisgo_obj=edisgo_obj, modes=modes)
 
-        elif mode == "manual":
-            if kwargs.get("loads_active_power", None) is not None:
-                edisgo_obj.timeseries.loads_active_power = kwargs.get(
-                    "loads_active_power"
-                )
-            if kwargs.get("loads_reactive_power", None) is not None:
-                edisgo_obj.timeseries.loads_reactive_power = kwargs.get(
-                    "loads_reactive_power"
-                )
+    config_data = edisgo_obj.config
 
-            if kwargs.get("generators_active_power", None) is not None:
-                edisgo_obj.timeseries.generators_active_power = kwargs.get(
-                    "generators_active_power"
-                )
-            if kwargs.get("generators_reactive_power", None) is not None:
-                edisgo_obj.timeseries.generators_reactive_power = kwargs.get(
-                    "generators_reactive_power"
-                )
+    weather_cell_ids = get_weather_cells_intersecting_with_grid_district(edisgo_obj)
 
-            if kwargs.get("storage_units_active_power", None) is not None:
-                edisgo_obj.timeseries.storage_units_active_power = kwargs.get(
-                    "storage_units_active_power"
-                )
-            if kwargs.get("storage_units_reactive_power", None) is not None:
-                edisgo_obj.timeseries.storage_units_reactive_power = kwargs.get(
-                    "storage_units_reactive_power"
-                )
-
-            if kwargs.get("charging_points_active_power", None) is not None:
-                edisgo_obj.timeseries.charging_points_active_power = kwargs.get(
-                    "charging_points_active_power"
-                )
-            if kwargs.get("charging_points_reactive_power", None) is not None:
-                edisgo_obj.timeseries.charging_points_reactive_power = kwargs.get(
-                    "charging_points_reactive_power"
-                )
-        else:
-            raise ValueError("{} is not a valid mode.".format(mode))
+    # feed-in time series of fluctuating renewables
+    ts = kwargs.get("timeseries_generation_fluctuating", None)
+    if isinstance(ts, pd.DataFrame):
+        edisgo_obj.timeseries.generation_fluctuating = ts
+    elif isinstance(ts, str) and ts == "oedb":
+        edisgo_obj.timeseries.generation_fluctuating = \
+            timeseries_import.feedin_oedb(
+                config_data, weather_cell_ids, kwargs.get(
+                    "timeindex", None))
     else:
-        config_data = edisgo_obj.config
-
-        weather_cell_ids = get_weather_cells_intersecting_with_grid_district(edisgo_obj)
-
-        # feed-in time series of fluctuating renewables
-        ts = kwargs.get("timeseries_generation_fluctuating", None)
-        if isinstance(ts, pd.DataFrame):
-            edisgo_obj.timeseries.generation_fluctuating = ts
-        elif isinstance(ts, str) and ts == "oedb":
-            edisgo_obj.timeseries.generation_fluctuating = \
-                timeseries_import.feedin_oedb(
-                    config_data, weather_cell_ids, kwargs.get(
-                        "timeindex", None))
-        else:
+        raise ValueError(
+            "Your input for "
+            '"timeseries_generation_fluctuating" is not '
+            "valid.".format(mode)
+        )
+    # feed-in time series for dispatchable generators
+    ts = kwargs.get("timeseries_generation_dispatchable", None)
+    if isinstance(ts, pd.DataFrame):
+        edisgo_obj.timeseries.generation_dispatchable = ts
+    else:
+        # check if there are any dispatchable generators, and
+        # throw error if there are
+        gens = edisgo_obj.topology.generators_df
+        if not (gens.type.isin(["solar", "wind"])).all():
             raise ValueError(
-                "Your input for "
-                '"timeseries_generation_fluctuating" is not '
-                "valid.".format(mode)
-            )
-        # feed-in time series for dispatchable generators
-        ts = kwargs.get("timeseries_generation_dispatchable", None)
-        if isinstance(ts, pd.DataFrame):
-            edisgo_obj.timeseries.generation_dispatchable = ts
-        else:
-            # check if there are any dispatchable generators, and
-            # throw error if there are
-            gens = edisgo_obj.topology.generators_df
-            if not (gens.type.isin(["solar", "wind"])).all():
-                raise ValueError(
-                    'Your input for "timeseries_generation_dispatchable" '
-                    "is not valid.".format(mode)
-                )
-        # reactive power time series for all generators
-        ts = kwargs.get("timeseries_generation_reactive_power", None)
-        if isinstance(ts, pd.DataFrame):
-            edisgo_obj.timeseries.generation_reactive_power = ts
-        # set time index
-        if kwargs.get("timeindex", None) is not None:
-            edisgo_obj.timeseries.timeindex = kwargs.get("timeindex")
-        else:
-            edisgo_obj.timeseries.timeindex = (
-                edisgo_obj.timeseries.generation_fluctuating.index
+                'Your input for "timeseries_generation_dispatchable" '
+                "is not valid.".format(mode)
             )
 
-        # load time series
-        ts = kwargs.get("timeseries_load", None)
-        if isinstance(ts, pd.DataFrame):
-            edisgo_obj.timeseries.load = ts
-        elif ts == "demandlib":
-            edisgo_obj.timeseries.load = \
-                timeseries_import.load_time_series_demandlib(
-                    config_data,
-                    year=edisgo_obj.timeseries.timeindex[0].year
-                )
-        else:
-            raise ValueError(
-                "Your input for 'timeseries_load' is not valid.".format(mode)
+    # load time series
+    ts = kwargs.get("timeseries_load", None)
+    if isinstance(ts, pd.DataFrame):
+        edisgo_obj.timeseries.load = ts
+    elif ts == "demandlib":
+        edisgo_obj.timeseries.load = \
+            timeseries_import.load_time_series_demandlib(
+                config_data,
+                year=edisgo_obj.timeseries.timeindex[0].year
             )
-        # reactive power timeseries for loads
-        ts = kwargs.get("timeseries_load_reactive_power", None)
-        if isinstance(ts, pd.DataFrame):
-            edisgo_obj.timeseries.load_reactive_power = ts
-
-        # create generator active and reactive power timeseries
-        _generation_from_timeseries(edisgo_obj=edisgo_obj)
-
-        # create load active and reactive power timeseries
-        _load_from_timeseries(edisgo_obj=edisgo_obj)
-
-        # create storage active and reactive power timeseries
-        _storage_from_timeseries(
-            edisgo_obj=edisgo_obj,
-            ts_active_power=kwargs.get("timeseries_storage_units", None),
-            ts_reactive_power=kwargs.get(
-                "timeseries_storage_units_reactive_power", None
-            ),
+    else:
+        raise ValueError(
+            "Your input for 'timeseries_load' is not valid.".format(mode)
         )
 
-        # check if time series for the set time index can be obtained
-        _check_timeindex(edisgo_obj=edisgo_obj)
+    # create generator active and reactive power timeseries
+    _generation_from_timeseries(edisgo_obj=edisgo_obj)
+
+    # create load active and reactive power timeseries
+    load_by_sector(edisgo_obj=edisgo_obj)
+
+    # create storage active and reactive power timeseries
+    _storage_from_timeseries(
+        edisgo_obj=edisgo_obj,
+        ts_active_power=kwargs.get("timeseries_storage_units", None),
+        ts_reactive_power=kwargs.get(
+            "timeseries_storage_units_reactive_power", None
+        ),
+    )
+
+    # check if time series for the set time index can be obtained
+    _check_timeindex(edisgo_obj=edisgo_obj)
 
 
-def _load_from_timeseries(edisgo_obj, load_names=None):
+def load_by_sector(edisgo_obj, load_names=None):
     """
     Set active and reactive load time series for specified loads by sector.
 
