@@ -398,7 +398,13 @@ class TimeSeries:
             # heat pumps
 
             # other?
-        print("x")
+        if not edisgo_object.topology.storage_units_df.empty:
+            # assign voltage level for reactive power
+            df = assign_voltage_level_to_component(
+                edisgo_object.topology.storage_units_df,
+                edisgo_object.topology.buses_df)
+            self._worst_case_storage_units(
+                cases, df, edisgo_object.config)
 
     def _worst_case_generators(self, cases, df, configs):
         """
@@ -550,6 +556,77 @@ class TimeSeries:
         self.loads_reactive_power = q_control.fixed_cosphi(
             self.loads_active_power, q_sign, power_factor)
 
+    def _worst_case_storage_units(self, cases, df, configs):
+        """
+        Get charging and discharging of storage units for worst case analyses.
+
+        Worst case feed-in time series are distinguished by whether it is a load or
+        feed-in case.
+        In case of storage units worst case time series it is not distinguished by
+        whether it is used to analyse the MV or LV. However, both options are generated
+        as it is distinguished in the case of loads.
+
+        For reactive power a fixed cosphi is assumed.
+
+        Parameters
+        ----------
+        cases : list(str)
+            List with worst-cases to generate time series for. Can be
+            'feed-in_case', 'load_case' or both.
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with information on generators in the format of
+            :attr:`~.network.topology.Topology.generators_df` with additional column
+            "voltage_level".
+        configs : :class:`~.tools.config.Config`
+            Configuration data with assumed simultaneity factors and reactive power
+            behavior.
+
+        """
+        # check that all storage units have information on nominal power
+        # and voltage level they are in
+        df = df.loc[:, ["p_nom", "voltage_level"]]
+        check = df.isnull().any(axis=1)
+        if check.any():
+            raise AttributeError(
+                "The following storage units have missing information on "
+                "nominal power or voltage level: {}.".format(
+                    check[check].index.values)
+            )
+
+        # active power
+        # get worst case configurations
+        worst_case_scale_factors = configs["worst_case_scale_factor"]
+        # get power scaling factors for different voltage levels and feed-in/load case
+        power_scaling = pd.Series()
+        for case in cases:
+            power_scaling.at["{}_{}".format(case, "mv")] = (
+                worst_case_scale_factors[
+                    "{}_storage".format(case)]
+            )
+            power_scaling.at["{}_{}".format(case, "lv")] = power_scaling.at[
+                "{}_{}".format(case, "mv")]
+        # calculate active power of loads
+        self.storage_units_active_power = power_scaling.to_frame("p_nom").dot(
+            df.loc[:, ["p_nom"]].T)
+
+        # reactive power
+        # get worst case configurations for each load
+        q_sign, power_factor = _reactive_power_factor_and_mode_default(
+            df, "storage_units", configs)
+        # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control = pd.concat([
+            self.time_series_raw.q_control,
+            pd.DataFrame(
+                index=df.index,
+                data={"type": "fixed_cosphi",
+                      "q_sign": q_sign,
+                      "power_factor": power_factor
+                      }
+            )]
+        )
+        # calculate reactive power of loads
+        self.storage_units_reactive_power = q_control.fixed_cosphi(
+            self.storage_units_active_power, q_sign, power_factor)
 
     @property
     def residual_load(self):
@@ -1399,82 +1476,6 @@ def _storage_from_timeseries(
                 "timeseries do not match topology and "
                 "timeindex."
             )
-
-
-def _worst_case_storage(edisgo_obj, modes, storage_names=None):
-    """
-    Define worst case storage unit time series.
-
-    Parameters
-    ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    modes : list
-        List with worst-cases to generate time series for. Can be
-        'feed-in_case', 'load_case' or both.
-    storage_names: str or list of str
-        Names of storage units to add timeseries for. Default None,
-        timeseries for all storage units of edisgo_obj are set then.
-
-    """
-    if len(edisgo_obj.topology.storage_units_df) == 0:
-        edisgo_obj.timeseries.storage_units_active_power = pd.DataFrame(
-            {}, index=edisgo_obj.timeseries.timeindex
-        )
-        edisgo_obj.timeseries.storage_units_reactive_power = pd.DataFrame(
-            {}, index=edisgo_obj.timeseries.timeindex
-        )
-    else:
-        if storage_names is None:
-            storage_names = edisgo_obj.topology.storage_units_df.index
-        storage_df = edisgo_obj.topology.storage_units_df.loc[
-            storage_names, ["bus", "p_nom"]
-        ]
-
-        # check that all storage units have bus, nominal power
-        check_storage = storage_df.isnull().any(axis=1)
-        if check_storage.any():
-            raise AttributeError(
-                "The following storage units have either missing bus or "
-                "nominal power: {}.".format(
-                    check_storage[check_storage].index.values
-                )
-            )
-
-        # active power
-        # get worst case configurations
-        worst_case_scale_factors = edisgo_obj.config["worst_case_scale_factor"]
-
-        # get worst case scaling factors for feed-in/load case
-        worst_case_ts = pd.DataFrame(
-            np.transpose(
-                [
-                    [
-                        worst_case_scale_factors["{}_storage".format(mode)]
-                        for mode in modes
-                    ]
-                ]
-                * len(storage_df)
-            ),
-            index=edisgo_obj.timeseries.timeindex,
-            columns=storage_df.index,
-        )
-        edisgo_obj.timeseries.storage_units_active_power = drop_duplicated_columns(
-            pd.concat(
-                [
-                    edisgo_obj.timeseries.storage_units_active_power,
-                    (worst_case_ts * storage_df.p_nom),
-                ],
-                axis=1,
-            ),
-            keep="last",
-        )
-
-        q_control._set_reactive_power_time_series_for_fixed_cosphi_using_config(
-            edisgo_obj=edisgo_obj,
-            df=storage_df,
-            component_type="storage_units",
-        )
 
 
 def _check_timeindex(edisgo_obj):
