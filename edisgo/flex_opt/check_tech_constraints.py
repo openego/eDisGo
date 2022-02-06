@@ -138,12 +138,12 @@ def lines_allowed_load(edisgo_obj, voltage_level):
         )
 
     i_lines_allowed_per_case = {}
-    i_lines_allowed_per_case["feedin_case"] = (
+    i_lines_allowed_per_case["feed-in_case"] = (
         lines_df.s_nom
         / sqrt(3)
         / nominal_voltage
         * edisgo_obj.config["grid_expansion_load_factors"][
-            "{}_feedin_case_line".format(voltage_level)
+            "{}_feed-in_case_line".format(voltage_level)
         ]
     )
 
@@ -624,9 +624,9 @@ def _mv_allowed_voltage_limits(edisgo_obj, voltage_levels):
 
     # get config values for lower voltage limit in feed-in case and upper
     # voltage limit in load case
-    v_allowed_per_case["feedin_case_lower"] = edisgo_obj.config[
+    v_allowed_per_case["feed-in_case_lower"] = edisgo_obj.config[
         "grid_expansion_allowed_voltage_deviations"
-    ]["feedin_case_lower"]
+    ]["feed-in_case_lower"]
     v_allowed_per_case["load_case_upper"] = edisgo_obj.config[
         "grid_expansion_allowed_voltage_deviations"
     ]["load_case_upper"]
@@ -641,12 +641,12 @@ def _mv_allowed_voltage_limits(edisgo_obj, voltage_levels):
     ]
 
     if voltage_levels == "mv_lv" or voltage_levels == "mv":
-        v_allowed_per_case["feedin_case_upper"] = (
+        v_allowed_per_case["feed-in_case_upper"] = (
             1
             + offset
             + control_deviation
             + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "{}_feedin_case_max_v_deviation".format(voltage_levels)
+                "{}_feed-in_case_max_v_deviation".format(voltage_levels)
             ]
         )
         v_allowed_per_case["load_case_lower"] = (
@@ -717,10 +717,10 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grid, mode):
 
     # calculate upper voltage limit in feed-in case and lower voltage limit in
     # load case
-    v_allowed_per_case["feedin_case_upper"] = (
+    v_allowed_per_case["feed-in_case_upper"] = (
         voltage_base
         + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-            "{}_feedin_case_max_v_deviation".format(config_string)
+            "{}_feed-in_case_max_v_deviation".format(config_string)
         ]
     )
     v_allowed_per_case["load_case_lower"] = (
@@ -731,9 +731,9 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grid, mode):
     )
 
     timeindex = voltage_base.index
-    v_allowed_per_case["feedin_case_lower"] = pd.Series(
+    v_allowed_per_case["feed-in_case_lower"] = pd.Series(
         edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-            "feedin_case_lower"
+            "feed-in_case_lower"
         ],
         index=timeindex,
     )

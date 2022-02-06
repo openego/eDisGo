@@ -229,8 +229,8 @@ def one_storage_per_feeder(
 
         # get allowed load factors per case
         lf = {
-            "feedin_case": edisgo.network.config["grid_expansion_load_factors"][
-                "mv_feedin_case_line"
+            "feed-in_case": edisgo.network.config["grid_expansion_load_factors"][
+                "mv_feed-in_case_line"
             ],
             "load_case": network.config["grid_expansion_load_factors"][
                 "mv_load_case_line"
@@ -250,7 +250,7 @@ def one_storage_per_feeder(
             q_total = q_feeder + q_storage
             p_hv_mv_station = p_slack - p_storage
             lf_ts = p_hv_mv_station.apply(
-                lambda _: lf["feedin_case"] if _ < 0 else lf["load_case"]
+                lambda _: lf["feed-in_case"] if _ < 0 else lf["load_case"]
             )
             s_max_ts = (p_total ** 2 + q_total ** 2).apply(sqrt).divide(lf_ts)
             s_max.append(max(s_max_ts))

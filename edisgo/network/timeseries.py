@@ -462,13 +462,13 @@ class TimeSeries:
         :pandas:`pandas.Series<Series>`
 
             Series with information on whether time step is handled as load
-            case ('load_case') or feed-in case ('feedin_case') for each time
+            case ('load_case') or feed-in case ('feed-in_case') for each time
             step in :py:attr:`~timeindex`.
 
         """
 
         return self.residual_load.apply(
-            lambda _: "feedin_case" if _ < 0.0 else "load_case"
+            lambda _: "feed-in_case" if _ < 0.0 else "load_case"
         )
 
     @property
@@ -1276,7 +1276,7 @@ def _worst_case_generation(edisgo_obj, modes, generator_names=None):
         The eDisGo model overall container
     modes : list
         List with worst-cases to generate time series for. Can be
-        'feedin_case', 'load_case' or both.
+        'feed-in_case', 'load_case' or both.
     generator_names: str or list of str
         Names of generators to add timeseries for. Default None, timeseries
         for all generators of edisgo_obj are set then.
@@ -1305,14 +1305,14 @@ def _worst_case_generation(edisgo_obj, modes, generator_names=None):
     worst_case_ts = pd.DataFrame(
         {
             "solar": [
-                worst_case_scale_factors["{}_feedin_pv".format(mode)] for mode in modes
+                worst_case_scale_factors["{}_feed-in_pv".format(mode)] for mode in modes
             ],
             "wind": [
-                worst_case_scale_factors["{}_feedin_wind".format(mode)]
+                worst_case_scale_factors["{}_feed-in_wind".format(mode)]
                 for mode in modes
             ],
             "other": [
-                worst_case_scale_factors["{}_feedin_other".format(mode)]
+                worst_case_scale_factors["{}_feed-in_other".format(mode)]
                 for mode in modes
             ],
         },
@@ -1375,7 +1375,7 @@ def _worst_case_load(edisgo_obj, modes, load_names=None):
         The eDisGo model overall container
     modes : list
         List with worst-cases to generate time series for. Can be
-        'feedin_case', 'load_case' or both.
+        'feed-in_case', 'load_case' or both.
     load_names: str or list of str
         Names of loads to add timeseries for. Default None, timeseries
         for all loads of edisgo_obj are set then.
@@ -1457,7 +1457,7 @@ def _worst_case_storage(edisgo_obj, modes, storage_names=None):
         The eDisGo model overall container
     modes : list
         List with worst-cases to generate time series for. Can be
-        'feedin_case', 'load_case' or both.
+        'feed-in_case', 'load_case' or both.
     storage_names: str or list of str
         Names of storage units to add timeseries for. Default None,
         timeseries for all storage units of edisgo_obj are set then.
