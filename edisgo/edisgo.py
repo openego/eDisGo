@@ -307,6 +307,14 @@ class EDisGo:
         if path is not None:
             import_ding0_grid(path, self)
 
+    def set_timeseries_worst_case_analysis(self, cases=["load_case", "feed-in_case"]):
+        """
+
+        """
+        if isinstance(cases, str):
+            cases = [cases]
+
+        self.timeseries.set_worst_case(self, cases)
     def to_pypsa(self, **kwargs):
         """
         Convert to PyPSA network representation.

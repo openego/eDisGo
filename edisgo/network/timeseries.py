@@ -1,3 +1,4 @@
+from itertools import product
 import logging
 import os
 
@@ -358,33 +359,161 @@ class TimeSeries:
             _add_component_time_series(obj=self, df_name=df_name,
                                        ts_new=ts_storage_units)
 
-    def _worst_case_conventional_load(self, modes, loads_df, configs):
+    def set_worst_case(self, edisgo_object, cases):
         """
-        Define worst case load time series for each conventional load by whether it
+        Worst case scaling factors for loads and generators are specified in
+        the config section `worst_case_scale_factor`.
+
+        For each case time series for MV analysis and LV analysis are returned, as
+        different simultaneity factors are assumed.
+
+        For conventional loads simultaneity factors from config used. Fixed coshphi assumed.
+        Values for cosphi also taken from config and it is distinguished between loads
+        in the MV and LV.
+
+        """
+        #ToDo: Check if index needs to be time index
+        # self.timeindex = pd.date_range(
+        #     "1/1/1970", periods=len(modes), freq="H"
+        # )
+        self.timeindex = ["_".join(case) for case in product(cases, ["mv", "lv"])]
+
+        if not edisgo_object.topology.generators_df.empty:
+            # assign voltage level for reactive power
+            df = assign_voltage_level_to_component(
+                edisgo_object.topology.generators_df, edisgo_object.topology.buses_df)
+            self._worst_case_generators(
+                cases, df, edisgo_object.config)
+        if not edisgo_object.topology.loads_df.empty:
+            # assign voltage level for reactive power
+            df = assign_voltage_level_to_component(
+                edisgo_object.topology.loads_df, edisgo_object.topology.buses_df)
+            # conventional loads
+            self._worst_case_conventional_load(
+                cases, df[df.type == "conventional_load"],
+                edisgo_object.config)
+
+            # charging points
+
+            # heat pumps
+
+            # other?
+        print("x")
+
+    def _worst_case_generators(self, cases, df, configs):
+        """
+        Get feed-in of generators for worst case analyses.
+
+        Worst case feed-in time series are distinguished by technology (PV, wind
+        and all other) and whether it is a load or feed-in case.
+        In case of generator worst case time series it is not distinguished by whether
+        it is used to analyse the MV or LV. However, both options are generated as it
+        is distinguished in the case of loads.
+
+        For reactive power a fixed cosphi is assumed.
+
+        Parameters
+        ----------
+        cases : list(str)
+            List with worst-cases to generate time series for. Can be
+            'feed-in_case', 'load_case' or both.
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with information on generators in the format of
+            :attr:`~.network.topology.Topology.generators_df` with additional column
+            "voltage_level".
+        configs : :class:`~.tools.config.Config`
+            Configuration data with assumed simultaneity factors and reactive power
+            behavior.
+
+        """
+        # check that all generators have information on nominal power, technology type,
+        # and voltage level they are in
+        df = df.loc[:, ["p_nom", "voltage_level", "type"]]
+        check = df.isnull().any(axis=1)
+        if check.any():
+            raise AttributeError(
+                "The following generators have missing information on "
+                "nominal power, technology type or voltage level: {}.".format(
+                    check[check].index.values)
+            )
+
+        # active power
+        # get worst case configurations
+        worst_case_scale_factors = configs["worst_case_scale_factor"]
+        # get power scaling factors for different technologies, voltage levels and
+        # feed-in/load case
+        types = ["pv", "wind", "other"]
+        power_scaling = pd.DataFrame(columns=types)
+        for t in types:
+            for case in cases:
+                power_scaling.at["{}_{}".format(case, "mv"), t] = (
+                    worst_case_scale_factors[
+                        "{}_feed-in_{}".format(case, t)]
+                )
+                power_scaling.at["{}_{}".format(case, "lv"), t] = power_scaling.at[
+                    "{}_{}".format(case, "mv"), t]
+        # calculate active power of generators
+        self.generators_active_power = pd.concat(
+            [power_scaling.pv.to_frame("p_nom").dot(
+                df[df.type == "solar"].loc[:, ["p_nom"]].T),
+             power_scaling.wind.to_frame("p_nom").dot(
+                 df[df.type == "wind"].loc[:, ["p_nom"]].T),
+                power_scaling.other.to_frame("p_nom").dot(
+                    df[~df.type.isin(["solar", "wind"])].loc[:, ["p_nom"]].T)
+            ], axis=1
+        )
+
+        # reactive power
+        # get worst case configurations for each load
+        q_sign, power_factor = _reactive_power_factor_and_mode_default(
+            df, "generators", configs)
+        # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control = pd.concat([
+            self.time_series_raw.q_control,
+            pd.DataFrame(
+                index=df.index,
+                data={"type": "fixed_cosphi",
+                      "q_sign": q_sign,
+                      "power_factor": power_factor
+                      }
+            )]
+        )
+        # calculate reactive power of loads
+        self.generators_reactive_power = q_control.fixed_cosphi(
+            self.generators_active_power, q_sign, power_factor)
+
+    def _worst_case_conventional_load(self, cases, df, configs):
+        """
+        Get demand of conventional loads for worst case analyses.
+
+        Worst case load time series are distinguished by whether it
         is a load or feed-in case and whether it used to analyse the MV or LV.
 
         For reactive power a fixed cosphi is assumed.
 
         Parameters
         ----------
-        edisgo_obj: :class:`~.self.edisgo.EDisGo`
-            The eDisGo model overall container
-        modes : list
+        cases : list(str)
             List with worst-cases to generate time series for. Can be
-            'feedin_case', 'load_case' or both.
-        loads_df : :pandas:`pandas.DataFrame<DataFrame>`
-            additional column voltage level
+            'feed-in_case', 'load_case' or both.
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with information on conventional loads in the format of
+            :attr:`~.network.topology.Topology.loads_df` with additional column
+            "voltage_level".
+        configs : :class:`~.tools.config.Config`
+            Configuration data with assumed simultaneity factors and reactive power
+            behavior.
 
         """
         # check that all loads have information on nominal power (grid connection power)
         # and voltage level they are in
-        loads_df = loads_df.loc[:, ["p_nom", "voltage_level"]]
-        check_loads = loads_df.isnull().any(axis=1)
-        if check_loads.any():
+        df = df.loc[:, ["p_nom", "voltage_level"]]
+        check = df.isnull().any(axis=1)
+        if check.any():
             raise AttributeError(
                 "The following loads have missing information on "
                 "grid connection power or voltage level: {}.".format(
-                    check_loads[check_loads].index.values)
+                    check[check].index.values)
             )
 
         # active power
@@ -392,30 +521,35 @@ class TimeSeries:
         worst_case_scale_factors = configs["worst_case_scale_factor"]
         # get power scaling factors for different voltage levels and feed-in/load case
         power_scaling = pd.Series()
-        for mode in modes:
+        for case in cases:
             for voltage_level in ["mv", "lv"]:
-                power_scaling.at["{}_{}".format(mode, voltage_level)] = (
+                power_scaling.at["{}_{}".format(case, voltage_level)] = (
                     worst_case_scale_factors[
-                        "{}_{}_load".format(voltage_level, mode)]
+                        "{}_{}_load".format(voltage_level, case)]
                 )
         # calculate active power of loads
         self.loads_active_power = power_scaling.to_frame("p_nom").dot(
-            loads_df.loc[:, ["p_nom"]].T)
+            df.loc[:, ["p_nom"]].T)
 
         # reactive power
         # get worst case configurations for each load
         q_sign, power_factor = _reactive_power_factor_and_mode_default(
-            loads_df, "loads", configs)
+            df, "loads", configs)
         # write reactive power configuration to TimeSeriesRaw
-        self.time_series_raw.loads_q_control = pd.DataFrame(
-            index=loads_df.index,
-            data={"type": "fixed_cosphi",
-                  "q_sign": q_sign,
-                  "power_factor": power_factor
-                  }
+        self.time_series_raw.q_control = pd.concat([
+            self.time_series_raw.q_control,
+            pd.DataFrame(
+                index=df.index,
+                data={"type": "fixed_cosphi",
+                      "q_sign": q_sign,
+                      "power_factor": power_factor
+                      }
+            )]
         )
+        # calculate reactive power of loads
         self.loads_reactive_power = q_control.fixed_cosphi(
-            self._loads_active_power, q_sign, power_factor)
+            self.loads_active_power, q_sign, power_factor)
+
 
     @property
     def residual_load(self):
@@ -636,10 +770,13 @@ class TimeSeriesRaw:
 
     Attributes
     ------------
-    loads_q_control : :pandas:`pandas.DataFrame<DataFrame>`
+    q_control : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with information on applied reactive power control or in case of
         conventional loads assumed reactive power behavior. Index of the dataframe are
-        the load names. Columns are
+        the component names as in index of
+        :attr:`~.network.topology.Topology.generators_df`,
+        :attr:`~.network.topology.Topology.loads_df`, and
+        :attr:`~.network.topology.Topology.storage_units_df`. Columns are
         "type" with the type of Q-control applied (can be "fixed_cosphi", "cosphi(P)",
         or "Q(V)"),
         "power_factor" with the (maximum) power factor,
@@ -659,7 +796,8 @@ class TimeSeriesRaw:
     """
 
     def __init__(self, **kwargs):
-        pass
+        self.q_control = pd.DataFrame(
+            columns=["type", "q_sign", "power_factor", "parametrisation"])
 
     @property
     def _attributes(self):
@@ -1263,190 +1401,6 @@ def _storage_from_timeseries(
             )
 
 
-def _worst_case_generation(edisgo_obj, modes, generator_names=None):
-    """
-    Define worst case generation time series for fluctuating and
-    dispatchable generators.
-
-    Overwrites active and reactive power time series of generators
-
-    Parameters
-    ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    modes : list
-        List with worst-cases to generate time series for. Can be
-        'feed-in_case', 'load_case' or both.
-    generator_names: str or list of str
-        Names of generators to add timeseries for. Default None, timeseries
-        for all generators of edisgo_obj are set then.
-    """
-    if generator_names is None:
-        generator_names = edisgo_obj.topology.generators_df.index
-
-    gens_df = edisgo_obj.topology.generators_df.loc[
-        generator_names, ["bus", "type", "p_nom"]
-    ]
-
-    # check that all generators have bus, type, nominal power
-    check_gens = gens_df.isnull().any(axis=1)
-    if check_gens.any():
-        raise AttributeError(
-            "The following generators have either missing bus, type or "
-            "nominal power: {}.".format(check_gens[check_gens].index.values)
-        )
-
-    # active power
-    # get worst case configurations
-    worst_case_scale_factors = edisgo_obj.config["worst_case_scale_factor"]
-
-    # get worst case scaling factors for different generator types and
-    # feed-in/load case
-    worst_case_ts = pd.DataFrame(
-        {
-            "solar": [
-                worst_case_scale_factors["{}_feed-in_pv".format(mode)] for mode in modes
-            ],
-            "wind": [
-                worst_case_scale_factors["{}_feed-in_wind".format(mode)]
-                for mode in modes
-            ],
-            "other": [
-                worst_case_scale_factors["{}_feed-in_other".format(mode)]
-                for mode in modes
-            ],
-        },
-        index=edisgo_obj.timeseries.timeindex,
-    )
-
-    gen_ts = pd.DataFrame(
-        index=edisgo_obj.timeseries.timeindex,
-        columns=gens_df.index,
-        dtype="float64",
-    )
-    # assign normalized active power time series to solar generators
-    cols_pv = gen_ts[gens_df.index[gens_df.type == "solar"]].columns
-    if len(cols_pv) > 0:
-        gen_ts[cols_pv] = pd.concat(
-            [worst_case_ts.loc[:, ["solar"]]] * len(cols_pv), axis=1, sort=True
-        )
-    # assign normalized active power time series to wind generators
-    cols_wind = gen_ts[gens_df.index[gens_df.type == "wind"]].columns
-    if len(cols_wind) > 0:
-        gen_ts[cols_wind] = pd.concat(
-            [worst_case_ts.loc[:, ["wind"]]] * len(cols_wind),
-            axis=1,
-            sort=True,
-        )
-    # assign normalized active power time series to other generators
-    cols = gen_ts.columns[~gen_ts.columns.isin(cols_pv.append(cols_wind))]
-    if len(cols) > 0:
-        gen_ts[cols] = pd.concat(
-            [worst_case_ts.loc[:, ["other"]]] * len(cols), axis=1, sort=True
-        )
-
-    # drop existing timeseries
-    _drop_existing_component_timeseries(edisgo_obj, "generators", generator_names)
-
-    # multiply normalized time series by nominal power of generator
-    edisgo_obj.timeseries.generators_active_power = pd.concat(
-        [
-            edisgo_obj.timeseries.generators_active_power,
-            gen_ts.mul(gens_df.p_nom),
-        ],
-        axis=1,
-    )
-
-    # calculate reactive power
-    q_control._set_reactive_power_time_series_for_fixed_cosphi_using_config(
-        edisgo_obj=edisgo_obj,
-        df=gens_df,
-        component_type="generators"
-    )
-
-
-def _worst_case_load(edisgo_obj, modes, load_names=None):
-    """
-    Define worst case load time series for each sector.
-
-    Parameters
-    ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    modes : list
-        List with worst-cases to generate time series for. Can be
-        'feed-in_case', 'load_case' or both.
-    load_names: str or list of str
-        Names of loads to add timeseries for. Default None, timeseries
-        for all loads of edisgo_obj are set then.
-
-    """
-
-    voltage_levels = ["mv", "lv"]
-
-    if load_names is None:
-        load_names = edisgo_obj.topology.loads_df.index
-    loads_df = edisgo_obj.topology.loads_df.loc[load_names, ["bus", "sector", "p_nom"]]
-
-    # check that all loads have bus, sector, annual consumption
-    check_loads = loads_df.isnull().any(axis=1)
-    if check_loads.any():
-        raise AttributeError(
-            "The following loads have either missing bus, sector or "
-            "annual consumption: {}.".format(check_loads[check_loads].index.values)
-        )
-
-    # assign voltage level to loads
-    if loads_df.empty:
-        return
-    loads_df["voltage_level"] = loads_df.apply(
-        lambda _: "lv" if edisgo_obj.topology.buses_df.at[_.bus, "v_nom"] < 1 else "mv",
-        axis=1,
-    )
-
-    # active power
-    # get worst case configurations
-    worst_case_scale_factors = edisgo_obj.config["worst_case_scale_factor"]
-
-    # get power scaling factors for different voltage levels and feed-in/
-    # load case
-    power_scaling = {}
-    for voltage_level in voltage_levels:
-        power_scaling[voltage_level] = [
-            worst_case_scale_factors["{}_{}_load".format(voltage_level, mode)]
-            for mode in modes
-        ]
-
-    # assign power scaling factor to each load
-    power_scaling_df = pd.DataFrame(
-        data=np.transpose(
-            [power_scaling[loads_df.at[col, "voltage_level"]] for col in loads_df.index]
-        ),
-        index=edisgo_obj.timeseries.timeindex,
-        columns=loads_df.index,
-    )
-
-    # drop existing timeseries
-    _drop_existing_component_timeseries(
-        edisgo_obj=edisgo_obj, comp_type="loads", comp_names=load_names
-    )
-
-    # calculate active power of loads
-    edisgo_obj.timeseries.loads_active_power = pd.concat(
-        [
-            edisgo_obj.timeseries.loads_active_power,
-            (power_scaling_df * loads_df.loc[:, "p_nom"]),
-        ],
-        axis=1,
-    )
-
-    q_control._set_reactive_power_time_series_for_fixed_cosphi_using_config(
-        edisgo_obj=edisgo_obj,
-        df=loads_df,
-        component_type="loads"
-    )
-
-
 def _worst_case_storage(edisgo_obj, modes, storage_names=None):
     """
     Define worst case storage unit time series.
@@ -1643,29 +1597,6 @@ def check_timeseries_for_index_and_cols(edisgo_obj, timeseries, component_names)
             "for the following components were tried to be "
             "added: {}".format(component_names)
         )
-
-
-def _get_worst_case_modes(mode):
-    """
-    Returns list of modes to be handled in worst case analysis.
-
-    Parameters
-    ----------
-    mode: str
-        string containing 'worst-case' and specifies case
-
-    Returns
-    -------
-    modes: list of str
-        list which can contains 'feedin-case', 'load_case' or both
-    """
-    if mode == "worst-case":
-        modes = ["feedin_case", "load_case"]
-    elif mode == "worst-case-feedin" or mode == "worst-case-load":
-        modes = ["{}_case".format(mode.split("-")[-1])]
-    else:
-        raise ValueError("{} is not a valid mode.".format(mode))
-    return modes
 
 
 def _reactive_power_factor_and_mode_default(comp_df, component_type, configs):
