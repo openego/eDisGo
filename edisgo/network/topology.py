@@ -209,7 +209,10 @@ class Topology:
                 Peak load or nominal capacity in MW.
 
             type : str
-                Load type. E.g. 'load', 'charging_point' or 'heat_pump'
+                Type of load, e.g. 'conventional_load', 'charging_point' or 'heat_pump'.
+                This information is for example currently necessary when setting up a
+                worst case analysis, as different types of loads are treated
+                differently.
 
             annual_consumption : float
                 Annual consumption in MWh.
@@ -906,7 +909,7 @@ class Topology:
         return False
 
     def add_load(
-        self, bus, p_nom, type="load", **kwargs
+        self, bus, p_nom, type="conventional_load", **kwargs
     ):
         """
         Adds load to topology.
@@ -921,7 +924,7 @@ class Topology:
             See :py:attr:`~loads_df` for more information.
         type : str
             See :py:attr:`~loads_df` for more information.
-            Default: "load"
+            Default: "conventional_load"
 
         Other Parameters
         -----------------
