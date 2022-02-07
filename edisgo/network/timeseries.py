@@ -389,12 +389,15 @@ class TimeSeries:
             df = assign_voltage_level_to_component(
                 edisgo_object.topology.loads_df, edisgo_object.topology.buses_df)
             # conventional loads
-            self._worst_case_conventional_load(
-                cases, df[df.type == "conventional_load"],
-                edisgo_object.config)
-
+            df_conv = df[df.type == "conventional_load"]
+            if not df_conv.empty:
+                self._worst_case_conventional_load(
+                    cases, df_conv, edisgo_object.config)
             # charging points
-
+            df_cp = df[df.type == "charging_point"]
+            if not df_cp.empty:
+                self._worst_case_charging_points(
+                    cases, df_cp, edisgo_object.config)
             # heat pumps
 
             # other?
@@ -484,7 +487,7 @@ class TimeSeries:
                       }
             )]
         )
-        # calculate reactive power of loads
+        # calculate reactive power of generators
         self.generators_reactive_power = q_control.fixed_cosphi(
             self.generators_active_power, q_sign, power_factor)
 
@@ -553,6 +556,92 @@ class TimeSeries:
             )]
         )
         # calculate reactive power of loads
+        self.loads_reactive_power = q_control.fixed_cosphi(
+            self.loads_active_power, q_sign, power_factor)
+
+    def _worst_case_charging_points(self, cases, df, configs):
+        """
+        Get demand of charging points for worst case analyses.
+
+        Worst case demand time series are distinguished by use case (home charging,
+        work charging, public (slow) charging and HPC), by whether it is a load or
+        feed-in case and by whether it used to analyse the MV or LV.
+
+        For reactive power a fixed cosphi is assumed.
+
+        Parameters
+        ----------
+        cases : list(str)
+            List with worst-cases to generate time series for. Can be
+            'feed-in_case', 'load_case' or both.
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with information on charging points in the format of
+            :attr:`~.network.topology.Topology.loads_df` with additional column
+            "voltage_level".
+        configs : :class:`~.tools.config.Config`
+            Configuration data with assumed simultaneity factors and reactive power
+            behavior.
+
+        """
+        # check that all charging points have information on nominal power,
+        # sector (use case), and voltage level they are in
+        df = df.loc[:, ["p_nom", "voltage_level", "sector"]]
+        check = df.isnull().any(axis=1)
+        if check.any():
+            raise AttributeError(
+                "The following charging points have missing information on "
+                "nominal power, use case or voltage level: {}.".format(
+                    check[check].index.values)
+            )
+        # check that there is no invalid sector (only "home", "work", "public", and
+        # "hpc" allowed)
+        use_cases = ["home", "work", "public", "hpc"]
+        sectors = df.sector.unique()
+        diff = list(set(sectors) - set(use_cases))
+        if len(diff) > 0:
+            raise AttributeError(
+                "The following charging points have a use case no worst case "
+                "simultaneity factor is defined for: {}.".format(
+                    df[df.sector.isin(diff)].index.values)
+            )
+
+        # active power
+        # get worst case configurations
+        worst_case_scale_factors = configs["worst_case_scale_factor"]
+        # get power scaling factors for different use cases, voltage levels and
+        # feed-in/load case
+        power_scaling = pd.DataFrame(columns=sectors)
+        for s in sectors:
+            for case in cases:
+                for voltage_level in ["mv", "lv"]:
+                    power_scaling.at["{}_{}".format(case, voltage_level), s] = (
+                        worst_case_scale_factors[
+                            "{}_{}_cp_{}".format(voltage_level, case, s)]
+                    )
+        # calculate active power of charging points
+        self.loads_active_power = pd.concat(
+            [self.loads_active_power] +
+            [power_scaling.loc[:, s].to_frame("p_nom").dot(
+                 df[df.sector == s].loc[:, ["p_nom"]].T) for s in sectors
+            ], axis=1
+        )
+
+        # reactive power
+        # get worst case configurations for each charging
+        q_sign, power_factor = _reactive_power_factor_and_mode_default(
+            df, "charging_points", configs)
+        # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control = pd.concat([
+            self.time_series_raw.q_control,
+            pd.DataFrame(
+                index=df.index,
+                data={"type": "fixed_cosphi",
+                      "q_sign": q_sign,
+                      "power_factor": power_factor
+                      }
+            )]
+        )
+        # calculate reactive power of charging points
         self.loads_reactive_power = q_control.fixed_cosphi(
             self.loads_active_power, q_sign, power_factor)
 
@@ -1615,7 +1704,8 @@ def _reactive_power_factor_and_mode_default(comp_df, component_type, configs):
         All components must have the same `component_type`.
     component_type : str
         The component type determines the reactive power factor and mode used.
-        Possible options are 'generators', 'storage_units' and 'loads'.
+        Possible options are 'generators', 'storage_units', 'loads', 'charging_points',
+        and 'heat_pumps'.
     configs : :class:`~.tools.config.Config`
         eDisGo configuration data.
 
@@ -1642,10 +1732,17 @@ def _reactive_power_factor_and_mode_default(comp_df, component_type, configs):
     elif component_type == "loads":
         get_q_sign = q_control.get_q_sign_load
         comp = "load"
+    elif component_type == "charging_points":
+        get_q_sign = q_control.get_q_sign_load
+        comp = "cp"
+    elif component_type == "heat_pumps":
+        get_q_sign = q_control.get_q_sign_load
+        comp = "hp"
     else:
         raise ValueError(
             "Given 'component_type' is not valid. Valid options are "
-            "'generators','storage_units' and 'loads'.")
+            "'generators','storage_units', 'loads', 'charging_points', and "
+            "'heat_pumps'.")
     for voltage_level in comp_df.voltage_level.unique():
         cols = comp_df.index[comp_df.voltage_level == voltage_level]
         if len(cols) > 0:
