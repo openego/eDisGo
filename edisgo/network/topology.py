@@ -37,7 +37,6 @@ COLUMNS = {
         "weather_cell_id",
         "subtype",
     ],
-    "charging_points_df": ["bus", "p_nom", "type", "sector"],
     "storage_units_df": ["bus", "control", "p_nom"],
     "transformers_df": ["bus0", "bus1", "x_pu", "r_pu", "s_nom", "type_info"],
     "lines_df": [
@@ -569,9 +568,9 @@ class Topology:
         self._switches_df = df
 
     @property
-    def charging_points_df(self, type="charging_point"):
+    def charging_points_df(self):
         """
-        Returns a subset from :py:attr:`~loads_df` containing only charging points.
+        Returns a subset of :py:attr:`~loads_df` containing only charging points.
 
         Parameters
         ----------
@@ -584,12 +583,10 @@ class Topology:
             Pandas DataFrame with all loads of the given type.
 
         """
-        if type in self.loads_df.type.unique():
-            return self.loads_df.loc[self.loads_df.type == type].dropna(
-                axis=1, how="all"
-            )
+        if "charging_point" in self.loads_df.type.unique():
+            return self.loads_df.loc[self.loads_df.type == "charging_point"]
         else:
-            return pd.DataFrame(columns=COLUMNS["charging_points_df"])
+            return pd.DataFrame(columns=COLUMNS["loads_df"])
 
     @property
     def id(self):

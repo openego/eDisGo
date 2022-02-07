@@ -173,11 +173,11 @@ class Grid(ABC):
         :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all charging points in topology. For more
             information on the dataframe see
-            :attr:`~.network.topology.Topology.charging_points_df`.
+            :attr:`~.network.topology.Topology.loads_df`.
 
         """
-        return self.edisgo_obj.topology.charging_points_df[
-            self.edisgo_obj.topology.charging_points_df.bus.isin(self.buses_df.index)
+        return self.loads_df[
+            self.loads_df.type == "charging_point"
         ]
 
     @property
