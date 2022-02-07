@@ -319,25 +319,17 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             ) = _get_timeseries_with_aggregated_elements(
                 edisgo_obj,
                 timesteps,
-                ["loads", "charging_points"],
+                ["loads"],
                 components["Load"].index,
                 aggregated_lv_components["Load"],
             )
         else:
-            loads_timeseries_active = pd.concat(
-                [
-                    edisgo_obj.timeseries.loads_active_power,
-                    edisgo_obj.timeseries.charging_points_active_power,
-                ],
-                axis=1,
-            ).loc[timesteps, components["Load"].index]
-            loads_timeseries_reactive = pd.concat(
-                [
-                    edisgo_obj.timeseries.loads_reactive_power,
-                    edisgo_obj.timeseries.charging_points_reactive_power,
-                ],
-                axis=1,
-            ).loc[timesteps, components["Load"].index]
+            loads_timeseries_active = edisgo_obj.timeseries.loads_active_power.loc[
+                timesteps, components["Load"].index
+            ]
+            loads_timeseries_reactive = edisgo_obj.timeseries.loads_reactive_power.loc[
+                timesteps, components["Load"].index
+            ]
         import_series_from_dataframe(
             pypsa_network, loads_timeseries_active, "Load", "p_set"
         )
@@ -525,8 +517,7 @@ def _append_lv_components(
     then connected to one side of the LVStation. If required, the LV components
     can be aggregated in different modes. As an example, loads can be
     aggregated sector-wise or all loads can be aggregated into one
-    representative load. The sum of p_nom or peak_load of all cumulated
-    components is calculated.
+    representative load. The sum of p_nom of all cumulated components is calculated.
 
     Parameters
     ----------
