@@ -63,11 +63,11 @@ setup(
         'Rtree',
     ],
     extras_require={
-        'geoplot': ['geopandas >= 0.9.0', 'contextily', 'descartes'],
-        'examples': ['jupyter'],
+        'geoplot': ['geopandas >= 0.9.0', 'contextily', 'descartes', 'plotly', 'dash==2.0.0'],
+        'examples': ['jupyter', 'jupyterlab', 'plotly', 'dash==2.0.0', 'jupyter_dash'],
         'dev': ['pytest', 'sphinx_rtd_theme'],
         'full': ['geopandas >= 0.9.0', 'contextily', 'descartes', 'jupyter', 'jupyterlab',
-                 'plotly', 'pytest', 'dash', 'sphinx_rtd_theme']
+                 'plotly', 'pytest', 'dash==2.0.0', 'jupyter_dash', 'sphinx_rtd_theme']
     },
     package_data={
         'edisgo': [

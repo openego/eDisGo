@@ -80,7 +80,11 @@ extlinks = {'pandas':('http://pandas.pydata.org/pandas-docs/stable/reference/api
                        'shapely.'),
             'ding0':('https://dingo.readthedocs.io/en/dev/api/ding0.html#%s',
                      'Ding0'),
-            'pypsa': ('https://pypsa.org/doc/components.html#%s', 'pypsa')
+            'pypsa': ('https://pypsa.org/doc/components.html#%s', 'pypsa'),
+            'plotly': (
+                'https://plotly.com/python-api-reference/generated/#%s.html',
+                'plotly'
+            ),
             }
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
