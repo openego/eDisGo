@@ -1147,7 +1147,7 @@ def draw_plotly(
 
         for node in G.nodes():
             v_res = edisgo_obj.results.v_res.T.loc[node]
-			v_min = v_res.min()
+            v_min = v_res.min()
             v_max = v_res.max()
 
             if abs(v_min - 1) > abs(v_max - 1):
@@ -1157,12 +1157,12 @@ def draw_plotly(
 
             colors.append(color)
 
-		colorbar = dict(
-			thickness=15,
-			title='Node Voltage Deviation',
-			xanchor='left',
-			titleside='right'
-		)
+        colorbar = dict(
+            thickness=15,
+            title='Node Voltage Deviation',
+            xanchor='left',
+            titleside='right'
+        )
         colorscale = 'RdBu'
         cmid = 0
 
@@ -1173,12 +1173,12 @@ def draw_plotly(
         colorscale = 'YlGnBu'
         cmid = None
 
-		colorbar = dict(
-			thickness=15,
-			title='Node Connections',
-			xanchor='left',
-			titleside='right'
-		)
+        colorbar = dict(
+            thickness=15,
+            title='Node Connections',
+            xanchor='left',
+            titleside='right'
+        )
 
     node_text = []
     for node in G.nodes():
@@ -1318,8 +1318,7 @@ def dash_plot(
     """
     Generates a jupyter dash app from given eDisGo object(s).
 
-    TODO: The app can't display two seperate colorbars for line and bus values atm
-    TODO: The colorbar title does not change yet when another mode is loaded
+    TODO: The app doesn't display two seperate colorbars for line and bus values atm
 
     Parameters
     ----------
