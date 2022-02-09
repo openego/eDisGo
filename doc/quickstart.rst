@@ -35,7 +35,7 @@ Installation under Windows
 
 For Windows users we recommend using Anaconda and to install the python package shapely
 using the conda-forge channel prior to installing eDisGo. You may use the provided
-`eDisGo_env.yml file <https://github.com/openego/eDisGo/blob/features/refactoring/eDisGo_env.yml>`_
+`eDisGo_env.yml file <https://github.com/openego/eDisGo/blob/dev/eDisGo_env.yml>`_
 to do so. Download the file and create a virtual environment with:
 
 .. code-block:: bash
