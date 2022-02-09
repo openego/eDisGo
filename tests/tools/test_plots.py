@@ -5,12 +5,10 @@ from edisgo.tools.plots import dash_plot
 
 
 class TestPlots:
-
     @classmethod
     def setup_class(self):
         self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case"
+            ding0_grid=pytest.ding0_test_network_path, worst_case_analysis="worst-case"
         )
         self.edisgo.reinforce()
 

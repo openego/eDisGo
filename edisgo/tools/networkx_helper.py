@@ -5,9 +5,9 @@ from pandas import DataFrame
 
 
 def translate_df_to_graph(
-        buses_df: DataFrame,
-        lines_df: DataFrame,
-        transformers_df: DataFrame | None = None,
+    buses_df: DataFrame,
+    lines_df: DataFrame,
+    transformers_df: DataFrame | None = None,
 ) -> Graph:
     """
     Translate DataFrames to networkx Graph Object.
@@ -46,8 +46,9 @@ def translate_df_to_graph(
     # add branches
     branches = [
         (bus0, bus1, {"branch_name": line_name, "length": length})
-        for line_name, bus0, bus1, length
-        in lines_df[["bus0", "bus1", "length"]].itertuples()
+        for line_name, bus0, bus1, length in lines_df[
+            ["bus0", "bus1", "length"]
+        ].itertuples()
     ]
 
     if transformers_df is not None:

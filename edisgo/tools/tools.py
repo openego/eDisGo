@@ -16,7 +16,6 @@ if "READTHEDOCS" not in os.environ:
 
     from egoio.db_tables import climate
     from egoio.tools.db import connection
-
     from shapely.geometry.multipolygon import MultiPolygon
     from shapely.wkt import loads as wkt_loads
 
