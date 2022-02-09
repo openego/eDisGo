@@ -13,6 +13,7 @@ class TestPlots:
         self.edisgo.reinforce()
 
     def test_dash_plot(self):
+        # TODO: at the moment this doesn't really test anything. Add meaningful tests.
         # test if any errors occur when only passing one edisgo object
         app = dash_plot(
             edisgo_objects=self.edisgo,

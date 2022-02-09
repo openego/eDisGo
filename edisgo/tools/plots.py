@@ -6,6 +6,7 @@ import os
 from typing import TYPE_CHECKING
 
 import matplotlib
+import matplotlib.cm as cm
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -1126,7 +1127,7 @@ def draw_plotly(
         try:
             peak_load = edisgo_obj.topology.loads_df.loc[
                 edisgo_obj.topology.loads_df.bus == node
-            ].peak_load.sum()
+            ].p_nom.sum()
             text += "<br>" + "peak_load = " + str(peak_load)
             p_nom = edisgo_obj.topology.generators_df.loc[
                 edisgo_obj.topology.generators_df.bus == node
