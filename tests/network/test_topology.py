@@ -198,7 +198,7 @@ class TestTopology:
     def test_add_load(self):
         """Test add_load method"""
 
-	# test adding conventional load
+        # test adding conventional load
 
         len_df_before = len(self.topology.loads_df)
 
@@ -247,7 +247,7 @@ class TestTopology:
                 sector="retail",
             )
 
-	# test adding charging point
+        # test adding charging point
 
         len_df_before = len(self.topology.charging_points_df)
 
@@ -528,7 +528,7 @@ class TestTopology:
     def test_remove_load(self):
         """Test remove_load method"""
 
-	# test removing conventional load
+        # test removing conventional load
 
         # check case where only load is connected to line,
         # line and bus are therefore removed as well
@@ -552,7 +552,7 @@ class TestTopology:
         assert "Bus_BranchTee_LVGrid_1_12" in self.topology.buses_df.index
         assert (connected_lines.index.isin(self.topology.lines_df.index)).all()
 
-	# test removing charging point
+        # test removing charging point
 
         # check case where only charging point is connected to line,
         # line and bus are therefore removed as well
