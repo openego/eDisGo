@@ -1,7 +1,6 @@
 name: eDisGo_env
 channels:
-  - conda-forge
   - defaults
 dependencies:
-  - shapely >=1.5.12, <=1.6.3
-  - pandas
+  - conda-forge::fiona
+  - conda-forge::rasterio
