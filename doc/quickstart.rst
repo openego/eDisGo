@@ -13,7 +13,7 @@ a virtual environment and its pip.
 
 .. code-block:: bash
 
-    pip3 install edisgo
+    python -m pip install edisgo
 
 The above will install all packages for the basic usage of eDisGo. To install
 additional packages e.g. needed to create plots with background maps or to run
@@ -21,19 +21,19 @@ the jupyter notebook examples, we provide installation with extra packages:
 
 .. code-block:: bash
 
-    pip3 install edisgo[geoplot]  # for plotting with background maps
-    pip3 install edisgo[examples]  # to run examples
-    pip3 install edisgo[dev]  # developer packages
-    pip3 install edisgo[full]  # combines all of the extras above
+    python -m pip install edisgo[geoplot]  # for plotting with background maps
+    python -m pip install edisgo[examples]  # to run examples
+    python -m pip install edisgo[dev]  # developer packages
+    python -m pip install edisgo[full]  # combines all of the extras above
 
 
 You may also consider installing a developer version as detailed in
 :ref:`dev-notes`.
 
-Installation under Windows
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Installation using Windows
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-For Windows users we recommend using Anaconda and to install the python package shapely
+For Windows users we recommend using Anaconda and to install the geo stack
 using the conda-forge channel prior to installing eDisGo. You may use the provided
 `eDisGo_env.yml file <https://github.com/openego/eDisGo/blob/dev/eDisGo_env.yml>`_
 to do so. Download the file and create a virtual environment with:
@@ -48,8 +48,7 @@ Activate the newly created environment with:
 
     conda activate eDisGo_env
 
-You can now install eDisGo using pip as described above, with or without extra
-packages.
+This will install eDisGo with all it's dependencies.
 
 Requirements for edisgoOPF package
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

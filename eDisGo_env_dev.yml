@@ -1,4 +1,4 @@
-name: eDisGo_env
+name: eDisGo_env_dev
 channels:
   - conda-forge
   - defaults
@@ -17,4 +17,4 @@ dependencies:
   - conda-forge::contextily
   - conda-forge::descartes
   - pip:
-      - eDisGo
+      - -e .[full]
