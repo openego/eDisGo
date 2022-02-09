@@ -42,7 +42,7 @@ function constraint_energy_rating(pm,i;nw::Int=pm.cnw,cnd::Int=pm.ccnd, fixed_si
     else
         emax = var(pm,:emax,i)
     end
-    @constraint(pm.model,soc_nw <= emax)       
+    @constraint(pm.model,soc_nw <= emax)
 end
 """
 upper bound constraint on charging and discharging rate with C-rate = 1
@@ -97,7 +97,7 @@ function constraint_soc(pm,i,nw_1::Int,nw_2::Int)
     eta_d = haskey(ref(pm,nw_2,:storage,i),"discharge_efficiency") ? ref(pm,nw_2,:storage,i,"discharge_efficiency") : 1.0
     #eta_c = ref(pm,nw_2,:storage,i,"charge_efficiency")
     #eta_d = ref(pm,nw_2,:storage,i,"discharge_efficiency")
-    
+
     @constraint(pm.model, soc_nw_2 - soc_nw_1 == Ts*(eta_c * uc_1 - ud_1/eta_d))
 end
 

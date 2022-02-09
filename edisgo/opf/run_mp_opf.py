@@ -1,21 +1,22 @@
-import os
 import json
-import subprocess
 import logging
-import numpy as np
+import os
+import subprocess
+
 from timeit import default_timer as timer
 
-from edisgo.tools.preprocess_pypsa_opf_structure import (
-    preprocess_pypsa_opf_structure,
-    aggregate_fluct_generators,
-)
-from edisgo.tools.powermodels_io import (
-    to_powermodels,
-    convert_storage_series,
-    add_storage_from_edisgo,
-)
+import numpy as np
 
 from edisgo.opf.util.scenario_settings import opf_settings
+from edisgo.tools.powermodels_io import (
+    add_storage_from_edisgo,
+    convert_storage_series,
+    to_powermodels,
+)
+from edisgo.tools.preprocess_pypsa_opf_structure import (
+    aggregate_fluct_generators,
+    preprocess_pypsa_opf_structure,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -144,9 +145,7 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
         pypsa_mv.lines.loc[:, "s_nom"] = pypsa_mv.lines.loc[:, "s_nom"] * 0.5
     timehorizon = len(pypsa_mv.snapshots)
     # set name of pypsa network
-    pypsa_mv.name = "ding0_{}_t_{}".format(
-        edisgo_network.topology.id, timehorizon
-    )
+    pypsa_mv.name = "ding0_{}_t_{}".format(edisgo_network.topology.id, timehorizon)
 
     # Remap storage bus names to Integers, if any
     if "storage_buses" in kwargs:
@@ -192,18 +191,14 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
     ) as outfile:
         json.dump(storage_data, outfile, default=convert)
     with open(
-        os.path.join(
-            scenario_data_dir, "{}_opf_setting.json".format(pm["name"])
-        ),
+        os.path.join(scenario_data_dir, "{}_opf_setting.json".format(pm["name"])),
         "w",
     ) as outfile:
         json.dump(settings, outfile, default=convert)
 
     logger.info("starting julia process")
     start = timer()
-    solution_dir = kwargs.get(
-        "results_path", os.path.join(opf_dir, "opf_solutions")
-    )
+    solution_dir = kwargs.get("results_path", os.path.join(opf_dir, "opf_solutions"))
     julia_process = subprocess.run(
         [
             "julia",

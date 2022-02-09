@@ -1,19 +1,19 @@
-import pandas as pd
-import numpy as np
-import pytest
 from math import sqrt
+
+import numpy as np
+import pandas as pd
+import pytest
 
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints
 
 
 class TestCheckTechConstraints:
-
     @classmethod
     def setup_class(self):
         self.edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case"
+            worst_case_analysis="worst-case",
         )
         self.timesteps = self.edisgo.timeseries.timeindex
 
@@ -67,7 +67,8 @@ class TestCheckTechConstraints:
         assert (1, 2) == df.shape
         # check missing transformer capacity
         assert np.isclose(
-            df.at["MVGrid_1", "s_missing"], (sqrt(1250) - 20) / 0.5,
+            df.at["MVGrid_1", "s_missing"],
+            (sqrt(1250) - 20) / 0.5,
         )
         assert df.at["MVGrid_1", "time_index"] == self.timesteps[1]
 
@@ -80,9 +81,7 @@ class TestCheckTechConstraints:
         # check missing transformer capacity of one grid
         assert np.isclose(
             df.at["LVGrid_1", "s_missing"],
-            self.edisgo.results.s_res.at[
-                self.timesteps[1], "LVStation_1_transformer_1"
-            ]
+            self.edisgo.results.s_res.at[self.timesteps[1], "LVStation_1_transformer_1"]
             - 0.16,
         )
         assert df.at["LVGrid_1", "time_index"] == self.timesteps[1]
@@ -144,18 +143,14 @@ class TestCheckTechConstraints:
     def test_mv_voltage_deviation(self):
 
         # check with no voltage issues
-        voltage_issues = check_tech_constraints.mv_voltage_deviation(
-            self.edisgo
-        )
+        voltage_issues = check_tech_constraints.mv_voltage_deviation(self.edisgo)
         assert {} == voltage_issues
 
         # create voltage issues
         self.mv_voltage_issues()
 
         # check with voltage issues and voltage_levels="mv_lv" (default)
-        voltage_issues = check_tech_constraints.mv_voltage_deviation(
-            self.edisgo
-        )
+        voltage_issues = check_tech_constraints.mv_voltage_deviation(self.edisgo)
         # check shape of dataframe
         assert (3, 2) == voltage_issues["MVGrid_1"].shape
         # check under- and overvoltage deviation values
@@ -165,9 +160,7 @@ class TestCheckTechConstraints:
             "Bus_GeneratorFluctuating_3",
         ]
         assert np.isclose(
-            voltage_issues["MVGrid_1"].at[
-                "Bus_GeneratorFluctuating_2", "v_diff_max"
-            ],
+            voltage_issues["MVGrid_1"].at["Bus_GeneratorFluctuating_2", "v_diff_max"],
             0.01,
         )
         assert (
@@ -176,9 +169,7 @@ class TestCheckTechConstraints:
         )
 
         # check with voltage issues and voltage_levels="mv"
-        voltage_issues = check_tech_constraints.mv_voltage_deviation(
-            self.edisgo, "mv"
-        )
+        voltage_issues = check_tech_constraints.mv_voltage_deviation(self.edisgo, "mv")
         # check shape of dataframe
         assert (3, 2) == voltage_issues["MVGrid_1"].shape
         # check under- and overvoltage deviation values
@@ -188,9 +179,7 @@ class TestCheckTechConstraints:
             "Bus_GeneratorFluctuating_3",
         ]
         assert np.isclose(
-            voltage_issues["MVGrid_1"].at[
-                "Bus_GeneratorFluctuating_2", "v_diff_max"
-            ],
+            voltage_issues["MVGrid_1"].at["Bus_GeneratorFluctuating_2", "v_diff_max"],
             0.06,
         )
         assert (
@@ -201,9 +190,7 @@ class TestCheckTechConstraints:
     def test_lv_voltage_deviation(self):
 
         # check with default values that there are no voltage issues
-        voltage_issues = check_tech_constraints.lv_voltage_deviation(
-            self.edisgo
-        )
+        voltage_issues = check_tech_constraints.lv_voltage_deviation(self.edisgo)
         assert {} == voltage_issues
 
         # check with mode "stations" and default value for voltage_level that
@@ -221,9 +208,7 @@ class TestCheckTechConstraints:
         assert len(voltage_issues) == 1
         assert len(voltage_issues["LVGrid_6"]) == 1
         assert np.isclose(
-            voltage_issues["LVGrid_6"].loc[
-                "BusBar_MVGrid_1_LVGrid_6_LV", "v_diff_max"
-            ],
+            voltage_issues["LVGrid_6"].loc["BusBar_MVGrid_1_LVGrid_6_LV", "v_diff_max"],
             0.0106225,
         )
 
@@ -241,9 +226,7 @@ class TestCheckTechConstraints:
         assert len(voltage_issues) == 1
         assert len(voltage_issues["LVGrid_6"]) == 1
         assert np.isclose(
-            voltage_issues["LVGrid_6"].loc[
-                "Bus_BranchTee_LVGrid_6_1", "v_diff_max"
-            ],
+            voltage_issues["LVGrid_6"].loc["Bus_BranchTee_LVGrid_6_1", "v_diff_max"],
             0.005,
         )
         # create second voltage issue in LVGrid_6, greater than first issue
@@ -257,24 +240,18 @@ class TestCheckTechConstraints:
         assert len(voltage_issues["LVGrid_6"]) == 2
         assert voltage_issues["LVGrid_6"].index[0] == "Bus_BranchTee_LVGrid_6_2"
         assert np.isclose(
-            voltage_issues["LVGrid_6"].loc[
-                "Bus_BranchTee_LVGrid_6_2", "v_diff_max"
-            ],
+            voltage_issues["LVGrid_6"].loc["Bus_BranchTee_LVGrid_6_2", "v_diff_max"],
             0.015,
         )
 
         # check with voltage_levels="mv_lv" and mode=None
         # uses same voltage issues as created above
-        voltage_issues = check_tech_constraints.lv_voltage_deviation(
-            self.edisgo
-        )
+        voltage_issues = check_tech_constraints.lv_voltage_deviation(self.edisgo)
         assert len(voltage_issues) == 1
         assert len(voltage_issues["LVGrid_6"]) == 3
         assert voltage_issues["LVGrid_6"].index[0] == "Bus_BranchTee_LVGrid_6_2"
         assert np.isclose(
-            voltage_issues["LVGrid_6"].loc[
-                "Bus_BranchTee_LVGrid_6_2", "v_diff_max"
-            ],
+            voltage_issues["LVGrid_6"].loc["Bus_BranchTee_LVGrid_6_2", "v_diff_max"],
             0.09,
         )
 
@@ -286,9 +263,7 @@ class TestCheckTechConstraints:
         assert len(voltage_issues) == 1
         assert len(voltage_issues["LVGrid_6"]) == 1
         assert np.isclose(
-            voltage_issues["LVGrid_6"].loc[
-                "BusBar_MVGrid_1_LVGrid_6_LV", "v_diff_max"
-            ],
+            voltage_issues["LVGrid_6"].loc["BusBar_MVGrid_1_LVGrid_6_LV", "v_diff_max"],
             0.04,
         )
 
@@ -297,9 +272,7 @@ class TestCheckTechConstraints:
         (
             v_limits_upper,
             v_limits_lower,
-        ) = check_tech_constraints._mv_allowed_voltage_limits(
-            self.edisgo, "mv"
-        )
+        ) = check_tech_constraints._mv_allowed_voltage_limits(self.edisgo, "mv")
 
         assert 1.05 == v_limits_upper.loc[self.timesteps[0]]
         assert 1.10 == v_limits_upper.loc[self.timesteps[1]]
@@ -310,9 +283,7 @@ class TestCheckTechConstraints:
         (
             v_limits_upper,
             v_limits_lower,
-        ) = check_tech_constraints._mv_allowed_voltage_limits(
-            self.edisgo, "mv_lv"
-        )
+        ) = check_tech_constraints._mv_allowed_voltage_limits(self.edisgo, "mv_lv")
 
         assert 1.10 == v_limits_upper.loc[self.timesteps[0]]
         assert 1.10 == v_limits_upper.loc[self.timesteps[1]]
@@ -381,9 +352,7 @@ class TestCheckTechConstraints:
         assert (2, 2) == uv_violations.shape
         assert (1, 2) == ov_violations.shape
         # check under- and overvoltage deviation values
-        assert np.isclose(
-            uv_violations.at["Bus_Generator_1", self.timesteps[1]], 0.02
-        )
+        assert np.isclose(uv_violations.at["Bus_Generator_1", self.timesteps[1]], 0.02)
         assert np.isclose(
             uv_violations.at["Bus_GeneratorFluctuating_3", self.timesteps[0]],
             0.005,
@@ -392,9 +361,7 @@ class TestCheckTechConstraints:
             ov_violations.at["Bus_GeneratorFluctuating_2", self.timesteps[0]],
             0.01,
         )
-        assert np.isclose(
-            uv_violations.at["Bus_Generator_1", self.timesteps[0]], -0.21
-        )
+        assert np.isclose(uv_violations.at["Bus_Generator_1", self.timesteps[0]], -0.21)
 
     def test__voltage_deviation(self):
 
@@ -419,10 +386,7 @@ class TestCheckTechConstraints:
         assert np.isclose(
             v_violations.at["Bus_GeneratorFluctuating_2", "v_diff_max"], 0.01
         )
-        assert (
-            v_violations.at["Bus_Generator_1", "time_index"]
-            == self.timesteps[1]
-        )
+        assert v_violations.at["Bus_Generator_1", "time_index"] == self.timesteps[1]
 
     def test_check_ten_percent_voltage_deviation(self):
         # check without voltage issues greater than 10%
@@ -433,6 +397,4 @@ class TestCheckTechConstraints:
         ] = 1.14
         msg = "Maximum allowed voltage deviation of 10% exceeded."
         with pytest.raises(ValueError, match=msg):
-            check_tech_constraints.check_ten_percent_voltage_deviation(
-                self.edisgo
-            )
+            check_tech_constraints.check_ten_percent_voltage_deviation(self.edisgo)

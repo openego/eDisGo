@@ -1,8 +1,9 @@
-import os
-import math
 import logging
-from math import acos, tan
+import math
+import os
+
 from abc import ABC, abstractmethod
+from math import acos, tan
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
@@ -156,9 +157,7 @@ class Component(BasicComponent):
         if math.isnan(grid.lv_grid_id):
             return self.topology.mv_grid
         else:
-            return self.topology._grids[
-                "LVGrid_{}".format(int(grid.lv_grid_id))
-            ]
+            return self.topology._grids["LVGrid_{}".format(int(grid.lv_grid_id))]
 
     @property
     def geom(self):
@@ -274,13 +273,13 @@ class Load(Component):
         return self.topology.loads_df
 
     @property
-    def peak_load(self):
+    def p_nom(self):
         """
         Peak load in MW.
 
         Parameters
         -----------
-        peak_load : :obj:`float`
+        p_nom : :obj:`float`
             Peak load in MW.
 
         Returns
@@ -289,12 +288,11 @@ class Load(Component):
             Peak load in MW.
 
         """
-        return self.topology.loads_df.at[self.id, "peak_load"]
+        return self.topology.loads_df.at[self.id, "p_nom"]
 
-    @peak_load.setter
-    def peak_load(self, peak_load):
-        # ToDo: Maybe perform type check before setting it.
-        self.topology._loads_df.at[self.id, "peak_load"] = peak_load
+    @p_nom.setter
+    def p_nom(self, p_nom):
+        self.topology._loads_df.at[self.id, "p_nom"] = float(p_nom)
 
     @property
     def annual_consumption(self):
@@ -312,15 +310,11 @@ class Load(Component):
             Annual consumption of load in MWh.
 
         """
-        return self.topology.loads_df.at[
-            self.id, "annual_consumption"
-        ]
+        return self.topology.loads_df.at[self.id, "annual_consumption"]
 
     @annual_consumption.setter
     def annual_consumption(self, annual_consumption):
-        self.topology._loads_df.at[
-            self.id, "annual_consumption"
-        ] = annual_consumption
+        self.topology._loads_df.at[self.id, "annual_consumption"] = annual_consumption
 
     @property
     def sector(self):
@@ -433,9 +427,7 @@ class Generator(Component):
     @nominal_power.setter
     def nominal_power(self, nominal_power):
         # ToDo: Maybe perform type check before setting it.
-        self.topology._generators_df.at[
-            self.id, "p_nom"
-        ] = nominal_power
+        self.topology._generators_df.at[self.id, "p_nom"] = nominal_power
 
     @property
     def type(self):
@@ -482,9 +474,7 @@ class Generator(Component):
 
     @subtype.setter
     def subtype(self, subtype):
-        self.topology._generators_df.at[
-            self.id, "subtype"
-        ] = subtype
+        self.topology._generators_df.at[self.id, "subtype"] = subtype
 
     @property
     def active_power_timeseries(self):
@@ -497,9 +487,7 @@ class Generator(Component):
             Active power time series of generator in MW.
 
         """
-        return self.edisgo_obj.timeseries.generators_active_power.loc[
-            :, self.id
-        ]
+        return self.edisgo_obj.timeseries.generators_active_power.loc[:, self.id]
 
     @property
     def reactive_power_timeseries(self):
@@ -512,9 +500,7 @@ class Generator(Component):
             Reactive power time series of generator in Mvar.
 
         """
-        return self.edisgo_obj.timeseries.generators_reactive_power.loc[
-            :, self.id
-        ]
+        return self.edisgo_obj.timeseries.generators_reactive_power.loc[:, self.id]
 
     @property
     def weather_cell_id(self):
@@ -535,15 +521,11 @@ class Generator(Component):
             Weather cell ID of generator.
 
         """
-        return self.topology.generators_df.at[
-            self.id, "weather_cell_id"
-        ]
+        return self.topology.generators_df.at[self.id, "weather_cell_id"]
 
     @weather_cell_id.setter
     def weather_cell_id(self, weather_cell_id):
-        self.topology._generators_df.at[
-            self.id, "weather_cell_id"
-        ] = weather_cell_id
+        self.topology._generators_df.at[self.id, "weather_cell_id"] = weather_cell_id
 
     def _set_bus(self, bus):
         # check if bus is valid
@@ -629,13 +611,9 @@ class Storage(Component):
             return self._timeseries
         else:
             self._timeseries["q"] = (
-                abs(self._timeseries.p)
-                * self.q_sign
-                * tan(acos(self.power_factor))
+                abs(self._timeseries.p) * self.q_sign * tan(acos(self.power_factor))
             )
-            return self._timeseries.loc[
-                self.grid.edisgo_obj.timeseries.timeindex, :
-            ]
+            return self._timeseries.loc[self.grid.edisgo_obj.timeseries.timeindex, :]
 
     @property
     def nominal_power(self):
@@ -946,9 +924,7 @@ class Switch(BasicComponent):
             elif col_closed is not None and col_open is None:
                 self._state = "closed"
             else:
-                raise AttributeError(
-                    "State of switch could not be determined."
-                )
+                raise AttributeError("State of switch could not be determined.")
         return self._state
 
     @property
@@ -975,15 +951,11 @@ class Switch(BasicComponent):
             Grid switch is in.
 
         """
-        grid = self.topology.buses_df.loc[
-            self.bus_closed, ["mv_grid_id", "lv_grid_id"]
-        ]
+        grid = self.topology.buses_df.loc[self.bus_closed, ["mv_grid_id", "lv_grid_id"]]
         if math.isnan(grid.lv_grid_id):
             return self.topology.mv_grid
         else:
-            return self.topology._grids[
-                "LVGrid_{}".format(int(grid.lv_grid_id))
-            ]
+            return self.topology._grids["LVGrid_{}".format(int(grid.lv_grid_id))]
 
     def open(self):
         """
@@ -994,9 +966,7 @@ class Switch(BasicComponent):
             self._state = "open"
             col = self._get_bus_column(self.bus_closed)
             if col is not None:
-                self.topology.lines_df.at[
-                    self.branch, col
-                ] = self.bus_open
+                self.topology.lines_df.at[self.branch, col] = self.bus_open
             else:
                 raise AttributeError(
                     "Could not open switch {}. Specified branch {} of switch "
@@ -1014,9 +984,7 @@ class Switch(BasicComponent):
             self._state = "closed"
             col = self._get_bus_column(self.bus_open)
             if col is not None:
-                self.topology.lines_df.at[
-                    self.branch, col
-                ] = self.bus_closed
+                self.topology.lines_df.at[self.branch, col] = self.bus_closed
             else:
                 raise AttributeError(
                     "Could not close switch {}. Specified branch {} of switch "

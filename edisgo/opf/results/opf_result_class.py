@@ -1,10 +1,11 @@
 import json
-import pandas as pd
 import logging
 
+import pandas as pd
+
 from edisgo.tools.preprocess_pypsa_opf_structure import (
-    preprocess_pypsa_opf_structure,
     aggregate_fluct_generators,
+    preprocess_pypsa_opf_structure,
 )
 
 logger = logging.getLogger("edisgo")
@@ -32,9 +33,7 @@ def read_from_json(edisgo_obj, path, mode="mv"):
         mode=mode, timesteps=edisgo_obj.timeseries.timeindex
     )
     timehorizon = len(pypsa_net.snapshots)
-    pypsa_net.name = "ding0_{}_t_{}".format(
-        edisgo_obj.topology.id, timehorizon
-    )
+    pypsa_net.name = "ding0_{}_t_{}".format(edisgo_obj.topology.id, timehorizon)
     preprocess_pypsa_opf_structure(edisgo_obj, pypsa_net, hvmv_trafo=False)
     aggregate_fluct_generators(pypsa_net)
     edisgo_obj.opf_results.set_solution(path, pypsa_net)
@@ -196,16 +195,12 @@ class OPFResults:
                 self.generators_t.qg = qg_t
             except:
                 logger.warning(
-                    "Error in writing OPF solutions for slack time " "series."
+                    "Error in writing OPF solutions for slack time series."
                 )
         else:
             try:
-                pg_t = pd.DataFrame(
-                    index=ts, columns=pypsa_net.generators.index
-                )
-                qg_t = pd.DataFrame(
-                    index=ts, columns=pypsa_net.generators.index
-                )
+                pg_t = pd.DataFrame(index=ts, columns=pypsa_net.generators.index)
+                qg_t = pd.DataFrame(index=ts, columns=pypsa_net.generators.index)
                 for (t, date_idx) in enumerate(ts):
                     gen_t = pd.DataFrame(gen_solution_data[str(t + 1)])
                     gen_t.index = gen_t.index.astype(int)
@@ -217,8 +212,7 @@ class OPFResults:
                 self.generators_t.qg = qg_t
             except:
                 logger.warning(
-                    "Error in writing OPF solutions for generator time "
-                    "series."
+                    "Error in writing OPF solutions for generator time series."
                 )
 
     def set_load_variables(self, pypsa_net):
@@ -228,11 +222,11 @@ class OPFResults:
 
         pd_t = pd.DataFrame(
             index=ts,
-            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()]
+            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()],
         )
         qd_t = pd.DataFrame(
             index=ts,
-            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()]
+            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()],
         )
         for (t, date_idx) in enumerate(ts):
             load_t = pd.DataFrame(load_solution_data[str(t + 1)])
@@ -241,12 +235,9 @@ class OPFResults:
             qd_t.loc[date_idx] = load_t.qd
 
         load_buses = self.pypsa.loads.bus.unique()
-        load_bus_df = pd.DataFrame(
-            columns=["bus_loc"],
-            index=[load_buses])
+        load_bus_df = pd.DataFrame(columns=["bus_loc"], index=[load_buses])
         for b in load_buses:
-            load_bus_df.at[
-                b, "bus_loc"] = self.pypsa.buses.index.get_loc(b)
+            load_bus_df.at[b, "bus_loc"] = self.pypsa.buses.index.get_loc(b)
         load_bus_df = load_bus_df.sort_values(by="bus_loc").reset_index()
         load_bus_df.index = load_bus_df.index + 1
         pd_t = pd_t.rename(columns=load_bus_df.level_0.to_dict())
@@ -268,9 +259,7 @@ class OPFResults:
             strg_statics = strg_statics.sort_index()
 
             # Convert one-based storage indices back to string names
-            idx_names = [
-                pypsa_net.buses.index[i - 1] for i in strg_statics.index
-            ]
+            idx_names = [pypsa_net.buses.index[i - 1] for i in strg_statics.index]
             strg_statics.index = pd.Index(idx_names)
 
             self.storage_units = strg_statics
@@ -282,9 +271,7 @@ class OPFResults:
             soc_t = pd.DataFrame(index=ts, columns=strg_statics.index)
 
             for (t, date_idx) in enumerate(ts):
-                strg_t = pd.DataFrame(
-                    solution_data["storage"]["nw"][str(t + 1)]
-                )
+                strg_t = pd.DataFrame(solution_data["storage"]["nw"][str(t + 1)])
                 strg_t.index = strg_t.index.astype(int)
                 strg_t = strg_t.sort_index()
                 strg_t.index = strg_statics.index

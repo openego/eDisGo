@@ -1,20 +1,19 @@
 import logging
-import pandas as pd
+
 import numpy as np
+import pandas as pd
+
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 
 from edisgo.flex_opt import check_tech_constraints
-
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
 
 logger = logging.getLogger(__name__)
 
 
 def _scored_critical_current(edisgo_obj, grid):
     # Get allowed current per line per time step
-    i_lines_allowed = check_tech_constraints.lines_allowed_load(
-        edisgo_obj, "mv"
-    )
+    i_lines_allowed = check_tech_constraints.lines_allowed_load(edisgo_obj, "mv")
     i_lines_pfa = edisgo_obj.results.i_res[grid.lines_df.index]
 
     # Get current relative to allowed current
@@ -43,17 +42,12 @@ def _scored_critical_overvoltage(edisgo_obj, grid):
         edisgo_obj, voltage_levels="mv"
     )
     _, voltage_diff_ov = check_tech_constraints.voltage_diff(
-        edisgo_obj,
-        nodes,
-        v_dev_allowed_upper,
-        v_dev_allowed_lower
+        edisgo_obj, nodes, v_dev_allowed_upper, v_dev_allowed_lower
     )
 
     # Get score for nodes that are over or under the allowed deviations
     voltage_diff_ov = (
-        voltage_diff_ov[voltage_diff_ov > 0]
-        .dropna(axis=1, how="all")
-        .sum(axis=0)
+        voltage_diff_ov[voltage_diff_ov > 0].dropna(axis=1, how="all").sum(axis=0)
     )
     return voltage_diff_ov.sort_values(ascending=False)
 
@@ -98,9 +92,7 @@ def get_steps_curtailment(edisgo_obj, percentage=0.5):
     steps.extend(get_steps_storage(edisgo_obj, window=0).tolist())
 
     if len(steps) == 0:
-        logger.warning(
-            "No critical steps detected. No network expansion required."
-        )
+        logger.warning("No critical steps detected. No network expansion required.")
 
     # Strip duplicates
     steps = list(dict.fromkeys(steps))
@@ -164,9 +156,7 @@ def get_steps_storage(edisgo_obj, window=5):
     reduced = list(dict.fromkeys(reduced))
 
     if len(reduced) == 0:
-        logger.warning(
-            "No critical steps detected. No network expansion required."
-        )
+        logger.warning("No critical steps detected. No network expansion required.")
 
     return pd.DatetimeIndex(reduced)
 
