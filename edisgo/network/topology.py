@@ -905,9 +905,7 @@ class Topology:
                 return True
         return False
 
-    def add_load(
-        self, bus, p_nom, type="load", **kwargs
-    ):
+    def add_load(self, bus, p_nom, type="load", **kwargs):
         """
         Adds load to topology.
 

@@ -143,9 +143,7 @@ class TestImportFromDing0:
             self.topology.switches_df = new_comps
             try:
                 ding0_import._validate_ding0_grid_import(self.topology)
-                raise Exception(
-                    "Appending components switches did not work properly."
-                )
+                raise Exception("Appending components switches did not work properly.")
             except ValueError as e:
                 assert e.args[
                     0
@@ -163,9 +161,7 @@ class TestImportFromDing0:
             ding0_import._validate_ding0_grid_import(self.topology)
             raise Exception("Appending components buses did not work properly.")
         except ValueError as e:
-            assert e.args[0] == "The following buses are isolated: {}.".format(
-                bus.name
-            )
+            assert e.args[0] == "The following buses are isolated: {}.".format(bus.name)
 
     def test_transformer_buses(self):
         assert (

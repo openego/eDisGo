@@ -659,10 +659,11 @@ def get_component_timeseries(edisgo_obj, **kwargs):
         if isinstance(ts, pd.DataFrame):
             edisgo_obj.timeseries.generation_fluctuating = ts
         elif isinstance(ts, str) and ts == "oedb":
-            edisgo_obj.timeseries.generation_fluctuating = \
+            edisgo_obj.timeseries.generation_fluctuating = (
                 timeseries_import.feedin_oedb(
-                    config_data, weather_cell_ids, kwargs.get(
-                        "timeindex", None))
+                    config_data, weather_cell_ids, kwargs.get("timeindex", None)
+                )
+            )
         else:
             raise ValueError(
                 "Your input for "
@@ -699,11 +700,9 @@ def get_component_timeseries(edisgo_obj, **kwargs):
         if isinstance(ts, pd.DataFrame):
             edisgo_obj.timeseries.load = ts
         elif ts == "demandlib":
-            edisgo_obj.timeseries.load = \
-                timeseries_import.load_time_series_demandlib(
-                    config_data,
-                    year=edisgo_obj.timeseries.timeindex[0].year
-                )
+            edisgo_obj.timeseries.load = timeseries_import.load_time_series_demandlib(
+                config_data, year=edisgo_obj.timeseries.timeindex[0].year
+            )
         else:
             raise ValueError(
                 "Your input for 'timeseries_load' is not valid.".format(mode)

@@ -194,9 +194,7 @@ class OPFResults:
                 self.generators_t.pg = pg_t
                 self.generators_t.qg = qg_t
             except:
-                logger.warning(
-                    "Error in writing OPF solutions for slack time series."
-                )
+                logger.warning("Error in writing OPF solutions for slack time series.")
         else:
             try:
                 pg_t = pd.DataFrame(index=ts, columns=pypsa_net.generators.index)
