@@ -260,7 +260,7 @@ class EDisGo:
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
             self.import_generators(
-                kwargs.get("generator_scenario"),
+                kwargs.pop("generator_scenario"),
                 **kwargs)
 
         # set up time series for feed-in and load
