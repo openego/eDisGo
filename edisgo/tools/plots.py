@@ -1326,7 +1326,7 @@ def dash_plot(
     node_plot_modes : list(str), optional
         List of line plot modes to display in plotly dash app. See
         :py:func:`~edisgo.tools.plots.draw_plotly` for more information. If None is
-        passed the modes ''adjacencies' and 'voltage_deviation' will be used.
+        passed the modes 'adjacencies' and 'voltage_deviation' will be used.
         Default: None
     Returns
     -------
