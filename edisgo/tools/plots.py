@@ -1147,7 +1147,7 @@ def draw_plotly(
 
         for node in G.nodes():
             v_res = edisgo_obj.results.v_res.T.loc[node]
-            v_min = v_res.min()
+			v_min = v_res.min()
             v_max = v_res.max()
 
             if abs(v_min - 1) > abs(v_max - 1):
@@ -1156,6 +1156,13 @@ def draw_plotly(
                 color = v_max - 1
 
             colors.append(color)
+
+		colorbar = dict(
+			thickness=15,
+			title='Node Voltage Deviation',
+			xanchor='left',
+			titleside='right'
+		)
         colorscale = 'RdBu'
         cmid = 0
 
@@ -1165,6 +1172,13 @@ def draw_plotly(
         ]
         colorscale = 'YlGnBu'
         cmid = None
+
+		colorbar = dict(
+			thickness=15,
+			title='Node Connections',
+			xanchor='left',
+			titleside='right'
+		)
 
     node_text = []
     for node in G.nodes():
@@ -1222,12 +1236,7 @@ def draw_plotly(
             size=8,
             cmid=cmid,
             line_width=2,
-            colorbar=dict(
-                thickness=15,
-                title='Node Connections',
-                xanchor='left',
-                titleside='right'
-            )
+            colorbar=colorbar
         )
     )
 
