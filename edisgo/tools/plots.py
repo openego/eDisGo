@@ -15,7 +15,7 @@ from dash import dcc, html
 from dash.dependencies import Input, Output
 from jupyter_dash import JupyterDash
 from matplotlib import pyplot as plt
-from pyproj import Proj, Transformer
+from pyproj import Transformer
 from pypsa import Network as PyPSANetwork
 
 from edisgo.tools import session_scope, tools
