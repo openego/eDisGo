@@ -48,7 +48,7 @@ Activate the newly created environment with:
 
     conda activate eDisGo_env
 
-This will install eDisGo with all it's dependencies.
+This will install eDisGo with all it's dependencies ([full] flag).
 
 Requirements for edisgoOPF package
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
