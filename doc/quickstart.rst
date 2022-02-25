@@ -3,8 +3,8 @@
 Getting started
 ================
 
-Installation
-------------
+Installation using Linux
+-------------------------
 
 .. warning:: Make sure to use python 3.7 or higher!
 
@@ -31,7 +31,9 @@ You may also consider installing a developer version as detailed in
 :ref:`dev-notes`.
 
 Installation using Windows
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------
+
+.. warning:: Make sure to use python 3.7 or higher!
 
 For Windows users we recommend using Anaconda and to install the geo stack
 using the conda-forge channel prior to installing eDisGo. You may use the provided
@@ -50,8 +52,14 @@ Activate the newly created environment with:
 
 This will install eDisGo with all it's dependencies ([full] flag).
 
+Installation using MacOS
+--------------------------
+
+We don't have any experience with our package on MacOS yet! If you try eDisGo on MacOS
+we would be happy if you let us know about your experience!
+
 Requirements for edisgoOPF package
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------------
 
 To use the multiperiod optimal power flow that is provided in the julia package
 edisgoOPF in eDisGo you additionally need to install julia version 1.1.1.

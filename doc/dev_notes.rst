@@ -49,6 +49,12 @@ Activate the newly created environment and install the pre-commit hooks with:
 
 This will install eDisGo with all it's dependencies.
 
+Installation using MacOS
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We don't have any experience with our package on MacOS yet! If you try eDisGo on MacOS
+we would be happy if you let us know about your experience!
+
 
 Code standards
 --------------
