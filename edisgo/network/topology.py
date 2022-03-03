@@ -1554,7 +1554,7 @@ class Topology:
                     )
                 )
 
-    def remove_line(self, name):
+    def remove_line(self, name, **kwargs):
         """
         Removes line with given name from topology.
 
@@ -1562,13 +1562,19 @@ class Topology:
         ----------
         name : str
             Identifier of line as specified in index of :py:attr:`~lines_df`.
-
+        force_remove=True, can force a bus or line to be removed even
+            though resulting topology has isolated buses or components.
         """
-        if not self._check_line_for_removal(name):
+        force_remove = kwargs.get('force_remove', False)
+        if not force_remove:
             raise AssertionError(
                 "Removal of line {} would create isolated "
                 "node.".format(name)
             )
+        else:
+            print('Line {} is forced to be removed even though it creates isolated buses.'
+                  'The resulting topology cannot be fully utilised. Try to remove connected '
+                  'components and isolated bus first to avoid this warning.'.format(name))
 
         # backup buses of line and check if buses can be removed as well
         bus0 = self.lines_df.at[name, "bus0"]
@@ -1591,7 +1597,7 @@ class Topology:
                 "Bus {} removed together with line {}".format(bus1, name)
             )
 
-    def remove_bus(self, name):
+    def remove_bus(self, name, **kwargs):
         """
         Removes bus with given name from topology.
 
@@ -1599,6 +1605,9 @@ class Topology:
         ----------
         name : str
             Identifier of bus as specified in index of :py:attr:`~buses_df`.
+        force_remove: bool
+            If true, bus will be removed even though it creates isolated
+            components.
 
         Notes
         -------
@@ -1609,15 +1618,20 @@ class Topology:
         to get all connected components.
 
         """
+        force_remove = kwargs.get('force_remove', False)
         conn_comp = self.get_connected_components_from_bus(name)
         conn_comp_types = [k for k, v in conn_comp.items() if not v.empty]
-        if len(conn_comp_types) > 0:
+        if len(conn_comp_types) > 0 and not force_remove:
             warnings.warn(
                 "Bus {} is not isolated and therefore not removed. Remove all "
                 "connected elements ({}) first to remove bus.".format(
                     name, conn_comp_types)
             )
         else:
+            if force_remove:
+                print('Bus {} is connected to elements, but forced to be removed. The resulting topology '
+                      'cannot be used to calculate power flows. Make sure to remove the connected '
+                      'elements as well.'.format(name))
             self._buses_df.drop(name, inplace=True)
 
     def update_number_of_parallel_lines(self, lines_num_parallel):

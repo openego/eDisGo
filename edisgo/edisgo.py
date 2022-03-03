@@ -1421,7 +1421,7 @@ class EDisGo:
 
         return comp_name
 
-    def remove_component(self, comp_type, comp_name, drop_ts=True):
+    def remove_component(self, comp_type, comp_name, drop_ts=True, **kwargs):
         """
         Removes single component from respective DataFrame. If drop_ts is set
         to True, timeseries of elements are deleted as well.
@@ -1436,15 +1436,17 @@ class EDisGo:
         drop_ts: Boolean
             Indicator if timeseries for component are removed as well. Defaults
             to True.
+        force_remove=True, can force a bus or line to be removed even
+            though resulting topology has isolated buses or components.
 
         Todo: change into remove_components, when add_component is changed into
             add_components, to allow removal of several components at a time
 
         """
         if comp_type == "Bus":
-            self.topology.remove_bus(comp_name)
+            self.topology.remove_bus(comp_name, **kwargs)
         elif comp_type == "Line":
-            self.topology.remove_line(comp_name)
+            self.topology.remove_line(comp_name, **kwargs)
         elif comp_type == "Load":
             self.topology.remove_load(comp_name)
             if drop_ts:

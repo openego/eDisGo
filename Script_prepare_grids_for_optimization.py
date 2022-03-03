@@ -1,17 +1,33 @@
 import multiprocessing as mp
 import os
+import pandas as pd
+import networkx as nx
+import traceback
+
 from edisgo.edisgo import import_edisgo_from_files
-from edisgo.tools.complexity_reduction import remove_1m_lines_from_edisgo
+from edisgo.tools.complexity_reduction import remove_1m_lines_from_edisgo, extract_feeders_nx
+from edisgo.network.timeseries import _get_attributes_to_save
+from edisgo.network.topology import Topology
+from edisgo.network.electromobility import get_energy_bands_for_optimization
 
 # Script to prepare grids for optimisation. The necessary steps are:
 # Timeseries: Extract extreme weeks
 # Topology: Remove 1m lines, extract feeders, extract downstream nodes matrix
 
 grid_dir = r"H:\Grids"
+ts_reduction_dir = r"C:\Users\aheider\Documents\Grids\simbev_nep_2035_results"
+bands_dir = r"C:\Users\aheider\Documents\Grids"
+data_dir = r"C:\Users\aheider\Documents\Grids"
 strategy = "dumb"
 use_mp = False
-remove_1m_lines = True
-extract_feeders = True
+remove_1m_lines = False
+extract_bands = False
+extract_extreme_weeks = False
+reduce_timeseries_to_extreme_weeks = False
+reduce_bands_to_extreme_weeks = False
+extract_feeders = False
+get_downstream_node_matrix = False
+cpu_count = 6#int(mp.cpu_count()/2)
 
 
 def remove_1m_lines_from_edisgo_parallel(grid_id):
@@ -27,17 +43,217 @@ def remove_1m_lines_from_edisgo_parallel(grid_id):
     edisgo.topology.to_csv(os.path.join(grid_dir, str(grid_id), strategy, "topology"))
 
 
+def extract_and_save_bands_parallel(grid_id):
+    try:
+        for use_case in ["home", "work"]:
+            print("Extracting bands for {}-{}".format(grid_id, use_case))
+            edisgo_obj = import_edisgo_from_files(data_dir+r"\{}\dumb".format(grid_id), import_timeseries=True,
+                                                  import_electromobility=True)
+            power, lower, upper = get_energy_bands_for_optimization(edisgo_obj, use_case)
+
+            power.to_csv(data_dir+r"\{}\upper_power_{}.csv".format(grid_id, use_case))
+            lower.to_csv(data_dir+r"\{}\lower_energy_{}.csv".format(grid_id, use_case))
+            upper.to_csv(data_dir+r"\{}\upper_energy_{}.csv".format(grid_id, use_case))
+            print("Successfully created bands for {}-{}".format(grid_id, use_case))
+    except:
+        print("Something went wrong with {}-{}".format(grid_id, use_case))
+        print(traceback.format_exc())
+
+
+def save_extreme_weeks_timeindex(grid_id):
+    # load extreme weeks
+    ts = pd.read_csv(os.path.join(ts_reduction_dir, str(grid_id), strategy,
+                                  "timeseries", "charging_points_active_power.csv"), index_col=0,
+                     parse_dates=True)
+    timeindex = pd.DataFrame(index=ts.index)
+    timeindex.to_csv(os.path.join(grid_dir, str(grid_id), "timeindex_extreme_weeks.csv"))
+    
+    
+def extract_extreme_weeks_parallel(grid_id):
+    """
+    Method to get extreme weeks from previous run and reduce new objects to these weeks.
+    """
+    # load extreme weeks
+    ts = pd.read_csv(os.path.join(grid_dir, str(grid_id), "timeindex_extreme_weeks.csv"), index_col=0,
+                     parse_dates=True)
+    timeindex = ts.index
+    # load original edisgo object
+    edisgo = import_edisgo_from_files(os.path.join(grid_dir, str(grid_id), strategy), import_topology=False,
+                                      import_timeseries=True)
+    if not (timeindex.isin(edisgo.timeseries.timeindex)).all():
+        raise ValueError("Edisgo object does not contain the given extreme weeks")
+    # adapt timeseries
+    attributes = _get_attributes_to_save()
+    edisgo.timeseries.timeindex = timeindex
+    for attr in attributes:
+        if not getattr(edisgo.timeseries, attr).empty:
+            setattr(edisgo.timeseries, attr,
+                    getattr(edisgo.timeseries, attr).loc[timeindex])
+    # save adapted timeseries object
+    edisgo.timeseries.to_csv(os.path.join(grid_dir, str(grid_id), strategy, "timeseries"))
+    # Todo: adapt flexibility bands
+
+
+def extract_extreme_weeks_from_bands(grid_id):
+    """
+    Method to reduce energy bands to extreme weeks and save them
+    """
+    ts = pd.read_csv(os.path.join(grid_dir, str(grid_id), "timeindex_extreme_weeks.csv"), index_col=0,
+                     parse_dates=True)
+    timeindex = ts.index
+    bands = ["upper_power", "upper_energy", "lower_energy"]
+    bands_dict = {}
+    for use_case in ["home", "work"]:
+        for band in bands:
+            bands_dict[band] = pd.read_csv(bands_dir+r"\{}\{}_{}.csv".format(
+                grid_id, band, use_case), index_col=0, parse_dates=True)
+            bands_dict[band].loc[timeindex].to_csv(
+                os.path.join(grid_dir, str(grid_id), "{}_{}.csv".format(band, use_case)))
+
+
+def extract_feeders_parallel(grid_id):
+    try:
+        edisgo_dir = os.path.join(grid_dir, str(grid_id), strategy)
+        save_dir = os.path.join(grid_dir, str(grid_id))
+        edisgo_obj = import_edisgo_from_files(edisgo_dir, import_timeseries=True)
+        extract_feeders_nx(edisgo_obj, save_dir)
+    except Exception as e:
+        print('Problem in grid {}.'.format(grid_id))
+        print(e)
+
+
+def get_downstream_node_matrix_feeders_parallel_server(grid_id_feeder_tuple):
+    grid_id = grid_id_feeder_tuple[0]
+    feeder_id = grid_id_feeder_tuple[1]
+    edisgo_dir = os.path.join(grid_dir, str(grid_id), "feeder", str(feeder_id))
+    if os.path.isfile(edisgo_dir+'/downstream_node_matrix_{}_{}.csv'.format(grid_id, feeder_id)):
+        return
+    try:
+        edisgo_obj = import_edisgo_from_files(edisgo_dir)
+        downstream_node_matrix = get_downstream_nodes_matrix_iterative(edisgo_obj.topology)
+        downstream_node_matrix.to_csv(edisgo_dir+'/downstream_node_matrix_{}_{}.csv'.format(grid_id, feeder_id))
+    except Exception as e:
+        print('Problem in feeder {} of grid {}.'.format(feeder_id, grid_id))
+        print(e.args)
+        print(e)
+    return
+
+
+def get_downstream_nodes_matrix_iterative(grid):
+    """
+    Method that returns matrix M with 0 and 1 entries describing the relation
+    of buses within the network. If bus b is descendant of a (assuming the
+    station is the root of the radial network) M[a,b] = 1, otherwise M[a,b] = 0.
+    The matrix is later used to determine the power flow at the different buses
+    by multiplying with the nodal power flow. S_sum = M * s, where s is the
+    nodal power vector.
+
+    Note: only works for radial networks.
+
+    :param grid: either Topology, MVGrid or LVGrid
+    :return:
+    Todo: Check version with networkx successor
+    """
+
+    def recursive_downstream_node_matrix_filling(current_bus, current_feeder,
+                                                 downstream_node_matrix,
+                                                 grid,
+                                                 visited_buses):
+        current_feeder.append(current_bus)
+        for neighbor in tree.successors(current_bus):
+            if neighbor not in visited_buses and neighbor not in current_feeder:
+                recursive_downstream_node_matrix_filling(
+                    neighbor, current_feeder, downstream_node_matrix, grid,
+                    visited_buses)
+        # current_bus = current_feeder.pop()
+        downstream_node_matrix.loc[current_feeder, current_bus] = 1
+        visited_buses.append(current_bus)
+        if len(visited_buses)%10==0:
+            print('{} % of the buses have been checked'.format(
+                len(visited_buses)/len(buses)*100))
+        current_feeder.pop()
+
+    buses = grid.buses_df.index.values
+    if str(type(grid)) == str(Topology):
+        graph = grid.to_graph()
+        slack = grid.mv_grid.station.index[0]
+    else:
+        graph = grid.graph
+        slack = grid.transformers_df.bus1.iloc[0]
+    tree = \
+        nx.bfs_tree(graph, slack)
+
+    print('Matrix for {} buses is extracted.'.format(len(buses)))
+    downstream_node_matrix = pd.DataFrame(columns=buses, index=buses)
+    downstream_node_matrix.fillna(0, inplace=True)
+
+    print('Starting iteration.')
+    visited_buses = []
+    current_feeder = []
+
+    recursive_downstream_node_matrix_filling(slack, current_feeder,
+                                             downstream_node_matrix, grid,
+                                             visited_buses)
+
+    return downstream_node_matrix
+
+
 if __name__ == '__main__':
     grid_ids = [176, 177, 1056, 1690, 1811, 2534]
 
-    if use_mp:
-        pool = mp.Pool(len(grid_ids))
+    if cpu_count > 1:
+        pool = mp.Pool(cpu_count)
         if remove_1m_lines:
             print("Removing 1m lines")
-            pool.map(remove_1m_lines_from_edisgo, grid_ids)
+            pool.map_async(remove_1m_lines_from_edisgo, grid_ids).get()
+        if extract_bands:
+            print("Extracting flexibility bands.")
+            pool.map_async(extract_and_save_bands_parallel, grid_ids).get()
+        if extract_extreme_weeks:
+            print("Extracting extreme weeks.")
+            pool.map_async(save_extreme_weeks_timeindex,grid_ids).get()
+        if reduce_timeseries_to_extreme_weeks:
+            print("Reducing timeseries.")
+            pool.map_async(extract_extreme_weeks_parallel, grid_ids).get()
+        if reduce_bands_to_extreme_weeks:
+            print("Reducing bands.")
+            pool.map_async(extract_extreme_weeks_from_bands, grid_ids).get()
+        if extract_feeders:
+            print("Extracting feeders.")
+            pool.map_async(extract_feeders_parallel, grid_ids).get()
+        if get_downstream_node_matrix:
+            print("Getting downstream nodes matrices")
+            grid_id_feeder_tuples = []
+            for grid_id in grid_ids:
+                feeder_dir = os.path.join(grid_dir, str(grid_id), "feeder")
+                for feeder in os.listdir(feeder_dir):
+                    grid_id_feeder_tuples.append((grid_id, feeder))
+            pool.map_async(get_downstream_node_matrix_feeders_parallel_server,
+                           grid_id_feeder_tuples).get()
         pool.close()
     else:
         for grid_id in grid_ids:
+            print("Preparing grid {}".format(grid_id))
             if remove_1m_lines:
                 print("Removing 1m lines")
                 remove_1m_lines_from_edisgo_parallel(grid_id)
+            if extract_bands:
+                print("Extracting flexibility bands.")
+                extract_and_save_bands_parallel(grid_id)
+            if extract_extreme_weeks:
+                print("Extracting extreme weeks.")
+                save_extreme_weeks_timeindex(grid_id)
+            if reduce_bands_to_extreme_weeks:
+                print("Reducing bands.")
+                extract_extreme_weeks_from_bands(grid_id)
+            if reduce_timeseries_to_extreme_weeks:
+                print("Reducing timeseries.")
+                extract_extreme_weeks_parallel(grid_id)
+            if extract_feeders:
+                print("Extracting feeders.")
+                extract_feeders_parallel(grid_id)
+            if get_downstream_node_matrix:
+                print("Getting downstream nodes matrices")
+                feeder_dir = os.path.join(grid_dir, str(grid_id), "feeder")
+                for feeder in os.listdir(feeder_dir):
+                    get_downstream_node_matrix_feeders_parallel_server((grid_id, feeder))

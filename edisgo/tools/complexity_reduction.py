@@ -1,3 +1,7 @@
+import os
+import networkx as nx
+from copy import deepcopy
+
 from edisgo.network.components import Switch
 
 
@@ -54,3 +58,99 @@ def remove_1m_end_line(edisgo, line):
     # remove line
     edisgo.topology.remove_line(line.name)
     print('{} removed.'.format(line.name))
+
+
+def extract_feeders_nx(edisgo_obj, save_dir=None, only_flex_ev=True):
+    """
+    Method to extract and optionally save MV-feeders.
+    """
+    edisgo_orig = deepcopy(edisgo_obj)
+    buses_with_feeders = edisgo_orig.topology.buses_df
+    station_bus = edisgo_obj.topology.mv_grid.station.index[0]
+    # get lines connected to station
+    feeder_lines = edisgo_obj.topology.lines_df.loc[
+        edisgo_obj.topology.lines_df.bus0 == station_bus].append(
+        edisgo_obj.topology.lines_df.loc[
+            edisgo_obj.topology.lines_df.bus1 == station_bus])
+    for feeder_line in feeder_lines.index:
+        edisgo_obj.remove_component('Line', feeder_line, force_remove=True)
+    graph = edisgo_obj.topology.to_graph()
+    subgraphs = list(
+        graph.subgraph(c)
+        for c in nx.connected_components(graph)
+    )
+    feeders = []
+    feeder_id = 0
+    for subgraph in subgraphs:
+        if only_flex_ev:
+            cp_feeder = edisgo_obj.topology.charging_points_df.loc[
+                edisgo_obj.topology.charging_points_df.bus.isin(list(subgraph.nodes))&
+                edisgo_obj.topology.charging_points_df.use_case.isin(["home", "work"])]
+            if len(cp_feeder) > 0:
+                buses_with_feeders.loc[list(subgraph.nodes), 'feeder_id'] = feeder_id
+                edisgo_feeder = create_feeder_edisgo_object(buses_with_feeders, edisgo_orig, feeder_id)
+                if save_dir:
+                    os.makedirs(save_dir + '/feeder/{}'.format(int(feeder_id)),
+                                exist_ok=True)
+                    edisgo_feeder.save(save_dir + '/feeder/{}'.format(int(feeder_id)))
+                feeders.append(edisgo_feeder)
+                feeder_id += 1
+        else:
+            raise NotImplementedError("So far the method is only implemented for the extraction of "
+                                      "feeders with flexible EV. Please adapt to your case.")
+    return feeders
+
+
+def create_feeder_edisgo_object(buses_with_feeders, edisgo_obj, feeder_id):
+    """
+    Method to create feeder edisgo object.
+    """
+    edisgo_feeder = deepcopy(edisgo_obj)
+    # convert topology
+    edisgo_feeder.topology.buses_df = edisgo_obj.topology.buses_df.loc[
+        buses_with_feeders.feeder_id == feeder_id].append(
+        edisgo_feeder.topology.mv_grid.station)
+    edisgo_feeder.topology.lines_df = edisgo_obj.topology.lines_df.loc[
+        edisgo_obj.topology.lines_df.bus0.isin(edisgo_feeder.topology.buses_df.index)].loc[
+        edisgo_obj.topology.lines_df.bus1.isin(edisgo_feeder.topology.buses_df.index)]
+    edisgo_feeder.topology.transformers_df = edisgo_obj.topology.transformers_df.loc[
+        edisgo_obj.topology.transformers_df.bus0.isin(edisgo_feeder.topology.buses_df.index)].loc[
+        edisgo_obj.topology.transformers_df.bus1.isin(edisgo_feeder.topology.buses_df.index)]
+    edisgo_feeder.topology.generators_df = edisgo_obj.topology.generators_df.loc[
+        edisgo_obj.topology.generators_df.bus.isin(edisgo_feeder.topology.buses_df.index)]
+    edisgo_feeder.topology.loads_df = edisgo_obj.topology.loads_df.loc[
+        edisgo_obj.topology.loads_df.bus.isin(edisgo_feeder.topology.buses_df.index)]
+    edisgo_feeder.topology.storage_units_df = edisgo_obj.topology.storage_units_df.loc[
+        edisgo_obj.topology.storage_units_df.bus.isin(edisgo_feeder.topology.buses_df.index)]
+    edisgo_feeder.topology.charging_points_df = edisgo_obj.topology.charging_points_df.loc[
+        edisgo_obj.topology.charging_points_df.bus.isin(edisgo_feeder.topology.buses_df.index)]
+    edisgo_feeder.topology.switches_df = edisgo_obj.topology.switches_df.loc[
+        edisgo_obj.topology.switches_df.branch.isin(edisgo_feeder.topology.lines_df.index)&
+        edisgo_obj.topology.switches_df.bus_open.isin(edisgo_feeder.topology.buses_df.index)&
+        edisgo_obj.topology.switches_df.bus_closed.isin(edisgo_feeder.topology.buses_df.index)]
+    # convert timeseries
+    if not edisgo_obj.timeseries.charging_points_active_power.empty:
+        edisgo_feeder.timeseries.charging_points_active_power = edisgo_obj.timeseries.charging_points_active_power[
+            edisgo_feeder.topology.charging_points_df.index]
+    if not edisgo_obj.timeseries.charging_points_reactive_power.empty:
+        edisgo_feeder.timeseries.charging_points_reactive_power = edisgo_obj.timeseries.charging_points_reactive_power[
+            edisgo_feeder.topology.charging_points_df.index]
+    if not edisgo_obj.timeseries.generators_active_power.empty:
+        edisgo_feeder.timeseries.generators_active_power = edisgo_obj.timeseries.generators_active_power[
+            edisgo_feeder.topology.generators_df.index]
+    if not edisgo_obj.timeseries.generators_reactive_power.empty:
+        edisgo_feeder.timeseries.generators_reactive_power = edisgo_obj.timeseries.generators_reactive_power[
+            edisgo_feeder.topology.generators_df.index]
+    if not edisgo_obj.timeseries.loads_active_power.empty:
+        edisgo_feeder.timeseries.loads_active_power = edisgo_obj.timeseries.loads_active_power[
+            edisgo_feeder.topology.loads_df.index]
+    if not edisgo_obj.timeseries.loads_reactive_power.empty:
+        edisgo_feeder.timeseries.loads_reactive_power = edisgo_obj.timeseries.loads_reactive_power[
+            edisgo_feeder.topology.loads_df.index]
+    if not edisgo_obj.timeseries.storage_units_active_power.empty:
+        edisgo_feeder.timeseries.storage_units_active_power = edisgo_obj.timeseries.storage_units_active_power[
+            edisgo_feeder.topology.storage_units_df.index]
+    if not edisgo_obj.timeseries.storage_units_reactive_power.empty:
+        edisgo_feeder.timeseries.storage_units_reactive_power = edisgo_obj.timeseries.storage_units_reactive_power[
+            edisgo_feeder.topology.storage_units_df.index]
+    return edisgo_feeder
