@@ -372,19 +372,128 @@ class TimeSeries:
             _add_component_time_series(obj=self, df_name=df_name,
                                        ts_new=ts_storage_units)
 
-    def set_worst_case(self, edisgo_object, cases):
+    def set_worst_case(self, edisgo_object, cases=['feed-in_case', 'load_case']):
         """
-        Worst case scaling factors for loads and generators are specified in
-        the config section `worst_case_scale_factor`.
+        Sets demand and feed-in of all loads, generators and storage units for the
+        specified worst cases.
 
-        For each case time series for MV analysis and LV analysis are returned, as
-        different simultaneity factors are assumed.
+        Possible worst cases are 'load_case' (heavy load flow case) and 'feed-in_case'
+        (reverse power flow case). Each case is set up once for dimensioning of the MV
+        grid ('load_case_mv'/'feed-in_case_mv') and once for the dimensioning of the LV
+        grid ('load_case_lv'/'feed-in_case_lv'), as different simultaneity factors are
+        assumed for the different voltage levels.
 
-        For conventional loads simultaneity factors from config used. Fixed coshphi assumed.
-        Values for cosphi also taken from config and it is distinguished between loads
-        in the MV and LV.
+        Assumed simultaneity factors specified in the config section
+        `worst_case_scale_factor` are used to generate active power demand or feed-in.
+        For the reactive power behavior fixed cosphi is assumed and the power factors
+        specified in the config section `reactive_power_factor` are used.
+
+        Component specific information is given below:
+
+        * Generators
+
+            Worst case feed-in time series are distinguished by technology (PV, wind
+            and all other) and whether it is a load or feed-in case.
+            In case of generator worst case time series it is not distinguished by
+            whether it is used to analyse the MV or LV. However, both options are
+            generated as it is distinguished in the case of loads.
+            Worst case scaling factors for generators are specified in
+            the config section `worst_case_scale_factor` through the parameters:
+            'feed-in_case_feed-in_pv', 'feed-in_case_feed-in_wind',
+            'feed-in_case_feed-in_other',
+            'load_case_feed-in_pv', load_case_feed-in_wind', and
+            'load_case_feed-in_other'.
+
+            For reactive power a fixed cosphi is assumed. A different reactive power
+            factor is used for generators in the MV and generators in the LV.
+            The reactive power factors for generators are specified in
+            the config section `reactive_power_factor` through the parameters:
+            'mv_gen' and 'lv_gen'.
+
+        * Conventional loads
+
+            Worst case load time series are distinguished by whether it
+            is a load or feed-in case and whether it used to analyse the MV or LV.
+            Worst case scaling factors for conventional loads are specified in
+            the config section `worst_case_scale_factor` through the parameters:
+            'mv_feed-in_case_load', 'lv_feed-in_case_load', 'mv_load_case_load', and
+            'lv_load_case_load'.
+
+            For reactive power a fixed cosphi is assumed. A different reactive power
+            factor is used for loads in the MV and loads in the LV.
+            The reactive power factors for conventional loads are specified in
+            the config section `reactive_power_factor` through the parameters:
+            'mv_load' and 'lv_load'.
+
+        * Charging points
+
+            Worst case demand time series are distinguished by use case (home charging,
+            work charging, public (slow) charging and HPC), by whether it is a load or
+            feed-in case and by whether it used to analyse the MV or LV.
+            Worst case scaling factors for charging points are specified in
+            the config section `worst_case_scale_factor` through the parameters:
+            'mv_feed-in_case_cp_home', 'mv_feed-in_case_cp_work',
+            'mv_feed-in_case_cp_public', and 'mv_feed-in_case_cp_hpc',
+            'lv_feed-in_case_cp_home', 'lv_feed-in_case_cp_work',
+            'lv_feed-in_case_cp_public', and 'lv_feed-in_case_cp_hpc',
+            'mv_load-in_case_cp_home', 'mv_load-in_case_cp_work',
+            'mv_load-in_case_cp_public', and 'mv_load-in_case_cp_hpc',
+            'lv_load-in_case_cp_home', 'lv_load-in_case_cp_work',
+            'lv_load-in_case_cp_public', and 'lv_load-in_case_cp_hpc'.
+
+            For reactive power a fixed cosphi is assumed. A different reactive power
+            factor is used for charging points in the MV and charging points in the LV.
+            The reactive power factors for charging points are specified in
+            the config section `reactive_power_factor` through the parameters:
+            'mv_cp' and 'lv_cp'.
+
+        * Heat pumps
+
+            Worst case demand time series are distinguished by whether it is a load or
+            feed-in case and by whether it used to analyse the MV or LV.
+            Worst case scaling factors for heat pumps are specified in
+            the config section `worst_case_scale_factor` through the parameters:
+            'mv_feed-in_case_hp', 'lv_feed-in_case_hp', 'mv_load_case_hp', and
+            'lv_load_case_hp'.
+
+            For reactive power a fixed cosphi is assumed. A different reactive power
+            factor is used for heat pumps in the MV and heat pumps in the LV.
+            The reactive power factors for heat pumps are specified in
+            the config section `reactive_power_factor` through the parameters:
+            'mv_hp' and 'lv_hp'.
+
+        * Storage units
+
+            Worst case feed-in time series are distinguished by whether it is a load or
+            feed-in case.
+            In case of storage units worst case time series it is not distinguished by
+            whether it is used to analyse the MV or LV. However, both options are
+            generated as it is distinguished in the case of loads.
+            Worst case scaling factors for storage units are specified in
+            the config section `worst_case_scale_factor` through the parameters:
+            'feed-in_case_storage' and 'load_case_storage'.
+
+            For reactive power a fixed cosphi is assumed. A different reactive power
+            factor is used for storage units in the MV and storage units in the LV.
+            The reactive power factors for storage units are specified in
+            the config section `reactive_power_factor` through the parameters:
+            'mv_storage' and 'lv_storage'.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        cases : list(str)
+            List with worst-cases to generate time series for. Can be
+            'feed-in_case', 'load_case' or both. Default: ['feed-in_case', 'load_case']
+
+        Notes
+        -----
+        Loads for which type information is not set are handled as conventional loads.
 
         """
+        # reset all time series
+        self.reset()
+
         #ToDo: Check if index needs to be time index
         # self.timeindex = pd.date_range(
         #     "1/1/1970", periods=len(modes), freq="H"
@@ -395,44 +504,87 @@ class TimeSeries:
             # assign voltage level for reactive power
             df = assign_voltage_level_to_component(
                 edisgo_object.topology.generators_df, edisgo_object.topology.buses_df)
-            self._worst_case_generators(
-                cases, df, edisgo_object.config)
+            self.generators_active_power, self.generators_reactive_power = (
+                self._worst_case_generators(
+                    cases, df, edisgo_object.config)
+            )
         if not edisgo_object.topology.loads_df.empty:
             # assign voltage level for reactive power
             df = assign_voltage_level_to_component(
                 edisgo_object.topology.loads_df, edisgo_object.topology.buses_df)
             # conventional loads
-            df_conv = df[df.type == "conventional_load"]
-            if not df_conv.empty:
-                self._worst_case_conventional_load(
-                    cases, df_conv, edisgo_object.config)
+            df_tmp = df[df.type == "conventional_load"]
+            if not df_tmp.empty:
+                self.loads_active_power, self.loads_reactive_power = (
+                    self._worst_case_conventional_load(
+                        cases, df_tmp, edisgo_object.config)
+                )
             # charging points
-            df_cp = df[df.type == "charging_point"]
-            if not df_cp.empty:
-                self._worst_case_charging_points(
-                    cases, df_cp, edisgo_object.config)
+            df_tmp = df[df.type == "charging_point"]
+            if not df_tmp.empty:
+                p_tmp, q_tmp = self._worst_case_charging_points(
+                    cases, df_tmp, edisgo_object.config)
+                self.loads_active_power = pd.concat(
+                    [self.loads_active_power, p_tmp],
+                    axis=1
+                )
+                self.loads_reactive_power = pd.concat(
+                    [self.loads_reactive_power, q_tmp],
+                    axis=1
+                )
             # heat pumps
-
-            # other?
+            df_tmp = df[df.type == "heat_pump"]
+            if not df_tmp.empty:
+                p_tmp, q_tmp = self._worst_case_heat_pumps(
+                    cases, df_tmp, edisgo_object.config)
+                self.loads_active_power = pd.concat(
+                    [self.loads_active_power, p_tmp],
+                    axis=1
+                )
+                self.loads_reactive_power = pd.concat(
+                    [self.loads_reactive_power, q_tmp],
+                    axis=1
+                )
+            # check if there are loads without time series remaining and if so, handle
+            # them as conventional loads
+            loads_without_ts = list(
+                set(df.index) - set(self.loads_active_power.columns))
+            if len(loads_without_ts) > 0:
+                logging.warning(
+                    "There are loads where information on type of load is missing. "
+                    "Handled types are 'conventional_load', 'charging_point', and "
+                    "'heat_pump'. Loads with missing type information are handled as "
+                    "conventional loads. If this is not the wanted behavior, please "
+                    "set type information. This concerns the following "
+                    "loads: {}.".format(loads_without_ts)
+                )
+                p_tmp, q_tmp = (
+                    self._worst_case_conventional_load(
+                        cases, df.loc[loads_without_ts, :], edisgo_object.config)
+                )
+                self.loads_active_power = pd.concat(
+                    [self.loads_active_power, p_tmp],
+                    axis=1
+                )
+                self.loads_reactive_power = pd.concat(
+                    [self.loads_reactive_power, q_tmp],
+                    axis=1
+                )
         if not edisgo_object.topology.storage_units_df.empty:
             # assign voltage level for reactive power
             df = assign_voltage_level_to_component(
                 edisgo_object.topology.storage_units_df,
                 edisgo_object.topology.buses_df)
-            self._worst_case_storage_units(
-                cases, df, edisgo_object.config)
+            self.storage_units_active_power, self.storage_units_reactive_power = (
+                self._worst_case_storage_units(
+                    cases, df, edisgo_object.config)
+            )
 
     def _worst_case_generators(self, cases, df, configs):
         """
         Get feed-in of generators for worst case analyses.
 
-        Worst case feed-in time series are distinguished by technology (PV, wind
-        and all other) and whether it is a load or feed-in case.
-        In case of generator worst case time series it is not distinguished by whether
-        it is used to analyse the MV or LV. However, both options are generated as it
-        is distinguished in the case of loads.
-
-        For reactive power a fixed cosphi is assumed.
+        See :py:attr:`~set_worst_case` for further information.
 
         Parameters
         ----------
@@ -446,6 +598,13 @@ class TimeSeries:
         configs : :class:`~.tools.config.Config`
             Configuration data with assumed simultaneity factors and reactive power
             behavior.
+
+        Returns
+        -------
+        (:pandas:`pandas.DataFrame<DataFrame>`, :pandas:`pandas.DataFrame<DataFrame>`)
+            Active and reactive power (in MW and MVA, respectively) in each case for
+            each generator. The index of the dataframe contains the case and the columns
+            are the generator names.
 
         """
         # check that all generators have information on nominal power, technology type,
@@ -475,14 +634,14 @@ class TimeSeries:
                 power_scaling.at["{}_{}".format(case, "lv"), t] = power_scaling.at[
                     "{}_{}".format(case, "mv"), t]
         # calculate active power of generators
-        self.generators_active_power = pd.concat(
+        active_power = pd.concat(
             [power_scaling.pv.to_frame("p_nom").dot(
                 df[df.type == "solar"].loc[:, ["p_nom"]].T),
              power_scaling.wind.to_frame("p_nom").dot(
                  df[df.type == "wind"].loc[:, ["p_nom"]].T),
                 power_scaling.other.to_frame("p_nom").dot(
                     df[~df.type.isin(["solar", "wind"])].loc[:, ["p_nom"]].T)
-            ], axis=1
+             ], axis=1
         )
 
         # reactive power
@@ -501,17 +660,15 @@ class TimeSeries:
             )]
         )
         # calculate reactive power of generators
-        self.generators_reactive_power = q_control.fixed_cosphi(
-            self.generators_active_power, q_sign, power_factor)
+        reactive_power = q_control.fixed_cosphi(
+            active_power, q_sign, power_factor)
+        return active_power, reactive_power
 
     def _worst_case_conventional_load(self, cases, df, configs):
         """
         Get demand of conventional loads for worst case analyses.
 
-        Worst case load time series are distinguished by whether it
-        is a load or feed-in case and whether it used to analyse the MV or LV.
-
-        For reactive power a fixed cosphi is assumed.
+        See :py:attr:`~set_worst_case` for further information.
 
         Parameters
         ----------
@@ -525,6 +682,13 @@ class TimeSeries:
         configs : :class:`~.tools.config.Config`
             Configuration data with assumed simultaneity factors and reactive power
             behavior.
+
+        Returns
+        -------
+        (:pandas:`pandas.DataFrame<DataFrame>`, :pandas:`pandas.DataFrame<DataFrame>`)
+            Active and reactive power (in MW and MVA, respectively) in each case for
+            each load. The index of the dataframe contains the case and the columns
+            are the load names.
 
         """
         # check that all loads have information on nominal power (grid connection power)
@@ -550,7 +714,7 @@ class TimeSeries:
                         "{}_{}_load".format(voltage_level, case)]
                 )
         # calculate active power of loads
-        self.loads_active_power = power_scaling.to_frame("p_nom").dot(
+        active_power = power_scaling.to_frame("p_nom").dot(
             df.loc[:, ["p_nom"]].T)
 
         # reactive power
@@ -569,18 +733,15 @@ class TimeSeries:
             )]
         )
         # calculate reactive power of loads
-        self.loads_reactive_power = q_control.fixed_cosphi(
-            self.loads_active_power, q_sign, power_factor)
+        reactive_power = q_control.fixed_cosphi(
+            active_power, q_sign, power_factor)
+        return active_power, reactive_power
 
     def _worst_case_charging_points(self, cases, df, configs):
         """
         Get demand of charging points for worst case analyses.
 
-        Worst case demand time series are distinguished by use case (home charging,
-        work charging, public (slow) charging and HPC), by whether it is a load or
-        feed-in case and by whether it used to analyse the MV or LV.
-
-        For reactive power a fixed cosphi is assumed.
+        See :py:attr:`~set_worst_case` for further information.
 
         Parameters
         ----------
@@ -594,6 +755,13 @@ class TimeSeries:
         configs : :class:`~.tools.config.Config`
             Configuration data with assumed simultaneity factors and reactive power
             behavior.
+
+        Returns
+        -------
+        (:pandas:`pandas.DataFrame<DataFrame>`, :pandas:`pandas.DataFrame<DataFrame>`)
+            Active and reactive power (in MW and MVA, respectively) in each case for
+            each charging point. The index of the dataframe contains the case and the
+            columns are the charging point names.
 
         """
         # check that all charging points have information on nominal power,
@@ -632,15 +800,14 @@ class TimeSeries:
                             "{}_{}_cp_{}".format(voltage_level, case, s)]
                     )
         # calculate active power of charging points
-        self.loads_active_power = pd.concat(
-            [self.loads_active_power] +
+        active_power = pd.concat(
             [power_scaling.loc[:, s].to_frame("p_nom").dot(
                  df[df.sector == s].loc[:, ["p_nom"]].T) for s in sectors
-            ], axis=1
+             ], axis=1
         )
 
         # reactive power
-        # get worst case configurations for each charging
+        # get worst case configurations for each charging point
         q_sign, power_factor = _reactive_power_factor_and_mode_default(
             df, "charging_points", configs)
         # write reactive power configuration to TimeSeriesRaw
@@ -655,20 +822,87 @@ class TimeSeries:
             )]
         )
         # calculate reactive power of charging points
-        self.loads_reactive_power = q_control.fixed_cosphi(
-            self.loads_active_power, q_sign, power_factor)
+        reactive_power = q_control.fixed_cosphi(
+            active_power, q_sign, power_factor)
+        return active_power, reactive_power
+
+    def _worst_case_heat_pumps(self, cases, df, configs):
+        """
+        Get demand of heat pumps for worst case analyses.
+
+        See :py:attr:`~set_worst_case` for further information.
+
+        Parameters
+        ----------
+        cases : list(str)
+            List with worst-cases to generate time series for. Can be
+            'feed-in_case', 'load_case' or both.
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with information on heat pumps in the format of
+            :attr:`~.network.topology.Topology.loads_df` with additional column
+            "voltage_level".
+        configs : :class:`~.tools.config.Config`
+            Configuration data with assumed simultaneity factors and reactive power
+            behavior.
+
+        Returns
+        -------
+        (:pandas:`pandas.DataFrame<DataFrame>`, :pandas:`pandas.DataFrame<DataFrame>`)
+            Active and reactive power (in MW and MVA, respectively) in each case for
+            each heat pump. The index of the dataframe contains the case and the columns
+            are the heat pump names.
+
+        """
+        # check that all heat pumps have information on nominal power, and voltage level
+        # they are in
+        df = df.loc[:, ["p_nom", "voltage_level"]]
+        check = df.isnull().any(axis=1)
+        if check.any():
+            raise AttributeError(
+                "The following heat pumps have missing information on "
+                "nominal power or voltage level: {}.".format(
+                    check[check].index.values)
+            )
+
+        # active power
+        # get worst case configurations
+        worst_case_scale_factors = configs["worst_case_scale_factor"]
+        # get power scaling factors for different voltage levels and feed-in/load case
+        power_scaling = pd.Series()
+        for case in cases:
+            for voltage_level in ["mv", "lv"]:
+                power_scaling.at["{}_{}".format(case, voltage_level)] = (
+                    worst_case_scale_factors[
+                        "{}_{}_hp".format(voltage_level, case)]
+                )
+        # calculate active power of heat pumps
+        active_power = power_scaling.to_frame("p_nom").dot(df.loc[:, ["p_nom"]].T)
+
+        # reactive power
+        # get worst case configurations for each heat pump
+        q_sign, power_factor = _reactive_power_factor_and_mode_default(
+            df, "heat_pumps", configs)
+        # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control = pd.concat([
+            self.time_series_raw.q_control,
+            pd.DataFrame(
+                index=df.index,
+                data={"type": "fixed_cosphi",
+                      "q_sign": q_sign,
+                      "power_factor": power_factor
+                      }
+            )]
+        )
+        # calculate reactive power of heat pumps
+        reactive_power = q_control.fixed_cosphi(
+            active_power, q_sign, power_factor)
+        return active_power, reactive_power
 
     def _worst_case_storage_units(self, cases, df, configs):
         """
         Get charging and discharging of storage units for worst case analyses.
 
-        Worst case feed-in time series are distinguished by whether it is a load or
-        feed-in case.
-        In case of storage units worst case time series it is not distinguished by
-        whether it is used to analyse the MV or LV. However, both options are generated
-        as it is distinguished in the case of loads.
-
-        For reactive power a fixed cosphi is assumed.
+        See :py:attr:`~set_worst_case` for further information.
 
         Parameters
         ----------
@@ -682,6 +916,13 @@ class TimeSeries:
         configs : :class:`~.tools.config.Config`
             Configuration data with assumed simultaneity factors and reactive power
             behavior.
+
+        Returns
+        -------
+        (:pandas:`pandas.DataFrame<DataFrame>`, :pandas:`pandas.DataFrame<DataFrame>`)
+            Active and reactive power (in MW and MVA, respectively) in each case for
+            each storage. The index of the dataframe contains the case and the columns
+            are the storage names.
 
         """
         # check that all storage units have information on nominal power
@@ -708,7 +949,7 @@ class TimeSeries:
             power_scaling.at["{}_{}".format(case, "lv")] = power_scaling.at[
                 "{}_{}".format(case, "mv")]
         # calculate active power of loads
-        self.storage_units_active_power = power_scaling.to_frame("p_nom").dot(
+        active_power = power_scaling.to_frame("p_nom").dot(
             df.loc[:, ["p_nom"]].T)
 
         # reactive power
@@ -727,8 +968,9 @@ class TimeSeries:
             )]
         )
         # calculate reactive power of loads
-        self.storage_units_reactive_power = q_control.fixed_cosphi(
-            self.storage_units_active_power, q_sign, power_factor)
+        reactive_power = q_control.fixed_cosphi(
+            active_power, q_sign, power_factor)
+        return active_power, reactive_power
 
     @property
     def residual_load(self):
