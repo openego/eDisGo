@@ -307,8 +307,67 @@ class EDisGo:
         if path is not None:
             import_ding0_grid(path, self)
 
-    def set_timeseries_worst_case_analysis(self, cases=["load_case", "feed-in_case"]):
+    def set_time_series_manual(self, generators_p=None, loads_p=None,
+                               storage_units_p=None, generators_q=None, loads_q=None,
+                               storage_units_q=None):
         """
+        Sets given component time series.
+
+        If time series for a component were already set before, they are overwritten.
+
+        Parameters
+        -----------
+        generators_p : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series in MW of generators. Index of the data frame is
+            a datetime index. Columns contain generators names of generators to set
+            time series for. Default: None.
+        loads_p : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series in MW of loads. Index of the data frame is
+            a datetime index. Columns contain load names of loads to set
+            time series for. Default: None.
+        storage_units_p : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series in MW of storage units. Index of the data frame is
+            a datetime index. Columns contain storage unit names of storage units to set
+            time series for. Default: None.
+        generators_q : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series in MVA of generators. Index of the data frame is
+            a datetime index. Columns contain generators names of generators to set
+            time series for. Default: None.
+        loads_q : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series in MVA of loads. Index of the data frame is
+            a datetime index. Columns contain load names of loads to set
+            time series for. Default: None.
+        storage_units_q : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series in MVA of storage units. Index of the data frame
+            is a datetime index. Columns contain storage unit names of storage units to
+            set time series for. Default: None.
+
+        """
+        self.timeseries.set_active_power_manual(
+            self,
+            ts_generators=generators_p,
+            ts_loads=loads_p,
+            ts_storage_units=storage_units_p
+        )
+        self.timeseries.set_reactive_power_manual(
+            self,
+            ts_generators=generators_q,
+            ts_loads=loads_q,
+            ts_storage_units=storage_units_q
+        )
+
+    def set_time_series_worst_case_analysis(self, cases=["load_case", "feed-in_case"]):
+        """
+        Sets demand and feed-in of all loads, generators and storage units for the
+        specified worst cases.
+
+        See :func:`~.network.timeseries.TimeSeries.set_worst_case` for more information.
+
+        Parameters
+        -----------
+        cases : str or list(str)
+            List with worst-cases to generate time series for. Can be
+            'feed-in_case', 'load_case' or both. Default: ['feed-in_case', 'load_case'].
 
         """
         if isinstance(cases, str):
