@@ -2181,6 +2181,7 @@ class Topology:
                 length=line_length,
                 kind=line_data.kind,
                 type_info=line_data.type_info,
+                num_parallel=line_data.num_parallel
             )
             # if line connected to switch was split, write new line name to
             # switch data
@@ -2209,6 +2210,7 @@ class Topology:
                 length=line_length,
                 kind=line_data.kind,
                 type_info=line_data.type_info,
+                num_parallel=line_data.num_parallel
             )
             # if line connected to switch was split, write new line name to
             # switch data
