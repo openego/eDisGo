@@ -110,6 +110,7 @@ def create_feeder_edisgo_object(buses_with_feeders, edisgo_obj, feeder_id):
     edisgo_feeder.topology.buses_df = edisgo_obj.topology.buses_df.loc[
         buses_with_feeders.feeder_id == feeder_id].append(
         edisgo_feeder.topology.mv_grid.station)
+    # Todo: code more efficiently using setattr and getattr
     edisgo_feeder.topology.lines_df = edisgo_obj.topology.lines_df.loc[
         edisgo_obj.topology.lines_df.bus0.isin(edisgo_feeder.topology.buses_df.index)].loc[
         edisgo_obj.topology.lines_df.bus1.isin(edisgo_feeder.topology.buses_df.index)]
@@ -129,6 +130,7 @@ def create_feeder_edisgo_object(buses_with_feeders, edisgo_obj, feeder_id):
         edisgo_obj.topology.switches_df.bus_open.isin(edisgo_feeder.topology.buses_df.index)&
         edisgo_obj.topology.switches_df.bus_closed.isin(edisgo_feeder.topology.buses_df.index)]
     # convert timeseries
+    # Todo: code more efficiently using setattr and getattr
     if not edisgo_obj.timeseries.charging_points_active_power.empty:
         edisgo_feeder.timeseries.charging_points_active_power = edisgo_obj.timeseries.charging_points_active_power[
             edisgo_feeder.topology.charging_points_df.index]
