@@ -246,6 +246,19 @@ class TimeSeries:
     def storage_units_reactive_power(self, df):
         self._storage_units_reactive_power = df
 
+    def reset(self):
+        """
+        Resets all time series.
+
+        Active and reactive power time series of all loads, generators and storage units
+        are deleted, as well as everything stored in :py:attr:`~time_series_raw`.
+        
+        """
+        self.generators_active_power = None
+        self.loads_active_power = None
+        self.storage_units_active_power = None
+        self.time_series_raw = TimeSeriesRaw()
+
     def set_active_power_manual(self, ts_generators=None, ts_loads=None,
                                 ts_storage_units=None):
         """
