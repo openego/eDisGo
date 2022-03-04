@@ -252,14 +252,14 @@ class TimeSeries:
 
         Active and reactive power time series of all loads, generators and storage units
         are deleted, as well as everything stored in :py:attr:`~time_series_raw`.
-        
+
         """
         self.generators_active_power = None
         self.loads_active_power = None
         self.storage_units_active_power = None
         self.time_series_raw = TimeSeriesRaw()
 
-    def set_active_power_manual(self, ts_generators=None, ts_loads=None,
+    def set_active_power_manual(self, edisgo_object, ts_generators=None, ts_loads=None,
                                 ts_storage_units=None):
         """
         Sets given component active power time series.
@@ -268,6 +268,7 @@ class TimeSeries:
 
         Parameters
         ----------
+        edisgo_object : :class:`~.EDisGo`
         ts_generators : :pandas:`pandas.DataFrame<DataFrame>`
             Active power time series in MW of generators. Index of the data frame is
             a datetime index. Columns contain generators names of generators to set
@@ -282,11 +283,11 @@ class TimeSeries:
             time series for.
 
         """
-        self._set_manual("active", ts_generators=ts_generators, ts_loads=ts_loads,
-                         ts_storage_units=ts_storage_units)
+        self._set_manual(edisgo_object, "active", ts_generators=ts_generators,
+                         ts_loads=ts_loads, ts_storage_units=ts_storage_units)
 
-    def set_reactive_power_manual(self, ts_generators=None, ts_loads=None,
-                                  ts_storage_units=None):
+    def set_reactive_power_manual(self, edisgo_object, ts_generators=None,
+                                  ts_loads=None, ts_storage_units=None):
         """
         Sets given component reactive power time series.
 
@@ -294,6 +295,7 @@ class TimeSeries:
 
         Parameters
         ----------
+        edisgo_object : :class:`~.EDisGo`
         ts_generators : :pandas:`pandas.DataFrame<DataFrame>`
             Reactive power time series in MVA of generators. Index of the data frame is
             a datetime index. Columns contain generators names of generators to set
@@ -308,10 +310,10 @@ class TimeSeries:
             set time series for.
 
         """
-        self._set_manual("reactive", ts_generators=ts_generators, ts_loads=ts_loads,
-                         ts_storage_units=ts_storage_units)
+        self._set_manual(edisgo_object, "reactive", ts_generators=ts_generators,
+                         ts_loads=ts_loads, ts_storage_units=ts_storage_units)
 
-    def _set_manual(self, mode, ts_generators=None, ts_loads=None,
+    def _set_manual(self, edisgo_object, mode, ts_generators=None, ts_loads=None,
                     ts_storage_units=None):
         """
         Sets given component time series.
@@ -320,6 +322,7 @@ class TimeSeries:
 
         Parameters
         ----------
+        edisgo_object : :class:`~.EDisGo`
         mode : str
             Defines whether to set active or reactive power time series. Possible
             options are "active" and "reactive".
@@ -338,6 +341,7 @@ class TimeSeries:
 
         """
         if ts_generators is not None:
+            _check_if_components_exist(edisgo_object, ts_generators, "generators")
             df_name = "generators_{}_power".format(mode)
             # drop generators time series from self.generators_(re)active_power that may
             # already exist for some of the given generators
@@ -350,6 +354,7 @@ class TimeSeries:
                                        ts_new=ts_generators)
 
         if ts_loads is not None:
+            _check_if_components_exist(edisgo_object, ts_loads, "loads")
             df_name = "loads_{}_power".format(mode)
             # drop load time series from self.loads_(re)active_power that may
             # already exist for some of the given loads
@@ -361,6 +366,7 @@ class TimeSeries:
                                        ts_new=ts_loads)
 
         if ts_storage_units is not None:
+            _check_if_components_exist(edisgo_object, ts_storage_units, "storage_units")
             df_name = "storage_units_{}_power".format(mode)
             # drop storage unit time series from self.storage_units_(re)active_power
             # that may already exist for some of the given storage units
@@ -372,7 +378,7 @@ class TimeSeries:
             _add_component_time_series(obj=self, df_name=df_name,
                                        ts_new=ts_storage_units)
 
-    def set_worst_case(self, edisgo_object, cases=['feed-in_case', 'load_case']):
+    def set_worst_case(self, edisgo_object, cases):
         """
         Sets demand and feed-in of all loads, generators and storage units for the
         specified worst cases.
@@ -484,7 +490,7 @@ class TimeSeries:
         edisgo_object : :class:`~.EDisGo`
         cases : list(str)
             List with worst-cases to generate time series for. Can be
-            'feed-in_case', 'load_case' or both. Default: ['feed-in_case', 'load_case']
+            'feed-in_case', 'load_case' or both.
 
         Notes
         -----
@@ -1941,6 +1947,32 @@ def check_timeseries_for_index_and_cols(edisgo_obj, timeseries, component_names)
             "as names of components to be added. Timeseries "
             "for the following components were tried to be "
             "added: {}".format(component_names)
+        )
+
+
+def _check_if_components_exist(edisgo_object, ts_df, component_type):
+    """
+    Checks if all components for which time series are provided exist in the network.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    ts_df : :pandas:`pandas.DataFrame<dataframe>`
+        Dataframe with time series to add.
+    component_type : str
+        The component type for which time series are added.
+        Possible options are 'generators', 'storage_units', 'loads'.
+
+    """
+    comps_in_network = getattr(
+        edisgo_object.topology, "{}_df".format(component_type)).index
+    comps_not_in_network = list(
+        set(ts_df.columns) - set(comps_in_network))
+    if len(comps_not_in_network) > 0:
+        logging.warning(
+            "Some time series were provided for components that are not in the "
+            "network. This concerns the following components: {}.".format(
+                comps_not_in_network)
         )
 
 
