@@ -15,7 +15,7 @@ from dash import dcc, html
 from dash.dependencies import Input, Output
 from jupyter_dash import JupyterDash
 from matplotlib import pyplot as plt
-from pyproj import Proj, Transformer
+from pyproj import Transformer
 from pypsa import Network as PyPSANetwork
 
 from edisgo.tools import session_scope, tools
@@ -172,7 +172,7 @@ def add_basemap(ax, zoom=12):
     Adds map to a plot.
 
     """
-    url = ctx.sources.ST_TONER_LITE
+    url = ctx.providers.Stamen.TonerLite
     xmin, xmax, ymin, ymax = ax.axis()
     basemap, extent = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=url)
     ax.imshow(basemap, extent=extent, interpolation="bilinear")
