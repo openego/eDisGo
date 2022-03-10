@@ -178,20 +178,11 @@ def charging_strategy(
             / edisgo_obj.electromobility.stepsize
         )
 
-        # calculate in which time steps the last time step needed to fulfill
-        # the charging demand is considered in the timeseries
-        mask = (minimum_charging_time % 1) >= timestamp_share_threshold
-
-        minimum_charging_time.loc[mask] = minimum_charging_time.apply(np.ceil)
-
-        minimum_charging_time.loc[~mask] = minimum_charging_time.apply(
-            np.floor)
-
         # recalculate the charging demand from the charging capacity
         # and the minimum charging time
         # Calculate the grid sided charging capacity in MVA
         df = df.assign(
-            minimum_charging_time=minimum_charging_time.astype(np.uint16),
+            minimum_charging_time=minimum_charging_time.astype(np.float32),
             harmonized_chargingdemand=minimum_charging_time
             * df.netto_charging_capacity
             * edisgo_obj.electromobility.stepsize
@@ -215,10 +206,6 @@ def charging_strategy(
                 * 60
                 / edisgo_obj.electromobility.stepsize
             )
-
-            maximum_needed_charging_time = maximum_needed_charging_time.apply(
-                np.floor
-            ).astype(np.uint16)
 
             # when the parking time is less than the maximum needed charging
             # time, the total charging time equates the parking time and the
@@ -333,7 +320,7 @@ def charging_strategy(
             for _, start, stop, cap in charging_processes_df[
                 RELEVANT_CHARGING_STRATEGIES_COLUMNS["dumb"]
             ].itertuples():
-                dummy_ts[start:start + stop] += cap
+                dummy_ts = dumb_charging(dummy_ts, start, stop, cap)
 
             _overwrite_timeseries(
                 edisgo_obj, cp.edisgo_id, pd.Series(
@@ -364,9 +351,12 @@ def charging_strategy(
                 if use_case == "public":
                     # if the charging process takes place in a "public" setting
                     # the charging is "dumb"
-                    dummy_ts[start:start + stop_dumb] += cap_dumb
+                    dummy_ts = dumb_charging(dummy_ts, start, stop_dumb, cap_dumb)
                 else:
-                    dummy_ts[start:start + stop_reduced] += cap_reduced
+                    t_full = int(stop_reduced)
+                    t_fraction = stop_reduced - t_full
+                    dummy_ts[start:start + t_full] += cap_reduced
+                    dummy_ts[start + t_full:start + t_full + 1] += cap_reduced * t_fraction
 
             _overwrite_timeseries(
                 edisgo_obj, cp.edisgo_id, pd.Series(
@@ -439,8 +429,8 @@ def charging_strategy(
             RELEVANT_CHARGING_STRATEGIES_COLUMNS["residual_dumb"]
         ].itertuples():
             try:
-                dummy_ts.loc[:, cp_id].iloc[start:start + stop] += cap
-
+                dummy_ts.loc[:, cp_id] = dumb_charging(dummy_ts.loc[:, cp_id],
+                                                       start, stop, cap)
             except Exception:
                 maximum_ts = len(dummy_ts)
                 logger.warning(
@@ -455,26 +445,34 @@ def charging_strategy(
 
         residual_load = init_residual_load + dummy_ts.sum(axis=1).to_numpy()
 
-        for _, start, end, k, cp_id, cap in flex_charging_processes_df[
+        for _, start, end, t_charge, cp_id, cap in flex_charging_processes_df[
             RELEVANT_CHARGING_STRATEGIES_COLUMNS["residual"]
         ].itertuples():
             flex_band = residual_load[start:end]
 
             # get k time steps with the lowest residual load in the parking
             # time
-            idx = np.argpartition(flex_band, k)[:k] + start
+            t_full = int(t_charge)
+            t_fraction = t_charge - t_full
+            idx_full = np.argpartition(flex_band, t_full)[:t_full] + start
+            try:
+                idx_fraction = list(set(np.argpartition(flex_band, t_full+1)[:t_full+1] + start)-set(idx_full))
+            except ValueError:
+                idx_fraction = list(set(range(start, end)) - set(idx_full))
 
             try:
-                dummy_ts[cp_id].iloc[idx] += cap
+                dummy_ts[cp_id].iloc[idx_full] += cap
+                dummy_ts[cp_id].iloc[idx_fraction] += cap * t_fraction
 
-                residual_load[idx] += cap
+                residual_load[idx_full] += cap
+                residual_load[idx_fraction] += cap * t_fraction
 
             except Exception:
                 logger.warning(
                     (
                         f"Charging process with index {_} could not be "
                         f"respected. The charging takes place within the "
-                        f"timesteps {idx}, while the timeseries consists of "
+                        f"timesteps {idx_full}, while the timeseries consists of "
                         f"{maximum_ts} timesteps."
                     )
                 )
@@ -488,3 +486,12 @@ def charging_strategy(
         raise ValueError(f"Strategy {strategy} has not yet been implemented.")
 
     logging.info(f"Charging strategy {strategy} completed.")
+
+
+def dumb_charging(charging_ts, start, charging_time, charging_capacity):
+    charging_time_full = int(charging_time)
+    charging_time_fraction = charging_time - charging_time_full
+    charging_ts[start:start + charging_time_full] += charging_capacity
+    charging_ts[start + charging_time_full:start + charging_time_full + 1] += \
+        charging_capacity * charging_time_fraction
+    return charging_ts
