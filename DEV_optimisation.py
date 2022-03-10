@@ -20,13 +20,15 @@ def run_optimized_charging_feeder_parallel(grid_feeder_tuple, run='_SEST',
     objective = 'minimize_loading'
     timesteps_per_iteration = 24 * 4
     iterations_per_era = 7
-    overlap_interations = 24
+    overlap_iterations = 24
     solver = 'gurobi'
     kwargs = {}#{'v_min':0.91, 'v_max':1.09, 'thermal_limit':0.9}
-
-    config = pd.Series({'objective':objective, 'solver': solver,
-                        'timesteps_per_iteration': timesteps_per_iteration,
-                        'iterations_per_era': iterations_per_era}.update(kwargs))
+    config_dict={'objective':objective, 'solver': solver,
+                 'timesteps_per_iteration': timesteps_per_iteration,
+                 'iterations_per_era': iterations_per_era,
+                 'overlap_iterations': overlap_iterations}
+    config_dict.update(kwargs)
+    config = pd.Series(config_dict)
 
     grid_id = grid_feeder_tuple[0]
     feeder_id = grid_feeder_tuple[1]
@@ -37,7 +39,7 @@ def run_optimized_charging_feeder_parallel(grid_feeder_tuple, run='_SEST',
 
     os.makedirs(result_dir, exist_ok=True)
 
-    if len(os.listdir(result_dir)) == 239:
+    if (len(os.listdir(result_dir)) > 239) and load_results:
         print('Feeder {} of grid {} already solved.'.format(feeder_id, grid_id))
         return
     elif (len(os.listdir(result_dir))>1) and load_results:
@@ -45,7 +47,7 @@ def run_optimized_charging_feeder_parallel(grid_feeder_tuple, run='_SEST',
         charging_start, energy_level_start, start_iter = load_values_from_previous_failed_run(feeder_id, grid_id,
                                                                                               iteration,
                                                                                               iterations_per_era,
-                                                                                              overlap_interations,
+                                                                                              overlap_iterations,
                                                                                               result_dir)
 
     else:
@@ -99,7 +101,7 @@ def run_optimized_charging_feeder_parallel(grid_feeder_tuple, run='_SEST',
             if iteration % iterations_per_era != iterations_per_era - 1:
                 timesteps = edisgo_obj.timeseries.timeindex[
                             iteration * timesteps_per_iteration:(iteration + 1) *
-                                                                timesteps_per_iteration + overlap_interations]
+                                                                timesteps_per_iteration + overlap_iterations]
                 energy_level_end = None
             else:
                 timesteps = edisgo_obj.timeseries.timeindex[
@@ -148,7 +150,7 @@ def run_optimized_charging_feeder_parallel(grid_feeder_tuple, run='_SEST',
                                     optimize_storage=False, optimize_ev_charging=True,
                                     charging_start=charging_start,
                                     energy_level_start=energy_level_start, energy_level_end=energy_level_end,
-                                    overlap_interations=overlap_interations, **kwargs)
+                                    overlap_interations=overlap_iterations, **kwargs)
 
             print('Set up model for week {}.'.format(iteration))
 
@@ -157,20 +159,23 @@ def run_optimized_charging_feeder_parallel(grid_feeder_tuple, run='_SEST',
             energy_level[iteration] = result_dict['energy_level_cp']
 
             if iteration % iterations_per_era != iterations_per_era - 1:
-                charging_start = charging_ev[iteration].iloc[-overlap_interations]
-                energy_level_start = energy_level[iteration].iloc[-overlap_interations]
+                charging_start = charging_ev[iteration].iloc[-overlap_iterations]
+                energy_level_start = energy_level[iteration].iloc[-overlap_iterations]
             else:
                 charging_start = None
                 energy_level_start = None
 
             print('Finished optimisation for week {}.'.format(iteration))
             for res_name, res in result_dict.items():
+                try:
+                    res = res.loc[edisgo_obj.timeseries.timeindex]
+                except:
+                    pass
                 if 'slack' in res_name:
                     res = res[res>1e-6]
                     res = res.dropna(how='all')
                     res = res.dropna(how='all')
                 if not res.empty:
-                    # Todo: extract right time indices
                     res.astype(np.float16).to_csv(result_dir + '/{}_{}_{}_{}.csv'.format(
                         res_name, grid_id, feeder_id, iteration))
             print('Saved results for week {}.'.format(iteration))
@@ -180,25 +185,24 @@ def run_optimized_charging_feeder_parallel(grid_feeder_tuple, run='_SEST',
         print(e)
         if 'iteration' in locals():
             if iteration >= 1:
-                charging_start = charging_ev[iteration-1].iloc[-overlap_interations]
-                charging_start.to_csv('results/tests/charging_start_{}_{}_{}.csv'.format(grid_id, feeder_id, iteration))
-                energy_level_start = energy_level[iteration-1].iloc[-overlap_interations]
-                energy_level_start.to_csv('results/tests/energy_level_start_{}_{}_{}.csv'.format(grid_id, feeder_id, iteration))
+                charging_start = charging_ev[iteration-1].iloc[-overlap_iterations]
+                charging_start.to_csv(result_dir +'/charging_start_{}_{}_{}.csv'.format(grid_id, feeder_id, iteration))
+                energy_level_start = energy_level[iteration-1].iloc[-overlap_iterations]
+                energy_level_start.to_csv(result_dir +'/energy_level_start_{}_{}_{}.csv'.format(grid_id, feeder_id, iteration))
 
 
 def load_values_from_previous_failed_run(feeder_id, grid_id, iteration, iterations_per_era, overlap_interations,
                                          result_dir):
     print('Importing values from previous run')
-    start_config_dir = r'U:\Software\eDisGo_mirror\results\tests'
-    starts = os.listdir(start_config_dir)
+    starts = os.listdir(result_dir)
     relevant_starts = [start for start in starts if ('charging_start_{}_{}_'.format(grid_id, feeder_id) in start) or
                        ('energy_level_start_{}_{}_'.format(grid_id, feeder_id) in start)]
     if (len(relevant_starts) > 0) and (int(relevant_starts[0].split('.')[0].split('_')[-1]) == iteration):
         iteration = int(relevant_starts[0].split('.')[0].split('_')[-1])
-        charging_start = pd.read_csv(os.path.join(start_config_dir,
+        charging_start = pd.read_csv(os.path.join(result_dir,
                                                   'charging_start_{}_{}_{}.csv'.format(
                                                       grid_id, feeder_id, iteration)), header=None, index_col=0)[1]
-        energy_level_start = pd.read_csv(os.path.join(start_config_dir,
+        energy_level_start = pd.read_csv(os.path.join(result_dir,
                                                       'energy_level_start_{}_{}_{}.csv'.format(
                                                           grid_id, feeder_id, iteration)), header=None, index_col=0)[1]
         # if new era starts, set start values to None
@@ -226,28 +230,28 @@ def load_values_from_previous_failed_run(feeder_id, grid_id, iteration, iteratio
 
 if __name__ == '__main__':
 
-    t1 = perf_counter()
-    grid_feeder_tuple = (2534, 3)
-    run_optimized_charging_feeder_parallel(grid_feeder_tuple, load_results=False)
-    print('It took {} seconds to run the full optimisation.'.format(perf_counter()-t1))
-    print('SUCCESS')
     # t1 = perf_counter()
-    #
-    # grid_ids = [176]
-    # root_dir = r'U:\Software'
-    # grid_id_feeder_tuples = []#[(2534,0), (2534,1), (2534,6)](176, 6)
-    # run_id = datetime.datetime.now().strftime("%Y%m%d-%H%M")
-    # for grid_id in grid_ids:
-    #     edisgo_dir = root_dir + r'\eDisGo_object_files\simbev_nep_2035_results\{}\feeder'.format(grid_id)
-    #     for feeder in os.listdir(edisgo_dir):
-    #         grid_id_feeder_tuples.append((grid_id, feeder))
-    #
-    # pool = mp.Pool(min(len(grid_id_feeder_tuples), int(mp.cpu_count()/2)))  # int(mp.cpu_count()/2)
-    #
-    # # results = [pool.apply_async(func=run_optimized_charging_feeder_parallel,
-    # #                             args=(grid_feeder_tuple, run_id))
-    # #            for grid_feeder_tuple in grid_id_feeder_tuples]
-    # results = pool.map_async(run_optimized_charging_feeder_parallel, grid_id_feeder_tuples).get()
-    # pool.close()
-    # print('It took {} seconds to run the full optimisation.'.format(perf_counter() - t1))
+    # grid_feeder_tuple = (176, 1)
+    # run_optimized_charging_feeder_parallel(grid_feeder_tuple, load_results=False)
+    # print('It took {} seconds to run the full optimisation.'.format(perf_counter()-t1))
     # print('SUCCESS')
+    t1 = perf_counter()
+
+    grid_ids = [2534]
+    root_dir = r'H:\Grids'
+    grid_id_feeder_tuples = []#[(2534,0), (2534,1), (2534,6)](176, 6)
+    run_id = datetime.datetime.now().strftime("%Y%m%d-%H%M")
+    for grid_id in grid_ids:
+        edisgo_dir = root_dir + r'\{}\feeder'.format(grid_id)
+        for feeder in os.listdir(edisgo_dir):
+            grid_id_feeder_tuples.append((grid_id, feeder))
+
+    pool = mp.Pool(min(len(grid_id_feeder_tuples), int(mp.cpu_count()/2)))  # int(mp.cpu_count()/2)
+
+    # results = [pool.apply_async(func=run_optimized_charging_feeder_parallel,
+    #                             args=(grid_feeder_tuple, run_id))
+    #            for grid_feeder_tuple in grid_id_feeder_tuples]
+    results = pool.map_async(run_optimized_charging_feeder_parallel, grid_id_feeder_tuples).get()
+    pool.close()
+    print('It took {} seconds to run the full optimisation.'.format(perf_counter() - t1))
+    print('SUCCESS')

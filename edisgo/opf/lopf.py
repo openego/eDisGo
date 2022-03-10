@@ -215,7 +215,7 @@ def get_underlying_elements(parameters):
         downstream_elements, power_factors = _get_underlying_elements(downstream_elements, power_factors, parameters, branch)
     if power_factors.isna().any().any():
         print('WARNING: Branch {} is overloaded with reactive power. Still needs handling.'.format(branch))
-        power_factors = power_factors.fillna(0) # Todo: ask Gaby and Birgit about this
+        power_factors = power_factors.fillna(0.01) # Todo: ask Gaby and Birgit about this
     return downstream_elements, power_factors
 
 
