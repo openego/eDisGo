@@ -257,7 +257,8 @@ class EDisGo:
         # set up results and time series container
         self.results = Results(self)
         self.opf_results = OPFResults()
-        self.timeseries = timeseries.TimeSeries()
+        self.timeseries = timeseries.TimeSeries(
+            timeindex=kwargs.get("timeindex", pd.DatetimeIndex([])))
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
