@@ -266,17 +266,6 @@ class EDisGo:
                 generator_scenario=kwargs.pop("generator_scenario"), **kwargs
             )
 
-        # set up time series for feed-in and load
-        # worst-case time series
-        if kwargs.get("import_timeseries", True):
-            if kwargs.get("worst_case_analysis", None):
-                timeseries.get_component_timeseries(
-                    edisgo_obj=self,
-                    mode=kwargs.get("worst_case_analysis", None),
-                )
-            else:
-                timeseries.get_component_timeseries(edisgo_obj=self, **kwargs)
-
     @property
     def config(self):
         """
