@@ -346,7 +346,7 @@ class EDisGo:
             ts_storage_units=storage_units_q
         )
 
-    def set_time_series_worst_case_analysis(self, cases=["load_case", "feed-in_case"]):
+    def set_time_series_worst_case_analysis(self, cases=None):
         """
         Sets demand and feed-in of all loads, generators and storage units for the
         specified worst cases.
@@ -357,9 +357,12 @@ class EDisGo:
         -----------
         cases : str or list(str)
             List with worst-cases to generate time series for. Can be
-            'feed-in_case', 'load_case' or both. Default: ['feed-in_case', 'load_case'].
+            'feed-in_case', 'load_case' or both. Defaults to None in which case both
+            'feed-in_case' and 'load_case' are set up.
 
         """
+        if cases is None:
+            cases = ["load_case", "feed-in_case"]
         if isinstance(cases, str):
             cases = [cases]
 
