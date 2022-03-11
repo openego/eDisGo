@@ -1226,6 +1226,24 @@ class TimeSeriesRaw:
         "fixed_cosphi"),
         "parametrisation" with the parametrisation of the
         respective Q-control (only applicable to "cosphi(P)" and "Q(V)").
+    conventional_loads_active_power_by_sector : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with load time series of each type of conventional load
+        normalized to an annual consumption of 1. Index needs to
+        be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+        Columns represent load type. In ding0 grids the
+        differentiated sectors are 'residential', 'retail', 'industrial', and
+        'agricultural'.
+    curtailment_target : :pandas:`pandas.DataFrame<dataframe>`
+        DataFrame with generator- or technology-specific curtailment target in MW.
+        In the case of generator-specific curtailment targets columns
+        of the DataFrame hold the generator name.
+        In the case of technology-specific curtailment targets columns
+        hold the technology type.
+        If curtailment targets are provided by generator type and weather cell ID,
+        columns are a :pandas:`pandas.MultiIndex<multiindex>`
+        with the first level containing the technology type and the second
+        level the weather cell ID.
+        Index of the DataFrame is a time index.
 
     Notes
     -----
@@ -1237,115 +1255,17 @@ class TimeSeriesRaw:
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self):
         self.q_control = pd.DataFrame(
             columns=["type", "q_sign", "power_factor", "parametrisation"])
+        self.conventional_loads_active_power_by_sector = None
 
     @property
     def _attributes(self):
         return [
-            "curtailment_target",
-            "generators_active_power_normalised"
+            "q_control",
+            "conventional_loads_active_power_by_sector"
         ]
-
-    @property
-    def curtailment_target(self):
-        """
-        Generator- or technology-specific active power curtailment target.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame with generator- or technology-specific curtailment
-            target in MW.
-            In the case of generator-specific curtailment targets columns
-            of the DataFrame hold the generator name.
-            In the case of technology-specific curtailment targets columns
-            hold the technology type. It is also possible to provide
-            curtailment targets by generator type and weather cell ID, in which
-            case columns are a :pandas:`pandas.MultiIndex<multiindex>`
-            with the first level containing the technology type and the second
-            level the weather cell ID.
-            Index of the DataFrame is a time index.
-
-        """
-        try:
-            return self._curtailment_target
-        except:
-            return pd.DataFrame()
-
-    @curtailment_target.setter
-    def curtailment_target(self, curtailment_target):
-        self._curtailment_target = curtailment_target
-
-    @property
-    def generators_active_power_normalised(self):
-        """
-        Technology-specific active power feed-in time series.
-
-        In case of wind and solar generators time series can further be
-        specified by weather cell ID, in which case columns of the DataFrame
-        are a :pandas:`pandas.MultiIndex<multiindex>` with
-        the first level containing the technology type and the second level
-        the weather cell ID.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame with technology-specific active power feed-in time series
-            in MW.
-            In the case of only technology-specific time series columns
-            hold the technology type. In the case of technology- and weather
-            cell-specific time series columns are a
-            :pandas:`pandas.MultiIndex<multiindex>` with the first level
-            containing the technology type and the second level
-            the weather cell ID.
-            Index of the DataFrame is a time index.
-
-        """
-        try:
-            return self._generators_active_power_normalised
-        except:
-            return pd.DataFrame()
-
-    @generators_active_power_normalised.setter
-    def generators_active_power_normalised(
-            self, generators_active_power_normalised):
-        self._generators_active_power_normalised = \
-            generators_active_power_normalised
-
-    @property
-    def loads_active_power_normalised(self):
-        """
-        Sector-specific active power demand time series.
-
-        Holds e.g. sector-specific electricity demand time series as generated
-        using the demandlib (see .
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame with technology-specific active power feed-in time series
-            in MW.
-            In the case of only technology-specific time series columns
-            hold the technology type. In the case of technology- and weather
-            cell-specific time series columns are a
-            :pandas:`pandas.MultiIndex<multiindex>` with the first level
-            containing the technology type and the second level
-            the weather cell ID.
-            Index of the DataFrame is a time index.
-
-        """
-        try:
-            return self._generators_active_power_normalised
-        except:
-            return pd.DataFrame()
-
-    @generators_active_power_normalised.setter
-    def generators_active_power_normalised(
-            self, generators_active_power_normalised):
-        self._generators_active_power_normalised = \
-            generators_active_power_normalised
 
     def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
         """
@@ -1365,26 +1285,27 @@ class TimeSeriesRaw:
             between precision and memory. Default: "float32".
 
         """
-        # ToDo: Adapt once format of raw data is defined
         if attr_to_reduce is None:
             attr_to_reduce = self._attributes
+        # remove attributes that do not contain only floats
+        if "q_control" in attr_to_reduce:
+            attr_to_reduce.remove("q_control")
         for attr in attr_to_reduce:
-            setattr(
-                self,
-                attr,
-                getattr(self, attr).apply(
-                    lambda _: _.astype(to_type)
+            if hasattr(self, attr):
+                setattr(
+                    self,
+                    attr,
+                    getattr(self, attr).apply(
+                        lambda _: _.astype(to_type)
+                    )
                 )
-            )
 
     def to_csv(self, directory, reduce_memory=False, **kwargs):
         """
         Saves time series to csv.
 
-        Saves the following time series to csv files with the same file name
-        (if the time series dataframe is not empty):
-
-        * curtailment
+        Saves all attributes that are set to csv files with the same file name.
+        See class definition for possible attributes.
 
         Parameters
         ----------
@@ -1410,7 +1331,7 @@ class TimeSeriesRaw:
         os.makedirs(directory, exist_ok=True)
 
         for attr in self._attributes:
-            if not getattr(self, attr).empty:
+            if hasattr(self, attr) and not getattr(self, attr).empty:
                 getattr(self, attr).to_csv(
                     os.path.join(directory, "{}.csv".format(attr))
                 )
