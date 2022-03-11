@@ -993,6 +993,81 @@ class TimeSeries:
             active_power, q_sign, power_factor)
         return active_power, reactive_power
 
+    def predefined_conventional_load_by_sector(
+            self, edisgo_object, ts_loads, load_names=None):
+        """
+        Set active power demand time series for conventional loads by sector.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        ts_loads : str or :pandas:`pandas.DataFrame<DataFrame>`
+            Possible options are:
+
+            * 'demandlib'
+
+                Time series for the year specified :py:attr:`~timeindex` are
+                generated using standard electric load profiles from the oemof
+                `demandlib <https://github.com/oemof/demandlib/>`_.
+                The demandlib provides sector-specific time series for the sectors
+                'residential', 'retail', 'industrial', and 'agricultural'.
+
+            * :pandas:`pandas.DataFrame<DataFrame>`
+
+                DataFrame with load time series per sector normalized to an annual
+                consumption of 1. Index needs to
+                be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+                Columns contain the sector as string.
+                In the current grid existing load types can be retrieved from column
+                `sector` in :attr:`~.network.topology.Topology.loads_df`. In ding0 grid
+                the differentiated sectors are 'residential', 'retail', 'industrial',
+                and 'agricultural'.
+        load_names : list(str)
+            If None, all loads of sectors for which sector-specific time series are
+            provided are used. In case the demandlib is used, all loads of sectors
+            'residential', 'retail', 'industrial', and 'agricultural' are used.
+
+        """
+        # in case time series from demandlib are used, retrieve demandlib time series
+        if isinstance(ts_loads, str) and ts_loads == "demandlib":
+            ts_loads = \
+                timeseries_import.load_time_series_demandlib(
+                    edisgo_object.config,
+                    year=self.timeindex[0].year
+                )
+        elif not isinstance(ts_loads, pd.DataFrame):
+            raise ValueError(
+                "'ts_loads' must either be a pandas DataFrame or 'demandlib'.")
+
+        # write to TimeSeriesRaw
+        self.time_series_raw.conventional_loads_active_power_by_sector = ts_loads
+
+        # set load_names if None
+        if load_names is None:
+            sectors = ts_loads.columns.unique()
+            load_names = edisgo_object.topology.loads_df[
+                edisgo_object.topology.loads_df.sector.isin(sectors)].index
+        load_names = _check_if_components_exist(edisgo_object, load_names, "loads")
+        loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
+
+        # drop existing time series
+        _drop_component_time_series(
+            obj=self, df_name="loads_active_power",
+            comp_names=load_names
+        )
+
+        # scale time series by annual consumption
+        self.loads_active_power = pd.concat(
+            [
+                self.loads_active_power,
+                loads_df.apply(
+                    lambda x: ts_loads[x.sector] * x.annual_consumption,
+                    axis=1,
+                ).T,
+            ],
+            axis=1,
+        )
+
     @property
     def residual_load(self):
         """
