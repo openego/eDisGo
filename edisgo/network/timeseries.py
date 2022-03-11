@@ -993,7 +993,7 @@ class TimeSeries:
             active_power, q_sign, power_factor)
         return active_power, reactive_power
 
-    def predefined_conventional_load_by_sector(
+    def predefined_conventional_loads_by_sector(
             self, edisgo_object, ts_loads, load_names=None):
         """
         Set active power demand time series for conventional loads by sector.
@@ -1067,6 +1067,192 @@ class TimeSeries:
             ],
             axis=1,
         )
+
+    def predefined_fluctuating_generators_by_technology(
+            self, edisgo_object, ts_generators, generator_names=None):
+        """
+        Set active power feed-in time series for fluctuating generators by technology.
+
+        In case time series are provided per technology and weather cell ID, active
+        power feed-in time series are also set by technology and weather cell ID.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        ts_generators : str or :pandas:`pandas.DataFrame<dataframe>`
+            Possible options are:
+
+            * 'oedb'
+
+                Hourly feed-in time series are obtained from the OpenEnergy DataBase
+                for the weather year 2011. See
+                :func:`edisgo.io.timeseries_import.import_feedin_timeseries` for more
+                information.
+
+            * :pandas:`pandas.DataFrame<dataframe>`
+
+                DataFrame with feed-in time series per technology or technology and
+                weather cell ID normalized to a nominal capacity of 1.
+                In case time series are provided only by technology, columns of the
+                DataFrame contain the technology type as string.
+                In case time series are provided by technology and weather cell ID
+                columns need to be a :pandas:`pandas.MultiIndex<MultiIndex>` with the
+                first level containing the technology as string and the second level
+                the weather cell ID as integer.
+                Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+
+                When importing a ding0 grid and/or using predefined scenarios
+                of the future generator park,
+                each generator has an assigned weather cell ID that identifies the
+                weather data cell from the weather data set used in the research
+                project `open_eGo <https://openegoproject.wordpress.com/>`_ to
+                determine feed-in profiles. The weather cell ID can be retrieved
+                from column `weather_cell_id` in
+                :attr:`~.network.topology.Topology.generators_df` and could be
+                overwritten to use own weather cells.
+
+        generator_names : list(str)
+            If None, all generators technology (and weather cell) specific time series
+            are provided for are used. In case the time series are retrieved from the
+            oedb, all solar and wind generators are used.
+
+        """
+        # in case time series from oedb are used, retrieve oedb time series
+        if isinstance(ts_generators, str) and ts_generators == "oedb":
+            weather_cell_ids = get_weather_cells_intersecting_with_grid_district(
+                edisgo_object)
+            ts_generators = timeseries_import.feedin_oedb(
+                edisgo_object.config, weather_cell_ids, self.timeindex)
+        elif not isinstance(ts_generators, pd.DataFrame):
+            raise ValueError(
+                "'ts_generators' must either be a pandas DataFrame or 'oedb'."
+            )
+
+        # write to TimeSeriesRaw
+        self.time_series_raw.fluctuating_generators_active_power_by_technology = (
+            ts_generators
+        )
+
+        # set generator_names if None
+        if generator_names is None:
+            if isinstance(
+                    ts_generators.columns, pd.MultiIndex
+            ):
+                technologies = ts_generators.columns.levels[0].unique()
+                weather_cell_ids = ts_generators.columns.levels[1].unique()
+                generator_names = edisgo_object.topology.generators_df[
+                    (edisgo_object.topology.generators_df.type.isin(technologies)) &
+                    (edisgo_object.topology.generators_df.weather_cell_id.isin(
+                        weather_cell_ids))].index
+            else:
+                technologies = ts_generators.columns.unique()
+                generator_names = edisgo_object.topology.generators_df[
+                    edisgo_object.topology.generators_df.type.isin(
+                        technologies)].index
+        generator_names = _check_if_components_exist(
+            edisgo_object, generator_names, "generators")
+        generators_df = edisgo_object.topology.generators_df.loc[generator_names, :]
+
+        # drop existing time series
+        _drop_component_time_series(
+            obj=self, df_name="generators_active_power",
+            comp_names=generator_names
+        )
+
+        # scale time series by nominal power
+        if isinstance(
+                ts_generators.columns, pd.MultiIndex
+        ):
+            ts_scaled = generators_df.apply(
+                lambda x: ts_generators[x.type][x.weather_cell_id].T * x.p_nom,
+                axis=1,
+            ).T
+        else:
+            ts_scaled = generators_df.apply(
+                lambda x: ts_generators[x.type].T * x.p_nom,
+                axis=1,
+            ).T
+        if not ts_scaled.empty:
+            self.generators_active_power = pd.concat(
+                [
+                    self.generators_active_power,
+                    ts_scaled,
+                ],
+                axis=1,
+                sort=False,
+            )
+
+    def predefined_dispatchable_generators_by_technology(
+            self, edisgo_object, ts_generators, generator_names=None):
+        """
+        Set active power feed-in time series for dispatchable generators by technology.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        ts_generators : :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with time series for active power of each
+            type of dispatchable generator normalized to a nominal capacity of 1.
+            Columns contain the technology type as string, e.g. 'gas', 'coal'.
+            Use 'other' if you don't want to explicitly provide a time series for every
+            possible technology. In the current grid existing generator technologies
+            can be retrieved from column `type` in
+            :attr:`~.network.topology.Topology.generators_df`.
+            Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+        generator_names : list(str)
+            If None, all generators technology-specific time series are provided for
+            are used. In case `ts_generators` contains a column 'other', all
+            dispatchable generators in the network (i.e. all but solar and wind
+            generators) are used.
+
+        """
+        if not isinstance(ts_generators, pd.DataFrame):
+            raise ValueError(
+                "'ts_generators' must be a pandas DataFrame."
+            )
+
+        # write to TimeSeriesRaw
+        self.time_series_raw.dispatchable_generators_active_power_by_technology = (
+            ts_generators
+        )
+
+        # set generator_names if None
+        if generator_names is None:
+            if "other" in ts_generators.columns:
+                generator_names = edisgo_object.topology.generators_df[
+                    ~edisgo_object.topology.generators_df.type.isin(
+                        ["solar", "wind"])].index
+            else:
+                generator_names = edisgo_object.topology.generators_df[
+                    edisgo_object.topology.generators_df.type.isin(
+                        ts_generators.columns)].index
+        generator_names = _check_if_components_exist(
+            edisgo_object, generator_names, "generators")
+        generators_df = edisgo_object.topology.generators_df.loc[generator_names, :]
+
+        # drop existing time series
+        _drop_component_time_series(
+            obj=self, df_name="generators_active_power",
+            comp_names=generator_names
+        )
+
+        # scale time series by nominal power
+        ts_scaled = generators_df.apply(
+            lambda x: ts_generators[
+                          x.type] * x.p_nom
+            if x.type in ts_generators.columns
+            else ts_generators["other"] * x.p_nom,
+            axis=1,
+        ).T
+        if not ts_scaled.empty:
+            self.generators_active_power = pd.concat(
+                [
+                    self.generators_active_power,
+                    ts_scaled,
+                ],
+                axis=1,
+                sort=False,
+            )
 
     @property
     def residual_load(self):
@@ -1308,6 +1494,19 @@ class TimeSeriesRaw:
         Columns represent load type. In ding0 grids the
         differentiated sectors are 'residential', 'retail', 'industrial', and
         'agricultural'.
+    fluctuating_generators_active_power_by_technology : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with feed-in time series per technology or technology and
+        weather cell ID normalized to a nominal capacity of 1.
+        Columns can either just contain the technology type as string or
+        be a :pandas:`pandas.MultiIndex<MultiIndex>` with the
+        first level containing the technology as string and the second level
+        the weather cell ID as integer.
+        Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+    dispatchable_generators_active_power_by_technology : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with feed-in time series per technology normalized to a nominal
+        capacity of 1.
+        Columns contain the technology type as string.
+        Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
     curtailment_target : :pandas:`pandas.DataFrame<dataframe>`
         DataFrame with generator- or technology-specific curtailment target in MW.
         In the case of generator-specific curtailment targets columns
@@ -1334,12 +1533,16 @@ class TimeSeriesRaw:
         self.q_control = pd.DataFrame(
             columns=["type", "q_sign", "power_factor", "parametrisation"])
         self.conventional_loads_active_power_by_sector = None
+        self.fluctuating_generators_active_power_by_technology = None
+        self.dispatchable_generators_active_power_by_technology = None
 
     @property
     def _attributes(self):
         return [
             "q_control",
-            "conventional_loads_active_power_by_sector"
+            "conventional_loads_active_power_by_sector",
+            "fluctuating_generators_active_power_by_technology",
+            "dispatchable_generators_active_power_by_technology"
         ]
 
     def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
