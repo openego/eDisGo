@@ -1005,19 +1005,22 @@ class TimeSeries:
         ----------
         edisgo_object : :class:`~.EDisGo`
         ts_generators : str or :pandas:`pandas.DataFrame<dataframe>`
+            Defines which technology-specific or technology and weather cell specific
+            active power time series to use.
             Possible options are:
 
             * 'oedb'
 
-                Hourly feed-in time series are obtained from the OpenEnergy DataBase
-                for the weather year 2011. See
+                Technology and weather cell specific hourly feed-in time series are
+                obtained from the OpenEnergy DataBase for the weather year 2011. See
                 :func:`edisgo.io.timeseries_import.import_feedin_timeseries` for more
                 information.
 
             * :pandas:`pandas.DataFrame<dataframe>`
 
-                DataFrame with feed-in time series per technology or technology and
-                weather cell ID normalized to a nominal capacity of 1.
+                DataFrame with self-provided feed-in time series per technology or
+                per technology and weather cell ID normalized to a nominal capacity
+                of 1.
                 In case time series are provided only by technology, columns of the
                 DataFrame contain the technology type as string.
                 In case time series are provided by technology and weather cell ID
@@ -1037,9 +1040,10 @@ class TimeSeries:
                 overwritten to use own weather cells.
 
         generator_names : list(str)
-            If None, all generators technology (and weather cell) specific time series
-            are provided for are used. In case the time series are retrieved from the
-            oedb, all solar and wind generators are used.
+            Defines for which fluctuating generators to use technology-specific time
+            series. If None, all generators technology (and weather cell) specific time
+            series are provided for are used. In case the time series are retrieved from
+            the oedb, all solar and wind generators are used.
 
         """
         # in case time series from oedb are used, retrieve oedb time series
@@ -1116,7 +1120,7 @@ class TimeSeries:
         ----------
         edisgo_object : :class:`~.EDisGo`
         ts_generators : :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame with time series for active power of each
+            DataFrame with self-provided active power time series of each
             type of dispatchable generator normalized to a nominal capacity of 1.
             Columns contain the technology type as string, e.g. 'gas', 'coal'.
             Use 'other' if you don't want to explicitly provide a time series for every
@@ -1125,10 +1129,11 @@ class TimeSeries:
             :attr:`~.network.topology.Topology.generators_df`.
             Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
         generator_names : list(str)
-            If None, all generators technology-specific time series are provided for
-            are used. In case `ts_generators` contains a column 'other', all
-            dispatchable generators in the network (i.e. all but solar and wind
-            generators) are used.
+            Defines for which dispatchable generators to use technology-specific time
+            series. If None, all dispatchable generators technology-specific time series
+            are provided for are used. In case `ts_generators` contains a column
+            'other', all dispatchable generators in the network (i.e. all but solar and
+            wind generators) are used.
 
         """
         if not isinstance(ts_generators, pd.DataFrame):
@@ -1188,6 +1193,7 @@ class TimeSeries:
         ----------
         edisgo_object : :class:`~.EDisGo`
         ts_loads : str or :pandas:`pandas.DataFrame<DataFrame>`
+            Defines which sector-specific active power time series to use.
             Possible options are:
 
             * 'demandlib'
@@ -1205,10 +1211,12 @@ class TimeSeries:
                 be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
                 Columns contain the sector as string.
                 In the current grid existing load types can be retrieved from column
-                `sector` in :attr:`~.network.topology.Topology.loads_df`. In ding0 grid
-                the differentiated sectors are 'residential', 'retail', 'industrial',
-                and 'agricultural'.
+                `sector` in :attr:`~.network.topology.Topology.loads_df` (make sure to
+                select `type` 'conventional_load').
+                In ding0 grid the differentiated sectors are 'residential', 'retail',
+                'industrial', and 'agricultural'.
         load_names : list(str)
+            Defines for which conventional loads to use sector-specific time series.
             If None, all loads of sectors for which sector-specific time series are
             provided are used. In case the demandlib is used, all loads of sectors
             'residential', 'retail', 'industrial', and 'agricultural' are used.
