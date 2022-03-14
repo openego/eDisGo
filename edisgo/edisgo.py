@@ -151,6 +151,22 @@ class EDisGo:
         if path is not None:
             import_ding0_grid(path, self)
 
+    def set_timeindex(self, timeindex):
+        """
+        Sets :py:attr:`~.network.timeseries.TimeSeries.timeindex` all time-dependent
+        attributes are indexed by.
+
+        The time index is for example used as default for time steps considered in
+        the power flow analysis and when checking the integrity of the network.
+
+        Parameters
+        -----------
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+            Time index to set.
+
+        """
+        self.timeseries.timeindex = timeindex
+
     def set_time_series_manual(self, generators_p=None, loads_p=None,
                                storage_units_p=None, generators_q=None, loads_q=None,
                                storage_units_q=None):
