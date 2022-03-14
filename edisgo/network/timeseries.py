@@ -2,14 +2,12 @@ from itertools import product
 import logging
 import os
 
-import numpy as np
 import pandas as pd
 
 from edisgo.io import timeseries_import
 from edisgo.flex_opt import q_control
 from edisgo.tools.tools import (
     assign_voltage_level_to_component,
-    drop_duplicated_columns,
     get_weather_cells_intersecting_with_grid_district,
 )
 
