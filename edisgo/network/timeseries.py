@@ -1262,6 +1262,63 @@ class TimeSeries:
             axis=1,
         )
 
+    def predefined_charging_points_by_use_case(
+            self, edisgo_object, ts_loads, load_names=None):
+        """
+        Set active power demand time series for charging points by their use case.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        ts_loads : :pandas:`pandas.DataFrame<DataFrame>`
+            DataFrame with self-provided load time series per use case normalized to
+            a nominal power of the charging point of 1.
+            Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+            Columns contain the use case as string.
+            In the current grid existing use case types can be retrieved from column
+            `sector` in :attr:`~.network.topology.Topology.loads_df` (make sure to
+            select `type` 'charging_point').
+            When using charging point input from SimBEV the differentiated use cases are
+            'home', 'work', 'public' and 'hpc'.
+        load_names : list(str)
+            Defines for which charging points to use use-case-specific time series.
+            If None, all charging points of use cases for which use-case-specific time
+            series are provided are used.
+
+        """
+        if not isinstance(ts_loads, pd.DataFrame):
+            raise ValueError(
+                "'ts_loads' must be a pandas DataFrame.")
+
+        # write to TimeSeriesRaw
+        self.time_series_raw.charging_points_active_power_by_use_case = ts_loads
+
+        # set load_names if None
+        if load_names is None:
+            sectors = ts_loads.columns.unique()
+            load_names = edisgo_object.topology.loads_df[
+                edisgo_object.topology.loads_df.sector.isin(sectors)].index
+        load_names = _check_if_components_exist(edisgo_object, load_names, "loads")
+        loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
+
+        # drop existing time series
+        _drop_component_time_series(
+            obj=self, df_name="loads_active_power",
+            comp_names=load_names
+        )
+
+        # scale time series by nominal power
+        self.loads_active_power = pd.concat(
+            [
+                self.loads_active_power,
+                loads_df.apply(
+                    lambda x: ts_loads[x.sector] * x.p_nom,
+                    axis=1,
+                ).T,
+            ],
+            axis=1,
+        )
+
     @property
     def residual_load(self):
         """
@@ -1495,13 +1552,6 @@ class TimeSeriesRaw:
         "fixed_cosphi"),
         "parametrisation" with the parametrisation of the
         respective Q-control (only applicable to "cosphi(P)" and "Q(V)").
-    conventional_loads_active_power_by_sector : :pandas:`pandas.DataFrame<DataFrame>`
-        DataFrame with load time series of each type of conventional load
-        normalized to an annual consumption of 1. Index needs to
-        be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-        Columns represent load type. In ding0 grids the
-        differentiated sectors are 'residential', 'retail', 'industrial', and
-        'agricultural'.
     fluctuating_generators_active_power_by_technology : :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with feed-in time series per technology or technology and
         weather cell ID normalized to a nominal capacity of 1.
@@ -1515,23 +1565,37 @@ class TimeSeriesRaw:
         capacity of 1.
         Columns contain the technology type as string.
         Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+    conventional_loads_active_power_by_sector : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with load time series of each type of conventional load
+        normalized to an annual consumption of 1. Index needs to
+        be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+        Columns represent load type. In ding0 grids the
+        differentiated sectors are 'residential', 'retail', 'industrial', and
+        'agricultural'.
+    charging_points_active_power_by_use_case : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with charging demand time series per use case normalized to a nominal
+        capacity of 1.
+        Columns contain the use case as string.
+        Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
 
     """
 
     def __init__(self):
         self.q_control = pd.DataFrame(
             columns=["type", "q_sign", "power_factor", "parametrisation"])
-        self.conventional_loads_active_power_by_sector = None
         self.fluctuating_generators_active_power_by_technology = None
         self.dispatchable_generators_active_power_by_technology = None
+        self.conventional_loads_active_power_by_sector = None
+        self.charging_points_active_power_by_use_case = None
 
     @property
     def _attributes(self):
         return [
             "q_control",
-            "conventional_loads_active_power_by_sector",
             "fluctuating_generators_active_power_by_technology",
-            "dispatchable_generators_active_power_by_technology"
+            "dispatchable_generators_active_power_by_technology",
+            "conventional_loads_active_power_by_sector",
+            "charging_points_active_power_by_use_case",
         ]
 
     def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
