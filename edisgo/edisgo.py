@@ -46,11 +46,13 @@ class EDisGo:
         generators are integrated and what further options there are.
         Default: None.
     timeindex : None or :pandas:`pandas.DatetimeIndex<DatetimeIndex>`, optional
-        Can be used to select time ranges of the feed-in and load time series
-        that will be used in the power flow analysis. Also defines the year
-        load time series are obtained for when choosing the 'demandlib' option
-        to generate load time series.
-
+        Defines the time steps feed-in and demand time series of all generators, loads
+        and storage units need to be set.
+        The time index is for example used as default for time steps considered in
+        the power flow analysis and when checking the integrity of the network.
+        Providing a time index is only optional in case a worst case analysis is set
+        up using :func:`~set_time_series_worst_case_analysis`.
+        In all other cases a time index needs to be set manually.
     config_path : None or :obj:`str` or :obj:`dict`
         Path to the config directory. Options are:
 
@@ -89,7 +91,7 @@ class EDisGo:
     ----------
     topology : :class:`~.network.topology.Topology`
         The topology is a container object holding the topology of the grids.
-    timeseries: :class:`~.network.timeseries.TimeSeries`
+    timeseries : :class:`~.network.timeseries.TimeSeries`
         Container for component time series.
     results : :class:`~.network.results.Results`
         This is a container holding all calculation results from power flow
