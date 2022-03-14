@@ -1515,25 +1515,6 @@ class TimeSeriesRaw:
         capacity of 1.
         Columns contain the technology type as string.
         Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-    curtailment_target : :pandas:`pandas.DataFrame<dataframe>`
-        DataFrame with generator- or technology-specific curtailment target in MW.
-        In the case of generator-specific curtailment targets columns
-        of the DataFrame hold the generator name.
-        In the case of technology-specific curtailment targets columns
-        hold the technology type.
-        If curtailment targets are provided by generator type and weather cell ID,
-        columns are a :pandas:`pandas.MultiIndex<multiindex>`
-        with the first level containing the technology type and the second
-        level the weather cell ID.
-        Index of the DataFrame is a time index.
-
-    Notes
-    -----
-    Can also hold the following attributes when specific mode of
-    :meth:`get_component_timeseries` is called: mode, generation_fluctuating,
-    generation_dispatchable, generation_reactive_power, load,
-    load_reactive_power. See description of meth:`get_component_timeseries` for
-    format of these.
 
     """
 
