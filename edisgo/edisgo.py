@@ -203,6 +203,14 @@ class EDisGo:
             set time series for. Default: None.
 
         """
+        # check if time index is already set, otherwise raise warning
+        if self.timeseries.timeindex.empty:
+            logger.warning(
+                "When setting time series manually a time index is not automatically "
+                "set but needs to be set by the user. You can set the time index "
+                "upon initialisation of the EDisGo object by providing the input "
+                "parameter 'timeindex' or using the function EDisGo.set_timeindex()."
+            )
         self.timeseries.set_active_power_manual(
             self,
             ts_generators=generators_p,
