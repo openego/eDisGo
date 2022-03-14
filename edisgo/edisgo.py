@@ -245,6 +245,112 @@ class EDisGo:
             cases = [cases]
 
         self.timeseries.set_worst_case(self, cases)
+
+    def set_time_series_active_power_predefined(
+            self,
+            fluctuating_generators_ts=None, fluctuating_generators_names=None,
+            dispatchable_generators_ts=None, dispatchable_generators_names=None,
+            conventional_loads_ts=None, conventional_loads_names=None,
+            charging_points_ts=None, charging_points_names=None,
+    ):
+        """
+        Uses predefined feed-in or demand profiles.
+
+        Predefined profiles comprise i.e. standard electric conventional load profiles
+        for different sectors generated using the oemof
+        `demandlib <https://github.com/oemof/demandlib/>`_ or feed-in time series of
+        fluctuating solar and wind generators provided on the OpenEnergy DataBase for
+        the weather year 2011.
+
+        This function can also be used to provide your own profiles per technology or
+        load sector.
+
+        Parameters
+        -----------
+        fluctuating_generators_ts : str or :pandas:`pandas.DataFrame<DataFrame>`
+            Defines which technology-specific (or technology and weather cell specific)
+            time series to use to set active power time series of fluctuating
+            generators. See parameter `ts_generators` in
+            :func:`~.network.timeseries.TimeSeries.predefined_fluctuating_generators_by_technology`
+            for more information. If None, no time series of fluctuating generators
+            are set. Default: None.
+        fluctuating_generators_names : list(str)
+            Defines for which fluctuating generators to apply technology-specific time
+            series. See parameter `generator_names` in
+            :func:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
+            for more information. Default: None.
+        dispatchable_generators_ts : :pandas:`pandas.DataFrame<DataFrame>`
+            Defines which technology-specific time series to use to set active power
+            time series of dispatchable generators.
+            See parameter `ts_generators` in
+            :func:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
+            for more information. If None, no time series of dispatchable generators
+            are set. Default: None.
+        dispatchable_generators_names : list(str)
+            Defines for which dispatchable generators to apply technology-specific time
+            series. See parameter `generator_names` in
+            :func:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
+            for more information. Default: None.
+        conventional_loads_ts : :pandas:`pandas.DataFrame<DataFrame>`
+            Defines which sector-specific time series to use to set active power
+            time series of conventional loads.
+            See parameter `ts_loads` in
+            :func:`~.network.timeseries.TimeSeries.predefined_conventional_loads_by_sector`
+            for more information. If None, no time series of conventional loads
+            are set. Default: None.
+        conventional_loads_names : list(str)
+            Defines for which conventional loads to apply technology-specific time
+            series. See parameter `load_names` in
+            :func:`~.network.timeseries.TimeSeries.predefined_conventional_loads_by_sector`
+            for more information. Default: None.
+        charging_points_ts : :pandas:`pandas.DataFrame<DataFrame>`
+            Defines which use-case-specific time series to use to set active power
+            time series of charging points.
+            See parameter `ts_loads` in
+            :func:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
+            for more information. If None, no time series of charging points
+            are set. Default: None.
+        charging_points_names : list(str)
+            Defines for which charging points to apply use-case-specific time
+            series. See parameter `load_names` in
+            :func:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
+            for more information. Default: None.
+
+        """
+        if self.timeseries.timeindex.empty:
+            logger.warning(
+                "When setting time series using predefined profiles a time index is "
+                "not automatically set but needs to be set by the user. In some cases "
+                "not setting a time index prior to calling this function may lead "
+                "to errors. You can set the time index upon initialisation of the "
+                "EDisGo object by providing the input parameter 'timeindex' or using "
+                "the function EDisGo.set_timeindex()."
+            )
+        if fluctuating_generators_ts is not None:
+            self.timeseries.predefined_fluctuating_generators_by_technology(
+                self,
+                fluctuating_generators_ts,
+                fluctuating_generators_names
+            )
+        if dispatchable_generators_ts is not None:
+            self.timeseries.predefined_dispatchable_generators_by_technology(
+                self,
+                dispatchable_generators_ts,
+                dispatchable_generators_names
+            )
+        if conventional_loads_ts is not None:
+            self.timeseries.predefined_conventional_loads_by_sector(
+                self,
+                conventional_loads_ts,
+                conventional_loads_names
+            )
+        if charging_points_ts is not None:
+            self.timeseries.predefined_charging_points_by_use_case(
+                self,
+                charging_points_ts,
+                charging_points_names
+            )
+
     def to_pypsa(self, **kwargs):
         """
         Convert to PyPSA network representation.
