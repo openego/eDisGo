@@ -1,4 +1,4 @@
-from itertools import product
+import itertools
 import logging
 import os
 
@@ -519,7 +519,8 @@ class TimeSeries:
         # self.timeindex = pd.date_range(
         #     "1/1/1970", periods=len(modes), freq="H"
         # )
-        self.timeindex = ["_".join(case) for case in product(cases, ["mv", "lv"])]
+        self.timeindex = ["_".join(case) for case in itertools.product(
+            cases, ["mv", "lv"])]
 
         if not edisgo_object.topology.generators_df.empty:
             # assign voltage level for reactive power
