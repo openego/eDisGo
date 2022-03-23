@@ -515,21 +515,26 @@ class TimeSeries:
         # reset all time series
         self.reset()
 
-        #ToDo: Check if index needs to be time index
-        # self.timeindex = pd.date_range(
-        #     "1/1/1970", periods=len(modes), freq="H"
-        # )
-        self.timeindex = ["_".join(case) for case in itertools.product(
+        # create a mapping from worst case cases to time stamps needed for pypsa
+        worst_cases = ["_".join(case) for case in itertools.product(
             cases, ["mv", "lv"])]
+        time_stamps = pd.date_range(
+            "1/1/1970", periods=len(worst_cases), freq="H"
+        )
+        self.timeindex_worst_cases = pd.Series(time_stamps, index=worst_cases)
+        self.timeindex = time_stamps
 
         if not edisgo_object.topology.generators_df.empty:
             # assign voltage level for reactive power
             df = assign_voltage_level_to_component(
                 edisgo_object.topology.generators_df, edisgo_object.topology.buses_df)
-            self.generators_active_power, self.generators_reactive_power = (
-                self._worst_case_generators(
-                    cases, df, edisgo_object.config)
+            p, q = self._worst_case_generators(
+                cases, df, edisgo_object.config
             )
+            # change index and set p and q
+            self.generators_active_power = p.rename(index=self.timeindex_worst_cases)
+            self.generators_reactive_power = q.rename(index=self.timeindex_worst_cases)
+
         if not edisgo_object.topology.loads_df.empty:
             # assign voltage level for reactive power
             df = assign_voltage_level_to_component(
@@ -537,34 +542,44 @@ class TimeSeries:
             # conventional loads
             df_tmp = df[df.type == "conventional_load"]
             if not df_tmp.empty:
-                self.loads_active_power, self.loads_reactive_power = (
-                    self._worst_case_conventional_load(
-                        cases, df_tmp, edisgo_object.config)
+                p, q = self._worst_case_conventional_load(
+                        cases, df_tmp, edisgo_object.config
                 )
+                # change index and set p and q
+                self.loads_active_power = p.rename(index=self.timeindex_worst_cases)
+                self.loads_reactive_power = q.rename(index=self.timeindex_worst_cases)
             # charging points
             df_tmp = df[df.type == "charging_point"]
             if not df_tmp.empty:
-                p_tmp, q_tmp = self._worst_case_charging_points(
-                    cases, df_tmp, edisgo_object.config)
+                p, q = self._worst_case_charging_points(
+                    cases, df_tmp, edisgo_object.config
+                )
+                # change index and set p and q
+                p = p.rename(index=self.timeindex_worst_cases)
+                q = q.rename(index=self.timeindex_worst_cases)
                 self.loads_active_power = pd.concat(
-                    [self.loads_active_power, p_tmp],
+                    [self.loads_active_power, p],
                     axis=1
                 )
                 self.loads_reactive_power = pd.concat(
-                    [self.loads_reactive_power, q_tmp],
+                    [self.loads_reactive_power, q],
                     axis=1
                 )
             # heat pumps
             df_tmp = df[df.type == "heat_pump"]
             if not df_tmp.empty:
-                p_tmp, q_tmp = self._worst_case_heat_pumps(
-                    cases, df_tmp, edisgo_object.config)
+                p, q = self._worst_case_heat_pumps(
+                    cases, df_tmp, edisgo_object.config
+                )
+                # change index and set p and q
+                p = p.rename(index=self.timeindex_worst_cases)
+                q = q.rename(index=self.timeindex_worst_cases)
                 self.loads_active_power = pd.concat(
-                    [self.loads_active_power, p_tmp],
+                    [self.loads_active_power, p],
                     axis=1
                 )
                 self.loads_reactive_power = pd.concat(
-                    [self.loads_reactive_power, q_tmp],
+                    [self.loads_reactive_power, q],
                     axis=1
                 )
             # check if there are loads without time series remaining and if so, handle
@@ -580,16 +595,18 @@ class TimeSeries:
                     "set type information. This concerns the following "
                     "loads: {}.".format(loads_without_ts)
                 )
-                p_tmp, q_tmp = (
-                    self._worst_case_conventional_load(
-                        cases, df.loc[loads_without_ts, :], edisgo_object.config)
+                p, q = self._worst_case_conventional_load(
+                        cases, df.loc[loads_without_ts, :], edisgo_object.config
                 )
+                # change index and set p and q
+                p = p.rename(index=self.timeindex_worst_cases)
+                q = q.rename(index=self.timeindex_worst_cases)
                 self.loads_active_power = pd.concat(
-                    [self.loads_active_power, p_tmp],
+                    [self.loads_active_power, p],
                     axis=1
                 )
                 self.loads_reactive_power = pd.concat(
-                    [self.loads_reactive_power, q_tmp],
+                    [self.loads_reactive_power, q],
                     axis=1
                 )
         if not edisgo_object.topology.storage_units_df.empty:
@@ -597,10 +614,13 @@ class TimeSeries:
             df = assign_voltage_level_to_component(
                 edisgo_object.topology.storage_units_df,
                 edisgo_object.topology.buses_df)
-            self.storage_units_active_power, self.storage_units_reactive_power = (
-                self._worst_case_storage_units(
-                    cases, df, edisgo_object.config)
+            p, q = self._worst_case_storage_units(
+                    cases, df, edisgo_object.config
             )
+            # change index and set p and q
+            self.storage_units_active_power = p.rename(index=self.timeindex_worst_cases)
+            self.storage_units_reactive_power = q.rename(
+                index=self.timeindex_worst_cases)
 
     def _worst_case_generators(self, cases, df, configs):
         """
