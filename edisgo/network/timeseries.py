@@ -404,8 +404,10 @@ class TimeSeries:
 
         Assumed simultaneity factors specified in the config section
         `worst_case_scale_factor` are used to generate active power demand or feed-in.
-        For the reactive power behavior fixed cosphi is assumed and the power factors
-        specified in the config section `reactive_power_factor` are used.
+        For the reactive power behavior fixed cosphi is assumed. The power factors
+        set in the config section `reactive_power_factor` and the power factor
+        mode, defining whether components behave inductive or capacitive, given
+        in the config section `reactive_power_mode`, are used.
 
         Component specific information is given below:
 
