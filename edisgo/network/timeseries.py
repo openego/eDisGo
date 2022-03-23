@@ -1330,6 +1330,190 @@ class TimeSeries:
             axis=1,
         )
 
+    def fixed_cosphi(
+            self, edisgo_object,
+            generators_parametrisation=None,
+            loads_parametrisation=None, storage_units_parametrisation=None
+    ):
+        """
+        Overwrites time series in case they already exist.
+
+        Parameters
+        -----------
+        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+            Sets fixed cosphi parameters for generators.
+            Possible options are:
+
+            * 'default'
+
+                Default configuration is used for all generators in the grid.
+                To this end, the power factors set in the config section
+                `reactive_power_factor` and the power factor mode, defining whether
+                components behave inductive or capacitive, given in the config section
+                `reactive_power_mode`, are used.
+
+            * :pandas:`pandas.DataFrame<dataframe>`
+
+                DataFrame with fix cosphi parametrisation for specified generators.
+                Columns are:
+
+                    * 'components' : list(str)
+                        List with generators to apply parametrisation for.
+
+                    * 'mode' : str
+                        Defines whether generators behave inductive or capacitive.
+                        Possible options are 'inductive', 'capacitive' or 'default'.
+                        In case of 'default', configuration from config section
+                        `reactive_power_mode` is used.
+
+                    * 'power_factor' : float or str
+                        Defines the fixed cosphi power factor. The power factor can
+                        either be directly provided as float or it can be set to
+                        'default', in which case configuration from config section
+                        `reactive_power_factor` is used.
+
+                Index of the dataframe is ignored.
+        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+            Sets fixed cosphi parameters for loads. The same options as for parameter
+            `generators_parametrisation` apply.
+        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+            Sets fixed cosphi parameters for storage units. The same options as for
+            parameter `generators_parametrisation` apply.
+
+        """
+        def _get_q_sign_and_power_factor_per_component(
+                parametrisation, components_df, type, q_sign_func):
+            # default configuration
+            if isinstance(parametrisation, str) and \
+                    parametrisation == "default":
+                # get default parametrisation from config
+                df = assign_voltage_level_to_component(
+                    components_df,
+                    edisgo_object.topology.buses_df)
+                components_names = df.index
+                q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
+                    df, type, edisgo_object.config)
+                power_factor = q_control._fixed_cosphi_default_power_factor(
+                    df, type, edisgo_object.config)
+            # given configuration
+            elif isinstance(parametrisation, pd.DataFrame):
+                # check if all given components exist in network and only use existing
+                components_names = list(itertools.chain.from_iterable(
+                    parametrisation.components))
+                components_names = _check_if_components_exist(
+                    edisgo_object, components_names, type)
+                # set up series with sign of reactive power and power factors
+                q_sign = pd.Series()
+                power_factor = pd.Series()
+                for index, row in parametrisation.iterrows():
+                    # get only components that exist in the network
+                    comps = [_ for _ in row["components"] if _ in components_names]
+                    if len(comps) > 0:
+                        # get q_sign (default or given)
+                        if row["mode"] == "default":
+                            df = assign_voltage_level_to_component(
+                                components_df.loc[comps, :],
+                                edisgo_object.topology.buses_df)
+                            q_sign = q_sign.append(
+                                q_control._fixed_cosphi_default_reactive_power_sign(
+                                    df, type, edisgo_object.config)
+                            )
+                        else:
+                            q_sign = q_sign.append(
+                                pd.Series(q_sign_func(row["mode"]),
+                                          index=comps
+                                          )
+                            )
+                        # get power factor (default or given)
+                        if row["power_factor"] == "default":
+                            df = assign_voltage_level_to_component(
+                                components_df.loc[comps, :],
+                                edisgo_object.topology.buses_df)
+                            power_factor = power_factor.append(
+                                q_control._fixed_cosphi_default_power_factor(
+                                    df, type, edisgo_object.config)
+                            )
+                        else:
+                            power_factor = power_factor.append(
+                                pd.Series(row["power_factor"],
+                                          index=comps
+                                          )
+                            )
+            else:
+                raise ValueError(
+                    "'{}_parametrisation' must either be a pandas DataFrame "
+                    "or 'default'.".format(type)
+                )
+
+            # write reactive power configuration to TimeSeriesRaw
+            # delete existing previous settings
+            self.time_series_raw.q_control.drop(
+                index=self.time_series_raw.q_control.index[
+                    self.time_series_raw.q_control.index.isin(components_names)],
+                inplace=True
+            )
+            self.time_series_raw.q_control = pd.concat([
+                self.time_series_raw.q_control,
+                pd.DataFrame(
+                    index=components_names,
+                    data={"type": "fixed_cosphi",
+                          "q_sign": q_sign,
+                          "power_factor": power_factor
+                          }
+                )]
+            )
+
+            # drop existing time series
+            _drop_component_time_series(
+                obj=self, df_name="{}_reactive_power".format(type),
+                comp_names=components_names
+            )
+            return q_sign, power_factor
+
+        # set reactive power for generators
+        if generators_parametrisation is not None:
+            q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
+                parametrisation=generators_parametrisation,
+                components_df=edisgo_object.topology.generators_df,
+                type="generators",
+                q_sign_func=q_control.get_q_sign_generator
+            )
+            # calculate reactive power
+            reactive_power = q_control.fixed_cosphi(
+                self.generators_active_power, q_sign, power_factor)
+            self.generators_reactive_power = pd.concat(
+                [self.generators_reactive_power, reactive_power],
+                axis=1
+            )
+        if loads_parametrisation is not None:
+            q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
+                parametrisation=loads_parametrisation,
+                components_df=edisgo_object.topology.loads_df,
+                type="loads",
+                q_sign_func=q_control.get_q_sign_load
+            )
+            # calculate reactive power
+            reactive_power = q_control.fixed_cosphi(
+                self.loads_active_power, q_sign, power_factor)
+            self.loads_reactive_power = pd.concat(
+                [self.loads_reactive_power, reactive_power],
+                axis=1
+            )
+        if storage_units_parametrisation is not None:
+            q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
+                parametrisation=storage_units_parametrisation,
+                components_df=edisgo_object.topology.storage_units_df,
+                type="storage_units",
+                q_sign_func=q_control.get_q_sign_generator
+            )
+            # calculate reactive power
+            reactive_power = q_control.fixed_cosphi(
+                self.storage_units_active_power, q_sign, power_factor)
+            self.storage_units_reactive_power = pd.concat(
+                [self.storage_units_reactive_power, reactive_power],
+                axis=1
+            )
+
     @property
     def residual_load(self):
         """
