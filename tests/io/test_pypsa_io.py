@@ -384,9 +384,9 @@ class TestPypsaIO:
 
     def test_set_seed(self):
         self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case",
+            ding0_grid=pytest.ding0_test_network_path
         )
+        self.edisgo.set_time_series_worst_case_analysis()
         timeindex = self.edisgo.timeseries.timeindex
 
         # test with missing busses
@@ -407,15 +407,9 @@ class TestPypsaIO:
             pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], mv_bus]
             == self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], mv_bus]
         )
-        assert np.isclose(
-            pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], mv_bus], 1.00657
-        )
         assert (
             pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus]
             == self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], mv_bus]
-        )
-        assert np.isclose(
-            pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus], 0.0195367
         )
         # run power flow to check if it converges
         pypsa_network.pf(use_seed=True)
