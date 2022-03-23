@@ -351,6 +351,40 @@ class EDisGo:
                 charging_points_names
             )
 
+    def set_time_series_reactive_power_control(
+            self, control="fixed_cosphi", generators_parametrisation=None,
+            loads_parametrisation=None, storage_units_parametrisation=None):
+        """
+        Parameters
+        -----------
+        control : str
+            Type of reactive power control to apply. Currently the only option is
+            'fixed_coshpi'. See :func:`~.network.timeseries.TimeSeries.fixed_cosphi`
+            for further information.
+        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+            See parameter `generators_parametrisation` in
+            :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
+            information.
+        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+            See parameter `loads_parametrisation` in
+            :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
+            information.
+        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+            See parameter `storage_units_parametrisation` in
+            :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
+            information.
+
+        """
+        if control == "fixed_cosphi":
+            self.timeseries.fixed_cosphi(
+                self,
+                generators_parametrisation=generators_parametrisation,
+                loads_parametrisation=loads_parametrisation,
+                storage_units_parametrisation=storage_units_parametrisation
+            )
+        else:
+            raise ValueError("'control' must be 'fixed_cosphi'.")
+
     def to_pypsa(self, **kwargs):
         """
         Convert to PyPSA network representation.
