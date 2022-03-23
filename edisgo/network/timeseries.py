@@ -664,8 +664,10 @@ class TimeSeries:
         )
 
         # reactive power
-        # get worst case configurations for each load
-        q_sign, power_factor = _reactive_power_factor_and_mode_default(
+        # get worst case configurations for each generator
+        power_factor = q_control._fixed_cosphi_default_power_factor(
+            df, "generators", configs)
+        q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
             df, "generators", configs)
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control = pd.concat([
@@ -738,7 +740,9 @@ class TimeSeries:
 
         # reactive power
         # get worst case configurations for each load
-        q_sign, power_factor = _reactive_power_factor_and_mode_default(
+        power_factor = q_control._fixed_cosphi_default_power_factor(
+            df, "loads", configs)
+        q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
             df, "loads", configs)
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control = pd.concat([
@@ -827,7 +831,9 @@ class TimeSeries:
 
         # reactive power
         # get worst case configurations for each charging point
-        q_sign, power_factor = _reactive_power_factor_and_mode_default(
+        power_factor = q_control._fixed_cosphi_default_power_factor(
+            df, "charging_points", configs)
+        q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
             df, "charging_points", configs)
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control = pd.concat([
@@ -899,7 +905,9 @@ class TimeSeries:
 
         # reactive power
         # get worst case configurations for each heat pump
-        q_sign, power_factor = _reactive_power_factor_and_mode_default(
+        power_factor = q_control._fixed_cosphi_default_power_factor(
+            df, "heat_pumps", configs)
+        q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
             df, "heat_pumps", configs)
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control = pd.concat([
@@ -973,7 +981,9 @@ class TimeSeries:
 
         # reactive power
         # get worst case configurations for each load
-        q_sign, power_factor = _reactive_power_factor_and_mode_default(
+        power_factor = q_control._fixed_cosphi_default_power_factor(
+            df, "storage_units", configs)
+        q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
             df, "storage_units", configs)
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control = pd.concat([
