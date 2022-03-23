@@ -1331,12 +1331,13 @@ class TimeSeries:
         )
 
     def fixed_cosphi(
-            self, edisgo_object,
-            generators_parametrisation=None,
+            self, edisgo_object, generators_parametrisation=None,
             loads_parametrisation=None, storage_units_parametrisation=None
     ):
         """
-        Overwrites time series in case they already exist.
+        Sets reactive power of specified components assuming a fixed power factor.
+
+        Overwrites reactive power time series in case they already exist.
 
         Parameters
         -----------
