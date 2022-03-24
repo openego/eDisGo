@@ -953,7 +953,7 @@ class Topology:
         else:
             grid_name = "MVGrid_" + str(int(bus_s.mv_grid_id))
 
-        type_name = "".join([val.capitalize() for val in type.split("_")])
+        type_name = "_".join([val.capitalize() for val in type.split("_")])
 
         tmp = f"{type_name}_{grid_name}"
 
@@ -967,7 +967,7 @@ class Topology:
                 self._grids[grid_name].loads_df.type == type
             ]
 
-            load_id = len(type_df)
+            load_id = len(type_df) + 1
 
         load_name = f"{tmp}_{load_id}"
 
@@ -1123,7 +1123,7 @@ class Topology:
             grid_name = "LVGrid_" + str(int(bus_s.lv_grid_id))
         else:
             grid_name = "MVGrid_" + str(int(bus_s.mv_grid_id))
-        storage_id = len(self._grids[grid_name].storage_units_df)
+        storage_id = len(self._grids[grid_name].storage_units_df) + 1
         storage_name = "StorageUnit_{}_{}".format(grid_name, storage_id)
         if storage_name in self.storage_units_df.index:
             storage_name = "StorageUnit_{}_{}".format(grid_name, storage_id + 1)
