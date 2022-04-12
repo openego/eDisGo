@@ -53,7 +53,7 @@ def integrate_charging_parks(edisgo_obj, comp_type="ChargingPoint"):
         Component Type. Default "ChargingPoint"
 
     """
-    charging_parks = list(edisgo_obj.electromobility.potential_charging_parks)
+    charging_parks = edisgo_obj.electromobility.potential_charging_parks
 
     # Only integrate charging parks with designated charging points
     designated_charging_parks = [
