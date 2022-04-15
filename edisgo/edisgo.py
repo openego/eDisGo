@@ -649,6 +649,146 @@ class EDisGo:
         status = run_mp_opf(self, timesteps, storage_series=storage_series, **kwargs)
         return status
 
+    def add_component(
+        self,
+        comp_type,
+        add_ts=True,
+        ts_active_power=None,
+        ts_reactive_power=None,
+        **kwargs
+    ):
+        """
+        Adds single component to network.
+
+        Components can be lines or buses as well as generators, loads, or storage units.
+        If add_ts is set to True, time series of elements are set as well. Currently,
+        time series need to be provided.
+
+        Parameters
+        ----------
+        comp_type : str
+            Type of added component. Can be 'bus', 'line', 'load', 'generator', or
+            'storage_unit'.
+        add_ts : bool
+            Indicator if time series for component are added as well. If True, active
+            and reactive power time series need to be provided through parameters
+            `ts_active_power` and `ts_reactive_power`. Default: True.
+        ts_active_power : :pandas:`pandas.Series<series>`
+            Active power time series of added component. Index of the series
+            must contain all time steps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex`.
+            Values are active power per time step in MW.
+        ts_reactive_power : :pandas:`pandas.Series<series>`
+            Reactive power time series of added component. Index of the series
+            must contain all time steps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex`.
+            Values are reactive power per time step in MVA.
+        **kwargs: dict
+            Attributes of added component. See respective functions for required
+            entries.
+
+        """
+        # ToDo: Add option to add transformer.
+        # Todo: change into add_components to allow adding of several components
+        #    at a time, change topology.add_load etc. to add_loads, where
+        #    lists of parameters can be inserted
+
+        if comp_type == "bus":
+            comp_name = self.topology.add_bus(**kwargs)
+
+        elif comp_type == "line":
+            comp_name = self.topology.add_line(**kwargs)
+
+        elif comp_type == "generator":
+            comp_name = self.topology.add_generator(**kwargs)
+            if add_ts:
+                self.set_time_series_manual(
+                    generators_p=pd.DataFrame({comp_name: ts_active_power}),
+                    generators_q=pd.DataFrame({comp_name: ts_reactive_power})
+                )
+
+        elif comp_type == "storage_unit":
+            comp_name = self.topology.add_storage_unit(**kwargs)
+            if add_ts:
+                self.set_time_series_manual(
+                    storage_units_p=pd.DataFrame({comp_name: ts_active_power}),
+                    storage_units_q=pd.DataFrame({comp_name: ts_reactive_power})
+                )
+
+        elif comp_type == "load":
+            comp_name = self.topology.add_load(**kwargs)
+            if add_ts:
+                self.set_time_series_manual(
+                    loads_p=pd.DataFrame({comp_name: ts_active_power}),
+                    loads_q=pd.DataFrame({comp_name: ts_reactive_power})
+                )
+
+        else:
+            raise ValueError("Invalid input for parameter 'comp_type'. Must either be "
+                             "'line', 'bus', 'generator', 'load' or 'storage_unit'.")
+        return comp_name
+
+    def remove_component(self, comp_type, comp_name, drop_ts=True):
+        """
+        Removes single component from network.
+
+        Components can be lines or buses as well as generators, loads, or storage units.
+        If drop_ts is set to True, time series of elements are deleted as well.
+
+        Parameters
+        ----------
+        comp_type : str
+            Type of removed component.  Can be 'bus', 'line', 'load', 'generator', or
+            'storage_unit'.
+        comp_name : str
+            Name of component to be removed.
+        drop_ts : bool
+            Indicator if time series for component are removed as well. Defaults
+            to True.
+
+        """
+        # Todo: change into remove_components, when add_component is changed into
+        #    add_components, to allow removal of several components at a time
+
+        if comp_type == "bus":
+            self.topology.remove_bus(comp_name)
+
+        elif comp_type == "line":
+            self.topology.remove_line(comp_name)
+
+        elif comp_type == "load":
+            self.topology.remove_load(comp_name)
+            if drop_ts:
+                for ts in ["active_power", "reactive_power"]:
+                    timeseries.drop_component_time_series(
+                        obj=self.timeseries,
+                        df_name="loads_{}".format(ts),
+                        comp_names=comp_name
+                    )
+
+        elif comp_type == "generator":
+            self.topology.remove_generator(comp_name)
+            if drop_ts:
+                for ts in ["active_power", "reactive_power"]:
+                    timeseries.drop_component_time_series(
+                        obj=self.timeseries,
+                        df_name="generators_{}".format(ts),
+                        comp_names=comp_name
+                    )
+
+        elif comp_type == "storage_unit":
+            self.topology.remove_storage_unit(comp_name)
+            if drop_ts:
+                for ts in ["active_power", "reactive_power"]:
+                    timeseries.drop_component_time_series(
+                        obj=self.timeseries,
+                        df_name="storage_units_{}".format(ts),
+                        comp_names=comp_name
+                    )
+
+        else:
+            raise ValueError("Component type is not correct.")
+        
     def aggregate_components(
         self,
         aggregate_generators_by_cols=None,
@@ -1099,85 +1239,6 @@ class EDisGo:
                 to_type=kwargs.get("to_type", "float32"),
             )
 
-    def add_component(
-        self,
-        comp_type,
-        add_ts=True,
-        ts_active_power=None,
-        ts_reactive_power=None,
-        **kwargs
-    ):
-        """
-        Adds single component to network.
-
-        Components can be lines or buses as well as generators, loads, or storage units.
-        If add_ts is set to True, time series of elements are set as well. Currently,
-        time series need to be provided.
-
-        Parameters
-        ----------
-        comp_type : str
-            Type of added component. Can be 'bus', 'line', 'load', 'generator', or
-            'storage_unit'.
-        add_ts : bool
-            Indicator if time series for component are added as well. If True, active
-            and reactive power time series need to be provided through parameters
-            `ts_active_power` and `ts_reactive_power`. Default: True.
-        ts_active_power : :pandas:`pandas.Series<series>`
-            Active power time series of added component. Index of the series
-            must contain all time steps in
-            :attr:`~.network.timeseries.TimeSeries.timeindex`.
-            Values are active power per time step in MW.
-        ts_reactive_power : :pandas:`pandas.Series<series>`
-            Reactive power time series of added component. Index of the series
-            must contain all time steps in
-            :attr:`~.network.timeseries.TimeSeries.timeindex`.
-            Values are reactive power per time step in MVA.
-        **kwargs: dict
-            Attributes of added component. See respective functions for required
-            entries.
-
-        """
-        # ToDo: Add option to add transformer.
-        # Todo: change into add_components to allow adding of several components
-        #    at a time, change topology.add_load etc. to add_loads, where
-        #    lists of parameters can be inserted
-
-        if comp_type == "bus":
-            comp_name = self.topology.add_bus(**kwargs)
-
-        elif comp_type == "line":
-            comp_name = self.topology.add_line(**kwargs)
-
-        elif comp_type == "generator":
-            comp_name = self.topology.add_generator(**kwargs)
-            if add_ts:
-                self.set_time_series_manual(
-                    generators_p=pd.DataFrame({comp_name: ts_active_power}),
-                    generators_q=pd.DataFrame({comp_name: ts_reactive_power})
-                )
-
-        elif comp_type == "storage_unit":
-            comp_name = self.topology.add_storage_unit(**kwargs)
-            if add_ts:
-                self.set_time_series_manual(
-                    storage_units_p=pd.DataFrame({comp_name: ts_active_power}),
-                    storage_units_q=pd.DataFrame({comp_name: ts_reactive_power})
-                )
-
-        elif comp_type == "load":
-            comp_name = self.topology.add_load(**kwargs)
-            if add_ts:
-                self.set_time_series_manual(
-                    loads_p=pd.DataFrame({comp_name: ts_active_power}),
-                    loads_q=pd.DataFrame({comp_name: ts_reactive_power})
-                )
-
-        else:
-            raise ValueError("Invalid input for parameter 'comp_type'. Must either be "
-                             "'line', 'bus', 'generator', 'load' or 'storage_unit'.")
-        return comp_name
-
     def integrate_component(
         self,
         comp_type,
@@ -1301,66 +1362,7 @@ class EDisGo:
 
         return comp_name
 
-    def remove_component(self, comp_type, comp_name, drop_ts=True):
-        """
-        Removes single component from network.
 
-        Components can be lines or buses as well as generators, loads, or storage units.
-        If drop_ts is set to True, time series of elements are deleted as well.
-
-        Parameters
-        ----------
-        comp_type : str
-            Type of removed component.  Can be 'bus', 'line', 'load', 'generator', or
-            'storage_unit'.
-        comp_name : str
-            Name of component to be removed.
-        drop_ts : bool
-            Indicator if time series for component are removed as well. Defaults
-            to True.
-
-        """
-        # Todo: change into remove_components, when add_component is changed into
-        #    add_components, to allow removal of several components at a time
-
-        if comp_type == "bus":
-            self.topology.remove_bus(comp_name)
-
-        elif comp_type == "line":
-            self.topology.remove_line(comp_name)
-
-        elif comp_type == "load":
-            self.topology.remove_load(comp_name)
-            if drop_ts:
-                for ts in ["active_power", "reactive_power"]:
-                    timeseries.drop_component_time_series(
-                        obj=self.timeseries,
-                        df_name="loads_{}".format(ts),
-                        comp_names=comp_name
-                    )
-
-        elif comp_type == "generator":
-            self.topology.remove_generator(comp_name)
-            if drop_ts:
-                for ts in ["active_power", "reactive_power"]:
-                    timeseries.drop_component_time_series(
-                        obj=self.timeseries,
-                        df_name="generators_{}".format(ts),
-                        comp_names=comp_name
-                    )
-
-        elif comp_type == "storage_unit":
-            self.topology.remove_storage_unit(comp_name)
-            if drop_ts:
-                for ts in ["active_power", "reactive_power"]:
-                    timeseries.drop_component_time_series(
-                        obj=self.timeseries,
-                        df_name="storage_units_{}".format(ts),
-                        comp_names=comp_name
-                    )
-
-        else:
-            raise ValueError("Component type is not correct.")
 
     def save_edisgo_to_pickle(self, path="", filename=None):
         abs_path = os.path.abspath(path)
