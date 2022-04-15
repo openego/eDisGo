@@ -1108,19 +1108,21 @@ class EDisGo:
         **kwargs
     ):
         """
-        Adds single component to network topology.
+        Adds single component to network.
 
-        Components can be lines or buses as well as generators, loads,
-        charging points or storage units.
+        Components can be lines or buses as well as generators, loads, or storage units.
+        If add_ts is set to True, time series of elements are set as well. Currently,
+        time series need to be provided.
 
         Parameters
         ----------
         comp_type : str
-            Type of added component. Can be 'Bus', 'Line', 'Load', 'Generator',
-            'StorageUnit', 'Transformer' or 'ChargingPoint'. Everything else is added as
-            load.
+            Type of added component. Can be 'bus', 'line', 'load', 'generator', or
+            'storage_unit'.
         add_ts : bool
-            Indicator if time series for component are added as well.
+            Indicator if time series for component are added as well. If True, active
+            and reactive power time series need to be provided through parameters
+            `ts_active_power` and `ts_reactive_power`. Default: True.
         ts_active_power : :pandas:`pandas.Series<series>`
             Active power time series of added component. Index of the series
             must contain all time steps in
@@ -1133,78 +1135,47 @@ class EDisGo:
             Values are reactive power per time step in MVA.
         **kwargs: dict
             Attributes of added component. See respective functions for required
-            entries. For 'Load', 'Generator' and 'StorageUnit' the boolean
-            add_ts determines whether a time series is created for the new
-            component or not.
+            entries.
 
-        Todo: change into add_components to allow adding of several components
-            at a time, change topology.add_load etc. to add_loads, where
-            lists of parameters can be inserted
         """
-        if comp_type == "Bus":
+        # ToDo: Add option to add transformer.
+        # Todo: change into add_components to allow adding of several components
+        #    at a time, change topology.add_load etc. to add_loads, where
+        #    lists of parameters can be inserted
+
+        if comp_type == "bus":
             comp_name = self.topology.add_bus(**kwargs)
 
-        elif comp_type == "Line":
+        elif comp_type == "line":
             comp_name = self.topology.add_line(**kwargs)
 
-        elif comp_type == "Generator":
+        elif comp_type == "generator":
             comp_name = self.topology.add_generator(**kwargs)
             if add_ts:
-                timeseries.add_generators_timeseries(
-                    edisgo_obj=self, generator_names=comp_name, **kwargs
+                self.set_time_series_manual(
+                    generators_p=pd.DataFrame({comp_name: ts_active_power}),
+                    generators_q=pd.DataFrame({comp_name: ts_reactive_power})
                 )
 
-        elif comp_type == "StorageUnit":
-            comp_name = self.topology.add_storage_unit(
-                **kwargs,
-            )
+        elif comp_type == "storage_unit":
+            comp_name = self.topology.add_storage_unit(**kwargs)
             if add_ts:
-                if isinstance(ts_active_power, pd.Series):
-                    ts_active_power = pd.DataFrame({comp_name: ts_active_power})
-                if isinstance(ts_reactive_power, pd.Series):
-                    ts_reactive_power = pd.DataFrame({comp_name: ts_reactive_power})
-                timeseries.add_storage_units_timeseries(
-                    edisgo_obj=self,
-                    storage_unit_names=comp_name,
-                    timeseries_storage_units=ts_active_power,
-                    timeseries_storage_units_reactive_power=ts_reactive_power,
-                    **kwargs,
+                self.set_time_series_manual(
+                    storage_units_p=pd.DataFrame({comp_name: ts_active_power}),
+                    storage_units_q=pd.DataFrame({comp_name: ts_reactive_power})
+                )
+
+        elif comp_type == "load":
+            comp_name = self.topology.add_load(**kwargs)
+            if add_ts:
+                self.set_time_series_manual(
+                    loads_p=pd.DataFrame({comp_name: ts_active_power}),
+                    loads_q=pd.DataFrame({comp_name: ts_reactive_power})
                 )
 
         else:
-            if "charging" in comp_type.lower():
-                type = "charging_point"
-            elif "heat" in comp_type.lower():
-                type = "heat_pump"
-            else:
-                type = "load"
-
-            kwargs["type"] = type
-
-            comp_name = self.topology.add_load(**kwargs)
-
-            if add_ts:
-                if "charging" in comp_type.lower():
-                    if ts_active_power is not None and ts_reactive_power is not None:
-                        timeseries.add_charging_points_timeseries(
-                            self,
-                            [comp_name],
-                            ts_active_power=pd.DataFrame({comp_name: ts_active_power}),
-                            ts_reactive_power=pd.DataFrame(
-                                {comp_name: ts_reactive_power}
-                            ),
-                        )
-
-                    else:
-                        raise ValueError(
-                            "Time series for charging points need to be provided."
-                        )
-
-                else:
-                    timeseries.add_loads_timeseries(
-                        edisgo_obj=self, load_names=comp_name, **kwargs
-                    )
-
+            raise ValueError("Invalid input for parameter 'comp_type'. Must either be "
+                             "'line', 'bus', 'generator', 'load' or 'storage_unit'.")
         return comp_name
 
     def integrate_component(
