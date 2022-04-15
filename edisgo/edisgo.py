@@ -1303,59 +1303,62 @@ class EDisGo:
 
     def remove_component(self, comp_type, comp_name, drop_ts=True):
         """
-        Removes single component from respective DataFrame. If drop_ts is set
-        to True, timeseries of elements are deleted as well.
+        Removes single component from network.
+
+        Components can be lines or buses as well as generators, loads, or storage units.
+        If drop_ts is set to True, time series of elements are deleted as well.
 
         Parameters
         ----------
-        comp_type: str
-            Type of removed component. Can be 'Bus', 'Line', 'Load',
-            'Generator', 'StorageUnit', 'Transformer'.
-        comp_name: str
+        comp_type : str
+            Type of removed component.  Can be 'bus', 'line', 'load', 'generator', or
+            'storage_unit'.
+        comp_name : str
             Name of component to be removed.
-        drop_ts: Boolean
-            Indicator if timeseries for component are removed as well. Defaults
+        drop_ts : bool
+            Indicator if time series for component are removed as well. Defaults
             to True.
 
-        Todo: change into remove_components, when add_component is changed into
-            add_components, to allow removal of several components at a time
-
         """
-        if comp_type == "Bus":
+        # Todo: change into remove_components, when add_component is changed into
+        #    add_components, to allow removal of several components at a time
+
+        if comp_type == "bus":
             self.topology.remove_bus(comp_name)
-        elif comp_type == "Line":
+
+        elif comp_type == "line":
             self.topology.remove_line(comp_name)
-        elif comp_type == "Load":
+
+        elif comp_type == "load":
             self.topology.remove_load(comp_name)
             if drop_ts:
-                timeseries._drop_existing_component_timeseries(
-                    edisgo_obj=self, comp_type="loads", comp_names=comp_name
-                )
+                for ts in ["active_power", "reactive_power"]:
+                    timeseries.drop_component_time_series(
+                        obj=self.timeseries,
+                        df_name="loads_{}".format(ts),
+                        comp_names=comp_name
+                    )
 
-        elif comp_type == "Generator":
+        elif comp_type == "generator":
             self.topology.remove_generator(comp_name)
             if drop_ts:
-                timeseries._drop_existing_component_timeseries(
-                    edisgo_obj=self,
-                    comp_type="generators",
-                    comp_names=comp_name,
-                )
-        elif comp_type == "StorageUnit":
+                for ts in ["active_power", "reactive_power"]:
+                    timeseries.drop_component_time_series(
+                        obj=self.timeseries,
+                        df_name="generators_{}".format(ts),
+                        comp_names=comp_name
+                    )
+
+        elif comp_type == "storage_unit":
             self.topology.remove_storage_unit(comp_name)
             if drop_ts:
-                timeseries._drop_existing_component_timeseries(
-                    edisgo_obj=self,
-                    comp_type="storage_units",
-                    comp_names=comp_name,
-                )
-        elif comp_type == "ChargingPoint":
-            self.topology.remove_load(comp_name)
-            if drop_ts:
-                timeseries._drop_existing_component_timeseries(
-                    edisgo_obj=self,
-                    comp_type="charging_points",
-                    comp_names=comp_name,
-                )
+                for ts in ["active_power", "reactive_power"]:
+                    timeseries.drop_component_time_series(
+                        obj=self.timeseries,
+                        df_name="storage_units_{}".format(ts),
+                        comp_names=comp_name
+                    )
+
         else:
             raise ValueError("Component type is not correct.")
 
