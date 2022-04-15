@@ -505,8 +505,8 @@ class EDisGo:
             edisgo_object=self, generator_scenario=generator_scenario, **kwargs
         )
 
-    def analyze(self, mode=None, timesteps=None, **kwargs):
         """Conducts a static, non-linear power flow analysis
+    def analyze(self, mode=None, timesteps=None, raise_not_converged=True, **kwargs):
 
         Conducts a static, non-linear power flow analysis using
         `PyPSA <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_
@@ -529,6 +529,11 @@ class EDisGo:
             analysis. It defaults to None in which case the time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex` are
             used.
+        raise_not_converged : bool
+            If True, an error is raised in case power flow analysis did not converge
+            for all time steps. I
+            Default: True.
+
 
         """
         if timesteps is None:
@@ -542,15 +547,24 @@ class EDisGo:
         # run power flow analysis
         pf_results = pypsa_network.pf(timesteps, use_seed=kwargs.get("use_seed", False))
 
-        if all(pf_results["converged"]["0"].tolist()):
-            pypsa_io.process_pfa_results(self, pypsa_network, timesteps)
-        else:
+        # get converged and not converged time steps
+        timesteps_converged = pf_results["converged"][
+            pf_results["converged"]["0"]].index
+        timesteps_not_converged = \
+            pf_results["converged"][
+                ~pf_results["converged"]["0"]].index
+
+        if raise_not_converged and len(timesteps_not_converged) > 0:
             raise ValueError(
                 "Power flow analysis did not converge for the "
                 "following time steps: {}.".format(
                     timesteps[~pf_results["converged"]["0"]].tolist()
                 )
             )
+
+        # handle converged time steps
+        pypsa_io.process_pfa_results(self, pypsa_network,
+                                     timesteps_converged)
 
     def reinforce(self, **kwargs):
         """
