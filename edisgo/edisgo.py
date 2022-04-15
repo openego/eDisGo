@@ -447,21 +447,6 @@ class EDisGo:
 
         return self.topology.to_graph()
 
-    # def curtail(self, methodology, curtailment_timeseries, **kwargs):
-    #     """
-    #     Sets up curtailment time series.
-    #
-    #     Curtailment time series are written into
-    #     :class:`~.network.network.TimeSeries`. See
-    #     :class:`~.network.network.CurtailmentControl` for more information on
-    #     parameters and methodologies.
-    #
-    #     # """
-    #     raise NotImplementedError
-    #     # CurtailmentControl(edisgo=self, methodology=methodology,
-    #     #                    curtailment_timeseries=curtailment_timeseries,
-    #     #                    mode=kwargs.pop('mode', None), **kwargs)
-
     def import_generators(self, generator_scenario=None, **kwargs):
         """
         Gets generator park for specified scenario and integrates them into
