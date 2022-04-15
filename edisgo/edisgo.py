@@ -387,17 +387,28 @@ class EDisGo:
 
     def to_pypsa(self, **kwargs):
         """
-        Convert to PyPSA network representation.
-
-        A network topology representation based on
-        :pandas:`pandas.DataFrame<DataFrame>`. The overall container object of
-        this data model, the :pypsa:`pypsa.Network<network>`,
-        is set up.
+        Convert to PyPSA :pypsa:`pypsa.Network<network>` representation.
 
         Parameters
         ----------
         kwargs :
             See :func:`~.io.pypsa_io.to_pypsa` for further information.
+
+        Other Parameters
+        -----------------
+        mode : str
+            Determines network levels that are translated to
+            `PyPSA network representation
+            <https://www.pypsa.org/doc/components.html#network>`_. Specify
+
+            * None to export MV and LV network levels. None is the default.
+            * 'mv' to export MV network level only. This includes cumulative load
+              and generation from underlying LV network aggregated at respective LV
+              station's primary side.
+            * 'mvlv' to export MV network level only. This includes cumulative load
+              and generation from underlying LV network aggregated at respective LV
+              station's secondary side.
+            * 'lv' to export specified LV network only.
 
         Returns
         -------
@@ -414,6 +425,7 @@ class EDisGo:
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
         # export grid
+        # ToDo: Move to pypsa_io.to_pypsa
         if not mode:
             return pypsa_io.to_pypsa(self, timesteps, **kwargs)
         elif "mv" in mode:
@@ -434,7 +446,7 @@ class EDisGo:
 
     def to_graph(self):
         """
-        Returns graph representation of the grid.
+        Returns networkx graph representation of the grid.
 
         Returns
         -------
@@ -505,28 +517,49 @@ class EDisGo:
             edisgo_object=self, generator_scenario=generator_scenario, **kwargs
         )
 
-        """Conducts a static, non-linear power flow analysis
     def analyze(self, mode=None, timesteps=None, raise_not_converged=True, **kwargs):
+        """
+        Conducts a static, non-linear power flow analysis.
 
         Conducts a static, non-linear power flow analysis using
         `PyPSA <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_
         and writes results (active, reactive and apparent power as well as
-        current on lines and voltages at buses) to
-        :class:`~.network.results.Results`
+        current on lines and voltages at buses) to :class:`~.network.results.Results`
         (e.g. :attr:`~.network.results.Results.v_res` for voltages).
-        See :func:`~.io.pypsa_io.to_pypsa` for more information.
 
         Parameters
         ----------
-        mode : str
-            Allows to toggle between power flow analysis (PFA) on the whole
-            network topology (default: None), only MV ('mv' or 'mvlv') or only
-            LV ('lv'). Defaults to None which equals power flow analysis for
-            MV + LV.
+        mode : str or None
+            Allows to toggle between power flow analysis for the whole network or just
+            the MV or one LV grid. Possible options are:
+
+            * None (default)
+
+                Power flow analysis is conducted for the whole network including MV and
+                LV level.
+
+            * 'mv'
+
+                Power flow analysis is conducted for the MV level only. LV loads and
+                generators are aggregated at the respective MV/LV stations' primary
+                side.
+
+            * 'mvlv'
+
+                Power flow analysis is conducted for the MV level only. In contrast to
+                mode 'mv' LV loads and generators are in this case aggregated at the
+                respective MV/LV stations' secondary side.
+
+            * 'lv'
+
+                Power flow analysis is conducted for one LV grid only. Name of the LV
+                grid to conduct power flow analysis for needs to be provided through
+                keyword argument 'lv_grid_name' as string.
+
         timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
             :pandas:`pandas.Timestamp<Timestamp>`
             Timesteps specifies for which time steps to conduct the power flow
-            analysis. It defaults to None in which case the time steps in
+            analysis. It defaults to None in which case all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex` are
             used.
         raise_not_converged : bool
@@ -534,6 +567,10 @@ class EDisGo:
             for all time steps. I
             Default: True.
 
+        Other Parameters
+        -----------------
+        Possible other parameters comprise all other parameters that can be set in
+        :attr:`~.io.pypsa_io.to_pypsa`.
 
         """
         if timesteps is None:
@@ -589,7 +626,7 @@ class EDisGo:
 
         return results
 
-    def perform_mp_opf(self, timesteps, storage_series=[], **kwargs):
+    def perform_mp_opf(self, timesteps, storage_series=None, **kwargs):
         """
         Run optimal power flow with julia.
 
@@ -607,6 +644,8 @@ class EDisGo:
             Status of optimization.
 
         """
+        if storage_series is None:
+            storage_series = []
         status = run_mp_opf(self, timesteps, storage_series=storage_series, **kwargs)
         return status
 
@@ -722,7 +761,7 @@ class EDisGo:
 
         Parameters
         ----------
-        technologies : :obj:`Boolean`
+        technologies : bool
             If True plots stations, generators, etc. in the topology in
             different colors. If False does not plot any nodes. Default: False.
 
