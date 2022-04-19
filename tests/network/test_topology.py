@@ -633,7 +633,7 @@ class TestTopology:
 
         # test try removing line that cannot be removed
         msg = "Removal of line Line_30000010 would create isolated node."
-        with pytest.raises(AssertionError, match=msg):
+        with pytest.warns(UserWarning, match=msg):
             self.topology.remove_line("Line_30000010")
 
         # test remove line in cycle (no bus is removed)
@@ -1275,7 +1275,7 @@ class TestTopologyWithEdisgoObject:
         }
 
         comp_name = self.edisgo.topology.connect_to_lv(
-            self.edisgo, test_cp, comp_type="ChargingPoint"
+            self.edisgo, test_cp, comp_type="charging_point"
         )
 
         # check that number of buses stayed the same
@@ -1309,7 +1309,7 @@ class TestTopologyWithEdisgoObject:
         }
 
         comp_name = self.edisgo.topology.connect_to_lv(
-            self.edisgo, test_cp, comp_type="ChargingPoint"
+            self.edisgo, test_cp, comp_type="charging_point"
         )
 
         # check that number of buses stayed the same
@@ -1344,7 +1344,7 @@ class TestTopologyWithEdisgoObject:
         }
 
         comp_name = self.edisgo.topology.connect_to_lv(
-            self.edisgo, test_cp, comp_type="ChargingPoint"
+            self.edisgo, test_cp, comp_type="charging_point"
         )
 
         # check that number of buses stayed the same

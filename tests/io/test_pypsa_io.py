@@ -5,11 +5,24 @@ import pytest
 from pandas.util.testing import assert_frame_equal
 
 from edisgo import EDisGo
-from edisgo.io.pypsa_io import _append_lv_components, process_pfa_results, set_seed
+from edisgo.io import pypsa_io
 from edisgo.network.results import Results
 
 
 class TestPypsaIO:
+
+    def test_to_pypsa(self):
+        self.edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_path
+        )
+        self.edisgo.set_time_series_worst_case_analysis()
+        timeindex = self.edisgo.timeseries.timeindex
+        pypsa_network = pypsa_io.to_pypsa(self.edisgo, timeindex)
+        slack_df = pypsa_network.generators[pypsa_network.generators.control == "Slack"]
+        assert len(slack_df) == 1
+        assert slack_df.bus.values[0] == "Bus_MVStation_1"
+        # ToDo: Check further things
+
     def test_append_lv_components(self):
         lv_components = {
             "Load": pd.DataFrame(),
@@ -18,15 +31,15 @@ class TestPypsaIO:
         }
         comps = pd.DataFrame({"bus": []})
         # check if returns when comps is empty
-        _append_lv_components("Unkown", comps, lv_components, "TestGrid")
+        pypsa_io._append_lv_components("Unkown", comps, lv_components, "TestGrid")
         # check exceptions for wrong input parameters
         comps = pd.DataFrame({"bus": ["bus1"]}, index=["dummy"])
         msg = "Component type not defined."
         with pytest.raises(ValueError, match=msg):
-            _append_lv_components("Unkown", comps, lv_components, "TestGrid")
+            pypsa_io._append_lv_components("Unkown", comps, lv_components, "TestGrid")
         msg = "Aggregation type for loads invalid."
         with pytest.raises(ValueError, match=msg):
-            _append_lv_components(
+            pypsa_io._append_lv_components(
                 "Load",
                 comps,
                 lv_components,
@@ -35,7 +48,7 @@ class TestPypsaIO:
             )
         msg = "Aggregation type for generators invalid."
         with pytest.raises(ValueError, match=msg):
-            _append_lv_components(
+            pypsa_io._append_lv_components(
                 "Generator",
                 comps,
                 lv_components,
@@ -44,7 +57,7 @@ class TestPypsaIO:
             )
         msg = "Aggregation type for storages invalid."
         with pytest.raises(ValueError, match=msg):
-            _append_lv_components(
+            pypsa_io._append_lv_components(
                 "StorageUnit",
                 comps,
                 lv_components,
@@ -71,7 +84,7 @@ class TestPypsaIO:
             ],
         )
         # check not aggregated generators
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "Generator",
             gens,
             lv_components,
@@ -90,7 +103,7 @@ class TestPypsaIO:
         ).all()
         # check aggregation of generators by type
         lv_components["Generator"] = pd.DataFrame()
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "Generator",
             gens,
             lv_components,
@@ -112,7 +125,7 @@ class TestPypsaIO:
         assert (lv_components["Generator"].fluctuating == [False, True, True]).all()
         # check if only one type is existing
         lv_components["Generator"] = pd.DataFrame()
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "Generator",
             gens.loc[gens.type == "solar"],
             lv_components,
@@ -127,7 +140,7 @@ class TestPypsaIO:
         assert (lv_components["Generator"].fluctuating == [True]).all()
         # check aggregation of generators by fluctuating or dispatchable
         lv_components["Generator"] = pd.DataFrame()
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "Generator",
             gens,
             lv_components,
@@ -151,7 +164,7 @@ class TestPypsaIO:
         assert (lv_components["Generator"].fluctuating == [True, False]).all()
         # check if only dispatchable gens are given
         lv_components["Generator"] = pd.DataFrame()
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "Generator",
             gens.loc[gens.type == "gas"],
             lv_components,
@@ -166,7 +179,7 @@ class TestPypsaIO:
         assert (lv_components["Generator"].fluctuating == [False]).all()
         # check if only fluctuating gens are given
         lv_components["Generator"] = pd.DataFrame()
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "Generator",
             gens.drop(gens.loc[gens.type == "gas"].index),
             lv_components,
@@ -184,7 +197,7 @@ class TestPypsaIO:
         assert (lv_components["Generator"].fluctuating == [True]).all()
         # check aggregation of all generators
         lv_components["Generator"] = pd.DataFrame()
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "Generator",
             gens,
             lv_components,
@@ -206,7 +219,7 @@ class TestPypsaIO:
         assert (lv_components["Generator"].fluctuating == ["Mixed"]).all()
         # check only fluctuating
         lv_components["Generator"] = pd.DataFrame()
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "Generator",
             gens.drop(gens.loc[gens.type == "gas"].index),
             lv_components,
@@ -228,7 +241,7 @@ class TestPypsaIO:
         assert (lv_components["Generator"].fluctuating == [True]).all()
         # check only dispatchable
         lv_components["Generator"] = pd.DataFrame()
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "Generator",
             gens.loc[gens.type == "gas"],
             lv_components,
@@ -270,7 +283,7 @@ class TestPypsaIO:
             ],
         )
         # check not aggregated loads
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "Load", loads, lv_components, "TestGrid", aggregate_loads=None
         )
         assert len(aggr_dict) == 0
@@ -280,7 +293,7 @@ class TestPypsaIO:
         assert (lv_components["Load"].index == loads.index).all()
         # check aggregate loads by sector
         lv_components["Load"] = pd.DataFrame()
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "Load",
             loads,
             lv_components,
@@ -308,7 +321,7 @@ class TestPypsaIO:
         assert np.isclose(lv_components["Load"].p_set, [0.63, 0.1, 0.29]).all()
         # check if only one sector exists
         lv_components["Load"] = pd.DataFrame()
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "Load",
             loads.loc[loads.sector == "industrial"],
             lv_components,
@@ -323,7 +336,7 @@ class TestPypsaIO:
         assert np.isclose(lv_components["Load"].p_set, 0.1).all()
         # check aggregation of all loads
         lv_components["Load"] = pd.DataFrame()
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "Load", loads, lv_components, "TestGrid", aggregate_loads="all"
         )
         assert len(aggr_dict) == 1
@@ -349,7 +362,7 @@ class TestPypsaIO:
             index=["Storage_1", "Storage_2"],
         )
         # check appending without aggregation
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "StorageUnit",
             storages,
             lv_components,
@@ -365,7 +378,7 @@ class TestPypsaIO:
         ).all()
         # check aggregration of all storages
         lv_components["StorageUnit"] = pd.DataFrame()
-        aggr_dict = _append_lv_components(
+        aggr_dict = pypsa_io._append_lv_components(
             "StorageUnit",
             storages,
             lv_components,
@@ -395,7 +408,7 @@ class TestPypsaIO:
         self.edisgo.analyze(timesteps=timeindex[0], mode="mv")
         # create pypsa network for first time step and all busses
         pypsa_network = self.edisgo.to_pypsa(timesteps=timeindex[0])
-        set_seed(self.edisgo, pypsa_network)
+        pypsa_io.set_seed(self.edisgo, pypsa_network)
 
         # check that for LV busses default values are used and for MV busses
         # results from previous power flow
@@ -414,11 +427,11 @@ class TestPypsaIO:
         # run power flow to check if it converges
         pypsa_network.pf(use_seed=True)
         # write results to edisgo object
-        process_pfa_results(self.edisgo, pypsa_network, timeindex)
+        pypsa_io.process_pfa_results(self.edisgo, pypsa_network, timeindex)
 
         # test with missing time steps
         pypsa_network = self.edisgo.to_pypsa()
-        set_seed(self.edisgo, pypsa_network)
+        pypsa_io.set_seed(self.edisgo, pypsa_network)
 
         # check that second time step default values are used and for first
         # time steps results from previous power flow
@@ -455,7 +468,7 @@ class TestPypsaIO:
         self.edisgo.analyze(timesteps=timeindex[0])
         self.edisgo.analyze(timesteps=timeindex[1])
         pypsa_network = self.edisgo.to_pypsa()
-        set_seed(self.edisgo, pypsa_network)
+        pypsa_io.set_seed(self.edisgo, pypsa_network)
 
         # check that for both time steps results from previous power flow
         # analyses are used

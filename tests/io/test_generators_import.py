@@ -6,7 +6,6 @@ from shapely.geometry import Point
 
 from edisgo import EDisGo
 from edisgo.io import generators_import as generators_import
-from edisgo.network.grids import LVGrid
 
 
 class TestGeneratorsImport:
@@ -20,9 +19,9 @@ class TestGeneratorsImport:
     @pytest.yield_fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case",
+            ding0_grid=pytest.ding0_test_network_path
         )
+        self.edisgo.set_time_series_worst_case_analysis()
 
     def test_update_grids(self):
 
