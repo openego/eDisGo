@@ -320,13 +320,6 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
     if kwargs.get("p_target", None) is None:
         _validate_generation()
 
-    # update time series if they were already set
-    if not edisgo_object.timeseries.generators_active_power.empty:
-        add_generators_timeseries(
-            edisgo_obj=edisgo_object,
-            generator_names=edisgo_object.topology.generators_df.index,
-        )
-
 
 def _update_grids(
     edisgo_object,
