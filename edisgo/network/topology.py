@@ -1436,9 +1436,11 @@ class Topology:
 
         """
         if not self._check_line_for_removal(name):
-            raise AssertionError(
-                "Removal of line {} would create isolated node.".format(name)
+            warnings.warn(
+                "Removal of line {} would create isolated node. Remove all "
+                "connected elements first to remove bus.".format(name)
             )
+            return
 
         # backup buses of line and check if buses can be removed as well
         bus0 = self.lines_df.at[name, "bus0"]
