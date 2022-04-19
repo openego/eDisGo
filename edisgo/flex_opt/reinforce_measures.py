@@ -494,6 +494,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
             ] = path_length_dict[node_2_3]
             edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
             lines_changes[crit_line_name] = 1
+            # ToDo: Include switch disconnector
 
     if not lines_changes:
         logger.debug(
