@@ -1838,7 +1838,7 @@ class TimeSeriesRaw:
         if "q_control" in attr_to_reduce:
             attr_to_reduce.remove("q_control")
         for attr in attr_to_reduce:
-            if hasattr(self, attr):
+            if hasattr(self, attr) and getattr(self, attr) is not None:
                 setattr(
                     self,
                     attr,
