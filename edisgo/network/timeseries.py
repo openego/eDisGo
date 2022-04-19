@@ -348,7 +348,7 @@ class TimeSeries:
             # drop generators time series from self.generators_(re)active_power that may
             # already exist for some of the given generators
             df_name = "generators_{}_power".format(mode)
-            _drop_component_time_series(
+            drop_component_time_series(
                 obj=self, df_name=df_name,
                 comp_names=ts_generators.columns
             )
@@ -366,7 +366,7 @@ class TimeSeries:
             # drop load time series from self.loads_(re)active_power that may
             # already exist for some of the given loads
             df_name = "loads_{}_power".format(mode)
-            _drop_component_time_series(
+            drop_component_time_series(
                 obj=self, df_name=df_name, comp_names=ts_loads.columns
             )
             # set (re)active power
@@ -383,7 +383,7 @@ class TimeSeries:
             # drop storage unit time series from self.storage_units_(re)active_power
             # that may already exist for some of the given storage units
             df_name = "storage_units_{}_power".format(mode)
-            _drop_component_time_series(
+            drop_component_time_series(
                 obj=self, df_name=df_name,
                 comp_names=ts_storage_units.columns
             )
@@ -1114,7 +1114,7 @@ class TimeSeries:
         generators_df = edisgo_object.topology.generators_df.loc[generator_names, :]
 
         # drop existing time series
-        _drop_component_time_series(
+        drop_component_time_series(
             obj=self, df_name="generators_active_power",
             comp_names=generator_names
         )
@@ -1192,7 +1192,7 @@ class TimeSeries:
         generators_df = edisgo_object.topology.generators_df.loc[generator_names, :]
 
         # drop existing time series
-        _drop_component_time_series(
+        drop_component_time_series(
             obj=self, df_name="generators_active_power",
             comp_names=generator_names
         )
@@ -1276,7 +1276,7 @@ class TimeSeries:
         loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
 
         # drop existing time series
-        _drop_component_time_series(
+        drop_component_time_series(
             obj=self, df_name="loads_active_power",
             comp_names=load_names
         )
@@ -1333,7 +1333,7 @@ class TimeSeries:
         loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
 
         # drop existing time series
-        _drop_component_time_series(
+        drop_component_time_series(
             obj=self, df_name="loads_active_power",
             comp_names=load_names
         )
@@ -1485,7 +1485,7 @@ class TimeSeries:
             )
 
             # drop existing time series
-            _drop_component_time_series(
+            drop_component_time_series(
                 obj=self, df_name="{}_reactive_power".format(type),
                 comp_names=components_names
             )
@@ -1912,7 +1912,7 @@ class TimeSeriesRaw:
         self._timeindex = timeindex
 
 
-def _drop_component_time_series(obj, df_name, comp_names):
+def drop_component_time_series(obj, df_name, comp_names):
     """
     Drop component time series.
 
