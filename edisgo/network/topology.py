@@ -1593,7 +1593,7 @@ class Topology:
             np.sqrt(3) * data_new_line.U_n * data_new_line.I_max_th
         )
 
-    def connect_to_mv(self, edisgo_object, comp_data, comp_type="Generator"):
+    def connect_to_mv(self, edisgo_object, comp_data, comp_type="generator"):
         """
         Add and connect new generator or charging point to MV grid topology.
 
@@ -1626,8 +1626,8 @@ class Topology:
             geolocation must be provided as
             :shapely:`Shapely Point object<points>`.
         comp_type : str
-            Type of added component. Can be 'Generator' or 'ChargingPoint'.
-            Default: 'Generator'.
+            Type of added component. Can be 'generator' or 'charging_point'.
+            Default: 'generator'.
 
         Returns
         -------
@@ -1643,7 +1643,7 @@ class Topology:
         else:
             geom = comp_data["geom"]
 
-        if comp_type == "Generator":
+        if comp_type == "generator":
             if comp_data["generator_id"] is not None:
                 bus = "Bus_Generator_{}".format(comp_data["generator_id"])
             else:
@@ -1659,7 +1659,7 @@ class Topology:
         )
 
         # add component to newly created bus
-        if comp_type == "Generator":
+        if comp_type == "generator":
             comp_name = self.add_generator(bus=bus, **comp_data)
         else:
             comp_name = self.add_load(bus=bus, type="charging_point", **comp_data)
@@ -1761,7 +1761,7 @@ class Topology:
         self,
         edisgo_object,
         comp_data,
-        comp_type="Generator",
+        comp_type="generator",
         allowed_number_of_comp_per_bus=2,
     ):
         """
@@ -1831,8 +1831,8 @@ class Topology:
             :shapely:`Shapely Point object<points>` and the LV grid ID as
             integer.
         comp_type : str
-            Type of added component. Can be 'Generator' or 'ChargingPoint'.
-            Default: 'Generator'.
+            Type of added component. Can be 'generator' or 'charging_point'.
+            Default: 'generator'.
         allowed_number_of_comp_per_bus : int
             Specifies, how many generators respectively charging points are
             at most allowed to be placed at the same bus. Default: 2.
@@ -1858,7 +1858,7 @@ class Topology:
             """
 
             # add bus for new component
-            if comp_type == "Generator":
+            if comp_type == "generator":
                 if comp_data["generator_id"] is not None:
                     b = "Bus_Generator_{}".format(comp_data["generator_id"])
                 else:
@@ -1919,7 +1919,7 @@ class Topology:
             substation ID is provided or it does not exist.
 
             """
-            if comp_type == "Generator":
+            if comp_type == "generator":
                 random.seed(a=comp_data["generator_id"])
             else:
                 # ToDo: Seed shouldn't depend on number of charging points, but
@@ -1931,11 +1931,11 @@ class Topology:
         # get list of LV grid IDs
         lv_grid_ids = [_.id for _ in self.mv_grid.lv_grids]
 
-        if comp_type == "Generator":
+        if comp_type == "generator":
             add_func = self.add_generator
-        elif comp_type == "ChargingPoint":
+        elif comp_type == "charging_point":
             add_func = self.add_load
-            comp_data["type"] = "charging_point"
+            comp_data["type"] = comp_type
         else:
             logger.error("Component type {} is not a valid option.".format(comp_type))
 
@@ -1996,7 +1996,7 @@ class Topology:
 
             # get valid buses to connect new component to
             lv_loads = lv_grid.loads_df
-            if comp_type == "Generator":
+            if comp_type == "generator":
                 if comp_data["p_nom"] <= 0.030:
                     tmp = lv_loads[lv_loads.sector == "residential"]
                     target_buses = tmp.bus.values
@@ -2021,7 +2021,7 @@ class Topology:
 
             # generate random list (unique elements) of possible target buses
             # to connect components to
-            if comp_type == "Generator":
+            if comp_type == "generator":
                 random.seed(a=comp_data["generator_id"])
             else:
                 random.seed(
@@ -2057,7 +2057,7 @@ class Topology:
                 lv_bus = lv_buses_rnd.pop()
 
                 # determine number of components of the same type at LV bus
-                if comp_type == "Generator":
+                if comp_type == "generator":
                     comps_at_bus = self.generators_df[self.generators_df.bus == lv_bus]
                 else:
                     comps_at_bus = self.charging_points_df[
