@@ -1355,6 +1355,8 @@ class Topology:
         """
         Removes load with given name from topology.
 
+        If no other elements are connected, line and bus are removed as well.
+
         Parameters
         ----------
         name : str
@@ -1376,6 +1378,8 @@ class Topology:
     def remove_generator(self, name):
         """
         Removes generator with given name from topology.
+
+        If no other elements are connected, line and bus are removed as well.
 
         Parameters
         ----------
@@ -1403,6 +1407,8 @@ class Topology:
         """
         Removes storage with given name from topology.
 
+        If no other elements are connected, line and bus are removed as well.
+
         Parameters
         ----------
         name : str
@@ -1428,6 +1434,9 @@ class Topology:
     def remove_line(self, name):
         """
         Removes line with given name from topology.
+
+        Line is only removed, if it does not result in isolated buses. A warning is
+        raised in that case.
 
         Parameters
         ----------
