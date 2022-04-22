@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from edisgo.io import ding0_import
 from edisgo.flex_opt import q_control
+from edisgo.io import ding0_import
 from edisgo.network import timeseries
 from edisgo.network.topology import Topology
 from edisgo.tools.config import Config
@@ -16,12 +16,17 @@ class TestTimeseriesReactive:
         self.timeseries = timeseries.TimeSeries()
         self.config = Config()
         ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
-        self.timeseries.timeindex = pd.date_range("1/1/1970", periods=2, freq="H")
+        self.timeseries.timeindex = pd.date_range("1/1/1970", periods=4, freq="H")
 
-    def test_set_reactive_power_time_series_for_fixed_cosphi_using_config(
-        self,
-    ):
+    def test_get_q_sign_generator(self):
+        # ToDo implement
+        pass
 
+    def test_get_q_sign_load(self):
+        # ToDo implement
+        pass
+
+    def test_fixed_cosphi(self):
         # test for component_type="generators"
         comp_mv_1 = "Generator_1"
         comp_mv_2 = "GeneratorFluctuating_2"
@@ -39,7 +44,7 @@ class TestTimeseriesReactive:
         )
         self.timeseries.generators_active_power = active_power_ts
 
-        q_control._set_reactive_power_time_series_for_fixed_cosphi_using_config(
+        q_control.fixed_cosphi(
             self,
             self.topology.generators_df.loc[[comp_mv_1, comp_mv_2, comp_lv_1], :],
             "generators",
@@ -138,4 +143,130 @@ class TestTimeseriesReactive:
         assert np.isclose(
             self.timeseries.storage_units_reactive_power.loc[:, [comp_mv_1]].values,
             active_power_ts.loc[:, [comp_mv_1]].values * -0.484322,
+        ).all()
+
+    def test__fixed_cosphi_default_power_factor(
+        self,
+    ):
+
+        # test for component_type="generators"
+        df = pd.DataFrame(
+            data={"voltage_level": ["mv", "lv", "lv"]},
+            index=["comp_mv_1", "comp_lv_1", "comp_lv_2"],
+        )
+        pf = q_control._fixed_cosphi_default_power_factor(
+            comp_df=df, component_type="generators", configs=self.config
+        )
+
+        assert pf.shape == (3,)
+        assert np.isclose(
+            pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
+            [0.9, 0.95, 0.95],
+        ).all()
+
+        # test for component_type="loads"
+        pf = q_control._fixed_cosphi_default_power_factor(
+            comp_df=df, component_type="loads", configs=self.config
+        )
+
+        assert pf.shape == (3,)
+        assert np.isclose(
+            pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
+            [0.9, 0.95, 0.95],
+        ).all()
+
+        # test for component_type="charging_points"
+        pf = q_control._fixed_cosphi_default_power_factor(
+            comp_df=df, component_type="charging_points", configs=self.config
+        )
+
+        assert pf.shape == (3,)
+        assert np.isclose(
+            pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
+            [1.0, 1.0, 1.0],
+        ).all()
+
+        # test for component_type="heat_pumps"
+        pf = q_control._fixed_cosphi_default_power_factor(
+            comp_df=df, component_type="heat_pumps", configs=self.config
+        )
+
+        assert pf.shape == (3,)
+        assert np.isclose(
+            pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
+            [0.98, 0.98, 0.98],
+        ).all()
+
+        # test for component_type="storage_units"
+        pf = q_control._fixed_cosphi_default_power_factor(
+            comp_df=df, component_type="storage_units", configs=self.config
+        )
+
+        assert pf.shape == (3,)
+        assert np.isclose(
+            pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
+            [0.9, 0.95, 0.95],
+        ).all()
+
+    def test__fixed_cosphi_default_reactive_power_sign(
+        self,
+    ):
+
+        # test for component_type="generators"
+        df = pd.DataFrame(
+            data={"voltage_level": ["mv", "lv", "lv"]},
+            index=["comp_mv_1", "comp_lv_1", "comp_lv_2"],
+        )
+        pf = q_control._fixed_cosphi_default_reactive_power_sign(
+            comp_df=df, component_type="generators", configs=self.config
+        )
+
+        assert pf.shape == (3,)
+        assert np.isclose(
+            pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
+            [-1.0, -1.0, -1.0],
+        ).all()
+
+        # test for component_type="loads"
+        pf = q_control._fixed_cosphi_default_power_factor(
+            comp_df=df, component_type="loads", configs=self.config
+        )
+
+        assert pf.shape == (3,)
+        assert np.isclose(
+            pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
+            [0.9, 0.95, 0.95],
+        ).all()
+
+        # test for component_type="charging_points"
+        pf = q_control._fixed_cosphi_default_power_factor(
+            comp_df=df, component_type="charging_points", configs=self.config
+        )
+
+        assert pf.shape == (3,)
+        assert np.isclose(
+            pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
+            [1.0, 1.0, 1.0],
+        ).all()
+
+        # test for component_type="heat_pumps"
+        pf = q_control._fixed_cosphi_default_power_factor(
+            comp_df=df, component_type="heat_pumps", configs=self.config
+        )
+
+        assert pf.shape == (3,)
+        assert np.isclose(
+            pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
+            [0.98, 0.98, 0.98],
+        ).all()
+
+        # test for component_type="storage_units"
+        pf = q_control._fixed_cosphi_default_power_factor(
+            comp_df=df, component_type="storage_units", configs=self.config
+        )
+
+        assert pf.shape == (3,)
+        assert np.isclose(
+            pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
+            [0.9, 0.95, 0.95],
         ).all()
