@@ -76,6 +76,18 @@ class TimeSeries:
                 )
         self._timeindex = ind
 
+    def _internal_getter(self, attribute):
+        try:
+            return getattr(self, "_" + attribute).loc[self.timeindex, :]
+        except AttributeError:
+            return pd.DataFrame(index=self.timeindex)
+        except KeyError:
+            logger.warning(
+                "Timeindex and {} have deviating indices. "
+                "Empty dataframe will be returned.".format(attribute)
+            )
+            return pd.DataFrame(index=self.timeindex)
+
     @property
     def generators_active_power(self):
         """
@@ -95,10 +107,7 @@ class TimeSeries:
             input parameter `df`.
 
         """
-        try:
-            return self._generators_active_power.loc[self.timeindex, :]
-        except Exception:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("generators_active_power")
 
     @generators_active_power.setter
     def generators_active_power(self, df):
@@ -123,10 +132,7 @@ class TimeSeries:
             see input parameter `df`.
 
         """
-        try:
-            return self._generators_reactive_power.loc[self.timeindex, :]
-        except Exception:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("generators_reactive_power")
 
     @generators_reactive_power.setter
     def generators_reactive_power(self, df):
@@ -151,10 +157,7 @@ class TimeSeries:
             input parameter `df`.
 
         """
-        try:
-            return self._loads_active_power.loc[self.timeindex, :]
-        except Exception:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("loads_active_power")
 
     @loads_active_power.setter
     def loads_active_power(self, df):
@@ -179,10 +182,7 @@ class TimeSeries:
             see input parameter `df`.
 
         """
-        try:
-            return self._loads_reactive_power.loc[self.timeindex, :]
-        except Exception:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("loads_reactive_power")
 
     @loads_reactive_power.setter
     def loads_reactive_power(self, df):
@@ -207,10 +207,7 @@ class TimeSeries:
             see input parameter `df`.
 
         """
-        try:
-            return self._storage_units_active_power.loc[self.timeindex, :]
-        except Exception:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("storage_units_active_power")
 
     @storage_units_active_power.setter
     def storage_units_active_power(self, df):
@@ -235,10 +232,7 @@ class TimeSeries:
             see input parameter `df`.
 
         """
-        try:
-            return self._storage_units_reactive_power.loc[self.timeindex, :]
-        except Exception:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("storage_units_reactive_power")
 
     @storage_units_reactive_power.setter
     def storage_units_reactive_power(self, df):
