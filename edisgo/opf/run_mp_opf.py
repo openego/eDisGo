@@ -84,7 +84,8 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
         "time_elapsed": 1.0,
         # storage units are considered
         "storage_units": False,
-        # positioning of storage units, if empty list, all buses are potential positions of storage units and
+        # positioning of storage units, if empty list, all buses are potential positions
+        # of storage units and
         # capacity is optimized
         "storage_buses": [],
         # total storage capacity in the network
@@ -98,7 +99,8 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
         # An overall allowance of curtailment is considered
         "curtailment_allowance": False,
         # Maximal allowed curtailment over entire time horizon,
-        # DEFAULT: "3percent"=> 3% of total RES generation in time horizon may be curtailed, else: Float
+        # DEFAULT: "3percent"=> 3% of total RES generation in time horizon may be
+        # curtailed, else: Float
         "curtailment_total": "3percent",
         "results_path": "opf_solutions"
         # path to where OPF results are stored
@@ -112,7 +114,8 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
     logger.debug(scenario_data_dir)
     # solution_dir = os.path.join(opf_dir, "opf_solutions/")
 
-    # set path to edisgoOPF folder for scenario data and julia module relative to this file
+    # set path to edisgoOPF folder for scenario data and julia module relative to this
+    # file
     # abspath = os.path.dirname(os.path.abspath(__file__))
     # opf_dir = os.path.join(abspath, "edisgoOPF/")
     # scenario_data_dir = os.path.join(opf_dir, "edisgo_scenario_data")
@@ -162,15 +165,18 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
     logger.debug("preprocessing pypsa structure for opf")
     preprocess_pypsa_opf_structure(edisgo_network, pypsa_mv, hvmv_trafo=False)
     aggregate_fluct_generators(pypsa_mv)
-    # convert pypsa structure to network dictionary and create dictionaries for time series of loads and generators
+    # convert pypsa structure to network dictionary and create dictionaries for time
+    # series of loads and generators
     pm, load_data, gen_data = to_powermodels(pypsa_mv)
     storage_data = convert_storage_series(storage_series)
 
-    # Export eDisGo storage only for operation only as they would interfere with positioning
+    # Export eDisGo storage only for operation only as they would interfere with
+    # positioning
     if settings["storage_operation_only"]:
         add_storage_from_edisgo(edisgo_network, pypsa_mv, pm)
 
-    # dump json files for static network information, timeseries of loads and generators, and opf settings
+    # dump json files for static network information, timeseries of loads and
+    # generators, and opf settings
     with open(
         os.path.join(scenario_data_dir, "{}_static.json".format(pm["name"])),
         "w",

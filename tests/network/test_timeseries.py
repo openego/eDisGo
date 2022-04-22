@@ -3,245 +3,330 @@ from math import acos, tan
 import pandas as pd
 import pytest
 
-from pandas.util.testing import assert_frame_equal, assert_series_equal
+from pandas.util.testing import assert_series_equal
 
 from edisgo import EDisGo
 from edisgo.tools.tools import assign_voltage_level_to_component
 
 
 class TestTimeSeries:
-
     @pytest.yield_fixture(autouse=True)
     def setup_class(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path
-        )
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
 
     def test_set_active_power_manual(self):
 
         # create dummy time series
         index_2 = pd.date_range("1/1/2018", periods=2, freq="H")
         index_3 = pd.date_range("1/1/2018", periods=3, freq="H")
-        dummy_ts_1 = pd.Series(
-            [1.4, 2.3],
-            index=index_2
-        )
-        dummy_ts_2 = pd.Series(
-            [1.4, 2.3, 1.5],
-            index=index_3
-        )
+        dummy_ts_1 = pd.Series([1.4, 2.3], index=index_2)
+        dummy_ts_2 = pd.Series([1.4, 2.3, 1.5], index=index_3)
         # set TimeSeries timeindex
         self.edisgo.timeseries.timeindex = index_2
 
         # test only existing components without prior time series being set
         self.edisgo.timeseries.set_active_power_manual(
             edisgo_object=self.edisgo,
-            ts_generators=pd.DataFrame(
-                {"GeneratorFluctuating_8": dummy_ts_1}
-            ),
+            ts_generators=pd.DataFrame({"GeneratorFluctuating_8": dummy_ts_1}),
             ts_loads=pd.DataFrame(
-                {"Load_residential_LVGrid_8_6": dummy_ts_2,
-                 "Load_residential_LVGrid_7_2": dummy_ts_2}
+                {
+                    "Load_residential_LVGrid_8_6": dummy_ts_2,
+                    "Load_residential_LVGrid_7_2": dummy_ts_2,
+                }
             ),
-            ts_storage_units=pd.DataFrame(
-                {"Storage_1": dummy_ts_2}
-            ),
+            ts_storage_units=pd.DataFrame({"Storage_1": dummy_ts_2}),
         )
         assert self.edisgo.timeseries.generators_active_power.shape == (2, 1)
-        assert (self.edisgo.timeseries.generators_active_power.loc[
-               :, "GeneratorFluctuating_8"] == dummy_ts_1).all()
+        assert (
+            self.edisgo.timeseries.generators_active_power.loc[
+                :, "GeneratorFluctuating_8"
+            ]
+            == dummy_ts_1
+        ).all()
         assert self.edisgo.timeseries.loads_active_power.shape == (2, 2)
-        assert (self.edisgo.timeseries._loads_active_power.loc[
-                :, "Load_residential_LVGrid_8_6"] == dummy_ts_2).all()
-        assert (self.edisgo.timeseries.loads_active_power.loc[
-                :, "Load_residential_LVGrid_7_2"] == dummy_ts_2.loc[index_2]).all()
+        assert (
+            self.edisgo.timeseries._loads_active_power.loc[
+                :, "Load_residential_LVGrid_8_6"
+            ]
+            == dummy_ts_2
+        ).all()
+        assert (
+            self.edisgo.timeseries.loads_active_power.loc[
+                :, "Load_residential_LVGrid_7_2"
+            ]
+            == dummy_ts_2.loc[index_2]
+        ).all()
         assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 1)
-        assert (self.edisgo.timeseries._storage_units_active_power.loc[
-                :, "Storage_1"] == dummy_ts_2).all()
-        assert (self.edisgo.timeseries.storage_units_active_power.loc[
-                :, "Storage_1"] == dummy_ts_2.loc[index_2]).all()
+        assert (
+            self.edisgo.timeseries._storage_units_active_power.loc[:, "Storage_1"]
+            == dummy_ts_2
+        ).all()
+        assert (
+            self.edisgo.timeseries.storage_units_active_power.loc[:, "Storage_1"]
+            == dummy_ts_2.loc[index_2]
+        ).all()
 
         # test overwriting and adding time series
         self.edisgo.timeseries.set_active_power_manual(
             edisgo_object=self.edisgo,
             ts_generators=pd.DataFrame(
-                {"GeneratorFluctuating_8": dummy_ts_2,
-                 "GeneratorFluctuating_17": dummy_ts_2}
+                {
+                    "GeneratorFluctuating_8": dummy_ts_2,
+                    "GeneratorFluctuating_17": dummy_ts_2,
+                }
             ),
             ts_loads=pd.DataFrame(
-                {"Load_residential_LVGrid_8_6": dummy_ts_1,
-                 "Load_residential_LVGrid_1_4": dummy_ts_1}
+                {
+                    "Load_residential_LVGrid_8_6": dummy_ts_1,
+                    "Load_residential_LVGrid_1_4": dummy_ts_1,
+                }
             ),
-            ts_storage_units=pd.DataFrame(
-                {"Storage_1": dummy_ts_1}
-            ),
+            ts_storage_units=pd.DataFrame({"Storage_1": dummy_ts_1}),
         )
         assert self.edisgo.timeseries.generators_active_power.shape == (2, 2)
-        assert (self.edisgo.timeseries.generators_active_power.loc[
-                :, "GeneratorFluctuating_8"] == dummy_ts_2.loc[index_2]).all()
-        assert (self.edisgo.timeseries._generators_active_power.loc[
-                :, "GeneratorFluctuating_17"] == dummy_ts_2).all()
-        assert (self.edisgo.timeseries.generators_active_power.loc[
-                :, "GeneratorFluctuating_17"] == dummy_ts_2.loc[index_2]).all()
+        assert (
+            self.edisgo.timeseries.generators_active_power.loc[
+                :, "GeneratorFluctuating_8"
+            ]
+            == dummy_ts_2.loc[index_2]
+        ).all()
+        assert (
+            self.edisgo.timeseries._generators_active_power.loc[
+                :, "GeneratorFluctuating_17"
+            ]
+            == dummy_ts_2
+        ).all()
+        assert (
+            self.edisgo.timeseries.generators_active_power.loc[
+                :, "GeneratorFluctuating_17"
+            ]
+            == dummy_ts_2.loc[index_2]
+        ).all()
         assert self.edisgo.timeseries.loads_active_power.shape == (2, 3)
-        assert (self.edisgo.timeseries._loads_active_power.loc[
-                :, "Load_residential_LVGrid_8_6"] == dummy_ts_1).all()
-        assert (self.edisgo.timeseries._loads_active_power.loc[
-                :, "Load_residential_LVGrid_1_4"] == dummy_ts_1).all()
-        assert (self.edisgo.timeseries.loads_active_power.loc[
-                :, "Load_residential_LVGrid_7_2"] == dummy_ts_2.loc[index_2]).all()
+        assert (
+            self.edisgo.timeseries._loads_active_power.loc[
+                :, "Load_residential_LVGrid_8_6"
+            ]
+            == dummy_ts_1
+        ).all()
+        assert (
+            self.edisgo.timeseries._loads_active_power.loc[
+                :, "Load_residential_LVGrid_1_4"
+            ]
+            == dummy_ts_1
+        ).all()
+        assert (
+            self.edisgo.timeseries.loads_active_power.loc[
+                :, "Load_residential_LVGrid_7_2"
+            ]
+            == dummy_ts_2.loc[index_2]
+        ).all()
         assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 1)
-        assert (self.edisgo.timeseries._storage_units_active_power.loc[
-                :, "Storage_1"] == dummy_ts_1).all()
-        assert (self.edisgo.timeseries.storage_units_active_power.loc[
-                :, "Storage_1"] == dummy_ts_1).all()
+        assert (
+            self.edisgo.timeseries._storage_units_active_power.loc[:, "Storage_1"]
+            == dummy_ts_1
+        ).all()
+        assert (
+            self.edisgo.timeseries.storage_units_active_power.loc[:, "Storage_1"]
+            == dummy_ts_1
+        ).all()
 
         # test non-existent components
         self.edisgo.timeseries.set_active_power_manual(
             edisgo_object=self.edisgo,
             ts_generators=pd.DataFrame(
-                {"Dummy_gen_1": dummy_ts_2,
-                 "GeneratorFluctuating_27": dummy_ts_2}
+                {"Dummy_gen_1": dummy_ts_2, "GeneratorFluctuating_27": dummy_ts_2}
             ),
             ts_loads=pd.DataFrame(
-                {"Dummy_load_1": dummy_ts_1,
-                 "Load_agricultural_LVGrid_1_3": dummy_ts_1}
+                {"Dummy_load_1": dummy_ts_1, "Load_agricultural_LVGrid_1_3": dummy_ts_1}
             ),
-            ts_storage_units=pd.DataFrame(
-                {"Dummy_storage_1": dummy_ts_1}
-            ),
+            ts_storage_units=pd.DataFrame({"Dummy_storage_1": dummy_ts_1}),
         )
         assert self.edisgo.timeseries.generators_active_power.shape == (2, 3)
-        assert ("Dummy_gen_1" not in
-                self.edisgo.timeseries.generators_active_power.columns)
-        assert (self.edisgo.timeseries._generators_active_power.loc[
-                :, "GeneratorFluctuating_27"] == dummy_ts_2).all()
+        assert (
+            "Dummy_gen_1" not in self.edisgo.timeseries.generators_active_power.columns
+        )
+        assert (
+            self.edisgo.timeseries._generators_active_power.loc[
+                :, "GeneratorFluctuating_27"
+            ]
+            == dummy_ts_2
+        ).all()
         assert self.edisgo.timeseries.loads_active_power.shape == (2, 4)
-        assert ("Dummy_load_1" not in
-                self.edisgo.timeseries.loads_active_power.columns)
-        assert (self.edisgo.timeseries.loads_active_power.loc[
-                :, "Load_agricultural_LVGrid_1_3"] == dummy_ts_1).all()
+        assert "Dummy_load_1" not in self.edisgo.timeseries.loads_active_power.columns
+        assert (
+            self.edisgo.timeseries.loads_active_power.loc[
+                :, "Load_agricultural_LVGrid_1_3"
+            ]
+            == dummy_ts_1
+        ).all()
         assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 1)
-        assert ("Dummy_storage_1" not in
-                self.edisgo.timeseries.storage_units_active_power.columns)
+        assert (
+            "Dummy_storage_1"
+            not in self.edisgo.timeseries.storage_units_active_power.columns
+        )
 
     def test_set_reactive_power_manual(self):
 
         # create dummy time series
         index_2 = pd.date_range("1/1/2018", periods=2, freq="H")
         index_3 = pd.date_range("1/1/2018", periods=3, freq="H")
-        dummy_ts_1 = pd.Series(
-            [1.4, 2.3],
-            index=index_2
-        )
-        dummy_ts_2 = pd.Series(
-            [1.4, 2.3, 1.5],
-            index=index_3
-        )
+        dummy_ts_1 = pd.Series([1.4, 2.3], index=index_2)
+        dummy_ts_2 = pd.Series([1.4, 2.3, 1.5], index=index_3)
         # set TimeSeries timeindex
         self.edisgo.timeseries.timeindex = index_2
 
         # test only existing components without prior time series being set
         self.edisgo.timeseries.set_reactive_power_manual(
             edisgo_object=self.edisgo,
-            ts_generators=pd.DataFrame(
-                {"GeneratorFluctuating_8": dummy_ts_1}
-            ),
+            ts_generators=pd.DataFrame({"GeneratorFluctuating_8": dummy_ts_1}),
             ts_loads=pd.DataFrame(
-                {"Load_residential_LVGrid_8_6": dummy_ts_2,
-                 "Load_residential_LVGrid_7_2": dummy_ts_2}
+                {
+                    "Load_residential_LVGrid_8_6": dummy_ts_2,
+                    "Load_residential_LVGrid_7_2": dummy_ts_2,
+                }
             ),
-            ts_storage_units=pd.DataFrame(
-                {"Storage_1": dummy_ts_2}
-            ),
+            ts_storage_units=pd.DataFrame({"Storage_1": dummy_ts_2}),
         )
         assert self.edisgo.timeseries.generators_reactive_power.shape == (2, 1)
-        assert (self.edisgo.timeseries.generators_reactive_power.loc[
-               :, "GeneratorFluctuating_8"] == dummy_ts_1).all()
+        assert (
+            self.edisgo.timeseries.generators_reactive_power.loc[
+                :, "GeneratorFluctuating_8"
+            ]
+            == dummy_ts_1
+        ).all()
         assert self.edisgo.timeseries.loads_reactive_power.shape == (2, 2)
-        assert (self.edisgo.timeseries._loads_reactive_power.loc[
-                :, "Load_residential_LVGrid_8_6"] == dummy_ts_2).all()
-        assert (self.edisgo.timeseries.loads_reactive_power.loc[
-                :, "Load_residential_LVGrid_7_2"] == dummy_ts_2.loc[index_2]).all()
+        assert (
+            self.edisgo.timeseries._loads_reactive_power.loc[
+                :, "Load_residential_LVGrid_8_6"
+            ]
+            == dummy_ts_2
+        ).all()
+        assert (
+            self.edisgo.timeseries.loads_reactive_power.loc[
+                :, "Load_residential_LVGrid_7_2"
+            ]
+            == dummy_ts_2.loc[index_2]
+        ).all()
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 1)
-        assert (self.edisgo.timeseries._storage_units_reactive_power.loc[
-                :, "Storage_1"] == dummy_ts_2).all()
-        assert (self.edisgo.timeseries.storage_units_reactive_power.loc[
-                :, "Storage_1"] == dummy_ts_2.loc[index_2]).all()
+        assert (
+            self.edisgo.timeseries._storage_units_reactive_power.loc[:, "Storage_1"]
+            == dummy_ts_2
+        ).all()
+        assert (
+            self.edisgo.timeseries.storage_units_reactive_power.loc[:, "Storage_1"]
+            == dummy_ts_2.loc[index_2]
+        ).all()
 
         # test overwriting and adding time series
         self.edisgo.timeseries.set_reactive_power_manual(
             edisgo_object=self.edisgo,
             ts_generators=pd.DataFrame(
-                {"GeneratorFluctuating_8": dummy_ts_2,
-                 "GeneratorFluctuating_17": dummy_ts_2}
+                {
+                    "GeneratorFluctuating_8": dummy_ts_2,
+                    "GeneratorFluctuating_17": dummy_ts_2,
+                }
             ),
             ts_loads=pd.DataFrame(
-                {"Load_residential_LVGrid_8_6": dummy_ts_1,
-                 "Load_residential_LVGrid_1_4": dummy_ts_1}
+                {
+                    "Load_residential_LVGrid_8_6": dummy_ts_1,
+                    "Load_residential_LVGrid_1_4": dummy_ts_1,
+                }
             ),
-            ts_storage_units=pd.DataFrame(
-                {"Storage_1": dummy_ts_1}
-            ),
+            ts_storage_units=pd.DataFrame({"Storage_1": dummy_ts_1}),
         )
         assert self.edisgo.timeseries.generators_reactive_power.shape == (2, 2)
-        assert (self.edisgo.timeseries.generators_reactive_power.loc[
-                :, "GeneratorFluctuating_8"] == dummy_ts_2.loc[index_2]).all()
-        assert (self.edisgo.timeseries._generators_reactive_power.loc[
-                :, "GeneratorFluctuating_17"] == dummy_ts_2).all()
-        assert (self.edisgo.timeseries.generators_reactive_power.loc[
-                :, "GeneratorFluctuating_17"] == dummy_ts_2.loc[index_2]).all()
+        assert (
+            self.edisgo.timeseries.generators_reactive_power.loc[
+                :, "GeneratorFluctuating_8"
+            ]
+            == dummy_ts_2.loc[index_2]
+        ).all()
+        assert (
+            self.edisgo.timeseries._generators_reactive_power.loc[
+                :, "GeneratorFluctuating_17"
+            ]
+            == dummy_ts_2
+        ).all()
+        assert (
+            self.edisgo.timeseries.generators_reactive_power.loc[
+                :, "GeneratorFluctuating_17"
+            ]
+            == dummy_ts_2.loc[index_2]
+        ).all()
         assert self.edisgo.timeseries.loads_reactive_power.shape == (2, 3)
-        assert (self.edisgo.timeseries._loads_reactive_power.loc[
-                :, "Load_residential_LVGrid_8_6"] == dummy_ts_1).all()
-        assert (self.edisgo.timeseries._loads_reactive_power.loc[
-                :, "Load_residential_LVGrid_1_4"] == dummy_ts_1).all()
-        assert (self.edisgo.timeseries.loads_reactive_power.loc[
-                :, "Load_residential_LVGrid_7_2"] == dummy_ts_2.loc[index_2]).all()
+        assert (
+            self.edisgo.timeseries._loads_reactive_power.loc[
+                :, "Load_residential_LVGrid_8_6"
+            ]
+            == dummy_ts_1
+        ).all()
+        assert (
+            self.edisgo.timeseries._loads_reactive_power.loc[
+                :, "Load_residential_LVGrid_1_4"
+            ]
+            == dummy_ts_1
+        ).all()
+        assert (
+            self.edisgo.timeseries.loads_reactive_power.loc[
+                :, "Load_residential_LVGrid_7_2"
+            ]
+            == dummy_ts_2.loc[index_2]
+        ).all()
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 1)
-        assert (self.edisgo.timeseries._storage_units_reactive_power.loc[
-                :, "Storage_1"] == dummy_ts_1).all()
-        assert (self.edisgo.timeseries.storage_units_reactive_power.loc[
-                :, "Storage_1"] == dummy_ts_1).all()
+        assert (
+            self.edisgo.timeseries._storage_units_reactive_power.loc[:, "Storage_1"]
+            == dummy_ts_1
+        ).all()
+        assert (
+            self.edisgo.timeseries.storage_units_reactive_power.loc[:, "Storage_1"]
+            == dummy_ts_1
+        ).all()
 
         # test non-existent components
         self.edisgo.timeseries.set_reactive_power_manual(
             edisgo_object=self.edisgo,
             ts_generators=pd.DataFrame(
-                {"Dummy_gen_1": dummy_ts_2,
-                 "GeneratorFluctuating_27": dummy_ts_2}
+                {"Dummy_gen_1": dummy_ts_2, "GeneratorFluctuating_27": dummy_ts_2}
             ),
             ts_loads=pd.DataFrame(
-                {"Dummy_load_1": dummy_ts_1,
-                 "Load_agricultural_LVGrid_1_3": dummy_ts_1}
+                {"Dummy_load_1": dummy_ts_1, "Load_agricultural_LVGrid_1_3": dummy_ts_1}
             ),
-            ts_storage_units=pd.DataFrame(
-                {"Dummy_storage_1": dummy_ts_1}
-            ),
+            ts_storage_units=pd.DataFrame({"Dummy_storage_1": dummy_ts_1}),
         )
         assert self.edisgo.timeseries.generators_reactive_power.shape == (2, 3)
-        assert ("Dummy_gen_1" not in
-                self.edisgo.timeseries.generators_reactive_power.columns)
-        assert (self.edisgo.timeseries._generators_reactive_power.loc[
-                :, "GeneratorFluctuating_27"] == dummy_ts_2).all()
+        assert (
+            "Dummy_gen_1"
+            not in self.edisgo.timeseries.generators_reactive_power.columns
+        )
+        assert (
+            self.edisgo.timeseries._generators_reactive_power.loc[
+                :, "GeneratorFluctuating_27"
+            ]
+            == dummy_ts_2
+        ).all()
         assert self.edisgo.timeseries.loads_reactive_power.shape == (2, 4)
-        assert ("Dummy_load_1" not in
-                self.edisgo.timeseries.loads_reactive_power.columns)
-        assert (self.edisgo.timeseries.loads_reactive_power.loc[
-                :, "Load_agricultural_LVGrid_1_3"] == dummy_ts_1).all()
+        assert "Dummy_load_1" not in self.edisgo.timeseries.loads_reactive_power.columns
+        assert (
+            self.edisgo.timeseries.loads_reactive_power.loc[
+                :, "Load_agricultural_LVGrid_1_3"
+            ]
+            == dummy_ts_1
+        ).all()
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 1)
-        assert ("Dummy_storage_1" not in
-                self.edisgo.timeseries.storage_units_reactive_power.columns)
+        assert (
+            "Dummy_storage_1"
+            not in self.edisgo.timeseries.storage_units_reactive_power.columns
+        )
 
     def test_worst_case_generators(self):
 
         # ######### check both feed-in and load case
         df = assign_voltage_level_to_component(
-            self.edisgo.topology.generators_df, self.edisgo.topology.buses_df)
+            self.edisgo.topology.generators_df, self.edisgo.topology.buses_df
+        )
         p_ts, q_ts = self.edisgo.timeseries._worst_case_generators(
-            cases=["feed-in_case", "load_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["feed-in_case", "load_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -254,7 +339,7 @@ class TestTimeSeries:
         comp = "Generator_1"  # gas, mv
         p_nom = 0.775
         exp = pd.Series(
-            data=[1. * p_nom, 1. * p_nom, 0., 0.],
+            data=[1.0 * p_nom, 1.0 * p_nom, 0.0, 0.0],
             name=comp,
             index=index,
         )
@@ -265,7 +350,7 @@ class TestTimeSeries:
         comp = "GeneratorFluctuating_2"  # wind, mv
         p_nom = 2.3
         exp = pd.Series(
-            data=[1. * p_nom, 1. * p_nom, 0., 0.],
+            data=[1.0 * p_nom, 1.0 * p_nom, 0.0, 0.0],
             name=comp,
             index=index,
         )
@@ -276,7 +361,7 @@ class TestTimeSeries:
         comp = "GeneratorFluctuating_3"  # solar, mv
         p_nom = 2.67
         exp = pd.Series(
-            data=[0.85 * p_nom, 0.85 * p_nom, 0., 0.],
+            data=[0.85 * p_nom, 0.85 * p_nom, 0.0, 0.0],
             name=comp,
             index=index,
         )
@@ -287,7 +372,7 @@ class TestTimeSeries:
         comp = "GeneratorFluctuating_20"  # solar, lv
         p_nom = 0.005
         exp = pd.Series(
-            data=[0.85 * p_nom, 0.85 * p_nom, 0., 0.],
+            data=[0.85 * p_nom, 0.85 * p_nom, 0.0, 0.0],
             name=comp,
             index=index,
         )
@@ -297,14 +382,14 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "Generator_1", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at["Generator_1", "type"]
+            == "fixed_cosphi"
+        )
 
         # ########### test for only feed-in case
         p_ts, q_ts = self.edisgo.timeseries._worst_case_generators(
-            cases=["feed-in_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["feed-in_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -316,7 +401,7 @@ class TestTimeSeries:
         comp = "GeneratorFluctuating_2"  # wind, mv
         p_nom = 2.3
         exp = pd.Series(
-            data=[1. * p_nom, 1. * p_nom],
+            data=[1.0 * p_nom, 1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -326,14 +411,16 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "GeneratorFluctuating_2", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at[
+                "GeneratorFluctuating_2", "type"
+            ]
+            == "fixed_cosphi"
+        )
 
         # ########### test for only load case
         p_ts, q_ts = self.edisgo.timeseries._worst_case_generators(
-            cases=["load_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["load_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -344,7 +431,7 @@ class TestTimeSeries:
         index = ["load_case_mv", "load_case_lv"]
         comp = "GeneratorFluctuating_20"  # solar, lv
         exp = pd.Series(
-            data=[0., 0.],
+            data=[0.0, 0.0],
             name=comp,
             index=index,
         )
@@ -354,8 +441,12 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "GeneratorFluctuating_20", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at[
+                "GeneratorFluctuating_20", "type"
+            ]
+            == "fixed_cosphi"
+        )
 
         # ########## test error raising in case of missing load/generator parameter
 
@@ -363,24 +454,22 @@ class TestTimeSeries:
         df.at[comp, "type"] = None
         with pytest.raises(AttributeError):
             self.edisgo.timeseries._worst_case_generators(
-                cases=["load_case"],
-                df=df,
-                configs=self.edisgo.config
+                cases=["load_case"], df=df, configs=self.edisgo.config
             )
 
     def test_worst_case_conventional_load(self):
 
         # connect one load to MV
         self.edisgo.topology._loads_df.at[
-            "Load_agricultural_LVGrid_1_1", "bus"] = "Bus_BranchTee_MVGrid_1_2"
+            "Load_agricultural_LVGrid_1_1", "bus"
+        ] = "Bus_BranchTee_MVGrid_1_2"
 
         # ######### check both feed-in and load case
         df = assign_voltage_level_to_component(
-            self.edisgo.topology.loads_df, self.edisgo.topology.buses_df)
+            self.edisgo.topology.loads_df, self.edisgo.topology.buses_df
+        )
         p_ts, q_ts = self.edisgo.timeseries._worst_case_conventional_load(
-            cases=["feed-in_case", "load_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["feed-in_case", "load_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -393,7 +482,7 @@ class TestTimeSeries:
         comp = "Load_agricultural_LVGrid_1_1"  # mv
         p_nom = 0.0523
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 1. * p_nom, 1. * p_nom],
+            data=[0.15 * p_nom, 0.1 * p_nom, 1.0 * p_nom, 1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -404,7 +493,7 @@ class TestTimeSeries:
         comp = "Load_agricultural_LVGrid_8_1"  # lv
         p_nom = 0.0478
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 1. * p_nom, 1. * p_nom],
+            data=[0.15 * p_nom, 0.1 * p_nom, 1.0 * p_nom, 1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -414,14 +503,16 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "Load_agricultural_LVGrid_8_1", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at[
+                "Load_agricultural_LVGrid_8_1", "type"
+            ]
+            == "fixed_cosphi"
+        )
 
         # ########### test for only feed-in case
         p_ts, q_ts = self.edisgo.timeseries._worst_case_conventional_load(
-            cases=["feed-in_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["feed-in_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -443,14 +534,16 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "Load_agricultural_LVGrid_8_1", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at[
+                "Load_agricultural_LVGrid_8_1", "type"
+            ]
+            == "fixed_cosphi"
+        )
 
         # ########### test for only load case
         p_ts, q_ts = self.edisgo.timeseries._worst_case_conventional_load(
-            cases=["load_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["load_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -462,7 +555,7 @@ class TestTimeSeries:
         comp = "Load_agricultural_LVGrid_1_1"  # mv
         p_nom = 0.0523
         exp = pd.Series(
-            data=[1. * p_nom, 1. * p_nom],
+            data=[1.0 * p_nom, 1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -472,8 +565,12 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "Load_agricultural_LVGrid_1_1", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at[
+                "Load_agricultural_LVGrid_1_1", "type"
+            ]
+            == "fixed_cosphi"
+        )
 
         # ########## test error raising in case of missing load/generator parameter
 
@@ -481,32 +578,35 @@ class TestTimeSeries:
         df.at[comp, "voltage_level"] = None
         with pytest.raises(AttributeError):
             self.edisgo.timeseries._worst_case_conventional_load(
-                cases=["load_case"],
-                df=df,
-                configs=self.edisgo.config
+                cases=["load_case"], df=df, configs=self.edisgo.config
             )
 
     def test_worst_case_charging_points(self):
         # add charging points to MV and LV
         df_cp = pd.DataFrame(
             {
-                "bus": ["Bus_BranchTee_MVGrid_1_2", "Bus_BranchTee_MVGrid_1_2",
-                        "Bus_BranchTee_LVGrid_1_5", "Bus_BranchTee_LVGrid_1_5"],
+                "bus": [
+                    "Bus_BranchTee_MVGrid_1_2",
+                    "Bus_BranchTee_MVGrid_1_2",
+                    "Bus_BranchTee_LVGrid_1_5",
+                    "Bus_BranchTee_LVGrid_1_5",
+                ],
                 "p_nom": [0.1, 0.2, 0.3, 0.4],
-                "type": ["charging_point", "charging_point",
-                         "charging_point", "charging_point"],
+                "type": [
+                    "charging_point",
+                    "charging_point",
+                    "charging_point",
+                    "charging_point",
+                ],
                 "sector": ["hpc", "public", "home", "work"],
             },
-            index=["CP1", "CP2", "CP3", "CP4"]
+            index=["CP1", "CP2", "CP3", "CP4"],
         )
 
         # ######### check both feed-in and load case
-        df = assign_voltage_level_to_component(
-            df_cp, self.edisgo.topology.buses_df)
+        df = assign_voltage_level_to_component(df_cp, self.edisgo.topology.buses_df)
         p_ts, q_ts = self.edisgo.timeseries._worst_case_charging_points(
-            cases=["feed-in_case", "load_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["feed-in_case", "load_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -519,7 +619,7 @@ class TestTimeSeries:
         comp = "CP1"  # mv, hpc
         p_nom = 0.1
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 1. * p_nom, 1. * p_nom],
+            data=[0.15 * p_nom, 0.1 * p_nom, 1.0 * p_nom, 1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -530,7 +630,7 @@ class TestTimeSeries:
         comp = "CP2"  # mv, public
         p_nom = 0.2
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 1. * p_nom, 1. * p_nom],
+            data=[0.15 * p_nom, 0.1 * p_nom, 1.0 * p_nom, 1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -541,7 +641,7 @@ class TestTimeSeries:
         comp = "CP3"  # lv, home
         p_nom = 0.3
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 0.3 * p_nom, 1. * p_nom],
+            data=[0.15 * p_nom, 0.1 * p_nom, 0.3 * p_nom, 1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -552,7 +652,7 @@ class TestTimeSeries:
         comp = "CP4"  # lv, work
         p_nom = 0.4
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 0.3 * p_nom, 1. * p_nom],
+            data=[0.15 * p_nom, 0.1 * p_nom, 0.3 * p_nom, 1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -562,14 +662,14 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "CP4", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at["CP4", "type"]
+            == "fixed_cosphi"
+        )
 
         # ########### test for only feed-in case
         p_ts, q_ts = self.edisgo.timeseries._worst_case_charging_points(
-            cases=["feed-in_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["feed-in_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -591,14 +691,14 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "CP3", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at["CP3", "type"]
+            == "fixed_cosphi"
+        )
 
         # ########### test for only load case
         p_ts, q_ts = self.edisgo.timeseries._worst_case_charging_points(
-            cases=["load_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["load_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -610,7 +710,7 @@ class TestTimeSeries:
         comp = "CP2"  # mv, public
         p_nom = 0.2
         exp = pd.Series(
-            data=[1. * p_nom, 1. * p_nom],
+            data=[1.0 * p_nom, 1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -620,8 +720,10 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "CP2", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at["CP2", "type"]
+            == "fixed_cosphi"
+        )
 
         # ########## test error raising in case of missing load/generator parameter
 
@@ -629,9 +731,7 @@ class TestTimeSeries:
         df.at[comp, "voltage_level"] = None
         with pytest.raises(AttributeError):
             self.edisgo.timeseries._worst_case_charging_points(
-                cases=["load_case"],
-                df=df,
-                configs=self.edisgo.config
+                cases=["load_case"], df=df, configs=self.edisgo.config
             )
 
     def test_worst_case_heat_pumps(self):
@@ -640,18 +740,15 @@ class TestTimeSeries:
             {
                 "bus": ["Bus_BranchTee_MVGrid_1_2", "Bus_BranchTee_LVGrid_1_5"],
                 "p_nom": [0.1, 0.2],
-                "type": ["heat_pump", "heat_pump"]
+                "type": ["heat_pump", "heat_pump"],
             },
-            index=["HP1", "HP2"]
+            index=["HP1", "HP2"],
         )
 
         # ######### check both feed-in and load case
-        df = assign_voltage_level_to_component(
-            df_hp, self.edisgo.topology.buses_df)
+        df = assign_voltage_level_to_component(df_hp, self.edisgo.topology.buses_df)
         p_ts, q_ts = self.edisgo.timeseries._worst_case_heat_pumps(
-            cases=["feed-in_case", "load_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["feed-in_case", "load_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -664,7 +761,7 @@ class TestTimeSeries:
         comp = "HP1"  # mv
         p_nom = 0.1
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 0.9 * p_nom, 1. * p_nom],
+            data=[0.15 * p_nom, 0.1 * p_nom, 0.9 * p_nom, 1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -675,7 +772,7 @@ class TestTimeSeries:
         comp = "HP2"  # lv
         p_nom = 0.2
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 0.9 * p_nom, 1. * p_nom],
+            data=[0.15 * p_nom, 0.1 * p_nom, 0.9 * p_nom, 1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -685,14 +782,14 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "HP1", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at["HP1", "type"]
+            == "fixed_cosphi"
+        )
 
         # ########### test for only feed-in case
         p_ts, q_ts = self.edisgo.timeseries._worst_case_heat_pumps(
-            cases=["feed-in_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["feed-in_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -714,14 +811,14 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "HP2", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at["HP2", "type"]
+            == "fixed_cosphi"
+        )
 
         # ########### test for only load case
         p_ts, q_ts = self.edisgo.timeseries._worst_case_heat_pumps(
-            cases=["load_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["load_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -733,7 +830,7 @@ class TestTimeSeries:
         comp = "HP1"  # mv
         p_nom = 0.1
         exp = pd.Series(
-            data=[0.9 * p_nom, 1. * p_nom],
+            data=[0.9 * p_nom, 1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -743,8 +840,10 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "HP1", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at["HP1", "type"]
+            == "fixed_cosphi"
+        )
 
         # ########## test error raising in case of missing load/generator parameter
 
@@ -752,20 +851,17 @@ class TestTimeSeries:
         df.at[comp, "voltage_level"] = None
         with pytest.raises(AttributeError):
             self.edisgo.timeseries._worst_case_heat_pumps(
-                cases=["load_case"],
-                df=df,
-                configs=self.edisgo.config
+                cases=["load_case"], df=df, configs=self.edisgo.config
             )
 
     def test_worst_case_storage_units(self):
 
         # ######### check both feed-in and load case
         df = assign_voltage_level_to_component(
-            self.edisgo.topology.storage_units_df, self.edisgo.topology.buses_df)
+            self.edisgo.topology.storage_units_df, self.edisgo.topology.buses_df
+        )
         p_ts, q_ts = self.edisgo.timeseries._worst_case_storage_units(
-            cases=["feed-in_case", "load_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["feed-in_case", "load_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -778,7 +874,7 @@ class TestTimeSeries:
         comp = "Storage_1"
         p_nom = 0.4
         exp = pd.Series(
-            data=[1. * p_nom, 1. * p_nom, -1. * p_nom, -1. * p_nom],
+            data=[1.0 * p_nom, 1.0 * p_nom, -1.0 * p_nom, -1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -788,14 +884,14 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "Storage_1", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at["Storage_1", "type"]
+            == "fixed_cosphi"
+        )
 
         # ########### test for only feed-in case
         p_ts, q_ts = self.edisgo.timeseries._worst_case_storage_units(
-            cases=["feed-in_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["feed-in_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -807,7 +903,7 @@ class TestTimeSeries:
         comp = "Storage_1"
         p_nom = 0.4
         exp = pd.Series(
-            data=[1. * p_nom, 1. * p_nom],
+            data=[1.0 * p_nom, 1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -817,14 +913,14 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "Storage_1", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at["Storage_1", "type"]
+            == "fixed_cosphi"
+        )
 
         # ########### test for only load case
         p_ts, q_ts = self.edisgo.timeseries._worst_case_storage_units(
-            cases=["load_case"],
-            df=df,
-            configs=self.edisgo.config
+            cases=["load_case"], df=df, configs=self.edisgo.config
         )
 
         # check shape
@@ -836,7 +932,7 @@ class TestTimeSeries:
         comp = "Storage_1"
         p_nom = 0.4
         exp = pd.Series(
-            data=[-1. * p_nom, -1. * p_nom],
+            data=[-1.0 * p_nom, -1.0 * p_nom],
             name=comp,
             index=index,
         )
@@ -846,8 +942,10 @@ class TestTimeSeries:
 
         # check TimeSeriesRaw
         assert len(self.edisgo.timeseries.time_series_raw.q_control) == len(df)
-        assert self.edisgo.timeseries.time_series_raw.q_control.at[
-                   "Storage_1", "type"] == "fixed_cosphi"
+        assert (
+            self.edisgo.timeseries.time_series_raw.q_control.at["Storage_1", "type"]
+            == "fixed_cosphi"
+        )
 
         # ########## test error raising in case of missing load/generator parameter
 
@@ -855,9 +953,7 @@ class TestTimeSeries:
         df.at[comp, "voltage_level"] = None
         with pytest.raises(AttributeError):
             self.edisgo.timeseries._worst_case_storage_units(
-                cases=["load_case"],
-                df=df,
-                configs=self.edisgo.config
+                cases=["load_case"], df=df, configs=self.edisgo.config
             )
 
     def test_predefined_fluctuating_generators_by_technology(self):
@@ -966,7 +1062,6 @@ class TestTimeSeries:
 
 
 class TestTimeSeriesRaw:
-
     def test_reduce_memory(self):
         # ToDo implement
         pass
@@ -981,7 +1076,6 @@ class TestTimeSeriesRaw:
 
 
 class TestTimeSeriesHelperFunctions:
-
     def test_drop_component_time_series(self):
         # ToDo implement
         pass
@@ -1029,7 +1123,9 @@ class TestTimeSeriesHelperFunctions:
         # # test drop storage units timeseries
         # assert hasattr(self.timeseries.storage_units_active_power, storage_1)
         # assert hasattr(self.timeseries.storage_units_reactive_power, storage_1)
-        # timeseries._drop_existing_component_timeseries(self, "storage_units", storage_1)
+        # timeseries._drop_existing_component_timeseries(
+        # self, "storage_units", storage_1
+        # )
         # with pytest.raises(KeyError):
         #     self.timeseries.storage_units_active_power.loc[timeindex, storage_1]
         # with pytest.raises(KeyError):

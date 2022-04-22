@@ -4,8 +4,8 @@ import os
 
 import pandas as pd
 
-from edisgo.io import timeseries_import
 from edisgo.flex_opt import q_control
+from edisgo.io import timeseries_import
 from edisgo.tools.tools import (
     assign_voltage_level_to_component,
     get_weather_cells_intersecting_with_grid_district,
@@ -97,7 +97,7 @@ class TimeSeries:
         """
         try:
             return self._generators_active_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @generators_active_power.setter
@@ -125,7 +125,7 @@ class TimeSeries:
         """
         try:
             return self._generators_reactive_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @generators_reactive_power.setter
@@ -153,7 +153,7 @@ class TimeSeries:
         """
         try:
             return self._loads_active_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @loads_active_power.setter
@@ -181,7 +181,7 @@ class TimeSeries:
         """
         try:
             return self._loads_reactive_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @loads_reactive_power.setter
@@ -209,7 +209,7 @@ class TimeSeries:
         """
         try:
             return self._storage_units_active_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @storage_units_active_power.setter
@@ -237,7 +237,7 @@ class TimeSeries:
         """
         try:
             return self._storage_units_reactive_power.loc[self.timeindex, :]
-        except:
+        except Exception:
             return pd.DataFrame(index=self.timeindex)
 
     @storage_units_reactive_power.setter
@@ -257,8 +257,9 @@ class TimeSeries:
         self.storage_units_active_power = None
         self.time_series_raw = TimeSeriesRaw()
 
-    def set_active_power_manual(self, edisgo_object, ts_generators=None, ts_loads=None,
-                                ts_storage_units=None):
+    def set_active_power_manual(
+        self, edisgo_object, ts_generators=None, ts_loads=None, ts_storage_units=None
+    ):
         """
         Sets given component active power time series.
 
@@ -281,11 +282,17 @@ class TimeSeries:
             time series for.
 
         """
-        self._set_manual(edisgo_object, "active", ts_generators=ts_generators,
-                         ts_loads=ts_loads, ts_storage_units=ts_storage_units)
+        self._set_manual(
+            edisgo_object,
+            "active",
+            ts_generators=ts_generators,
+            ts_loads=ts_loads,
+            ts_storage_units=ts_storage_units,
+        )
 
-    def set_reactive_power_manual(self, edisgo_object, ts_generators=None,
-                                  ts_loads=None, ts_storage_units=None):
+    def set_reactive_power_manual(
+        self, edisgo_object, ts_generators=None, ts_loads=None, ts_storage_units=None
+    ):
         """
         Sets given component reactive power time series.
 
@@ -308,11 +315,22 @@ class TimeSeries:
             set time series for.
 
         """
-        self._set_manual(edisgo_object, "reactive", ts_generators=ts_generators,
-                         ts_loads=ts_loads, ts_storage_units=ts_storage_units)
+        self._set_manual(
+            edisgo_object,
+            "reactive",
+            ts_generators=ts_generators,
+            ts_loads=ts_loads,
+            ts_storage_units=ts_storage_units,
+        )
 
-    def _set_manual(self, edisgo_object, mode, ts_generators=None, ts_loads=None,
-                    ts_storage_units=None):
+    def _set_manual(
+        self,
+        edisgo_object,
+        mode,
+        ts_generators=None,
+        ts_loads=None,
+        ts_storage_units=None,
+    ):
         """
         Sets given component time series.
 
@@ -342,25 +360,25 @@ class TimeSeries:
             # check if all generators time series are provided for exist in the network
             # and only set time series for those that do
             comps_in_network = _check_if_components_exist(
-                edisgo_object, ts_generators.columns, "generators")
+                edisgo_object, ts_generators.columns, "generators"
+            )
             ts_generators = ts_generators.loc[:, comps_in_network]
 
             # drop generators time series from self.generators_(re)active_power that may
             # already exist for some of the given generators
             df_name = "generators_{}_power".format(mode)
             drop_component_time_series(
-                obj=self, df_name=df_name,
-                comp_names=ts_generators.columns
+                obj=self, df_name=df_name, comp_names=ts_generators.columns
             )
             # set (re)active power
-            _add_component_time_series(obj=self, df_name=df_name,
-                                       ts_new=ts_generators)
+            _add_component_time_series(obj=self, df_name=df_name, ts_new=ts_generators)
 
         if ts_loads is not None:
             # check if all loads time series are provided for exist in the network
             # and only set time series for those that do
             comps_in_network = _check_if_components_exist(
-                edisgo_object, ts_loads.columns, "loads")
+                edisgo_object, ts_loads.columns, "loads"
+            )
             ts_loads = ts_loads.loc[:, comps_in_network]
 
             # drop load time series from self.loads_(re)active_power that may
@@ -370,26 +388,26 @@ class TimeSeries:
                 obj=self, df_name=df_name, comp_names=ts_loads.columns
             )
             # set (re)active power
-            _add_component_time_series(obj=self, df_name=df_name,
-                                       ts_new=ts_loads)
+            _add_component_time_series(obj=self, df_name=df_name, ts_new=ts_loads)
 
         if ts_storage_units is not None:
             # check if all storage units time series are provided for exist in the
             # network and only set time series for those that do
             comps_in_network = _check_if_components_exist(
-                edisgo_object, ts_storage_units.columns, "storage_units")
+                edisgo_object, ts_storage_units.columns, "storage_units"
+            )
             ts_storage_units = ts_storage_units.loc[:, comps_in_network]
 
             # drop storage unit time series from self.storage_units_(re)active_power
             # that may already exist for some of the given storage units
             df_name = "storage_units_{}_power".format(mode)
             drop_component_time_series(
-                obj=self, df_name=df_name,
-                comp_names=ts_storage_units.columns
+                obj=self, df_name=df_name, comp_names=ts_storage_units.columns
             )
             # set (re)active power
-            _add_component_time_series(obj=self, df_name=df_name,
-                                       ts_new=ts_storage_units)
+            _add_component_time_series(
+                obj=self, df_name=df_name, ts_new=ts_storage_units
+            )
 
     def set_worst_case(self, edisgo_object, cases):
         """
@@ -516,21 +534,19 @@ class TimeSeries:
         self.reset()
 
         # create a mapping from worst case cases to time stamps needed for pypsa
-        worst_cases = ["_".join(case) for case in itertools.product(
-            cases, ["mv", "lv"])]
-        time_stamps = pd.date_range(
-            "1/1/1970", periods=len(worst_cases), freq="H"
-        )
+        worst_cases = [
+            "_".join(case) for case in itertools.product(cases, ["mv", "lv"])
+        ]
+        time_stamps = pd.date_range("1/1/1970", periods=len(worst_cases), freq="H")
         self.timeindex_worst_cases = pd.Series(time_stamps, index=worst_cases)
         self.timeindex = time_stamps
 
         if not edisgo_object.topology.generators_df.empty:
             # assign voltage level for reactive power
             df = assign_voltage_level_to_component(
-                edisgo_object.topology.generators_df, edisgo_object.topology.buses_df)
-            p, q = self._worst_case_generators(
-                cases, df, edisgo_object.config
+                edisgo_object.topology.generators_df, edisgo_object.topology.buses_df
             )
+            p, q = self._worst_case_generators(cases, df, edisgo_object.config)
             # change index and set p and q
             self.generators_active_power = p.rename(index=self.timeindex_worst_cases)
             self.generators_reactive_power = q.rename(index=self.timeindex_worst_cases)
@@ -538,12 +554,13 @@ class TimeSeries:
         if not edisgo_object.topology.loads_df.empty:
             # assign voltage level for reactive power
             df = assign_voltage_level_to_component(
-                edisgo_object.topology.loads_df, edisgo_object.topology.buses_df)
+                edisgo_object.topology.loads_df, edisgo_object.topology.buses_df
+            )
             # conventional loads
             df_tmp = df[df.type == "conventional_load"]
             if not df_tmp.empty:
                 p, q = self._worst_case_conventional_load(
-                        cases, df_tmp, edisgo_object.config
+                    cases, df_tmp, edisgo_object.config
                 )
                 # change index and set p and q
                 self.loads_active_power = p.rename(index=self.timeindex_worst_cases)
@@ -558,34 +575,29 @@ class TimeSeries:
                 p = p.rename(index=self.timeindex_worst_cases)
                 q = q.rename(index=self.timeindex_worst_cases)
                 self.loads_active_power = pd.concat(
-                    [self.loads_active_power, p],
-                    axis=1
+                    [self.loads_active_power, p], axis=1
                 )
                 self.loads_reactive_power = pd.concat(
-                    [self.loads_reactive_power, q],
-                    axis=1
+                    [self.loads_reactive_power, q], axis=1
                 )
             # heat pumps
             df_tmp = df[df.type == "heat_pump"]
             if not df_tmp.empty:
-                p, q = self._worst_case_heat_pumps(
-                    cases, df_tmp, edisgo_object.config
-                )
+                p, q = self._worst_case_heat_pumps(cases, df_tmp, edisgo_object.config)
                 # change index and set p and q
                 p = p.rename(index=self.timeindex_worst_cases)
                 q = q.rename(index=self.timeindex_worst_cases)
                 self.loads_active_power = pd.concat(
-                    [self.loads_active_power, p],
-                    axis=1
+                    [self.loads_active_power, p], axis=1
                 )
                 self.loads_reactive_power = pd.concat(
-                    [self.loads_reactive_power, q],
-                    axis=1
+                    [self.loads_reactive_power, q], axis=1
                 )
             # check if there are loads without time series remaining and if so, handle
             # them as conventional loads
             loads_without_ts = list(
-                set(df.index) - set(self.loads_active_power.columns))
+                set(df.index) - set(self.loads_active_power.columns)
+            )
             if len(loads_without_ts) > 0:
                 logging.warning(
                     "There are loads where information on type of load is missing. "
@@ -596,31 +608,28 @@ class TimeSeries:
                     "loads: {}.".format(loads_without_ts)
                 )
                 p, q = self._worst_case_conventional_load(
-                        cases, df.loc[loads_without_ts, :], edisgo_object.config
+                    cases, df.loc[loads_without_ts, :], edisgo_object.config
                 )
                 # change index and set p and q
                 p = p.rename(index=self.timeindex_worst_cases)
                 q = q.rename(index=self.timeindex_worst_cases)
                 self.loads_active_power = pd.concat(
-                    [self.loads_active_power, p],
-                    axis=1
+                    [self.loads_active_power, p], axis=1
                 )
                 self.loads_reactive_power = pd.concat(
-                    [self.loads_reactive_power, q],
-                    axis=1
+                    [self.loads_reactive_power, q], axis=1
                 )
         if not edisgo_object.topology.storage_units_df.empty:
             # assign voltage level for reactive power
             df = assign_voltage_level_to_component(
-                edisgo_object.topology.storage_units_df,
-                edisgo_object.topology.buses_df)
-            p, q = self._worst_case_storage_units(
-                    cases, df, edisgo_object.config
+                edisgo_object.topology.storage_units_df, edisgo_object.topology.buses_df
             )
+            p, q = self._worst_case_storage_units(cases, df, edisgo_object.config)
             # change index and set p and q
             self.storage_units_active_power = p.rename(index=self.timeindex_worst_cases)
             self.storage_units_reactive_power = q.rename(
-                index=self.timeindex_worst_cases)
+                index=self.timeindex_worst_cases
+            )
 
     def _worst_case_generators(self, cases, df, configs):
         """
@@ -657,7 +666,8 @@ class TimeSeries:
             raise AttributeError(
                 "The following generators have missing information on "
                 "nominal power, technology type or voltage level: {}.".format(
-                    check[check].index.values)
+                    check[check].index.values
+                )
             )
 
         # active power
@@ -669,44 +679,53 @@ class TimeSeries:
         power_scaling = pd.DataFrame(columns=types)
         for t in types:
             for case in cases:
-                power_scaling.at["{}_{}".format(case, "mv"), t] = (
-                    worst_case_scale_factors[
-                        "{}_feed-in_{}".format(case, t)]
-                )
+                power_scaling.at[
+                    "{}_{}".format(case, "mv"), t
+                ] = worst_case_scale_factors["{}_feed-in_{}".format(case, t)]
                 power_scaling.at["{}_{}".format(case, "lv"), t] = power_scaling.at[
-                    "{}_{}".format(case, "mv"), t]
+                    "{}_{}".format(case, "mv"), t
+                ]
         # calculate active power of generators
         active_power = pd.concat(
-            [power_scaling.pv.to_frame("p_nom").dot(
-                df[df.type == "solar"].loc[:, ["p_nom"]].T),
-             power_scaling.wind.to_frame("p_nom").dot(
-                 df[df.type == "wind"].loc[:, ["p_nom"]].T),
+            [
+                power_scaling.pv.to_frame("p_nom").dot(
+                    df[df.type == "solar"].loc[:, ["p_nom"]].T
+                ),
+                power_scaling.wind.to_frame("p_nom").dot(
+                    df[df.type == "wind"].loc[:, ["p_nom"]].T
+                ),
                 power_scaling.other.to_frame("p_nom").dot(
-                    df[~df.type.isin(["solar", "wind"])].loc[:, ["p_nom"]].T)
-             ], axis=1
+                    df[~df.type.isin(["solar", "wind"])].loc[:, ["p_nom"]].T
+                ),
+            ],
+            axis=1,
         )
 
         # reactive power
         # get worst case configurations for each generator
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "generators", configs)
+            df, "generators", configs
+        )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "generators", configs)
+            df, "generators", configs
+        )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
-        self.time_series_raw.q_control = pd.concat([
-            self.time_series_raw.q_control,
-            pd.DataFrame(
-                index=df.index,
-                data={"type": "fixed_cosphi",
-                      "q_sign": q_sign,
-                      "power_factor": power_factor
-                      }
-            )]
+        self.time_series_raw.q_control = pd.concat(
+            [
+                self.time_series_raw.q_control,
+                pd.DataFrame(
+                    index=df.index,
+                    data={
+                        "type": "fixed_cosphi",
+                        "q_sign": q_sign,
+                        "power_factor": power_factor,
+                    },
+                ),
+            ]
         )
         # calculate reactive power of generators
-        reactive_power = q_control.fixed_cosphi(
-            active_power, q_sign, power_factor)
+        reactive_power = q_control.fixed_cosphi(active_power, q_sign, power_factor)
         return active_power, reactive_power
 
     def _worst_case_conventional_load(self, cases, df, configs):
@@ -744,7 +763,8 @@ class TimeSeries:
             raise AttributeError(
                 "The following loads have missing information on "
                 "grid connection power or voltage level: {}.".format(
-                    check[check].index.values)
+                    check[check].index.values
+                )
             )
 
         # active power
@@ -754,35 +774,37 @@ class TimeSeries:
         power_scaling = pd.Series()
         for case in cases:
             for voltage_level in ["mv", "lv"]:
-                power_scaling.at["{}_{}".format(case, voltage_level)] = (
-                    worst_case_scale_factors[
-                        "{}_{}_load".format(voltage_level, case)]
-                )
+                power_scaling.at[
+                    "{}_{}".format(case, voltage_level)
+                ] = worst_case_scale_factors["{}_{}_load".format(voltage_level, case)]
         # calculate active power of loads
-        active_power = power_scaling.to_frame("p_nom").dot(
-            df.loc[:, ["p_nom"]].T)
+        active_power = power_scaling.to_frame("p_nom").dot(df.loc[:, ["p_nom"]].T)
 
         # reactive power
         # get worst case configurations for each load
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "loads", configs)
+            df, "loads", configs
+        )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "loads", configs)
+            df, "loads", configs
+        )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
-        self.time_series_raw.q_control = pd.concat([
-            self.time_series_raw.q_control,
-            pd.DataFrame(
-                index=df.index,
-                data={"type": "fixed_cosphi",
-                      "q_sign": q_sign,
-                      "power_factor": power_factor
-                      }
-            )]
+        self.time_series_raw.q_control = pd.concat(
+            [
+                self.time_series_raw.q_control,
+                pd.DataFrame(
+                    index=df.index,
+                    data={
+                        "type": "fixed_cosphi",
+                        "q_sign": q_sign,
+                        "power_factor": power_factor,
+                    },
+                ),
+            ]
         )
         # calculate reactive power of loads
-        reactive_power = q_control.fixed_cosphi(
-            active_power, q_sign, power_factor)
+        reactive_power = q_control.fixed_cosphi(active_power, q_sign, power_factor)
         return active_power, reactive_power
 
     def _worst_case_charging_points(self, cases, df, configs):
@@ -820,7 +842,8 @@ class TimeSeries:
             raise AttributeError(
                 "The following charging points have missing information on "
                 "nominal power, use case or voltage level: {}.".format(
-                    check[check].index.values)
+                    check[check].index.values
+                )
             )
         # check that there is no invalid sector (only "home", "work", "public", and
         # "hpc" allowed)
@@ -831,7 +854,8 @@ class TimeSeries:
             raise AttributeError(
                 "The following charging points have a use case no worst case "
                 "simultaneity factor is defined for: {}.".format(
-                    df[df.sector.isin(diff)].index.values)
+                    df[df.sector.isin(diff)].index.values
+                )
             )
 
         # active power
@@ -843,38 +867,47 @@ class TimeSeries:
         for s in sectors:
             for case in cases:
                 for voltage_level in ["mv", "lv"]:
-                    power_scaling.at["{}_{}".format(case, voltage_level), s] = (
-                        worst_case_scale_factors[
-                            "{}_{}_cp_{}".format(voltage_level, case, s)]
-                    )
+                    power_scaling.at[
+                        "{}_{}".format(case, voltage_level), s
+                    ] = worst_case_scale_factors[
+                        "{}_{}_cp_{}".format(voltage_level, case, s)
+                    ]
         # calculate active power of charging points
         active_power = pd.concat(
-            [power_scaling.loc[:, s].to_frame("p_nom").dot(
-                 df[df.sector == s].loc[:, ["p_nom"]].T) for s in sectors
-             ], axis=1
+            [
+                power_scaling.loc[:, s]
+                .to_frame("p_nom")
+                .dot(df[df.sector == s].loc[:, ["p_nom"]].T)
+                for s in sectors
+            ],
+            axis=1,
         )
 
         # reactive power
         # get worst case configurations for each charging point
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "charging_points", configs)
+            df, "charging_points", configs
+        )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "charging_points", configs)
+            df, "charging_points", configs
+        )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
-        self.time_series_raw.q_control = pd.concat([
-            self.time_series_raw.q_control,
-            pd.DataFrame(
-                index=df.index,
-                data={"type": "fixed_cosphi",
-                      "q_sign": q_sign,
-                      "power_factor": power_factor
-                      }
-            )]
+        self.time_series_raw.q_control = pd.concat(
+            [
+                self.time_series_raw.q_control,
+                pd.DataFrame(
+                    index=df.index,
+                    data={
+                        "type": "fixed_cosphi",
+                        "q_sign": q_sign,
+                        "power_factor": power_factor,
+                    },
+                ),
+            ]
         )
         # calculate reactive power of charging points
-        reactive_power = q_control.fixed_cosphi(
-            active_power, q_sign, power_factor)
+        reactive_power = q_control.fixed_cosphi(active_power, q_sign, power_factor)
         return active_power, reactive_power
 
     def _worst_case_heat_pumps(self, cases, df, configs):
@@ -911,8 +944,7 @@ class TimeSeries:
         if check.any():
             raise AttributeError(
                 "The following heat pumps have missing information on "
-                "nominal power or voltage level: {}.".format(
-                    check[check].index.values)
+                "nominal power or voltage level: {}.".format(check[check].index.values)
             )
 
         # active power
@@ -922,34 +954,37 @@ class TimeSeries:
         power_scaling = pd.Series()
         for case in cases:
             for voltage_level in ["mv", "lv"]:
-                power_scaling.at["{}_{}".format(case, voltage_level)] = (
-                    worst_case_scale_factors[
-                        "{}_{}_hp".format(voltage_level, case)]
-                )
+                power_scaling.at[
+                    "{}_{}".format(case, voltage_level)
+                ] = worst_case_scale_factors["{}_{}_hp".format(voltage_level, case)]
         # calculate active power of heat pumps
         active_power = power_scaling.to_frame("p_nom").dot(df.loc[:, ["p_nom"]].T)
 
         # reactive power
         # get worst case configurations for each heat pump
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "heat_pumps", configs)
+            df, "heat_pumps", configs
+        )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "heat_pumps", configs)
+            df, "heat_pumps", configs
+        )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
-        self.time_series_raw.q_control = pd.concat([
-            self.time_series_raw.q_control,
-            pd.DataFrame(
-                index=df.index,
-                data={"type": "fixed_cosphi",
-                      "q_sign": q_sign,
-                      "power_factor": power_factor
-                      }
-            )]
+        self.time_series_raw.q_control = pd.concat(
+            [
+                self.time_series_raw.q_control,
+                pd.DataFrame(
+                    index=df.index,
+                    data={
+                        "type": "fixed_cosphi",
+                        "q_sign": q_sign,
+                        "power_factor": power_factor,
+                    },
+                ),
+            ]
         )
         # calculate reactive power of heat pumps
-        reactive_power = q_control.fixed_cosphi(
-            active_power, q_sign, power_factor)
+        reactive_power = q_control.fixed_cosphi(active_power, q_sign, power_factor)
         return active_power, reactive_power
 
     def _worst_case_storage_units(self, cases, df, configs):
@@ -986,8 +1021,7 @@ class TimeSeries:
         if check.any():
             raise AttributeError(
                 "The following storage units have missing information on "
-                "nominal power or voltage level: {}.".format(
-                    check[check].index.values)
+                "nominal power or voltage level: {}.".format(check[check].index.values)
             )
 
         # active power
@@ -996,41 +1030,45 @@ class TimeSeries:
         # get power scaling factors for different voltage levels and feed-in/load case
         power_scaling = pd.Series()
         for case in cases:
-            power_scaling.at["{}_{}".format(case, "mv")] = (
-                worst_case_scale_factors[
-                    "{}_storage".format(case)]
-            )
+            power_scaling.at["{}_{}".format(case, "mv")] = worst_case_scale_factors[
+                "{}_storage".format(case)
+            ]
             power_scaling.at["{}_{}".format(case, "lv")] = power_scaling.at[
-                "{}_{}".format(case, "mv")]
+                "{}_{}".format(case, "mv")
+            ]
         # calculate active power of loads
-        active_power = power_scaling.to_frame("p_nom").dot(
-            df.loc[:, ["p_nom"]].T)
+        active_power = power_scaling.to_frame("p_nom").dot(df.loc[:, ["p_nom"]].T)
 
         # reactive power
         # get worst case configurations for each load
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "storage_units", configs)
+            df, "storage_units", configs
+        )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "storage_units", configs)
+            df, "storage_units", configs
+        )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
-        self.time_series_raw.q_control = pd.concat([
-            self.time_series_raw.q_control,
-            pd.DataFrame(
-                index=df.index,
-                data={"type": "fixed_cosphi",
-                      "q_sign": q_sign,
-                      "power_factor": power_factor
-                      }
-            )]
+        self.time_series_raw.q_control = pd.concat(
+            [
+                self.time_series_raw.q_control,
+                pd.DataFrame(
+                    index=df.index,
+                    data={
+                        "type": "fixed_cosphi",
+                        "q_sign": q_sign,
+                        "power_factor": power_factor,
+                    },
+                ),
+            ]
         )
         # calculate reactive power of loads
-        reactive_power = q_control.fixed_cosphi(
-            active_power, q_sign, power_factor)
+        reactive_power = q_control.fixed_cosphi(active_power, q_sign, power_factor)
         return active_power, reactive_power
 
     def predefined_fluctuating_generators_by_technology(
-            self, edisgo_object, ts_generators, generator_names=None):
+        self, edisgo_object, ts_generators, generator_names=None
+    ):
         """
         Set active power feed-in time series for fluctuating generators by technology.
 
@@ -1085,9 +1123,11 @@ class TimeSeries:
         # in case time series from oedb are used, retrieve oedb time series
         if isinstance(ts_generators, str) and ts_generators == "oedb":
             weather_cell_ids = get_weather_cells_intersecting_with_grid_district(
-                edisgo_object)
+                edisgo_object
+            )
             ts_generators = timeseries_import.feedin_oedb(
-                edisgo_object.config, weather_cell_ids, self.timeindex)
+                edisgo_object.config, weather_cell_ids, self.timeindex
+            )
         elif not isinstance(ts_generators, pd.DataFrame):
             raise ValueError(
                 "'ts_generators' must either be a pandas DataFrame or 'oedb'."
@@ -1100,34 +1140,34 @@ class TimeSeries:
 
         # set generator_names if None
         if generator_names is None:
-            if isinstance(
-                    ts_generators.columns, pd.MultiIndex
-            ):
+            if isinstance(ts_generators.columns, pd.MultiIndex):
                 technologies = ts_generators.columns.levels[0].unique()
                 weather_cell_ids = ts_generators.columns.levels[1].unique()
                 generator_names = edisgo_object.topology.generators_df[
-                    (edisgo_object.topology.generators_df.type.isin(technologies)) &
-                    (edisgo_object.topology.generators_df.weather_cell_id.isin(
-                        weather_cell_ids))].index
+                    (edisgo_object.topology.generators_df.type.isin(technologies))
+                    & (
+                        edisgo_object.topology.generators_df.weather_cell_id.isin(
+                            weather_cell_ids
+                        )
+                    )
+                ].index
             else:
                 technologies = ts_generators.columns.unique()
                 generator_names = edisgo_object.topology.generators_df[
-                    edisgo_object.topology.generators_df.type.isin(
-                        technologies)].index
+                    edisgo_object.topology.generators_df.type.isin(technologies)
+                ].index
         generator_names = _check_if_components_exist(
-            edisgo_object, generator_names, "generators")
+            edisgo_object, generator_names, "generators"
+        )
         generators_df = edisgo_object.topology.generators_df.loc[generator_names, :]
 
         # drop existing time series
         drop_component_time_series(
-            obj=self, df_name="generators_active_power",
-            comp_names=generator_names
+            obj=self, df_name="generators_active_power", comp_names=generator_names
         )
 
         # scale time series by nominal power
-        if isinstance(
-                ts_generators.columns, pd.MultiIndex
-        ):
+        if isinstance(ts_generators.columns, pd.MultiIndex):
             ts_scaled = generators_df.apply(
                 lambda x: ts_generators[x.type][x.weather_cell_id].T * x.p_nom,
                 axis=1,
@@ -1148,7 +1188,8 @@ class TimeSeries:
             )
 
     def predefined_dispatchable_generators_by_technology(
-            self, edisgo_object, ts_generators, generator_names=None):
+        self, edisgo_object, ts_generators, generator_names=None
+    ):
         """
         Set active power feed-in time series for dispatchable generators by technology.
 
@@ -1173,9 +1214,7 @@ class TimeSeries:
 
         """
         if not isinstance(ts_generators, pd.DataFrame):
-            raise ValueError(
-                "'ts_generators' must be a pandas DataFrame."
-            )
+            raise ValueError("'ts_generators' must be a pandas DataFrame.")
 
         # write to TimeSeriesRaw
         self.time_series_raw.dispatchable_generators_active_power_by_technology = (
@@ -1186,26 +1225,27 @@ class TimeSeries:
         if generator_names is None:
             if "other" in ts_generators.columns:
                 generator_names = edisgo_object.topology.generators_df[
-                    ~edisgo_object.topology.generators_df.type.isin(
-                        ["solar", "wind"])].index
+                    ~edisgo_object.topology.generators_df.type.isin(["solar", "wind"])
+                ].index
             else:
                 generator_names = edisgo_object.topology.generators_df[
                     edisgo_object.topology.generators_df.type.isin(
-                        ts_generators.columns)].index
+                        ts_generators.columns
+                    )
+                ].index
         generator_names = _check_if_components_exist(
-            edisgo_object, generator_names, "generators")
+            edisgo_object, generator_names, "generators"
+        )
         generators_df = edisgo_object.topology.generators_df.loc[generator_names, :]
 
         # drop existing time series
         drop_component_time_series(
-            obj=self, df_name="generators_active_power",
-            comp_names=generator_names
+            obj=self, df_name="generators_active_power", comp_names=generator_names
         )
 
         # scale time series by nominal power
         ts_scaled = generators_df.apply(
-            lambda x: ts_generators[
-                          x.type] * x.p_nom
+            lambda x: ts_generators[x.type] * x.p_nom
             if x.type in ts_generators.columns
             else ts_generators["other"] * x.p_nom,
             axis=1,
@@ -1221,7 +1261,8 @@ class TimeSeries:
             )
 
     def predefined_conventional_loads_by_sector(
-            self, edisgo_object, ts_loads, load_names=None):
+        self, edisgo_object, ts_loads, load_names=None
+    ):
         """
         Set active power demand time series for conventional loads by sector.
 
@@ -1260,14 +1301,13 @@ class TimeSeries:
         """
         # in case time series from demandlib are used, retrieve demandlib time series
         if isinstance(ts_loads, str) and ts_loads == "demandlib":
-            ts_loads = \
-                timeseries_import.load_time_series_demandlib(
-                    edisgo_object.config,
-                    year=self.timeindex[0].year
-                )
+            ts_loads = timeseries_import.load_time_series_demandlib(
+                edisgo_object.config, year=self.timeindex[0].year
+            )
         elif not isinstance(ts_loads, pd.DataFrame):
             raise ValueError(
-                "'ts_loads' must either be a pandas DataFrame or 'demandlib'.")
+                "'ts_loads' must either be a pandas DataFrame or 'demandlib'."
+            )
 
         # write to TimeSeriesRaw
         self.time_series_raw.conventional_loads_active_power_by_sector = ts_loads
@@ -1276,14 +1316,14 @@ class TimeSeries:
         if load_names is None:
             sectors = ts_loads.columns.unique()
             load_names = edisgo_object.topology.loads_df[
-                edisgo_object.topology.loads_df.sector.isin(sectors)].index
+                edisgo_object.topology.loads_df.sector.isin(sectors)
+            ].index
         load_names = _check_if_components_exist(edisgo_object, load_names, "loads")
         loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
 
         # drop existing time series
         drop_component_time_series(
-            obj=self, df_name="loads_active_power",
-            comp_names=load_names
+            obj=self, df_name="loads_active_power", comp_names=load_names
         )
 
         # scale time series by annual consumption
@@ -1299,7 +1339,8 @@ class TimeSeries:
         )
 
     def predefined_charging_points_by_use_case(
-            self, edisgo_object, ts_loads, load_names=None):
+        self, edisgo_object, ts_loads, load_names=None
+    ):
         """
         Set active power demand time series for charging points by their use case.
 
@@ -1323,8 +1364,7 @@ class TimeSeries:
 
         """
         if not isinstance(ts_loads, pd.DataFrame):
-            raise ValueError(
-                "'ts_loads' must be a pandas DataFrame.")
+            raise ValueError("'ts_loads' must be a pandas DataFrame.")
 
         # write to TimeSeriesRaw
         self.time_series_raw.charging_points_active_power_by_use_case = ts_loads
@@ -1333,14 +1373,14 @@ class TimeSeries:
         if load_names is None:
             sectors = ts_loads.columns.unique()
             load_names = edisgo_object.topology.loads_df[
-                edisgo_object.topology.loads_df.sector.isin(sectors)].index
+                edisgo_object.topology.loads_df.sector.isin(sectors)
+            ].index
         load_names = _check_if_components_exist(edisgo_object, load_names, "loads")
         loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
 
         # drop existing time series
         drop_component_time_series(
-            obj=self, df_name="loads_active_power",
-            comp_names=load_names
+            obj=self, df_name="loads_active_power", comp_names=load_names
         )
 
         # scale time series by nominal power
@@ -1356,8 +1396,11 @@ class TimeSeries:
         )
 
     def fixed_cosphi(
-            self, edisgo_object, generators_parametrisation=None,
-            loads_parametrisation=None, storage_units_parametrisation=None
+        self,
+        edisgo_object,
+        generators_parametrisation=None,
+        loads_parametrisation=None,
+        storage_units_parametrisation=None,
     ):
         """
         Sets reactive power of specified components assuming a fixed power factor.
@@ -1407,27 +1450,32 @@ class TimeSeries:
             parameter `generators_parametrisation` apply.
 
         """
+
         def _get_q_sign_and_power_factor_per_component(
-                parametrisation, components_df, type, q_sign_func):
+            parametrisation, components_df, type, q_sign_func
+        ):
             # default configuration
-            if isinstance(parametrisation, str) and \
-                    parametrisation == "default":
+            if isinstance(parametrisation, str) and parametrisation == "default":
                 # get default parametrisation from config
                 df = assign_voltage_level_to_component(
-                    components_df,
-                    edisgo_object.topology.buses_df)
+                    components_df, edisgo_object.topology.buses_df
+                )
                 components_names = df.index
                 q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-                    df, type, edisgo_object.config)
+                    df, type, edisgo_object.config
+                )
                 power_factor = q_control._fixed_cosphi_default_power_factor(
-                    df, type, edisgo_object.config)
+                    df, type, edisgo_object.config
+                )
             # given configuration
             elif isinstance(parametrisation, pd.DataFrame):
                 # check if all given components exist in network and only use existing
-                components_names = list(itertools.chain.from_iterable(
-                    parametrisation.components))
+                components_names = list(
+                    itertools.chain.from_iterable(parametrisation.components)
+                )
                 components_names = _check_if_components_exist(
-                    edisgo_object, components_names, type)
+                    edisgo_object, components_names, type
+                )
                 # set up series with sign of reactive power and power factors
                 q_sign = pd.Series()
                 power_factor = pd.Series()
@@ -1439,31 +1487,31 @@ class TimeSeries:
                         if row["mode"] == "default":
                             df = assign_voltage_level_to_component(
                                 components_df.loc[comps, :],
-                                edisgo_object.topology.buses_df)
+                                edisgo_object.topology.buses_df,
+                            )
                             q_sign = q_sign.append(
                                 q_control._fixed_cosphi_default_reactive_power_sign(
-                                    df, type, edisgo_object.config)
+                                    df, type, edisgo_object.config
+                                )
                             )
                         else:
                             q_sign = q_sign.append(
-                                pd.Series(q_sign_func(row["mode"]),
-                                          index=comps
-                                          )
+                                pd.Series(q_sign_func(row["mode"]), index=comps)
                             )
                         # get power factor (default or given)
                         if row["power_factor"] == "default":
                             df = assign_voltage_level_to_component(
                                 components_df.loc[comps, :],
-                                edisgo_object.topology.buses_df)
+                                edisgo_object.topology.buses_df,
+                            )
                             power_factor = power_factor.append(
                                 q_control._fixed_cosphi_default_power_factor(
-                                    df, type, edisgo_object.config)
+                                    df, type, edisgo_object.config
+                                )
                             )
                         else:
                             power_factor = power_factor.append(
-                                pd.Series(row["power_factor"],
-                                          index=comps
-                                          )
+                                pd.Series(row["power_factor"], index=comps)
                             )
             else:
                 raise ValueError(
@@ -1475,24 +1523,29 @@ class TimeSeries:
             # delete existing previous settings
             self.time_series_raw.q_control.drop(
                 index=self.time_series_raw.q_control.index[
-                    self.time_series_raw.q_control.index.isin(components_names)],
-                inplace=True
+                    self.time_series_raw.q_control.index.isin(components_names)
+                ],
+                inplace=True,
             )
-            self.time_series_raw.q_control = pd.concat([
-                self.time_series_raw.q_control,
-                pd.DataFrame(
-                    index=components_names,
-                    data={"type": "fixed_cosphi",
-                          "q_sign": q_sign,
-                          "power_factor": power_factor
-                          }
-                )]
+            self.time_series_raw.q_control = pd.concat(
+                [
+                    self.time_series_raw.q_control,
+                    pd.DataFrame(
+                        index=components_names,
+                        data={
+                            "type": "fixed_cosphi",
+                            "q_sign": q_sign,
+                            "power_factor": power_factor,
+                        },
+                    ),
+                ]
             )
 
             # drop existing time series
             drop_component_time_series(
-                obj=self, df_name="{}_reactive_power".format(type),
-                comp_names=components_names
+                obj=self,
+                df_name="{}_reactive_power".format(type),
+                comp_names=components_names,
             )
             return q_sign, power_factor
 
@@ -1502,42 +1555,42 @@ class TimeSeries:
                 parametrisation=generators_parametrisation,
                 components_df=edisgo_object.topology.generators_df,
                 type="generators",
-                q_sign_func=q_control.get_q_sign_generator
+                q_sign_func=q_control.get_q_sign_generator,
             )
             # calculate reactive power
             reactive_power = q_control.fixed_cosphi(
-                self.generators_active_power, q_sign, power_factor)
+                self.generators_active_power, q_sign, power_factor
+            )
             self.generators_reactive_power = pd.concat(
-                [self.generators_reactive_power, reactive_power],
-                axis=1
+                [self.generators_reactive_power, reactive_power], axis=1
             )
         if loads_parametrisation is not None:
             q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
                 parametrisation=loads_parametrisation,
                 components_df=edisgo_object.topology.loads_df,
                 type="loads",
-                q_sign_func=q_control.get_q_sign_load
+                q_sign_func=q_control.get_q_sign_load,
             )
             # calculate reactive power
             reactive_power = q_control.fixed_cosphi(
-                self.loads_active_power, q_sign, power_factor)
+                self.loads_active_power, q_sign, power_factor
+            )
             self.loads_reactive_power = pd.concat(
-                [self.loads_reactive_power, reactive_power],
-                axis=1
+                [self.loads_reactive_power, reactive_power], axis=1
             )
         if storage_units_parametrisation is not None:
             q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
                 parametrisation=storage_units_parametrisation,
                 components_df=edisgo_object.topology.storage_units_df,
                 type="storage_units",
-                q_sign_func=q_control.get_q_sign_generator
+                q_sign_func=q_control.get_q_sign_generator,
             )
             # calculate reactive power
             reactive_power = q_control.fixed_cosphi(
-                self.storage_units_active_power, q_sign, power_factor)
+                self.storage_units_active_power, q_sign, power_factor
+            )
             self.storage_units_reactive_power = pd.concat(
-                [self.storage_units_reactive_power, reactive_power],
-                axis=1
+                [self.storage_units_reactive_power, reactive_power], axis=1
             )
 
     @property
@@ -1559,9 +1612,9 @@ class TimeSeries:
 
         """
         return (
-                self.loads_active_power.sum(axis=1) -
-                self.generators_active_power.sum(axis=1) -
-                self.storage_units_active_power.sum(axis=1)
+            self.loads_active_power.sum(axis=1)
+            - self.generators_active_power.sum(axis=1)
+            - self.storage_units_active_power.sum(axis=1)
         )
 
     @property
@@ -1597,13 +1650,17 @@ class TimeSeries:
     @property
     def _attributes(self):
         return [
-            "loads_active_power", "loads_reactive_power",
-            "generators_active_power", "generators_reactive_power",
-            "storage_units_active_power", "storage_units_reactive_power"
+            "loads_active_power",
+            "loads_reactive_power",
+            "generators_active_power",
+            "generators_reactive_power",
+            "storage_units_active_power",
+            "storage_units_reactive_power",
         ]
 
-    def reduce_memory(self, attr_to_reduce=None, to_type="float32",
-                      time_series_raw=True, **kwargs):
+    def reduce_memory(
+        self, attr_to_reduce=None, to_type="float32", time_series_raw=True, **kwargs
+    ):
         """
         Reduces size of dataframes to save memory.
 
@@ -1640,8 +1697,7 @@ class TimeSeries:
             )
         if time_series_raw:
             self.time_series_raw.reduce_memory(
-                kwargs.get("attr_to_reduce_raw", None),
-                to_type=to_type
+                kwargs.get("attr_to_reduce_raw", None), to_type=to_type
             )
 
     def to_csv(self, directory, reduce_memory=False, time_series_raw=False, **kwargs):
@@ -1699,7 +1755,7 @@ class TimeSeries:
         if time_series_raw:
             self.time_series_raw.to_csv(
                 directory=os.path.join(directory, "time_series_raw"),
-                reduce_memory=reduce_memory
+                reduce_memory=reduce_memory,
             )
 
     def from_csv(self, directory, time_series_raw=False, **kwargs):
@@ -1745,7 +1801,8 @@ class TimeSeries:
         if time_series_raw:
             self.time_series_raw.from_csv(
                 directory=kwargs.get(
-                    "directory_raw", os.path.join(directory, "time_series_raw"))
+                    "directory_raw", os.path.join(directory, "time_series_raw")
+                )
             )
 
 
@@ -1773,7 +1830,8 @@ class TimeSeriesRaw:
         "fixed_cosphi"),
         "parametrisation" with the parametrisation of the
         respective Q-control (only applicable to "cosphi(P)" and "Q(V)").
-    fluctuating_generators_active_power_by_technology : :pandas:`pandas.DataFrame<DataFrame>`
+    fluctuating_generators_active_power_by_technology : \
+        :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with feed-in time series per technology or technology and
         weather cell ID normalized to a nominal capacity of 1.
         Columns can either just contain the technology type as string or
@@ -1781,7 +1839,8 @@ class TimeSeriesRaw:
         first level containing the technology as string and the second level
         the weather cell ID as integer.
         Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-    dispatchable_generators_active_power_by_technology : :pandas:`pandas.DataFrame<DataFrame>`
+    dispatchable_generators_active_power_by_technology : \
+        :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with feed-in time series per technology normalized to a nominal
         capacity of 1.
         Columns contain the technology type as string.
@@ -1803,7 +1862,8 @@ class TimeSeriesRaw:
 
     def __init__(self):
         self.q_control = pd.DataFrame(
-            columns=["type", "q_sign", "power_factor", "parametrisation"])
+            columns=["type", "q_sign", "power_factor", "parametrisation"]
+        )
         self.fluctuating_generators_active_power_by_technology = None
         self.dispatchable_generators_active_power_by_technology = None
         self.conventional_loads_active_power_by_sector = None
@@ -1845,11 +1905,7 @@ class TimeSeriesRaw:
         for attr in attr_to_reduce:
             if hasattr(self, attr) and getattr(self, attr) is not None:
                 setattr(
-                    self,
-                    attr,
-                    getattr(self, attr).apply(
-                        lambda _: _.astype(to_type)
-                    )
+                    self, attr, getattr(self, attr).apply(lambda _: _.astype(to_type))
                 )
 
     def to_csv(self, directory, reduce_memory=False, **kwargs):
@@ -1942,9 +1998,7 @@ def drop_component_time_series(obj, df_name, comp_names):
         df_name,
         getattr(obj, df_name).drop(
             getattr(obj, df_name).columns[
-                getattr(
-                    obj, df_name
-                ).columns.isin(comp_names)
+                getattr(obj, df_name).columns.isin(comp_names)
             ],
             axis=1,
         ),
@@ -1972,10 +2026,7 @@ def _add_component_time_series(obj, df_name, ts_new):
         obj,
         df_name,
         pd.concat(
-            [
-                getattr(obj, df_name),
-                ts_new
-            ],
+            [getattr(obj, df_name), ts_new],
             axis=1,
         ),
     )
@@ -2003,14 +2054,15 @@ def _check_if_components_exist(edisgo_object, component_names, component_type):
 
     """
     comps_in_network = getattr(
-        edisgo_object.topology, "{}_df".format(component_type)).index
-    comps_not_in_network = list(
-        set(component_names) - set(comps_in_network))
+        edisgo_object.topology, "{}_df".format(component_type)
+    ).index
+    comps_not_in_network = list(set(component_names) - set(comps_in_network))
     if len(comps_not_in_network) > 0:
         logging.warning(
             "Some of the provided {} are not in the network. "
             "This concerns the following components: {}.".format(
-                component_type, comps_not_in_network)
+                component_type, comps_not_in_network
+            )
         )
         provided_comps_in_network = set(component_names) - set(comps_not_in_network)
         return provided_comps_in_network

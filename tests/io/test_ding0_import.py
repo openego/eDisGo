@@ -64,11 +64,11 @@ class TestImportFromDing0:
                     "did not work properly.".format(comp)
                 )
             except ValueError as e:
-                assert e.args[
-                    0
-                ] == "{} have duplicate entry in one of the components dataframes.".format(
-                    name
+                assert e.args[0] == (
+                    f"{name} have duplicate entry in one of the components "
+                    f"dataframes."
                 )
+
             # reset dataframe
             setattr(self.topology, "_{}_df".format(comp), comps)
             ding0_import._validate_ding0_grid_import(self.topology)

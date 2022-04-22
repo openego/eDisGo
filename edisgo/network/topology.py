@@ -233,7 +233,7 @@ class Topology:
         """
         try:
             return self._loads_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["loads_df"])
 
     @loads_df.setter
@@ -289,7 +289,7 @@ class Topology:
         """
         try:
             return self._generators_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["generators_df"])
 
     @generators_df.setter
@@ -328,7 +328,7 @@ class Topology:
         """
         try:
             return self._storage_units_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["storage_units_df"])
 
     @storage_units_df.setter
@@ -373,7 +373,7 @@ class Topology:
         """
         try:
             return self._transformers_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["transformers_df"])
 
     @transformers_df.setter
@@ -400,7 +400,7 @@ class Topology:
         """
         try:
             return self._transformers_hvmv_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["transformers_df"])
 
     @transformers_hvmv_df.setter
@@ -460,7 +460,7 @@ class Topology:
         """
         try:
             return self._lines_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["lines_df"])
 
     @lines_df.setter
@@ -507,14 +507,14 @@ class Topology:
         """
         try:
             return self._buses_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["buses_df"])
 
     @buses_df.setter
     def buses_df(self, df):
         # make sure in_building takes on only True or False (not numpy bools)
         # needs to be tested using `== True`, not `is True`
-        buses_in_building = df[df.in_building == True].index
+        buses_in_building = df[df.in_building == True].index  # noqa: E712
         df.loc[buses_in_building, "in_building"] = True
         df.loc[~df.index.isin(buses_in_building), "in_building"] = False
         self._buses_df = df
@@ -560,7 +560,7 @@ class Topology:
         """
         try:
             return self._switches_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["switches_df"])
 
     @switches_df.setter
@@ -905,9 +905,7 @@ class Topology:
                 return True
         return False
 
-    def add_load(
-        self, bus, p_nom, type="conventional_load", **kwargs
-    ):
+    def add_load(self, bus, p_nom, type="conventional_load", **kwargs):
         """
         Adds load to topology.
 
@@ -1205,9 +1203,9 @@ class Topology:
                     line_data = self.equipment_data[
                         "{}_overhead_lines".format(voltage_level)
                     ].loc[type_info, :]
-                except:
+                except Exception:
                     raise ValueError("Specified line type is not valid.")
-            except:
+            except Exception:
                 raise
             return line_data
 
@@ -2192,7 +2190,7 @@ class Topology:
                 length=line_length,
                 kind=line_data.kind,
                 type_info=line_data.type_info,
-                num_parallel=line_data.num_parallel
+                num_parallel=line_data.num_parallel,
             )
             # if line connected to switch was split, write new line name to
             # switch data
@@ -2221,7 +2219,7 @@ class Topology:
                 length=line_length,
                 kind=line_data.kind,
                 type_info=line_data.type_info,
-                num_parallel=line_data.num_parallel
+                num_parallel=line_data.num_parallel,
             )
             # if line connected to switch was split, write new line name to
             # switch data
