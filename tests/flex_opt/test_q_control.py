@@ -228,14 +228,14 @@ class TestTimeseriesReactive:
         ).all()
 
         # test for component_type="loads"
-        pf = q_control._fixed_cosphi_default_power_factor(
+        pf = q_control._fixed_cosphi_default_reactive_power_sign(
             comp_df=df, component_type="loads", configs=self.config
         )
 
         assert pf.shape == (3,)
         assert np.isclose(
             pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
-            [0.9, 0.95, 0.95],
+            [1.0, 1.0, 1.0],
         ).all()
 
         # test for component_type="charging_points"
