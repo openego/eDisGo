@@ -1,9 +1,11 @@
+import logging
+
 from math import acos, tan
 
 import pandas as pd
 import pytest
 
-from pandas.util.testing import assert_series_equal
+from pandas.util.testing import assert_frame_equal, assert_series_equal
 
 from edisgo import EDisGo
 from edisgo.tools.tools import assign_voltage_level_to_component
@@ -13,6 +15,26 @@ class TestTimeSeries:
     @pytest.yield_fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+
+    def test_timeseries_getters(self, caplog):
+        index_2 = pd.date_range("1/1/2018", periods=2, freq="H")
+        index_3 = pd.date_range("1/1/2018", periods=3, freq="H")
+        timeseries = pd.DataFrame(index=index_2, columns=["Comp_1"], data=[1.3, 2])
+        self.edisgo.timeseries.timeindex = index_3
+        for attribute in self.edisgo.timeseries._attributes:
+            assert_frame_equal(
+                getattr(self.edisgo.timeseries, attribute), pd.DataFrame(index=index_3)
+            )
+            setattr(self.edisgo.timeseries, attribute, timeseries)
+            with caplog.at_level(logging.WARNING):
+                assert_frame_equal(
+                    getattr(self.edisgo.timeseries, attribute),
+                    pd.DataFrame(index=index_3),
+                )
+            assert (
+                "Timeindex and {} have deviating indices. "
+                "Empty dataframe will be returned.".format(attribute) in caplog.text
+            )
 
     def test_set_active_power_manual(self):
 
