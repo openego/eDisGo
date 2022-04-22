@@ -69,7 +69,8 @@ def run_example():
     scenario = "nep2035"
 
     # Set up worst-case scenario
-    edisgo = EDisGo(ding0_grid=dingo_grid_path, worst_case_analysis="worst-case")
+    edisgo = EDisGo(ding0_grid=dingo_grid_path)
+    edisgo.set_time_series_worst_case_analysis()
 
     # Reinforce ding0 grid to obtain a stable status quo grid
     logging.info("Conduct grid reinforcement to obtain stable status quo grid.")
@@ -99,6 +100,7 @@ def run_example():
 
     # Get data on generators in NEP scenario and connect generators to the grid
     edisgo.import_generators(generator_scenario=scenario)
+    edisgo.set_time_series_worst_case_analysis()
 
     # Conduct topology reinforcement
     edisgo.reinforce()

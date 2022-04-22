@@ -1831,7 +1831,7 @@ class TimeSeriesRaw:
         "parametrisation" with the parametrisation of the
         respective Q-control (only applicable to "cosphi(P)" and "Q(V)").
     fluctuating_generators_active_power_by_technology : \
-        :pandas:`pandas.DataFrame<DataFrame>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with feed-in time series per technology or technology and
         weather cell ID normalized to a nominal capacity of 1.
         Columns can either just contain the technology type as string or
@@ -1840,7 +1840,7 @@ class TimeSeriesRaw:
         the weather cell ID as integer.
         Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
     dispatchable_generators_active_power_by_technology : \
-        :pandas:`pandas.DataFrame<DataFrame>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with feed-in time series per technology normalized to a nominal
         capacity of 1.
         Columns contain the technology type as string.
