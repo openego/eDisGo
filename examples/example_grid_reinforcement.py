@@ -77,16 +77,16 @@ def run_example():
     # Overwrite config parameters for allowed voltage deviations in
     # initial topology reinforcement to better represent currently used limits
     edisgo.config["grid_expansion_allowed_voltage_deviations"] = {
-        "feedin_case_lower": 0.9,
+        "feed-in_case_lower": 0.9,
         "load_case_upper": 1.1,
         "hv_mv_trafo_offset": 0.04,
         "hv_mv_trafo_control_deviation": 0.0,
         "mv_load_case_max_v_deviation": 0.055,
-        "mv_feedin_case_max_v_deviation": 0.02,
+        "mv_feed-in_case_max_v_deviation": 0.02,
         "lv_load_case_max_v_deviation": 0.065,
-        "lv_feedin_case_max_v_deviation": 0.03,
+        "lv_feed-in_case_max_v_deviation": 0.03,
         "mv_lv_station_load_case_max_v_deviation": 0.02,
-        "mv_lv_station_feedin_case_max_v_deviation": 0.01,
+        "mv_lv_station_feed-in_case_max_v_deviation": 0.01,
     }
     # Conduct reinforcement
     edisgo.reinforce()
