@@ -693,6 +693,7 @@ class TimeSeries:
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
             df, "generators", configs)
         # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
         self.time_series_raw.q_control = pd.concat([
             self.time_series_raw.q_control,
             pd.DataFrame(
@@ -768,6 +769,7 @@ class TimeSeries:
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
             df, "loads", configs)
         # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
         self.time_series_raw.q_control = pd.concat([
             self.time_series_raw.q_control,
             pd.DataFrame(
@@ -859,6 +861,7 @@ class TimeSeries:
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
             df, "charging_points", configs)
         # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
         self.time_series_raw.q_control = pd.concat([
             self.time_series_raw.q_control,
             pd.DataFrame(
@@ -933,6 +936,7 @@ class TimeSeries:
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
             df, "heat_pumps", configs)
         # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
         self.time_series_raw.q_control = pd.concat([
             self.time_series_raw.q_control,
             pd.DataFrame(
@@ -1009,6 +1013,7 @@ class TimeSeries:
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
             df, "storage_units", configs)
         # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
         self.time_series_raw.q_control = pd.concat([
             self.time_series_raw.q_control,
             pd.DataFrame(
