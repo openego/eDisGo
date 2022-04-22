@@ -710,6 +710,7 @@ class TimeSeries:
             df, "generators", configs
         )
         # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
         self.time_series_raw.q_control = pd.concat(
             [
                 self.time_series_raw.q_control,
@@ -788,6 +789,7 @@ class TimeSeries:
             df, "loads", configs
         )
         # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
         self.time_series_raw.q_control = pd.concat(
             [
                 self.time_series_raw.q_control,
@@ -890,6 +892,7 @@ class TimeSeries:
             df, "charging_points", configs
         )
         # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
         self.time_series_raw.q_control = pd.concat(
             [
                 self.time_series_raw.q_control,
@@ -966,6 +969,7 @@ class TimeSeries:
             df, "heat_pumps", configs
         )
         # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
         self.time_series_raw.q_control = pd.concat(
             [
                 self.time_series_raw.q_control,
@@ -1044,6 +1048,7 @@ class TimeSeries:
             df, "storage_units", configs
         )
         # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
         self.time_series_raw.q_control = pd.concat(
             [
                 self.time_series_raw.q_control,
