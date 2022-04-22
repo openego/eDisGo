@@ -860,6 +860,38 @@ class TestTimeSeries:
                 configs=self.edisgo.config
             )
 
+    def test_predefined_fluctuating_generators_by_technology(self):
+        # ToDo implement
+        pass
+
+    def test_predefined_dispatchable_generators_by_technology(self):
+        # ToDo implement
+        pass
+
+    def test_predefined_conventional_loads_by_sector(self):
+        # ToDo implement
+        pass
+
+    def test_predefined_charging_points_by_use_case(self):
+        # ToDo implement
+        pass
+
+    def test_fixed_cosphi(self):
+        # ToDo implement
+        pass
+
+    def test_residual_load(self):
+        # ToDo implement
+        pass
+
+    def test_timesteps_load_feedin_case(self):
+        # ToDo implement
+        pass
+
+    def test_reduce_memory(self):
+        # ToDo implement
+        pass
+
     def test_to_csv(self):
         # ToDo implement
         pass
@@ -1011,9 +1043,3 @@ class TestTimeSeriesHelperFunctions:
     def test_check_if_components_exist(self):
         # ToDo implement
         pass
-
-    def test_check_if_components_exist(self):
-        # ToDo implement
-        pass
-
-
