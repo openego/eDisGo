@@ -112,7 +112,8 @@ class EDisGo:
         self.results = Results(self)
         self.opf_results = OPFResults()
         self.timeseries = timeseries.TimeSeries(
-            timeindex=kwargs.get("timeindex", pd.DatetimeIndex([])))
+            timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
+        )
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
@@ -167,9 +168,15 @@ class EDisGo:
         """
         self.timeseries.timeindex = timeindex
 
-    def set_time_series_manual(self, generators_p=None, loads_p=None,
-                               storage_units_p=None, generators_q=None, loads_q=None,
-                               storage_units_q=None):
+    def set_time_series_manual(
+        self,
+        generators_p=None,
+        loads_p=None,
+        storage_units_p=None,
+        generators_q=None,
+        loads_q=None,
+        storage_units_q=None,
+    ):
         """
         Sets given component time series.
 
@@ -215,13 +222,13 @@ class EDisGo:
             self,
             ts_generators=generators_p,
             ts_loads=loads_p,
-            ts_storage_units=storage_units_p
+            ts_storage_units=storage_units_p,
         )
         self.timeseries.set_reactive_power_manual(
             self,
             ts_generators=generators_q,
             ts_loads=loads_q,
-            ts_storage_units=storage_units_q
+            ts_storage_units=storage_units_q,
         )
 
     def set_time_series_worst_case_analysis(self, cases=None):
@@ -247,11 +254,15 @@ class EDisGo:
         self.timeseries.set_worst_case(self, cases)
 
     def set_time_series_active_power_predefined(
-            self,
-            fluctuating_generators_ts=None, fluctuating_generators_names=None,
-            dispatchable_generators_ts=None, dispatchable_generators_names=None,
-            conventional_loads_ts=None, conventional_loads_names=None,
-            charging_points_ts=None, charging_points_names=None,
+        self,
+        fluctuating_generators_ts=None,
+        fluctuating_generators_names=None,
+        dispatchable_generators_ts=None,
+        dispatchable_generators_names=None,
+        conventional_loads_ts=None,
+        conventional_loads_names=None,
+        charging_points_ts=None,
+        charging_points_names=None,
     ):
         """
         Uses predefined feed-in or demand profiles.
@@ -328,32 +339,28 @@ class EDisGo:
             )
         if fluctuating_generators_ts is not None:
             self.timeseries.predefined_fluctuating_generators_by_technology(
-                self,
-                fluctuating_generators_ts,
-                fluctuating_generators_names
+                self, fluctuating_generators_ts, fluctuating_generators_names
             )
         if dispatchable_generators_ts is not None:
             self.timeseries.predefined_dispatchable_generators_by_technology(
-                self,
-                dispatchable_generators_ts,
-                dispatchable_generators_names
+                self, dispatchable_generators_ts, dispatchable_generators_names
             )
         if conventional_loads_ts is not None:
             self.timeseries.predefined_conventional_loads_by_sector(
-                self,
-                conventional_loads_ts,
-                conventional_loads_names
+                self, conventional_loads_ts, conventional_loads_names
             )
         if charging_points_ts is not None:
             self.timeseries.predefined_charging_points_by_use_case(
-                self,
-                charging_points_ts,
-                charging_points_names
+                self, charging_points_ts, charging_points_names
             )
 
     def set_time_series_reactive_power_control(
-            self, control="fixed_cosphi", generators_parametrisation=None,
-            loads_parametrisation=None, storage_units_parametrisation=None):
+        self,
+        control="fixed_cosphi",
+        generators_parametrisation=None,
+        loads_parametrisation=None,
+        storage_units_parametrisation=None,
+    ):
         """
         Parameters
         -----------
@@ -380,7 +387,7 @@ class EDisGo:
                 self,
                 generators_parametrisation=generators_parametrisation,
                 loads_parametrisation=loads_parametrisation,
-                storage_units_parametrisation=storage_units_parametrisation
+                storage_units_parametrisation=storage_units_parametrisation,
             )
         else:
             raise ValueError("'control' must be 'fixed_cosphi'.")
@@ -586,10 +593,11 @@ class EDisGo:
 
         # get converged and not converged time steps
         timesteps_converged = pf_results["converged"][
-            pf_results["converged"]["0"]].index
-        timesteps_not_converged = \
-            pf_results["converged"][
-                ~pf_results["converged"]["0"]].index
+            pf_results["converged"]["0"]
+        ].index
+        timesteps_not_converged = pf_results["converged"][
+            ~pf_results["converged"]["0"]
+        ].index
 
         if raise_not_converged and len(timesteps_not_converged) > 0:
             raise ValueError(
@@ -600,8 +608,7 @@ class EDisGo:
             )
 
         # handle converged time steps
-        pypsa_io.process_pfa_results(self, pypsa_network,
-                                     timesteps_converged)
+        pypsa_io.process_pfa_results(self, pypsa_network, timesteps_converged)
 
     def reinforce(self, **kwargs):
         """
@@ -704,7 +711,7 @@ class EDisGo:
             if add_ts:
                 self.set_time_series_manual(
                     generators_p=pd.DataFrame({comp_name: ts_active_power}),
-                    generators_q=pd.DataFrame({comp_name: ts_reactive_power})
+                    generators_q=pd.DataFrame({comp_name: ts_reactive_power}),
                 )
 
         elif comp_type == "storage_unit":
@@ -712,7 +719,7 @@ class EDisGo:
             if add_ts:
                 self.set_time_series_manual(
                     storage_units_p=pd.DataFrame({comp_name: ts_active_power}),
-                    storage_units_q=pd.DataFrame({comp_name: ts_reactive_power})
+                    storage_units_q=pd.DataFrame({comp_name: ts_reactive_power}),
                 )
 
         elif comp_type == "load":
@@ -720,12 +727,14 @@ class EDisGo:
             if add_ts:
                 self.set_time_series_manual(
                     loads_p=pd.DataFrame({comp_name: ts_active_power}),
-                    loads_q=pd.DataFrame({comp_name: ts_reactive_power})
+                    loads_q=pd.DataFrame({comp_name: ts_reactive_power}),
                 )
 
         else:
-            raise ValueError("Invalid input for parameter 'comp_type'. Must either be "
-                             "'line', 'bus', 'generator', 'load' or 'storage_unit'.")
+            raise ValueError(
+                "Invalid input for parameter 'comp_type'. Must either be "
+                "'line', 'bus', 'generator', 'load' or 'storage_unit'."
+            )
         return comp_name
 
     def integrate_component(
@@ -839,12 +848,12 @@ class EDisGo:
             if comp_type == "generator":
                 self.set_time_series_manual(
                     generators_p=pd.DataFrame({comp_name: ts_active_power}),
-                    generators_q=pd.DataFrame({comp_name: ts_reactive_power})
+                    generators_q=pd.DataFrame({comp_name: ts_reactive_power}),
                 )
             else:
                 self.set_time_series_manual(
                     loads_p=pd.DataFrame({comp_name: ts_active_power}),
-                    loads_q=pd.DataFrame({comp_name: ts_reactive_power})
+                    loads_q=pd.DataFrame({comp_name: ts_reactive_power}),
                 )
 
         return comp_name
@@ -884,7 +893,7 @@ class EDisGo:
                     timeseries.drop_component_time_series(
                         obj=self.timeseries,
                         df_name="loads_{}".format(ts),
-                        comp_names=comp_name
+                        comp_names=comp_name,
                     )
 
         elif comp_type == "generator":
@@ -894,7 +903,7 @@ class EDisGo:
                     timeseries.drop_component_time_series(
                         obj=self.timeseries,
                         df_name="generators_{}".format(ts),
-                        comp_names=comp_name
+                        comp_names=comp_name,
                     )
 
         elif comp_type == "storage_unit":
@@ -904,7 +913,7 @@ class EDisGo:
                     timeseries.drop_component_time_series(
                         obj=self.timeseries,
                         df_name="storage_units_{}".format(ts),
-                        comp_names=comp_name
+                        comp_names=comp_name,
                     )
 
         else:
@@ -942,16 +951,17 @@ class EDisGo:
             which case all loads at the same bus are aggregated.
 
         """
+
         def _aggregate_time_series(attribute, groups, naming):
             return pd.concat(
                 [
                     pd.DataFrame(
                         {
                             naming.format("_".join(k))
-                            if isinstance(k, tuple) else naming.format(k): getattr(
-                                self.timeseries, attribute).loc[:, v].sum(
-                                axis=1
-                            )
+                            if isinstance(k, tuple)
+                            else naming.format(k): getattr(self.timeseries, attribute)
+                            .loc[:, v]
+                            .sum(axis=1)
                         }
                     )
                     for k, v in groups.items()
@@ -965,8 +975,10 @@ class EDisGo:
             aggregate_loads_by_cols = ["bus"]
 
         # aggregate generators
-        if len(aggregate_generators_by_cols) > 0 and \
-                not self.topology.generators_df.empty:
+        if (
+            len(aggregate_generators_by_cols) > 0
+            and not self.topology.generators_df.empty
+        ):
 
             gens_groupby = self.topology.generators_df.groupby(
                 aggregate_generators_by_cols
@@ -976,9 +988,7 @@ class EDisGo:
             # set up new generators_df
             gens_df_grouped = gens_groupby.sum().reset_index()
             gens_df_grouped["name"] = gens_df_grouped.apply(
-                lambda _: naming.format(
-                    "_".join(_.loc[aggregate_generators_by_cols])
-                ),
+                lambda _: naming.format("_".join(_.loc[aggregate_generators_by_cols])),
                 axis=1,
             )
             gens_df_grouped["control"] = "PQ"
@@ -988,13 +998,14 @@ class EDisGo:
 
             # set up new generator time series
             self.timeseries.generators_active_power = _aggregate_time_series(
-                "generators_active_power", gens_groupby.groups, naming)
+                "generators_active_power", gens_groupby.groups, naming
+            )
             self.timeseries.generators_reactive_power = _aggregate_time_series(
-                "generators_reactive_power", gens_groupby.groups, naming)
+                "generators_reactive_power", gens_groupby.groups, naming
+            )
 
         # aggregate loads
-        if len(aggregate_loads_by_cols) > 0 and \
-                not self.topology.loads_df.empty:
+        if len(aggregate_loads_by_cols) > 0 and not self.topology.loads_df.empty:
 
             loads_groupby = self.topology.loads_df.groupby(aggregate_loads_by_cols)
             naming = "Loads_{}"
@@ -1009,9 +1020,11 @@ class EDisGo:
 
             # set up new loads time series
             self.timeseries.loads_active_power = _aggregate_time_series(
-                "loads_active_power", loads_groupby.groups, naming)
+                "loads_active_power", loads_groupby.groups, naming
+            )
             self.timeseries.loads_reactive_power = _aggregate_time_series(
-                "loads_reactive_power", loads_groupby.groups, naming)
+                "loads_reactive_power", loads_groupby.groups, naming
+            )
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
@@ -1181,7 +1194,8 @@ class EDisGo:
 
         Parameters
         ----------
-        timestep : :pandas:`pandas.Timestamp<Timestamp>` or list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
+        timestep : :pandas:`pandas.Timestamp<Timestamp>` or \
+            list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
             Specifies time steps histogram is plotted for. If timestep is None
             all time steps voltages are calculated for are used. Default: None.
         title : :obj:`str` or :obj:`bool`, optional
@@ -1233,7 +1247,8 @@ class EDisGo:
 
         Parameters
         ----------
-        timestep : :pandas:`pandas.Timestamp<Timestamp>` or list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
+        timestep : :pandas:`pandas.Timestamp<Timestamp>` or \
+            list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
             Specifies time step(s) histogram is plotted for. If `timestep` is
             None all time steps currents are calculated for are used.
             Default: None.

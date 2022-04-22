@@ -596,7 +596,10 @@ class CurtailmentControl:
 
         # get all fluctuating generators and their attributes (weather ID,
         # type, etc.)
-        generators = get_gen_info(edisgo.topology, "mvlv", fluctuating=True)
+        # TODO: Function get_gen_info does not exist
+        generators = get_gen_info(  # noqa: F821
+            edisgo.topology, "mvlv", fluctuating=True
+        )
 
         # do analyze to get all voltages at generators and feed-in dataframe
         edisgo.analyze(mode=mode)
@@ -696,7 +699,7 @@ class CurtailmentControl:
             raise KeyError(message)
         try:
             curtailment_timeseries.loc[network.timeseries.timeindex]
-        except:
+        except Exception:
             message = (
                 "Time index of curtailment time series does not match "
                 "with load and feed-in time series."
