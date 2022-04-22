@@ -21,7 +21,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
     Export edisgo object to PyPSA Network
 
     For details from a user perspective see API documentation of
-    :meth:`~edisgo.EDisGo.analyze` of the API class
+    :meth:`~edisgo.EDisGo.to_pypsa` of the API class
     :class:`~.edisgo.EDisGo`.
 
     Translating eDisGo's network topology to PyPSA representation is structured
