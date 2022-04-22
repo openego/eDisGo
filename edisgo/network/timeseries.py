@@ -1544,7 +1544,10 @@ class TimeSeries:
             return q_sign, power_factor
 
         # set reactive power for generators
-        if generators_parametrisation is not None:
+        if (
+            generators_parametrisation is not None
+            and not edisgo_object.topology.generators_df.empty
+        ):
             q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
                 parametrisation=generators_parametrisation,
                 components_df=edisgo_object.topology.generators_df,
@@ -1558,7 +1561,10 @@ class TimeSeries:
             self.generators_reactive_power = pd.concat(
                 [self.generators_reactive_power, reactive_power], axis=1
             )
-        if loads_parametrisation is not None:
+        if (
+            loads_parametrisation is not None
+            and not edisgo_object.topology.loads_df.empty
+        ):
             q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
                 parametrisation=loads_parametrisation,
                 components_df=edisgo_object.topology.loads_df,
@@ -1572,7 +1578,10 @@ class TimeSeries:
             self.loads_reactive_power = pd.concat(
                 [self.loads_reactive_power, reactive_power], axis=1
             )
-        if storage_units_parametrisation is not None:
+        if (
+            storage_units_parametrisation is not None
+            and not edisgo_object.topology.storage_units_df.empty
+        ):
             q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
                 parametrisation=storage_units_parametrisation,
                 components_df=edisgo_object.topology.storage_units_df,
