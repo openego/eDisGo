@@ -143,8 +143,8 @@ class Grid(ABC):
             List of loads within the network.
 
         """
-        for l in self.loads_df.index:
-            yield Load(id=l, edisgo_obj=self.edisgo_obj)
+        for load in self.loads_df.index:
+            yield Load(id=load, edisgo_obj=self.edisgo_obj)
 
     @property
     def storage_units_df(self):
@@ -176,9 +176,7 @@ class Grid(ABC):
             :attr:`~.network.topology.Topology.loads_df`.
 
         """
-        return self.loads_df[
-            self.loads_df.type == "charging_point"
-        ]
+        return self.loads_df[self.loads_df.type == "charging_point"]
 
     @property
     def switch_disconnectors_df(self):

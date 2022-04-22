@@ -15,7 +15,8 @@ from dash import dcc, html
 from dash.dependencies import Input, Output
 from jupyter_dash import JupyterDash
 from matplotlib import pyplot as plt
-from pyproj import Proj, Transformer
+from networkx import Graph
+from pyproj import Transformer
 from pypsa import Network as PyPSANetwork
 
 from edisgo.tools import session_scope, tools
@@ -37,12 +38,12 @@ if "READTHEDOCS" not in os.environ:
     geopandas = True
     try:
         import geopandas as gpd
-    except:
+    except Exception:
         geopandas = False
     contextily = True
     try:
         import contextily as ctx
-    except:
+    except Exception:
         contextily = False
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,8 @@ def histogram(data, **kwargs):
         Data to be plotted, e.g. voltage or current (`v_res` or `i_res` from
         :class:`network.results.Results`). Index of the dataframe must be
         a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-    timeindex : :pandas:`pandas.Timestamp<Timestamp>` or list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
+    timeindex : :pandas:`pandas.Timestamp<Timestamp>` or \
+        list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
         Specifies time steps histogram is plotted for. If timeindex is None all
         time steps provided in `data` are used. Default: None.
     directory : :obj:`str` or None, optional
@@ -128,7 +130,7 @@ def histogram(data, **kwargs):
     }
     try:
         fig_size = standard_sizes[fig_size]
-    except:
+    except Exception:
         fig_size = standard_sizes["a5landscape"]
 
     plot_data = data.loc[timeindex, :].T.stack()
@@ -544,7 +546,7 @@ def mv_grid_topology(
                 try:
                     bus_colors[bus] = costs_lv_stations.loc[bus, "total_costs"]
                     bus_sizes[bus] = 100
-                except:
+                except Exception:
                     bus_colors[bus] = 0
                     bus_sizes[bus] = 0
             # MVStation handeling
@@ -552,7 +554,7 @@ def mv_grid_topology(
                 try:
                     bus_colors[bus] = costs_mv_station.loc[bus, "total_costs"]
                     bus_sizes[bus] = 100
-                except:
+                except Exception:
                     bus_colors[bus] = 0
                     bus_sizes[bus] = 0
             else:
@@ -830,7 +832,7 @@ def mv_grid_topology(
     # draw arrows on lines
     if arrows and timestep and line_color == "loading":
         path = ll[1].get_segments()
-        colors = cmap(ll[1].get_array() / 100)
+        # colors = cmap(ll[1].get_array() / 100)
         for i in range(len(path)):
             if edisgo_obj.lines_t.p0.loc[timestep, line_colors.index[i]] > 0:
                 arrowprops = dict(arrowstyle="->", color="b")  # colors[i])
@@ -952,8 +954,6 @@ def draw_plotly(
 
     if G is None:
         G = edisgo_obj.topology.mv_grid.graph
-
-    node_list = list(G.nodes())
 
     if hasattr(grid, "transformers_df"):
         node_root = grid.transformers_df.bus1.iat[0]

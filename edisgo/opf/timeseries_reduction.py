@@ -133,14 +133,14 @@ def get_steps_storage(edisgo_obj, window=5):
         nodes = pd.DataFrame(v)
         if "time_index" in nodes:
             for step in nodes["time_index"]:
-                if not step in crit_periods:
+                if step not in crit_periods:
                     crit_periods.append(step)
 
     # Get periods with current violations
     crit_lines = check_tech_constraints.mv_line_load(edisgo_obj)
     if "time_index" in crit_lines:
         for step in crit_lines["time_index"]:
-            if not step in crit_periods:
+            if step not in crit_periods:
                 crit_periods.append(step)
 
     reduced = []

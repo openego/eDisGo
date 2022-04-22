@@ -4,10 +4,10 @@ import numpy as np
 import pandas as pd
 import pypsa
 
-from pypower.idx_brch import *
-from pypower.idx_bus import *
-from pypower.idx_cost import *
-from pypower.idx_gen import *
+from pypower.idx_brch import *  # noqa: F403
+from pypower.idx_bus import *  # noqa: F403
+from pypower.idx_cost import *  # noqa: F403
+from pypower.idx_gen import *  # noqa: F403
 
 
 def to_powermodels(pypsa_net):
@@ -47,11 +47,16 @@ def convert_storage_series(timeseries):
         return storage
 
 
-# FIXME: Static storage data is exported from the eDisGo network rather than the PyPSA network as the capacity of network doesn't seem to be available there. For consistency with the rest of the conversion, it should be converted from PyPSA as well.
-# TODO: This will (probably) not work if there are multiple storage units connected to the same bus.
+# FIXME: Static storage data is exported from the eDisGo network rather than the PyPSA
+#  network as the capacity of network doesn't seem to be available there. For
+#  consistency with the rest of the conversion, it should be converted from PyPSA as
+#  well.
+# TODO: This will (probably) not work if there are multiple storage units connected to
+#  the same bus.
 def add_storage_from_edisgo(edisgo_obj, psa_net, pm_dict):
     """
-    Read static storage data (position and capacity) from eDisGo and export to Powermodels dict
+    Read static storage data (position and capacity) from eDisGo and export to
+    Powermodels dict
     """
     # Drop values that are not available
     storage = pd.DataFrame(edisgo_obj.topology.storage_units_df[["bus", "p_nom"]])
@@ -129,7 +134,7 @@ def pypsa2ppc(psa_net):
                 time_horizon
             )
         )
-    except IndexError as e:
+    except IndexError:
         print("No load timeseries. Create empty dicts for timeseries of load")
         load_dict = dict()
     try:
@@ -139,7 +144,7 @@ def pypsa2ppc(psa_net):
                 time_horizon
             )
         )
-    except IndexError as e:
+    except IndexError:
         print(
             "no generator timeseries Create empty dicts "
             "for timeseries of load and generation "
@@ -178,18 +183,18 @@ def ppc2pm(ppc, psa_net):  # pragma: no cover
     shunt_idx = 1
     for row in ppc["bus"]:
         bus = dict()
-        idx = int(row[BUS_I]) + 1
+        idx = int(row[BUS_I]) + 1  # noqa: F405
         bus["index"] = idx
         bus["bus_i"] = idx
-        bus["zone"] = int(row[ZONE])
-        bus["bus_type"] = int(row[BUS_TYPE])
-        bus["vmax"] = row[VMAX]
-        bus["vmin"] = row[VMIN]
-        bus["va"] = row[VA]
-        bus["vm"] = row[VM]
-        bus["base_kv"] = row[BASE_KV]
-        pd = row[PD]
-        qd = row[QD]
+        bus["zone"] = int(row[ZONE])  # noqa: F405
+        bus["bus_type"] = int(row[BUS_TYPE])  # noqa: F405
+        bus["vmax"] = row[VMAX]  # noqa: F405
+        bus["vmin"] = row[VMIN]  # noqa: F405
+        bus["va"] = row[VA]  # noqa: F405
+        bus["vm"] = row[VM]  # noqa: F405
+        bus["base_kv"] = row[BASE_KV]  # noqa: F405
+        pd = row[PD]  # noqa: F405
+        qd = row[QD]  # noqa: F405
         if pd != 0 or qd != 0:
             pm["load"][str(load_idx)] = {
                 "pd": pd,
@@ -199,8 +204,8 @@ def ppc2pm(ppc, psa_net):  # pragma: no cover
                 "index": load_idx,
             }
             load_idx += 1
-        bs = row[BS]
-        gs = row[GS]
+        bs = row[BS]  # noqa: F405
+        gs = row[GS]  # noqa: F405
         if pd != 0 or qd != 0:
             pm["shunt"][str(shunt_idx)] = {
                 "gs": gs,
@@ -217,40 +222,45 @@ def ppc2pm(ppc, psa_net):  # pragma: no cover
         branch = dict()
         branch["index"] = idx
         branch["transformer"] = idx > n_lines
-        branch["br_r"] = row[BR_R].real
-        branch["br_x"] = row[BR_X].real
-        branch["g_fr"] = -row[BR_B].imag / 2.0
-        branch["g_to"] = -row[BR_B].imag / 2.0
-        branch["b_fr"] = row[BR_B].real / 2.0
-        branch["b_to"] = row[BR_B].real / 2.0
-        branch["rate_a"] = row[RATE_A].real if row[RATE_A] > 0 else row[RATE_B].real
-        branch["rate_b"] = row[RATE_B].real
-        branch["rate_c"] = row[RATE_C].real
-        branch["f_bus"] = int(row[F_BUS].real) + 1
-        branch["t_bus"] = int(row[T_BUS].real) + 1
-        branch["br_status"] = int(row[BR_STATUS].real)
-        branch["angmin"] = row[ANGMIN].real
-        branch["angmax"] = row[ANGMAX].real
-        branch["tap"] = row[TAP].real
-        branch["shift"] = math.radians(row[SHIFT].real)
+        branch["br_r"] = row[BR_R].real  # noqa: F405
+        branch["br_x"] = row[BR_X].real  # noqa: F405
+        branch["g_fr"] = -row[BR_B].imag / 2.0  # noqa: F405
+        branch["g_to"] = -row[BR_B].imag / 2.0  # noqa: F405
+        branch["b_fr"] = row[BR_B].real / 2.0  # noqa: F405
+        branch["b_to"] = row[BR_B].real / 2.0  # noqa: F405
+        branch["rate_a"] = (
+            row[RATE_A].real if row[RATE_A] > 0 else row[RATE_B].real  # noqa: F405
+        )
+        branch["rate_b"] = row[RATE_B].real  # noqa: F405
+        branch["rate_c"] = row[RATE_C].real  # noqa: F405
+        branch["f_bus"] = int(row[F_BUS].real) + 1  # noqa: F405
+        branch["t_bus"] = int(row[T_BUS].real) + 1  # noqa: F405
+        branch["br_status"] = int(row[BR_STATUS].real)  # noqa: F405
+        branch["angmin"] = row[ANGMIN].real  # noqa: F405
+        branch["angmax"] = row[ANGMAX].real  # noqa: F405
+        branch["tap"] = row[TAP].real  # noqa: F405
+        branch["shift"] = math.radians(row[SHIFT].real)  # noqa: F405
         pm["branch"][str(idx)] = branch
 
     for idx, row in enumerate(ppc["gen"], start=1):
         gen = dict()
-        gen["pg"] = row[PG]
-        gen["qg"] = row[QG]
-        gen["gen_bus"] = int(row[GEN_BUS]) + 1
-        gen["vg"] = row[VG]
-        gen["qmax"] = row[QMAX]
-        gen["gen_status"] = int(row[GEN_STATUS])
-        gen["qmin"] = row[QMIN]
-        gen["pmin"] = row[PMIN]
-        gen["pmax"] = row[PMAX]
+        gen["pg"] = row[PG]  # noqa: F405
+        gen["qg"] = row[QG]  # noqa: F405
+        gen["gen_bus"] = int(row[GEN_BUS]) + 1  # noqa: F405
+        gen["vg"] = row[VG]  # noqa: F405
+        gen["qmax"] = row[QMAX]  # noqa: F405
+        gen["gen_status"] = int(row[GEN_STATUS])  # noqa: F405
+        gen["qmin"] = row[QMIN]  # noqa: F405
+        gen["pmin"] = row[PMIN]  # noqa: F405
+        gen["pmax"] = row[PMAX]  # noqa: F405
         gen["index"] = idx
         pm["gen"][str(idx)] = gen
 
-    # TODO add attribute "fluctuating" to generators from psa_net, maybe move to ppc first
-    # is_fluctuating = [int("fluctuating" in index.lower()) for index in psa_net.generators.index]
+    # TODO add attribute "fluctuating" to generators from psa_net, maybe move to ppc
+    #  first
+    # is_fluctuating = [
+    #   int("fluctuating" in index.lower()) for index in psa_net.generators.index
+    # ]
     # for idx, row in enumerate(is_fluctuating, start=1):
     #     pm["gen"][str(idx)]["fluctuating"] = row
 
@@ -265,14 +275,14 @@ def ppc2pm(ppc, psa_net):  # pragma: no cover
         ppc["gencost"] = ppc["gencost"][: ppc["gen"].shape[0], :]
     for idx, row in enumerate(ppc["gencost"], start=1):
         gen = pm["gen"][str(idx)]
-        gen["model"] = int(row[MODEL])
+        gen["model"] = int(row[MODEL])  # noqa: F405
         if gen["model"] == 1:
-            gen["ncost"] = int(row[NCOST])
-            gen["cost"] = row[COST : COST + gen["ncost"] * 2].tolist()
+            gen["ncost"] = int(row[NCOST])  # noqa: F405
+            gen["cost"] = row[COST : COST + gen["ncost"] * 2].tolist()  # noqa: F405
         elif gen["model"] == 2:
-            gen["ncost"] = int(row[NCOST])
+            gen["ncost"] = int(row[NCOST])  # noqa: F405
             gen["cost"] = [0] * 3
-            costs = row[COST:]
+            costs = row[COST:]  # noqa: F405
             if len(costs) > 3:
                 print(costs)
                 raise ValueError("Maximum quadratic cost function allowed")
@@ -337,20 +347,21 @@ def _build_bus(psa_net, ppc):
     bus_cols = len(col_names)
     ppc["bus"] = np.zeros(shape=(n_bus, bus_cols), dtype=float)
     ppc["bus"][:, :bus_cols] = np.array([0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1.05, 0.95])
-    ppc["bus"][:, BUS_I] = np.arange(n_bus)
+    ppc["bus"][:, BUS_I] = np.arange(n_bus)  # noqa: F405
     bus_types = ["PQ", "PV", "Slack", "None"]
     bus_types_int = np.array(
         [bus_types.index(b_type) + 1 for b_type in psa_net.buses["control"].values],
         dtype=int,
     )
-    ppc["bus"][:, BUS_TYPE] = bus_types_int
-    ppc["bus"][:, BASE_KV] = psa_net.buses["v_nom"].values
-    # for edisgo scenario voltage bounds defined for load and feed-in case with 0.985<= v <= 1.05
-    # bounds have to be at least in that range, only accept stronger bounds if given
-    ppc["bus"][:, VMAX] = [
+    ppc["bus"][:, BUS_TYPE] = bus_types_int  # noqa: F405
+    ppc["bus"][:, BASE_KV] = psa_net.buses["v_nom"].values  # noqa: F405
+    # for edisgo scenario voltage bounds defined for load and feed-in case with
+    # 0.985<= v <= 1.05 bounds have to be at least in that range, only accept stronger
+    # bounds if given
+    ppc["bus"][:, VMAX] = [  # noqa: F405
         min(val, 1.05) for val in psa_net.buses["v_mag_pu_max"].values
     ]
-    ppc["bus"][:, VMIN] = [
+    ppc["bus"][:, VMIN] = [  # noqa: F405
         max(val, 0.985) for val in psa_net.buses["v_mag_pu_min"].values
     ]
     return
@@ -359,7 +370,8 @@ def _build_bus(psa_net, ppc):
 def _build_gen(psa_net, ppc):
     n_gen = psa_net.generators.shape[0]
     gen_cols = 21
-    # "bus, p_set, q_set, q_max, q_min, v_set_pu, mva_base, status, p_nom, p_min, Pc1, Pc2, Qc1min, Qc1max, Qc2min, Qc2max, ramp_agc, ramp_10, ramp_30, ramp_q, apf
+    # "bus, p_set, q_set, q_max, q_min, v_set_pu, mva_base, status, p_nom, p_min, Pc1,
+    # Pc2, Qc1min, Qc1max, Qc2min, Qc2max, ramp_agc, ramp_10, ramp_30, ramp_q, apf
     ppc["gen"] = np.zeros(shape=(n_gen, gen_cols), dtype=float)
     # get bus indices for generators
     bus_indices = np.array(
@@ -373,26 +385,26 @@ def _build_gen(psa_net, ppc):
             n_gen, len(np.unique(bus_indices))
         )
     )
-    ppc["gen"][:, GEN_BUS] = bus_indices
+    ppc["gen"][:, GEN_BUS] = bus_indices  # noqa: F405
     # adjust bus types
-    bus_types = ["PQ", "PV", "Slack", "None"]
-    gen_types = np.array(
-        [
-            bus_types.index(gen_type) + 1
-            for gen_type in psa_net.generators["control"].values
-        ],
-        dtype=int,
-    )
+    # bus_types = ["PQ", "PV", "Slack", "None"]
+    # gen_types = np.array(
+    #     [
+    #         bus_types.index(gen_type) + 1
+    #         for gen_type in psa_net.generators["control"].values
+    #     ],
+    #     dtype=int,
+    # )
     # ppc["bus"][bus_indices,BUS_TYPE] = gen_types
     # set setpoint of pg and qg
-    ppc["gen"][:, PG] = psa_net.generators["p_set"].values
-    ppc["gen"][:, QG] = psa_net.generators["q_set"].values
+    ppc["gen"][:, PG] = psa_net.generators["p_set"].values  # noqa: F405
+    ppc["gen"][:, QG] = psa_net.generators["q_set"].values  # noqa: F405
 
-    ppc["gen"][:, MBASE] = 1.0
-    ppc["gen"][:, GEN_STATUS] = 1.0
+    ppc["gen"][:, MBASE] = 1.0  # noqa: F405
+    ppc["gen"][:, GEN_STATUS] = 1.0  # noqa: F405
 
-    ppc["gen"][:, PMAX] = psa_net.generators["p_nom"].values
-    ppc["gen"][:, PMIN] = 0
+    ppc["gen"][:, PMAX] = psa_net.generators["p_nom"].values  # noqa: F405
+    ppc["gen"][:, PMIN] = 0  # noqa: F405
     # TODO SET QMAX AND QMIN! e.g.: cos(phi) value from config
     # ppc["gen"][:,QMAX] = 0
     # ppc["gen"][:, QMIN] = 0
@@ -403,23 +415,42 @@ def _build_gen(psa_net, ppc):
     cost_cols = 7
     ppc["gencost"] = np.zeros(shape=(n_gen, cost_cols), dtype=float)
     # polynomial cost function
-    ppc["gencost"][:, MODEL] = POLYNOMIAL
-    ppc["gencost"][:, STARTUP] = psa_net.generators["start_up_cost"].values
-    ppc["gencost"][:, SHUTDOWN] = psa_net.generators["shut_down_cost"].values
+    ppc["gencost"][:, MODEL] = POLYNOMIAL  # noqa: F405
+    ppc["gencost"][:, STARTUP] = psa_net.generators[  # noqa: F405
+        "start_up_cost"
+    ].values
+    ppc["gencost"][:, SHUTDOWN] = psa_net.generators[  # noqa: F405
+        "shut_down_cost"
+    ].values
     # quadratic cost function has 3 cost coefficients
-    ppc["gencost"][:, NCOST] = 3
-    ppc["gencost"][:, COST] = 0.0
-    ppc["gencost"][:, COST + 1] = psa_net.generators["marginal_cost"].values
-    ppc["gencost"][:, COST + 2] = 0.0
+    ppc["gencost"][:, NCOST] = 3  # noqa: F405
+    ppc["gencost"][:, COST] = 0.0  # noqa: F405
+    ppc["gencost"][:, COST + 1] = psa_net.generators[  # noqa: F405
+        "marginal_cost"
+    ].values
+    ppc["gencost"][:, COST + 2] = 0.0  # noqa: F405
     return
 
 
 def _build_branch(psa_net, ppc):
     n_branch = len(psa_net.lines.index)
     print("build {} lines".format(n_branch))
-    col_names = "fbus, tbus, r, x, b, rateA, rateB, rateC, ratio, angle, status, angmin, angmax".split(
-        ", "
-    )
+    col_names = [
+        "fbus",
+        "tbus",
+        "r",
+        "x",
+        "b",
+        "rateA",
+        "rateB",
+        "rateC",
+        "ratio",
+        "angle",
+        "status",
+        "angmin",
+        "angmax",
+    ]
+
     branch_cols = len(col_names)
     ppc["branch"] = np.zeros(shape=(n_branch, branch_cols), dtype=float)
     from_bus = np.array(
@@ -428,20 +459,20 @@ def _build_branch(psa_net, ppc):
     to_bus = np.array(
         [psa_net.buses.index.get_loc(bus_name) for bus_name in psa_net.lines["bus1"]]
     )
-    ppc["branch"][:, F_BUS] = from_bus
-    ppc["branch"][:, T_BUS] = to_bus
+    ppc["branch"][:, F_BUS] = from_bus  # noqa: F405
+    ppc["branch"][:, T_BUS] = to_bus  # noqa: F405
 
-    ppc["branch"][:, BR_R] = psa_net.lines["r_pu"].values
-    ppc["branch"][:, BR_X] = psa_net.lines["x_pu"].values
-    ppc["branch"][:, BR_B] = psa_net.lines["b_pu"].values
-    ppc["branch"][:, RATE_A] = psa_net.lines["s_nom"].values
-    ppc["branch"][:, RATE_B] = 250  # Default values
-    ppc["branch"][:, RATE_C] = 250  # Default values
-    ppc["branch"][:, TAP] = 0.0
-    ppc["branch"][:, SHIFT] = 0.0
-    ppc["branch"][:, BR_STATUS] = 1.0
-    ppc["branch"][:, ANGMIN] = -360
-    ppc["branch"][:, ANGMAX] = 360
+    ppc["branch"][:, BR_R] = psa_net.lines["r_pu"].values  # noqa: F405
+    ppc["branch"][:, BR_X] = psa_net.lines["x_pu"].values  # noqa: F405
+    ppc["branch"][:, BR_B] = psa_net.lines["b_pu"].values  # noqa: F405
+    ppc["branch"][:, RATE_A] = psa_net.lines["s_nom"].values  # noqa: F405
+    ppc["branch"][:, RATE_B] = 250  # Default values  # noqa: F405
+    ppc["branch"][:, RATE_C] = 250  # Default values  # noqa: F405
+    ppc["branch"][:, TAP] = 0.0  # noqa: F405
+    ppc["branch"][:, SHIFT] = 0.0  # noqa: F405
+    ppc["branch"][:, BR_STATUS] = 1.0  # noqa: F405
+    ppc["branch"][:, ANGMIN] = -360  # noqa: F405
+    ppc["branch"][:, ANGMAX] = 360  # noqa: F405
     # TODO BRANCHCOSTS!
     # check which branch costs are given in psa_net,
     ncost = sum(
@@ -451,9 +482,10 @@ def _build_branch(psa_net, ppc):
     if ncost == 0:
         print("no branch costs are given in pypsa network")
     elif ncost == 1:
-        if not "costs_cable" in psa_net.lines.columns:
+        if "costs_cable" not in psa_net.lines.columns:
             print(
-                "costs for cables not in pypsa network, not possible to define cost function for network expansion"
+                "costs for cables not in pypsa network, not possible to define cost"
+                "function for network expansion"
             )
         else:
             ppc["branchcost"] = np.zeros(shape=(n_branch, 2), dtype=float)
@@ -471,9 +503,21 @@ def _build_branch(psa_net, ppc):
 def _build_transformers(psa_net, ppc):
     n_transformers = len(psa_net.transformers.index)
     print("appending {} transformers".format(n_transformers))
-    col_names = "fbus, tbus, r, x, b, rateA, rateB, rateC, ratio, angle, status, angmin, angmax".split(
-        ", "
-    )
+    col_names = [
+        "fbus",
+        "tbus",
+        "r",
+        "x",
+        "b",
+        "rateA",
+        "rateB",
+        "rateC",
+        "ratio",
+        "angle",
+        "status",
+        "angmin",
+        "angmax",
+    ]
 
     transformers = np.zeros(shape=(n_transformers, len(col_names)), dtype=float)
     from_bus = np.array(
@@ -488,20 +532,20 @@ def _build_transformers(psa_net, ppc):
             for bus_name in psa_net.transformers["bus1"]
         ]
     )
-    transformers[:, F_BUS] = from_bus
-    transformers[:, T_BUS] = to_bus
+    transformers[:, F_BUS] = from_bus  # noqa: F405
+    transformers[:, T_BUS] = to_bus  # noqa: F405
 
-    transformers[:, BR_R] = psa_net.transformers["r_pu"].values
-    transformers[:, BR_X] = psa_net.transformers["x_pu"].values
-    transformers[:, BR_B] = psa_net.transformers["b_pu"].values
-    transformers[:, RATE_A] = psa_net.transformers["s_nom"].values
-    transformers[:, RATE_B] = 250  # Default values
-    transformers[:, RATE_C] = 250  # Default values
-    transformers[:, TAP] = psa_net.transformers["tap_ratio"].values
-    transformers[:, SHIFT] = psa_net.transformers["phase_shift"].values
-    transformers[:, BR_STATUS] = 1.0
-    transformers[:, ANGMIN] = -360
-    transformers[:, ANGMAX] = 360
+    transformers[:, BR_R] = psa_net.transformers["r_pu"].values  # noqa: F405
+    transformers[:, BR_X] = psa_net.transformers["x_pu"].values  # noqa: F405
+    transformers[:, BR_B] = psa_net.transformers["b_pu"].values  # noqa: F405
+    transformers[:, RATE_A] = psa_net.transformers["s_nom"].values  # noqa: F405
+    transformers[:, RATE_B] = 250  # Default values  # noqa: F405
+    transformers[:, RATE_C] = 250  # Default values  # noqa: F405
+    transformers[:, TAP] = psa_net.transformers["tap_ratio"].values  # noqa: F405
+    transformers[:, SHIFT] = psa_net.transformers["phase_shift"].values  # noqa: F405
+    transformers[:, BR_STATUS] = 1.0  # noqa: F405
+    transformers[:, ANGMIN] = -360  # noqa: F405
+    transformers[:, ANGMAX] = 360  # noqa: F405
 
     ppc["branch"] = np.append(ppc["branch"], transformers, axis=0)
     # add trafo costs to branch cost with same shape
@@ -530,7 +574,7 @@ def _build_load(psa_net, ppc):
         )
     )
 
-    ## USE LOAD DATA FROM psa_net.loads as static network data
+    # USE LOAD DATA FROM psa_net.loads as static network data
     # set bool if loads contains a timeseries
     # istime = len(psa_net.loads_t["p_set"].values[0]) != 0
     # istime = False
@@ -538,15 +582,17 @@ def _build_load(psa_net, ppc):
 
     for (load_idx, bus_idx) in enumerate(load_buses):
         # if istime:
-        #     # if timeseries take maximal value of load_bus for static information of the network
+        #     # if timeseries take maximal value of load_bus for static information of
+        #     # the network
         #     p_d = max(psa_net.loads_t["p_set"].values[:,load_idx])
         #     q_d = max(psa_net.loads_t["q_set"].values[:,load_idx])
         # else:
         p_d = psa_net.loads["p_set"].values[load_idx]
         q_d = psa_net.loads["q_set"].values[load_idx]
-        # increase demand at bus_idx by p_d and q_d from load_idx, as multiple loads can be attached to single bus
-        ppc["bus"][bus_idx, PD] += p_d
-        ppc["bus"][bus_idx, QD] += q_d
+        # increase demand at bus_idx by p_d and q_d from load_idx, as multiple loads
+        # can be attached to single bus
+        ppc["bus"][bus_idx, PD] += p_d  # noqa: F405
+        ppc["bus"][bus_idx, QD] += q_d  # noqa: F405
 
     return
 
@@ -591,8 +637,10 @@ def _build_generator_dict(psa_net, ppc):
     generator_dict = {"gen_data": dict()}
     time_horizon = len(psa_net.generators_t["p_set"])
     generator_dict["time_horizon"] = time_horizon
-    # buses_with_gens = [psa_net.generators.loc[busname]["bus"] for busname in psa_net.generators_t["p_set"].columns]
-    # gen_buses = np.array([psa_net.buses.index.get_loc(bus_name) for bus_name in buses_with_gens])
+    # buses_with_gens = [psa_net.generators.loc[busname]["bus"] for busname in
+    # psa_net.generators_t["p_set"].columns]
+    # gen_buses = np.array([psa_net.buses.index.get_loc(bus_name) for bus_name in
+    # buses_with_gens])
     gen_buses = [
         psa_net.buses.index.get_loc(bus_name) for bus_name in psa_net.generators["bus"]
     ]
