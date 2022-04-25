@@ -832,7 +832,9 @@ class TestTopologyWithEdisgoObject:
 
             common_cols = list(set(attr.columns).intersection(grid_attr.columns))
 
-            assert_frame_equal(attr[common_cols], grid_attr[common_cols])
+            assert_frame_equal(
+                attr[common_cols], grid_attr[common_cols], check_names=False
+            )
 
     def test_from_csv(self):
         """
