@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 
 import matplotlib.pyplot as plt
@@ -7,6 +9,7 @@ import pandas as pd
 from networkx.drawing.nx_pydot import graphviz_layout
 
 from edisgo.network.components import Generator, Load, Switch
+from edisgo.tools.geopandas_helper import to_geopandas
 from edisgo.tools.networkx_helper import translate_df_to_graph
 
 
@@ -75,6 +78,24 @@ class Grid(ABC):
 
         """
         return translate_df_to_graph(self.buses_df, self.lines_df)
+
+    @property
+    def geopandas(self):
+        """
+        Returns components as :geopandas:`GeoDataFrame`\\ s
+
+        Returns container with :geopandas:`GeoDataFrame`\\ s containing all georeferenced
+        components within the grid.
+
+        Returns
+        -------
+        :class:`~.tools.geopandas_helper.GeoPandasGridContainer` or \
+            list(:class:`~.tools.geopandas_helper.GeoPandasGridContainer`)
+            Data container with GeoDataFrames containing all georeferenced components
+            within the grid(s).
+
+        """
+        return to_geopandas(self)
 
     @property
     def station(self):
@@ -533,3 +554,10 @@ class LVGrid(Grid):
         else:
             plt.savefig(filename, dpi=150, bbox_inches="tight", pad_inches=0.1)
             plt.close()
+
+    @property
+    def geopandas(self):
+        """
+        TODO: Remove this as soon as LVGrids are georeferenced
+        """
+        raise NotImplementedError("LV Grids are not georeferenced yet.")

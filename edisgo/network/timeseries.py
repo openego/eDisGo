@@ -604,6 +604,7 @@ class TimeSeries:
                 p, q = self._worst_case_conventional_load(
                     cases, df.loc[loads_without_ts, :], edisgo_object.config
                 )
+
                 # change index and set p and q
                 p = p.rename(index=self.timeindex_worst_cases)
                 q = q.rename(index=self.timeindex_worst_cases)

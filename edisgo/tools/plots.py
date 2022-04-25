@@ -31,6 +31,8 @@ if TYPE_CHECKING:
 
 if "READTHEDOCS" not in os.environ:
 
+    import geopandas as gpd
+
     from egoio.db_tables.grid import EgoDpMvGriddistrict
     from egoio.db_tables.model_draft import EgoGridMvGriddistrict
     from geoalchemy2 import shape
@@ -667,7 +669,7 @@ def mv_grid_topology(
     ax = plt.gca()
 
     # plot network district
-    if grid_district_geom and geopandas:
+    if grid_district_geom:
         try:
             projection = 3857 if contextily and background_map else 4326
             crs = {
