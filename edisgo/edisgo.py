@@ -574,6 +574,11 @@ class EDisGo:
             for all time steps. I
             Default: True.
 
+        Returns
+        --------
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+            Returns the time steps for which power flow analysis did not converge.
+
         Other Parameters
         -----------------
         Possible other parameters comprise all other parameters that can be set in
@@ -607,6 +612,8 @@ class EDisGo:
 
         # handle converged time steps
         pypsa_io.process_pfa_results(self, pypsa_network, timesteps_converged)
+
+        return timesteps_not_converged
 
     def reinforce(self, **kwargs):
         """
