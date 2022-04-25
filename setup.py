@@ -85,6 +85,7 @@ examples_requirements = [
     "plotly",
     "dash==2.0.0",
     "jupyter_dash",
+    "werkzeug==2.0.3",
 ]
 dev_requirements = [
     "pytest",
