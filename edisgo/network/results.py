@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def _get_matching_dict_of_attributes_and_file_names():

@@ -12,7 +12,7 @@ if "READTHEDOCS" not in os.environ:
 
 import logging
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def import_ding0_grid(path, edisgo_obj):
@@ -79,8 +79,9 @@ def import_ding0_grid(path, edisgo_obj):
     # but ding0 grids currently also only contain conventional loads
     # ToDo: Change, once information is provided by ding0
     loads_without_type = edisgo_obj.topology.loads_df[
-        (edisgo_obj.topology.loads_df.type.isnull()) |
-        (edisgo_obj.topology.loads_df.type == "")].index
+        (edisgo_obj.topology.loads_df.type.isnull())
+        | (edisgo_obj.topology.loads_df.type == "")
+    ].index
     edisgo_obj.topology.loads_df.loc[loads_without_type, "type"] = "conventional_load"
     # drop slack generator from generators
     slack = grid.generators.loc[grid.generators.control == "Slack"].index

@@ -25,7 +25,7 @@ if "READTHEDOCS" not in os.environ:
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 COLUMNS = {
     "loads_df": ["bus", "p_nom", "type", "annual_consumption", "sector"],
@@ -1058,7 +1058,7 @@ class Topology:
         while generator_name in self.generators_df.index:
             random.seed(a=generator_name)
             generator_name = "Generator_{}_{}".format(
-                tmp, random.randint(10 ** 8, 10 ** 9)
+                tmp, random.randint(10**8, 10**9)
             )
 
         # create new generator dataframe
@@ -1128,7 +1128,7 @@ class Topology:
             while storage_name in self.storage_units_df.index:
                 random.seed(a=storage_name)
                 storage_name = "StorageUnit_{}_{}".format(
-                    grid_name, random.randint(10 ** 8, 10 ** 9)
+                    grid_name, random.randint(10**8, 10**9)
                 )
 
         # create new storage unit dataframe
@@ -1264,7 +1264,7 @@ class Topology:
         while line_name in self.lines_df.index:
             random.seed(a=line_name)
             line_name = "Line_{}_{}_{}".format(
-                bus0, bus1, random.randint(10 ** 8, 10 ** 9)
+                bus0, bus1, random.randint(10**8, 10**9)
             )
 
         # check if all necessary data is now available
@@ -1326,7 +1326,7 @@ class Topology:
         # check uniqueness of provided bus name and otherwise change bus name
         while bus_name in self.buses_df.index:
             random.seed(a=bus_name)
-            bus_name = "Bus_{}".format(random.randint(10 ** 8, 10 ** 9))
+            bus_name = "Bus_{}".format(random.randint(10**8, 10**9))
 
         x = kwargs.get("x", None)
         y = kwargs.get("y", None)

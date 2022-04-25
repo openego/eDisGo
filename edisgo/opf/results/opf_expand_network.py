@@ -5,7 +5,7 @@ import pandas as pd
 
 from edisgo.network.timeseries import add_storage_units_timeseries
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def expand_network(edisgo, tolerance=1e-6):

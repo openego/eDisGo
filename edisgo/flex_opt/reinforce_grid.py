@@ -9,7 +9,7 @@ from edisgo.flex_opt import exceptions, reinforce_measures
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.tools import tools
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def reinforce_grid(

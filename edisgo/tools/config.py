@@ -27,7 +27,7 @@ from glob import glob
 
 import edisgo
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 try:
     import configparser as cp
