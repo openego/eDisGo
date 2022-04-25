@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from geopandas import GeoDataFrame
+from pandas.testing import assert_frame_equal
 from shapely.geometry import Point
 
 from edisgo import EDisGo
@@ -12,6 +14,7 @@ from edisgo.io import ding0_import
 from edisgo.network.components import Switch
 from edisgo.network.grids import LVGrid
 from edisgo.network.topology import Topology
+from edisgo.tools.geopandas_helper import GeoPandasGridContainer
 
 
 class TestTopology:
@@ -806,6 +809,32 @@ class TestTopologyWithEdisgoObject:
             ding0_grid=pytest.ding0_test_network_path
         )
         self.edisgo.set_time_series_worst_case_analysis()
+
+    def test_to_geopandas(self):
+        geopandas_container = self.edisgo.topology.to_geopandas()
+
+        assert isinstance(geopandas_container, GeoPandasGridContainer)
+
+        attrs = [
+            "buses_gdf",
+            "generators_gdf",
+            "lines_gdf",
+            "loads_gdf",
+            "storage_units_gdf",
+            "transformers_gdf",
+        ]
+
+        for attr_str in attrs:
+            attr = getattr(geopandas_container, attr_str)
+            grid_attr = getattr(
+                self.edisgo.topology.mv_grid, attr_str.replace("_gdf", "_df")
+            )
+
+            assert isinstance(attr, GeoDataFrame)
+
+            common_cols = set(attr.columns).intersection(grid_attr.columns)
+
+            assert_frame_equal(attr[common_cols], grid_attr[common_cols])
 
     def test_from_csv(self):
         """
