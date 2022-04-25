@@ -36,7 +36,8 @@ def reinforce_grid(
         conducted and therefore which time steps to consider when checking
         for over-loading and over-voltage issues.
         It defaults to None in which case all timesteps in
-        timeseries.timeindex (see :class:`~.network.network.TimeSeries`) are used.
+        timeseries.timeindex (see :class:`~.network.network.TimeSeries`) are
+        used.
         Possible options are:
 
         * None

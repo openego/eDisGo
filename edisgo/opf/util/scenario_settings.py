@@ -1,13 +1,16 @@
 def opf_settings():
     opf_settings = {
-        # name of postmethod, right now this is just the scenario name and every scenario is handle in one problem setup
-        # the so-called postmethod
-        # for future extension define multiple postmethods in different julia files which will be call by the scenarioname
+        # name of postmethod, right now this is just the scenario name and every
+        # scenario is handle in one problem setup the so-called postmethod for future
+        # extension define multiple postmethods in different julia files which will be
+        # call by the scenarioname
         "scenario": "nep",
-        # objective function, DEFAULT "nep", future extension might include "generation costs" "storage costs" etc.
+        # objective function, DEFAULT "nep", future extension might include "generation
+        # costs" "storage costs" etc.
         "objective": "nep",
-        # chosen relaxation, DEFAULT: "none", options: "none", "soc", "soc_cr", "cr", relaxation are described in
-        # masterthesis "MULTIPERIOD OPTIMAL POWER FLOW PROBLEM IN DISTRIBUTION SYSTEM PLANNING" by Jaap Pedersen
+        # chosen relaxation, DEFAULT: "none", options: "none", "soc", "soc_cr", "cr",
+        # relaxation are described in masterthesis "MULTIPERIOD OPTIMAL POWER FLOW
+        # PROBLEM IN DISTRIBUTION SYSTEM PLANNING" by Jaap Pedersen
         "relaxation": "none",
         # Dictionary of linked time steps in the format {linked step => original step}
         "clusters": {},
@@ -17,15 +20,19 @@ def opf_settings():
         "time_horizon": 2,
         # length of time step in hours
         "time_elapsed": 1.0,
-        # storage units are considered, DEFAULT:False, if true storage units will be located either at buses given in
-        # "storage_buses" or if "storage_buses"=[] all buses are considered as possible locations
+        # storage units are considered, DEFAULT:False, if true storage units will be
+        # located either at buses given in "storage_buses" or if "storage_buses"=[] all
+        # buses are considered as possible locations
         "storage_units": False,
-        # positioning of storage units, if empty list, all buses are potential positions of storage units and
-        # capacity is optimized, entries of list need to be type "int"
+        # positioning of storage units, if empty list, all buses are potential
+        # positions of storage units and capacity is optimized, entries of list need to
+        # be type "int"
         "storage_buses": [],
-        # Only optimize operation of storages exported from eDisGo. Do not optimize storage positioning.
+        # Only optimize operation of storages exported from eDisGo. Do not optimize
+        # storage positioning.
         "storage_operation_only": False,
-        # total storage capacity in the network, sizing of storages is a decision variable and will be found in optimization
+        # total storage capacity in the network, sizing of storages is a decision
+        # variable and will be found in optimization
         "total_storage_capacity": 0.0,
         # Requirements for curtailment in every time step is considered, DEFAULT: False
         "curtailment_requirement": False,

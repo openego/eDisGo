@@ -399,7 +399,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
     for repr_node in nodes_feeder.keys():
 
         # find node farthest away
-        get_weight = lambda u, v, data: data["length"]
+        get_weight = lambda u, v, data: data["length"]  # noqa: E731
         path_length = 0
         for n in nodes_feeder[repr_node]:
             path_length_dict_tmp = dijkstra_shortest_path_length(
@@ -494,6 +494,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
             ] = path_length_dict[node_2_3]
             edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
             lines_changes[crit_line_name] = 1
+            # ToDo: Include switch disconnector
 
     if not lines_changes:
         logger.debug(

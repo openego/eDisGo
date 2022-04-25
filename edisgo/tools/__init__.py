@@ -16,7 +16,7 @@ def session_scope():
     session = Session()
     try:
         yield session
-    except:
+    except Exception:
         session.rollback()
         raise
     finally:

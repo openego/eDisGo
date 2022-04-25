@@ -21,7 +21,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
     Export edisgo object to PyPSA Network
 
     For details from a user perspective see API documentation of
-    :meth:`~edisgo.EDisGo.analyze` of the API class
+    :meth:`~edisgo.EDisGo.to_pypsa` of the API class
     :class:`~.edisgo.EDisGo`.
 
     Translating eDisGo's network topology to PyPSA representation is structured
@@ -58,6 +58,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
     * Duplicate labels in components DataFrames and components' time series
       DataFrames
 
+    Todo: Adapt docstring (add kwargs)
+
     Parameters
     ----------
     grid_object: :class:`~.EDisGo` or :class:`~.network.grids.Grid`
@@ -74,7 +76,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         * 'mvlv' to export MV network level only. This includes cumulative load
           and generation from underlying LV network aggregated at respective LV
           station's secondary side.
-          #ToDo change name of this mode or use kwarg to define where to aggregate lv loads and generation
+          TODO: change name of this mode or use kwarg to define where to aggregate lv
+           loads and generation
         * 'lv' to export specified LV network only.
     timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
         :pandas:`pandas.Timestamp<Timestamp>`
@@ -319,25 +322,17 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             ) = _get_timeseries_with_aggregated_elements(
                 edisgo_obj,
                 timesteps,
-                ["loads", "charging_points"],
+                ["loads"],
                 components["Load"].index,
                 aggregated_lv_components["Load"],
             )
         else:
-            loads_timeseries_active = pd.concat(
-                [
-                    edisgo_obj.timeseries.loads_active_power,
-                    edisgo_obj.timeseries.charging_points_active_power,
-                ],
-                axis=1,
-            ).loc[timesteps, components["Load"].index]
-            loads_timeseries_reactive = pd.concat(
-                [
-                    edisgo_obj.timeseries.loads_reactive_power,
-                    edisgo_obj.timeseries.charging_points_reactive_power,
-                ],
-                axis=1,
-            ).loc[timesteps, components["Load"].index]
+            loads_timeseries_active = edisgo_obj.timeseries.loads_active_power.loc[
+                timesteps, components["Load"].index
+            ]
+            loads_timeseries_reactive = edisgo_obj.timeseries.loads_reactive_power.loc[
+                timesteps, components["Load"].index
+            ]
         import_series_from_dataframe(
             pypsa_network, loads_timeseries_active, "Load", "p_set"
         )
@@ -525,8 +520,7 @@ def _append_lv_components(
     then connected to one side of the LVStation. If required, the LV components
     can be aggregated in different modes. As an example, loads can be
     aggregated sector-wise or all loads can be aggregated into one
-    representative load. The sum of p_nom or peak_load of all cumulated
-    components is calculated.
+    representative load. The sum of p_nom of all cumulated components is calculated.
 
     Parameters
     ----------
@@ -670,7 +664,7 @@ def _append_lv_components(
             raise ValueError("Aggregation type for generators invalid.")
         lv_components[comp] = lv_components[comp].append(comps_aggr)
     elif comp == "StorageUnit":
-        if aggregate_storages == None:
+        if aggregate_storages is None:
             comps_aggr = comps.loc[:, ["bus", "control"]]
         elif aggregate_storages == "all":
             comps_aggr = pd.DataFrame(
@@ -817,8 +811,9 @@ def _check_integrity_of_pypsa(pypsa_network):
     Checks whether the provided pypsa network is calculable.
 
     Isolated nodes,
-    duplicate labels, that every load, generator and storage unit has a
-    time series for active and reactive power, and completeness of buses and branch elements are checked.
+    duplicate labels, that every load, generator and storage unit has a time series for
+    active and reactive power, and completeness of buses and branch elements are
+    checked.
 
     Parameters
     ----------
@@ -874,8 +869,8 @@ def _check_integrity_of_pypsa(pypsa_network):
             ]
             if not missing.empty:
                 raise ValueError(
-                    "The following components have no `{}` time "
-                    "series.".format(missing.index, i)
+                    f"The following components have no '{i}' time "
+                    f"series. Components: {missing.index}"
                 )
 
     missing = pypsa_network.buses.loc[
@@ -886,7 +881,7 @@ def _check_integrity_of_pypsa(pypsa_network):
     if not missing.empty:
         raise ValueError(
             "The following components have no `v_mag_pu_set` time "
-            "series.".format(missing.index)
+            "series: {}.".format(missing.index)
         )
 
     # check for duplicates in p_set and q_set
@@ -923,7 +918,8 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     pypsa : :pypsa:`pypsa.Network<network>`
         The PyPSA `Network container
         <https://www.pypsa.org/doc/components.html#network>`_
-    timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or :pandas:`pandas.Timestamp<Timestamp>`
+    timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+        :pandas:`pandas.Timestamp<Timestamp>`
         Time steps for which latest power flow analysis was conducted and
         for which to retrieve pypsa results.
 
@@ -945,6 +941,7 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     """
     # get the absolute losses in the system (in MW and Mvar)
     # subtracting total generation (including slack) from total load
+    # ToDo include storage units
     grid_losses = {
         "p": (
             abs(pypsa.generators_t["p"].sum(axis=1) - pypsa.loads_t["p"].sum(axis=1))

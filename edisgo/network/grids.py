@@ -164,8 +164,8 @@ class Grid(ABC):
             List of loads within the network.
 
         """
-        for l in self.loads_df.index:
-            yield Load(id=l, edisgo_obj=self.edisgo_obj)
+        for load in self.loads_df.index:
+            yield Load(id=load, edisgo_obj=self.edisgo_obj)
 
     @property
     def storage_units_df(self):
@@ -194,12 +194,10 @@ class Grid(ABC):
         :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all charging points in topology. For more
             information on the dataframe see
-            :attr:`~.network.topology.Topology.charging_points_df`.
+            :attr:`~.network.topology.Topology.loads_df`.
 
         """
-        return self.edisgo_obj.topology.charging_points_df[
-            self.edisgo_obj.topology.charging_points_df.bus.isin(self.buses_df.index)
-        ]
+        return self.loads_df[self.loads_df.type == "charging_point"]
 
     @property
     def switch_disconnectors_df(self):

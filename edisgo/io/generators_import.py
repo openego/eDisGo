@@ -6,7 +6,6 @@ import pandas as pd
 
 from sqlalchemy import func
 
-from edisgo.network.timeseries import add_generators_timeseries
 from edisgo.tools import session_scope
 from edisgo.tools.geo import proj2equidistant
 
@@ -321,13 +320,6 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
     if kwargs.get("p_target", None) is None:
         _validate_generation()
 
-    # update time series if they were already set
-    if not edisgo_object.timeseries.generators_active_power.empty:
-        add_generators_timeseries(
-            edisgo_obj=edisgo_object,
-            generator_names=edisgo_object.topology.generators_df.index,
-        )
-
 
 def _update_grids(
     edisgo_object,
@@ -610,7 +602,7 @@ def _update_grids(
 
         # drop types not in p_target from new_gens
         for gen_type in new_gens.generator_type.unique():
-            if not gen_type in p_target.keys():
+            if gen_type not in p_target.keys():
                 new_gens.drop(
                     new_gens[new_gens["generator_type"] == gen_type].index,
                     inplace=True,

@@ -215,7 +215,7 @@ class TestTopology:
             test_info="test",
         )
         assert len_df_before + 1 == len(self.topology.loads_df)
-        assert name == "Load_LVGrid_1_residential_10"
+        assert name == "Conventional_Load_LVGrid_1_residential_10"
         assert self.topology.loads_df.at[name, "p_nom"] == 1
         assert self.topology.loads_df.at[name, "test_info"] == "test"
 
@@ -224,7 +224,7 @@ class TestTopology:
             bus="Bus_BranchTee_LVGrid_1_4", p_nom=2, annual_consumption=1
         )
         assert len_df_before + 2 == len(self.topology.loads_df)
-        assert name == "Load_LVGrid_1_1"
+        assert name == "Conventional_Load_LVGrid_1_9"
         assert self.topology.loads_df.loc[name, "p_nom"] == 2
         assert self.topology.loads_df.loc[name, "sector"] is np.nan
 
@@ -233,7 +233,7 @@ class TestTopology:
             bus="Bus_BranchTee_LVGrid_1_4", p_nom=3, annual_consumption=1
         )
         assert len_df_before + 3 == len(self.topology.loads_df)
-        assert name == "Load_LVGrid_1_2"
+        assert name == "Conventional_Load_LVGrid_1_10"
         assert self.topology.loads_df.loc[name, "p_nom"] == 3
 
         # test error raising if bus is not valid
@@ -264,7 +264,7 @@ class TestTopology:
             test_info="test",
         )
         assert len_df_before + 1 == len(self.topology.charging_points_df)
-        assert name == "ChargingPoint_MVGrid_1_home_0"
+        assert name == "Charging_Point_MVGrid_1_home_1"
         assert self.topology.charging_points_df.at[name, "sector"] == "home"
         assert self.topology.charging_points_df.at[name, "test_info"] == "test"
 
@@ -276,7 +276,7 @@ class TestTopology:
             sector="work",
         )
         assert len_df_before + 2 == len(self.topology.charging_points_df)
-        assert name == "ChargingPoint_LVGrid_1_work_0"
+        assert name == "Charging_Point_LVGrid_1_work_1"
         assert self.topology.charging_points_df.at[name, "p_nom"] == 0.5
 
         # test error raising if bus is not valid
@@ -340,14 +340,14 @@ class TestTopology:
             test_info="test",
         )
         assert len_df_before + 1 == len(self.topology.storage_units_df)
-        assert name == "StorageUnit_LVGrid_1_0"
+        assert name == "StorageUnit_LVGrid_1_1"
         assert self.topology.storage_units_df.at[name, "p_nom"] == 1
         assert self.topology.storage_units_df.loc[name, "test_info"] == "test"
 
         # test without kwargs
         name = self.topology.add_storage_unit(bus="Bus_BranchTee_LVGrid_1_6", p_nom=2)
         assert len_df_before + 2 == len(self.topology.storage_units_df)
-        assert name == "StorageUnit_LVGrid_1_1"
+        assert name == "StorageUnit_LVGrid_1_2"
         assert self.topology.storage_units_df.at[name, "p_nom"] == 2
         assert self.topology.storage_units_df.at[name, "control"] == "PQ"
 
@@ -559,7 +559,7 @@ class TestTopology:
 
         # check case where only charging point is connected to line,
         # line and bus are therefore removed as well
-        name = "ChargingPoint_LVGrid_1_0"
+        name = "ChargingPoint_LVGrid_1_work_1"
         bus = "Bus_Load_agricultural_LVGrid_1_1"
         # get connected line
         connected_lines = self.topology.get_connected_lines_from_bus(bus)
@@ -571,7 +571,7 @@ class TestTopology:
         assert ~(connected_lines.index.isin(self.topology.lines_df.index)).any()
 
         # check case where charging point is not the only connected element
-        name = "ChargingPoint_MVGrid_1_0"
+        name = "ChargingPoint_MVGrid_1_home_1"
         bus = "Bus_BranchTee_MVGrid_1_8"
         # get connected lines
         connected_lines = self.topology.get_connected_lines_from_bus(bus)
@@ -610,7 +610,7 @@ class TestTopology:
 
         # check case where only storage unit is connected to line,
         # line and bus are therefore removed as well
-        name = "StorageUnit_LVGrid_1_1"
+        name = "StorageUnit_LVGrid_1_2"
         bus = "Bus_BranchTee_LVGrid_1_6"
         # get connected line
         connected_lines = self.topology.get_connected_lines_from_bus(bus)
@@ -622,7 +622,7 @@ class TestTopology:
         assert ~(connected_lines.index.isin(self.topology.lines_df.index)).any()
 
         # check case where storage is not the only connected element
-        name = "StorageUnit_LVGrid_1_0"
+        name = "StorageUnit_LVGrid_1_1"
         bus = "Bus_BranchTee_LVGrid_1_3"
         # get connected lines
         connected_lines = self.topology.get_connected_lines_from_bus(bus)
@@ -636,7 +636,7 @@ class TestTopology:
 
         # test try removing line that cannot be removed
         msg = "Removal of line Line_30000010 would create isolated node."
-        with pytest.raises(AssertionError, match=msg):
+        with pytest.warns(UserWarning, match=msg):
             self.topology.remove_line("Line_30000010")
 
         # test remove line in cycle (no bus is removed)
@@ -806,9 +806,9 @@ class TestTopologyWithEdisgoObject:
     @pytest.yield_fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case",
+            ding0_grid=pytest.ding0_test_network_path
         )
+        self.edisgo.set_time_series_worst_case_analysis()
 
     def test_to_geopandas(self):
         geopandas_container = self.edisgo.topology.to_geopandas()
@@ -1304,7 +1304,7 @@ class TestTopologyWithEdisgoObject:
         }
 
         comp_name = self.edisgo.topology.connect_to_lv(
-            self.edisgo, test_cp, comp_type="ChargingPoint"
+            self.edisgo, test_cp, comp_type="charging_point"
         )
 
         # check that number of buses stayed the same
@@ -1338,7 +1338,7 @@ class TestTopologyWithEdisgoObject:
         }
 
         comp_name = self.edisgo.topology.connect_to_lv(
-            self.edisgo, test_cp, comp_type="ChargingPoint"
+            self.edisgo, test_cp, comp_type="charging_point"
         )
 
         # check that number of buses stayed the same
@@ -1373,7 +1373,7 @@ class TestTopologyWithEdisgoObject:
         }
 
         comp_name = self.edisgo.topology.connect_to_lv(
-            self.edisgo, test_cp, comp_type="ChargingPoint"
+            self.edisgo, test_cp, comp_type="charging_point"
         )
 
         # check that number of buses stayed the same

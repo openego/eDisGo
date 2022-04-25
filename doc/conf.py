@@ -28,7 +28,6 @@ __author__ = "nesnoj, gplssm"
 # serve to show the default.
 
 import os
-import shlex
 import sys
 
 from unittest.mock import MagicMock
@@ -82,7 +81,8 @@ extlinks = {
         "geopandas.",
     ),
     "networkx": (
-        "https://networkx.github.io/documentation/stable/reference/classes/graph.html#%s",
+        "https://networkx.github.io/documentation/stable/reference/classes/"
+        "graph.html#%s",
         "networkx.",
     ),
     "sqlalchemy": (
@@ -92,6 +92,7 @@ extlinks = {
     "shapely": ("https://shapely.readthedocs.io/en/latest/manual.html#%s", "shapely."),
     "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "Ding0"),
     "pypsa": ("https://pypsa.org/doc/components.html#%s", "pypsa"),
+    "plotly": ("https://plotly.com/python-api-reference/generated/#%s.html", "plotly"),
 }
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -166,8 +167,9 @@ pygments_style = "sphinx"
 todo_include_todos = True
 
 
-# Fix import error of modules which depend on C modules (mock out the imports for these modules)
-# see http://read-the-docs.readthedocs.io/en/latest/faq.html#i-get-import-errors-on-libraries-that-depend-on-c-modules
+# Fix import error of modules which depend on C modules (mock out the imports for these
+# modules) see http://read-the-docs.readthedocs.io/en/latest/
+#  faq.html#i-get-import-errors-on-libraries-that-depend-on-c-modules
 if "READTHEDOCS" in os.environ:
 
     class Mock(MagicMock):
@@ -185,7 +187,7 @@ if "READTHEDOCS" in os.environ:
 # a list of builtin themes.
 # html_theme = 'alabaster'
 
-import sphinx_rtd_theme
+import sphinx_rtd_theme  # noqa: E402
 
 html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 html_theme = "sphinx_rtd_theme"
@@ -286,13 +288,13 @@ htmlhelp_basename = "edisgodoc"
 
 latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
-    #'papersize': 'letterpaper',
+    # 'papersize': 'letterpaper',
     # The font size ('10pt', '11pt' or '12pt').
-    #'pointsize': '10pt',
+    # 'pointsize': '10pt',
     # Additional stuff for the LaTeX preamble.
-    #'preamble': '',
+    # 'preamble': '',
     # Latex figure (float) alignment
-    #'figure_align': 'htbp',
+    # 'figure_align': 'htbp',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples

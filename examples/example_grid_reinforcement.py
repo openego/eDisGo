@@ -28,7 +28,6 @@ grids.
 import logging
 import os
 
-import pandas as pd
 import requests
 
 from edisgo import EDisGo
@@ -70,23 +69,24 @@ def run_example():
     scenario = "nep2035"
 
     # Set up worst-case scenario
-    edisgo = EDisGo(ding0_grid=dingo_grid_path, worst_case_analysis="worst-case")
+    edisgo = EDisGo(ding0_grid=dingo_grid_path)
+    edisgo.set_time_series_worst_case_analysis()
 
     # Reinforce ding0 grid to obtain a stable status quo grid
     logging.info("Conduct grid reinforcement to obtain stable status quo grid.")
     # Overwrite config parameters for allowed voltage deviations in
     # initial topology reinforcement to better represent currently used limits
     edisgo.config["grid_expansion_allowed_voltage_deviations"] = {
-        "feedin_case_lower": 0.9,
+        "feed-in_case_lower": 0.9,
         "load_case_upper": 1.1,
         "hv_mv_trafo_offset": 0.04,
         "hv_mv_trafo_control_deviation": 0.0,
         "mv_load_case_max_v_deviation": 0.055,
-        "mv_feedin_case_max_v_deviation": 0.02,
+        "mv_feed-in_case_max_v_deviation": 0.02,
         "lv_load_case_max_v_deviation": 0.065,
-        "lv_feedin_case_max_v_deviation": 0.03,
+        "lv_feed-in_case_max_v_deviation": 0.03,
         "mv_lv_station_load_case_max_v_deviation": 0.02,
-        "mv_lv_station_feedin_case_max_v_deviation": 0.01,
+        "mv_lv_station_feed-in_case_max_v_deviation": 0.01,
     }
     # Conduct reinforcement
     edisgo.reinforce()
@@ -100,6 +100,7 @@ def run_example():
 
     # Get data on generators in NEP scenario and connect generators to the grid
     edisgo.import_generators(generator_scenario=scenario)
+    edisgo.set_time_series_worst_case_analysis()
 
     # Conduct topology reinforcement
     edisgo.reinforce()

@@ -39,7 +39,6 @@ COLUMNS = {
         "weather_cell_id",
         "subtype",
     ],
-    "charging_points_df": ["bus", "p_nom", "type", "sector"],
     "storage_units_df": ["bus", "control", "p_nom"],
     "transformers_df": ["bus0", "bus1", "x_pu", "r_pu", "s_nom", "type_info"],
     "lines_df": [
@@ -211,7 +210,10 @@ class Topology:
                 Peak load or nominal capacity in MW.
 
             type : str
-                Load type. E.g. 'load', 'charging_point' or 'heat_pump'
+                Type of load, e.g. 'conventional_load', 'charging_point' or 'heat_pump'.
+                This information is for example currently necessary when setting up a
+                worst case analysis, as different types of loads are treated
+                differently.
 
             annual_consumption : float
                 Annual consumption in MWh.
@@ -233,7 +235,7 @@ class Topology:
         """
         try:
             return self._loads_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["loads_df"])
 
     @loads_df.setter
@@ -289,7 +291,7 @@ class Topology:
         """
         try:
             return self._generators_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["generators_df"])
 
     @generators_df.setter
@@ -328,7 +330,7 @@ class Topology:
         """
         try:
             return self._storage_units_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["storage_units_df"])
 
     @storage_units_df.setter
@@ -373,7 +375,7 @@ class Topology:
         """
         try:
             return self._transformers_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["transformers_df"])
 
     @transformers_df.setter
@@ -400,7 +402,7 @@ class Topology:
         """
         try:
             return self._transformers_hvmv_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["transformers_df"])
 
     @transformers_hvmv_df.setter
@@ -460,7 +462,7 @@ class Topology:
         """
         try:
             return self._lines_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["lines_df"])
 
     @lines_df.setter
@@ -507,14 +509,14 @@ class Topology:
         """
         try:
             return self._buses_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["buses_df"])
 
     @buses_df.setter
     def buses_df(self, df):
         # make sure in_building takes on only True or False (not numpy bools)
         # needs to be tested using `== True`, not `is True`
-        buses_in_building = df[df.in_building == True].index
+        buses_in_building = df[df.in_building == True].index  # noqa: E712
         df.loc[buses_in_building, "in_building"] = True
         df.loc[~df.index.isin(buses_in_building), "in_building"] = False
         self._buses_df = df
@@ -560,7 +562,7 @@ class Topology:
         """
         try:
             return self._switches_df
-        except:
+        except Exception:
             return pd.DataFrame(columns=COLUMNS["switches_df"])
 
     @switches_df.setter
@@ -568,9 +570,9 @@ class Topology:
         self._switches_df = df
 
     @property
-    def charging_points_df(self, type="charging_point"):
+    def charging_points_df(self):
         """
-        Returns a subset from :py:attr:`~loads_df` containing only charging points.
+        Returns a subset of :py:attr:`~loads_df` containing only charging points.
 
         Parameters
         ----------
@@ -583,12 +585,10 @@ class Topology:
             Pandas DataFrame with all loads of the given type.
 
         """
-        if type in self.loads_df.type.unique():
-            return self.loads_df.loc[self.loads_df.type == type].dropna(
-                axis=1, how="all"
-            )
+        if "charging_point" in self.loads_df.type.unique():
+            return self.loads_df.loc[self.loads_df.type == "charging_point"]
         else:
-            return pd.DataFrame(columns=COLUMNS["charging_points_df"])
+            return pd.DataFrame(columns=COLUMNS["loads_df"])
 
     @property
     def id(self):
@@ -907,7 +907,7 @@ class Topology:
                 return True
         return False
 
-    def add_load(self, bus, p_nom, type="load", **kwargs):
+    def add_load(self, bus, p_nom, type="conventional_load", **kwargs):
         """
         Adds load to topology.
 
@@ -921,7 +921,7 @@ class Topology:
             See :py:attr:`~loads_df` for more information.
         type : str
             See :py:attr:`~loads_df` for more information.
-            Default: "load"
+            Default: "conventional_load"
 
         Other Parameters
         -----------------
@@ -953,7 +953,7 @@ class Topology:
         else:
             grid_name = "MVGrid_" + str(int(bus_s.mv_grid_id))
 
-        type_name = "".join([val.capitalize() for val in type.split("_")])
+        type_name = "_".join([val.capitalize() for val in type.split("_")])
 
         tmp = f"{type_name}_{grid_name}"
 
@@ -967,7 +967,7 @@ class Topology:
                 self._grids[grid_name].loads_df.type == type
             ]
 
-            load_id = len(type_df)
+            load_id = len(type_df) + 1
 
         load_name = f"{tmp}_{load_id}"
 
@@ -1123,7 +1123,7 @@ class Topology:
             grid_name = "LVGrid_" + str(int(bus_s.lv_grid_id))
         else:
             grid_name = "MVGrid_" + str(int(bus_s.mv_grid_id))
-        storage_id = len(self._grids[grid_name].storage_units_df)
+        storage_id = len(self._grids[grid_name].storage_units_df) + 1
         storage_name = "StorageUnit_{}_{}".format(grid_name, storage_id)
         if storage_name in self.storage_units_df.index:
             storage_name = "StorageUnit_{}_{}".format(grid_name, storage_id + 1)
@@ -1205,9 +1205,9 @@ class Topology:
                     line_data = self.equipment_data[
                         "{}_overhead_lines".format(voltage_level)
                     ].loc[type_info, :]
-                except:
+                except Exception:
                     raise ValueError("Specified line type is not valid.")
-            except:
+            except Exception:
                 raise
             return line_data
 
@@ -1355,6 +1355,8 @@ class Topology:
         """
         Removes load with given name from topology.
 
+        If no other elements are connected, line and bus are removed as well.
+
         Parameters
         ----------
         name : str
@@ -1376,6 +1378,8 @@ class Topology:
     def remove_generator(self, name):
         """
         Removes generator with given name from topology.
+
+        If no other elements are connected, line and bus are removed as well.
 
         Parameters
         ----------
@@ -1403,6 +1407,8 @@ class Topology:
         """
         Removes storage with given name from topology.
 
+        If no other elements are connected, line and bus are removed as well.
+
         Parameters
         ----------
         name : str
@@ -1429,6 +1435,9 @@ class Topology:
         """
         Removes line with given name from topology.
 
+        Line is only removed, if it does not result in isolated buses. A warning is
+        raised in that case.
+
         Parameters
         ----------
         name : str
@@ -1436,9 +1445,11 @@ class Topology:
 
         """
         if not self._check_line_for_removal(name):
-            raise AssertionError(
-                "Removal of line {} would create isolated node.".format(name)
+            warnings.warn(
+                "Removal of line {} would create isolated node. Remove all "
+                "connected elements first to remove bus.".format(name)
             )
+            return
 
         # backup buses of line and check if buses can be removed as well
         bus0 = self.lines_df.at[name, "bus0"]
@@ -1591,7 +1602,7 @@ class Topology:
             np.sqrt(3) * data_new_line.U_n * data_new_line.I_max_th
         )
 
-    def connect_to_mv(self, edisgo_object, comp_data, comp_type="Generator"):
+    def connect_to_mv(self, edisgo_object, comp_data, comp_type="generator"):
         """
         Add and connect new generator or charging point to MV grid topology.
 
@@ -1624,8 +1635,8 @@ class Topology:
             geolocation must be provided as
             :shapely:`Shapely Point object<points>`.
         comp_type : str
-            Type of added component. Can be 'Generator' or 'ChargingPoint'.
-            Default: 'Generator'.
+            Type of added component. Can be 'generator' or 'charging_point'.
+            Default: 'generator'.
 
         Returns
         -------
@@ -1641,7 +1652,7 @@ class Topology:
         else:
             geom = comp_data["geom"]
 
-        if comp_type == "Generator":
+        if comp_type == "generator":
             if comp_data["generator_id"] is not None:
                 bus = "Bus_Generator_{}".format(comp_data["generator_id"])
             else:
@@ -1657,7 +1668,7 @@ class Topology:
         )
 
         # add component to newly created bus
-        if comp_type == "Generator":
+        if comp_type == "generator":
             comp_name = self.add_generator(bus=bus, **comp_data)
         else:
             comp_name = self.add_load(bus=bus, type="charging_point", **comp_data)
@@ -1759,7 +1770,7 @@ class Topology:
         self,
         edisgo_object,
         comp_data,
-        comp_type="Generator",
+        comp_type="generator",
         allowed_number_of_comp_per_bus=2,
     ):
         """
@@ -1829,8 +1840,8 @@ class Topology:
             :shapely:`Shapely Point object<points>` and the LV grid ID as
             integer.
         comp_type : str
-            Type of added component. Can be 'Generator' or 'ChargingPoint'.
-            Default: 'Generator'.
+            Type of added component. Can be 'generator' or 'charging_point'.
+            Default: 'generator'.
         allowed_number_of_comp_per_bus : int
             Specifies, how many generators respectively charging points are
             at most allowed to be placed at the same bus. Default: 2.
@@ -1856,7 +1867,7 @@ class Topology:
             """
 
             # add bus for new component
-            if comp_type == "Generator":
+            if comp_type == "generator":
                 if comp_data["generator_id"] is not None:
                     b = "Bus_Generator_{}".format(comp_data["generator_id"])
                 else:
@@ -1917,7 +1928,7 @@ class Topology:
             substation ID is provided or it does not exist.
 
             """
-            if comp_type == "Generator":
+            if comp_type == "generator":
                 random.seed(a=comp_data["generator_id"])
             else:
                 # ToDo: Seed shouldn't depend on number of charging points, but
@@ -1929,11 +1940,11 @@ class Topology:
         # get list of LV grid IDs
         lv_grid_ids = [_.id for _ in self.mv_grid.lv_grids]
 
-        if comp_type == "Generator":
+        if comp_type == "generator":
             add_func = self.add_generator
-        elif comp_type == "ChargingPoint":
+        elif comp_type == "charging_point":
             add_func = self.add_load
-            comp_data["type"] = "charging_point"
+            comp_data["type"] = comp_type
         else:
             logger.error("Component type {} is not a valid option.".format(comp_type))
 
@@ -1994,7 +2005,7 @@ class Topology:
 
             # get valid buses to connect new component to
             lv_loads = lv_grid.loads_df
-            if comp_type == "Generator":
+            if comp_type == "generator":
                 if comp_data["p_nom"] <= 0.030:
                     tmp = lv_loads[lv_loads.sector == "residential"]
                     target_buses = tmp.bus.values
@@ -2019,7 +2030,7 @@ class Topology:
 
             # generate random list (unique elements) of possible target buses
             # to connect components to
-            if comp_type == "Generator":
+            if comp_type == "generator":
                 random.seed(a=comp_data["generator_id"])
             else:
                 random.seed(
@@ -2055,7 +2066,7 @@ class Topology:
                 lv_bus = lv_buses_rnd.pop()
 
                 # determine number of components of the same type at LV bus
-                if comp_type == "Generator":
+                if comp_type == "generator":
                     comps_at_bus = self.generators_df[self.generators_df.bus == lv_bus]
                 else:
                     comps_at_bus = self.charging_points_df[
@@ -2181,6 +2192,7 @@ class Topology:
                 length=line_length,
                 kind=line_data.kind,
                 type_info=line_data.type_info,
+                num_parallel=line_data.num_parallel,
             )
             # if line connected to switch was split, write new line name to
             # switch data
@@ -2209,6 +2221,7 @@ class Topology:
                 length=line_length,
                 kind=line_data.kind,
                 type_info=line_data.type_info,
+                num_parallel=line_data.num_parallel,
             )
             # if line connected to switch was split, write new line name to
             # switch data

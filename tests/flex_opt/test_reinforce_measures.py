@@ -10,9 +10,9 @@ class TestReinforceMeasures:
     @classmethod
     def setup_class(self):
         self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case",
+            ding0_grid=pytest.ding0_test_network_path
         )
+        self.edisgo.set_time_series_worst_case_analysis()
         self.edisgo.analyze()
         self.timesteps = pd.date_range("1/1/1970", periods=2, freq="H")
 

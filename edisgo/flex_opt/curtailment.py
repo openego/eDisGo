@@ -120,17 +120,17 @@ def voltage_based(
     if not combined_analysis:
         allowed_voltage_dev_mv = edisgo.network.config[
             "grid_expansion_allowed_voltage_deviations"
-        ]["mv_feedin_case_max_v_deviation"]
+        ]["mv_feed-in_case_max_v_deviation"]
         allowed_voltage_diff_lv = edisgo.network.config[
             "grid_expansion_allowed_voltage_deviations"
-        ]["lv_feedin_case_max_v_deviation"]
+        ]["lv_feed-in_case_max_v_deviation"]
     else:
         allowed_voltage_dev_mv = edisgo.network.config[
             "grid_expansion_allowed_voltage_deviations"
-        ]["mv_lv_feedin_case_max_v_deviation"]
+        ]["mv_lv_feed-in_case_max_v_deviation"]
         allowed_voltage_diff_lv = edisgo.network.config[
             "grid_expansion_allowed_voltage_deviations"
-        ]["mv_lv_feedin_case_max_v_deviation"]
+        ]["mv_lv_feed-in_case_max_v_deviation"]
 
     # assign allowed voltage deviation to each generator
     if not edisgo.network.pypsa.edisgo_mode:
@@ -596,7 +596,10 @@ class CurtailmentControl:
 
         # get all fluctuating generators and their attributes (weather ID,
         # type, etc.)
-        generators = get_gen_info(edisgo.topology, "mvlv", fluctuating=True)
+        # TODO: Function get_gen_info does not exist
+        generators = get_gen_info(  # noqa: F821
+            edisgo.topology, "mvlv", fluctuating=True
+        )
 
         # do analyze to get all voltages at generators and feed-in dataframe
         edisgo.analyze(mode=mode)
@@ -696,7 +699,7 @@ class CurtailmentControl:
             raise KeyError(message)
         try:
             curtailment_timeseries.loc[network.timeseries.timeindex]
-        except:
+        except Exception:
             message = (
                 "Time index of curtailment time series does not match "
                 "with load and feed-in time series."
