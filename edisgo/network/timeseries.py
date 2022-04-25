@@ -67,13 +67,11 @@ class TimeSeries:
 
     @timeindex.setter
     def timeindex(self, ind):
-        if len(self._timeindex) > 0:
-            # check if new time index is subset of existing time index
-            if not ind.isin(self._timeindex).all():
-                logger.warning(
-                    "Not all time steps of new time index lie within existing "
-                    "time index. This may cause problems later on."
-                )
+        if len(self._timeindex) > 0 and not ind.isin(self._timeindex).all():
+            logger.warning(
+                "Not all time steps of new time index lie within existing "
+                "time index. This may cause problems later on."
+            )
         self._timeindex = ind
 
     @property
@@ -598,7 +596,7 @@ class TimeSeries:
             loads_without_ts = list(
                 set(df.index) - set(self.loads_active_power.columns)
             )
-            if len(loads_without_ts) > 0:
+            if loads_without_ts:
                 logging.warning(
                     "There are loads where information on type of load is missing. "
                     "Handled types are 'conventional_load', 'charging_point', and "
@@ -850,7 +848,7 @@ class TimeSeries:
         use_cases = ["home", "work", "public", "hpc"]
         sectors = df.sector.unique()
         diff = list(set(sectors) - set(use_cases))
-        if len(diff) > 0:
+        if diff:
             raise AttributeError(
                 "The following charging points have a use case no worst case "
                 "simultaneity factor is defined for: {}.".format(
@@ -1748,9 +1746,7 @@ class TimeSeries:
 
         for attr in self._attributes:
             if not getattr(self, attr).empty:
-                getattr(self, attr).to_csv(
-                    os.path.join(directory, "{}.csv".format(attr))
-                )
+                getattr(self, attr).to_csv(os.path.join(directory, f"{attr}.csv"))
 
         if time_series_raw:
             self.time_series_raw.to_csv(
@@ -1785,7 +1781,7 @@ class TimeSeries:
         """
         timeindex = None
         for attr in self._attributes:
-            path = os.path.join(directory, "{}.csv".format(attr))
+            path = os.path.join(directory, f"{attr}.csv")
             if os.path.exists(path):
                 setattr(
                     self,
@@ -1793,7 +1789,7 @@ class TimeSeries:
                     pd.read_csv(path, index_col=0, parse_dates=True),
                 )
                 if timeindex is None:
-                    timeindex = getattr(self, "_{}".format(attr)).index
+                    timeindex = getattr(self, "f_{attr}").index
         if timeindex is None:
             timeindex = pd.DatetimeIndex([])
         self._timeindex = timeindex
@@ -2057,13 +2053,13 @@ def _check_if_components_exist(edisgo_object, component_names, component_type):
         edisgo_object.topology, "{}_df".format(component_type)
     ).index
     comps_not_in_network = list(set(component_names) - set(comps_in_network))
-    if len(comps_not_in_network) > 0:
+
+    if comps_not_in_network:
         logging.warning(
             "Some of the provided {} are not in the network. "
             "This concerns the following components: {}.".format(
                 component_type, comps_not_in_network
             )
         )
-        provided_comps_in_network = set(component_names) - set(comps_not_in_network)
-        return provided_comps_in_network
+        return set(component_names) - set(comps_not_in_network)
     return component_names
