@@ -89,6 +89,7 @@ examples_requirements = [
 dev_requirements = [
     "pytest",
     "sphinx_rtd_theme",
+    "sphinx-autodoc-typehints",
     "pre-commit",
     "black",
     "isort",
