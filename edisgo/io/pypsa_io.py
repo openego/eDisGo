@@ -58,6 +58,8 @@ def to_pypsa(grid_object, timesteps, **kwargs):
     * Duplicate labels in components DataFrames and components' time series
       DataFrames
 
+    Todo: Adapt docstring (add kwargs)
+
     Parameters
     ----------
     grid_object: :class:`~.EDisGo` or :class:`~.network.grids.Grid`
@@ -879,7 +881,7 @@ def _check_integrity_of_pypsa(pypsa_network):
     if not missing.empty:
         raise ValueError(
             "The following components have no `v_mag_pu_set` time "
-            f"series. Components: {missing.index}"
+            "series: {}.".format(missing.index)
         )
 
     # check for duplicates in p_set and q_set
@@ -939,6 +941,7 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     """
     # get the absolute losses in the system (in MW and Mvar)
     # subtracting total generation (including slack) from total load
+    # ToDo include storage units
     grid_losses = {
         "p": (
             abs(pypsa.generators_t["p"].sum(axis=1) - pypsa.loads_t["p"].sum(axis=1))

@@ -74,6 +74,18 @@ class TimeSeries:
             )
         self._timeindex = ind
 
+    def _internal_getter(self, attribute):
+        try:
+            return getattr(self, "_" + attribute).loc[self.timeindex, :]
+        except AttributeError:
+            return pd.DataFrame(index=self.timeindex)
+        except KeyError:
+            logger.warning(
+                "Timeindex and {} have deviating indices. "
+                "Empty dataframe will be returned.".format(attribute)
+            )
+            return pd.DataFrame(index=self.timeindex)
+
     @property
     def generators_active_power(self):
         """
@@ -93,10 +105,7 @@ class TimeSeries:
             input parameter `df`.
 
         """
-        try:
-            return self._generators_active_power.loc[self.timeindex, :]
-        except Exception:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("generators_active_power")
 
     @generators_active_power.setter
     def generators_active_power(self, df):
@@ -121,10 +130,7 @@ class TimeSeries:
             see input parameter `df`.
 
         """
-        try:
-            return self._generators_reactive_power.loc[self.timeindex, :]
-        except Exception:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("generators_reactive_power")
 
     @generators_reactive_power.setter
     def generators_reactive_power(self, df):
@@ -149,10 +155,7 @@ class TimeSeries:
             input parameter `df`.
 
         """
-        try:
-            return self._loads_active_power.loc[self.timeindex, :]
-        except Exception:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("loads_active_power")
 
     @loads_active_power.setter
     def loads_active_power(self, df):
@@ -177,10 +180,7 @@ class TimeSeries:
             see input parameter `df`.
 
         """
-        try:
-            return self._loads_reactive_power.loc[self.timeindex, :]
-        except Exception:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("loads_reactive_power")
 
     @loads_reactive_power.setter
     def loads_reactive_power(self, df):
@@ -205,10 +205,7 @@ class TimeSeries:
             see input parameter `df`.
 
         """
-        try:
-            return self._storage_units_active_power.loc[self.timeindex, :]
-        except Exception:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("storage_units_active_power")
 
     @storage_units_active_power.setter
     def storage_units_active_power(self, df):
@@ -233,10 +230,7 @@ class TimeSeries:
             see input parameter `df`.
 
         """
-        try:
-            return self._storage_units_reactive_power.loc[self.timeindex, :]
-        except Exception:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("storage_units_reactive_power")
 
     @storage_units_reactive_power.setter
     def storage_units_reactive_power(self, df):
@@ -1548,7 +1542,10 @@ class TimeSeries:
             return q_sign, power_factor
 
         # set reactive power for generators
-        if generators_parametrisation is not None:
+        if (
+            generators_parametrisation is not None
+            and not edisgo_object.topology.generators_df.empty
+        ):
             q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
                 parametrisation=generators_parametrisation,
                 components_df=edisgo_object.topology.generators_df,
@@ -1562,7 +1559,10 @@ class TimeSeries:
             self.generators_reactive_power = pd.concat(
                 [self.generators_reactive_power, reactive_power], axis=1
             )
-        if loads_parametrisation is not None:
+        if (
+            loads_parametrisation is not None
+            and not edisgo_object.topology.loads_df.empty
+        ):
             q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
                 parametrisation=loads_parametrisation,
                 components_df=edisgo_object.topology.loads_df,
@@ -1576,7 +1576,10 @@ class TimeSeries:
             self.loads_reactive_power = pd.concat(
                 [self.loads_reactive_power, reactive_power], axis=1
             )
-        if storage_units_parametrisation is not None:
+        if (
+            storage_units_parametrisation is not None
+            and not edisgo_object.topology.storage_units_df.empty
+        ):
             q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
                 parametrisation=storage_units_parametrisation,
                 components_df=edisgo_object.topology.storage_units_df,
@@ -1827,7 +1830,7 @@ class TimeSeriesRaw:
         "parametrisation" with the parametrisation of the
         respective Q-control (only applicable to "cosphi(P)" and "Q(V)").
     fluctuating_generators_active_power_by_technology : \
-        :pandas:`pandas.DataFrame<DataFrame>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with feed-in time series per technology or technology and
         weather cell ID normalized to a nominal capacity of 1.
         Columns can either just contain the technology type as string or
@@ -1836,7 +1839,7 @@ class TimeSeriesRaw:
         the weather cell ID as integer.
         Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
     dispatchable_generators_active_power_by_technology : \
-        :pandas:`pandas.DataFrame<DataFrame>`
+    :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with feed-in time series per technology normalized to a nominal
         capacity of 1.
         Columns contain the technology type as string.

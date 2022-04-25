@@ -357,9 +357,9 @@ class EDisGo:
     def set_time_series_reactive_power_control(
         self,
         control="fixed_cosphi",
-        generators_parametrisation=None,
-        loads_parametrisation=None,
-        storage_units_parametrisation=None,
+        generators_parametrisation="default",
+        loads_parametrisation="default",
+        storage_units_parametrisation="default",
     ):
         """
         Parameters
@@ -371,15 +371,15 @@ class EDisGo:
         generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
             See parameter `generators_parametrisation` in
             :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
-            information.
+            information. Here, per default, the option 'default' is used.
         loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
             See parameter `loads_parametrisation` in
             :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
-            information.
+            information. Here, per default, the option 'default' is used.
         storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
             See parameter `storage_units_parametrisation` in
             :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
-            information.
+            information. Here, per default, the option 'default' is used.
 
         """
         if control == "fixed_cosphi":
