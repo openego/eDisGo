@@ -30,9 +30,6 @@ if TYPE_CHECKING:
     from edisgo.network.grids import Grid
 
 if "READTHEDOCS" not in os.environ:
-
-    import geopandas as gpd
-
     from egoio.db_tables.grid import EgoDpMvGriddistrict
     from egoio.db_tables.model_draft import EgoGridMvGriddistrict
     from geoalchemy2 import shape
@@ -1129,7 +1126,7 @@ def draw_plotly(
         try:
             peak_load = edisgo_obj.topology.loads_df.loc[
                 edisgo_obj.topology.loads_df.bus == node
-            ].p_nom.sum()
+            ].p_set.sum()
             text += "<br>" + "peak_load = " + str(peak_load)
             p_nom = edisgo_obj.topology.generators_df.loc[
                 edisgo_obj.topology.generators_df.bus == node
