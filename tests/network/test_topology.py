@@ -209,32 +209,32 @@ class TestTopology:
         name = self.topology.add_load(
             load_id=10,
             bus="Bus_BranchTee_LVGrid_1_4",
-            p_nom=1,
+            p_set=1,
             annual_consumption=2,
             sector="residential",
             test_info="test",
         )
         assert len_df_before + 1 == len(self.topology.loads_df)
         assert name == "Conventional_Load_LVGrid_1_residential_10"
-        assert self.topology.loads_df.at[name, "p_nom"] == 1
+        assert self.topology.loads_df.at[name, "p_set"] == 1
         assert self.topology.loads_df.at[name, "test_info"] == "test"
 
         # test without kwargs
         name = self.topology.add_load(
-            bus="Bus_BranchTee_LVGrid_1_4", p_nom=2, annual_consumption=1
+            bus="Bus_BranchTee_LVGrid_1_4", p_set=2, annual_consumption=1
         )
         assert len_df_before + 2 == len(self.topology.loads_df)
         assert name == "Conventional_Load_LVGrid_1_9"
-        assert self.topology.loads_df.loc[name, "p_nom"] == 2
+        assert self.topology.loads_df.loc[name, "p_set"] == 2
         assert self.topology.loads_df.loc[name, "sector"] is np.nan
 
         # test without kwargs (name created using number of loads in grid)
         name = self.topology.add_load(
-            bus="Bus_BranchTee_LVGrid_1_4", p_nom=3, annual_consumption=1
+            bus="Bus_BranchTee_LVGrid_1_4", p_set=3, annual_consumption=1
         )
         assert len_df_before + 3 == len(self.topology.loads_df)
         assert name == "Conventional_Load_LVGrid_1_10"
-        assert self.topology.loads_df.loc[name, "p_nom"] == 3
+        assert self.topology.loads_df.loc[name, "p_set"] == 3
 
         # test error raising if bus is not valid
         msg = (
@@ -245,7 +245,7 @@ class TestTopology:
             self.topology.add_load(
                 load_id=8,
                 bus="Unknown_bus",
-                p_nom=1,
+                p_set=1,
                 annual_consumption=1,
                 sector="retail",
             )
@@ -257,7 +257,7 @@ class TestTopology:
         # test with kwargs
         name = self.topology.add_load(
             bus="Bus_BranchTee_MVGrid_1_8",
-            p_nom=1,
+            p_set=1,
             type="charging_point",
             sector="home",
             number=2,
@@ -272,12 +272,12 @@ class TestTopology:
         name = self.topology.add_load(
             bus="Bus_BranchTee_LVGrid_1_2",
             type="charging_point",
-            p_nom=0.5,
+            p_set=0.5,
             sector="work",
         )
         assert len_df_before + 2 == len(self.topology.charging_points_df)
         assert name == "Charging_Point_LVGrid_1_work_1"
-        assert self.topology.charging_points_df.at[name, "p_nom"] == 0.5
+        assert self.topology.charging_points_df.at[name, "p_set"] == 0.5
 
         # test error raising if bus is not valid
         msg = (
@@ -285,7 +285,7 @@ class TestTopology:
             "buses_df."
         )
         with pytest.raises(ValueError, match=msg):
-            self.topology.add_load(bus="Unknown_bus", p_nom=0.5, sector="work")
+            self.topology.add_load(bus="Unknown_bus", p_set=0.5, sector="work")
 
     def test_add_generator(self):
         """Test add_generator method"""
@@ -1011,16 +1011,16 @@ class TestTopologyWithEdisgoObject:
         x = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_2", "x"]
         y = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_2", "y"]
         geom = Point((x, y))
-        test_gen = {
+        test_cp = {
             "geom": geom,
-            "p_nom": 2.5,
+            "p_set": 2.5,
             "sector": "fast",
             "number": 10,
             "voltage_level": 4,
         }
 
         comp_name = self.edisgo.topology.connect_to_mv(
-            self.edisgo, test_gen, comp_type="ChargingPoint"
+            self.edisgo, test_cp, comp_type="charging_point"
         )
 
         # check if number of buses increased
@@ -1045,7 +1045,7 @@ class TestTopologyWithEdisgoObject:
         # check new generator
         assert (
             self.edisgo.topology.charging_points_df.at[comp_name, "number"]
-            == test_gen["number"]
+            == test_cp["number"]
         )
 
     def test_connect_to_lv(self):
@@ -1296,7 +1296,7 @@ class TestTopologyWithEdisgoObject:
 
         # add charging point
         test_cp = {
-            "p_nom": 0.01,
+            "p_set": 0.01,
             "geom": geom,
             "sector": "home",
             "voltage_level": 7,
@@ -1319,7 +1319,7 @@ class TestTopologyWithEdisgoObject:
         assert bus == "Bus_BranchTee_LVGrid_3_6"
         assert self.edisgo.topology.buses_df.at[bus, "lv_grid_id"] == 3
         # check new charging point
-        assert self.edisgo.topology.charging_points_df.at[comp_name, "p_nom"] == 0.01
+        assert self.edisgo.topology.charging_points_df.at[comp_name, "p_set"] == 0.01
 
         # test voltage level 7 - use case work (connected to agricultural load)
 
@@ -1329,7 +1329,7 @@ class TestTopologyWithEdisgoObject:
 
         # add charging point
         test_cp = {
-            "p_nom": 0.02,
+            "p_set": 0.02,
             "number": 2,
             "geom": geom,
             "sector": "work",
@@ -1364,7 +1364,7 @@ class TestTopologyWithEdisgoObject:
 
         # add charging point
         test_cp = {
-            "p_nom": 0.02,
+            "p_set": 0.02,
             "number": 2,
             "geom": geom,
             "sector": "public",

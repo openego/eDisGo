@@ -502,9 +502,9 @@ class TestTimeSeries:
         # check values
         index = ["feed-in_case_mv", "feed-in_case_lv", "load_case_mv", "load_case_lv"]
         comp = "Load_agricultural_LVGrid_1_1"  # mv
-        p_nom = 0.0523
+        p_set = 0.0523
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 1.0 * p_nom, 1.0 * p_nom],
+            data=[0.15 * p_set, 0.1 * p_set, 1.0 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -513,9 +513,9 @@ class TestTimeSeries:
         assert_series_equal(q_ts.loc[:, comp], exp * pf, check_dtype=False)
 
         comp = "Load_agricultural_LVGrid_8_1"  # lv
-        p_nom = 0.0478
+        p_set = 0.0478
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 1.0 * p_nom, 1.0 * p_nom],
+            data=[0.15 * p_set, 0.1 * p_set, 1.0 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -544,9 +544,9 @@ class TestTimeSeries:
         # check values
         index = ["feed-in_case_mv", "feed-in_case_lv"]
         comp = "Load_agricultural_LVGrid_8_1"  # lv
-        p_nom = 0.0478
+        p_set = 0.0478
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom],
+            data=[0.15 * p_set, 0.1 * p_set],
             name=comp,
             index=index,
         )
@@ -575,9 +575,9 @@ class TestTimeSeries:
         # check values
         index = ["load_case_mv", "load_case_lv"]
         comp = "Load_agricultural_LVGrid_1_1"  # mv
-        p_nom = 0.0523
+        p_set = 0.0523
         exp = pd.Series(
-            data=[1.0 * p_nom, 1.0 * p_nom],
+            data=[1.0 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -613,7 +613,7 @@ class TestTimeSeries:
                     "Bus_BranchTee_LVGrid_1_5",
                     "Bus_BranchTee_LVGrid_1_5",
                 ],
-                "p_nom": [0.1, 0.2, 0.3, 0.4],
+                "p_set": [0.1, 0.2, 0.3, 0.4],
                 "type": [
                     "charging_point",
                     "charging_point",
@@ -639,9 +639,9 @@ class TestTimeSeries:
         # check values
         index = ["feed-in_case_mv", "feed-in_case_lv", "load_case_mv", "load_case_lv"]
         comp = "CP1"  # mv, hpc
-        p_nom = 0.1
+        p_set = 0.1
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 1.0 * p_nom, 1.0 * p_nom],
+            data=[0.15 * p_set, 0.1 * p_set, 1.0 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -650,9 +650,9 @@ class TestTimeSeries:
         assert_series_equal(q_ts.loc[:, comp], exp * pf, check_dtype=False)
 
         comp = "CP2"  # mv, public
-        p_nom = 0.2
+        p_set = 0.2
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 1.0 * p_nom, 1.0 * p_nom],
+            data=[0.15 * p_set, 0.1 * p_set, 1.0 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -661,9 +661,9 @@ class TestTimeSeries:
         assert_series_equal(q_ts.loc[:, comp], exp * pf, check_dtype=False)
 
         comp = "CP3"  # lv, home
-        p_nom = 0.3
+        p_set = 0.3
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 0.3 * p_nom, 1.0 * p_nom],
+            data=[0.15 * p_set, 0.1 * p_set, 0.3 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -672,9 +672,9 @@ class TestTimeSeries:
         assert_series_equal(q_ts.loc[:, comp], exp * pf, check_dtype=False)
 
         comp = "CP4"  # lv, work
-        p_nom = 0.4
+        p_set = 0.4
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 0.3 * p_nom, 1.0 * p_nom],
+            data=[0.15 * p_set, 0.1 * p_set, 0.3 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -701,9 +701,9 @@ class TestTimeSeries:
         # check values
         index = ["feed-in_case_mv", "feed-in_case_lv"]
         comp = "CP3"  # lv, home
-        p_nom = 0.3
+        p_set = 0.3
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom],
+            data=[0.15 * p_set, 0.1 * p_set],
             name=comp,
             index=index,
         )
@@ -730,9 +730,9 @@ class TestTimeSeries:
         # check values
         index = ["load_case_mv", "load_case_lv"]
         comp = "CP2"  # mv, public
-        p_nom = 0.2
+        p_set = 0.2
         exp = pd.Series(
-            data=[1.0 * p_nom, 1.0 * p_nom],
+            data=[1.0 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -761,7 +761,7 @@ class TestTimeSeries:
         df_hp = pd.DataFrame(
             {
                 "bus": ["Bus_BranchTee_MVGrid_1_2", "Bus_BranchTee_LVGrid_1_5"],
-                "p_nom": [0.1, 0.2],
+                "p_set": [0.1, 0.2],
                 "type": ["heat_pump", "heat_pump"],
             },
             index=["HP1", "HP2"],
@@ -781,9 +781,9 @@ class TestTimeSeries:
         # check values
         index = ["feed-in_case_mv", "feed-in_case_lv", "load_case_mv", "load_case_lv"]
         comp = "HP1"  # mv
-        p_nom = 0.1
+        p_set = 0.1
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 0.9 * p_nom, 1.0 * p_nom],
+            data=[0.15 * p_set, 0.1 * p_set, 0.9 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -792,9 +792,9 @@ class TestTimeSeries:
         assert_series_equal(q_ts.loc[:, comp], exp * pf, check_dtype=False)
 
         comp = "HP2"  # lv
-        p_nom = 0.2
+        p_set = 0.2
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom, 0.9 * p_nom, 1.0 * p_nom],
+            data=[0.15 * p_set, 0.1 * p_set, 0.9 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -821,9 +821,9 @@ class TestTimeSeries:
         # check values
         index = ["feed-in_case_mv", "feed-in_case_lv"]
         comp = "HP2"  # lv
-        p_nom = 0.2
+        p_set = 0.2
         exp = pd.Series(
-            data=[0.15 * p_nom, 0.1 * p_nom],
+            data=[0.15 * p_set, 0.1 * p_set],
             name=comp,
             index=index,
         )
@@ -850,9 +850,9 @@ class TestTimeSeries:
         # check values
         index = ["load_case_mv", "load_case_lv"]
         comp = "HP1"  # mv
-        p_nom = 0.1
+        p_set = 0.1
         exp = pd.Series(
-            data=[0.9 * p_nom, 1.0 * p_nom],
+            data=[0.9 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )

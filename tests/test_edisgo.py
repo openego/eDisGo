@@ -12,7 +12,6 @@ from edisgo import EDisGo
 
 
 class TestEDisGo:
-
     @pytest.fixture(autouse=True)
     def setup_fixture(self):
         """
@@ -25,17 +24,15 @@ class TestEDisGo:
         self.setup_edisgo_object()
 
     def setup_edisgo_object(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path
-        )
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
 
     def setup_worst_case_time_series(self):
         self.edisgo.set_time_series_worst_case_analysis()
 
     def test_set_time_series_manual(self):
-        bus_name = self.edisgo.add_component(
-            comp_type="bus", bus_name="Testbus", v_nom=20
-        )
+        # bus_name = self.edisgo.add_component(
+        #     comp_type="bus", bus_name="Testbus", v_nom=20
+        # )
         # Todo: implement test
         pass
 
@@ -62,8 +59,7 @@ class TestEDisGo:
 
         # test mode "mv" and timesteps given
         pypsa_network = self.edisgo.to_pypsa(
-            mode="mv",
-            timesteps=self.edisgo.timeseries.timeindex[0]
+            mode="mv", timesteps=self.edisgo.timeseries.timeindex[0]
         )
         assert len(pypsa_network.buses) == 31
         assert len(pypsa_network.buses_t.v_mag_pu_set) == 1
@@ -83,9 +79,7 @@ class TestEDisGo:
 
     @pytest.mark.slow
     def test_generator_import(self):
-        edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_2_path
-        )
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         edisgo.import_generators("nep2035")
         assert len(edisgo.topology.generators_df) == 1636
 
@@ -98,17 +92,11 @@ class TestEDisGo:
         assert self.edisgo.results.v_res.shape == (4, 140)
 
         # test mode "mv" and timesteps given
-        self.edisgo.analyze(
-            mode="mv",
-            timesteps=self.edisgo.timeseries.timeindex[0]
-        )
+        self.edisgo.analyze(mode="mv", timesteps=self.edisgo.timeseries.timeindex[0])
         assert self.edisgo.results.v_res.shape == (1, 31)
 
         # test mode "lv"
-        self.edisgo.analyze(
-            mode="lv",
-            lv_grid_name="LVGrid_1"
-        )
+        self.edisgo.analyze(mode="lv", lv_grid_name="LVGrid_1")
         assert self.edisgo.results.v_res.shape == (4, 15)
 
         # ToDo: test non convergence
@@ -125,10 +113,7 @@ class TestEDisGo:
 
         self.setup_worst_case_time_series()
         index = self.edisgo.timeseries.timeindex
-        dummy_ts = pd.Series(
-            data=[0.1, 0.2, 0.1, 0.2],
-            index=index
-        )
+        dummy_ts = pd.Series(data=[0.1, 0.2, 0.1, 0.2], index=index)
 
         # Test add bus
         num_buses = len(self.edisgo.topology.buses_df)
@@ -161,16 +146,16 @@ class TestEDisGo:
             type="conventional_load",
             load_id=4,
             bus="Testbus",
-            p_nom=0.2,
+            p_set=0.2,
             annual_consumption=3.2,
             sector="residential",
             ts_active_power=dummy_ts,
-            ts_reactive_power=dummy_ts
+            ts_reactive_power=dummy_ts,
         )
         assert load_name == "Conventional_Load_MVGrid_1_residential_4"
         assert len(self.edisgo.topology.loads_df) == num_loads + 1
         assert self.edisgo.topology.loads_df.loc[load_name, "bus"] == "Testbus"
-        assert self.edisgo.topology.loads_df.loc[load_name, "p_nom"] == 0.2
+        assert self.edisgo.topology.loads_df.loc[load_name, "p_set"] == 0.2
         assert self.edisgo.topology.loads_df.loc[load_name, "annual_consumption"] == 3.2
         assert self.edisgo.topology.loads_df.loc[load_name, "sector"] == "residential"
         assert np.isclose(
@@ -254,10 +239,9 @@ class TestEDisGo:
         # Point, with time series
         num_cps = len(self.edisgo.topology.charging_points_df)
 
-        comp_data = {"p_nom": 4, "sector": "fast"}
+        comp_data = {"p_set": 4, "sector": "fast"}
         dummy_ts = pd.Series(
-            data=[0.1, 0.2, 0.1, 0.2],
-            index=self.edisgo.timeseries.timeindex
+            data=[0.1, 0.2, 0.1, 0.2], index=self.edisgo.timeseries.timeindex
         )
         ts_active_power = dummy_ts
         ts_reactive_power = dummy_ts
@@ -294,9 +278,7 @@ class TestEDisGo:
             == [0.1, 0.2, 0.1, 0.2]
         ).all()
         assert (
-            self.edisgo.timeseries.loads_reactive_power.loc[
-                :, comp_name
-            ].values
+            self.edisgo.timeseries.loads_reactive_power.loc[:, comp_name].values
             == [0.1, 0.2, 0.1, 0.2]
         ).all()
 
@@ -304,7 +286,7 @@ class TestEDisGo:
 
         # test charging point integration by nominal power, geom as shapely
         # Point, with time series
-        comp_data = {"number": 13, "p_nom": 0.04, "sector": "fast"}
+        comp_data = {"number": 13, "p_set": 0.04, "sector": "fast"}
         comp_name = self.edisgo.integrate_component(
             comp_type="charging_point",
             geolocation=geom,
@@ -326,9 +308,7 @@ class TestEDisGo:
             == [0.1, 0.2, 0.1, 0.2]
         ).all()
         assert (
-            self.edisgo.timeseries.loads_reactive_power.loc[
-                :, comp_name
-            ].values
+            self.edisgo.timeseries.loads_reactive_power.loc[:, comp_name].values
             == [0.1, 0.2, 0.1, 0.2]
         ).all()
 
@@ -339,8 +319,7 @@ class TestEDisGo:
         # Test remove bus (where bus cannot be removed, because load is still connected)
         num_buses = len(self.edisgo.topology.buses_df)
         self.edisgo.remove_component(
-            comp_type="bus",
-            comp_name="Bus_BranchTee_LVGrid_2_2"
+            comp_type="bus", comp_name="Bus_BranchTee_LVGrid_2_2"
         )
         assert len(self.edisgo.topology.buses_df) == num_buses
         assert "Bus_BranchTee_LVGrid_2_2" in self.edisgo.topology.buses_df.index
@@ -358,18 +337,13 @@ class TestEDisGo:
 
         # Test remove line
         num_lines = len(self.edisgo.topology.lines_df)
-        self.edisgo.remove_component(
-            comp_type="line",
-            comp_name="Line_20000002"
-        )
+        self.edisgo.remove_component(comp_type="line", comp_name="Line_20000002")
         assert len(self.edisgo.topology.lines_df) == num_lines
 
         # Test remove generator (without time series)
         num_gens = len(self.edisgo.topology.generators_df)
         self.edisgo.remove_component(
-            "generator",
-            comp_name="GeneratorFluctuating_10",
-            drop_ts=False
+            "generator", comp_name="GeneratorFluctuating_10", drop_ts=False
         )
         assert len(self.edisgo.topology.generators_df) == num_gens - 1
         assert self.edisgo.timeseries.generators_active_power.shape == (4, num_gens)
@@ -377,10 +351,7 @@ class TestEDisGo:
 
         # Test remove storage unit (with time series)
         num_storages = len(self.edisgo.topology.storage_units_df)
-        self.edisgo.remove_component(
-            comp_type="storage_unit",
-            comp_name="Storage_1"
-        )
+        self.edisgo.remove_component(comp_type="storage_unit", comp_name="Storage_1")
         assert len(self.edisgo.topology.storage_units_df) == num_storages - 1
         assert load_name not in self.edisgo.timeseries.loads_active_power.columns
         assert load_name not in self.edisgo.timeseries.loads_reactive_power.columns
@@ -400,8 +371,7 @@ class TestEDisGo:
         number_loads_before = len(self.edisgo.topology.loads_df)
 
         self.edisgo.aggregate_components(
-            aggregate_generators_by_cols=[],
-            aggregate_loads_by_cols=[]
+            aggregate_generators_by_cols=[], aggregate_loads_by_cols=[]
         )
 
         assert number_gens_before == len(self.edisgo.topology.generators_df)
@@ -412,7 +382,7 @@ class TestEDisGo:
 
         # save original values
         gens_p_nom_before = self.edisgo.topology.generators_df.p_nom.sum()
-        loads_p_nom_before = self.edisgo.topology.loads_df.p_nom.sum()
+        loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
         gens_feedin_before = self.edisgo.timeseries.generators_active_power.sum().sum()
         gens_feedin_reactive_before = (
             self.edisgo.timeseries.generators_reactive_power.sum().sum()
@@ -453,7 +423,7 @@ class TestEDisGo:
             gens_feedin_reactive_before,
             self.edisgo.timeseries.generators_reactive_power.sum().sum(),
         )
-        assert np.isclose(loads_p_nom_before, self.edisgo.topology.loads_df.p_nom.sum())
+        assert np.isclose(loads_p_set_before, self.edisgo.topology.loads_df.p_set.sum())
         assert np.isclose(
             loads_demand_before,
             self.edisgo.timeseries.loads_active_power.sum().sum(),
@@ -478,7 +448,7 @@ class TestEDisGo:
         )
         assert num_loads_before - 1 == len(self.edisgo.topology.loads_df)
         assert self.edisgo.topology.loads_df.at[
-            "Loads_Bus_BranchTee_LVGrid_1_10", "p_nom"
+            "Loads_Bus_BranchTee_LVGrid_1_10", "p_set"
         ] == (2 * 0.001397)
         assert (
             self.edisgo.timeseries.loads_active_power.loc[
@@ -508,7 +478,7 @@ class TestEDisGo:
             bus="Bus_BranchTee_LVGrid_1_10",
             type="charging_point",
             sector="home",
-            p_nom=0.2
+            p_set=0.2,
         )
         # manipulate grid so that more than one load of the same sector is
         # connected at the same bus
@@ -517,7 +487,7 @@ class TestEDisGo:
         ] = "Bus_BranchTee_LVGrid_1_10"
 
         # save original values (only loads, as generators did not change)
-        loads_p_nom_before = self.edisgo.topology.loads_df.p_nom.sum()
+        loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
         loads_demand_before = self.edisgo.timeseries.loads_active_power.sum().sum()
         loads_demand_reactive_before = (
             self.edisgo.timeseries.loads_reactive_power.sum().sum()
@@ -542,8 +512,8 @@ class TestEDisGo:
             self.edisgo.timeseries.generators_reactive_power.sum().sum(),
         )
         assert np.isclose(
-            loads_p_nom_before,
-            self.edisgo.topology.loads_df.p_nom.sum(),
+            loads_p_set_before,
+            self.edisgo.topology.loads_df.p_set.sum(),
         )
         assert np.isclose(
             loads_demand_before,
@@ -554,16 +524,18 @@ class TestEDisGo:
             self.edisgo.timeseries.loads_reactive_power.sum().sum(),
         )
         charging_points_df = self.edisgo.topology.charging_points_df
-        assert np.isclose(0.2, charging_points_df.p_nom.sum())
+        assert np.isclose(0.2, charging_points_df.p_set.sum())
         assert np.isclose(
             0.6,
-            self.edisgo.timeseries.loads_active_power.loc[
-                :, charging_points_df.index].sum().sum(),
+            self.edisgo.timeseries.loads_active_power.loc[:, charging_points_df.index]
+            .sum()
+            .sum(),
         )
         assert np.isclose(
             0,
-            self.edisgo.timeseries.loads_reactive_power.loc[
-                :, charging_points_df.index].sum().sum(),
+            self.edisgo.timeseries.loads_reactive_power.loc[:, charging_points_df.index]
+            .sum()
+            .sum(),
         )
         # test that generators were aggregated
         assert num_gens_before - 4 == len(self.edisgo.topology.generators_df)
@@ -571,7 +543,7 @@ class TestEDisGo:
         # with load
         assert num_loads_before - 1 == len(self.edisgo.topology.loads_df)
         assert self.edisgo.topology.loads_df.at[
-            "Loads_Bus_BranchTee_LVGrid_1_10_conventional_load_residential", "p_nom"
+            "Loads_Bus_BranchTee_LVGrid_1_10_conventional_load_residential", "p_set"
         ] == (2 * 0.001397)
         assert (
             self.edisgo.timeseries.loads_active_power.loc[
@@ -597,7 +569,7 @@ class TestEDisGo:
         ] = "misc"
 
         # save original values (values of loads were changed in previous aggregation)
-        loads_p_nom_before = self.edisgo.topology.loads_df.p_nom.sum()
+        loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
         loads_demand_before = self.edisgo.timeseries.loads_active_power.sum().sum()
         loads_demand_reactive_before = (
             self.edisgo.timeseries.loads_reactive_power.sum().sum()
@@ -605,8 +577,7 @@ class TestEDisGo:
         num_loads_before = len(self.edisgo.topology.loads_df)
 
         self.edisgo.aggregate_components(
-            aggregate_generators_by_cols=["bus", "type"],
-            aggregate_loads_by_cols=[]
+            aggregate_generators_by_cols=["bus", "type"], aggregate_loads_by_cols=[]
         )
         # test that total p_nom and total feed-in/demand stayed the same
         assert np.isclose(
@@ -620,9 +591,7 @@ class TestEDisGo:
             gens_feedin_reactive_before,
             self.edisgo.timeseries.generators_reactive_power.sum().sum(),
         )
-        assert np.isclose(
-            loads_p_nom_before, self.edisgo.topology.loads_df.p_nom.sum()
-        )
+        assert np.isclose(loads_p_set_before, self.edisgo.topology.loads_df.p_set.sum())
         assert np.isclose(
             loads_demand_before,
             self.edisgo.timeseries.loads_active_power.sum().sum(),

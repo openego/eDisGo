@@ -10,11 +10,8 @@ from edisgo.network.results import Results
 
 
 class TestPypsaIO:
-
     def test_to_pypsa(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path
-        )
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
         timeindex = self.edisgo.timeseries.timeindex
         pypsa_network = pypsa_io.to_pypsa(self.edisgo, timeindex)
@@ -33,7 +30,7 @@ class TestPypsaIO:
         # check if returns when comps is empty
         pypsa_io._append_lv_components("Unkown", comps, lv_components, "TestGrid")
         # check exceptions for wrong input parameters
-        comps = pd.DataFrame({"bus": ["bus1"]}, index=["dummy"])
+        comps = pd.DataFrame({"bus": ["bus1"], "p_set": [0.1]}, index=["dummy"])
         msg = "Component type not defined."
         with pytest.raises(ValueError, match=msg):
             pypsa_io._append_lv_components("Unkown", comps, lv_components, "TestGrid")
@@ -263,7 +260,7 @@ class TestPypsaIO:
         loads = pd.DataFrame(
             {
                 "bus": ["LVStation"] * 6,
-                "p_nom": [0.05, 0.23, 0.04, 0.2, 0.1, 0.4],
+                "p_set": [0.05, 0.23, 0.04, 0.2, 0.1, 0.4],
                 "sector": [
                     "retail",
                     "agricultural",
@@ -288,7 +285,7 @@ class TestPypsaIO:
         )
         assert len(aggr_dict) == 0
         assert len(lv_components["Load"]) == 6
-        assert (loads.p_nom.values == lv_components["Load"].p_set.values).all()
+        assert (loads.p_set.values == lv_components["Load"].p_set.values).all()
         assert (lv_components["Load"].bus == "LVStation").all()
         assert (lv_components["Load"].index == loads.index).all()
         # check aggregate loads by sector
@@ -396,9 +393,7 @@ class TestPypsaIO:
         pass
 
     def test_set_seed(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path
-        )
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
         timeindex = self.edisgo.timeseries.timeindex
 
