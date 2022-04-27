@@ -699,6 +699,16 @@ class EDisGo:
             Attributes of added component. See respective functions for required
             entries.
 
+            * 'bus' : :attr:`~.network.topology.Topology.add_bus`
+
+            * 'line' : :attr:`~.network.topology.Topology.add_line`
+
+            * 'load' : :attr:`~.network.topology.Topology.add_load`
+
+            * 'generator' : :attr:`~.network.topology.Topology.add_generator`
+
+            * 'storage_unit' : :attr:`~.network.topology.Topology.add_storage_unit`
+
         """
         # ToDo: Add option to add transformer.
         # Todo: change into add_components to allow adding of several components
