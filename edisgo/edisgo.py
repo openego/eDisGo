@@ -607,7 +607,16 @@ class EDisGo:
         if raise_not_converged and len(timesteps_not_converged) > 0:
             raise ValueError(
                 "Power flow analysis did not converge for the "
-                "following time steps: {}.".format(timesteps_not_converged)
+                "following {} time steps: {}.".format(
+                    len(timesteps_not_converged), timesteps_not_converged
+                )
+            )
+        elif len(timesteps_not_converged) > 0:
+            logger.warning(
+                "Power flow analysis did not converge for the "
+                "following {} time steps: {}.".format(
+                    len(timesteps_not_converged), timesteps_not_converged
+                )
             )
 
         # handle converged time steps
