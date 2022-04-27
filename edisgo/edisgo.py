@@ -20,7 +20,7 @@ from edisgo.tools.geo import find_nearest_bus
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 class EDisGo:
@@ -667,8 +667,7 @@ class EDisGo:
         """
         if storage_series is None:
             storage_series = []
-        status = run_mp_opf(self, timesteps, storage_series=storage_series, **kwargs)
-        return status
+        return run_mp_opf(self, timesteps, storage_series=storage_series, **kwargs)
 
     def add_component(
         self,
@@ -676,7 +675,7 @@ class EDisGo:
         add_ts=True,
         ts_active_power=None,
         ts_reactive_power=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Adds single component to network.
@@ -769,7 +768,7 @@ class EDisGo:
         add_ts=True,
         ts_active_power=None,
         ts_reactive_power=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Adds single component to topology based on geolocation.
@@ -848,7 +847,7 @@ class EDisGo:
 
         # check if geolocation is given as shapely Point, otherwise transform
         # to shapely Point
-        if not type(geolocation) is Point:
+        if type(geolocation) is not Point:
             geolocation = Point(geolocation)
 
         # Connect in MV
@@ -915,9 +914,7 @@ class EDisGo:
             if drop_ts:
                 for ts in ["active_power", "reactive_power"]:
                     timeseries.drop_component_time_series(
-                        obj=self.timeseries,
-                        df_name="loads_{}".format(ts),
-                        comp_names=comp_name,
+                        obj=self.timeseries, df_name=f"loads_{ts}", comp_names=comp_name
                     )
 
         elif comp_type == "generator":
@@ -926,7 +923,7 @@ class EDisGo:
                 for ts in ["active_power", "reactive_power"]:
                     timeseries.drop_component_time_series(
                         obj=self.timeseries,
-                        df_name="generators_{}".format(ts),
+                        df_name=f"generators_{ts}",
                         comp_names=comp_name,
                     )
 
@@ -936,7 +933,7 @@ class EDisGo:
                 for ts in ["active_power", "reactive_power"]:
                     timeseries.drop_component_time_series(
                         obj=self.timeseries,
-                        df_name="storage_units_{}".format(ts),
+                        df_name=f"storage_units_{ts}",
                         comp_names=comp_name,
                     )
 
@@ -1249,10 +1246,11 @@ class EDisGo:
 
         if title is True:
             if len(timestep) == 1:
-                title = "Voltage histogram for time step {}".format(timestep[0])
+                title = f"Voltage histogram for time step {timestep[0]}"
             else:
-                title = "Voltage histogram \nfor time steps {} to {}".format(
-                    timestep[0], timestep[-1]
+                title = (
+                    f"Voltage histogram \nfor time steps {timestep[0]} to "
+                    f"{timestep[-1]}"
                 )
         elif title is False:
             title = None
@@ -1321,13 +1319,11 @@ class EDisGo:
 
         if title is True:
             if len(timestep) == 1:
-                title = "Relative line load histogram for time step {}".format(
-                    timestep[0]
-                )
+                title = f"Relative line load histogram for time step {timestep[0]}"
             else:
                 title = (
                     "Relative line load histogram \nfor time steps "
-                    "{} to {}".format(timestep[0], timestep[-1])
+                    f"{timestep[0]} to {timestep[-1]}"
                 )
         elif title is False:
             title = None
@@ -1339,7 +1335,7 @@ class EDisGo:
         save_results=True,
         save_topology=True,
         save_timeseries=True,
-        **kwargs
+        **kwargs,
     ):
         """
         Saves EDisGo object to csv.
@@ -1402,7 +1398,7 @@ class EDisGo:
     def save_edisgo_to_pickle(self, path="", filename=None):
         abs_path = os.path.abspath(path)
         if filename is None:
-            filename = "edisgo_object_{ext}.pkl".format(ext=self.topology.mv_grid.id)
+            filename = f"edisgo_object_{self.topology.mv_grid.id}.pkl"
         pickle.dump(self, open(os.path.join(abs_path, filename), "wb"))
 
     def reduce_memory(self, **kwargs):
@@ -1450,7 +1446,7 @@ def import_edisgo_from_files(
     import_topology=True,
     import_timeseries=False,
     import_results=False,
-    **kwargs
+    **kwargs,
 ):
     edisgo_obj = EDisGo(import_timeseries=False)
     if import_topology:
@@ -1472,13 +1468,14 @@ def import_edisgo_from_files(
             edisgo_obj.results.from_csv(os.path.join(directory, "results"), parameters)
         else:
             logging.warning("No results directory found. Results not imported.")
-    if kwargs.get("import_residual_load", False):
-        if os.path.exists(os.path.join(directory, "time_series_sums.csv")):
-            residual_load = (
-                pd.read_csv(os.path.join(directory, "time_series_sums.csv"))
-                .rename(columns={"Unnamed: 0": "timeindex"})
-                .set_index("timeindex")["residual_load"]
-            )
-            residual_load.index = pd.to_datetime(residual_load.index)
-            edisgo_obj.timeseries._residual_load = residual_load
+    if kwargs.get("import_residual_load", False) and os.path.exists(
+        os.path.join(directory, "time_series_sums.csv")
+    ):
+        residual_load = (
+            pd.read_csv(os.path.join(directory, "time_series_sums.csv"))
+            .rename(columns={"Unnamed: 0": "timeindex"})
+            .set_index("timeindex")["residual_load"]
+        )
+        residual_load.index = pd.to_datetime(residual_load.index)
+        edisgo_obj.timeseries._residual_load = residual_load
     return edisgo_obj

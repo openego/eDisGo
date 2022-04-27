@@ -33,7 +33,7 @@ import requests
 from edisgo import EDisGo
 from edisgo.network.results import Results
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 

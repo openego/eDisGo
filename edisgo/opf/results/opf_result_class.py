@@ -8,7 +8,7 @@ from edisgo.tools.preprocess_pypsa_opf_structure import (
     preprocess_pypsa_opf_structure,
 )
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def read_from_json(edisgo_obj, path, mode="mv"):

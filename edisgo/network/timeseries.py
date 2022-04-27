@@ -11,7 +11,7 @@ from edisgo.tools.tools import (
     get_weather_cells_intersecting_with_grid_district,
 )
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 class TimeSeries:
@@ -67,24 +67,22 @@ class TimeSeries:
 
     @timeindex.setter
     def timeindex(self, ind):
-        if len(self._timeindex) > 0:
-            # check if new time index is subset of existing time index
-            if not ind.isin(self._timeindex).all():
-                logger.warning(
-                    "Not all time steps of new time index lie within existing "
-                    "time index. This may cause problems later on."
-                )
+        if len(self._timeindex) > 0 and not ind.isin(self._timeindex).all():
+            logger.warning(
+                "Not all time steps of new time index lie within existing "
+                "time index. This may cause problems later on."
+            )
         self._timeindex = ind
 
     def _internal_getter(self, attribute):
         try:
-            return getattr(self, "_" + attribute).loc[self.timeindex, :]
+            return getattr(self, f"_{attribute}").loc[self.timeindex, :]
         except AttributeError:
             return pd.DataFrame(index=self.timeindex)
         except KeyError:
             logger.warning(
-                "Timeindex and {} have deviating indices. "
-                "Empty dataframe will be returned.".format(attribute)
+                f"Timeindex and {attribute} have deviating indices. "
+                "Empty dataframe will be returned."
             )
             return pd.DataFrame(index=self.timeindex)
 
@@ -360,7 +358,7 @@ class TimeSeries:
 
             # drop generators time series from self.generators_(re)active_power that may
             # already exist for some of the given generators
-            df_name = "generators_{}_power".format(mode)
+            df_name = f"generators_{mode}_power"
             drop_component_time_series(
                 obj=self, df_name=df_name, comp_names=ts_generators.columns
             )
@@ -377,7 +375,7 @@ class TimeSeries:
 
             # drop load time series from self.loads_(re)active_power that may
             # already exist for some of the given loads
-            df_name = "loads_{}_power".format(mode)
+            df_name = f"loads_{mode}_power"
             drop_component_time_series(
                 obj=self, df_name=df_name, comp_names=ts_loads.columns
             )
@@ -394,7 +392,7 @@ class TimeSeries:
 
             # drop storage unit time series from self.storage_units_(re)active_power
             # that may already exist for some of the given storage units
-            df_name = "storage_units_{}_power".format(mode)
+            df_name = f"storage_units_{mode}_power"
             drop_component_time_series(
                 obj=self, df_name=df_name, comp_names=ts_storage_units.columns
             )
@@ -592,14 +590,14 @@ class TimeSeries:
             loads_without_ts = list(
                 set(df.index) - set(self.loads_active_power.columns)
             )
-            if len(loads_without_ts) > 0:
+            if loads_without_ts:
                 logging.warning(
                     "There are loads where information on type of load is missing. "
                     "Handled types are 'conventional_load', 'charging_point', and "
                     "'heat_pump'. Loads with missing type information are handled as "
                     "conventional loads. If this is not the wanted behavior, please "
                     "set type information. This concerns the following "
-                    "loads: {}.".format(loads_without_ts)
+                    f"loads: {loads_without_ts}."
                 )
                 p, q = self._worst_case_conventional_load(
                     cases, df.loc[loads_without_ts, :], edisgo_object.config
@@ -659,10 +657,8 @@ class TimeSeries:
         check = df.isnull().any(axis=1)
         if check.any():
             raise AttributeError(
-                "The following generators have missing information on "
-                "nominal power, technology type or voltage level: {}.".format(
-                    check[check].index.values
-                )
+                f"The following generators have missing information on nominal power, "
+                f"technology type or voltage level: {check[check].index.values}."
             )
 
         # active power
@@ -674,12 +670,12 @@ class TimeSeries:
         power_scaling = pd.DataFrame(columns=types)
         for t in types:
             for case in cases:
-                power_scaling.at[
-                    "{}_{}".format(case, "mv"), t
-                ] = worst_case_scale_factors["{}_feed-in_{}".format(case, t)]
-                power_scaling.at["{}_{}".format(case, "lv"), t] = power_scaling.at[
-                    "{}_{}".format(case, "mv"), t
+                power_scaling.at[f"{case}_mv", t] = worst_case_scale_factors[
+                    f"{case}_feed-in_{t}"
                 ]
+
+                power_scaling.at[f"{case}_lv", t] = power_scaling.at[f"{case}_mv", t]
+
         # calculate active power of generators
         active_power = pd.concat(
             [
@@ -756,10 +752,8 @@ class TimeSeries:
         check = df.isnull().any(axis=1)
         if check.any():
             raise AttributeError(
-                "The following loads have missing information on "
-                "grid connection power or voltage level: {}.".format(
-                    check[check].index.values
-                )
+                f"The following loads have missing information on grid connection power"
+                f" or voltage level: {check[check].index.values}."
             )
 
         # active power
@@ -769,9 +763,10 @@ class TimeSeries:
         power_scaling = pd.Series()
         for case in cases:
             for voltage_level in ["mv", "lv"]:
-                power_scaling.at[
-                    "{}_{}".format(case, voltage_level)
-                ] = worst_case_scale_factors["{}_{}_load".format(voltage_level, case)]
+                power_scaling.at[f"{case}_{voltage_level}"] = worst_case_scale_factors[
+                    f"{voltage_level}_{case}_load"
+                ]
+
         # calculate active power of loads
         active_power = power_scaling.to_frame("p_nom").dot(df.loc[:, ["p_nom"]].T)
 
@@ -835,22 +830,20 @@ class TimeSeries:
         check = df.isnull().any(axis=1)
         if check.any():
             raise AttributeError(
-                "The following charging points have missing information on "
-                "nominal power, use case or voltage level: {}.".format(
-                    check[check].index.values
-                )
+                "The following charging points have missing information on nominal "
+                f"power, use case or voltage level: {check[check].index.values}."
             )
+
         # check that there is no invalid sector (only "home", "work", "public", and
         # "hpc" allowed)
         use_cases = ["home", "work", "public", "hpc"]
         sectors = df.sector.unique()
         diff = list(set(sectors) - set(use_cases))
-        if len(diff) > 0:
+        if diff:
             raise AttributeError(
                 "The following charging points have a use case no worst case "
-                "simultaneity factor is defined for: {}.".format(
-                    df[df.sector.isin(diff)].index.values
-                )
+                "simultaneity factor is defined for: "
+                f"{df[df.sector.isin(diff)].index.values}."
             )
 
         # active power
@@ -863,10 +856,9 @@ class TimeSeries:
             for case in cases:
                 for voltage_level in ["mv", "lv"]:
                     power_scaling.at[
-                        "{}_{}".format(case, voltage_level), s
-                    ] = worst_case_scale_factors[
-                        "{}_{}_cp_{}".format(voltage_level, case, s)
-                    ]
+                        f"{case}_{voltage_level}", s
+                    ] = worst_case_scale_factors[f"{voltage_level}_{case}_cp_{s}"]
+
         # calculate active power of charging points
         active_power = pd.concat(
             [
@@ -938,8 +930,8 @@ class TimeSeries:
         check = df.isnull().any(axis=1)
         if check.any():
             raise AttributeError(
-                "The following heat pumps have missing information on "
-                "nominal power or voltage level: {}.".format(check[check].index.values)
+                f"The following heat pumps have missing information on nominal power or"
+                f" voltage level: {check[check].index.values}."
             )
 
         # active power
@@ -949,9 +941,10 @@ class TimeSeries:
         power_scaling = pd.Series()
         for case in cases:
             for voltage_level in ["mv", "lv"]:
-                power_scaling.at[
-                    "{}_{}".format(case, voltage_level)
-                ] = worst_case_scale_factors["{}_{}_hp".format(voltage_level, case)]
+                power_scaling.at[f"{case}_{voltage_level}"] = worst_case_scale_factors[
+                    f"{voltage_level}_{case}_hp"
+                ]
+
         # calculate active power of heat pumps
         active_power = power_scaling.to_frame("p_nom").dot(df.loc[:, ["p_nom"]].T)
 
@@ -1015,8 +1008,8 @@ class TimeSeries:
         check = df.isnull().any(axis=1)
         if check.any():
             raise AttributeError(
-                "The following storage units have missing information on "
-                "nominal power or voltage level: {}.".format(check[check].index.values)
+                "The following storage units have missing information on nominal power"
+                f" or voltage level: {check[check].index.values}."
             )
 
         # active power
@@ -1025,12 +1018,9 @@ class TimeSeries:
         # get power scaling factors for different voltage levels and feed-in/load case
         power_scaling = pd.Series()
         for case in cases:
-            power_scaling.at["{}_{}".format(case, "mv")] = worst_case_scale_factors[
-                "{}_storage".format(case)
-            ]
-            power_scaling.at["{}_{}".format(case, "lv")] = power_scaling.at[
-                "{}_{}".format(case, "mv")
-            ]
+            power_scaling.at[f"{case}_mv"] = worst_case_scale_factors[f"{case}_storage"]
+            power_scaling.at[f"{case}_lv"] = power_scaling.at[f"{case}_mv"]
+
         # calculate active power of loads
         active_power = power_scaling.to_frame("p_nom").dot(df.loc[:, ["p_nom"]].T)
 
@@ -1462,7 +1452,6 @@ class TimeSeries:
                 power_factor = q_control._fixed_cosphi_default_power_factor(
                     df, type, edisgo_object.config
                 )
-            # given configuration
             elif isinstance(parametrisation, pd.DataFrame):
                 # check if all given components exist in network and only use existing
                 components_names = list(
@@ -1510,8 +1499,8 @@ class TimeSeries:
                             )
             else:
                 raise ValueError(
-                    "'{}_parametrisation' must either be a pandas DataFrame "
-                    "or 'default'.".format(type)
+                    f"'{type}_parametrisation' must either be a pandas DataFrame or "
+                    f"'default'."
                 )
 
             # write reactive power configuration to TimeSeriesRaw
@@ -1538,10 +1527,9 @@ class TimeSeries:
 
             # drop existing time series
             drop_component_time_series(
-                obj=self,
-                df_name="{}_reactive_power".format(type),
-                comp_names=components_names,
+                obj=self, df_name=f"{type}_reactive_power", comp_names=components_names
             )
+
             return q_sign, power_factor
 
         # set reactive power for generators
@@ -1752,9 +1740,7 @@ class TimeSeries:
 
         for attr in self._attributes:
             if not getattr(self, attr).empty:
-                getattr(self, attr).to_csv(
-                    os.path.join(directory, "{}.csv".format(attr))
-                )
+                getattr(self, attr).to_csv(os.path.join(directory, f"{attr}.csv"))
 
         if time_series_raw:
             self.time_series_raw.to_csv(
@@ -1789,7 +1775,7 @@ class TimeSeries:
         """
         timeindex = None
         for attr in self._attributes:
-            path = os.path.join(directory, "{}.csv".format(attr))
+            path = os.path.join(directory, f"{attr}.csv")
             if os.path.exists(path):
                 setattr(
                     self,
@@ -1797,7 +1783,7 @@ class TimeSeries:
                     pd.read_csv(path, index_col=0, parse_dates=True),
                 )
                 if timeindex is None:
-                    timeindex = getattr(self, "_{}".format(attr)).index
+                    timeindex = getattr(self, "f_{attr}").index
         if timeindex is None:
             timeindex = pd.DatetimeIndex([])
         self._timeindex = timeindex
@@ -1944,9 +1930,7 @@ class TimeSeriesRaw:
 
         for attr in self._attributes:
             if hasattr(self, attr) and not getattr(self, attr).empty:
-                getattr(self, attr).to_csv(
-                    os.path.join(directory, "{}.csv".format(attr))
-                )
+                getattr(self, attr).to_csv(os.path.join(directory, f"{attr}.csv"))
 
     def from_csv(self, directory):
         """
@@ -1963,7 +1947,7 @@ class TimeSeriesRaw:
         """
         timeindex = None
         for attr in self._attributes:
-            path = os.path.join(directory, "{}.csv".format(attr))
+            path = os.path.join(directory, f"{attr}.csv")
             if os.path.exists(path):
                 setattr(
                     self,
@@ -1971,7 +1955,7 @@ class TimeSeriesRaw:
                     pd.read_csv(path, index_col=0, parse_dates=True),
                 )
                 if timeindex is None:
-                    timeindex = getattr(self, "_{}".format(attr)).index
+                    timeindex = getattr(self, f"_{attr}").index
         if timeindex is None:
             timeindex = pd.DatetimeIndex([])
         self._timeindex = timeindex
@@ -2057,17 +2041,15 @@ def _check_if_components_exist(edisgo_object, component_names, component_type):
         Returns a set of all provided components that are in the network.
 
     """
-    comps_in_network = getattr(
-        edisgo_object.topology, "{}_df".format(component_type)
-    ).index
+    comps_in_network = getattr(edisgo_object.topology, f"{component_type}_df").index
+
     comps_not_in_network = list(set(component_names) - set(comps_in_network))
-    if len(comps_not_in_network) > 0:
+
+    if comps_not_in_network:
         logging.warning(
-            "Some of the provided {} are not in the network. "
-            "This concerns the following components: {}.".format(
-                component_type, comps_not_in_network
-            )
+            f"Some of the provided {component_type} are not in the network. This "
+            f"concerns the following components: {comps_not_in_network}."
         )
-        provided_comps_in_network = set(component_names) - set(comps_not_in_network)
-        return provided_comps_in_network
+
+        return set(component_names) - set(comps_not_in_network)
     return component_names

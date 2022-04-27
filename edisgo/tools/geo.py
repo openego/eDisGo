@@ -9,7 +9,7 @@ if "READTHEDOCS" not in os.environ:
 
 import logging
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def proj2equidistant(srid):

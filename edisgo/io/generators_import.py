@@ -9,7 +9,7 @@ from sqlalchemy import func
 from edisgo.tools import session_scope
 from edisgo.tools.geo import proj2equidistant
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 if "READTHEDOCS" not in os.environ:
     from egoio.db_tables import model_draft, supply
@@ -191,7 +191,7 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
         """
 
         # set capacity difference threshold
-        cap_diff_threshold = 10 ** -1
+        cap_diff_threshold = 10**-1
 
         capacity_imported = (
             generators_res_mv["p_nom"].sum()
@@ -421,7 +421,7 @@ def _update_grids(
         return None
 
     # set capacity difference threshold
-    cap_diff_threshold = 10 ** -4
+    cap_diff_threshold = 10**-4
 
     # get all imported generators
     imported_gens = pd.concat(

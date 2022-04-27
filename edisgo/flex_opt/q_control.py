@@ -103,7 +103,7 @@ def _get_component_dict():
         "storage_units": "storage",
         "loads": "load",
         "charging_points": "cp",
-        "heat_pumps": "hp"
+        "heat_pumps": "hp",
     }
     return comp_dict
 
@@ -153,7 +153,8 @@ def _fixed_cosphi_default_power_factor(comp_df, component_type, configs):
         raise ValueError(
             "Given 'component_type' is not valid. Valid options are "
             "'generators','storage_units', 'loads', 'charging_points', and "
-            "'heat_pumps'.")
+            "'heat_pumps'."
+        )
 
 
 def _fixed_cosphi_default_reactive_power_sign(comp_df, component_type, configs):
@@ -190,7 +191,7 @@ def _fixed_cosphi_default_reactive_power_sign(comp_df, component_type, configs):
         "storage_units": get_q_sign_generator,
         "loads": get_q_sign_load,
         "charging_points": get_q_sign_load,
-        "heat_pumps": get_q_sign_load
+        "heat_pumps": get_q_sign_load,
     }
 
     if component_type in comp_dict.keys():
@@ -202,13 +203,12 @@ def _fixed_cosphi_default_reactive_power_sign(comp_df, component_type, configs):
             cols = comp_df.index[comp_df.voltage_level == voltage_level]
             if len(cols) > 0:
                 q_sign[cols] = get_q_sign(
-                    reactive_power_mode[
-                        "{}_{}".format(voltage_level, comp)
-                    ]
+                    reactive_power_mode["{}_{}".format(voltage_level, comp)]
                 )
         return q_sign
     else:
         raise ValueError(
             "Given 'component_type' is not valid. Valid options are "
             "'generators','storage_units', 'loads', 'charging_points', and "
-            "'heat_pumps'.")
+            "'heat_pumps'."
+        )

@@ -8,7 +8,7 @@ import pandas as pd
 
 from edisgo.network.grids import LVGrid, MVGrid
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def mv_line_load(edisgo_obj):

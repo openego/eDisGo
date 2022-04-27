@@ -11,7 +11,7 @@ from networkx.algorithms.shortest_paths.weighted import (
 
 from edisgo.network.grids import LVGrid, MVGrid
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):

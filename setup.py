@@ -78,13 +78,20 @@ requirements = [
     "pygeos",
 ]
 
-geo_plot_requirements = ["contextily", "descartes", "plotly", "dash==2.0.0"]
+geo_plot_requirements = [
+    "contextily",
+    "descartes",
+    "plotly",
+    "dash==2.0.0",
+    "werkzeug==2.0.3",
+]
 examples_requirements = [
     "jupyter",
     "jupyterlab",
     "plotly",
     "dash==2.0.0",
     "jupyter_dash",
+    "werkzeug==2.0.3",
 ]
 dev_requirements = [
     "pytest",

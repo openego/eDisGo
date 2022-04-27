@@ -13,7 +13,7 @@ from networkx.algorithms.shortest_paths.weighted import (
 from edisgo.flex_opt import check_tech_constraints, costs
 from edisgo.tools import plots, tools
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def one_storage_per_feeder(
@@ -144,7 +144,7 @@ def one_storage_per_feeder(
             # return node farthest away
             return [
                 _
-                for _ in path_length_dict.keys()
+                for _ in path_length_dict
                 if path_length_dict[_] == max(path_length_dict.values())
             ][0]
 
@@ -205,8 +205,7 @@ def one_storage_per_feeder(
         lines = edisgo.network.pypsa.lines.loc[repr(feeder), :]
         mv_station_bus = (
             "bus0"
-            if lines.loc["bus0"]
-            == "Bus_{}".format(repr(edisgo.network.mv_grid.station))
+            if lines.loc["bus0"] == f"Bus_{repr(edisgo.network.mv_grid.station)}"
             else "bus1"
         )
         if mv_station_bus == "bus0":
@@ -255,7 +254,7 @@ def one_storage_per_feeder(
             lf_ts = p_hv_mv_station.apply(
                 lambda _: lf["feed-in_case"] if _ < 0 else lf["load_case"]
             )
-            s_max_ts = (p_total ** 2 + q_total ** 2).apply(sqrt).divide(lf_ts)
+            s_max_ts = (p_total**2 + q_total**2).apply(sqrt).divide(lf_ts)
             s_max.append(max(s_max_ts))
 
         return sizes[pd.Series(s_max).idxmin()]
@@ -286,12 +285,8 @@ def one_storage_per_feeder(
             critical_nodes = critical_nodes[edisgo.network.mv_grid]
         else:
             return []
-        # filter nodes with voltage issues in feeder
-        critical_nodes_feeder = []
-        for n in critical_nodes.index:
-            if repr(n.mv_feeder) == repr(feeder):
-                critical_nodes_feeder.append(n)
-        return critical_nodes_feeder
+
+        return [n for n in critical_nodes.index if repr(n.mv_feeder) == repr(feeder)]
 
     def _critical_lines_feeder(edisgo, feeder):
         """
@@ -320,23 +315,25 @@ def one_storage_per_feeder(
         # get all overloaded MV lines
         critical_lines = check_tech_constraints.mv_line_load(edisgo.network)
         # filter overloaded lines in feeder
-        critical_lines_feeder = []
-        for line in critical_lines.index:
-            if repr(tools.get_mv_feeder_from_line(line)) == repr(feeder):
-                critical_lines_feeder.append(line)
+        critical_lines_feeder = [
+            line
+            for line in critical_lines.index
+            if repr(tools.get_mv_feeder_from_line(line)) == repr(feeder)
+        ]
+
         return critical_lines.loc[critical_lines_feeder, :]
 
     def _estimate_new_number_of_lines(critical_lines_feeder):
-        number_parallel_lines = 0
-        for crit_line in critical_lines_feeder.index:
-            number_parallel_lines += (
+        return sum(
+            (
                 ceil(
                     critical_lines_feeder.loc[crit_line, "max_rel_overload"]
                     * crit_line.quantity
                 )
                 - crit_line.quantity
             )
-        return number_parallel_lines
+            for crit_line in critical_lines_feeder.index
+        )
 
     raise NotImplementedError
 

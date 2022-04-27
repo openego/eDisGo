@@ -6,7 +6,7 @@ from math import acos, tan
 
 from shapely.geometry import Point
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 class BasicComponent(ABC):

@@ -805,9 +805,7 @@ class TestTopologyWithEdisgoObject:
 
     @pytest.yield_fixture(autouse=True)
     def setup_class(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path
-        )
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
 
     def test_to_geopandas(self):
@@ -832,9 +830,11 @@ class TestTopologyWithEdisgoObject:
 
             assert isinstance(attr, GeoDataFrame)
 
-            common_cols = set(attr.columns).intersection(grid_attr.columns)
+            common_cols = list(set(attr.columns).intersection(grid_attr.columns))
 
-            assert_frame_equal(attr[common_cols], grid_attr[common_cols])
+            assert_frame_equal(
+                attr[common_cols], grid_attr[common_cols], check_names=False
+            )
 
     def test_from_csv(self):
         """
