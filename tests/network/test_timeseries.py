@@ -979,8 +979,134 @@ class TestTimeSeries:
             )
 
     def test_predefined_fluctuating_generators_by_technology(self):
-        # ToDo implement
-        pass
+
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+
+        # ############# oedb, all generators (default)
+        self.edisgo.timeseries.predefined_fluctuating_generators_by_technology(
+            self.edisgo, "oedb"
+        )
+
+        # check shape
+        fluctuating_gens = self.edisgo.topology.generators_df[
+            self.edisgo.topology.generators_df.type.isin(["wind", "solar"])
+        ]
+        p_ts = self.edisgo.timeseries.generators_active_power
+        assert p_ts.shape == (2, len(fluctuating_gens))
+
+        # check values
+        comp = "GeneratorFluctuating_2"  # wind, w_id = 1122074
+        p_nom = 2.3
+        exp = pd.Series(
+            data=[0.0 * p_nom, 0.0 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+        comp = "GeneratorFluctuating_8"  # wind, w_id = 1122075
+        p_nom = 3.0
+        exp = pd.Series(
+            data=[0.0029929 * p_nom, 0.009521 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+        comp = "GeneratorFluctuating_25"  # solar, w_id = 1122075
+        p_nom = 0.006
+        exp = pd.Series(
+            data=[0.07824 * p_nom, 0.11216 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+
+        # ############# own settings (without weather cell ID), all generators
+        gens_p = pd.DataFrame(
+            data={
+                "wind": [1, 2],
+                "solar": [3, 4],
+            },
+            index=timeindex,
+        )
+        self.edisgo.timeseries.predefined_fluctuating_generators_by_technology(
+            self.edisgo, gens_p
+        )
+
+        # check shape
+        fluctuating_gens = self.edisgo.topology.generators_df[
+            self.edisgo.topology.generators_df.type.isin(["wind", "solar"])
+        ]
+        p_ts = self.edisgo.timeseries.generators_active_power
+        assert p_ts.shape == (2, len(fluctuating_gens))
+
+        # check values
+        comp = "GeneratorFluctuating_2"  # wind
+        p_nom = 2.3
+        exp = pd.Series(
+            data=[1.0 * p_nom, 2.0 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False)
+        comp = "GeneratorFluctuating_20"  # solar
+        p_nom = 0.005
+        exp = pd.Series(
+            data=[3.0 * p_nom, 4.0 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False)
+
+        # ############# own settings (with weather cell ID), selected generators
+        self.edisgo.timeseries.timeindex = timeindex
+        gens_p = pd.DataFrame(
+            data={
+                ("wind", 1122074): [5, 6],
+                ("solar", 1122075): [7, 8],
+            },
+            index=timeindex,
+        )
+        self.edisgo.timeseries.predefined_fluctuating_generators_by_technology(
+            self.edisgo,
+            gens_p,
+            generator_names=["GeneratorFluctuating_4", "GeneratorFluctuating_2"],
+        )
+
+        # check shape (should be the same as before, as time series are not reset but
+        # overwritten)
+        p_ts = self.edisgo.timeseries.generators_active_power
+        assert p_ts.shape == (2, len(fluctuating_gens))
+
+        # check values (check that values are overwritten)
+        comp = "GeneratorFluctuating_2"  # wind
+        p_nom = 2.3
+        exp = pd.Series(
+            data=[5.0 * p_nom, 6.0 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False)
+        comp = "GeneratorFluctuating_4"  # solar
+        p_nom = 1.93
+        exp = pd.Series(
+            data=[7.0 * p_nom, 8.0 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False)
+
+        # ############# own settings (with weather cell ID), all generators (check, that
+        # time series for generators are set for those for which time series are
+        # provided)
+        self.edisgo.timeseries.reset()
+        self.edisgo.timeseries.predefined_fluctuating_generators_by_technology(
+            self.edisgo, gens_p
+        )
+
+        # check shape
+        p_ts = self.edisgo.timeseries.generators_active_power
+        assert p_ts.shape == (2, 22)
 
     def test_predefined_dispatchable_generators_by_technology(self):
         # ToDo implement
