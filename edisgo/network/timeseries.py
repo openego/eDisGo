@@ -2,6 +2,7 @@ import itertools
 import logging
 import os
 
+import numpy as np
 import pandas as pd
 
 from edisgo.flex_opt import q_control
@@ -1126,16 +1127,13 @@ class TimeSeries:
         # set generator_names if None
         if generator_names is None:
             if isinstance(ts_generators.columns, pd.MultiIndex):
-                technologies = ts_generators.columns.levels[0].unique()
-                weather_cell_ids = ts_generators.columns.levels[1].unique()
-                generator_names = edisgo_object.topology.generators_df[
-                    (edisgo_object.topology.generators_df.type.isin(technologies))
-                    & (
-                        edisgo_object.topology.generators_df.weather_cell_id.isin(
-                            weather_cell_ids
-                        )
-                    )
-                ].index
+                groups = edisgo_object.topology.generators_df.groupby(
+                    ["type", "weather_cell_id"]
+                ).groups
+                combinations = ts_generators.columns
+                generator_names = np.concatenate(
+                    [groups[_].values for _ in combinations if _ in groups.keys()]
+                )
             else:
                 technologies = ts_generators.columns.unique()
                 generator_names = edisgo_object.topology.generators_df[
