@@ -749,7 +749,7 @@ class TimeSeries:
         """
         # check that all loads have information on nominal power (grid connection power)
         # and voltage level they are in
-        df = df.loc[:, ["p_nom", "voltage_level"]]
+        df = df.loc[:, ["p_set", "voltage_level"]]
         check = df.isnull().any(axis=1)
         if check.any():
             raise AttributeError(
@@ -769,7 +769,7 @@ class TimeSeries:
                 ]
 
         # calculate active power of loads
-        active_power = power_scaling.to_frame("p_nom").dot(df.loc[:, ["p_nom"]].T)
+        active_power = power_scaling.to_frame("p_set").dot(df.loc[:, ["p_set"]].T)
 
         # reactive power
         # get worst case configurations for each load
@@ -827,7 +827,7 @@ class TimeSeries:
         """
         # check that all charging points have information on nominal power,
         # sector (use case), and voltage level they are in
-        df = df.loc[:, ["p_nom", "voltage_level", "sector"]]
+        df = df.loc[:, ["p_set", "voltage_level", "sector"]]
         check = df.isnull().any(axis=1)
         if check.any():
             raise AttributeError(
@@ -864,8 +864,8 @@ class TimeSeries:
         active_power = pd.concat(
             [
                 power_scaling.loc[:, s]
-                .to_frame("p_nom")
-                .dot(df[df.sector == s].loc[:, ["p_nom"]].T)
+                .to_frame("p_set")
+                .dot(df[df.sector == s].loc[:, ["p_set"]].T)
                 for s in sectors
             ],
             axis=1,
@@ -927,7 +927,7 @@ class TimeSeries:
         """
         # check that all heat pumps have information on nominal power, and voltage level
         # they are in
-        df = df.loc[:, ["p_nom", "voltage_level"]]
+        df = df.loc[:, ["p_set", "voltage_level"]]
         check = df.isnull().any(axis=1)
         if check.any():
             raise AttributeError(
@@ -947,7 +947,7 @@ class TimeSeries:
                 ]
 
         # calculate active power of heat pumps
-        active_power = power_scaling.to_frame("p_nom").dot(df.loc[:, ["p_nom"]].T)
+        active_power = power_scaling.to_frame("p_set").dot(df.loc[:, ["p_set"]].T)
 
         # reactive power
         # get worst case configurations for each heat pump

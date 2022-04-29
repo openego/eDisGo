@@ -148,9 +148,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         slack_df = _set_slack(edisgo_obj.topology.mv_grid)
 
         components = {
-            "Load": grid_object.topology.loads_df.loc[:, ["bus", "p_nom"]].rename(
-                columns={"p_nom": "p_set"}
-            ),
+            "Load": grid_object.topology.loads_df.loc[:, ["bus", "p_set"]],
             "Generator": grid_object.topology.generators_df.loc[
                 :, ["bus", "control", "p_nom"]
             ],
@@ -492,9 +490,7 @@ def _get_grid_component_dict(grid_object):
         and "Line"
     """
     components = {
-        "Load": grid_object.loads_df.loc[:, ["bus", "p_nom"]].rename(
-            columns={"p_nom": "p_set"}
-        ),
+        "Load": grid_object.loads_df.loc[:, ["bus", "p_set"]],
         "Generator": grid_object.generators_df.loc[:, ["bus", "control", "p_nom"]],
         "StorageUnit": grid_object.storage_units_df.loc[:, ["bus", "control"]],
         "Line": grid_object.lines_df.loc[
@@ -520,7 +516,8 @@ def _append_lv_components(
     then connected to one side of the LVStation. If required, the LV components
     can be aggregated in different modes. As an example, loads can be
     aggregated sector-wise or all loads can be aggregated into one
-    representative load. The sum of p_nom of all cumulated components is calculated.
+    representative load. The sum of p_nom/p_set of all cumulated components is
+    calculated.
 
     Parameters
     ----------
@@ -566,15 +563,12 @@ def _append_lv_components(
         return {}
     if comp == "Load":
         if aggregate_loads is None:
-            comps_aggr = comps.loc[:, ["bus", "p_nom"]].rename(
-                columns={"p_nom": "p_set"}
-            )
+            comps_aggr = comps.loc[:, ["bus", "p_set"]]
         elif aggregate_loads == "sectoral":
             comps_aggr = (
-                comps.loc[:, ["p_nom", "sector"]]
+                comps.loc[:, ["p_set", "sector"]]
                 .groupby("sector")
                 .sum()
-                .rename(columns={"p_nom": "p_set"})
                 .loc[:, ["p_set"]]
             )
             for sector in comps_aggr.index.values:
@@ -585,7 +579,7 @@ def _append_lv_components(
             comps_aggr["bus"] = bus
         elif aggregate_loads == "all":
             comps_aggr = pd.DataFrame(
-                {"bus": [bus], "p_set": [sum(comps.p_nom)]},
+                {"bus": [bus], "p_set": [sum(comps.p_set)]},
                 index=[lv_grid_name + "_loads"],
             )
             aggregated_elements[lv_grid_name + "_loads"] = comps.index.values

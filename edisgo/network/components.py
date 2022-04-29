@@ -204,7 +204,7 @@ class Load(Component):
         return self.topology.loads_df
 
     @property
-    def p_nom(self):
+    def p_set(self):
         """
         Peak load in MW.
 
@@ -219,11 +219,11 @@ class Load(Component):
             Peak load in MW.
 
         """
-        return self.topology.loads_df.at[self.id, "p_nom"]
+        return self.topology.loads_df.at[self.id, "p_set"]
 
-    @p_nom.setter
-    def p_nom(self, p_nom):
-        self.topology._loads_df.at[self.id, "p_nom"] = float(p_nom)
+    @p_set.setter
+    def p_set(self, p_set):
+        self.topology._loads_df.at[self.id, "p_set"] = float(p_set)
 
     @property
     def annual_consumption(self):

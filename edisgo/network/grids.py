@@ -84,8 +84,8 @@ class Grid(ABC):
         """
         Returns components as :geopandas:`GeoDataFrame`\\ s
 
-        Returns container with :geopandas:`GeoDataFrame`\\ s containing all georeferenced
-        components within the grid.
+        Returns container with :geopandas:`GeoDataFrame`\\ s containing all
+        georeferenced components within the grid.
 
         Returns
         -------
@@ -307,7 +307,7 @@ class Grid(ABC):
         return self.generators_df.groupby(["type"]).sum()["p_nom"]
 
     @property
-    def p_nom(self):
+    def p_set(self):
         """
         Cumulative peak load of loads in the network in MW.
 
@@ -317,10 +317,10 @@ class Grid(ABC):
             Cumulative peak load of loads in the network in MW.
 
         """
-        return self.loads_df.p_nom.sum()
+        return self.loads_df.p_set.sum()
 
     @property
-    def p_nom_per_sector(self):
+    def p_set_per_sector(self):
         """
         Cumulative peak load of loads in the network per sector in MW.
 
@@ -330,7 +330,7 @@ class Grid(ABC):
             Cumulative peak load of loads in the network per sector in MW.
 
         """
-        return self.loads_df.groupby(["sector"]).sum()["p_nom"]
+        return self.loads_df.groupby(["sector"]).sum()["p_set"]
 
     def __repr__(self):
         return "_".join([self.__class__.__name__, str(self.id)])
@@ -512,7 +512,7 @@ class LVGrid(Grid):
             edge_color_is_sequence = False
 
         node_size = [
-            top.get_connected_components_from_bus(v)["loads"].p_nom.sum() * 50000 + 10
+            top.get_connected_components_from_bus(v)["loads"].p_set.sum() * 50000 + 10
             for v in G
         ]
         if isinstance(node_color, pd.Series):

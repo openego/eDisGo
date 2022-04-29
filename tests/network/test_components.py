@@ -20,7 +20,7 @@ class TestComponents:
 
         # test getter
         assert load.id == "Load_agricultural_LVGrid_1_1"
-        assert load.p_nom == 0.0523
+        assert load.p_set == 0.0523
         assert load.annual_consumption == 238
         assert load.sector == "agricultural"
         assert load.bus == "Bus_BranchTee_LVGrid_1_2"
@@ -31,8 +31,8 @@ class TestComponents:
         assert isinstance(load.reactive_power_timeseries, pd.Series)
 
         # test setter
-        load.p_nom = 0.06
-        assert load.p_nom == 0.06
+        load.p_set = 0.06
+        assert load.p_set == 0.06
         load.annual_consumption = 4
         assert load.annual_consumption == 4
         load.sector = "residential"

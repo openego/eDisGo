@@ -202,21 +202,17 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
         capacity_grid = edisgo_object.topology.generators_df.p_nom.sum()
 
         logger.debug(
-            "Cumulative generator capacity (updated): {} MW".format(
-                round(capacity_imported, 1)
-            )
+            f"Cumulative generator capacity (updated): {round(capacity_imported, 1)} MW"
         )
 
         if abs(capacity_imported - capacity_grid) > cap_diff_threshold:
             raise ValueError(
-                "Cumulative capacity of imported generators ({} MW) "
-                "differs from cumulative capacity of generators "
-                "in updated grid ({} MW) by {} MW.".format(
-                    round(capacity_imported, 1),
-                    round(capacity_grid, 1),
-                    round(capacity_imported - capacity_grid, 1),
-                )
+                f"Cumulative capacity of imported generators ("
+                f"{round(capacity_imported, 1)} MW) differs from cumulative capacity of"
+                f" generators in updated grid ({round(capacity_grid, 1)} MW) by "
+                f"{round(capacity_imported - capacity_grid, 1)} MW."
             )
+
         else:
             logger.debug("Cumulative capacity of imported generators validated.")
 
@@ -314,7 +310,7 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
         edisgo_object=edisgo_object,
         imported_generators_mv=generators_mv,
         imported_generators_lv=generators_res_lv,
-        **kwargs
+        **kwargs,
     )
 
     if kwargs.get("p_target", None) is None:
@@ -329,7 +325,7 @@ def _update_grids(
     update_existing=True,
     p_target=None,
     allowed_number_of_comp_per_lv_bus=2,
-    **kwargs
+    **kwargs,
 ):
     """
     Update network according to new generator dataset.
@@ -428,7 +424,7 @@ def _update_grids(
         [imported_generators_lv, imported_generators_mv], sort=True
     )
 
-    logger.debug("{} generators imported.".format(len(imported_gens)))
+    logger.debug(f"{len(imported_gens)} generators imported.")
 
     # get existing generators and append ID column
     existing_gens = edisgo_object.topology.generators_df
@@ -437,9 +433,8 @@ def _update_grids(
     )
 
     logger.debug(
-        "Cumulative generator capacity (existing): {} MW".format(
-            round(existing_gens.p_nom.sum(), 1)
-        )
+        "Cumulative generator capacity (existing): "
+        f"{round(existing_gens.p_nom.sum(), 1)} MW"
     )
 
     # check if capacity of any of the imported generators is <= 0
@@ -525,10 +520,16 @@ def _update_grids(
     new_gens_mv = imported_generators_mv[
         ~imported_generators_mv.index.isin(list(existing_gens.id))
     ]
+    new_gens_mv = new_gens_mv.assign(
+        p=new_gens_mv.p_nom,
+    )
 
     new_gens_lv = imported_generators_lv[
         ~imported_generators_lv.index.isin(list(existing_gens.id))
     ]
+    new_gens_lv = new_gens_lv.assign(
+        p=new_gens_lv.p_nom,
+    )
 
     if p_target is not None:
 

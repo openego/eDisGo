@@ -827,20 +827,26 @@ class EDisGo:
         """
         supported_voltage_levels = {4, 5, 6, 7}
         p_nom = kwargs.get("p_nom", None)
+        p_set = kwargs.get("p_set", None)
+
+        p = p_nom if p_set is None else p_set
+
+        kwargs["p"] = p
+
         if voltage_level not in supported_voltage_levels:
-            if p_nom is None:
+            if p is None:
                 raise ValueError(
                     "Neither appropriate voltage level nor nominal power "
                     "were supplied."
                 )
             # Determine voltage level manually from nominal power
-            if 4.5 < p_nom <= 17.5:
+            if 4.5 < p <= 17.5:
                 voltage_level = 4
-            elif 0.3 < p_nom <= 4.5:
+            elif 0.3 < p <= 4.5:
                 voltage_level = 5
-            elif 0.1 < p_nom <= 0.3:
+            elif 0.1 < p <= 0.3:
                 voltage_level = 6
-            elif 0 < p_nom <= 0.1:
+            elif 0 < p <= 0.1:
                 voltage_level = 7
             else:
                 raise ValueError("Unsupported voltage level")

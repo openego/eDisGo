@@ -328,7 +328,7 @@ def integrate_curtailment_as_load(edisgo, curtailment_per_node):
             load = edisgo.topology.add_load(
                 load_id=1,
                 bus=n,
-                p_nom=curtailment_per_node.loc[:, n].max(),
+                p_set=curtailment_per_node.loc[:, n].max(),
                 annual_consumption=0.0,
                 sector="curtailment",
             )
