@@ -701,5 +701,93 @@ def _reinforce_lines_overloading_per_grid_level(edisgo_obj, voltage_level, crit_
     relevant_lines = relevant_lines.loc[~relevant_lines.index.isin(lines_single.index)]
     if not relevant_lines.empty:
         _replace_by_parallel_standard_lines(relevant_lines.index)
+    return lines_changes
 
+
+def add_parallel_line_over_half_length_of_string(edisgo_obj, grid, crit_lines):
+    standard_line = edisgo_obj.config["grid_expansion_standard_equipment"]["mv_line"]
+
+    station_node = grid.transformers_df.bus1.iloc[0]
+
+    voltage_level = "mv"
+
+    relevant_lines = edisgo_obj.topology.lines_df.loc[
+        crit_lines[crit_lines.voltage_level == voltage_level].index
+    ]
+
+    # find the most critical lines connected to different MV feeder in HV/MV station
+    crit_nodes_feeder = relevant_lines[relevant_lines["bus0"] == station_node]
+
+    # find the closed and open sides of switches
+    switch_df = edisgo_obj.topology.switches_df.loc[:, "bus_closed":"bus_open"].values
+    switches = [node for nodes in switch_df for node in nodes]
+
+    graph = grid.graph
+    paths = {}
+    nodes_feeder = {}
+
+    for node in switches:
+
+        # paths for the open and closed sides of CBs
+        path = nx.shortest_path(graph, station_node, node)
+        for crit_node in crit_nodes_feeder.bus1.values:
+            if crit_node in path:
+                paths[node] = path
+                nodes_feeder.setdefault(path[1], []).append(node)
+
+    lines_changes = {}
+    for farthest_node in nodes_feeder.values():
+
+        def get_weight(u, v, data):
+            return data["length"]
+
+        path_length_dict_tmp = dijkstra_shortest_path_length(
+            graph, station_node, get_weight, target=farthest_node
+        )
+        path = paths[farthest_node[0]]
+        node_1_2 = next(
+            j
+            for j in path
+            if path_length_dict_tmp[j] >= path_length_dict_tmp[farthest_node[0]] * 1 / 2
+        )
+
+        # if MVGrid: check if node_1_2 is LV station and if not find
+        # next LV station
+        while node_1_2 not in edisgo_obj.topology.transformers_df.bus0.values:
+            try:
+                # try to find LVStation behind node_1_2
+                node_1_2 = path[path.index(node_1_2) + 1]
+            except IndexError:
+                # if no LVStation between node_1_2 and node with
+                # voltage problem, connect node directly to
+                # MVStation
+                node_1_2 = farthest_node[0]
+                break
+
+        # get line between node_1_2 and predecessor node (that is
+        # closer to the station)
+        pred_node = path[path.index(node_1_2) - 1]
+        crit_line_name = graph.get_edge_data(node_1_2, pred_node)["branch_name"]
+        if grid.lines_df.at[crit_line_name, "bus0"] == pred_node:
+            edisgo_obj.topology._lines_df.at[crit_line_name, "bus0"] = station_node
+        elif grid.lines_df.at[crit_line_name, "bus1"] == pred_node:
+            edisgo_obj.topology._lines_df.at[crit_line_name, "bus1"] = station_node
+
+        else:
+
+            raise ValueError("Bus not in line buses. " "Please check.")
+
+        # change line length and type
+
+        edisgo_obj.topology._lines_df.at[
+            crit_line_name, "length"
+        ] = path_length_dict_tmp[node_1_2]
+        edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
+        lines_changes[crit_line_name] = 1
+
+        if not lines_changes:
+            logger.debug(
+                "==> {} line(s) was/were reinforced due to loading "
+                "issues.".format(len(lines_changes))
+            )
     return lines_changes
