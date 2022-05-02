@@ -15,6 +15,7 @@ from edisgo.tools import tools
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
+    from edisgo.network.results import Results
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ def reinforce_grid(
     max_while_iterations: int = 20,
     combined_analysis: bool = False,
     mode: str | None = None,
-):
+) -> Results:
     """
     Evaluates network reinforcement needs and performs measures.
 
@@ -86,7 +87,7 @@ def reinforce_grid(
           and neglecting LV network topology. LV load and generation is
           aggregated per LV network and directly connected to the secondary
           side of the respective MV/LV station.
-        * 'lv' TODO: @Kilian
+        * 'lv' to reinforce LV networks including MV/LV stations only.
 
     Returns
     -------

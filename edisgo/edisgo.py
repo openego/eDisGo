@@ -633,11 +633,12 @@ class EDisGo:
         max_while_iterations: int = 20,
         combined_analysis: bool = False,
         mode: str | None = None,
-    ):
+    ) -> Results:
         """
         Reinforces the network and calculates network expansion costs.
 
-        TODO: @Kilian
+        If the :func:`edisgo.network.TimeSeries.time_series_mode` is `worst-case` input
+        for `timesteps_pfa` and `mode` are overwritten and therefore ignored.
 
         See :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid` for more
         information.
@@ -659,23 +660,14 @@ class EDisGo:
             timesteps_pfa = self.timeseries.timeindex[1::2]
             mode = "lv"
 
-            results = reinforce_grid(
-                self,
-                max_while_iterations=max_while_iterations,
-                copy_grid=copy_grid,
-                timesteps_pfa=timesteps_pfa,
-                combined_analysis=combined_analysis,
-                mode=mode,
-            )
-        else:
-            results = reinforce_grid(
-                self,
-                max_while_iterations=max_while_iterations,
-                copy_grid=copy_grid,
-                timesteps_pfa=timesteps_pfa,
-                combined_analysis=combined_analysis,
-                mode=mode,
-            )
+        results = reinforce_grid(
+            self,
+            max_while_iterations=max_while_iterations,
+            copy_grid=copy_grid,
+            timesteps_pfa=timesteps_pfa,
+            combined_analysis=combined_analysis,
+            mode=mode,
+        )
 
         # add measure to Results object
         if not copy_grid:

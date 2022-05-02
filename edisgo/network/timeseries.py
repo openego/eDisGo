@@ -50,9 +50,24 @@ class TimeSeries:
         self.time_series_mode = None
 
     @property
-    def time_series_mode(self):
+    def time_series_mode(self) -> str | None:
         """
-        TODO: @Kilian
+        Time series mode.
+
+        Is used to distinguish between normal time series analysis and worst-case
+        analysis.
+
+        Parameters
+        -----------
+        time_series_mode_str : str or None
+            Can be `worst-case` for worst-case analysis. Everything else will be
+            treated as normal time series analysis.
+
+        Returns
+        -------
+        str or None
+            Can be `worst-case` for worst-case analysis. Everything else will be
+            treated as normal time series analysis.
         """
         return self._time_series_mode
 
