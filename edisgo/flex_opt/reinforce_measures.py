@@ -787,7 +787,7 @@ def add_parallel_line_over_half_length_of_string(edisgo_obj, grid, crit_lines):
 
         if not lines_changes:
             logger.debug(
-                "==> {} line(s) was/were reinforced due to loading "
-                "issues.".format(len(lines_changes))
+                f"==> {len(lines_changes)} line(s) was/were reinforced due to loading "
+                "issues."
             )
     return lines_changes
