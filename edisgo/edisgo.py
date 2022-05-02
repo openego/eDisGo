@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 import pickle
@@ -624,25 +626,59 @@ class EDisGo:
 
         return timesteps_not_converged
 
-    def reinforce(self, **kwargs):
+    def reinforce(
+        self,
+        timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
+        copy_grid: bool = False,
+        max_while_iterations: int = 20,
+        combined_analysis: bool = False,
+        mode: str | None = None,
+    ):
         """
         Reinforces the network and calculates network expansion costs.
+
+        TODO: @Kilian
 
         See :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid` for more
         information.
 
         """
-        results = reinforce_grid(
-            self,
-            max_while_iterations=kwargs.get("max_while_iterations", 10),
-            copy_grid=kwargs.get("copy_grid", False),
-            timesteps_pfa=kwargs.get("timesteps_pfa", None),
-            combined_analysis=kwargs.get("combined_analysis", False),
-            mode=kwargs.get("mode", None),
-        )
+        if self.timeseries.time_series_mode == "worst-case":
+            timesteps_pfa = self.timeseries.timeindex[::2]
+            mode = "mv"
+
+            reinforce_grid(
+                self,
+                max_while_iterations=max_while_iterations,
+                copy_grid=copy_grid,
+                timesteps_pfa=timesteps_pfa,
+                combined_analysis=combined_analysis,
+                mode=mode,
+            )
+
+            timesteps_pfa = self.timeseries.timeindex[1::2]
+            mode = "lv"
+
+            results = reinforce_grid(
+                self,
+                max_while_iterations=max_while_iterations,
+                copy_grid=copy_grid,
+                timesteps_pfa=timesteps_pfa,
+                combined_analysis=combined_analysis,
+                mode=mode,
+            )
+        else:
+            results = reinforce_grid(
+                self,
+                max_while_iterations=max_while_iterations,
+                copy_grid=copy_grid,
+                timesteps_pfa=timesteps_pfa,
+                combined_analysis=combined_analysis,
+                mode=mode,
+            )
 
         # add measure to Results object
-        if not kwargs.get("copy_grid", False):
+        if not copy_grid:
             self.results.measures = "grid_expansion"
 
         return results

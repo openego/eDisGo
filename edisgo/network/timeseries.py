@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 import logging
 import os
@@ -45,6 +47,18 @@ class TimeSeries:
 
         self._timeindex = kwargs.get("timeindex", pd.DatetimeIndex([]))
         self.time_series_raw = TimeSeriesRaw()
+        self.time_series_mode = None
+
+    @property
+    def time_series_mode(self):
+        """
+        TODO: @Kilian
+        """
+        return self._time_series_mode
+
+    @time_series_mode.setter
+    def time_series_mode(self, time_series_mode_str: str | None):
+        self._time_series_mode = time_series_mode_str
 
     @property
     def timeindex(self):
@@ -245,6 +259,7 @@ class TimeSeries:
         are deleted, as well as everything stored in :py:attr:`~time_series_raw`.
 
         """
+        self.time_series_mode = None
         self.generators_active_power = None
         self.loads_active_power = None
         self.storage_units_active_power = None
@@ -282,6 +297,7 @@ class TimeSeries:
             ts_loads=ts_loads,
             ts_storage_units=ts_storage_units,
         )
+        self.time_series_mode = "time_series"
 
     def set_reactive_power_manual(
         self, edisgo_object, ts_generators=None, ts_loads=None, ts_storage_units=None
@@ -315,6 +331,7 @@ class TimeSeries:
             ts_loads=ts_loads,
             ts_storage_units=ts_storage_units,
         )
+        self.time_series_mode = "time_series"
 
     def _set_manual(
         self,
@@ -624,6 +641,8 @@ class TimeSeries:
             self.storage_units_reactive_power = q.rename(
                 index=self.timeindex_worst_cases
             )
+
+        self.time_series_mode = "worst-case"
 
     def _worst_case_generators(self, cases, df, configs):
         """
@@ -1170,6 +1189,8 @@ class TimeSeries:
                 sort=False,
             )
 
+        self.time_series_mode = "time_series"
+
     def predefined_dispatchable_generators_by_technology(
         self, edisgo_object, ts_generators, generator_names=None
     ):
@@ -1242,6 +1263,8 @@ class TimeSeries:
                 axis=1,
                 sort=False,
             )
+
+        self.time_series_mode = "time_series"
 
     def predefined_conventional_loads_by_sector(
         self, edisgo_object, ts_loads, load_names=None
@@ -1321,6 +1344,8 @@ class TimeSeries:
             axis=1,
         )
 
+        self.time_series_mode = "time_series"
+
     def predefined_charging_points_by_use_case(
         self, edisgo_object, ts_loads, load_names=None
     ):
@@ -1377,6 +1402,8 @@ class TimeSeries:
             ],
             axis=1,
         )
+
+        self.time_series_mode = "time_series"
 
     def fixed_cosphi(
         self,
@@ -1582,6 +1609,8 @@ class TimeSeries:
             self.storage_units_reactive_power = pd.concat(
                 [self.storage_units_reactive_power, reactive_power], axis=1
             )
+
+        self.time_series_mode = "time_series"
 
     @property
     def residual_load(self):
