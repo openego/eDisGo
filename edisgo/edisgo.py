@@ -645,7 +645,12 @@ class EDisGo:
 
         """
         if self.timeseries.time_series_mode == "worst-case":
-            timesteps_pfa = self.timeseries.timeindex[::2]
+            timeindex_worst_cases = self.timeseries.timeindex_worst_cases
+            timesteps_pfa = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("mv")
+                ]
+            )
             mode = "mv"
 
             reinforce_grid(
@@ -657,7 +662,11 @@ class EDisGo:
                 mode=mode,
             )
 
-            timesteps_pfa = self.timeseries.timeindex[1::2]
+            timesteps_pfa = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("lv")
+                ]
+            )
             mode = "lv"
 
         results = reinforce_grid(
