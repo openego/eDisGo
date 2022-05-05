@@ -1285,7 +1285,7 @@ class TimeSeries:
         # in case time series from demandlib are used, retrieve demandlib time series
         if isinstance(ts_loads, str) and ts_loads == "demandlib":
             ts_loads = timeseries_import.load_time_series_demandlib(
-                edisgo_object.config, year=self.timeindex[0].year
+                edisgo_object.config, timeindex=self.timeindex
             )
         elif not isinstance(ts_loads, pd.DataFrame):
             raise ValueError(

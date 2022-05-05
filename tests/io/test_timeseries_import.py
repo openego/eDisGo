@@ -38,9 +38,7 @@ class TestTimeseriesImport:
 
     def test_import_load_timeseries(self):
         timeindex = pd.date_range("1/1/2018", periods=8760, freq="H")
-        load = timeseries_import.load_time_series_demandlib(
-            self.config, timeindex[0].year
-        )
+        load = timeseries_import.load_time_series_demandlib(self.config, timeindex)
         assert (
             load.columns == ["retail", "residential", "agricultural", "industrial"]
         ).all()
