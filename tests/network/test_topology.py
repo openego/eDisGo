@@ -1389,3 +1389,124 @@ class TestTopologyWithEdisgoObject:
         assert self.edisgo.topology.buses_df.at[bus, "lv_grid_id"] == 3
         # check new charging point
         assert self.edisgo.topology.charging_points_df.at[comp_name, "number"] == 2
+
+    def test_check_integrity(self):
+        """Test of validation of grids."""
+        comps_dict = {
+            "buses": "BusBar_MVGrid_1_LVGrid_2_MV",
+            "generators": "GeneratorFluctuating_14",
+            "loads": "Load_residential_LVGrid_3_2",
+            "transformers": "LVStation_5_transformer_1",
+            "lines": "Line_10014",
+            "switches": "circuit_breaker_1",
+        }
+        # check duplicate node
+        for comp, name in comps_dict.items():
+            new_comp = getattr(self.edisgo.topology, "_{}_df".format(comp)).loc[name]
+            comps = getattr(self.edisgo.topology, "_{}_df".format(comp))
+            setattr(self.edisgo.topology, "_{}_df".format(comp), comps.append(new_comp))
+            try:
+                self.edisgo.topology.check_integrity()
+                raise Exception(
+                    "Appending components {} in check duplicate "
+                    "did not work properly.".format(comp)
+                )
+            except ValueError as e:
+                assert e.args[0] == (
+                    f"{name} have duplicate entry in one of the components "
+                    f"dataframes."
+                )
+
+            # reset dataframe
+            setattr(self.edisgo.topology, "_{}_df".format(comp), comps)
+            self.edisgo.topology.check_integrity()
+
+        # check not connected generator and load
+        for nodal_component in ["loads", "generators"]:
+            comps = getattr(self.edisgo.topology, "_{}_df".format(nodal_component))
+            new_comp = comps.loc[comps_dict[nodal_component]]
+            new_comp.name = "new_nodal_component"
+            new_comp.bus = "Non_existent_bus_" + nodal_component
+            setattr(
+                self.edisgo.topology,
+                "_{}_df".format(nodal_component),
+                comps.append(new_comp),
+            )
+            try:
+                self.edisgo.topology.check_integrity()
+                raise Exception(
+                    "Appending components {} did not work "
+                    "properly.".format(nodal_component)
+                )
+            except ValueError as e:
+                assert e.args[
+                    0
+                ] == "The following {} have buses which are not defined: {}.".format(
+                    nodal_component, new_comp.name
+                )
+            # reset dataframe
+            setattr(self.edisgo.topology, "_{}_df".format(nodal_component), comps)
+            self.edisgo.topology.check_integrity()
+
+        # check branch components
+        i = 0
+        for branch_component in ["lines", "transformers"]:
+            comps = getattr(self.edisgo.topology, "_{}_df".format(branch_component))
+            new_comp = comps.loc[comps_dict[branch_component]]
+            new_comp.name = "new_branch_component"
+            setattr(
+                new_comp,
+                "bus" + str(i),
+                "Non_existent_bus_" + branch_component,
+            )
+            setattr(
+                self.edisgo.topology,
+                "_{}_df".format(branch_component),
+                comps.append(new_comp),
+            )
+            try:
+                self.edisgo.topology.check_integrity()
+                raise Exception(
+                    "Appending components {} did not work "
+                    "properly.".format(branch_component)
+                )
+            except ValueError as e:
+                assert e.args[
+                    0
+                ] == "The following {} have bus{} which are not defined: {}.".format(
+                    branch_component, i, new_comp.name
+                )
+            # reset dataframe
+            setattr(self.edisgo.topology, "_{}_df".format(branch_component), comps)
+            self.edisgo.topology.check_integrity()
+            i += 1
+
+        # check switches
+        comps = self.edisgo.topology.switches_df
+        for attr in ["bus_open", "bus_closed"]:
+            new_comp = comps.loc[comps_dict["switches"]]
+            new_comp.name = "new_switch"
+            new_comps = comps.append(new_comp)
+            new_comps.at[new_comp.name, attr] = "Non_existent_" + attr
+            self.edisgo.topology.switches_df = new_comps
+            try:
+                self.edisgo.topology.check_integrity()
+                raise Exception("Appending components switches did not work properly.")
+            except ValueError as e:
+                assert e.args[
+                    0
+                ] == "The following switches have {} which are not defined: {}.".format(
+                    attr, new_comp.name
+                )
+            self.edisgo.topology.switches_df = comps
+            self.edisgo.topology.check_integrity()
+
+        # check isolated node
+        bus = self.edisgo.topology.buses_df.loc[comps_dict["buses"]]
+        bus.name = "New_bus"
+        self.edisgo.topology.buses_df = self.edisgo.topology.buses_df.append(bus)
+        try:
+            self.edisgo.topology.check_integrity()
+            raise Exception("Appending components buses did not work properly.")
+        except ValueError as e:
+            assert e.args[0] == "The following buses are isolated: {}.".format(bus.name)
