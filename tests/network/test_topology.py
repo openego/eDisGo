@@ -1413,8 +1413,8 @@ class TestTopologyWithEdisgoObject:
                 )
             except ValueError as e:
                 assert e.args[0] == (
-                    f"{name} have duplicate entry in one of the components "
-                    f"dataframes."
+                    f"{name} have duplicate entry in one of the following components' "
+                    f"dataframes: {comp}."
                 )
 
             # reset dataframe

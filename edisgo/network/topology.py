@@ -2491,39 +2491,30 @@ class Topology:
         """
         # check for duplicate labels (of components)
         duplicated_labels = []
-        if any(self.buses_df.index.duplicated()):
-            duplicated_labels.append(
-                self.buses_df.index[self.buses_df.index.duplicated()].values
-            )
-        if any(self.generators_df.index.duplicated()):
-            duplicated_labels.append(
-                self.generators_df.index[self.generators_df.index.duplicated()].values
-            )
-        if any(self.loads_df.index.duplicated()):
-            duplicated_labels.append(
-                self.loads_df.index[self.loads_df.index.duplicated()].values
-            )
-        if any(self.transformers_df.index.duplicated()):
-            duplicated_labels.append(
-                self.transformers_df.index[
-                    self.transformers_df.index.duplicated()
-                ].values
-            )
-        if any(self.lines_df.index.duplicated()):
-            duplicated_labels.append(
-                self.lines_df.index[self.lines_df.index.duplicated()].values
-            )
-        if any(self.switches_df.index.duplicated()):
-            duplicated_labels.append(
-                self.switches_df.index[self.switches_df.index.duplicated()].values
-            )
+        duplicated_comps = []
+        for comp in [
+            "buses",
+            "generators",
+            "loads",
+            "transformers",
+            "lines",
+            "switches",
+        ]:
+            if any(getattr(self, comp + "_df").index.duplicated()):
+                duplicated_comps.append(comp)
+                duplicated_labels.append(
+                    getattr(self, comp + "_df")
+                    .index[getattr(self, comp + "_df").index.duplicated()]
+                    .values
+                )
         if duplicated_labels:
             raise ValueError(
-                "{labels} have duplicate entry in one of the components "
-                "dataframes.".format(
+                "{labels} have duplicate entry in one of the following components' "
+                "dataframes: {comps}.".format(
                     labels=", ".join(
                         np.concatenate([list.tolist() for list in duplicated_labels])
-                    )
+                    ),
+                    comps=", ".join(duplicated_comps),
                 )
             )
 
