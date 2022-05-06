@@ -267,10 +267,14 @@ Storage integration
 
 .. warning:: The storage integration methods described below are not yet adapted to the refactored code and therefore currently do not work.
 
-Besides the possibility to connect a storage with a given operation to any node in the grid, eDisGo provides a methodology that takes
-a given storage capacity and allocates it to multiple smaller storages such that it reduces line overloading and voltage deviations.
-The methodology is implemented in :py:func:`~edisgo.flex_opt.storage_positioning.one_storage_per_feeder`. As the above described
-curtailment allocation methodologies it is intended to be used in combination with `eTraGo <https://github.com/openego/eTraGo>`_ where
+Besides the possibility to connect a storage with a given operation to any node in the
+grid, eDisGo provides a methodology that takes
+a given storage capacity and allocates it to multiple smaller storage units such that it
+reduces line overloading and voltage deviations.
+The methodology is implemented in :py:func:`~edisgo.flex_opt.storage_positioning.one_storage_per_feeder`.
+As the above described
+curtailment allocation methodologies it is intended to be used in combination
+with `eTraGo <https://github.com/openego/eTraGo>`_ where
 storage capacity and operation is optimized.
 
 For each feeder with load or voltage issues it is checked if integrating a

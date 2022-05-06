@@ -313,11 +313,12 @@ using the provided API for the oemof demandlib and the OpenEnergy DataBase:
     # (There are currently no predefined profiles for dispatchable generators, wherefore
     # their feed-in profiles need to be provided)
     timeseries_generation_dispatchable = pd.DataFrame(
-        {'biomass': [1] * len(timeindex),
-         'coal': [1] * len(timeindex),
-         'other': [1] * len(timeindex)
+        {"biomass": [1] * len(timeindex),
+         "coal": [1] * len(timeindex),
+         "other": [1] * len(timeindex)
          },
-        index=timeindex)
+        index=timeindex
+    )
     edisgo_obj.set_time_series_active_power_predefined(
         conventional_loads_ts="demandlib",
         fluctuating_generators_ts="oedb",
