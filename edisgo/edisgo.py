@@ -567,22 +567,22 @@ class EDisGo:
             :pandas:`pandas.Timestamp<Timestamp>`
             Timesteps specifies for which time steps to conduct the power flow
             analysis. It defaults to None in which case all time steps in
-            :attr:`~.network.timeseries.TimeSeries.timeindex` are
-            used.
+            :attr:`~.network.timeseries.TimeSeries.timeindex` are used.
         raise_not_converged : bool
             If True, an error is raised in case power flow analysis did not converge
-            for all time steps. I
+            for all time steps.
             Default: True.
+
+        Other Parameters
+        -----------------
+        kwargs : dict
+            Possible other parameters comprise all other parameters that can be set in
+            :func:`edisgo.io.pypsa_io.to_pypsa`.
 
         Returns
         --------
         :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
             Returns the time steps for which power flow analysis did not converge.
-
-        Other Parameters
-        -----------------
-        Possible other parameters comprise all other parameters that can be set in
-        :attr:`~.io.pypsa_io.to_pypsa`.
 
         """
         if timesteps is None:
