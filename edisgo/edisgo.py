@@ -637,15 +637,21 @@ class EDisGo:
         """
         Reinforces the network and calculates network expansion costs.
 
-        If the :attr:`edisgo.network.timeseries.TimeSeries.time_series_mode` is
-        `worst-case` input for `timesteps_pfa` and `mode` are overwritten and therefore
+        If the :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case` is
+        True input for `timesteps_pfa` and `mode` are overwritten and therefore
         ignored.
 
         See :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid` for more
         information on input parameters and methodology.
 
         """
-        if self.timeseries.time_series_mode == "worst-case":
+        if self.timeseries.is_worst_case:
+
+            logger.info(
+                "Running reinforcement in worst-case mode by differentiating between mv"
+                " and lv load and feed-in cases."
+            )
+
             timeindex_worst_cases = self.timeseries.timeindex_worst_cases
             timesteps_pfa = pd.DatetimeIndex(
                 timeindex_worst_cases.loc[

@@ -286,13 +286,14 @@ def reinforce_grid(
 
     # solve voltage problems in MV topology
     logger.debug("==> Check voltage in MV topology.")
-    if combined_analysis:
-        voltage_levels = "mv_lv"
-    else:
-        voltage_levels = "mv"
+    voltage_levels = "mv_lv" if combined_analysis else "mv"
 
-    crit_nodes = checks.mv_voltage_deviation(
-        edisgo_reinforce, voltage_levels=voltage_levels
+    crit_nodes = (
+        False
+        if mode == "lv"
+        else checks.mv_voltage_deviation(
+            edisgo_reinforce, voltage_levels=voltage_levels
+        )
     )
 
     while_counter = 0

@@ -47,10 +47,10 @@ class TimeSeries:
 
         self._timeindex = kwargs.get("timeindex", pd.DatetimeIndex([]))
         self.time_series_raw = TimeSeriesRaw()
-        self.time_series_mode = None
+        self.is_worst_case = False
 
     @property
-    def time_series_mode(self) -> str | None:
+    def is_worst_case(self) -> bool:
         """
         Time series mode.
 
@@ -59,21 +59,21 @@ class TimeSeries:
 
         Parameters
         -----------
-        time_series_mode_str : str or None
-            Can be `worst-case` for worst-case analysis. Everything else will be
-            treated as normal time series analysis.
+        is_worst_case : bool
+            Indicates if current time series is worst-case time series with different
+            assumptions for mv and lv simultaneities.
 
         Returns
         -------
-        str or None
-            Can be `worst-case` for worst-case analysis. Everything else will be
-            treated as normal time series analysis.
+        bool
+            Indicates if current time series is worst-case time series with different
+            assumptions for mv and lv simultaneities.
         """
-        return self._time_series_mode
+        return self._is_worst_case
 
-    @time_series_mode.setter
-    def time_series_mode(self, time_series_mode_str: str | None):
-        self._time_series_mode = time_series_mode_str
+    @is_worst_case.setter
+    def is_worst_case(self, is_worst_case: bool):
+        self._is_worst_case = is_worst_case
 
     @property
     def timeindex(self):
@@ -274,7 +274,7 @@ class TimeSeries:
         are deleted, as well as everything stored in :py:attr:`~time_series_raw`.
 
         """
-        self.time_series_mode = None
+        self.is_worst_case = False
         self.generators_active_power = None
         self.loads_active_power = None
         self.storage_units_active_power = None
@@ -312,7 +312,7 @@ class TimeSeries:
             ts_loads=ts_loads,
             ts_storage_units=ts_storage_units,
         )
-        self.time_series_mode = "time_series"
+        self.is_worst_case = False
 
     def set_reactive_power_manual(
         self, edisgo_object, ts_generators=None, ts_loads=None, ts_storage_units=None
@@ -346,7 +346,7 @@ class TimeSeries:
             ts_loads=ts_loads,
             ts_storage_units=ts_storage_units,
         )
-        self.time_series_mode = "time_series"
+        self.is_worst_case = "time_series"
 
     def _set_manual(
         self,
@@ -657,7 +657,7 @@ class TimeSeries:
                 index=self.timeindex_worst_cases
             )
 
-        self.time_series_mode = "worst-case"
+        self.is_worst_case = True
 
     def _worst_case_generators(self, cases, df, configs):
         """
@@ -1204,7 +1204,7 @@ class TimeSeries:
                 sort=False,
             )
 
-        self.time_series_mode = "time_series"
+        self.is_worst_case = False
 
     def predefined_dispatchable_generators_by_technology(
         self, edisgo_object, ts_generators, generator_names=None
@@ -1279,7 +1279,7 @@ class TimeSeries:
                 sort=False,
             )
 
-        self.time_series_mode = "time_series"
+        self.is_worst_case = False
 
     def predefined_conventional_loads_by_sector(
         self, edisgo_object, ts_loads, load_names=None
@@ -1359,7 +1359,7 @@ class TimeSeries:
             axis=1,
         )
 
-        self.time_series_mode = "time_series"
+        self.is_worst_case = False
 
     def predefined_charging_points_by_use_case(
         self, edisgo_object, ts_loads, load_names=None
@@ -1418,7 +1418,7 @@ class TimeSeries:
             axis=1,
         )
 
-        self.time_series_mode = "time_series"
+        self.is_worst_case = False
 
     def fixed_cosphi(
         self,
@@ -1625,7 +1625,7 @@ class TimeSeries:
                 [self.storage_units_reactive_power, reactive_power], axis=1
             )
 
-        self.time_series_mode = "time_series"
+        self.is_worst_case = False
 
     @property
     def residual_load(self):
