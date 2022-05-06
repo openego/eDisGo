@@ -1291,9 +1291,20 @@ class TimeSeries:
             raise ValueError(
                 "'ts_loads' must either be a pandas DataFrame or 'demandlib'."
             )
+        elif ts_loads.empty:
+            raise Warning("The profile you entered is empty. Method is skipped.")
+            return
 
         # write to TimeSeriesRaw
-        self.time_series_raw.conventional_loads_active_power_by_sector = ts_loads
+        if self.time_series_raw.conventional_loads_active_power_by_sector is not None:
+            for col in ts_loads:
+                self.time_series_raw.conventional_loads_active_power_by_sector[
+                    col
+                ] = ts_loads[col]
+        else:
+            self.time_series_raw.conventional_loads_active_power_by_sector = (
+                ts_loads.copy()
+            )
 
         # set load_names if None
         if load_names is None:
@@ -1348,9 +1359,20 @@ class TimeSeries:
         """
         if not isinstance(ts_loads, pd.DataFrame):
             raise ValueError("'ts_loads' must be a pandas DataFrame.")
+        elif ts_loads.empty:
+            raise Warning("The profile you entered is empty. Method is skipped.")
+            return
 
         # write to TimeSeriesRaw
-        self.time_series_raw.charging_points_active_power_by_use_case = ts_loads
+        if self.time_series_raw.charging_points_active_power_by_use_case is not None:
+            for col in ts_loads:
+                self.time_series_raw.charging_points_active_power_by_use_case[
+                    col
+                ] = ts_loads[col]
+        else:
+            self.time_series_raw.charging_points_active_power_by_use_case = (
+                ts_loads.copy()
+            )
 
         # set load_names if None
         if load_names is None:
@@ -1360,6 +1382,13 @@ class TimeSeries:
             ].index
         load_names = _check_if_components_exist(edisgo_object, load_names, "loads")
         loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
+
+        # check if all loads are charging points and throw warning if not
+        if not all(loads_df.type.isin(["charging_point"])):
+            raise Warning(
+                "Not all affected loads are charging points. Please check and"
+                " adapt if necessary."
+            )
 
         # drop existing time series
         drop_component_time_series(
@@ -1371,7 +1400,7 @@ class TimeSeries:
             [
                 self.loads_active_power,
                 loads_df.apply(
-                    lambda x: ts_loads[x.sector] * x.p_nom,
+                    lambda x: ts_loads[x.sector] * x.p_set,
                     axis=1,
                 ).T,
             ],

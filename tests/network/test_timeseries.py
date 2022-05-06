@@ -2,6 +2,7 @@ import logging
 
 from math import acos, tan
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -1113,12 +1114,349 @@ class TestTimeSeries:
         pass
 
     def test_predefined_conventional_loads_by_sector(self):
-        # ToDo implement
-        pass
+        index = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.timeseries.timeindex = index
+        # define expected profiles
+        profiles = pd.DataFrame(
+            index=index,
+            columns=["retail", "residential", "agricultural", "industrial"],
+            data=[
+                [0.0000597, 0.0000782, 0.0000654, 0.0000992],
+                [0.0000526, 0.0000563, 0.0000611, 0.0000992],
+                [0.0000459, 0.0000451, 0.0000585, 0.0000992],
+            ],
+        )
+        # test assertion error timeindex
+        with pytest.raises(Warning) as exc_info:
+            self.edisgo.timeseries.predefined_conventional_loads_by_sector(
+                self.edisgo, pd.DataFrame()
+            )
+        assert (
+            exc_info.value.args[0]
+            == "The profile you entered is empty. Method is skipped."
+        )
+        # test demandlib - single loads
+        loads = [
+            "Load_agricultural_LVGrid_5_2",
+            "Load_agricultural_LVGrid_9_1",
+            "Load_residential_LVGrid_9_2",
+            "Load_retail_LVGrid_9_14",
+            "Load_residential_LVGrid_5_3",
+            "Load_industrial_LVGrid_6_1",
+            "Load_agricultural_LVGrid_7_1",
+        ]
+        self.edisgo.timeseries.predefined_conventional_loads_by_sector(
+            self.edisgo, "demandlib", load_names=loads
+        )
+        # fmt: off
+        assert self.edisgo.timeseries.time_series_raw.\
+            conventional_loads_active_power_by_sector.shape\
+               == (3, 4)
+        assert_frame_equal(
+            self.edisgo.timeseries.time_series_raw.
+            conventional_loads_active_power_by_sector,
+            profiles,
+            atol=1e-7,
+        )
+        # fmt: on
+        assert self.edisgo.timeseries.loads_active_power.shape == (3, 7)
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power[
+                "Load_agricultural_LVGrid_5_2"
+            ].values,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_agricultural_LVGrid_5_2", "annual_consumption"
+                ]
+                * profiles["agricultural"]
+            ).values,
+            atol=1e-4,
+        ).all()
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power[
+                "Load_residential_LVGrid_5_3"
+            ].values,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_residential_LVGrid_5_3", "annual_consumption"
+                ]
+                * profiles["residential"]
+            ).values,
+            atol=1e-4,
+        ).all()
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power["Load_retail_LVGrid_9_14"].values,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_retail_LVGrid_9_14", "annual_consumption"
+                ]
+                * profiles["retail"]
+            ).values,
+            atol=1e-4,
+        ).all()
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power[
+                "Load_industrial_LVGrid_6_1"
+            ].values,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_industrial_LVGrid_6_1", "annual_consumption"
+                ]
+                * profiles["industrial"]
+            ).values,
+            atol=1e-4,
+        ).all()
+        # test demandlib - all
+        self.edisgo.timeseries.predefined_conventional_loads_by_sector(
+            self.edisgo, "demandlib"
+        )
+        # fmt: off
+        assert self.edisgo.timeseries.time_series_raw.\
+            conventional_loads_active_power_by_sector.shape\
+               == (3, 4)
+        # fmt: on
+        assert self.edisgo.timeseries.loads_active_power.shape == (3, 50)
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power[
+                "Load_industrial_LVGrid_6_1"
+            ].values,
+            [0.05752256] * 3,
+        ).all()
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power.loc[
+                index[1], "Load_agricultural_LVGrid_5_2"
+            ],
+            0.0274958,
+        )
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power.loc[
+                index, "Load_residential_LVGrid_9_2"
+            ].values,
+            [0.00038328, 0.00027608, 0.00022101],
+        ).all()
+        # test assertion error
+        with pytest.raises(ValueError) as exc_info:
+            self.edisgo.timeseries.predefined_conventional_loads_by_sector(
+                self.edisgo, "random"
+            )
+        assert (
+            exc_info.value.args[0]
+            == "'ts_loads' must either be a pandas DataFrame or 'demandlib'."
+        )
+        # test manual - all
+        profiles = pd.DataFrame(
+            index=index,
+            columns=["retail", "residential", "agricultural", "industrial"],
+            data=[
+                [0.003, 0.02, 0.00, 0.1],
+                [0.004, 0.01, 0.10, 0.2],
+                [0.002, 0.06, 0.25, 1.0],
+            ],
+        )
+        self.edisgo.timeseries.predefined_conventional_loads_by_sector(
+            self.edisgo, profiles
+        )
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power[
+                "Load_agricultural_LVGrid_5_2"
+            ].values,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_agricultural_LVGrid_5_2", "annual_consumption"
+                ]
+                * profiles["agricultural"]
+            ).values,
+        ).all()
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power[
+                "Load_residential_LVGrid_5_3"
+            ].values,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_residential_LVGrid_5_3", "annual_consumption"
+                ]
+                * profiles["residential"]
+            ).values,
+        ).all()
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power["Load_retail_LVGrid_9_14"].values,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_retail_LVGrid_9_14", "annual_consumption"
+                ]
+                * profiles["retail"]
+            ).values,
+        ).all()
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power[
+                "Load_industrial_LVGrid_6_1"
+            ].values,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_industrial_LVGrid_6_1", "annual_consumption"
+                ]
+                * profiles["industrial"]
+            ).values,
+        ).all()
+        # test manual - single loads
+        profiles_new = (
+            pd.DataFrame(
+                index=index,
+                columns=["retail", "residential", "agricultural", "industrial"],
+                data=[
+                    [0.003, 0.02, 0.00, 0.1],
+                    [0.004, 0.01, 0.10, 0.2],
+                    [0.002, 0.06, 0.25, 1.0],
+                ],
+            )
+            * 5
+        )
+        loads = ["Load_industrial_LVGrid_6_1", "Load_residential_LVGrid_5_3"]
+        self.edisgo.timeseries.predefined_conventional_loads_by_sector(
+            self.edisgo, profiles_new, load_names=loads
+        )
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power[
+                "Load_agricultural_LVGrid_5_2"
+            ].values,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_agricultural_LVGrid_5_2", "annual_consumption"
+                ]
+                * profiles["agricultural"]
+            ).values,
+        ).all()
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power[
+                "Load_residential_LVGrid_5_3"
+            ].values,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_residential_LVGrid_5_3", "annual_consumption"
+                ]
+                * profiles_new["residential"]
+            ).values,
+        ).all()
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power["Load_retail_LVGrid_9_14"].values,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_retail_LVGrid_9_14", "annual_consumption"
+                ]
+                * profiles["retail"]
+            ).values,
+        ).all()
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power[
+                "Load_industrial_LVGrid_6_1"
+            ].values,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_industrial_LVGrid_6_1", "annual_consumption"
+                ]
+                * profiles_new["industrial"]
+            ).values,
+        ).all()
 
     def test_predefined_charging_points_by_use_case(self):
-        # ToDo implement
-        pass
+        index = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.timeseries.timeindex = index
+        # add charging points to MV and LV
+        df_cp = pd.DataFrame(
+            {
+                "bus": [
+                    "Bus_BranchTee_MVGrid_1_2",
+                    "Bus_BranchTee_MVGrid_1_2",
+                    "Bus_BranchTee_LVGrid_1_5",
+                    "Bus_BranchTee_LVGrid_1_5",
+                ],
+                "p_set": [0.1, 0.2, 0.3, 0.4],
+                "type": [
+                    "charging_point",
+                    "charging_point",
+                    "charging_point",
+                    "charging_point",
+                ],
+                "sector": ["hpc", "public", "home", "work"],
+            },
+            index=["CP1", "CP2", "CP3", "CP4"],
+        )
+        self.edisgo.topology.loads_df = self.edisgo.topology.loads_df.append(df_cp)
+        # test assertion error
+        with pytest.raises(ValueError) as exc_info:
+            self.edisgo.timeseries.predefined_charging_points_by_use_case(
+                self.edisgo, "random"
+            )
+        assert exc_info.value.args[0] == "'ts_loads' must be a pandas DataFrame."
+        # test all charging points
+        profiles = pd.DataFrame(
+            index=index,
+            columns=["hpc", "public", "home", "work"],
+            data=[
+                [3.03, 0.22, 0.01, 0.1],
+                [2.04, 0.41, 0.20, 0.2],
+                [7.01, 0.16, 0.24, 1.0],
+            ],
+        )
+        self.edisgo.timeseries.predefined_charging_points_by_use_case(
+            self.edisgo, profiles
+        )
+        # fmt: off
+        assert self.edisgo.timeseries.time_series_raw.\
+            charging_points_active_power_by_use_case.shape\
+               == (3, 4)
+        # fmt: on
+
+        for name, cp in df_cp.iterrows():
+            assert np.isclose(
+                self.edisgo.timeseries.loads_active_power[name].values,
+                (
+                    self.edisgo.topology.charging_points_df.loc[name, "p_set"]
+                    * profiles[cp.sector]
+                ).values,
+            ).all()
+        # test single charging points
+        profiles_new = profiles * 0.5
+        self.edisgo.timeseries.predefined_charging_points_by_use_case(
+            self.edisgo, profiles_new, load_names=["CP1", "CP3"]
+        )
+        for name, cp in df_cp.iterrows():
+            if name in ["CP1", "CP3"]:
+                assert np.isclose(
+                    self.edisgo.timeseries.loads_active_power[name].values,
+                    (
+                        self.edisgo.topology.charging_points_df.loc[name, "p_set"]
+                        * profiles_new[cp.sector]
+                    ).values,
+                ).all()
+            else:
+                assert np.isclose(
+                    self.edisgo.timeseries.loads_active_power[name].values,
+                    (
+                        self.edisgo.topology.charging_points_df.loc[name, "p_set"]
+                        * profiles[cp.sector]
+                    ).values,
+                ).all()
+        # test warning
+        profiles = pd.DataFrame(
+            index=index,
+            columns=["residential", "public", "home"],
+            data=[[3.03, 0.01, 0.1], [2.04, 0.20, 0.2], [7.01, 0.24, 1.0]],
+        )
+        with pytest.raises(Warning) as exc_info:
+            self.edisgo.timeseries.predefined_charging_points_by_use_case(
+                self.edisgo, profiles
+            )
+        assert (
+            exc_info.value.args[0]
+            == "Not all affected loads are charging points. Please check and"
+            " adapt if necessary."
+        )
+        # fmt: off
+        assert self.edisgo.timeseries.time_series_raw.\
+            charging_points_active_power_by_use_case.shape\
+               == (3, 5)
+        # fmt: on
 
     def test_fixed_cosphi(self):
         # ToDo implement
