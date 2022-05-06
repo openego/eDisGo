@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 
@@ -15,6 +16,8 @@ from edisgo.network.components import Switch
 from edisgo.network.grids import LVGrid
 from edisgo.network.topology import Topology
 from edisgo.tools.geopandas_helper import GeoPandasGridContainer
+
+logger = logging.getLogger(__name__)
 
 
 class TestTopology:
@@ -1390,7 +1393,7 @@ class TestTopologyWithEdisgoObject:
         # check new charging point
         assert self.edisgo.topology.charging_points_df.at[comp_name, "number"] == 2
 
-    def test_check_integrity(self):
+    def test_check_integrity(self, caplog):
         """Test of validation of grids."""
         comps_dict = {
             "buses": "BusBar_MVGrid_1_LVGrid_2_MV",
@@ -1405,17 +1408,12 @@ class TestTopologyWithEdisgoObject:
             new_comp = getattr(self.edisgo.topology, "_{}_df".format(comp)).loc[name]
             comps = getattr(self.edisgo.topology, "_{}_df".format(comp))
             setattr(self.edisgo.topology, "_{}_df".format(comp), comps.append(new_comp))
-            try:
-                self.edisgo.topology.check_integrity()
-                raise Exception(
-                    "Appending components {} in check duplicate "
-                    "did not work properly.".format(comp)
-                )
-            except ValueError as e:
-                assert e.args[0] == (
-                    f"{name} have duplicate entry in one of the following components' "
-                    f"dataframes: {comp}."
-                )
+            self.edisgo.topology.check_integrity()
+            assert (
+                f"{name} have duplicate entry in one of the following components' "
+                f"dataframes: {comp}." in caplog.text
+            )
+            caplog.clear()
 
             # reset dataframe
             setattr(self.edisgo.topology, "_{}_df".format(comp), comps)
@@ -1432,18 +1430,14 @@ class TestTopologyWithEdisgoObject:
                 "_{}_df".format(nodal_component),
                 comps.append(new_comp),
             )
-            try:
-                self.edisgo.topology.check_integrity()
-                raise Exception(
-                    "Appending components {} did not work "
-                    "properly.".format(nodal_component)
-                )
-            except ValueError as e:
-                assert e.args[
-                    0
-                ] == "The following {} have buses which are not defined: {}.".format(
+            self.edisgo.topology.check_integrity()
+            assert (
+                "The following {} have buses which are not defined: {}.".format(
                     nodal_component, new_comp.name
                 )
+                in caplog.text
+            )
+            caplog.clear()
             # reset dataframe
             setattr(self.edisgo.topology, "_{}_df".format(nodal_component), comps)
             self.edisgo.topology.check_integrity()
@@ -1464,18 +1458,14 @@ class TestTopologyWithEdisgoObject:
                 "_{}_df".format(branch_component),
                 comps.append(new_comp),
             )
-            try:
-                self.edisgo.topology.check_integrity()
-                raise Exception(
-                    "Appending components {} did not work "
-                    "properly.".format(branch_component)
-                )
-            except ValueError as e:
-                assert e.args[
-                    0
-                ] == "The following {} have bus{} which are not defined: {}.".format(
+            self.edisgo.topology.check_integrity()
+            assert (
+                "The following {} have bus{} which are not defined: {}.".format(
                     branch_component, i, new_comp.name
                 )
+                in caplog.text
+            )
+            caplog.clear()
             # reset dataframe
             setattr(self.edisgo.topology, "_{}_df".format(branch_component), comps)
             self.edisgo.topology.check_integrity()
@@ -1489,15 +1479,14 @@ class TestTopologyWithEdisgoObject:
             new_comps = comps.append(new_comp)
             new_comps.at[new_comp.name, attr] = "Non_existent_" + attr
             self.edisgo.topology.switches_df = new_comps
-            try:
-                self.edisgo.topology.check_integrity()
-                raise Exception("Appending components switches did not work properly.")
-            except ValueError as e:
-                assert e.args[
-                    0
-                ] == "The following switches have {} which are not defined: {}.".format(
+            self.edisgo.topology.check_integrity()
+            assert (
+                "The following switches have {} which are not defined: {}.".format(
                     attr, new_comp.name
                 )
+                in caplog.text
+            )
+            caplog.clear()
             self.edisgo.topology.switches_df = comps
             self.edisgo.topology.check_integrity()
 
@@ -1505,8 +1494,6 @@ class TestTopologyWithEdisgoObject:
         bus = self.edisgo.topology.buses_df.loc[comps_dict["buses"]]
         bus.name = "New_bus"
         self.edisgo.topology.buses_df = self.edisgo.topology.buses_df.append(bus)
-        try:
-            self.edisgo.topology.check_integrity()
-            raise Exception("Appending components buses did not work properly.")
-        except ValueError as e:
-            assert e.args[0] == "The following buses are isolated: {}.".format(bus.name)
+        self.edisgo.topology.check_integrity()
+        assert "The following buses are isolated: {}.".format(bus.name) in caplog.text
+        caplog.clear()

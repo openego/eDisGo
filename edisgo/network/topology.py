@@ -2508,7 +2508,7 @@ class Topology:
                     .values
                 )
         if duplicated_labels:
-            raise ValueError(
+            logger.warning(
                 "{labels} have duplicate entry in one of the following components' "
                 "dataframes: {comps}.".format(
                     labels=", ".join(
@@ -2530,7 +2530,7 @@ class Topology:
             missing = df.index[~df.bus.isin(self.buses_df.index)]
             buses.append(df.bus.values)
             if len(missing) > 0:
-                raise ValueError(
+                logger.warning(
                     "The following {} have buses which are not defined: "
                     "{}.".format(nodal_component, ", ".join(missing.values))
                 )
@@ -2541,7 +2541,7 @@ class Topology:
                 buses.append(df[attr].values)
                 missing = df.index[~df[attr].isin(self.buses_df.index)]
                 if len(missing) > 0:
-                    raise ValueError(
+                    logger.warning(
                         "The following {} have {} which are not defined: "
                         "{}.".format(branch_component, attr, ", ".join(missing.values))
                     )
@@ -2552,7 +2552,7 @@ class Topology:
             ]
             buses.append(self.switches_df[attr].values)
             if len(missing) > 0:
-                raise ValueError(
+                logger.warning(
                     "The following switches have {} which are not defined: "
                     "{}.".format(attr, ", ".join(missing.values))
                 )
@@ -2560,7 +2560,7 @@ class Topology:
         all_buses = np.unique(np.concatenate(buses, axis=None))
         missing = self.buses_df.index[~self.buses_df.index.isin(all_buses)]
         if len(missing) > 0:
-            raise ValueError(
+            logger.warning(
                 "The following buses are isolated: {}.".format(
                     ", ".join(missing.values)
                 )
