@@ -760,7 +760,7 @@ class EDisGo:
             )
         return comp_name
 
-    def integrate_component(
+    def integrate_component_based_on_geolocation(
         self,
         comp_type,
         geolocation,
@@ -804,14 +804,14 @@ class EDisGo:
             Active power time series of added component. Index of the series
             must contain all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex`.
-            Values are active power per time step in MW. Currently, if you want
+            Values are active power per time step in MW. If you want
             to add time series (if `add_ts` is True), you must provide a
             time series. It is not automatically retrieved.
         ts_reactive_power : :pandas:`pandas.Series<Series>`, optional
             Reactive power time series of added component. Index of the series
             must contain all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex`.
-            Values are reactive power per time step in MVA. Currently, if you
+            Values are reactive power per time step in MVA. If you
             want to add time series (if `add_ts` is True), you must provide a
             time series. It is not automatically retrieved.
 

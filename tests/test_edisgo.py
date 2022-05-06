@@ -217,7 +217,7 @@ class TestEDisGo:
             "generator_type": "misc",
             "subtype": "misc_sub",
         }
-        comp_name = self.edisgo.integrate_component(
+        comp_name = self.edisgo.integrate_component_based_on_geolocation(
             comp_type="generator",
             geolocation=(x, y),
             voltage_level=4,
@@ -246,7 +246,7 @@ class TestEDisGo:
         ts_active_power = dummy_ts
         ts_reactive_power = dummy_ts
 
-        comp_name = self.edisgo.integrate_component(
+        comp_name = self.edisgo.integrate_component_based_on_geolocation(
             comp_type="charging_point",
             geolocation=geom,
             ts_active_power=ts_active_power,
@@ -287,7 +287,7 @@ class TestEDisGo:
         # test charging point integration by nominal power, geom as shapely
         # Point, with time series
         comp_data = {"number": 13, "p_set": 0.04, "sector": "fast"}
-        comp_name = self.edisgo.integrate_component(
+        comp_name = self.edisgo.integrate_component_based_on_geolocation(
             comp_type="charging_point",
             geolocation=geom,
             ts_active_power=ts_active_power,
