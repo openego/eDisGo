@@ -633,6 +633,7 @@ class EDisGo:
         max_while_iterations: int = 20,
         combined_analysis: bool = False,
         mode: str | None = None,
+        **kwargs,
     ) -> Results:
         """
         Reinforces the network and calculates network expansion costs.
@@ -644,8 +645,15 @@ class EDisGo:
         See :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid` for more
         information on input parameters and methodology.
 
+        Other Parameters
+        -----------------
+        is_worst_case : bool
+            Is used to overwrite the return value from
+            :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case`. If True
+            reinforcement is calculated for worst-case MV and LV cases separately.
+
         """
-        if self.timeseries.is_worst_case:
+        if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
 
             logger.info(
                 "Running reinforcement in worst-case mode by differentiating between mv"
