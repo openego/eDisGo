@@ -1826,11 +1826,14 @@ class TimeSeries:
         """
         Check for NaN-values and if timeseries is empty.
         """
-        for attr in self._attributes:
-            if getattr(self, attr).isnull().any().any():
-                logger.warning("There are null values in {}".format(attr))
-            if getattr(self, attr).empty:  # Todo: keep this or check in edisgo?
-                logger.warning("{} is empty".format(attr))
+        if len(self.timeindex) == 0:
+            logger.warning("No timeindex set. Empty timeseries will be returned.")
+        else:
+            for attr in self._attributes:
+                if getattr(self, attr).isnull().any().any():
+                    logger.warning("There are null values in {}".format(attr))
+                if getattr(self, attr).empty:  # Todo: keep this or check in edisgo?
+                    logger.warning("{} is empty".format(attr))
 
 
 class TimeSeriesRaw:

@@ -1555,13 +1555,18 @@ class TestTimeSeries:
             "storage_units_active_power",
             "storage_units_reactive_power",
         ]
+        # check warning empty timeindex
+        self.edisgo.timeseries.check_integrity()
+        assert "No timeindex set. Empty timeseries will be returned." in caplog.text
+        caplog.clear()
         # check warning empty timeseries
+        index = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.timeseries.timeindex = index
         self.edisgo.timeseries.check_integrity()
         for attr in attrs:
             assert "{} is empty".format(attr) in caplog.text
         caplog.clear()
         # add timeseries
-        index = pd.date_range("1/1/2018", periods=3, freq="H")
         for attr in attrs:
             tmp = attr.split("_")
             if len(tmp) == 3:
@@ -1581,21 +1586,15 @@ class TestTimeSeries:
             )
         # check warning for null values
         for attr in attrs:
-            tmp = attr.split("_")
-            if len(tmp) == 3:
-                comp_type = tmp[0]
-            elif len(tmp) == 4:
-                comp_type = "_".join(tmp[0:2])
-            for ts_type in ["active_power", "reactive_power"]:
-                ts_tmp = getattr(self.edisgo.timeseries, comp_type + "_" + ts_type)
-                if not ts_tmp.empty:
-                    ts_tmp.iloc[0, 0] = np.NaN
-                    setattr(self.edisgo.timeseries, comp_type + "_" + ts_type, ts_tmp)
-                    self.edisgo.timeseries.check_integrity()
-                    assert "There are null values in {}".format(attr) in caplog.text
-                    caplog.clear()
-                    ts_tmp.iloc[0, 0] = 0
-                    setattr(self.edisgo.timeseries, comp_type + "_" + ts_type, ts_tmp)
+            ts_tmp = getattr(self.edisgo.timeseries, attr)
+            if not ts_tmp.empty:
+                ts_tmp.iloc[0, 0] = np.NaN
+                setattr(self.edisgo.timeseries, attr, ts_tmp)
+                self.edisgo.timeseries.check_integrity()
+                assert "There are null values in {}".format(attr) in caplog.text
+                caplog.clear()
+                ts_tmp.iloc[0, 0] = 0
+                setattr(self.edisgo.timeseries, attr, ts_tmp)
 
 
 class TestTimeSeriesRaw:
