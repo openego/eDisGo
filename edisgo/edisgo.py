@@ -2,6 +2,7 @@ import logging
 import os
 import pickle
 
+import numpy as np
 import pandas as pd
 
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
@@ -1440,6 +1441,76 @@ class EDisGo:
             to_type=kwargs.get("to_type", "float32"),
             attr_to_reduce=kwargs.get("results_attr_to_reduce", None),
         )
+
+    def check_integrity(self):
+        """
+        Method to check the integrity of the eDisGo-object. Checks for consistency of
+        topology (see :func:`edisgo.topology.check_integrity`), timeseries (see
+        :func:`edisgo.timeseries.check_integrity`) and the interplay of both.
+        """
+        self.topology.check_integrity()
+        self.timeseries.check_integrity()
+        # check consistency of topology and timeseries
+        comp_types = ["generators", "loads", "storage_units"]
+        for comp_type in comp_types:
+            comps = getattr(self.topology, comp_type + "_df")
+            for ts in ["active_power", "reactive_power"]:
+                comp_ts_name = "_".join([comp_type, ts])
+                comp_ts = getattr(self.timeseries, comp_ts_name)
+                # check whether all components in topology have an entry in the
+                # respective active and reactive power timeseries
+                missing = comps.index[~comps.index.isin(comp_ts.columns)]
+                if len(missing) > 0:
+                    logger.warning(
+                        "The following {type} are missing in {ts}: "
+                        "{comps}".format(
+                            type=comp_type, ts=comp_ts_name, comps=missing.values
+                        )
+                    )
+                # check whether all elements in timeseries have an entry in the topology
+                missing_ts = comp_ts.columns[~comp_ts.columns.isin(comps.index)]
+                if len(missing_ts) > 0:
+                    logger.warning(
+                        "The following {type} have entries in {ts}, but not "
+                        "in {top}: {comps}".format(
+                            type=comp_type,
+                            ts=comp_ts_name,
+                            top=comp_type + "_df",
+                            comps=missing_ts.values,
+                        )
+                    )
+            # check if the powers inside the timeseries exceed the given nominal
+            # or peak power of the component
+            if comp_type in ["generators", "storage_units"]:
+                attr = "p_nom"
+            else:
+                attr = "p_set"
+            # Todo: check only for active power?
+            active_power = getattr(
+                self.timeseries, "_".join([comp_type, "active_power"])
+            )
+            reactive_power = getattr(
+                self.timeseries, "_".join([comp_type, "reactive_power"])
+            )
+            appearant_power = (
+                active_power.apply(np.square) + reactive_power.apply(np.square)
+            ).apply(np.sqrt)
+            comps_complete = comps.index[
+                comps.index.isin(active_power.columns)
+                & comps.index.isin(reactive_power.columns)
+            ]
+            exceeding = comps_complete[
+                (
+                    appearant_power[comps_complete].max()
+                    > comps.loc[comps_complete, attr]
+                )
+            ]
+            if len(exceeding) > 0:
+                logger.warning(
+                    "Values of appearant power in the timeseries object exceed {} for "
+                    "the following {}: {}".format(attr, comp_type, exceeding.values)
+                )
+            logging.info("Integrity check finished. Please pay attention to warnings.")
 
 
 def import_edisgo_from_pickle(filename, path=""):
