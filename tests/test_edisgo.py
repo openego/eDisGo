@@ -846,7 +846,7 @@ class TestEDisGo:
             else:
                 attr = "p_set"
             assert (
-                "Values of appearant power in the timeseries object exceed {} for "
+                "Values of active power in the timeseries object exceed {} for "
                 "the following {}: {}".format(
                     attr, comp_type, str(comp_names).replace(",", "")
                 )

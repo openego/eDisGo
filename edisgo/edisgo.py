@@ -2,7 +2,6 @@ import logging
 import os
 import pickle
 
-import numpy as np
 import pandas as pd
 
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
@@ -1479,35 +1478,22 @@ class EDisGo:
                             comps=missing_ts.values,
                         )
                     )
-            # check if the powers inside the timeseries exceed the given nominal
+            # check if the active powers inside the timeseries exceed the given nominal
             # or peak power of the component
             if comp_type in ["generators", "storage_units"]:
                 attr = "p_nom"
             else:
                 attr = "p_set"
-            # Todo: check only for active power?
             active_power = getattr(
                 self.timeseries, "_".join([comp_type, "active_power"])
             )
-            reactive_power = getattr(
-                self.timeseries, "_".join([comp_type, "reactive_power"])
-            )
-            appearant_power = (
-                active_power.apply(np.square) + reactive_power.apply(np.square)
-            ).apply(np.sqrt)
-            comps_complete = comps.index[
-                comps.index.isin(active_power.columns)
-                & comps.index.isin(reactive_power.columns)
-            ]
+            comps_complete = comps.index[comps.index.isin(active_power.columns)]
             exceeding = comps_complete[
-                (
-                    appearant_power[comps_complete].max()
-                    > comps.loc[comps_complete, attr]
-                )
+                (active_power[comps_complete].max() > comps.loc[comps_complete, attr])
             ]
             if len(exceeding) > 0:
                 logger.warning(
-                    "Values of appearant power in the timeseries object exceed {} for "
+                    "Values of active power in the timeseries object exceed {} for "
                     "the following {}: {}".format(attr, comp_type, exceeding.values)
                 )
             logging.info("Integrity check finished. Please pay attention to warnings.")
