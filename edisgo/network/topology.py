@@ -973,6 +973,88 @@ class Topology:
                 return True
         return False
 
+    def add_loads(self, buses, peak_loads, annual_consumptions, **kwargs):
+        """
+        Adds load to topology.
+
+        Load name is generated automatically.
+
+        Parameters
+        ----------
+        buses : list of str
+            See :py:attr:`~loads_df` for more information.
+        peak_loads : list of floats
+            See :py:attr:`~loads_df` for more information.
+        annual_consumptions : list of floats
+            See :py:attr:`~loads_df` for more information.
+
+        Other Parameters
+        -----------------
+        kwargs :
+            Kwargs may contain any further attributes you want to specify.
+            See :py:attr:`~loads_df` for more information on additional
+            attributes used for some functionalities in edisgo. Kwargs may
+            also contain a load ID (provided through keyword argument
+            `load_id` as string) used to generate a unique identifier
+            for the newly added load.
+
+        Returns
+        --------
+        str
+            Unique identifier of added load.
+
+        """
+        try:
+            buses_df = self.buses_df.loc[buses]
+        except KeyError:
+            raise ValueError(
+                "Specified bus {} is not valid as it is not defined in "
+                "buses_df.".format(buses)
+            )
+        load_ids = kwargs.pop("load_ids", None)
+        sectors = kwargs.get("sectors", None)
+        load_names = []
+        i = 0
+        # generate load name and check uniqueness
+        for name, bus_df in buses_df.iterrows():
+            if bus_df.lv_grid_id is not None and not np.isnan(bus_df.lv_grid_id):
+                grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
+            else:
+                grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
+            tmp = grid_name
+
+            if sectors is not None:
+                tmp = tmp + "_" + sectors[i]
+
+            if load_ids is not None:
+                tmp = tmp + "_" + str(load_ids[i])
+            load_name = "Load_{}".format(tmp)
+            if load_name in self.loads_df.index:
+                nr_loads = len(self._grids[grid_name].loads_df)
+                load_name = "Load_{}_{}".format(tmp, nr_loads)
+                while load_name in self.loads_df.index:
+                    random.seed(a=load_name)
+                    load_name = "Load_{}_{}".format(
+                        tmp, random.randint(10 ** 8, 10 ** 9)
+                    )
+            load_names.append(load_name)
+            i += 1
+
+        # create new load dataframe
+        data = {
+            "bus": buses,
+            "peak_load": peak_loads,
+            "annual_consumption": annual_consumptions,
+        }
+        data.update(kwargs)
+        new_df = pd.DataFrame(
+            data,
+            index=load_names,
+        )
+        new_df.rename(columns={'sectors ': 'sector'}, inplace=True)
+        self._loads_df = self.loads_df.append(new_df)
+        return load_names
+
     def add_load(self, bus, peak_load, annual_consumption, **kwargs):
         """
         Adds load to topology.
@@ -1004,52 +1086,107 @@ class Topology:
             Unique identifier of added load.
 
         """
+
+        sector = kwargs.get("sector", None)
+        if sector is not None:
+            sectors = [sector]
+        else:
+            sectors = None
+        load_id = kwargs.pop("load_id", None)
+        if load_id is not None:
+            load_ids = [load_id]
+        else:
+            load_ids = None
+        return self.add_loads(buses=[bus], peak_loads=[peak_load],
+                              annual_consumptions=[annual_consumption], sectors=sectors,
+                              load_ids=load_ids)[0]
+
+    def add_generators(
+            self, buses, p_noms, generator_types, controls="PQ", **kwargs
+    ):
+        """
+        Adds generator to topology.
+
+        Generator name is generated automatically.
+
+        Parameters
+        ----------
+        buses : list of str
+            See :py:attr:`~generators_df` for more information.
+        p_noms : list of float
+            See :py:attr:`~generators_df` for more information.
+        generator_types : list of str
+            Type of generator, e.g. 'solar' or 'gas'. See 'type' in
+            :py:attr:`~generators_df` for more information.
+        controls : list of str
+            See :py:attr:`~generators_df` for more information. Defaults
+            to 'PQ'.
+
+        Other Parameters
+        ------------------
+        kwargs :
+            Kwargs may contain any further attributes you want to specify.
+            See :py:attr:`~generators_df` for more information on additional
+            attributes used for some functionalities in edisgo. Kwargs may
+            also contain a generator ID (provided through keyword argument
+            `generator_id` as string) used to generate a unique identifier
+            for the newly added generator.
+
+        Returns
+        -------
+        list of str
+            Unique identifier of added generator.
+
+        """
+        # check if bus exists
         try:
-            bus_df = self.buses_df.loc[bus]
+            buses_df = self.buses_df.loc[buses]
         except KeyError:
             raise ValueError(
                 "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus)
+                "buses_df.".format(buses)
             )
 
-        # generate load name and check uniqueness
-        if bus_df.lv_grid_id is not None and not np.isnan(bus_df.lv_grid_id):
-            grid_name = "LVGrid_" + str(int(bus_df.lv_grid_id))
-        else:
-            grid_name = "MVGrid_" + str(int(bus_df.mv_grid_id))
-        tmp = grid_name
-        sector = kwargs.get("sector", None)
-        if sector is not None:
-            tmp = tmp + "_" + sector
-        load_id = kwargs.pop("load_id", None)
-        if load_id is not None:
-            tmp = tmp + "_" + str(load_id)
-        load_name = "Load_{}".format(tmp)
-        if load_name in self.loads_df.index:
-            nr_loads = len(self._grids[grid_name].loads_df)
-            load_name = "Load_{}_{}".format(tmp, nr_loads)
-            while load_name in self.loads_df.index:
-                random.seed(a=load_name)
-                load_name = "Load_{}_{}".format(
+        generator_ids = kwargs.pop("generator_ids", None)
+        generator_names = []
+        i = 0
+
+        # generate generator name and check uniqueness
+        for name, bus_df in buses_df.iterrows():
+            if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
+                tmp = "LVGrid_" + str(int(bus_df.lv_grid_id))
+            else:
+                tmp = "MVGrid_" + str(int(bus_df.mv_grid_id))
+            tmp = tmp + "_" + generator_types[i]
+            if generator_ids is not None:
+                tmp = tmp + "_" + str(generator_ids[i])
+            generator_name = "Generator_{}".format(tmp)
+            while generator_name in self.generators_df.index:
+                random.seed(a=generator_name)
+                generator_name = "Generator_{}_{}".format(
                     tmp, random.randint(10 ** 8, 10 ** 9)
                 )
+            generator_names.append(generator_name)
+            i += 1
 
-        # create new load dataframe
+        # create new generator dataframe
         data = {
-            "bus": bus,
-            "peak_load": peak_load,
-            "annual_consumption": annual_consumption,
+            "bus": buses,
+            "p_nom": p_noms,
+            "type": generator_types,
+            "control": controls
         }
         data.update(kwargs)
-        new_df = pd.Series(
+        new_df = pd.DataFrame(
             data,
-            name=load_name,
-        ).to_frame().T
-        self._loads_df = self.loads_df.append(new_df)
-        return load_name
+            index=generator_names,
+        )
+
+        self.generators_df = self.generators_df.append(new_df)
+        return generator_names
 
     def add_generator(
-        self, bus, p_nom, generator_type, control="PQ", **kwargs
+            self, bus, p_nom, generator_type, control="PQ", **kwargs
     ):
         """
         Adds generator to topology.
@@ -1085,46 +1222,16 @@ class Topology:
             Unique identifier of added generator.
 
         """
-        # check if bus exists
-        try:
-            bus_df = self.buses_df.loc[bus]
-        except KeyError:
-            raise ValueError(
-                "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus)
-            )
 
-        # generate generator name and check uniqueness
-        if not np.isnan(bus_df.lv_grid_id) and bus_df.lv_grid_id is not None:
-            tmp = "LVGrid_" + str(int(bus_df.lv_grid_id))
-        else:
-            tmp = "MVGrid_" + str(int(bus_df.mv_grid_id))
-        tmp = tmp + "_" + generator_type
         generator_id = kwargs.pop("generator_id", None)
         if generator_id is not None:
-            tmp = tmp + "_" + str(generator_id)
-        generator_name = "Generator_{}".format(tmp)
-        while generator_name in self.generators_df.index:
-            random.seed(a=generator_name)
-            generator_name = "Generator_{}_{}".format(
-                tmp, random.randint(10 ** 8, 10 ** 9)
-            )
-
-        # create new generator dataframe
-        data = {
-            "bus": bus,
-            "p_nom": p_nom,
-            "type": generator_type,
-            "control": control
-        }
-        data.update(kwargs)
-        new_df = pd.Series(
-            data,
-            name=generator_name,
-        ).to_frame().T
-
-        self.generators_df = self.generators_df.append(new_df)
-        return generator_name
+            generator_ids = [generator_id]
+        else:
+            generator_ids = None
+        return self.add_generators(buses=[bus], p_noms=[p_nom],
+                                   generator_types=[generator_type],
+                                   controls=[control],
+                                   generator_ids=generator_ids)[0]
 
     def add_charging_point(self, bus, p_nom, use_case, **kwargs):
         """
@@ -1566,21 +1673,24 @@ class Topology:
             though resulting topology has isolated buses or components.
         """
         force_remove = kwargs.get('force_remove', False)
-        if not force_remove:
-            raise AssertionError(
-                "Removal of line {} would create isolated "
-                "node.".format(name)
-            )
-        else:
-            print('Line {} is forced to be removed even though it creates isolated buses.'
-                  'The resulting topology cannot be fully utilised. Try to remove connected '
-                  'components and isolated bus first to avoid this warning.'.format(name))
 
         # backup buses of line and check if buses can be removed as well
         bus0 = self.lines_df.at[name, "bus0"]
         remove_bus0 = self._check_bus_for_removal(bus0)
         bus1 = self.lines_df.at[name, "bus1"]
         remove_bus1 = self._check_bus_for_removal(bus1)
+
+
+        if not force_remove:
+            if not (remove_bus1 or remove_bus0):
+                raise AssertionError(
+                    "Removal of line {} would create isolated "
+                    "node.".format(name)
+                )
+        else:
+            print('Line {} is forced to be removed even though it creates isolated buses.'
+                  'The resulting topology cannot be fully utilised. Try to remove connected '
+                  'components and isolated bus first to avoid this warning.'.format(name))
 
         # drop line
         self._lines_df.drop(name, inplace=True)
@@ -1794,7 +1904,7 @@ class Topology:
             bus = "Bus_ChargingPoint_{}".format(
                 len(self.charging_points_df))
 
-        self.add_bus(
+        bus = self.add_bus(
             bus_name=bus,
             v_nom=self.mv_grid.nominal_voltage,
             x=geom.x,
@@ -2014,7 +2124,7 @@ class Topology:
             else:
                 geom = comp_data["geom"]
 
-            self.add_bus(
+            b = self.add_bus(
                 bus_name=b,
                 v_nom=lv_grid.nominal_voltage,
                 x=geom.x,
@@ -2423,7 +2533,7 @@ class Topology:
             )
 
             # remove old line from topology and equipment changes
-            self.remove_line(line_data.name)
+            self.remove_line(line_data.name, force_remove=True)
             edisgo_object.results._del_line_from_equipment_changes(
                 line_repr=line_data.name
             )

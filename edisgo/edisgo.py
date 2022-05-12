@@ -1188,12 +1188,12 @@ class EDisGo:
                 f" were dropped: {drop_unarchived}")
 
     def add_component(
-        self,
-        comp_type,
-        add_ts=True,
-        ts_active_power=None,
-        ts_reactive_power=None,
-        **kwargs
+            self,
+            comp_type,
+            add_ts=True,
+            ts_active_power=None,
+            ts_reactive_power=None,
+            **kwargs
     ):
         """
         Adds single component to network topology.
@@ -1234,16 +1234,38 @@ class EDisGo:
             comp_name = self.topology.add_line(**kwargs)
         elif comp_type == "Load" or comp_type == "charging_park":
             comp_name = self.topology.add_load(**kwargs)
+            if isinstance(ts_active_power, pd.Series):
+                loads_active_power = pd.DataFrame()
+                loads_active_power[comp_name] = ts_active_power
+            else:
+                loads_active_power = None
+            if isinstance(ts_reactive_power, pd.Series):
+                loads_reactive_power = pd.DataFrame()
+                loads_reactive_power[comp_name] = ts_reactive_power
+            else:
+                loads_reactive_power = None
             if add_ts:
                 timeseries.add_loads_timeseries(
-                    edisgo_obj=self, load_names=comp_name, **kwargs
+                    edisgo_obj=self, load_names=comp_name, loads_active_power=loads_active_power,
+                    loads_reactive_power=loads_reactive_power, **kwargs
                 )
 
         elif comp_type == "Generator":
             comp_name = self.topology.add_generator(**kwargs)
+            if isinstance(ts_active_power, pd.Series):
+                generators_active_power = pd.DataFrame()
+                generators_active_power[comp_name] = ts_active_power
+            else:
+                generators_active_power = None
+            if isinstance(ts_reactive_power, pd.Series):
+                generators_reactive_power = pd.DataFrame()
+                generators_reactive_power[comp_name] = ts_reactive_power
+            else:
+                generators_reactive_power = None
             if add_ts:
                 timeseries.add_generators_timeseries(
-                    edisgo_obj=self, generator_names=comp_name, **kwargs
+                    edisgo_obj=self, generator_names=comp_name, generators_active_power=generators_active_power,
+                    generators_reactive_power=generators_reactive_power, **kwargs
                 )
 
         elif comp_type == "ChargingPoint":
@@ -1277,8 +1299,132 @@ class EDisGo:
                 timeseries.add_storage_units_timeseries(
                     edisgo_obj=self,
                     storage_unit_names=comp_name,
-                    timeseries_storage_units=ts_active_power,
-                    timeseries_storage_units_reactive_power=ts_reactive_power,
+                    storage_units_active_power=ts_active_power,
+                    storage_units_reactive_power=ts_reactive_power,
+                    **kwargs
+                )
+        else:
+            raise ValueError("Component type is not correct.")
+        return comp_name
+
+    def add_components(
+            self,
+            comp_type,
+            add_ts=True,
+            ts_active_power=None,
+            ts_reactive_power=None,
+            **kwargs
+    ):
+        """
+        Adds single component to network topology.
+
+        Components can be lines or buses as well as generators, loads,
+        charging points or storage units.
+
+        Parameters
+        ----------
+        comp_type : str
+            Type of added component. Can be 'Bus', 'Line', 'Load', 'Generator',
+            'StorageUnit', 'Transformer' or 'ChargingPoint'.
+        add_ts : bool
+            Indicator if time series for component are added as well.
+        ts_active_power : :pandas:`pandas.Series<series>`
+            Active power time series of added component. Index of the series
+            must contain all time steps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex`.
+            Values are active power per time step in MW.
+        ts_reactive_power : :pandas:`pandas.Series<series>`
+            Reactive power time series of added component. Index of the series
+            must contain all time steps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex`.
+            Values are reactive power per time step in MVA.
+        **kwargs: dict
+            Attributes of added component. See respective functions for required
+            entries. For 'Load', 'Generator' and 'StorageUnit' the boolean
+            add_ts determines whether a time series is created for the new
+            component or not.
+
+        Todo: change into add_components to allow adding of several components
+            at a time, change topology.add_load etc. to add_loads, where
+            lists of parameters can be inserted
+        """
+        if comp_type == "Bus":
+            raise NotImplementedError
+            comp_name = self.topology.add_bus(**kwargs)
+        elif comp_type == "Line":
+            raise NotImplementedError
+            comp_name = self.topology.add_line(**kwargs)
+        elif comp_type == "Load" or comp_type == "charging_park":
+            comp_name = self.topology.add_loads(**kwargs)
+            if isinstance(ts_active_power, pd.DataFrame):
+                loads_active_power = ts_active_power
+                loads_active_power.columns = comp_name
+            else:
+                loads_active_power = None
+            if isinstance(ts_reactive_power, pd.DataFrame):
+                loads_reactive_power = ts_reactive_power
+                loads_reactive_power.columns = comp_name
+            else:
+                loads_reactive_power = None
+            if add_ts:
+                timeseries.add_loads_timeseries(
+                    edisgo_obj=self, load_names=comp_name, loads_active_power=loads_active_power,
+                    loads_reactive_power=loads_reactive_power, **kwargs
+                )
+
+        elif comp_type == "Generator":
+            comp_name = self.topology.add_generators(**kwargs)
+            if isinstance(ts_active_power, pd.DataFrame):
+                generators_active_power = ts_active_power
+                generators_active_power.columns = comp_name
+            else:
+                generators_active_power = None
+            if isinstance(ts_reactive_power, pd.DataFrame):
+                generators_reactive_power = ts_reactive_power
+                generators_reactive_power.columns = comp_name
+            else:
+                generators_reactive_power = None
+            if add_ts:
+                timeseries.add_generators_timeseries(
+                    edisgo_obj=self, generator_names=comp_name, generators_active_power=generators_active_power,
+                    generators_reactive_power=generators_reactive_power, **kwargs
+                )
+
+        elif comp_type == "ChargingPoint":
+            raise NotImplementedError
+            comp_name = self.topology.add_charging_point(**kwargs)
+            if add_ts:
+                if ts_active_power is not None and ts_reactive_power is not None:
+                    timeseries.add_charging_points_timeseries(
+                        self, [comp_name],
+                        ts_active_power=pd.DataFrame({
+                            comp_name: ts_active_power}),
+                        ts_reactive_power=pd.DataFrame({
+                            comp_name: ts_reactive_power})
+                    )
+                else:
+                    raise ValueError("Time series for charging points need "
+                                     "to be provided.")
+
+        elif comp_type == "StorageUnit":
+            raise NotImplementedError
+            comp_name = self.topology.add_storage_unit(
+                **kwargs,
+            )
+            if add_ts:
+                if isinstance(ts_active_power, pd.Series):
+                    ts_active_power = pd.DataFrame(
+                        {comp_name: ts_active_power}
+                    )
+                if isinstance(ts_reactive_power, pd.Series):
+                    ts_reactive_power = pd.DataFrame(
+                        {comp_name: ts_reactive_power}
+                    )
+                timeseries.add_storage_units_timeseries(
+                    edisgo_obj=self,
+                    storage_unit_names=comp_name,
+                    storage_units_active_power=ts_active_power,
+                    storage_units_reactive_power=ts_reactive_power,
                     **kwargs
                 )
         else:
