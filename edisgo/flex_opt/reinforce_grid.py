@@ -94,8 +94,9 @@ def reinforce_grid(
     """
 
     def _add_lines_changes_to_equipment_changes():
-        edisgo_reinforce.results.equipment_changes = (
-            edisgo_reinforce.results.equipment_changes.append(
+        edisgo_reinforce.results.equipment_changes = pd.concat(
+            [
+                edisgo_reinforce.results.equipment_changes,
                 pd.DataFrame(
                     {
                         "iteration_step": [iteration_step] * len(lines_changes),
@@ -106,25 +107,26 @@ def reinforce_grid(
                         "quantity": [_ for _ in lines_changes.values()],
                     },
                     index=lines_changes.keys(),
-                )
-            )
+                ),
+            ],
         )
 
     def _add_transformer_changes_to_equipment_changes(mode):
-        for station, transformer_list in transformer_changes[mode].items():
-            edisgo_reinforce.results.equipment_changes = (
-                edisgo_reinforce.results.equipment_changes.append(
-                    pd.DataFrame(
-                        {
-                            "iteration_step": [iteration_step] * len(transformer_list),
-                            "change": [mode] * len(transformer_list),
-                            "equipment": transformer_list,
-                            "quantity": [1] * len(transformer_list),
-                        },
-                        index=[station] * len(transformer_list),
-                    )
-                )
+        df_list = [edisgo_reinforce.results.equipment_changes]
+        df_list.extend(
+            pd.DataFrame(
+                {
+                    "iteration_step": [iteration_step] * len(transformer_list),
+                    "change": [mode] * len(transformer_list),
+                    "equipment": transformer_list,
+                    "quantity": [1] * len(transformer_list),
+                },
+                index=[station] * len(transformer_list),
             )
+            for station, transformer_list in transformer_changes[mode].items()
+        )
+
+        edisgo_reinforce.results.equipment_changes = pd.concat(df_list)
 
     # check if provided mode is valid
     if mode and mode not in ["mv", "mvlv"]:
@@ -175,7 +177,12 @@ def reinforce_grid(
     logger.debug("==> Check line load.")
     crit_lines = checks.mv_line_load(edisgo_reinforce)
     if not mode:
-        crit_lines = crit_lines.append(checks.lv_line_load(edisgo_reinforce))
+        crit_lines = pd.concat(
+            [
+                crit_lines,
+                checks.lv_line_load(edisgo_reinforce),
+            ]
+        )
 
     while_counter = 0
     while (
@@ -225,7 +232,12 @@ def reinforce_grid(
         logger.debug("==> Recheck line load.")
         crit_lines = checks.mv_line_load(edisgo_reinforce)
         if not mode:
-            crit_lines = crit_lines.append(checks.lv_line_load(edisgo_reinforce))
+            crit_lines = pd.concat(
+                [
+                    crit_lines,
+                    checks.lv_line_load(edisgo_reinforce),
+                ]
+            )
 
         iteration_step += 1
         while_counter += 1
@@ -427,7 +439,12 @@ def reinforce_grid(
     logger.debug("==> Recheck line load.")
     crit_lines = checks.mv_line_load(edisgo_reinforce)
     if not mode:
-        crit_lines = crit_lines.append(checks.lv_line_load(edisgo_reinforce))
+        crit_lines = pd.concat(
+            [
+                crit_lines,
+                checks.lv_line_load(edisgo_reinforce),
+            ]
+        )
 
     while_counter = 0
     while (
@@ -477,7 +494,12 @@ def reinforce_grid(
         logger.debug("==> Recheck line load.")
         crit_lines = checks.mv_line_load(edisgo_reinforce)
         if not mode:
-            crit_lines = crit_lines.append(checks.lv_line_load(edisgo_reinforce))
+            crit_lines = pd.concat(
+                [
+                    crit_lines,
+                    checks.lv_line_load(edisgo_reinforce),
+                ]
+            )
 
         iteration_step += 1
         while_counter += 1
