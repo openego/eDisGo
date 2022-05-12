@@ -173,9 +173,12 @@ def lines_allowed_load(edisgo_obj, voltage_level):
     )
 
     # lines in radial feeders are not n-1 secure anyways
-    i_lines_allowed_per_case["load_case"] = i_lines_allowed_per_case[
-        "load_case"
-    ].append(lines_df.loc[lines_radial_feeders].s_nom / sqrt(3) / nominal_voltage)
+    i_lines_allowed_per_case["load_case"] = pd.concat(
+        [
+            i_lines_allowed_per_case["load_case"],
+            lines_df.loc[lines_radial_feeders].s_nom / sqrt(3) / nominal_voltage,
+        ]
+    )
 
     i_lines_allowed = edisgo_obj.timeseries.timesteps_load_feedin_case.loc[
         edisgo_obj.results.i_res.index
@@ -330,7 +333,12 @@ def mv_lv_station_load(edisgo_obj):
 
     crit_stations = pd.DataFrame()
     for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
-        crit_stations = crit_stations.append(_station_load(edisgo_obj, lv_grid))
+        crit_stations = pd.concat(
+            [
+                crit_stations,
+                _station_load(edisgo_obj, lv_grid),
+            ]
+        )
     if not crit_stations.empty:
         logger.debug(
             "==> {} MV/LV station(s) has/have load issues.".format(
@@ -834,16 +842,22 @@ def voltage_diff(edisgo_obj, buses, v_dev_allowed_upper, v_dev_allowed_lower):
     buses_ov = v_mag_pu_pfa[
         overvoltage[~overvoltage.index.isin(buses_both.columns)].index
     ]
-    voltage_diff_ov = voltage_diff_ov.append(
-        buses_ov.T - v_dev_allowed_upper.loc[v_mag_pu_pfa.index].values
+    voltage_diff_ov = pd.concat(
+        [
+            voltage_diff_ov,
+            buses_ov.T - v_dev_allowed_upper.loc[v_mag_pu_pfa.index].values,
+        ]
     )
 
     # handle buses with undervoltage issues and append to voltage_diff_uv
     buses_uv = v_mag_pu_pfa[
         undervoltage[~undervoltage.index.isin(buses_both.columns)].index
     ]
-    voltage_diff_uv = voltage_diff_uv.append(
-        -buses_uv.T + v_dev_allowed_lower.loc[v_mag_pu_pfa.index].values
+    voltage_diff_uv = pd.concat(
+        [
+            voltage_diff_uv,
+            -buses_uv.T + v_dev_allowed_lower.loc[v_mag_pu_pfa.index].values,
+        ]
     )
 
     return voltage_diff_uv, voltage_diff_ov
@@ -901,9 +915,19 @@ def _voltage_deviation(edisgo_obj, buses, v_limits_upper, v_limits_lower):
 
     # append to crit buses dataframe
     if not voltage_diff_ov.empty:
-        crit_buses_grid = crit_buses_grid.append(_append_crit_buses(voltage_diff_ov))
+        crit_buses_grid = pd.concat(
+            [
+                crit_buses_grid,
+                _append_crit_buses(voltage_diff_ov),
+            ]
+        )
     if not voltage_diff_uv.empty:
-        crit_buses_grid = crit_buses_grid.append(_append_crit_buses(voltage_diff_uv))
+        crit_buses_grid = pd.concat(
+            [
+                crit_buses_grid,
+                _append_crit_buses(voltage_diff_uv),
+            ]
+        )
 
     if not crit_buses_grid.empty:
         crit_buses_grid.sort_values(by=["v_diff_max"], ascending=False, inplace=True)
