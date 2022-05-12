@@ -187,17 +187,19 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
             # transformer of the same kind as the transformer that best
             # meets the missing power demand
             new_transformers = grid.transformers_df.loc[
-                grid.transformers_df[s_max_per_trafo >= s_trafo_missing][
-                    "s_nom"
-                ].idxmin()
+                [
+                    grid.transformers_df[s_max_per_trafo >= s_trafo_missing][
+                        "s_nom"
+                    ].idxmin()
+                ]
             ]
-            name = new_transformers.name.split("_")
+            name = new_transformers.index[0].split("_")
             name.insert(-1, "reinforced")
             name[-1] = len(grid.transformers_df) + 1
-            new_transformers.name = "_".join([str(_) for _ in name])
+            new_transformers.index = ["_".join([str(_) for _ in name])]
 
             # add new transformer to list of added transformers
-            transformers_changes["added"][grid_name] = [new_transformers.name]
+            transformers_changes["added"][grid_name] = [new_transformers.index[0]]
         else:
             # get any transformer to get attributes for new transformer from
             duplicated_transformer = grid.transformers_df.iloc[[0]]
@@ -220,9 +222,13 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
                 name[-1] = i + 1
                 index.append("_".join([str(_) for _ in name]))
 
-            new_transformers = duplicated_transformer.iloc[
-                np.arange(len(duplicated_transformer)).repeat(number_transformers)
-            ]
+            if number_transformers > 1:
+                new_transformers = duplicated_transformer.iloc[
+                    np.arange(len(duplicated_transformer)).repeat(number_transformers)
+                ]
+            else:
+                new_transformers = duplicated_transformer.copy()
+
             new_transformers.index = index
 
             # add new transformer to list of added transformers
@@ -249,6 +255,7 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
                     new_transformers,
                 ]
             )
+            print("break")
         else:
             edisgo_obj.topology.transformers_hvmv_df = pd.concat(
                 [
@@ -305,12 +312,12 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
     for grid_repr in critical_stations.keys():
         grid = edisgo_obj.topology._grids[grid_repr]
         # get any transformer to get attributes for new transformer from
-        duplicated_transformer = grid.transformers_df.iloc[0]
+        duplicated_transformer = grid.transformers_df.iloc[[0]]
         # change transformer parameters
-        name = duplicated_transformer.name.split("_")
+        name = duplicated_transformer.index[0].split("_")
         name.insert(-1, "reinforced")
         name[-1] = len(grid.transformers_df) + 1
-        duplicated_transformer.name = "_".join([str(_) for _ in name])
+        duplicated_transformer.index = ["_".join([str(_) for _ in name])]
         duplicated_transformer.s_nom = standard_transformer.S_nom
         duplicated_transformer.r_pu = standard_transformer.r_pu
         duplicated_transformer.x_pu = standard_transformer.x_pu
@@ -322,7 +329,7 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
                 duplicated_transformer,
             ]
         )
-        transformers_changes["added"][grid_repr] = [duplicated_transformer.name]
+        transformers_changes["added"][grid_repr] = duplicated_transformer.index.tolist()
 
     if transformers_changes["added"]:
         logger.debug(
