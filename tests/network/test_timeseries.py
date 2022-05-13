@@ -1113,9 +1113,16 @@ class TestTimeSeries:
         # ToDo implement
         pass
 
-    def test_predefined_conventional_loads_by_sector(self):
+    def test_predefined_conventional_loads_by_sector(self, caplog):
         index = pd.date_range("1/1/2018", periods=3, freq="H")
         self.edisgo.timeseries.timeindex = index
+
+        # test assertion error
+        self.edisgo.timeseries.predefined_conventional_loads_by_sector(
+            self.edisgo, pd.DataFrame()
+        )
+        assert "The profile you entered is empty. Method is skipped." in caplog.text
+
         # define expected profiles
         profiles = pd.DataFrame(
             index=index,
@@ -1126,15 +1133,7 @@ class TestTimeSeries:
                 [0.0000459, 0.0000451, 0.0000585, 0.0000992],
             ],
         )
-        # test assertion error timeindex
-        with pytest.raises(Warning) as exc_info:
-            self.edisgo.timeseries.predefined_conventional_loads_by_sector(
-                self.edisgo, pd.DataFrame()
-            )
-        assert (
-            exc_info.value.args[0]
-            == "The profile you entered is empty. Method is skipped."
-        )
+
         # test demandlib - single loads
         loads = [
             "Load_agricultural_LVGrid_5_2",
@@ -1358,9 +1357,16 @@ class TestTimeSeries:
             ).values,
         ).all()
 
-    def test_predefined_charging_points_by_use_case(self):
+    def test_predefined_charging_points_by_use_case(self, caplog):
         index = pd.date_range("1/1/2018", periods=3, freq="H")
         self.edisgo.timeseries.timeindex = index
+
+        # test assertion error
+        self.edisgo.timeseries.predefined_conventional_loads_by_sector(
+            self.edisgo, pd.DataFrame()
+        )
+        assert "The profile you entered is empty. Method is skipped." in caplog.text
+
         # add charging points to MV and LV
         df_cp = pd.DataFrame(
             {
@@ -1387,12 +1393,7 @@ class TestTimeSeries:
                 df_cp,
             ]
         )
-        # test assertion error
-        with pytest.raises(ValueError) as exc_info:
-            self.edisgo.timeseries.predefined_charging_points_by_use_case(
-                self.edisgo, "random"
-            )
-        assert exc_info.value.args[0] == "'ts_loads' must be a pandas DataFrame."
+
         # test all charging points
         profiles = pd.DataFrame(
             index=index,

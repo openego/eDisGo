@@ -1313,7 +1313,7 @@ class TimeSeries:
                 "'ts_loads' must either be a pandas DataFrame or 'demandlib'."
             )
         elif ts_loads.empty:
-            raise Warning("The profile you entered is empty. Method is skipped.")
+            logger.warning("The profile you entered is empty. Method is skipped.")
             return
 
         # write to TimeSeriesRaw
@@ -1381,7 +1381,7 @@ class TimeSeries:
         if not isinstance(ts_loads, pd.DataFrame):
             raise ValueError("'ts_loads' must be a pandas DataFrame.")
         elif ts_loads.empty:
-            raise Warning("The profile you entered is empty. Method is skipped.")
+            logger.warning("The profile you entered is empty. Method is skipped.")
             return
 
         # write to TimeSeriesRaw
