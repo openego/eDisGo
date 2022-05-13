@@ -278,7 +278,7 @@ def reinforce_grid(
         )
     else:
         logger.info(
-            f"==> Load issues were solved in {while_counter} iteration " "step(s)."
+            f"==> Load issues were solved in {while_counter} iteration step(s)."
         )
 
     # REINFORCE BRANCHES DUE TO VOLTAGE ISSUES
