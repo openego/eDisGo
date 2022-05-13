@@ -1381,7 +1381,12 @@ class TestTimeSeries:
             },
             index=["CP1", "CP2", "CP3", "CP4"],
         )
-        self.edisgo.topology.loads_df = self.edisgo.topology.loads_df.append(df_cp)
+        self.edisgo.topology.loads_df = pd.concat(
+            [
+                self.edisgo.topology.loads_df,
+                df_cp,
+            ]
+        )
         # test assertion error
         with pytest.raises(ValueError) as exc_info:
             self.edisgo.timeseries.predefined_charging_points_by_use_case(

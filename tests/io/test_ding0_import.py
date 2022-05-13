@@ -1,3 +1,4 @@
+import pandas as pd
 import pytest
 import shapely
 
@@ -54,9 +55,9 @@ class TestImportFromDing0:
         }
         # check duplicate node
         for comp, name in comps_dict.items():
-            new_comp = getattr(self.topology, "_{}_df".format(comp)).loc[name]
+            new_comp = getattr(self.topology, "_{}_df".format(comp)).loc[[name]]
             comps = getattr(self.topology, "_{}_df".format(comp))
-            setattr(self.topology, "_{}_df".format(comp), comps.append(new_comp))
+            setattr(self.topology, "_{}_df".format(comp), pd.concat([comps, new_comp]))
             try:
                 ding0_import._validate_ding0_grid_import(self.topology)
                 raise Exception(
@@ -82,7 +83,7 @@ class TestImportFromDing0:
             setattr(
                 self.topology,
                 "_{}_df".format(nodal_component),
-                comps.append(new_comp),
+                pd.concat([comps, new_comp.to_frame().T]),
             )
             try:
                 ding0_import._validate_ding0_grid_import(self.topology)
@@ -114,7 +115,7 @@ class TestImportFromDing0:
             setattr(
                 self.topology,
                 "_{}_df".format(branch_component),
-                comps.append(new_comp),
+                pd.concat([comps, new_comp.to_frame().T]),
             )
             try:
                 ding0_import._validate_ding0_grid_import(self.topology)
@@ -138,7 +139,7 @@ class TestImportFromDing0:
         for attr in ["bus_open", "bus_closed"]:
             new_comp = comps.loc[comps_dict["switches"]]
             new_comp.name = "new_switch"
-            new_comps = comps.append(new_comp)
+            new_comps = pd.concat([comps, new_comp.to_frame().T])
             new_comps.at[new_comp.name, attr] = "Non_existent_" + attr
             self.topology.switches_df = new_comps
             try:
@@ -156,12 +157,12 @@ class TestImportFromDing0:
         # check isolated node
         bus = self.topology.buses_df.loc[comps_dict["buses"]]
         bus.name = "New_bus"
-        self.topology.buses_df = self.topology.buses_df.append(bus)
+        self.topology.buses_df = pd.concat([self.topology.buses_df, bus.to_frame().T])
         try:
             ding0_import._validate_ding0_grid_import(self.topology)
             raise Exception("Appending components buses did not work properly.")
         except ValueError as e:
-            assert e.args[0] == "The following buses are isolated: {}.".format(bus.name)
+            assert e.args[0] == f"The following buses are isolated: {bus.name}."
 
     def test_transformer_buses(self):
         assert (
