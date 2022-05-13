@@ -8,17 +8,6 @@ from edisgo import EDisGo
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 
 
-def assert_frame_not_equal(*args, **kwargs):
-    try:
-        assert_frame_equal(*args, **kwargs)
-    except AssertionError:
-        # frames are not equal
-        pass
-    else:
-        # frames are equal
-        raise AssertionError
-
-
 class TestReinforceGrid:
     @classmethod
     def setup_class(cls):
@@ -50,9 +39,9 @@ class TestReinforceGrid:
             )
 
             for comparison_mode, comparison_result in results_dict.items():
-                if mode == comparison_mode:
-                    continue
-                else:
-                    assert_frame_not_equal(
-                        result.equipment_changes, comparison_result.equipment_changes
-                    )
+                if mode != comparison_mode:
+                    with pytest.raises(AssertionError):
+                        assert_frame_equal(
+                            result.equipment_changes,
+                            comparison_result.equipment_changes,
+                        )
