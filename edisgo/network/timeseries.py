@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 import logging
 import os
@@ -45,6 +47,25 @@ class TimeSeries:
 
         self._timeindex = kwargs.get("timeindex", pd.DatetimeIndex([]))
         self.time_series_raw = TimeSeriesRaw()
+
+    @property
+    def is_worst_case(self) -> bool:
+        """
+        Time series mode.
+
+        Is used to distinguish between normal time series analysis and worst-case
+        analysis. Is determined by checking if the timindex starts before 1971 as the
+        default for worst-case is 1970. Be mindful when creating your own worst-cases.
+
+        Returns
+        -------
+        bool
+            Indicates if current time series is worst-case time series with different
+            assumptions for mv and lv simultaneities.
+        """
+        if len(self.timeindex) > 0:
+            return self.timeindex[0] < pd.Timestamp("1971-01-01")
+        return False
 
     @property
     def timeindex(self):

@@ -1,0 +1,58 @@
+import numpy as np
+import pytest
+
+from numpy.testing import assert_array_equal
+from pandas.testing import assert_frame_equal
+
+from edisgo import EDisGo
+from edisgo.flex_opt.reinforce_grid import reinforce_grid
+
+
+def assert_frame_not_equal(*args, **kwargs):
+    try:
+        assert_frame_equal(*args, **kwargs)
+    except AssertionError:
+        # frames are not equal
+        pass
+    else:
+        # frames are equal
+        raise AssertionError
+
+
+class TestReinforceGrid:
+    @classmethod
+    def setup_class(cls):
+        cls.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+
+        cls.edisgo.set_time_series_worst_case_analysis()
+
+    def test_reinforce_grid(self):
+        modes = [None, "mv", "mvlv", "lv"]
+
+        results_dict = {
+            mode: reinforce_grid(edisgo=self.edisgo, copy_grid=True, mode=mode)
+            for mode in modes
+        }
+
+        for mode, result in results_dict.items():
+            if mode is None:
+                target = ["mv/lv", "mv", "lv"]
+            elif mode == "mv":
+                target = ["mv"]
+            elif mode == "mvlv":
+                target = ["mv", "mv/lv"]
+            else:
+                target = ["mv/lv", "lv"]
+
+            assert_array_equal(
+                np.sort(target),
+                np.sort(result.grid_expansion_costs.voltage_level.unique()),
+            )
+
+            for comparison_mode, comparison_result in results_dict.items():
+                if mode == comparison_mode:
+                    continue
+                else:
+                    assert_frame_not_equal(
+                        result.equipment_changes, comparison_result.equipment_changes
+                    )

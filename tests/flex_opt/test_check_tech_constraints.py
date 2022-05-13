@@ -11,9 +11,7 @@ from edisgo.flex_opt import check_tech_constraints
 class TestCheckTechConstraints:
     @classmethod
     def setup_class(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path
-        )
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
         self.timesteps = self.edisgo.timeseries.timeindex
 
@@ -59,8 +57,7 @@ class TestCheckTechConstraints:
         # create over-load problem with highest over-load in first time step (as it is
         # a load case)
         self.edisgo.results.pfa_slack = pd.DataFrame(
-            data={"p": [30, 25, 30, 20], "q": [30, 25, 30, 20]},
-            index=self.timesteps
+            data={"p": [30, 25, 30, 20], "q": [30, 25, 30, 20]}, index=self.timesteps
         )
 
         df = check_tech_constraints.hv_mv_station_load(self.edisgo)

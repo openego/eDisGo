@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 import pickle
@@ -624,25 +626,75 @@ class EDisGo:
 
         return timesteps_not_converged
 
-    def reinforce(self, **kwargs):
+    def reinforce(
+        self,
+        timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
+        copy_grid: bool = False,
+        max_while_iterations: int = 20,
+        combined_analysis: bool = False,
+        mode: str | None = None,
+        **kwargs,
+    ) -> Results:
         """
         Reinforces the network and calculates network expansion costs.
 
+        If the :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case` is
+        True input for `timesteps_pfa` and `mode` are overwritten and therefore
+        ignored.
+
         See :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid` for more
-        information.
+        information on input parameters and methodology.
+
+        Other Parameters
+        -----------------
+        is_worst_case : bool
+            Is used to overwrite the return value from
+            :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case`. If True
+            reinforcement is calculated for worst-case MV and LV cases separately.
 
         """
+        if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
+
+            logger.info(
+                "Running reinforcement in worst-case mode by differentiating between mv"
+                " and lv load and feed-in cases."
+            )
+
+            timeindex_worst_cases = self.timeseries.timeindex_worst_cases
+            timesteps_pfa = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("mv")
+                ]
+            )
+            mode = "mv"
+
+            reinforce_grid(
+                self,
+                max_while_iterations=max_while_iterations,
+                copy_grid=copy_grid,
+                timesteps_pfa=timesteps_pfa,
+                combined_analysis=combined_analysis,
+                mode=mode,
+            )
+
+            timesteps_pfa = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("lv")
+                ]
+            )
+            mode = "lv"
+
         results = reinforce_grid(
             self,
-            max_while_iterations=kwargs.get("max_while_iterations", 10),
-            copy_grid=kwargs.get("copy_grid", False),
-            timesteps_pfa=kwargs.get("timesteps_pfa", None),
-            combined_analysis=kwargs.get("combined_analysis", False),
-            mode=kwargs.get("mode", None),
+            max_while_iterations=max_while_iterations,
+            copy_grid=copy_grid,
+            timesteps_pfa=timesteps_pfa,
+            combined_analysis=combined_analysis,
+            mode=mode,
         )
 
         # add measure to Results object
-        if not kwargs.get("copy_grid", False):
+        if not copy_grid:
             self.results.measures = "grid_expansion"
 
         return results
