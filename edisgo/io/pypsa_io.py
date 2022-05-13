@@ -5,6 +5,7 @@ container.
 """
 
 import collections
+import logging
 
 from math import sqrt
 
@@ -14,6 +15,8 @@ import pandas as pd
 from networkx import connected_components
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
+
+logger = logging.getLogger(__name__)
 
 
 def to_pypsa(grid_object, timesteps, **kwargs):
@@ -899,6 +902,18 @@ def _check_integrity_of_pypsa(pypsa_network):
                 pypsa_network.buses_t["v_mag_pu_set"].columns.duplicated()
             )
         )
+
+    for comp in ["lines", "transformers"]:
+        z = getattr(pypsa_network, comp).apply(
+            lambda x: np.sqrt(np.square(x.r) + np.square(x.x)), axis=1
+        )
+        if (z < 1e-6).any():
+            logger.warning(
+                "Very small values for impedance of {}: {}. This might "
+                "cause problems in the power flow.".format(
+                    comp, z[z < 1e-6].index.values
+                )
+            )
 
 
 def process_pfa_results(edisgo, pypsa, timesteps):
