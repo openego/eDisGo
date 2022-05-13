@@ -782,7 +782,7 @@ class TimeSeries:
         # get worst case configurations
         worst_case_scale_factors = configs["worst_case_scale_factor"]
         # get power scaling factors for different voltage levels and feed-in/load case
-        power_scaling = pd.Series()
+        power_scaling = pd.Series(dtype=float)
         for case in cases:
             for voltage_level in ["mv", "lv"]:
                 power_scaling.at[f"{case}_{voltage_level}"] = worst_case_scale_factors[
@@ -1521,14 +1521,20 @@ class TimeSeries:
                                 components_df.loc[comps, :],
                                 edisgo_object.topology.buses_df,
                             )
-                            q_sign = q_sign.append(
-                                q_control._fixed_cosphi_default_reactive_power_sign(
-                                    df, type, edisgo_object.config
-                                )
+                            q_sign = pd.concat(
+                                [
+                                    q_sign,
+                                    q_control._fixed_cosphi_default_reactive_power_sign(
+                                        df, type, edisgo_object.config
+                                    ),
+                                ]
                             )
                         else:
-                            q_sign = q_sign.append(
-                                pd.Series(q_sign_func(row["mode"]), index=comps)
+                            q_sign = pd.concat(
+                                [
+                                    q_sign,
+                                    pd.Series(q_sign_func(row["mode"]), index=comps),
+                                ]
                             )
                         # get power factor (default or given)
                         if row["power_factor"] == "default":
@@ -1536,14 +1542,20 @@ class TimeSeries:
                                 components_df.loc[comps, :],
                                 edisgo_object.topology.buses_df,
                             )
-                            power_factor = power_factor.append(
-                                q_control._fixed_cosphi_default_power_factor(
-                                    df, type, edisgo_object.config
-                                )
+                            power_factor = pd.concat(
+                                [
+                                    power_factor,
+                                    q_control._fixed_cosphi_default_power_factor(
+                                        df, type, edisgo_object.config
+                                    ),
+                                ]
                             )
                         else:
-                            power_factor = power_factor.append(
-                                pd.Series(row["power_factor"], index=comps)
+                            power_factor = pd.concat(
+                                [
+                                    power_factor,
+                                    pd.Series(row["power_factor"], index=comps),
+                                ]
                             )
             else:
                 raise ValueError(

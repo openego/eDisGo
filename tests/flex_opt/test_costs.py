@@ -19,8 +19,11 @@ class TestCosts:
             "MVStation_1_transformer_1"
         ]
         hv_mv_trafo.name = "MVStation_1_transformer_reinforced_2"
-        self.edisgo.topology.transformers_hvmv_df = (
-            self.edisgo.topology.transformers_hvmv_df.append(hv_mv_trafo)
+        self.edisgo.topology.transformers_hvmv_df = pd.concat(
+            [
+                self.edisgo.topology.transformers_hvmv_df,
+                hv_mv_trafo.to_frame().T,
+            ]
         )
         mv_lv_trafo = self.edisgo.topology.transformers_df.loc[
             "LVStation_1_transformer_1"
@@ -29,8 +32,11 @@ class TestCosts:
         self.edisgo.topology.transformers_df.drop(
             "LVStation_1_transformer_1", inplace=True
         )
-        self.edisgo.topology.transformers_df = (
-            self.edisgo.topology.transformers_df.append(mv_lv_trafo)
+        self.edisgo.topology.transformers_df = pd.concat(
+            [
+                self.edisgo.topology.transformers_df,
+                mv_lv_trafo.to_frame().T,
+            ]
         )
 
         self.edisgo.results.equipment_changes = pd.DataFrame(
