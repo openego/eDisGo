@@ -729,8 +729,11 @@ class Topology:
             :attr:`~.network.topology.Topology.lines_df`.
 
         """
-        return self.lines_df.loc[self.lines_df.bus0 == bus_name].append(
-            self.lines_df.loc[self.lines_df.bus1 == bus_name]
+        return pd.concat(
+            [
+                self.lines_df.loc[self.lines_df.bus0 == bus_name],
+                self.lines_df.loc[self.lines_df.bus1 == bus_name],
+            ]
         )
 
     def get_line_connecting_buses(self, bus_1, bus_2):
@@ -782,22 +785,37 @@ class Topology:
         components["generators"] = self.generators_df.loc[
             self.generators_df.bus == bus_name
         ]
+
         components["loads"] = self.loads_df.loc[self.loads_df.bus == bus_name]
+
         components["storage_units"] = self.storage_units_df.loc[
             self.storage_units_df.bus == bus_name
         ]
+
         components["lines"] = self.get_connected_lines_from_bus(bus_name)
-        components["transformers"] = self.transformers_df.loc[
-            self.transformers_df.bus0 == bus_name
-        ].append(self.transformers_df.loc[self.transformers_df.bus1 == bus_name])
-        components["transformers_hvmv"] = self.transformers_hvmv_df.loc[
-            self.transformers_hvmv_df.bus0 == bus_name
-        ].append(
-            self.transformers_hvmv_df.loc[self.transformers_hvmv_df.bus1 == bus_name]
+
+        components["transformers"] = pd.concat(
+            [
+                self.transformers_df.loc[self.transformers_df.bus0 == bus_name],
+                self.transformers_df.loc[self.transformers_df.bus1 == bus_name],
+            ]
         )
+
+        components["transformers_hvmv"] = pd.concat(
+            [
+                self.transformers_hvmv_df.loc[
+                    self.transformers_hvmv_df.bus0 == bus_name
+                ],
+                self.transformers_hvmv_df.loc[
+                    self.transformers_hvmv_df.bus1 == bus_name
+                ],
+            ]
+        )
+
         components["switches"] = self.switches_df.loc[
             self.switches_df.bus_closed == bus_name
         ]
+
         return components
 
     def get_neighbours(self, bus_name):
@@ -999,7 +1017,12 @@ class Topology:
         for col in new_df.columns:
             new_df[col] = pd.to_numeric(new_df[col], errors="ignore")
 
-        self._loads_df = self.loads_df.append(new_df)
+        self._loads_df = pd.concat(
+            [
+                self.loads_df,
+                new_df,
+            ]
+        )
 
         return load_name
 
@@ -1085,7 +1108,12 @@ class Topology:
         for col in new_df.columns:
             new_df[col] = pd.to_numeric(new_df[col], errors="ignore")
 
-        self.generators_df = self.generators_df.append(new_df)
+        self.generators_df = pd.concat(
+            [
+                self.generators_df,
+                new_df,
+            ]
+        )
         return generator_name
 
     def add_storage_unit(self, bus, p_nom, control="PQ", **kwargs):
@@ -1150,7 +1178,12 @@ class Topology:
         for col in new_df.columns:
             new_df[col] = pd.to_numeric(new_df[col], errors="ignore")
 
-        self.storage_units_df = self.storage_units_df.append(new_df)
+        self.storage_units_df = pd.concat(
+            [
+                self.storage_units_df,
+                new_df,
+            ]
+        )
         return storage_name
 
     def add_line(self, bus0, bus1, length, **kwargs):
@@ -1229,7 +1262,12 @@ class Topology:
         ]
         if not bus0_bus1.empty and bus1_bus0.empty:
             logging.debug("Line between bus0 {} and bus1 {} already exists.")
-            return bus1_bus0.append(bus0_bus1).index[0]
+            return pd.concat(
+                [
+                    bus1_bus0,
+                    bus0_bus1,
+                ]
+            ).index[0]
 
         # unpack optional parameters
         x = kwargs.get("x", None)
@@ -1288,7 +1326,12 @@ class Topology:
             },
             index=[line_name],
         )
-        self.lines_df = self.lines_df.append(new_line_df)
+        self.lines_df = pd.concat(
+            [
+                self.lines_df,
+                new_line_df,
+            ]
+        )
         return line_name
 
     def add_bus(self, bus_name, v_nom, **kwargs):
@@ -1345,7 +1388,12 @@ class Topology:
             },
             index=[bus_name],
         )
-        self.buses_df = self.buses_df.append(new_bus_df)
+        self.buses_df = pd.concat(
+            [
+                self.buses_df,
+                new_bus_df,
+            ]
+        )
         return bus_name
 
     def remove_load(self, name):
