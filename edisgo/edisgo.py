@@ -416,6 +416,10 @@ class EDisGo:
               and generation from underlying LV network aggregated at respective LV
               station's secondary side.
             * 'lv' to export specified LV network only.
+        check_edisgo_integrity: bool
+            Check integrity of edisgo object before translating to pypsa. This option is
+            meant to help the identification of possible sources of errors in the
+            object if the power flow calculations fail.
 
         Returns
         -------
@@ -431,6 +435,11 @@ class EDisGo:
         # check if timesteps is array-like, otherwise convert to list
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
+        # possibly execute consistency check
+        if kwargs.get("check_edisgo_integrity", False) or (
+            logger.level == logging.DEBUG
+        ):
+            self.check_integrity()
         # export grid
         # ToDo: Move to pypsa_io.to_pypsa
         if not mode:
