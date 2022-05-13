@@ -9,9 +9,7 @@ from edisgo.flex_opt.costs import grid_expansion_costs, line_expansion_costs
 class TestCosts:
     @classmethod
     def setup_class(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path
-        )
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
         self.edisgo.analyze()
 

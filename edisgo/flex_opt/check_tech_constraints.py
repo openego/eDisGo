@@ -392,9 +392,10 @@ def _station_load(edisgo_obj, grid):
     s_station = sum(transformers_df.s_nom)
     load_factor = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
         lambda _: edisgo_obj.config["grid_expansion_load_factors"][
-            "{}_{}_transformer".format(voltage_level, _)
+            f"{voltage_level}_{_}_transformer"
         ]
     )
+
     s_station_allowed = s_station * load_factor
 
     # calculate residual apparent power (if negative, station is over-loaded)
@@ -406,17 +407,16 @@ def _station_load(edisgo_obj, grid):
         # devided by the load factor to account for load factors smaller than
         # one, which lead to a higher needed additional capacity)
         s_missing = (s_res / load_factor).dropna()
-        crit_stations = pd.DataFrame(
+        return pd.DataFrame(
             {
                 "s_missing": abs(s_missing.min()),
                 "time_index": s_missing.idxmin(),
             },
             index=[repr(grid)],
         )
-    else:
-        crit_stations = pd.DataFrame()
 
-    return crit_stations
+    else:
+        return pd.DataFrame()
 
 
 def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
