@@ -1317,15 +1317,10 @@ class TimeSeries:
             return
 
         # write to TimeSeriesRaw
-        if self.time_series_raw.conventional_loads_active_power_by_sector is not None:
-            for col in ts_loads:
-                self.time_series_raw.conventional_loads_active_power_by_sector[
-                    col
-                ] = ts_loads[col]
-        else:
-            self.time_series_raw.conventional_loads_active_power_by_sector = (
-                ts_loads.copy()
-            )
+        for col in ts_loads:
+            self.time_series_raw.conventional_loads_active_power_by_sector[
+                col
+            ] = ts_loads[col]
 
         # set load_names if None
         if load_names is None:
@@ -1385,15 +1380,10 @@ class TimeSeries:
             return
 
         # write to TimeSeriesRaw
-        if self.time_series_raw.charging_points_active_power_by_use_case is not None:
-            for col in ts_loads:
-                self.time_series_raw.charging_points_active_power_by_use_case[
-                    col
-                ] = ts_loads[col]
-        else:
-            self.time_series_raw.charging_points_active_power_by_use_case = (
-                ts_loads.copy()
-            )
+        for col in ts_loads:
+            self.time_series_raw.charging_points_active_power_by_use_case[
+                col
+            ] = ts_loads[col]
 
         # set load_names if None
         if load_names is None:
@@ -1916,8 +1906,8 @@ class TimeSeriesRaw:
         )
         self.fluctuating_generators_active_power_by_technology = None
         self.dispatchable_generators_active_power_by_technology = None
-        self.conventional_loads_active_power_by_sector = None
-        self.charging_points_active_power_by_use_case = None
+        self.conventional_loads_active_power_by_sector = pd.DataFrame(dtype=float)
+        self.charging_points_active_power_by_use_case = pd.DataFrame(dtype=float)
 
     @property
     def _attributes(self):
