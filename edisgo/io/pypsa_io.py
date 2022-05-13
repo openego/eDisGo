@@ -907,7 +907,7 @@ def _check_integrity_of_pypsa(pypsa_network):
         z = getattr(pypsa_network, comp).apply(
             lambda x: np.sqrt(np.square(x.r) + np.square(x.x)), axis=1
         )
-        if (z < 1e-6).any():
+        if not z.empty and (z < 1e-6).any():
             logger.warning(
                 "Very small values for impedance of {}: {}. This might "
                 "cause problems in the power flow.".format(
