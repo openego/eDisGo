@@ -1140,11 +1140,6 @@ class TimeSeries:
                 "'ts_generators' must either be a pandas DataFrame or 'oedb'."
             )
 
-        # write to TimeSeriesRaw
-        self.time_series_raw.fluctuating_generators_active_power_by_technology = (
-            ts_generators
-        )
-
         # set generator_names if None
         if generator_names is None:
             if isinstance(ts_generators.columns, pd.MultiIndex):
@@ -1191,6 +1186,23 @@ class TimeSeries:
                 sort=False,
             )
 
+        # write to TimeSeriesRaw
+        if not isinstance(ts_generators.columns, pd.MultiIndex):
+            # make columns a multiindex, otherwise columns are not a multiindex anymore
+            # after concatenation and duplicates not correctly identified
+            ts_generators.columns = pd.MultiIndex.from_product(
+                [ts_generators.columns, [None]]
+            )
+        tmp = pd.concat(
+            [
+                self.time_series_raw.fluctuating_generators_active_power_by_technology,
+                ts_generators,
+            ],
+            axis=1,
+        )
+        tmp = tmp.loc[:, ~tmp.columns.duplicated(keep="last")]
+        self.time_series_raw.fluctuating_generators_active_power_by_technology = tmp
+
     def predefined_dispatchable_generators_by_technology(
         self, edisgo_object, ts_generators, generator_names=None
     ):
@@ -1221,9 +1233,10 @@ class TimeSeries:
             raise ValueError("'ts_generators' must be a pandas DataFrame.")
 
         # write to TimeSeriesRaw
-        self.time_series_raw.dispatchable_generators_active_power_by_technology = (
-            ts_generators
-        )
+        for col in ts_generators:
+            self.time_series_raw.dispatchable_generators_active_power_by_technology[
+                col
+            ] = ts_generators[col]
 
         # set generator_names if None
         if generator_names is None:
@@ -1904,8 +1917,12 @@ class TimeSeriesRaw:
         self.q_control = pd.DataFrame(
             columns=["type", "q_sign", "power_factor", "parametrisation"]
         )
-        self.fluctuating_generators_active_power_by_technology = None
-        self.dispatchable_generators_active_power_by_technology = None
+        self.fluctuating_generators_active_power_by_technology = pd.DataFrame(
+            dtype=float
+        )
+        self.dispatchable_generators_active_power_by_technology = pd.DataFrame(
+            dtype=float
+        )
         self.conventional_loads_active_power_by_sector = pd.DataFrame(dtype=float)
         self.charging_points_active_power_by_use_case = pd.DataFrame(dtype=float)
 

@@ -995,6 +995,13 @@ class TestTimeSeries:
         ]
         p_ts = self.edisgo.timeseries.generators_active_power
         assert p_ts.shape == (2, len(fluctuating_gens))
+        # fmt: off
+        assert (
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology.shape
+            == (2, 8)
+        )
+        # fmt: on
 
         # check values
         comp = "GeneratorFluctuating_2"  # wind, w_id = 1122074
@@ -1040,6 +1047,13 @@ class TestTimeSeries:
         ]
         p_ts = self.edisgo.timeseries.generators_active_power
         assert p_ts.shape == (2, len(fluctuating_gens))
+        # fmt: off
+        assert (
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology.shape
+            == (2, 10)
+        )
+        # fmt: on
 
         # check values
         comp = "GeneratorFluctuating_2"  # wind
@@ -1078,6 +1092,13 @@ class TestTimeSeries:
         # overwritten)
         p_ts = self.edisgo.timeseries.generators_active_power
         assert p_ts.shape == (2, len(fluctuating_gens))
+        # fmt: off
+        assert (
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology.shape
+            == (2, 10)
+        )
+        # fmt: on
 
         # check values (check that values are overwritten)
         comp = "GeneratorFluctuating_2"  # wind
@@ -1096,6 +1117,16 @@ class TestTimeSeries:
             index=timeindex,
         )
         assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False)
+        # fmt: off
+        assert_series_equal(
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology.loc[
+                :, ("wind", 1122074)
+            ],
+            gens_p.loc[:, ("wind", 1122074)],
+            check_dtype=False,
+        )
+        # fmt: on
 
         # ############# own settings (with weather cell ID), all generators (check, that
         # time series for generators are set for those for which time series are
@@ -1108,6 +1139,13 @@ class TestTimeSeries:
         # check shape
         p_ts = self.edisgo.timeseries.generators_active_power
         assert p_ts.shape == (2, 22)
+        # fmt: off
+        assert (
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology.shape
+            == (2, 2)
+        )
+        # fmt: on
 
     def test_predefined_dispatchable_generators_by_technology(self):
         # ToDo implement
