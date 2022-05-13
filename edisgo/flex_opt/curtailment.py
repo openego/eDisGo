@@ -217,12 +217,15 @@ def voltage_based(
         curtailment = pd.DataFrame()
 
     # set curtailment for other time steps to zero
-    curtailment = curtailment.append(
-        pd.DataFrame(
-            0,
-            columns=feedin.columns,
-            index=curtailment_timeseries[curtailment_timeseries <= 0].index,
-        )
+    curtailment = pd.concat(
+        [
+            curtailment,
+            pd.DataFrame(
+                0,
+                columns=feedin.columns,
+                index=curtailment_timeseries[curtailment_timeseries <= 0].index,
+            ),
+        ]
     )
 
     # check if curtailment target was met

@@ -60,7 +60,7 @@ requirements = [
     "demandlib",
     "networkx >= 2.5.0",
     "geopy >= 2.0.0",
-    "pandas >= 1.2.0, < 1.3.0",
+    "pandas >= 1.2.0",
     "geopandas >= 0.9.0",
     "pyproj >= 3.0.0",
     "shapely >= 1.7.0",

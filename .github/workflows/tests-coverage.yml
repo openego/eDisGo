@@ -19,6 +19,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
+        pip3 install --upgrade pip
         pip3 install -e $GITHUB_WORKSPACE[full]
         pip3 install coveralls
     - name: Run coverage
