@@ -619,7 +619,7 @@ def _append_lv_components(
         elif aggregate_generators == "curtailable":
             comps_fluct = comps[comps.type.isin(flucts)]
             comps_disp = comps[~comps.index.isin(comps_fluct.index)]
-            comps_aggr = pd.DataFrame(columns=["bus", "control", "p_nom"])
+            comps_aggr = pd.DataFrame(columns=["bus", "control", "p_nom"], dtype=float)
             if len(comps_fluct) > 0:
                 comps_aggr = pd.concat(
                     [
