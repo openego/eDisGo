@@ -1595,6 +1595,34 @@ class TestTimeSeries:
                 caplog.clear()
                 ts_tmp.iloc[0, 0] = 0
                 setattr(self.edisgo.timeseries, attr, ts_tmp)
+        # check warning for duplicated indices and columns
+        for attr in attrs:
+            ts_tmp = getattr(self.edisgo.timeseries, attr)
+            if not ts_tmp.empty:
+                # check for duplicated indices
+                ts_tmp_duplicated = pd.concat([ts_tmp, ts_tmp.iloc[0:2]])
+                setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
+                self.edisgo.timeseries.check_integrity()
+                assert (
+                    "{} has duplicated indices: {}".format(
+                        attr, ts_tmp.iloc[0:2].index.values
+                    )
+                    in caplog.text
+                )
+                caplog.clear()
+                setattr(self.edisgo.timeseries, attr, ts_tmp)
+                # check for duplicated columns
+                ts_tmp_duplicated = pd.concat([ts_tmp, ts_tmp.iloc[:, 0:2]], axis=1)
+                setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
+                self.edisgo.timeseries.check_integrity()
+                assert (
+                    "{} has duplicated columns: {}".format(
+                        attr, ts_tmp.iloc[:, 0:2].columns.values
+                    )
+                    in caplog.text
+                )
+                caplog.clear()
+                setattr(self.edisgo.timeseries, attr, ts_tmp)
 
 
 class TestTimeSeriesRaw:

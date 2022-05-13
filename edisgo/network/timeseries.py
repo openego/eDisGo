@@ -1824,7 +1824,7 @@ class TimeSeries:
 
     def check_integrity(self):
         """
-        Check for NaN-values and if timeseries is empty.
+        Check for NaN, duplicated indices or columns and if timeseries is empty.
         """
         if len(self.timeindex) == 0:
             logger.warning("No timeindex set. Empty timeseries will be returned.")
@@ -1834,6 +1834,24 @@ class TimeSeries:
                     logger.warning("There are null values in {}".format(attr))
                 if getattr(self, attr).empty:  # Todo: keep this or check in edisgo?
                     logger.warning("{} is empty".format(attr))
+                if any(getattr(self, attr).index.duplicated()):
+                    duplicated_labels = (
+                        getattr(self, attr)
+                        .index[getattr(self, attr).index.duplicated()]
+                        .values
+                    )
+                    logger.warning(
+                        "{} has duplicated indices: {}".format(attr, duplicated_labels)
+                    )
+                if any(getattr(self, attr).columns.duplicated()):
+                    duplicated_labels = (
+                        getattr(self, attr)
+                        .columns[getattr(self, attr).columns.duplicated()]
+                        .values
+                    )
+                    logger.warning(
+                        "{} has duplicated columns: {}".format(attr, duplicated_labels)
+                    )
 
 
 class TimeSeriesRaw:
