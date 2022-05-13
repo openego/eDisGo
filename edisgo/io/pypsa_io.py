@@ -208,13 +208,14 @@ def to_pypsa(grid_object, timesteps, **kwargs):
                 station_bus = lv_grid.buses_df.loc[
                     [lv_grid.transformers_df.bus1.unique()[0]]
                 ]
-                buses_df = buses_df.append(station_bus.loc[:, ["v_nom"]])
+                buses_df = pd.concat([buses_df, station_bus.loc[:, ["v_nom"]]])
             # handle one gate components
             for comp, dfs in lv_components_to_aggregate.items():
                 comps = pd.DataFrame()
                 for df in dfs:
                     comps_tmp = getattr(lv_grid, df).copy()
-                    comps = comps.append(comps_tmp)
+                    comps = pd.concat([comps, comps_tmp])
+
                 comps.bus = station_bus.index.values[0]
                 aggregated_lv_components[comp].update(
                     _append_lv_components(
@@ -232,7 +233,12 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         components = collections.defaultdict(pd.DataFrame)
         for comps in (mv_components, lv_components):
             for key, value in comps.items():
-                components[key] = components[key].append(value)
+                components[key] = pd.concat(
+                    [
+                        components[key],
+                        value,
+                    ]
+                )
 
     elif mode == "lv":
 
@@ -585,7 +591,14 @@ def _append_lv_components(
             aggregated_elements[lv_grid_name + "_loads"] = comps.index.values
         else:
             raise ValueError("Aggregation type for loads invalid.")
-        lv_components[comp] = lv_components[comp].append(comps_aggr)
+
+        lv_components[comp] = pd.concat(
+            [
+                lv_components[comp],
+                comps_aggr,
+            ]
+        )
+
     elif comp == "Generator":
         flucts = ["wind", "solar"]
         if aggregate_generators is None:
@@ -608,31 +621,38 @@ def _append_lv_components(
             comps_disp = comps[~comps.index.isin(comps_fluct.index)]
             comps_aggr = pd.DataFrame(columns=["bus", "control", "p_nom"])
             if len(comps_fluct) > 0:
-                comps_aggr = comps_aggr.append(
-                    pd.DataFrame(
-                        {
-                            "bus": [bus],
-                            "control": ["PQ"],
-                            "p_nom": [sum(comps_fluct.p_nom)],
-                            "fluctuating": [True],
-                        },
-                        index=[lv_grid_name + "_fluctuating"],
-                    )
+                comps_aggr = pd.concat(
+                    [
+                        comps_aggr,
+                        pd.DataFrame(
+                            {
+                                "bus": [bus],
+                                "control": ["PQ"],
+                                "p_nom": [sum(comps_fluct.p_nom)],
+                                "fluctuating": [True],
+                            },
+                            index=[lv_grid_name + "_fluctuating"],
+                        ),
+                    ]
                 )
                 aggregated_elements[
                     lv_grid_name + "_fluctuating"
                 ] = comps_fluct.index.values
+
             if len(comps_disp) > 0:
-                comps_aggr = comps_aggr.append(
-                    pd.DataFrame(
-                        {
-                            "bus": [bus],
-                            "control": ["PQ"],
-                            "p_nom": [sum(comps_disp.p_nom)],
-                            "fluctuating": [False],
-                        },
-                        index=[lv_grid_name + "_dispatchable"],
-                    )
+                comps_aggr = pd.concat(
+                    [
+                        comps_aggr,
+                        pd.DataFrame(
+                            {
+                                "bus": [bus],
+                                "control": ["PQ"],
+                                "p_nom": [sum(comps_disp.p_nom)],
+                                "fluctuating": [False],
+                            },
+                            index=[lv_grid_name + "_dispatchable"],
+                        ),
+                    ]
                 )
                 aggregated_elements[
                     lv_grid_name + "_dispatchable"
@@ -656,7 +676,14 @@ def _append_lv_components(
             aggregated_elements[lv_grid_name + "_generators"] = comps.index.values
         else:
             raise ValueError("Aggregation type for generators invalid.")
-        lv_components[comp] = lv_components[comp].append(comps_aggr)
+
+        lv_components[comp] = pd.concat(
+            [
+                lv_components[comp],
+                comps_aggr,
+            ]
+        )
+
     elif comp == "StorageUnit":
         if aggregate_storages is None:
             comps_aggr = comps.loc[:, ["bus", "control"]]
@@ -668,7 +695,14 @@ def _append_lv_components(
             aggregated_elements[lv_grid_name + "_storages"] = comps.index.values
         else:
             raise ValueError("Aggregation type for storages invalid.")
-        lv_components[comp] = lv_components[comp].append(comps_aggr)
+
+        lv_components[comp] = pd.concat(
+            [
+                lv_components[comp],
+                comps_aggr,
+            ]
+        )
+
     else:
         raise ValueError("Component type not defined.")
 
