@@ -102,7 +102,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
 
         return costs_lines[["costs", "voltage_level"]]
 
-    costs = pd.DataFrame()
+    costs = pd.DataFrame(dtype=float)
 
     if without_generator_import:
         equipment_changes = edisgo_obj.results.equipment_changes.loc[

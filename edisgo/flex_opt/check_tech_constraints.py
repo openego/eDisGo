@@ -264,7 +264,7 @@ def _line_load(edisgo_obj, voltage_level):
         )
         crit_lines.loc[:, "voltage_level"] = voltage_level
     else:
-        crit_lines = pd.DataFrame()
+        crit_lines = pd.DataFrame(dtype=float)
 
     return crit_lines
 
@@ -331,7 +331,7 @@ def mv_lv_station_load(edisgo_obj):
 
     """
 
-    crit_stations = pd.DataFrame()
+    crit_stations = pd.DataFrame(dtype=float)
     for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
         crit_stations = pd.concat(
             [
@@ -424,7 +424,7 @@ def _station_load(edisgo_obj, grid):
         )
 
     else:
-        return pd.DataFrame()
+        return pd.DataFrame(dtype=float)
 
 
 def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
@@ -907,7 +907,7 @@ def _voltage_deviation(edisgo_obj, buses, v_limits_upper, v_limits_lower):
             index=df.index,
         )
 
-    crit_buses_grid = pd.DataFrame()
+    crit_buses_grid = pd.DataFrame(dtype=float)
 
     voltage_diff_uv, voltage_diff_ov = voltage_diff(
         edisgo_obj, buses, v_limits_upper, v_limits_lower

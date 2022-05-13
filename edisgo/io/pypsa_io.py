@@ -179,7 +179,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
         )
 
         if mode == "mv":
-            mv_components["Transformer"] = pd.DataFrame()
+            mv_components["Transformer"] = pd.DataFrame(dtype=float)
         elif mode == "mvlv":
             # get all MV/LV transformers
             mv_components["Transformer"] = edisgo_obj.topology.transformers_df.loc[
@@ -194,7 +194,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
             "Generator": ["generators_df"],
             "StorageUnit": ["storage_units_df"],
         }
-        lv_components = {key: pd.DataFrame() for key in lv_components_to_aggregate}
+        lv_components = {key: pd.DataFrame(dtype=float) for key in lv_components_to_aggregate}
 
         for lv_grid in grid_object.lv_grids:
             if mode == "mv":
@@ -211,7 +211,7 @@ def to_pypsa(grid_object, timesteps, **kwargs):
                 buses_df = pd.concat([buses_df, station_bus.loc[:, ["v_nom"]]])
             # handle one gate components
             for comp, dfs in lv_components_to_aggregate.items():
-                comps = pd.DataFrame()
+                comps = pd.DataFrame(dtype=float)
                 for df in dfs:
                     comps_tmp = getattr(lv_grid, df).copy()
                     comps = pd.concat([comps, comps_tmp])
@@ -739,8 +739,8 @@ def _get_timeseries_with_aggregated_elements(
         with timesteps as index and name of elements as columns.
     """
     # get relevant timeseries
-    elements_timeseries_active_all = pd.DataFrame()
-    elements_timeseries_reactive_all = pd.DataFrame()
+    elements_timeseries_active_all = pd.DataFrame(dtype=float)
+    elements_timeseries_reactive_all = pd.DataFrame(dtype=float)
     for element_type in element_types:
         elements_timeseries_active_all = pd.concat(
             [
