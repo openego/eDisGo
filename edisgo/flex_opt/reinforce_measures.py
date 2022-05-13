@@ -255,7 +255,6 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
                     new_transformers,
                 ]
             )
-            print("break")
         else:
             edisgo_obj.topology.transformers_hvmv_df = pd.concat(
                 [

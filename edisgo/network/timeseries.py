@@ -761,7 +761,7 @@ class TimeSeries:
         # get worst case configurations
         worst_case_scale_factors = configs["worst_case_scale_factor"]
         # get power scaling factors for different voltage levels and feed-in/load case
-        power_scaling = pd.Series()
+        power_scaling = pd.Series(dtype=float)
         for case in cases:
             for voltage_level in ["mv", "lv"]:
                 power_scaling.at[f"{case}_{voltage_level}"] = worst_case_scale_factors[
