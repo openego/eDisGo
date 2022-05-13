@@ -4,8 +4,6 @@ import os
 
 from typing import TYPE_CHECKING
 
-import pandas as pd
-
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
 
@@ -90,7 +88,7 @@ class GeoPandasGridContainer:
             """The grid_id property."""
             return self._grid_id
 
-        @crs.setter
+        @grid_id.setter
         def grid_id(self, grid_id_val):
             self._grid_id = grid_id_val
 
@@ -99,7 +97,7 @@ class GeoPandasGridContainer:
             """The grid property."""
             return self.grid
 
-        @crs.setter
+        @grid.setter
         def grid(self, grid_obj):
             self.grid = grid_obj
 
@@ -195,10 +193,7 @@ def to_geopandas(grid_obj: Grid):
     components_dict = {}
 
     for component in COMPONENTS:
-        if component == "transformers_df":
-            left_on = "bus1"
-        else:
-            left_on = "bus"
+        left_on = "bus1" if component == "transformers_df" else "bus"
 
         attr = getattr(grid_obj, component)
 
