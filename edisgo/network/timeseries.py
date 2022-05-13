@@ -1190,6 +1190,7 @@ class TimeSeries:
         if not isinstance(ts_generators.columns, pd.MultiIndex):
             # make columns a multiindex, otherwise columns are not a multiindex anymore
             # after concatenation and duplicates not correctly identified
+            ts_generators = ts_generators.copy()
             ts_generators.columns = pd.MultiIndex.from_product(
                 [ts_generators.columns, [None]]
             )
