@@ -1,16 +1,18 @@
-import pandas as pd
 import os
+
 import numpy as np
+import pandas as pd
+
 from pypsa import Network as PyPSANetwork
 
-from edisgo.network.grids import MVGrid, LVGrid
+from edisgo.network.grids import LVGrid, MVGrid
 
 if "READTHEDOCS" not in os.environ:
     from shapely.wkt import loads as wkt_loads
 
 import logging
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def import_ding0_grid(path, edisgo_obj):
@@ -44,9 +46,7 @@ def import_ding0_grid(path, edisgo_obj):
         ].v_nom.values
         transformers_df.loc[
             voltage_bus1 > voltage_bus0, ["bus0", "bus1"]
-        ] = transformers_df.loc[
-            voltage_bus1 > voltage_bus0, ["bus1", "bus0"]
-        ].values
+        ] = transformers_df.loc[voltage_bus1 > voltage_bus0, ["bus1", "bus0"]].values
         return transformers_df
 
     def sort_hvmv_transformer_buses(transformers_df):
@@ -68,16 +68,23 @@ def import_ding0_grid(path, edisgo_obj):
     grid.import_from_csv_folder(path)
 
     # write dataframes to edisgo_obj
-    edisgo_obj.topology.buses_df = grid.buses[
-        edisgo_obj.topology.buses_df.columns]
-    edisgo_obj.topology.lines_df = grid.lines[
-        edisgo_obj.topology.lines_df.columns]
+    edisgo_obj.topology.buses_df = grid.buses[edisgo_obj.topology.buses_df.columns]
+    edisgo_obj.topology.lines_df = grid.lines[edisgo_obj.topology.lines_df.columns]
 
-    edisgo_obj.topology.loads_df = grid.loads[
-        edisgo_obj.topology.loads_df.columns]
+    grid.loads = grid.loads.drop(columns="p_set").rename(columns={"peak_load": "p_set"})
+
+    edisgo_obj.topology.loads_df = grid.loads[edisgo_obj.topology.loads_df.columns]
+    # set loads without type information to be conventional loads
+    # this is done, as ding0 currently does not provide information on the type of load
+    # but ding0 grids currently also only contain conventional loads
+    # ToDo: Change, once information is provided by ding0
+    loads_without_type = edisgo_obj.topology.loads_df[
+        (edisgo_obj.topology.loads_df.type.isnull())
+        | (edisgo_obj.topology.loads_df.type == "")
+    ].index
+    edisgo_obj.topology.loads_df.loc[loads_without_type, "type"] = "conventional_load"
     # drop slack generator from generators
-    slack = grid.generators.loc[
-        grid.generators.control == "Slack"].index
+    slack = grid.generators.loc[grid.generators.control == "Slack"].index
     grid.generators.drop(slack, inplace=True)
     edisgo_obj.topology.generators_df = grid.generators[
         edisgo_obj.topology.generators_df.columns
@@ -86,16 +93,14 @@ def import_ding0_grid(path, edisgo_obj):
         edisgo_obj.topology.storage_units_df.columns
     ]
     edisgo_obj.topology.transformers_df = sort_transformer_buses(
-        grid.transformers.drop(
-            labels=["x_pu", "r_pu"], axis=1).rename(
-                columns={"r": "r_pu", "x": "x_pu"}
+        grid.transformers.drop(labels=["x_pu", "r_pu"], axis=1).rename(
+            columns={"r": "r_pu", "x": "x_pu"}
         )[edisgo_obj.topology.transformers_df.columns]
     )
     edisgo_obj.topology.transformers_hvmv_df = sort_hvmv_transformer_buses(
-        pd.read_csv(
-            os.path.join(path, "transformers_hvmv.csv"),
-            index_col=[0]
-        ).rename(columns={"r": "r_pu", "x": "x_pu"})
+        pd.read_csv(os.path.join(path, "transformers_hvmv.csv"), index_col=[0]).rename(
+            columns={"r": "r_pu", "x": "x_pu"}
+        )
     )
     edisgo_obj.topology.switches_df = pd.read_csv(
         os.path.join(path, "switches.csv"), index_col=[0]
@@ -143,9 +148,7 @@ def _validate_ding0_grid_import(topology):
     duplicated_labels = []
     if any(topology.buses_df.index.duplicated()):
         duplicated_labels.append(
-            topology.buses_df.index[
-                topology.buses_df.index.duplicated()
-            ].values
+            topology.buses_df.index[topology.buses_df.index.duplicated()].values
         )
     if any(topology.generators_df.index.duplicated()):
         duplicated_labels.append(
@@ -155,9 +158,7 @@ def _validate_ding0_grid_import(topology):
         )
     if any(topology.loads_df.index.duplicated()):
         duplicated_labels.append(
-            topology.loads_df.index[
-                topology.loads_df.index.duplicated()
-            ].values
+            topology.loads_df.index[topology.loads_df.index.duplicated()].values
         )
     if any(topology.transformers_df.index.duplicated()):
         duplicated_labels.append(
@@ -167,24 +168,18 @@ def _validate_ding0_grid_import(topology):
         )
     if any(topology.lines_df.index.duplicated()):
         duplicated_labels.append(
-            topology.lines_df.index[
-                topology.lines_df.index.duplicated()
-            ].values
+            topology.lines_df.index[topology.lines_df.index.duplicated()].values
         )
     if any(topology.switches_df.index.duplicated()):
         duplicated_labels.append(
-            topology.switches_df.index[
-                topology.switches_df.index.duplicated()
-            ].values
+            topology.switches_df.index[topology.switches_df.index.duplicated()].values
         )
     if duplicated_labels:
         raise ValueError(
             "{labels} have duplicate entry in one of the components "
             "dataframes.".format(
                 labels=", ".join(
-                    np.concatenate(
-                        [list.tolist() for list in duplicated_labels]
-                    )
+                    np.concatenate([list.tolist() for list in duplicated_labels])
                 )
             )
         )
@@ -193,7 +188,10 @@ def _validate_ding0_grid_import(topology):
     buses = []
 
     for nodal_component in [
-        "loads", "generators", "charging_points", "storage_units"]:
+        "loads",
+        "generators",
+        "storage_units",
+    ]:
         df = getattr(topology, nodal_component + "_df")
         missing = df.index[~df.bus.isin(topology.buses_df.index)]
         buses.append(df.bus.values)
@@ -211,9 +209,7 @@ def _validate_ding0_grid_import(topology):
             if len(missing) > 0:
                 raise ValueError(
                     "The following {} have {} which are not defined: "
-                    "{}.".format(
-                        branch_component, attr, ", ".join(missing.values)
-                    )
+                    "{}.".format(branch_component, attr, ", ".join(missing.values))
                 )
 
     for attr in ["bus_open", "bus_closed"]:
@@ -231,7 +227,5 @@ def _validate_ding0_grid_import(topology):
     missing = topology.buses_df.index[~topology.buses_df.index.isin(all_buses)]
     if len(missing) > 0:
         raise ValueError(
-            "The following buses are isolated: {}.".format(
-                ", ".join(missing.values)
-            )
+            "The following buses are isolated: {}.".format(", ".join(missing.values))
         )

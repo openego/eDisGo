@@ -25,8 +25,8 @@ n::Int64 maximal path depth
             push!(list,br_nr)
         end
 
-        return 
-    else       
+        return
+    else
         # increment path position i
         i+=1
         old = new

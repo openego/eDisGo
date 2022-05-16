@@ -3,7 +3,7 @@ create fields for storages in network data according to a given bus_list
 
 ### Arguments
 
-- `network_data::Dict{String,Any}`, dictionary containing network data 
+- `network_data::Dict{String,Any}`, dictionary containing network data
 #### optional
 
 - `bus_list::Array`, list of bus ids where a storage is possible, DEFAULT= `[]` => every bus is used

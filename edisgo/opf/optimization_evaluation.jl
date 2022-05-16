@@ -1,6 +1,6 @@
 #=
 optimization_evaluation:
-- Julia version: 
+- Julia version:
 - Author: RL-INSTITUT\jaap.pedersen
 - Date: 2019-12-19
 =#

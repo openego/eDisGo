@@ -1,12 +1,13 @@
-import os
-import logging
 import csv
-import pandas as pd
-import numpy as np
+import logging
+import os
 
 from zipfile import ZipFile
-from edisgo.tools.tools import get_files_recursive
 
+import numpy as np
+import pandas as pd
+
+from edisgo.tools.tools import get_files_recursive
 
 logger = logging.getLogger("edisgo")
 
@@ -33,6 +34,7 @@ def _get_matching_dict_of_attributes_and_file_names():
         "i_res": "currents",
         "pfa_p": "active_powers",
         "pfa_q": "reactive_powers",
+        "s_res": "apparent_powers",
         "grid_losses": "grid_losses",
         "pfa_slack": "slack_results",
         "pfa_v_mag_pu_seed": "pfa_v_mag_pu_seed",
@@ -41,7 +43,7 @@ def _get_matching_dict_of_attributes_and_file_names():
     grid_expansion_results_dict = {
         "grid_expansion_costs": "grid_expansion_costs",
         "unresolved_issues": "unresolved_issues",
-        "equipment_changes": "equipment_changes"
+        "equipment_changes": "equipment_changes",
     }
     return powerflow_results_dict, grid_expansion_results_dict
 
@@ -92,7 +94,7 @@ class Results:
 
     @property
     def pfa_p(self):
-        """
+        r"""
         Active power over components in MW from last power flow analysis.
 
         The given active power for each line / transformer is the
@@ -128,7 +130,7 @@ class Results:
         """
         try:
             return self._pfa_p
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @pfa_p.setter
@@ -137,7 +139,7 @@ class Results:
 
     @property
     def pfa_q(self):
-        """
+        r"""
         Active power over components in Mvar from last power flow analysis.
 
         The given reactive power over each line / transformer is the
@@ -173,7 +175,7 @@ class Results:
         """
         try:
             return self._pfa_q
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @pfa_q.setter
@@ -207,7 +209,7 @@ class Results:
         """
         try:
             return self._v_res
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @v_res.setter
@@ -242,7 +244,7 @@ class Results:
         """
         try:
             return self._i_res
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @i_res.setter
@@ -251,7 +253,7 @@ class Results:
 
     @property
     def s_res(self):
-        """
+        r"""
         Apparent power over components in MVA from last power flow analysis.
 
         The given apparent power over each line / transformer is the
@@ -330,7 +332,7 @@ class Results:
         """
         try:
             return self._equipment_changes
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @equipment_changes.setter
@@ -389,7 +391,7 @@ class Results:
         """
         try:
             return self._grid_expansion_costs
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @grid_expansion_costs.setter
@@ -398,7 +400,7 @@ class Results:
 
     @property
     def grid_losses(self):
-        """
+        r"""
         Active and reactive network losses in MW and Mvar, respectively.
 
         Parameters
@@ -439,7 +441,7 @@ class Results:
         """
         try:
             return self._grid_losses
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @grid_losses.setter
@@ -479,7 +481,7 @@ class Results:
         """
         try:
             return self._pfa_slack
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @pfa_slack.setter
@@ -516,7 +518,7 @@ class Results:
         """
         try:
             return self._pfa_v_mag_pu_seed
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @pfa_v_mag_pu_seed.setter
@@ -554,7 +556,7 @@ class Results:
         """
         try:
             return self._pfa_v_ang_seed
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @pfa_v_ang_seed.setter
@@ -711,7 +713,7 @@ class Results:
         """
         try:
             return self._unresolved_issues
-        except:
+        except Exception:
             return pd.DataFrame()
 
     @unresolved_issues.setter
@@ -734,8 +736,9 @@ class Results:
             contain `type_info`. Line representative is the series name.
 
         """
-        self.equipment_changes = \
-            self.equipment_changes.append(
+        self.equipment_changes = pd.concat(
+            [
+                self.equipment_changes,
                 pd.DataFrame(
                     {
                         "iteration_step": [0],
@@ -744,8 +747,9 @@ class Results:
                         "quantity": [1],
                     },
                     index=[line.name],
-                )
-            )
+                ),
+            ]
+        )
 
     def _del_line_from_equipment_changes(self, line_repr):
         """
@@ -765,10 +769,7 @@ class Results:
 
         """
         if line_repr in self.equipment_changes.index:
-            self.equipment_changes = \
-                self.equipment_changes.drop(
-                    line_repr
-                )
+            self.equipment_changes = self.equipment_changes.drop(line_repr)
 
     def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
         """
@@ -797,19 +798,18 @@ class Results:
         """
         if attr_to_reduce is None:
             attr_to_reduce = [
-                "pfa_p", "pfa_q",
-                "v_res", "i_res",
-                "grid_losses"
+                "pfa_p",
+                "pfa_q",
+                "v_res",
+                "i_res",
+                "grid_losses",
             ]
         for attr in attr_to_reduce:
-            setattr(
-                self,
-                attr,
-                getattr(self, attr).astype(to_type)
-            )
+            setattr(self, attr, getattr(self, attr).astype(to_type))
 
-    def to_csv(self, directory, parameters=None, reduce_memory=False,
-               save_seed=False, **kwargs):
+    def to_csv(
+        self, directory, parameters=None, reduce_memory=False, save_seed=False, **kwargs
+    ):
         """
         Saves results to csv.
 
@@ -904,8 +904,10 @@ class Results:
             for attr in save_attributes:
                 if not getattr(self, attr).empty:
                     getattr(self, attr).to_csv(
-                        os.path.join(target_dir, "{}.csv".format(
-                            power_flow_results_dict[attr]))
+                        os.path.join(
+                            target_dir,
+                            "{}.csv".format(power_flow_results_dict[attr]),
+                        )
                     )
 
         def _save_grid_expansion_results(target_dir, save_attributes):
@@ -918,9 +920,10 @@ class Results:
             for attr in save_attributes:
                 if not getattr(self, attr).empty:
                     getattr(self, attr).to_csv(
-                        os.path.join(target_dir, "{}.csv".format(
-                            grid_expansion_results_dict[attr]
-                        ))
+                        os.path.join(
+                            target_dir,
+                            "{}.csv".format(grid_expansion_results_dict[attr]),
+                        )
                     )
 
         def _save_curtailment_results(target_dir):
@@ -971,31 +974,32 @@ class Results:
         # dictionary with function to call to save each parameter
         func_dict = {
             "powerflow_results": _save_power_flow_results,
-            "grid_expansion_results": _save_grid_expansion_results
+            "grid_expansion_results": _save_grid_expansion_results,
         }
 
         # get dictionaries matching attribute names and file names
-        power_flow_results_dict, grid_expansion_results_dict = \
-            _get_matching_dict_of_attributes_and_file_names()
+        (
+            power_flow_results_dict,
+            grid_expansion_results_dict,
+        ) = _get_matching_dict_of_attributes_and_file_names()
 
         # if None, set to save all attributes
         if parameters is None:
             parameters = {
                 "powerflow_results": list(power_flow_results_dict.keys()),
-                "grid_expansion_results": list(
-                    grid_expansion_results_dict.keys())
+                "grid_expansion_results": list(grid_expansion_results_dict.keys()),
             }
             if not save_seed:
                 parameters["powerflow_results"] = [
-                    _ for _ in parameters["powerflow_results"]
-                    if not "seed" in _
+                    _ for _ in parameters["powerflow_results"] if "seed" not in _
                 ]
 
         if not isinstance(parameters, dict):
             raise ValueError(
                 "Invalid input for `parameters` when saving "
                 "results to csv. `parameters` must be a dictionary. "
-                "See docstring for more information.")
+                "See docstring for more information."
+            )
 
         # iterate over dictionary to save power flow results, etc. to csv
         # depending on what is specified in parameters
@@ -1009,8 +1013,8 @@ class Results:
                 )
                 logger.error(message)
                 raise KeyError(message)
-            except:
-                raise
+            except Exception:
+                raise Exception
 
         # save measures
         pd.DataFrame(data={"measure": self.measures}).to_csv(
@@ -1026,9 +1030,7 @@ class Results:
             ]
             writer.writerows(rows)
 
-    def from_csv(
-            self, data_path, parameters=None, dtype=None,
-            from_zip_archive=False):
+    def from_csv(self, data_path, parameters=None, dtype=None, from_zip_archive=False):
         """
         Restores results from csv files.
 
@@ -1055,8 +1057,10 @@ class Results:
 
         """
         # get dictionaries matching attribute names and file names
-        power_flow_results_dict, grid_expansion_results_dict = \
-            _get_matching_dict_of_attributes_and_file_names()
+        (
+            power_flow_results_dict,
+            grid_expansion_results_dict,
+        ) = _get_matching_dict_of_attributes_and_file_names()
 
         all_keys_dict = dict(power_flow_results_dict)
         all_keys_dict.update(grid_expansion_results_dict)
@@ -1065,15 +1069,17 @@ class Results:
         if parameters is None:
             parameters = {
                 "powerflow_results": list(power_flow_results_dict.keys()),
-                "grid_expansion_results": list(
-                    grid_expansion_results_dict.keys())
+                "grid_expansion_results": list(grid_expansion_results_dict.keys()),
             }
+        if "s_res" in parameters["powerflow_results"]:
+            parameters["powerflow_results"].remove("s_res")
 
         if not isinstance(parameters, dict):
             raise ValueError(
                 "Invalid input for `parameters` when restoring "
                 "results from csv. `parameters` must be a dictionary. "
-                "See docstring for more information.")
+                "See docstring for more information."
+            )
 
         if from_zip_archive:
             # read from zip archive
@@ -1102,7 +1108,8 @@ class Results:
             # check files within the directory and sub directories
             files = [
                 f.split(str(data_path) + "/")[-1]
-                for f in get_files_recursive(data_path)]
+                for f in get_files_recursive(data_path)
+            ]
 
             # add .csv to files to match directory structure
             params = {}
@@ -1118,15 +1125,11 @@ class Results:
             # append measures
             params["measures"] = "measures.csv"
 
-        attrs_to_read = {k: v for k, v in params.items()
-                         if v in files}
+        attrs_to_read = {k: v for k, v in params.items() if v in files}
 
         # set attributes to set dtype for if dtype is not None
         if dtype is not None:
-            attr_to_reduce = [
-                "pfa_p", "pfa_q",
-                "v_res", "i_res",
-                "grid_losses"]
+            attr_to_reduce = ["pfa_p", "pfa_q", "v_res", "i_res", "grid_losses"]
         else:
             attr_to_reduce = []
 
@@ -1139,19 +1142,16 @@ class Results:
             if from_zip_archive:
                 # open zip file to make it readable for pandas
                 with zip.open(file) as f:
-                    df = pd.read_csv(
-                        f, index_col=0, parse_dates=True, dtype=dt)
+                    df = pd.read_csv(f, index_col=0, parse_dates=True, dtype=dt)
             else:
                 path = os.path.join(data_path, file)
-                df = pd.read_csv(
-                    path, index_col=0, parse_dates=True, dtype=dt)
+                df = pd.read_csv(path, index_col=0, parse_dates=True, dtype=dt)
 
             if attr == "measures":
                 self._measures = df.measure.tolist()
                 continue
 
-            setattr(
-                self, attr, df)
+            setattr(self, attr, df)
 
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections

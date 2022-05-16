@@ -1,13 +1,14 @@
 import logging
 import os
+
+from pathlib import Path
+
+import geopandas as gpd
 import numpy as np
 import pandas as pd
-import geopandas as gpd
 
-from sklearn import preprocessing
-from pathlib import Path
 from numpy.random import default_rng
-
+from sklearn import preprocessing
 
 logger = logging.getLogger("edisgo")
 
@@ -428,7 +429,9 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
         edisgo_obj.electromobility.charging_processes_df.use_case == "public"
     ]
 
-    public_df.car_id += edisgo_obj.electromobility.charging_processes_df.car_id.max() + 1
+    public_df.car_id += (
+        edisgo_obj.electromobility.charging_processes_df.car_id.max() + 1
+    )
 
     edisgo_obj.electromobility.simbev_config_df = read_csv_simbev_config(
         path,
@@ -532,9 +535,12 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
                 combined_weights.at[lv_grid_id] for lv_grid_id in lv_grid_ids
             ]
 
+            # fmt: off
             distance_weights = (
-                edisgo_obj.electromobility._potential_charging_parks_df.distance_weight.tolist()
+                edisgo_obj.electromobility._potential_charging_parks_df.distance_weight
+                .tolist()
             )
+            # fmt: on
 
             distance_weight = kwargs.get("distance_weight", 1 / 3)
 
@@ -907,11 +913,13 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
                     p=weights,
                 )
 
+                # fmt: off
                 charging_point_id = (
-                    edisgo_obj.electromobility.charging_processes_df.
-                    charging_point_id.max()
+                    edisgo_obj.electromobility.charging_processes_df.charging_point_id
+                    .max()
                     + 1
                 )
+                # fmt: on
 
                 if charging_point_id != charging_point_id:
                     charging_point_id = 0
@@ -924,11 +932,11 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
                     idx, "charging_point_id"
                 ] = charging_point_id
 
-                available_charging_points_df.loc[charging_point_id] = (
-                    edisgo_obj.electromobility.charging_processes_df.loc[
-                        idx, available_charging_points_df.columns
-                    ].tolist()
-                )
+                available_charging_points_df.loc[
+                    charging_point_id
+                ] = edisgo_obj.electromobility.charging_processes_df.loc[
+                    idx, available_charging_points_df.columns
+                ].tolist()
 
                 designated_charging_point_capacity_df.at[
                     charging_park_id, "designated_charging_point_capacity"

@@ -220,50 +220,62 @@ a time series for the storage unit needs to be provided.
     from edisgo import EDisGo
 
     # Set up EDisGo object
-    edisgo = EDisGo(ding0_grid=dingo_grid_path,
-                    worst_case_analysis='worst-case')
+    edisgo = EDisGo(ding0_grid=dingo_grid_path)
 
     # Get random bus to connect storage to
     random_bus = edisgo.topology.buses_df.index[3]
     # Add storage instance
     edisgo.add_component(
-        "StorageUnit",
+        comp_type="storage_unit",
+        add_ts=False,
         bus=random_bus,
-        p_nom=4)
+        p_nom=4
+    )
+
+    # Set up worst case time series for loads, generators and storage unit
+    edisgo.set_time_series_worst_case_analysis()
+
 
 .. code-block:: python
 
     import pandas as pd
     from edisgo import EDisGo
 
-    # Set up the EDisGo object using the OpenEnergy DataBase and the oemof
-    # demandlib to set up time series for loads and fluctuating generators
-    # (time series for dispatchable generators need to be provided)
-    timeindex = pd.date_range('1/1/2011', periods=4, freq='H')
-    timeseries_generation_dispatchable = pd.DataFrame(
-        {'biomass': [1] * len(timeindex),
-         'coal': [1] * len(timeindex),
-         'other': [1] * len(timeindex)
-         },
-        index=timeindex)
+    # Set up the EDisGo object
+    timeindex = pd.date_range("1/1/2011", periods=4, freq="H")
     edisgo = EDisGo(
-        ding0_grid='ding0_example_grid',
-        generator_scenario='ego100',
-        timeseries_load='demandlib',
-        timeseries_generation_fluctuating='oedb',
-        timeseries_generation_dispatchable=timeseries_generation_dispatchable,
-        timeindex=timeindex)
+        ding0_grid=dingo_grid_path,
+        generator_scenario="ego100",
+        timeindex=timeindex
+    )
 
-    # Get random bus to connect storage to
-    random_bus = edisgo.topology.buses_df.index[3]
-    # Add storage instance
+    # Add time series for loads and generators
+    timeseries_generation_dispatchable = pd.DataFrame(
+        {"biomass": [1] * len(timeindex),
+         "coal": [1] * len(timeindex),
+         "other": [1] * len(timeindex)
+         },
+        index=timeindex
+    )
+    edisgo.set_time_series_active_power_predefined(
+        conventional_loads_ts="demandlib",
+        fluctuating_generators_ts="oedb",
+        dispatchable_generators_ts=timeseries_generation_dispatchable
+    )
+    edisgo.set_time_series_reactive_power_control()
+
+    # Add storage unit to random bus with time series
     edisgo.add_component(
-        "StorageUnit",
-        bus=random_bus,
+        comp_type="storage_unit",
+        bus=edisgo.topology.buses_df.index[3],
         p_nom=4,
         ts_active_power=pd.Series(
             [-3.4, 2.5, -3.4, 2.5],
-            index=edisgo.timeseries.timeindex))
+            index=edisgo.timeseries.timeindex),
+        ts_reactive_power=pd.Series(
+            [0., 0., 0., 0.],
+            index=edisgo.timeseries.timeindex)
+    )
 
 Following is an example on how to use the OPF to find the optimal storage
 positions in the grid with regard to grid expansion costs. Storage operation

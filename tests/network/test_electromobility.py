@@ -1,14 +1,19 @@
 import os
+
 import pytest
-import pandas as pd
 
 from edisgo.edisgo import import_edisgo_from_files
-from edisgo.io.electromobility_import import import_simbev_electromobility, distribute_charging_demand
-from edisgo.flex_opt.charging_strategies import integrate_charging_parks, charging_strategy
+from edisgo.flex_opt.charging_strategies import (
+    charging_strategy,
+    integrate_charging_parks,
+)
+from edisgo.io.electromobility_import import (
+    distribute_charging_demand,
+    import_simbev_electromobility,
+)
 
 
 class TestElectromobility:
-
     @classmethod
     def setup_class(self):
         self.ding0_path = pytest.ding0_test_network_3_path
@@ -17,7 +22,8 @@ class TestElectromobility:
         self.charging_strategies = ["dumb", "reduced", "residual"]
 
         self.edisgo_obj = import_edisgo_from_files(
-            self.ding0_path, import_topology=True, import_timeseries=True)
+            self.ding0_path, import_topology=True, import_timeseries=True
+        )
 
     def test_import_simbev_electromobility(self):
 
@@ -25,11 +31,12 @@ class TestElectromobility:
 
         electromobility = self.edisgo_obj.electromobility
 
-        # The number of files should be the same as the maximum car id + 1 (starts with zero)
+        # The number of files should be the same as the maximum car id + 1 (starts with
+        # zero)
         files = 0
 
         for dirpath, dirnames, filenames in os.walk(self.standing_times_path):
-                files += len([f for f in filenames if f.endswith(".csv")])
+            files += len([f for f in filenames if f.endswith(".csv")])
 
         assert electromobility.charging_processes_df.car_id.max() == files - 1
         assert isinstance(electromobility.eta_charging_points, float)
@@ -37,7 +44,9 @@ class TestElectromobility:
         assert isinstance(electromobility.stepsize, int)
         assert len(electromobility.grid_connections_gdf.columns) == 4
         # There should be as many grid connections as potential charging parks
-        assert len(electromobility.grid_connections_gdf) == len(list(electromobility.potential_charging_parks))
+        assert len(electromobility.grid_connections_gdf) == len(
+            list(electromobility.potential_charging_parks)
+        )
 
     def test_distribute_charging_demand(self):
 
@@ -45,12 +54,19 @@ class TestElectromobility:
 
         electromobility = self.edisgo_obj.electromobility
 
-        total_charging_demand_at_charging_parks = sum([cp.charging_processes_df.chargingdemand.sum() for cp in list(
-            electromobility.potential_charging_parks) if cp.designated_charging_point_capacity > 0])
+        total_charging_demand_at_charging_parks = sum(
+            cp.charging_processes_df.chargingdemand.sum()
+            for cp in list(electromobility.potential_charging_parks)
+            if cp.designated_charging_point_capacity > 0
+        )
 
-        total_charging_demand = electromobility.charging_processes_df.chargingdemand.sum()
+        total_charging_demand = (
+            electromobility.charging_processes_df.chargingdemand.sum()
+        )
 
-        assert round(total_charging_demand_at_charging_parks, 0) == round(total_charging_demand, 0)
+        assert round(total_charging_demand_at_charging_parks, 0) == round(
+            total_charging_demand, 0
+        )
 
     def test_integrate_charging_parks(self):
 
@@ -63,15 +79,28 @@ class TestElectromobility:
         topology = self.edisgo_obj.topology
 
         designated_charging_parks_with_charging_points = len(
-            [cp for cp in list(
-                electromobility.potential_charging_parks) if cp.designated_charging_point_capacity > 0])
+            [
+                cp
+                for cp in list(electromobility.potential_charging_parks)
+                if cp.designated_charging_point_capacity > 0
+            ]
+        )
 
-        integrated_charging_parks = [cp for cp in list(
-            electromobility.potential_charging_parks) if cp.grid is not None]
+        integrated_charging_parks = [
+            cp
+            for cp in list(electromobility.potential_charging_parks)
+            if cp.grid is not None
+        ]
 
-        assert designated_charging_parks_with_charging_points == len(integrated_charging_parks)
-        assert len(integrated_charging_parks) == len(ts.charging_points_active_power.columns)
-        assert len(integrated_charging_parks) == len(ts.charging_points_reactive_power.columns)
+        assert designated_charging_parks_with_charging_points == len(
+            integrated_charging_parks
+        )
+        assert len(integrated_charging_parks) == len(
+            ts.charging_points_active_power.columns
+        )
+        assert len(integrated_charging_parks) == len(
+            ts.charging_points_reactive_power.columns
+        )
 
         edisgo_ids_cp = sorted(cp.edisgo_id for cp in integrated_charging_parks)
         edisgo_ids_ts = sorted(ts.charging_points_active_power.columns.tolist())
@@ -85,16 +114,20 @@ class TestElectromobility:
         for count, strategy in enumerate(self.charging_strategies):
             charging_strategy(self.edisgo_obj, strategy=strategy)
 
-            electromobility = self.edisgo_obj.electromobility
-
             ts = self.edisgo_obj.timeseries
 
             # Check if all charging points have a valid chargingdemand > 0
-            df = ts.charging_points_active_power.loc[:, (ts.charging_points_active_power <= 0).any(axis=0)]
+            df = ts.charging_points_active_power.loc[
+                :, (ts.charging_points_active_power <= 0).any(axis=0)
+            ]
 
             assert df.shape == ts.charging_points_active_power.shape
 
             charging_demand_lst.append(ts.charging_points_active_power.sum())
 
-        # the chargingdemand per charging point and therefore in total should always be the same
-        assert all((_.round(4) == charging_demand_lst[0].round(4)).all() for _ in charging_demand_lst)
+        # the chargingdemand per charging point and therefore in total should always be
+        # the same
+        assert all(
+            (_.round(4) == charging_demand_lst[0].round(4)).all()
+            for _ in charging_demand_lst
+        )

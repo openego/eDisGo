@@ -1,13 +1,14 @@
-import os
 import logging
-import pandas as pd
-import geopandas as gpd
+import os
 
 from zipfile import ZipFile
+
+import geopandas as gpd
+import pandas as pd
+
 from sklearn import preprocessing
 
 from edisgo.network.components import PotentialChargingParks
-
 
 logger = logging.getLogger("edisgo")
 
@@ -22,12 +23,7 @@ COLUMNS = {
         "park_start",
         "park_end",
     ],
-    "grid_connections_gdf": [
-        "id",
-        "use_case",
-        "user_centric_weight",
-        "geometry"
-    ],
+    "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
     "simbev_config_df": ["value"],
     "potential_charging_parks_df": [
         "lv_grid_id",
@@ -144,8 +140,7 @@ class Electromobility:
         try:
             return self._integrated_charging_parks_df
         except Exception:
-            return pd.DataFrame(
-                columns=COLUMNS["integrated_charging_parks_df"])
+            return pd.DataFrame(columns=COLUMNS["integrated_charging_parks_df"])
 
     @integrated_charging_parks_df.setter
     def integrated_charging_parks_df(self, df):
@@ -235,8 +230,7 @@ class Electromobility:
                 path = os.path.join(directory, file)
                 df.to_csv(path)
 
-    def from_csv(
-            self, data_path, edisgo_obj, from_zip_archive=False):
+    def from_csv(self, data_path, edisgo_obj, from_zip_archive=False):
         """
         Restores electromobility from csv files.
 
@@ -273,33 +267,32 @@ class Electromobility:
             if from_zip_archive:
                 # open zip file to make it readable for pandas
                 with zip.open(file) as f:
-                    df = pd.read_csv(
-                        f, index_col=0)
+                    df = pd.read_csv(f, index_col=0)
             else:
                 path = os.path.join(data_path, file)
-                df = pd.read_csv(
-                    path, index_col=0)
+                df = pd.read_csv(path, index_col=0)
 
             if attr == "grid_connections_gdf":
                 epsg = edisgo_obj.topology.grid_district["srid"]
 
-                df = df.assign(
-                    geometry=gpd.GeoSeries.from_wkt(df["geometry"]))
+                df = df.assign(geometry=gpd.GeoSeries.from_wkt(df["geometry"]))
 
                 try:
                     df = gpd.GeoDataFrame(
-                        df, geometry="geometry", crs={"init": f"epsg:{epsg}"})
+                        df, geometry="geometry", crs={"init": f"epsg:{epsg}"}
+                    )
 
-                except Exception as _:
+                except Exception:
                     logging.warning(
                         f"Grid connections could not be loaded with "
-                        f"EPSG {epsg}. Trying with EPSG 4326 as fallback.")
+                        f"EPSG {epsg}. Trying with EPSG 4326 as fallback."
+                    )
 
                     df = gpd.GeoDataFrame(
-                        df, geometry="geometry", crs={"init": "epsg:4326"})
+                        df, geometry="geometry", crs={"init": "epsg:4326"}
+                    )
 
-            setattr(
-                self, attr, df)
+            setattr(self, attr, df)
 
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections
@@ -327,34 +320,34 @@ class Electromobility:
             potential_charging_parks = list(self.potential_charging_parks)
 
             potential_charging_parks_df.lv_grid_id = [
-                _.nearest_substation["lv_grid_id"]
-                for _ in potential_charging_parks
+                _.nearest_substation["lv_grid_id"] for _ in potential_charging_parks
             ]
 
             potential_charging_parks_df.distance_to_nearest_substation = [
-                _.nearest_substation["distance"]
-                for _ in potential_charging_parks
+                _.nearest_substation["distance"] for _ in potential_charging_parks
             ]
 
             min_max_scaler = preprocessing.MinMaxScaler()
 
+            # fmt: off
             potential_charging_parks_df.distance_weight = (
                 1 - min_max_scaler.fit_transform(
-                    potential_charging_parks_df.
-                    distance_to_nearest_substation.values.reshape(-1, 1)
+                    potential_charging_parks_df.distance_to_nearest_substation.values
+                        .reshape(-1, 1)  # noqa: E131
                 )
             )
+            # fmt: on
 
             potential_charging_parks_df.charging_point_capacity = [
-                _.designated_charging_point_capacity
-                for _ in potential_charging_parks
+                _.designated_charging_point_capacity for _ in potential_charging_parks
             ]
 
             potential_charging_parks_df.charging_point_weight = (
                 1
                 - min_max_scaler.fit_transform(
-                    potential_charging_parks_df.charging_point_capacity.
-                    values.reshape(-1, 1)
+                    potential_charging_parks_df.charging_point_capacity.values.reshape(
+                        -1, 1
+                    )
                 )
             )
 
