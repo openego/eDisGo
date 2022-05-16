@@ -704,7 +704,55 @@ def _reinforce_lines_overloading_per_grid_level(edisgo_obj, voltage_level, crit_
     return lines_changes
 
 
-def add_parallel_line_over_half_length_of_string(edisgo_obj, grid, crit_lines):
+def split_feeder_at_half_length(edisgo_obj, grid, crit_lines):
+    # ToDo: Type hinting
+
+    """
+
+    The critical string load is remedied by the following methods:
+    1-Find the point at the half-length of the feeder
+    2-If the half-length of the feeder is the first node that comes from the main
+    station,reinforce the lines by adding parallel lines since the first node
+    directly is connected to the main station.
+    3- Otherwise, find the next LV station comes after the mid-point of the
+    feeder and split the line from this point so that it is to be connected to
+    the main station.
+    4-Find the preceding LV station of the newly disconnected LV station and
+    remove the linebetween these two LV stations to create 2 independent feeders.
+    5- If grid: LV, do not count in the nodes in the building
+
+    Parameters
+    ----------
+    edisgo_obj:class:`~.EDisGo`
+    grid: class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
+    crit_lines:  Dataframe containing over-loaded lines, their maximum relative
+        over-loading (maximum calculated current over allowed current) and the
+        corresponding time step.
+        Index of the data frame is the names of the over-loaded lines.
+        Columns are 'max_rel_overload' containing the maximum relative
+        over-loading as float, 'time_index' containing the corresponding
+        time-step the over-loading occurred in as
+        :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
+        the voltage level the line is in (either 'mv' or 'lv').
+
+
+    Returns
+    -------
+    dict
+
+    Dictionary with the name of lines as keys and the corresponding number of
+    lines added as values.
+
+    Notes
+    -----
+    In this method, the division is done according to the longest route (not the feeder
+    has more load)
+
+    """
+
+    # TODO: to be integrated in the future outside of functions
+    def get_weight(u, v, data):
+        return data["length"]
 
     if isinstance(grid, LVGrid):
 
@@ -721,21 +769,10 @@ def add_parallel_line_over_half_length_of_string(edisgo_obj, grid, crit_lines):
         ]
 
         # find the most critical lines connected to different LV feeder in MV/LV station
-        crit_lines_feeder = relevant_lines[relevant_lines["bus0"].str.contains("LV")]
-
-        paths = {}
-        nodes_feeder = {}
-
-        for node in G:
-
-            path = nx.shortest_path(G, source=station_node, target=node)
-
-            for first_node in crit_lines_feeder.bus1.values:
-                if first_node in path:
-                    paths[node] = path  # paths where the critical line is in
-                    nodes_feeder.setdefault(path[1], []).append(
-                        node
-                    )  # key:first_node values:nodes in the critical feeder
+        crit_lines_feeder = relevant_lines[
+            relevant_lines["bus0"].str.contains("LV")
+            & relevant_lines["bus0"].str.contains(repr(grid).split("_")[1])
+        ]
 
     elif isinstance(grid, MVGrid):
 
@@ -744,7 +781,7 @@ def add_parallel_line_over_half_length_of_string(edisgo_obj, grid, crit_lines):
         ]
         voltage_level = "mv"
         G = grid.graph
-        station_node = grid.transformers_df.bus1.iloc[0]
+        station_node = grid.transformers_df.bus1.iat[0]
 
         # find all the mv lines that have overloading issues in lines_df
         relevant_lines = edisgo_obj.topology.lines_df.loc[
@@ -760,38 +797,41 @@ def add_parallel_line_over_half_length_of_string(edisgo_obj, grid, crit_lines):
         ].values
         switches = [node for nodes in switch_df for node in nodes]
 
-        paths = {}
-        nodes_feeder = {}
+    else:
+        raise ValueError(f"Grid Type {type(grid)} is not supported.")
 
-        for node in switches:
+    if isinstance(grid, LVGrid):
+        nodes = G
+    else:
+        nodes = switches
 
-            # paths for the open and closed sides of CBs
-            path = nx.shortest_path(G, station_node, node)
-            for crit_node in crit_lines_feeder.bus1.values:
-                if crit_node in path:
-                    paths[node] = path
-                    nodes_feeder.setdefault(path[1], []).append(
-                        node
-                    )  # key:first_node values:nodes in the critical feeder
+    paths = {}
+    nodes_feeder = {}
+    for node in nodes:
+        # paths for the open and closed sides of CBs
+        path = nx.shortest_path(G, station_node, node)
+        for first_node in crit_lines_feeder.bus1.values:
+            if first_node in path:
+                paths[node] = path
+                nodes_feeder.setdefault(path[1], []).append(
+                    node
+                )  # key:first_node values:nodes in the critical feeder
 
     lines_changes = {}
 
-    for farthest_node in nodes_feeder.values():
+    for node_list in nodes_feeder.values():
 
-        def get_weight(u, v, data):
-            return data["length"]
+        farthest_node = node_list[-1]
 
         path_length_dict_tmp = dijkstra_shortest_path_length(
             G, station_node, get_weight, target=farthest_node
         )
-
-        path = paths[farthest_node[-1]]
+        path = paths[farthest_node]
 
         node_1_2 = next(
             j
             for j in path
-            if path_length_dict_tmp[j]
-            >= path_length_dict_tmp[farthest_node[-1]] * 1 / 2
+            if path_length_dict_tmp[j] >= path_length_dict_tmp[farthest_node] * 1 / 2
         )
 
         # if LVGrid: check if node_1_2 is outside of a house
@@ -804,7 +844,7 @@ def add_parallel_line_over_half_length_of_string(edisgo_obj, grid, crit_lines):
                 node_1_2 = path[path.index(node_1_2) - 1]
                 # break if node is station
                 if node_1_2 is path[0]:
-                    logger.error("Could not reinforce voltage issue.")
+                    logger.error("Could not reinforce overloading issue.")
                     break
 
         # if MVGrid: check if node_1_2 is LV station and if not find
@@ -818,7 +858,7 @@ def add_parallel_line_over_half_length_of_string(edisgo_obj, grid, crit_lines):
                     # if no LVStation between node_1_2 and node with
                     # voltage problem, connect node directly to
                     # MVStation
-                    node_1_2 = farthest_node[0]
+                    node_1_2 = farthest_node
                     break
 
         # if node_1_2 is a representative (meaning it is already
