@@ -3,13 +3,11 @@ import os
 import pytest
 
 from edisgo.edisgo import import_edisgo_from_files
-from edisgo.flex_opt.charging_strategies import (
-    charging_strategy,
-    integrate_charging_parks,
-)
+from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
-    import_simbev_electromobility,
+    import_electromobility,
+    integrate_charging_parks,
 )
 
 
@@ -27,7 +25,7 @@ class TestElectromobility:
 
     def test_import_simbev_electromobility(self):
 
-        import_simbev_electromobility(pytest.simbev_test_results_path, self.edisgo_obj)
+        import_electromobility(self.edisgo_obj, pytest.simbev_test_results_path)
 
         electromobility = self.edisgo_obj.electromobility
 
