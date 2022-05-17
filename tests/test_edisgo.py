@@ -672,11 +672,12 @@ class TestEDisGo:
 
         # check that results, topology and timeseries directory are created
         dirs_in_save_dir = os.listdir(save_dir)
-        assert len(dirs_in_save_dir) == 3
+        assert len(dirs_in_save_dir) == 4
         # Todo: check anything else?
         shutil.rmtree(os.path.join(save_dir, "results"))
         shutil.rmtree(os.path.join(save_dir, "topology"))
         shutil.rmtree(os.path.join(save_dir, "timeseries"))
+        shutil.rmtree(os.path.join(save_dir, "electromobility"))
 
     def test_reduce_memory(self):
 

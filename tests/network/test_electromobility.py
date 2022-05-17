@@ -55,13 +55,13 @@ class TestElectromobility:
         electromobility = self.edisgo_obj.electromobility
 
         total_charging_demand_at_charging_parks = sum(
-            cp.charging_processes_df.chargingdemand.sum()
+            cp.charging_processes_df.chargingdemand_kWh.sum()
             for cp in list(electromobility.potential_charging_parks)
             if cp.designated_charging_point_capacity > 0
         )
 
         total_charging_demand = (
-            electromobility.charging_processes_df.chargingdemand.sum()
+            electromobility.charging_processes_df.chargingdemand_kWh.sum()
         )
 
         assert round(total_charging_demand_at_charging_parks, 0) == round(
@@ -96,14 +96,16 @@ class TestElectromobility:
             integrated_charging_parks
         )
         assert len(integrated_charging_parks) == len(
-            ts.charging_points_active_power.columns
+            ts.charging_points_active_power(self.edisgo_obj).columns
         )
         assert len(integrated_charging_parks) == len(
-            ts.charging_points_reactive_power.columns
+            ts.charging_points_reactive_power(self.edisgo_obj).columns
         )
 
         edisgo_ids_cp = sorted(cp.edisgo_id for cp in integrated_charging_parks)
-        edisgo_ids_ts = sorted(ts.charging_points_active_power.columns.tolist())
+        edisgo_ids_ts = sorted(
+            ts.charging_points_active_power(self.edisgo_obj).columns.tolist()
+        )
         edisgo_ids_topology = sorted(topology.charging_points_df.index.tolist())
 
         assert edisgo_ids_cp == edisgo_ids_ts == edisgo_ids_topology
@@ -116,17 +118,19 @@ class TestElectromobility:
 
             ts = self.edisgo_obj.timeseries
 
-            # Check if all charging points have a valid chargingdemand > 0
-            df = ts.charging_points_active_power.loc[
-                :, (ts.charging_points_active_power <= 0).any(axis=0)
+            # Check if all charging points have a valid chargingdemand_kWh > 0
+            df = ts.charging_points_active_power(self.edisgo_obj).loc[
+                :, (ts.charging_points_active_power(self.edisgo_obj) <= 0).any(axis=0)
             ]
 
-            assert df.shape == ts.charging_points_active_power.shape
+            assert df.shape == ts.charging_points_active_power(self.edisgo_obj).shape
 
-            charging_demand_lst.append(ts.charging_points_active_power.sum())
+            charging_demand_lst.append(
+                ts.charging_points_active_power(self.edisgo_obj).sum()
+            )
 
-        # the chargingdemand per charging point and therefore in total should always be
-        # the same
+        # the chargingdemand_kWh per charging point and therefore in total should
+        # always be the same
         assert all(
             (_.round(4) == charging_demand_lst[0].round(4)).all()
             for _ in charging_demand_lst

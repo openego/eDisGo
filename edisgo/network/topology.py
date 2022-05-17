@@ -60,7 +60,7 @@ COLUMNS = {
     "switches_df": ["bus_open", "bus_closed", "branch", "type_info"],
     "lv_grids_df": [
         "peak_generation_capacity",
-        "peak_load",
+        "p_set",
         "installed_charging_point_capacity",
         "substation_capacity",
         "generators_weight",
@@ -195,12 +195,12 @@ class Topology:
                 # values (so far only for LV transformers, not necessary for
                 # MV as MV impedances are not used)
                 if voltage_level == "lv" and i == "transformers":
-                    data["{}_{}".format(voltage_level, i)]["r_pu"] = data[
-                        "{}_{}".format(voltage_level, i)
-                    ]["P_k"] / (data["{}_{}".format(voltage_level, i)]["S_nom"])
-                    data["{}_{}".format(voltage_level, i)]["x_pu"] = np.sqrt(
-                        (data["{}_{}".format(voltage_level, i)]["u_kr"] / 100) ** 2
-                        - data["{}_{}".format(voltage_level, i)]["r_pu"] ** 2
+                    name = f"{voltage_level}_{i}"
+
+                    data[name]["r_pu"] = data[name]["P_k"] / data[name]["S_nom"]
+
+                    data[name]["x_pu"] = np.sqrt(
+                        (data[name]["u_kr"] / 100) ** 2 - data[name]["r_pu"] ** 2
                     )
         return data
 
@@ -656,10 +656,10 @@ class Topology:
             _.peak_generation_capacity for _ in lv_grids
         ]
 
-        lv_grids_df.peak_load = [_.peak_load for _ in lv_grids]
+        lv_grids_df.p_set = [_.p_set for _ in lv_grids]
 
         lv_grids_df.installed_charging_point_capacity = [
-            _.charging_points_df.p_nom.sum() for _ in lv_grids
+            _.charging_points_df.p_set.sum() for _ in lv_grids
         ]
 
         lv_grids_df.substation_capacity = [
@@ -676,7 +676,7 @@ class Topology:
             lv_grids_df.generators_weight.values.reshape(-1, 1)
         )
 
-        lv_grids_df.loads_weight = lv_grids_df.peak_load.divide(
+        lv_grids_df.loads_weight = lv_grids_df.p_set.divide(
             lv_grids_df.substation_capacity
         )
 

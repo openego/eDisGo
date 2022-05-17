@@ -18,13 +18,12 @@ COLUMNS = {
         "car_id",
         "destination",
         "use_case",
-        "netto_charging_capacity",
-        "chargingdemand",
-        "park_start",
-        "park_end",
+        "nominal_charging_capacity_kW",
+        "chargingdemand_kWh",
+        "park_start_timesteps",
+        "park_end_timesteps",
     ],
     "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
-    "simbev_config_df": ["value"],
     "potential_charging_parks_df": [
         "lv_grid_id",
         "distance_to_nearest_substation",
@@ -33,8 +32,8 @@ COLUMNS = {
         "charging_point_weight",
     ],
     "designated_charging_points_df": [
-        "park_end",
-        "netto_charging_capacity",
+        "park_end_timesteps",
+        "nominal_charging_capacity_kW",
         "charging_park_id",
         "use_case",
     ],
@@ -114,7 +113,7 @@ class Electromobility:
     @property
     def simbev_config_df(self):
         """
-        DataFrame with all `SimBEV <https://github.com/rl-institut/simbev>`_
+        Dict with all `SimBEV <https://github.com/rl-institut/simbev>`_
         config data.
 
         Returns
@@ -129,7 +128,7 @@ class Electromobility:
         try:
             return self._simbev_config_df
         except Exception:
-            return pd.DataFrame(columns=COLUMNS["simbev_config_df"])
+            return pd.DataFrame()
 
     @simbev_config_df.setter
     def simbev_config_df(self, df):
@@ -159,7 +158,7 @@ class Electromobility:
 
         """
         try:
-            return int(self.simbev_config_df.at["stepsize", "value"])
+            return int(self.simbev_config_df.at[0, "stepsize"])
         except Exception:
             return None
 
@@ -176,7 +175,7 @@ class Electromobility:
 
         """
         try:
-            return int(self.simbev_config_df.at["days", "value"])
+            return int(self.simbev_config_df.at[0, "days"])
         except Exception:
             return None
 
@@ -193,7 +192,7 @@ class Electromobility:
 
         """
         try:
-            return float(self.simbev_config_df.at["eta_CP", "value"])
+            return float(self.simbev_config_df.at[0, "eta_cp"])
         except Exception:
             return None
 
@@ -375,7 +374,7 @@ def _get_matching_dict_of_attributes_and_file_names():
         "charging_processes_df": "charging_processes.csv",
         "grid_connections_gdf": "grid_connections.csv",
         "integrated_charging_parks_df": "integrated_charging_parks.csv",
-        "simbev_config_df": "simbev_config.csv",
+        "simbev_config_df": "metadata_simbev_run.csv",
     }
 
     return emob_dict

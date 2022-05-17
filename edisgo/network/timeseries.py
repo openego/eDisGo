@@ -4,6 +4,7 @@ import itertools
 import logging
 import os
 
+from typing import TYPE_CHECKING
 from zipfile import ZipFile
 
 import numpy as np
@@ -15,6 +16,9 @@ from edisgo.tools.tools import (
     assign_voltage_level_to_component,
     get_weather_cells_intersecting_with_grid_district,
 )
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +213,44 @@ class TimeSeries:
     @loads_reactive_power.setter
     def loads_reactive_power(self, df):
         self._loads_reactive_power = df
+
+    def charging_points_active_power(self, edisgo_object: EDisGo):
+        """
+        Returns a subset of :py:attr:`~loads_active_power` containing only the time
+        series of charging points.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Pandas DataFrame with active power time series of charging points.
+
+        """
+        return self.loads_active_power.loc[
+            :, edisgo_object.topology.charging_points_df.index
+        ]
+
+    def charging_points_reactive_power(self, edisgo_object: EDisGo):
+        """
+        Returns a subset of :py:attr:`~loads_reactive_power` containing only the time
+        series of charging points.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Pandas DataFrame with reactive power time series of charging points.
+
+        """
+        return self.loads_reactive_power.loc[
+            :, edisgo_object.topology.charging_points_df.index
+        ]
 
     @property
     def storage_units_active_power(self):

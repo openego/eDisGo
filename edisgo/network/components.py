@@ -1030,7 +1030,7 @@ class PotentialChargingParks(BasicComponent):
         return round(
             self.charging_processes_df.groupby("charging_point_id")
             .max()
-            .netto_charging_capacity.sum()
+            .nominal_charging_capacity_kW.sum()
             / self._edisgo_obj.electromobility.eta_charging_points,
             1,
         )
@@ -1142,10 +1142,16 @@ class PotentialChargingParks(BasicComponent):
         return self._edisgo_obj.topology.grid_district["geom"].contains(self.geometry)
 
     @property
-    def _last_charging_process_and_netto_charging_capacity_per_charging_point(self):
+    def _last_charging_process_and_nominal_charging_capacity_kW_per_charging_point(
+        self,
+    ):
         return (
             self.charging_processes_df[
-                ["charging_point_id", "park_end", "netto_charging_capacity"]
+                [
+                    "charging_point_id",
+                    "park_end_timesteps",
+                    "nominal_charging_capacity_kW",
+                ]
             ]
             .groupby(by="charging_point_id")
             .max()
