@@ -16,6 +16,7 @@ logger = logging.getLogger("edisgo")
 min_max_scaler = preprocessing.MinMaxScaler()
 
 COLUMNS = {
+    "integrated_charging_parks_df": ["edisgo_id"],
     "charging_processes_df": [
         "ags",
         "car_id",
@@ -89,49 +90,50 @@ PRIVATE_DESTINATIONS = {
 }
 
 
-def import_simbev_electromobility(path, edisgo_obj, **kwargs):
+def import_electromobility(edisgo_obj, directory, **kwargs):
     """
+    Import electromobility data from SimBEV and TracBEV.
 
     Parameters
     ----------
-    path : str
-            Main path holding SimBEV output data
     edisgo_obj : :class:`~.EDisGo`
+    directory : str
+        Main directory holding electromobility data.
     kwargs :
-            Kwargs may contain any further attributes you want to specify.
+        Kwargs may contain any further attributes you want to specify.
 
-            gc_to_car_rate_home : float
-                Specifies the minimum rate between possible grid connections
-                points for the use case "home" and the total number of cars.
-                Default 0.5 .
-            gc_to_car_rate_work : float
-                Specifies the minimum rate between possible grid connections
-                points for the use case "work" and the total number of cars.
-                Default 0.25 .
-            gc_to_car_rate_public : float
-                Specifies the minimum rate between possible grid connections
-                points for the use case "public" and the total number of cars.
-                Default 0.1 .
-            gc_to_car_rate_hpc : float
-                Specifies the minimum rate between possible grid connections
-                points for the use case "hpc" and the total number of cars.
-                Default 0.005 .
-            mode_parking_times : str
-                If the mode_parking_times is set to "frugal" only parking times
-                with any charging demand are imported. Default "frugal".
-            charging_processes_dir : str
-                Charging processes sub-directory. Default "simbev_run".
-            simbev_config_file : str
-                Name of the simbev config file. Default "config_data.csv".
-            grid_connections_dir : str
-                Possible grid Connections sub-directory.
-                Default "grid_connections".
+        gc_to_car_rate_home : float
+            Specifies the minimum rate between possible grid connections
+            points for the use case "home" and the total number of cars.
+            Default 0.5 .
+        gc_to_car_rate_work : float
+            Specifies the minimum rate between possible grid connections
+            points for the use case "work" and the total number of cars.
+            Default 0.25 .
+        gc_to_car_rate_public : float
+            Specifies the minimum rate between possible grid connections
+            points for the use case "public" and the total number of cars.
+            Default 0.1 .
+        gc_to_car_rate_hpc : float
+            Specifies the minimum rate between possible grid connections
+            points for the use case "hpc" and the total number of cars.
+            Default 0.005 .
+        mode_parking_times : str
+            If the mode_parking_times is set to "frugal" only parking times
+            with any charging demand are imported. Default "frugal".
+        charging_processes_dir : str
+            Charging processes sub-directory. Default "simbev_run".
+        simbev_config_file : str
+            Name of the simbev config file. Default "metadata_simbev_run.json".
+        grid_connections_dir : str
+            Possible grid Connections sub-directory.
+            Default "grid_connections".
 
     """
     # TODO: SimBEV is in development and this import will need constant
     #  updating for now
     edisgo_obj.electromobility.charging_processes_df = read_csvs_charging_processes(
-        path,
+        directory,
         mode=kwargs.pop("mode_parking_times", "frugal"),
         csv_dir=kwargs.pop("charging_processes_dir", "simbev_run"),
     )
@@ -149,13 +151,13 @@ def import_simbev_electromobility(path, edisgo_obj, **kwargs):
     )
 
     edisgo_obj.electromobility.simbev_config_df = read_simbev_config_df(
-        path,
+        directory,
         edisgo_obj,
         simbev_config_file=kwargs.pop("simbev_config_file", "metadata_simbev_run.json"),
     )
 
     edisgo_obj.electromobility.grid_connections_gdf = read_geojsons_grid_connections(
-        path,
+        directory,
         edisgo_obj,
         dir=kwargs.pop("grid_connections_dir", "grid_connections"),
         **kwargs,
@@ -491,6 +493,7 @@ def read_geojsons_grid_connections(path, edisgo_obj, dir=None, **kwargs):
 
 def distribute_charging_demand(edisgo_obj, **kwargs):
     """
+    Distribute charging demand from SimBEV onto potential charging parks from TracBEV.
 
     Parameters
     ----------
@@ -1007,3 +1010,52 @@ def determine_grid_connection_capacity(
             * (total_charging_point_capacity - lower_limit)
             + 1
         ) * total_charging_point_capacity
+
+
+def integrate_charging_parks(edisgo_obj):
+    """
+    Integrates all designated charging parks into the grid. The charging demand
+    is not integrated here, but an empty dummy timeseries is generated.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+
+    """
+    charging_parks = edisgo_obj.electromobility.potential_charging_parks
+
+    # Only integrate charging parks with designated charging points
+    designated_charging_parks = [
+        cp
+        for cp in charging_parks
+        if (cp.designated_charging_point_capacity > 0) and cp.within_grid
+    ]
+
+    charging_park_ids = [_.id for _ in designated_charging_parks]
+
+    dummy_timeseries = pd.Series(
+        [0.0] * len(edisgo_obj.timeseries.timeindex),
+        index=edisgo_obj.timeseries.timeindex,
+    )
+
+    comp_type = "charging_point"
+
+    # integrate ChargingPoints and save the names of the eDisGo ID
+    edisgo_ids = [
+        edisgo_obj.integrate_component_based_on_geolocation(
+            comp_type=comp_type,
+            geolocation=cp.geometry,
+            sector=cp.use_case,
+            add_ts=True,
+            ts_active_power=dummy_timeseries,
+            ts_reactive_power=dummy_timeseries,
+            p_set=cp.grid_connection_capacity,
+        )
+        for cp in designated_charging_parks
+    ]
+
+    edisgo_obj.electromobility.integrated_charging_parks_df = pd.DataFrame(
+        columns=COLUMNS["integrated_charging_parks_df"],
+        data=edisgo_ids,
+        index=charging_park_ids,
+    )

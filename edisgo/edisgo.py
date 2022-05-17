@@ -7,10 +7,15 @@ import shutil
 
 import pandas as pd
 
+from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io import pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
-from edisgo.io.electromobility_import import import_simbev_electromobility
+from edisgo.io.electromobility_import import (
+    distribute_charging_demand,
+    import_electromobility,
+    integrate_charging_parks,
+)
 from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.network import timeseries
 from edisgo.network.electromobility import Electromobility
@@ -115,7 +120,6 @@ class EDisGo:
 
         # instantiate electromobility object and load charging processes and sites
         self.electromobility = Electromobility(edisgo_obj=self)
-        self.import_simbev_electromobility(path=kwargs.get("simbev_data", None))
 
         # set up results and time series container
         self.results = Results(self)
@@ -400,11 +404,6 @@ class EDisGo:
             )
         else:
             raise ValueError("'control' must be 'fixed_cosphi'.")
-
-    def import_simbev_electromobility(self, path):
-
-        if path is not None:
-            import_simbev_electromobility(path, self)
 
     def to_pypsa(self, **kwargs):
         """
@@ -1116,6 +1115,128 @@ class EDisGo:
             self.timeseries.loads_reactive_power = _aggregate_time_series(
                 "loads_reactive_power", loads_groupby.groups, naming
             )
+
+    def import_electromobility(self, directory=None, **kwargs):
+        """
+        Import electromobility data from SimBEV and TracBEV.
+
+        Parameters
+        ----------
+        directory : str
+            Main directory holding electromobility data.
+        kwargs :
+            Kwargs may contain any further attributes you want to specify.
+
+            gc_to_car_rate_home : float
+                Specifies the minimum rate between possible grid connections
+                points for the use case "home" and the total number of cars.
+                Default 0.5 .
+            gc_to_car_rate_work : float
+                Specifies the minimum rate between possible grid connections
+                points for the use case "work" and the total number of cars.
+                Default 0.25 .
+            gc_to_car_rate_public : float
+                Specifies the minimum rate between possible grid connections
+                points for the use case "public" and the total number of cars.
+                Default 0.1 .
+            gc_to_car_rate_hpc : float
+                Specifies the minimum rate between possible grid connections
+                points for the use case "hpc" and the total number of cars.
+                Default 0.005 .
+            mode_parking_times : str
+                If the mode_parking_times is set to "frugal" only parking times
+                with any charging demand are imported. Default "frugal".
+            charging_processes_dir : str
+                Charging processes sub-directory. Default "simbev_run".
+            simbev_config_file : str
+                Name of the simbev config file. Default "metadata_simbev_run.json".
+            grid_connections_dir : str
+                Possible grid Connections sub-directory.
+                Default "grid_connections".
+        """
+        if directory is not None:
+            import_electromobility(self, directory, **kwargs)
+
+    def distribute_charging_demand(self, **kwargs):
+        """
+        Distribute charging demand and integrate charging parks into the grid.
+
+        Distribute charging demand from SimBEV onto potential charging parks from
+        TracBEV. Integrates all designated charging parks into the grid. The charging
+        demand is not integrated here, but an empty dummy timeseries is generated.
+
+        Parameters
+        ----------
+        kwargs :
+            Kwargs may contain any further attributes you want to specify.
+
+            mode Default : str
+                Distribution mode. If the mode is set to "user_friendly" only the
+                simbev weights are used for the distribution. If the mode is
+                "grid_friendly" also grid conditions are respected.
+                Default "user_friendly".
+            generators_weight_factor : float
+                Weighting factor of the generators weight within a lv grid in
+                comparison to the loads weight. Default 0.5 .
+            distance_weight : float
+                Weighting factor for the distance between a grid connection point
+                and it's nearest substation in comparison to the combination of
+                the generators and load factors of the lv grids.
+                Default 1 / 3 .
+            user_friendly_weight : float
+                Weighting factor of the user friendly weight in comparison to the
+                grid friendly weight. Default 0.5 .
+
+        """
+        if (
+            self.electromobility.charging_processes_df.empty
+            or self.electromobility.grid_connections_gdf.empty
+        ):
+            logger.error(
+                "Please import electromobility data from SimBEV and TracBEV before "
+                "distribution. The respective dataframes 'charging_processes_df' and/or"
+                " 'grid_connections_gdf' are empty and need to be filled first."
+            )
+        else:
+            distribute_charging_demand(self, **kwargs)
+
+            integrate_charging_parks(self)
+
+    def charging_strategy(self, strategy="dumb", **kwargs):
+        """
+        Calculates the timeseries per charging park for a given charging strategy.
+
+        Parameters
+        ----------
+        strategy : str
+            The charging strategy. Default "dumb". Only "private" charging
+            processes at "home" or at "work" can be flexibilized. "public" charging
+            processes will always be "dumb". For now the following charging
+            strategies are valid:
+                "dumb": The cars are charged directly after arrival with the
+                maximum possible charging capacity.
+                "reduced": The cars are charged directly after arrival with the
+                minimum possible charging capacity. The minimum possible charging
+                capacity is determined by the parking time and the
+                minimum_charging_capacity_factor.
+                "residual": The cars are charged when the residual load in the MV
+                grid is at it's lowest (high generation and low consumption).
+                Charging processes with a low flexibility band are given priority.
+        kwargs :
+            timestamp_share_threshold : float
+                Percental threshold of the time required at a time step for charging
+                the vehicle. If the time requirement is below this limit, then the
+                charging process is not mapped into the time series. If, however, it is
+                above this limit, the time step is mapped to 100% into the time series.
+                This prevents differences between the charging strategies and creates a
+                compromise between the simultaneity of charging processes and an
+                artificial increase in the charging demand. Default 0.2
+            minimum_charging_capacity_factor : float
+                Technical percental minimum charging capacity per charging point.
+                Default 0.1
+
+        """
+        charging_strategy(self, strategy=strategy, **kwargs)
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """

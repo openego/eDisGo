@@ -3,10 +3,6 @@ import logging
 import numpy as np
 import pandas as pd
 
-COLUMNS = {
-    "integrated_charging_parks_df": ["edisgo_id"],
-}
-
 RELEVANT_CHARGING_STRATEGIES_COLUMNS = {
     "dumb": [
         "park_start_timesteps",
@@ -39,56 +35,6 @@ RELEVANT_CHARGING_STRATEGIES_COLUMNS = {
 logger = logging.getLogger("edisgo")
 
 
-def integrate_charging_parks(edisgo_obj, comp_type="charging_point"):
-    """
-    Integrates all designated charging parks into the grid. The charging demand
-    is not integrated here, but an empty dummy timeseries is generated.
-
-    Parameters
-    ----------
-    edisgo_obj : :class:`~.EDisGo`
-    comp_type : str
-        Component Type. Default "ChargingPoint"
-
-    """
-    charging_parks = edisgo_obj.electromobility.potential_charging_parks
-
-    # Only integrate charging parks with designated charging points
-    designated_charging_parks = [
-        cp
-        for cp in charging_parks
-        if (cp.designated_charging_point_capacity > 0) and cp.within_grid
-    ]
-
-    charging_park_ids = [_.id for _ in designated_charging_parks]
-
-    dummy_timeseries = pd.Series(
-        [0.0] * len(edisgo_obj.timeseries.timeindex),
-        index=edisgo_obj.timeseries.timeindex,
-    )
-
-    # integrate ChargingPoints and save the names of the eDisGo ID
-    edisgo_ids = [
-        edisgo_obj.integrate_component_based_on_geolocation(
-            # edisgo_obj,
-            comp_type=comp_type,
-            geolocation=cp.geometry,
-            sector=cp.use_case,
-            add_ts=True,
-            ts_active_power=dummy_timeseries,
-            ts_reactive_power=dummy_timeseries,
-            p_set=cp.grid_connection_capacity,
-        )
-        for cp in designated_charging_parks
-    ]
-
-    edisgo_obj.electromobility.integrated_charging_parks_df = pd.DataFrame(
-        columns=COLUMNS["integrated_charging_parks_df"],
-        data=edisgo_ids,
-        index=charging_park_ids,
-    )
-
-
 # TODO: the dummy timeseries should be as long as the simulated days and not
 #  the timeindex of the edisgo object. At the moment this would result into
 #  wrong results if the timeindex of the edisgo object is not continuously
@@ -100,7 +46,7 @@ def charging_strategy(
     minimum_charging_capacity_factor=0.1,
 ):
     """
-    Calculates the timeseries per charging park if parking times are given.
+    Calculates the timeseries per charging park for a given charging strategy.
 
     Parameters
     ----------
