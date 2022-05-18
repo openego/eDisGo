@@ -82,7 +82,7 @@ class Electromobility:
 
         Returns
         -------
-        :geopandas:`geodataframe`
+        :geopandas:`GeoDataFrame`
             GeoDataFrame with AGS, charging use case (home, work, public or
             hpc), user centric weight and geometry.
 
@@ -113,8 +113,7 @@ class Electromobility:
     @property
     def simbev_config_df(self):
         """
-        Dict with all `SimBEV <https://github.com/rl-institut/simbev>`_
-        config data.
+        Dict with all `SimBEV <https://github.com/rl-institut/simbev>`_. config data.
 
         Returns
         -------
