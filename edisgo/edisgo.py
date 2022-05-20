@@ -740,15 +740,12 @@ class EDisGo:
         comp_type : str
             Type of added component. Can be 'bus', 'line', 'load', 'generator', or
             'storage_unit'.
-        add_ts : bool
-            Indicator if time series for component are added as well. If True, active
-            and reactive power time series need to be provided through parameters
-            `ts_active_power` and `ts_reactive_power`. Default: True.
         ts_active_power : :pandas:`pandas.Series<series>` or None
-            Active power time series of added component. Index of the series
-            must contain all time steps in
+            Active power time series of added component.
+            Index of the series must contain all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex`.
             Values are active power per time step in MW.
+            Defaults to None in which case no time series is set.
         ts_reactive_power : :pandas:`pandas.Series<series>` or str or None
             Possible options are:
 
@@ -770,6 +767,11 @@ class EDisGo:
                 it was not provided, reactive power cannot be set and a warning is
                 raised.
 
+            * None
+
+                No reactive power time series is set.
+
+            Default: None
         **kwargs: dict
             Attributes of added component. See respective functions for required
             entries.
@@ -800,6 +802,35 @@ class EDisGo:
                 index=["comp"],
             )
 
+        def _set_timeseries():
+            if ts_active_power is not None:
+                self.set_time_series_manual(
+                    **{f"{comp_type}s_p": pd.DataFrame({comp_name: ts_active_power})}
+                )
+            if ts_reactive_power is not None:
+                if isinstance(ts_reactive_power, pd.Series):
+                    self.set_time_series_manual(
+                        **{
+                            f"{comp_type}s_q": pd.DataFrame(
+                                {comp_name: ts_reactive_power}
+                            )
+                        }
+                    )
+                elif ts_reactive_power == "default":
+                    if ts_active_power is None:
+                        logging.warning(
+                            f"Default reactive power time series of {comp_name} cannot "
+                            "be set as active power time series was not provided."
+                        )
+                    else:
+                        self.set_time_series_reactive_power_control(
+                            **{
+                                f"{comp_type}s_parametrisation": _get_q_default_df(
+                                    comp_name
+                                )
+                            }
+                        )
+
         if comp_type == "bus":
             comp_name = self.topology.add_bus(**kwargs)
 
@@ -808,66 +839,15 @@ class EDisGo:
 
         elif comp_type == "generator":
             comp_name = self.topology.add_generator(**kwargs)
-            if ts_active_power is not None:
-                self.set_time_series_manual(
-                    generators_p=pd.DataFrame({comp_name: ts_active_power}),
-                )
-            if ts_reactive_power is not None:
-                if isinstance(ts_reactive_power, pd.Series):
-                    self.set_time_series_manual(
-                        generators_q=pd.DataFrame({comp_name: ts_reactive_power}),
-                    )
-                elif ts_reactive_power == "default":
-                    if ts_active_power is None:
-                        logging.warning(
-                            f"Default reactive power time series of {comp_name} cannot "
-                            "be set as active power time series was not provided."
-                        )
-                    self.set_time_series_reactive_power_control(
-                        generators_parametrisation=_get_q_default_df(comp_name)
-                    )
+            _set_timeseries()
 
         elif comp_type == "storage_unit":
             comp_name = self.topology.add_storage_unit(**kwargs)
-            if ts_active_power is not None:
-                self.set_time_series_manual(
-                    storage_units_p=pd.DataFrame({comp_name: ts_active_power}),
-                )
-            if ts_reactive_power is not None:
-                if isinstance(ts_reactive_power, pd.Series):
-                    self.set_time_series_manual(
-                        storage_units_q=pd.DataFrame({comp_name: ts_reactive_power}),
-                    )
-                elif ts_reactive_power == "default":
-                    if ts_active_power is None:
-                        logging.warning(
-                            f"Default reactive power time series of {comp_name} cannot "
-                            "be set as active power time series was not provided."
-                        )
-                    self.set_time_series_reactive_power_control(
-                        storage_units_parametrisation=_get_q_default_df(comp_name)
-                    )
+            _set_timeseries()
 
         elif comp_type == "load":
             comp_name = self.topology.add_load(**kwargs)
-            if ts_active_power is not None:
-                self.set_time_series_manual(
-                    loads_p=pd.DataFrame({comp_name: ts_active_power}),
-                )
-            if ts_reactive_power is not None:
-                if isinstance(ts_reactive_power, pd.Series):
-                    self.set_time_series_manual(
-                        loads_q=pd.DataFrame({comp_name: ts_reactive_power}),
-                    )
-                elif ts_reactive_power == "default":
-                    if ts_active_power is None:
-                        logging.warning(
-                            f"Default reactive power time series of {comp_name} cannot "
-                            "be set as active power time series was not provided."
-                        )
-                    self.set_time_series_reactive_power_control(
-                        loads_parametrisation=_get_q_default_df(comp_name)
-                    )
+            _set_timeseries()
 
         else:
             raise ValueError(
