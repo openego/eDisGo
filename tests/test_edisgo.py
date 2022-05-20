@@ -109,7 +109,7 @@ class TestEDisGo:
         assert len(results.equipment_changes) == 10
         # Todo: test other relevant values
 
-    def test_add_component(self):
+    def test_add_component(self, caplog):
 
         self.setup_worst_case_time_series()
         index = self.edisgo.timeseries.timeindex
@@ -158,20 +158,37 @@ class TestEDisGo:
         assert self.edisgo.topology.loads_df.loc[load_name, "p_set"] == 0.2
         assert self.edisgo.topology.loads_df.loc[load_name, "annual_consumption"] == 3.2
         assert self.edisgo.topology.loads_df.loc[load_name, "sector"] == "residential"
-        assert np.isclose(
-            self.edisgo.timeseries.loads_active_power.loc[index[0], load_name],
-            0.1,
+        assert (
+            self.edisgo.timeseries.loads_active_power.loc[:, load_name] == dummy_ts
+        ).all()
+        assert (
+            self.edisgo.timeseries.loads_reactive_power.loc[:, load_name] == dummy_ts
+        ).all()
+
+        # Test add load (with reactive power time series default mode)
+        load_name = self.edisgo.add_component(
+            comp_type="load",
+            type="conventional_load",
+            load_id=4,
+            bus="Testbus",
+            p_set=0.2,
+            annual_consumption=3.2,
+            sector="residential",
+            ts_active_power=dummy_ts,
+            ts_reactive_power="default",
         )
-        assert np.isclose(
-            self.edisgo.timeseries.loads_reactive_power.loc[index[1], load_name],
-            0.2,
-        )
+        assert (
+            self.edisgo.timeseries.loads_active_power.loc[:, load_name] == dummy_ts
+        ).all()
+        assert (
+            self.edisgo.timeseries.loads_reactive_power.loc[:, load_name]
+            == dummy_ts * np.tan(np.arccos(0.9))
+        ).all()
 
         # Test add generator (without time series)
         num_gens = len(self.edisgo.topology.generators_df)
         gen_name = self.edisgo.add_component(
             "generator",
-            add_ts=False,
             generator_id=5,
             bus="Testbus",
             p_nom=2.5,
@@ -184,6 +201,36 @@ class TestEDisGo:
         assert self.edisgo.topology.generators_df.loc[gen_name, "type"] == "solar"
         assert self.edisgo.timeseries.generators_active_power.shape == (4, num_gens)
         assert self.edisgo.timeseries.generators_reactive_power.shape == (4, num_gens)
+
+        # Test add generator (test that warning is raised when no active power time
+        # series is provided for default mode)
+        gen_name = self.edisgo.add_component(
+            "generator",
+            generator_id=5,
+            bus="Testbus",
+            p_nom=2.5,
+            generator_type="solar",
+            ts_reactive_power="default",
+        )
+        assert (
+            f"Default reactive power time series of {gen_name} cannot be set as "
+            f"active power time series was not provided." in caplog.text
+        )
+
+        # Test add generator (with reactive power time series default mode)
+        gen_name = self.edisgo.add_component(
+            "generator",
+            generator_id=5,
+            bus="Testbus",
+            p_nom=2.5,
+            generator_type="solar",
+            ts_active_power=dummy_ts,
+            ts_reactive_power="default",
+        )
+        assert (
+            self.edisgo.timeseries.generators_reactive_power.loc[:, gen_name]
+            == dummy_ts * -np.tan(np.arccos(0.9))
+        ).all()
 
         # Test add storage unit
         num_storages = len(self.edisgo.topology.storage_units_df)
@@ -222,7 +269,7 @@ class TestEDisGo:
             geolocation=(x, y),
             voltage_level=4,
             add_ts=False,
-            **comp_data
+            **comp_data,
         )
 
         assert len(self.edisgo.topology.generators_df) == num_gens + 1
@@ -251,7 +298,7 @@ class TestEDisGo:
             geolocation=geom,
             ts_active_power=ts_active_power,
             ts_reactive_power=ts_reactive_power,
-            **comp_data
+            **comp_data,
         )
 
         assert len(self.edisgo.topology.charging_points_df) == num_cps + 1
@@ -292,7 +339,7 @@ class TestEDisGo:
             geolocation=geom,
             ts_active_power=ts_active_power,
             ts_reactive_power=ts_reactive_power,
-            **comp_data
+            **comp_data,
         )
 
         assert len(self.edisgo.topology.charging_points_df) == num_cps + 2
