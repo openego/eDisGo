@@ -364,6 +364,8 @@ class EDisGo:
         storage_units_parametrisation="default",
     ):
         """
+        Set reactive power time series of components.
+
         Parameters
         -----------
         control : str
@@ -382,6 +384,53 @@ class EDisGo:
             See parameter `storage_units_parametrisation` in
             :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
+
+        Notes
+        ------
+        Be careful to set parametrisation of other component types to None if you only
+        want to set reactive power of certain components. See example below for further
+        information.
+
+        Examples
+        --------
+        To only set reactive power time series of one generator using default
+        configurations you can do the following:
+
+        >>> self.set_time_series_reactive_power_control(
+        >>>     generators_parametrisation=pd.DataFrame(
+        >>>        {
+        >>>            "components": [["Generator_1"]],
+        >>>            "mode": ["default"],
+        >>>            "power_factor": ["default"],
+        >>>        },
+        >>>        index=[1],
+        >>>     ),
+        >>>     loads_parametrisation=None,
+        >>>     storage_units_parametrisation=None
+        >>> )
+
+        In the example above, `loads_parametrisation` and
+        `storage_units_parametrisation` need to be set to None, otherwise already
+        existing time series would be overwritten.
+
+        To only change configuration of one load and for all other components use
+        default configurations you can do the following:
+
+        >>> self.set_time_series_reactive_power_control(
+        >>>     loads_parametrisation=pd.DataFrame(
+        >>>        {
+        >>>            "components": [["Load_1"],
+        >>>                           self.topology.loads_df.index.drop(["Load_1"])],
+        >>>            "mode": ["capacitive", "default"],
+        >>>            "power_factor": [0.98, "default"],
+        >>>        },
+        >>>        index=[1, 2],
+        >>>     )
+        >>> )
+
+        In the example above, `generators_parametrisation` and
+        `storage_units_parametrisation` do not need to be set as default configurations
+        are per default used for all generators and storage units anyways.
 
         """
         if control == "fixed_cosphi":
