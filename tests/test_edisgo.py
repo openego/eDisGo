@@ -18,9 +18,6 @@ class TestEDisGo:
         Fixture to set up new EDisGo object before each test function.
 
         """
-        # self.edisgo = EDisGo(
-        #     ding0_grid=pytest.ding0_test_network_path
-        # )
         self.setup_edisgo_object()
 
     def setup_edisgo_object(self):
@@ -45,8 +42,71 @@ class TestEDisGo:
         pass
 
     def test_set_time_series_reactive_power_control(self):
-        # Todo: implement test
-        pass
+
+        # set active power time series for fixed cosphi
+        timeindex = pd.date_range("1/1/1970", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+        ts_solar = np.array([0.1, 0.2, 0.3])
+        ts_wind = [0.4, 0.5, 0.6]
+        self.edisgo.set_time_series_active_power_predefined(
+            fluctuating_generators_ts=pd.DataFrame(
+                {"solar": ts_solar, "wind": ts_wind}, index=timeindex
+            ),
+            dispatchable_generators_ts=pd.DataFrame(
+                {"other": ts_solar}, index=timeindex
+            ),
+            conventional_loads_ts="demandlib",
+        )
+
+        # test only setting reactive power for one generator
+        gen = "GeneratorFluctuating_4"  # solar MV generator
+        self.edisgo.set_time_series_reactive_power_control(
+            generators_parametrisation=pd.DataFrame(
+                {
+                    "components": [[gen]],
+                    "mode": ["default"],
+                    "power_factor": ["default"],
+                },
+                index=[1],
+            ),
+            loads_parametrisation=None,
+            storage_units_parametrisation=None,
+        )
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (3, 1)
+        assert self.edisgo.timeseries.loads_reactive_power.empty
+        assert self.edisgo.timeseries.storage_units_reactive_power.empty
+        assert (
+            np.isclose(
+                self.edisgo.timeseries.generators_reactive_power.loc[:, gen],
+                ts_solar * -np.tan(np.arccos(0.9)) * 1.93,
+            )
+        ).all()
+
+        # test changing only configuration of one load
+        load = "Load_residential_LVGrid_1_5"
+        self.edisgo.set_time_series_reactive_power_control(
+            loads_parametrisation=pd.DataFrame(
+                {
+                    "components": [
+                        [load],
+                        self.edisgo.topology.loads_df.index.drop([load]),
+                    ],
+                    "mode": ["capacitive", "default"],
+                    "power_factor": [0.98, "default"],
+                },
+                index=[1, 2],
+            ),
+            storage_units_parametrisation=None,
+        )
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (3, 28)
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (3, 50)
+        assert (
+            np.isclose(
+                self.edisgo.timeseries.loads_reactive_power.loc[:, load],
+                self.edisgo.timeseries.loads_active_power.loc[:, load]
+                * -np.tan(np.arccos(0.98)),
+            )
+        ).all()
 
     def test_to_pypsa(self):
 
