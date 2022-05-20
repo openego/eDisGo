@@ -2463,9 +2463,13 @@ class Topology:
         self.buses_df = pd.read_csv(os.path.join(directory, "buses.csv"), index_col=0)
         self.lines_df = pd.read_csv(os.path.join(directory, "lines.csv"), index_col=0)
         if os.path.exists(os.path.join(directory, "loads.csv")):
-            self.loads_df = pd.read_csv(
+            rename_loads = {
+                "peak_load": "p_set",  # in v.0.1.1
+                            }
+            loads_df = pd.read_csv(
                 os.path.join(directory, "loads.csv"), index_col=0
-            )
+            ).rename(columns=rename_loads)
+            self.loads_df = loads_df
         if os.path.exists(os.path.join(directory, "generators.csv")):
             generators_df = pd.read_csv(
                 os.path.join(directory, "generators.csv"), index_col=0
