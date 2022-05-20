@@ -1642,7 +1642,7 @@ class TimeSeries:
             )
             # calculate reactive power
             reactive_power = q_control.fixed_cosphi(
-                self.generators_active_power, q_sign, power_factor
+                self.generators_active_power.loc[:, q_sign.index], q_sign, power_factor
             )
             self.generators_reactive_power = pd.concat(
                 [self.generators_reactive_power, reactive_power], axis=1
@@ -1659,7 +1659,7 @@ class TimeSeries:
             )
             # calculate reactive power
             reactive_power = q_control.fixed_cosphi(
-                self.loads_active_power, q_sign, power_factor
+                self.loads_active_power.loc[:, q_sign.index], q_sign, power_factor
             )
             self.loads_reactive_power = pd.concat(
                 [self.loads_reactive_power, reactive_power], axis=1
@@ -1676,7 +1676,9 @@ class TimeSeries:
             )
             # calculate reactive power
             reactive_power = q_control.fixed_cosphi(
-                self.storage_units_active_power, q_sign, power_factor
+                self.storage_units_active_power.loc[:, q_sign.index],
+                q_sign,
+                power_factor,
             )
             self.storage_units_reactive_power = pd.concat(
                 [self.storage_units_reactive_power, reactive_power], axis=1

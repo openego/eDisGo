@@ -375,6 +375,8 @@ class EDisGo:
         storage_units_parametrisation="default",
     ):
         """
+        Set reactive power time series of components.
+
         Parameters
         -----------
         control : str
@@ -393,6 +395,53 @@ class EDisGo:
             See parameter `storage_units_parametrisation` in
             :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
+
+        Notes
+        ------
+        Be careful to set parametrisation of other component types to None if you only
+        want to set reactive power of certain components. See example below for further
+        information.
+
+        Examples
+        --------
+        To only set reactive power time series of one generator using default
+        configurations you can do the following:
+
+        >>> self.set_time_series_reactive_power_control(
+        >>>     generators_parametrisation=pd.DataFrame(
+        >>>        {
+        >>>            "components": [["Generator_1"]],
+        >>>            "mode": ["default"],
+        >>>            "power_factor": ["default"],
+        >>>        },
+        >>>        index=[1],
+        >>>     ),
+        >>>     loads_parametrisation=None,
+        >>>     storage_units_parametrisation=None
+        >>> )
+
+        In the example above, `loads_parametrisation` and
+        `storage_units_parametrisation` need to be set to None, otherwise already
+        existing time series would be overwritten.
+
+        To only change configuration of one load and for all other components use
+        default configurations you can do the following:
+
+        >>> self.set_time_series_reactive_power_control(
+        >>>     loads_parametrisation=pd.DataFrame(
+        >>>        {
+        >>>            "components": [["Load_1"],
+        >>>                           self.topology.loads_df.index.drop(["Load_1"])],
+        >>>            "mode": ["capacitive", "default"],
+        >>>            "power_factor": [0.98, "default"],
+        >>>        },
+        >>>        index=[1, 2],
+        >>>     )
+        >>> )
+
+        In the example above, `generators_parametrisation` and
+        `storage_units_parametrisation` do not need to be set as default configurations
+        are per default used for all generators and storage units anyways.
 
         """
         if control == "fixed_cosphi":
@@ -735,7 +784,6 @@ class EDisGo:
     def add_component(
         self,
         comp_type,
-        add_ts=True,
         ts_active_power=None,
         ts_reactive_power=None,
         **kwargs,
@@ -752,20 +800,38 @@ class EDisGo:
         comp_type : str
             Type of added component. Can be 'bus', 'line', 'load', 'generator', or
             'storage_unit'.
-        add_ts : bool
-            Indicator if time series for component are added as well. If True, active
-            and reactive power time series need to be provided through parameters
-            `ts_active_power` and `ts_reactive_power`. Default: True.
-        ts_active_power : :pandas:`pandas.Series<series>`
-            Active power time series of added component. Index of the series
-            must contain all time steps in
+        ts_active_power : :pandas:`pandas.Series<series>` or None
+            Active power time series of added component.
+            Index of the series must contain all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex`.
             Values are active power per time step in MW.
-        ts_reactive_power : :pandas:`pandas.Series<series>`
-            Reactive power time series of added component. Index of the series
-            must contain all time steps in
-            :attr:`~.network.timeseries.TimeSeries.timeindex`.
-            Values are reactive power per time step in MVA.
+            Defaults to None in which case no time series is set.
+        ts_reactive_power : :pandas:`pandas.Series<series>` or str or None
+            Possible options are:
+
+            * :pandas:`pandas.Series<series>`
+
+                Reactive power time series of added component. Index of the series must
+                contain all time steps in
+                :attr:`~.network.timeseries.TimeSeries.timeindex`. Values are reactive
+                power per time step in MVA.
+
+            * "default"
+
+                Reactive power time series is determined based on assumptions on fixed
+                power factor of the component. To this end, the power factors set in the
+                config section `reactive_power_factor` and the power factor mode,
+                defining whether components behave inductive or capacitive, given in the
+                config section `reactive_power_mode`, are used.
+                This option requires you to provide an active power time series. In case
+                it was not provided, reactive power cannot be set and a warning is
+                raised.
+
+            * None
+
+                No reactive power time series is set.
+
+            Default: None
         **kwargs: dict
             Attributes of added component. See respective functions for required
             entries.
@@ -786,6 +852,54 @@ class EDisGo:
         #    at a time, change topology.add_load etc. to add_loads, where
         #    lists of parameters can be inserted
 
+        def _get_q_default_df(comp_name):
+            return pd.DataFrame(
+                {
+                    "components": [[comp_name]],
+                    "mode": ["default"],
+                    "power_factor": ["default"],
+                },
+                index=["comp"],
+            )
+
+        def _set_timeseries():
+            if ts_active_power is not None:
+                self.set_time_series_manual(
+                    **{f"{comp_type}s_p": pd.DataFrame({comp_name: ts_active_power})}
+                )
+            if ts_reactive_power is not None:
+                if isinstance(ts_reactive_power, pd.Series):
+                    self.set_time_series_manual(
+                        **{
+                            f"{comp_type}s_q": pd.DataFrame(
+                                {comp_name: ts_reactive_power}
+                            )
+                        }
+                    )
+                elif ts_reactive_power == "default":
+                    if ts_active_power is None:
+                        logging.warning(
+                            f"Default reactive power time series of {comp_name} cannot "
+                            "be set as active power time series was not provided."
+                        )
+                    else:
+                        other_comps = [
+                            _
+                            for _ in ["generator", "load", "storage_unit"]
+                            if _ != comp_type
+                        ]
+                        parameter_dict = {
+                            f"{t}s_parametrisation": None for t in other_comps
+                        }
+                        parameter_dict.update(
+                            {
+                                f"{comp_type}s_parametrisation": _get_q_default_df(
+                                    comp_name
+                                )
+                            }
+                        )
+                        self.set_time_series_reactive_power_control(**parameter_dict)
+
         if comp_type == "bus":
             comp_name = self.topology.add_bus(**kwargs)
 
@@ -794,27 +908,15 @@ class EDisGo:
 
         elif comp_type == "generator":
             comp_name = self.topology.add_generator(**kwargs)
-            if add_ts:
-                self.set_time_series_manual(
-                    generators_p=pd.DataFrame({comp_name: ts_active_power}),
-                    generators_q=pd.DataFrame({comp_name: ts_reactive_power}),
-                )
+            _set_timeseries()
 
         elif comp_type == "storage_unit":
             comp_name = self.topology.add_storage_unit(**kwargs)
-            if add_ts:
-                self.set_time_series_manual(
-                    storage_units_p=pd.DataFrame({comp_name: ts_active_power}),
-                    storage_units_q=pd.DataFrame({comp_name: ts_reactive_power}),
-                )
+            _set_timeseries()
 
         elif comp_type == "load":
             comp_name = self.topology.add_load(**kwargs)
-            if add_ts:
-                self.set_time_series_manual(
-                    loads_p=pd.DataFrame({comp_name: ts_active_power}),
-                    loads_q=pd.DataFrame({comp_name: ts_reactive_power}),
-                )
+            _set_timeseries()
 
         else:
             raise ValueError(
