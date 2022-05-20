@@ -823,13 +823,22 @@ class EDisGo:
                             "be set as active power time series was not provided."
                         )
                     else:
-                        self.set_time_series_reactive_power_control(
-                            **{
+                        other_comps = [
+                            _
+                            for _ in ["generator", "load", "storage_unit"]
+                            if _ != comp_type
+                        ]
+                        parameter_dict = {
+                            f"{t}s_parametrisation": None for t in other_comps
+                        }
+                        parameter_dict.update(
+                            {
                                 f"{comp_type}s_parametrisation": _get_q_default_df(
                                     comp_name
                                 )
                             }
                         )
+                        self.set_time_series_reactive_power_control(**parameter_dict)
 
         if comp_type == "bus":
             comp_name = self.topology.add_bus(**kwargs)

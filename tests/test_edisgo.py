@@ -184,6 +184,13 @@ class TestEDisGo:
             self.edisgo.timeseries.loads_reactive_power.loc[:, load_name]
             == dummy_ts * np.tan(np.arccos(0.9))
         ).all()
+        # check that reactive power time series were not all set to default
+        assert (
+            self.edisgo.timeseries.loads_active_power.loc[
+                :, "Conventional_Load_MVGrid_1_residential_4"
+            ]
+            == dummy_ts
+        ).all()
 
         # Test add generator (without time series)
         num_gens = len(self.edisgo.topology.generators_df)
