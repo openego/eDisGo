@@ -271,6 +271,23 @@ class TimeSeries:
         self.storage_units_active_power = None
         self.time_series_raw = TimeSeriesRaw()
 
+    def resample(self, freq):
+        """Resample all time series. Active and reactive power time series of all loads, generators and storage units
+        are resampled to the frequency given using the mean value.
+
+        Parameters
+        ----------
+        freq : str
+            freq needs to be smaller then original, using pandas offset aliases
+        """
+        for attr in self._attributes:
+            if not getattr(self, attr).empty:
+                setattr(self, attr, getattr(self, attr).resample(freq).mean())
+
+        self.timeindex = pd.date_range(self.timeindex.min(),
+                                       self.timeindex.max(),
+                                       freq=freq)
+
     def set_active_power_manual(
         self, edisgo_object, ts_generators=None, ts_loads=None, ts_storage_units=None
     ):
