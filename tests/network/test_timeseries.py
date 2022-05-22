@@ -1599,8 +1599,85 @@ class TestTimeSeries:
         # fmt: on
 
     def test_fixed_cosphi(self):
-        # ToDo implement
-        pass
+        # set active power time series for fixed cosphi
+        timeindex = pd.date_range("1/1/1970", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+        ts_solar = np.array([0.1, 0.2, 0.3])
+        ts_wind = [0.4, 0.5, 0.6]
+        self.edisgo.set_time_series_active_power_predefined(
+            fluctuating_generators_ts=pd.DataFrame(
+                {"solar": ts_solar, "wind": ts_wind}, index=timeindex
+            ),
+            dispatchable_generators_ts=pd.DataFrame(
+                {"other": ts_solar}, index=timeindex
+            ),
+            conventional_loads_ts="demandlib",
+        )
+        self.edisgo.set_time_series_manual(
+            storage_units_p=pd.DataFrame({"Storage_1": ts_wind}, index=timeindex)
+        )
+
+        # test different options (default, Dataframe with default, Dataframe with
+        # different settings) - None is already tested in eDisGo class tests
+        gen = "GeneratorFluctuating_14"  # solar LV generator
+        load_1 = "Load_agricultural_LVGrid_3_1"
+        load_2 = "Load_residential_LVGrid_7_3"
+        load_3 = "Load_residential_LVGrid_8_12"
+        self.edisgo.set_time_series_reactive_power_control(
+            generators_parametrisation=pd.DataFrame(
+                {
+                    "components": [[gen]],
+                    "mode": ["default"],
+                    "power_factor": ["default"],
+                },
+                index=[1],
+            ),
+            loads_parametrisation=pd.DataFrame(
+                {
+                    "components": [[load_1], [load_2, load_3]],
+                    "mode": ["default", "capacitive"],
+                    "power_factor": ["default", 0.98],
+                },
+                index=[1, 2],
+            ),
+            storage_units_parametrisation="default",
+        )
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (3, 1)
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (3, 3)
+        assert self.edisgo.timeseries.storage_units_reactive_power.shape == (3, 1)
+        assert (
+            np.isclose(
+                self.edisgo.timeseries.generators_reactive_power.loc[:, gen],
+                ts_solar * -np.tan(np.arccos(0.95)) * 0.005,
+            )
+        ).all()
+        assert (
+            np.isclose(
+                self.edisgo.timeseries.loads_reactive_power.loc[:, load_1],
+                self.edisgo.timeseries.loads_active_power.loc[:, load_1]
+                * np.tan(np.arccos(0.95)),
+            )
+        ).all()
+        assert (
+            (
+                np.isclose(
+                    self.edisgo.timeseries.loads_reactive_power.loc[
+                        :, [load_2, load_3]
+                    ],
+                    self.edisgo.timeseries.loads_active_power.loc[:, [load_2, load_3]]
+                    * -np.tan(np.arccos(0.98)),
+                )
+            )
+            .all()
+            .all()
+        )
+        assert (
+            np.isclose(
+                self.edisgo.timeseries.storage_units_reactive_power.loc[:, "Storage_1"],
+                self.edisgo.timeseries.storage_units_active_power.loc[:, "Storage_1"]
+                * -np.tan(np.arccos(0.9)),
+            )
+        ).all()
 
     def test_residual_load(self):
         # ToDo implement
