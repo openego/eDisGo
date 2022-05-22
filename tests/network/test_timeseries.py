@@ -1148,8 +1148,104 @@ class TestTimeSeries:
         # fmt: on
 
     def test_predefined_dispatchable_generators_by_technology(self):
-        # ToDo implement
-        pass
+
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+
+        # ############# all generators (default), with "other"
+        gens_p = pd.DataFrame(
+            data={
+                "other": [5, 6],
+            },
+            index=timeindex,
+        )
+
+        self.edisgo.timeseries.predefined_dispatchable_generators_by_technology(
+            self.edisgo, gens_p
+        )
+
+        # check shape
+        dispatchable_gens = self.edisgo.topology.generators_df[
+            ~self.edisgo.topology.generators_df.type.isin(["wind", "solar"])
+        ]
+        p_ts = self.edisgo.timeseries.generators_active_power
+        assert p_ts.shape == (2, len(dispatchable_gens))
+        # fmt: off
+        assert (
+                self.edisgo.timeseries.time_series_raw.
+                dispatchable_generators_active_power_by_technology.shape
+                == (2, 1)
+        )
+        # fmt: on
+
+        # check values
+        comp = "Generator_1"  # gas
+        p_nom = 0.775
+        exp = pd.Series(
+            data=[5.0 * p_nom, 6.0 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+
+        # ############# all generators (default), with "gas" and "other"
+        # overwrite type of generator GeneratorFluctuating_2
+        self.edisgo.topology._generators_df.at[
+            "GeneratorFluctuating_2", "type"
+        ] = "coal"
+        gens_p = pd.DataFrame(
+            data={
+                "other": [5, 6],
+                "gas": [7, 8],
+            },
+            index=timeindex,
+        )
+
+        self.edisgo.timeseries.predefined_dispatchable_generators_by_technology(
+            self.edisgo, gens_p
+        )
+
+        # check shape
+        dispatchable_gens = self.edisgo.topology.generators_df[
+            ~self.edisgo.topology.generators_df.type.isin(["wind", "solar"])
+        ]
+        p_ts = self.edisgo.timeseries.generators_active_power
+        assert p_ts.shape == (2, len(dispatchable_gens))
+        # fmt: off
+        assert (
+                self.edisgo.timeseries.time_series_raw.
+                dispatchable_generators_active_power_by_technology.shape
+                == (2, 2)
+        )
+        # fmt: on
+
+        # check values
+        comp = "Generator_1"  # gas
+        p_nom = 0.775
+        exp = pd.Series(
+            data=[7.0 * p_nom, 8.0 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+        comp = "GeneratorFluctuating_2"  # coal (other)
+        p_nom = 2.3
+        exp = pd.Series(
+            data=[5.0 * p_nom, 6.0 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+        # fmt: off
+        assert_series_equal(
+            self.edisgo.timeseries.time_series_raw.
+            dispatchable_generators_active_power_by_technology.loc[
+                :, "other"
+            ],
+            gens_p.loc[:, "other"],
+            check_dtype=False,
+        )
+        # fmt: on
 
     def test_predefined_conventional_loads_by_sector(self, caplog):
         index = pd.date_range("1/1/2018", periods=3, freq="H")
