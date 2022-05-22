@@ -1446,7 +1446,8 @@ class TimeSeries:
 
         Parameters
         -----------
-        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` or \
+            None
             Sets fixed cosphi parameters for generators.
             Possible options are:
 
@@ -1479,10 +1480,17 @@ class TimeSeries:
                         `reactive_power_factor` is used.
 
                 Index of the dataframe is ignored.
-        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+
+            * None
+
+                No reactive power time series are set.
+
+            Default: None.
+        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` or None
             Sets fixed cosphi parameters for loads. The same options as for parameter
             `generators_parametrisation` apply.
-        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` \
+            or None
             Sets fixed cosphi parameters for storage units. The same options as for
             parameter `generators_parametrisation` apply.
 
