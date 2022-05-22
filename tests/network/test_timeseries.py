@@ -1680,8 +1680,23 @@ class TestTimeSeries:
         ).all()
 
     def test_residual_load(self):
-        # ToDo implement
-        pass
+        self.edisgo.set_time_series_worst_case_analysis()
+        time_steps_load_case = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
+        ].values
+        peak_load = (
+            self.edisgo.topology.loads_df.p_set.sum()
+            + self.edisgo.topology.storage_units_df.p_nom.sum()
+        )
+        assert np.isclose(
+            self.edisgo.timeseries.residual_load.loc[time_steps_load_case], peak_load
+        ).all()
+        time_steps_feedin_case = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
+        ].values
+        assert (
+            self.edisgo.timeseries.residual_load.loc[time_steps_feedin_case] < 0
+        ).all()
 
     def test_timesteps_load_feedin_case(self):
         # ToDo implement
