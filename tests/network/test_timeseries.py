@@ -16,7 +16,7 @@ from edisgo.tools.tools import assign_voltage_level_to_component
 
 
 class TestTimeSeries:
-    @pytest.yield_fixture(autouse=True)
+    @pytest.fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
 
