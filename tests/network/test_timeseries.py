@@ -1,4 +1,6 @@
 import logging
+import os
+import shutil
 
 from math import acos, tan
 
@@ -1769,38 +1771,61 @@ class TestTimeSeries:
         # fmt: on
 
     def test_to_csv(self):
-        # ToDo implement
-        pass
-        # timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
-        # timeseries_obj = timeseries.TimeSeries(timeindex=timeindex)
-        #
-        # # create dummy time series
-        # loads_active_power = pd.DataFrame(
-        #     {"load1": [1.4, 2.3], "load2": [2.4, 1.3]}, index=timeindex
-        # )
-        # timeseries_obj.loads_active_power = loads_active_power
-        # generators_reactive_power = pd.DataFrame(
-        #     {"gen1": [1.4, 2.3], "gen2": [2.4, 1.3]}, index=timeindex
-        # )
-        # timeseries_obj.generators_reactive_power = generators_reactive_power
-        #
-        # # test with default values
-        # dir = os.path.join(os.getcwd(), "timeseries_csv")
-        # timeseries_obj.to_csv(dir)
-        #
-        # files_in_timeseries_dir = os.listdir(dir)
-        # assert len(files_in_timeseries_dir) == 2
-        # assert "loads_active_power.csv" in files_in_timeseries_dir
-        # assert "generators_reactive_power.csv" in files_in_timeseries_dir
-        #
-        # shutil.rmtree(dir)
-        #
-        # # test with reduce memory True
-        # timeseries_obj.to_csv(dir, reduce_memory=True)
-        #
-        # assert timeseries_obj.loads_active_power.load1.dtype == "float32"
-        #
-        # shutil.rmtree(dir, ignore_errors=True)
+
+        timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+
+        # create dummy time series
+        loads_active_power = pd.DataFrame(
+            {"load1": [1.4, 2.3], "load2": [2.4, 1.3]}, index=timeindex
+        )
+        self.edisgo.timeseries.loads_active_power = loads_active_power
+        generators_reactive_power = pd.DataFrame(
+            {"gen1": [1.4, 2.3], "gen2": [2.4, 1.3]}, index=timeindex
+        )
+        self.edisgo.timeseries.generators_reactive_power = generators_reactive_power
+        # fmt: off
+        self.edisgo.timeseries.time_series_raw. \
+            fluctuating_generators_active_power_by_technology = pd.DataFrame(
+                data={
+                    "wind": [1.23, 2.0],
+                    "solar": [3.0, 4.0],
+                },
+                index=self.edisgo.timeseries.timeindex,
+            )
+        # fmt: on
+
+        # test with default values
+        save_dir = os.path.join(os.getcwd(), "timeseries_csv")
+        self.edisgo.timeseries.to_csv(save_dir)
+
+        files_in_timeseries_dir = os.listdir(save_dir)
+        assert len(files_in_timeseries_dir) == 2
+        assert "loads_active_power.csv" in files_in_timeseries_dir
+        assert "generators_reactive_power.csv" in files_in_timeseries_dir
+
+        shutil.rmtree(save_dir)
+
+        # test with reduce memory True, to_type = float16 and saving TimeSeriesRaw
+        self.edisgo.timeseries.to_csv(
+            save_dir, reduce_memory=True, to_type="float16", time_series_raw=True
+        )
+
+        assert (
+            self.edisgo.timeseries.generators_reactive_power.dtypes == "float16"
+        ).all()
+        files_in_timeseries_dir = os.listdir(save_dir)
+        assert len(files_in_timeseries_dir) == 3
+        files_in_timeseries_raw_dir = os.listdir(
+            os.path.join(save_dir, "time_series_raw")
+        )
+        assert len(files_in_timeseries_raw_dir) == 1
+        assert (
+            "fluctuating_generators_active_power_by_technology.csv"
+            in files_in_timeseries_raw_dir
+        )
+
+        shutil.rmtree(save_dir, ignore_errors=True)
 
     def test_from_csv(self):
         # ToDo implement
