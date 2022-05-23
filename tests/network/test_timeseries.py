@@ -11,6 +11,7 @@ import pytest
 from pandas.util.testing import assert_frame_equal, assert_series_equal
 
 from edisgo import EDisGo
+from edisgo.network import timeseries
 from edisgo.tools.tools import assign_voltage_level_to_component
 
 
@@ -1895,8 +1896,58 @@ class TestTimeSeries:
 
 class TestTimeSeriesRaw:
     def test_reduce_memory(self):
-        # ToDo implement
-        pass
+
+        time_series_raw = timeseries.TimeSeriesRaw()
+        timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
+        df = pd.DataFrame(
+            data={
+                "residential": [1.23, 2.0, 5.0, 6.0],
+                "industrial": [3.0, 4.0, 7.0, 8.0],
+            },
+            index=timeindex,
+        )
+        time_series_raw.conventional_loads_active_power_by_sector = df
+        time_series_raw.charging_points_active_power_by_use_case = df
+        q_control = pd.DataFrame(
+            {
+                "type": ["fixed_cosphi", "fixed_cosphi"],
+                "q_sign": [1, -1],
+                "power_factor": [1.0, 0.98],
+                "parametrisation": [None, None],
+            },
+            index=["gen_1", "laod_2"],
+        )
+        time_series_raw.q_control = q_control
+
+        # check with default value
+        assert (
+            time_series_raw.conventional_loads_active_power_by_sector.dtypes
+            == "float64"
+        ).all()
+        assert time_series_raw.q_control.power_factor.dtype == "float64"
+        time_series_raw.reduce_memory()
+        assert (
+            time_series_raw.conventional_loads_active_power_by_sector.dtypes
+            == "float32"
+        ).all()
+        assert (
+            time_series_raw.charging_points_active_power_by_use_case.dtypes == "float32"
+        ).all()
+        assert time_series_raw.q_control.power_factor.dtype == "float64"
+
+        # check arguments
+        time_series_raw.reduce_memory(
+            to_type="float16",
+            attr_to_reduce=["conventional_loads_active_power_by_sector"],
+        )
+
+        assert (
+            time_series_raw.conventional_loads_active_power_by_sector.dtypes
+            == "float16"
+        ).all()
+        assert (
+            time_series_raw.charging_points_active_power_by_use_case.dtypes == "float32"
+        ).all()
 
     def test_to_csv(self):
         # ToDo implement
