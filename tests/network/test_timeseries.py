@@ -1955,12 +1955,61 @@ class TestTimeSeriesRaw:
         ).all()
 
     def test_to_csv(self):
-        # ToDo implement
-        pass
+
+        # test with default values
+        save_dir = os.path.join(os.getcwd(), "timeseries_csv")
+        self.time_series_raw.to_csv(save_dir)
+
+        files_in_timeseries_dir = os.listdir(save_dir)
+        assert len(files_in_timeseries_dir) == 3
+        assert (
+            "conventional_loads_active_power_by_sector.csv" in files_in_timeseries_dir
+        )
+        assert "charging_points_active_power_by_use_case.csv" in files_in_timeseries_dir
+        assert "q_control.csv" in files_in_timeseries_dir
+
+        shutil.rmtree(save_dir)
+
+        # test with reduce memory True, to_type = float16 and saving TimeSeriesRaw
+        self.time_series_raw.to_csv(save_dir, reduce_memory=True, to_type="float16")
+
+        assert (
+            self.time_series_raw.conventional_loads_active_power_by_sector.dtypes
+            == "float16"
+        ).all()
+        files_in_timeseries_dir = os.listdir(save_dir)
+        assert len(files_in_timeseries_dir) == 3
+
+        shutil.rmtree(save_dir, ignore_errors=True)
 
     def test_from_csv(self):
-        # ToDo implement
-        pass
+
+        # write to csv
+        save_dir = os.path.join(os.getcwd(), "timeseries_csv")
+        self.time_series_raw.to_csv(save_dir, time_series_raw=True)
+
+        # reset TimeSeriesRaw
+        self.time_series_raw = timeseries.TimeSeriesRaw()
+
+        self.time_series_raw.from_csv(save_dir)
+
+        pd.testing.assert_frame_equal(
+            self.time_series_raw.conventional_loads_active_power_by_sector,
+            self.df,
+            check_freq=False,
+        )
+        pd.testing.assert_frame_equal(
+            self.time_series_raw.charging_points_active_power_by_use_case,
+            self.df,
+            check_freq=False,
+        )
+        pd.testing.assert_frame_equal(
+            self.time_series_raw.q_control,
+            self.q_control,
+            check_freq=False,
+        )
+
+        shutil.rmtree(save_dir)
 
 
 class TestTimeSeriesHelperFunctions:
