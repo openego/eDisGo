@@ -1828,42 +1828,69 @@ class TestTimeSeries:
         shutil.rmtree(save_dir, ignore_errors=True)
 
     def test_from_csv(self):
-        # ToDo implement
-        pass
-        # timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
-        # timeseries_obj = timeseries.TimeSeries(timeindex=timeindex)
-        #
-        # # create dummy time series
-        # loads_active_power = pd.DataFrame(
-        #     {"load1": [1.4, 2.3], "load2": [2.4, 1.3]}, index=timeindex
-        # )
-        # timeseries_obj.loads_active_power = loads_active_power
-        # generators_reactive_power = pd.DataFrame(
-        #     {"gen1": [1.4, 2.3], "gen2": [2.4, 1.3]}, index=timeindex
-        # )
-        # timeseries_obj.generators_reactive_power = generators_reactive_power
-        #
-        # # write to csv
-        # dir = os.path.join(os.getcwd(), "timeseries_csv")
-        # timeseries_obj.to_csv(dir)
-        #
-        # # reset TimeSeries
-        # timeseries_obj = timeseries.TimeSeries()
-        #
-        # timeseries_obj.from_csv(dir)
-        #
-        # pd.testing.assert_frame_equal(
-        #     timeseries_obj.loads_active_power,
-        #     loads_active_power,
-        #     check_freq=False,
-        # )
-        # pd.testing.assert_frame_equal(
-        #     timeseries_obj.generators_reactive_power,
-        #     generators_reactive_power,
-        #     check_freq=False,
-        # )
-        #
-        # shutil.rmtree(dir)
+
+        timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+
+        # create dummy time series
+        loads_reactive_power = pd.DataFrame(
+            {"load1": [1.4, 2.3], "load2": [2.4, 1.3]}, index=timeindex
+        )
+        self.edisgo.timeseries.loads_reactive_power = loads_reactive_power
+        generators_active_power = pd.DataFrame(
+            {"gen1": [1.4, 2.3], "gen2": [2.4, 1.3]}, index=timeindex
+        )
+        self.edisgo.timeseries.generators_active_power = generators_active_power
+        fluc_gen = pd.DataFrame(
+            data={
+                "wind": [1.23, 2.0],
+                "solar": [3.0, 4.0],
+            },
+            index=self.edisgo.timeseries.timeindex,
+        )
+        # fmt: off
+        self.edisgo.timeseries.time_series_raw. \
+            fluctuating_generators_active_power_by_technology = fluc_gen
+        # fmt: on
+
+        # write to csv
+        save_dir = os.path.join(os.getcwd(), "timeseries_csv")
+        self.edisgo.timeseries.to_csv(save_dir, time_series_raw=True)
+
+        # reset TimeSeries
+        self.edisgo.timeseries.reset()
+
+        self.edisgo.timeseries.from_csv(save_dir)
+
+        pd.testing.assert_frame_equal(
+            self.edisgo.timeseries.loads_reactive_power,
+            loads_reactive_power,
+            check_freq=False,
+        )
+        pd.testing.assert_frame_equal(
+            self.edisgo.timeseries.generators_active_power,
+            generators_active_power,
+            check_freq=False,
+        )
+        # fmt: off
+        assert (
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology.empty
+        )
+        # fmt: on
+
+        self.edisgo.timeseries.from_csv(save_dir, time_series_raw=True)
+
+        # fmt: off
+        pd.testing.assert_frame_equal(
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology,
+            fluc_gen,
+            check_freq=False,
+        )
+        # fmt: on
+
+        shutil.rmtree(save_dir)
 
 
 class TestTimeSeriesRaw:
