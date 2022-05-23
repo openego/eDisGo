@@ -2033,7 +2033,7 @@ class TimeSeriesRaw:
                     pd.read_csv(path, index_col=0, parse_dates=True),
                 )
                 if timeindex is None:
-                    timeindex = getattr(self, f"_{attr}").index
+                    timeindex = getattr(self, f"{attr}").index
         if timeindex is None:
             timeindex = pd.DatetimeIndex([])
         self._timeindex = timeindex
