@@ -1699,8 +1699,23 @@ class TestTimeSeries:
         ).all()
 
     def test_timesteps_load_feedin_case(self):
-        # ToDo implement
-        pass
+        self.edisgo.set_time_series_worst_case_analysis()
+        time_steps_load_case = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
+        ].values
+        assert (
+            self.edisgo.timeseries.timesteps_load_feedin_case.loc[time_steps_load_case]
+            == "load_case"
+        ).all()
+        time_steps_feedin_case = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
+        ].values
+        assert (
+            self.edisgo.timeseries.timesteps_load_feedin_case.loc[
+                time_steps_feedin_case
+            ]
+            == "feed-in_case"
+        ).all()
 
     def test_reduce_memory(self):
         # ToDo implement
