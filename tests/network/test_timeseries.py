@@ -1718,8 +1718,55 @@ class TestTimeSeries:
         ).all()
 
     def test_reduce_memory(self):
-        # ToDo implement
-        pass
+
+        self.edisgo.set_time_series_worst_case_analysis()
+        # fmt: off
+        self.edisgo.timeseries.time_series_raw.\
+            fluctuating_generators_active_power_by_technology = pd.DataFrame(
+                data={
+                    "wind": [1.23, 2.0, 5.0, 6.0],
+                    "solar": [3.0, 4.0, 7.0, 8.0],
+                },
+                index=self.edisgo.timeseries.timeindex,
+            )
+        # fmt: on
+
+        # check with default value
+        assert (self.edisgo.timeseries.loads_active_power.dtypes == "float64").all()
+        # fmt: off
+        assert (
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology.dtypes
+            == "float64"
+        ).all()
+        # fmt: on
+        self.edisgo.timeseries.reduce_memory()
+        assert (self.edisgo.timeseries.loads_active_power.dtypes == "float32").all()
+        assert (self.edisgo.timeseries.loads_reactive_power.dtypes == "float32").all()
+        # fmt: off
+        assert (
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology.dtypes
+            == "float32"
+        ).all()
+        # fmt: on
+
+        # check arguments
+        self.edisgo.timeseries.reduce_memory(
+            to_type="float16",
+            attr_to_reduce=["loads_reactive_power"],
+            time_series_raw=False,
+        )
+
+        assert (self.edisgo.timeseries.loads_active_power.dtypes == "float32").all()
+        assert (self.edisgo.timeseries.loads_reactive_power.dtypes == "float16").all()
+        # fmt: off
+        assert (
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology.dtypes
+            == "float32"
+        ).all()
+        # fmt: on
 
     def test_to_csv(self):
         # ToDo implement
