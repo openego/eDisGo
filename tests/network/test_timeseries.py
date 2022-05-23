@@ -1895,58 +1895,63 @@ class TestTimeSeries:
 
 
 class TestTimeSeriesRaw:
-    def test_reduce_memory(self):
-
-        time_series_raw = timeseries.TimeSeriesRaw()
+    @pytest.fixture(autouse=True)
+    def setup_class(self):
+        # add dummy time series
+        self.time_series_raw = timeseries.TimeSeriesRaw()
         timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
-        df = pd.DataFrame(
+        self.df = pd.DataFrame(
             data={
                 "residential": [1.23, 2.0, 5.0, 6.0],
                 "industrial": [3.0, 4.0, 7.0, 8.0],
             },
             index=timeindex,
         )
-        time_series_raw.conventional_loads_active_power_by_sector = df
-        time_series_raw.charging_points_active_power_by_use_case = df
-        q_control = pd.DataFrame(
+        self.time_series_raw.conventional_loads_active_power_by_sector = self.df
+        self.time_series_raw.charging_points_active_power_by_use_case = self.df
+        self.q_control = pd.DataFrame(
             {
                 "type": ["fixed_cosphi", "fixed_cosphi"],
                 "q_sign": [1, -1],
                 "power_factor": [1.0, 0.98],
-                "parametrisation": [None, None],
+                "parametrisation": [np.nan, np.nan],
             },
             index=["gen_1", "laod_2"],
         )
-        time_series_raw.q_control = q_control
+        self.time_series_raw.q_control = self.q_control
+
+    def test_reduce_memory(self):
 
         # check with default value
         assert (
-            time_series_raw.conventional_loads_active_power_by_sector.dtypes
+            self.time_series_raw.conventional_loads_active_power_by_sector.dtypes
             == "float64"
         ).all()
-        assert time_series_raw.q_control.power_factor.dtype == "float64"
-        time_series_raw.reduce_memory()
+        assert self.time_series_raw.q_control.power_factor.dtype == "float64"
+        self.time_series_raw.reduce_memory()
         assert (
-            time_series_raw.conventional_loads_active_power_by_sector.dtypes
+            self.time_series_raw.conventional_loads_active_power_by_sector.dtypes
             == "float32"
         ).all()
         assert (
-            time_series_raw.charging_points_active_power_by_use_case.dtypes == "float32"
+            self.time_series_raw.charging_points_active_power_by_use_case.dtypes
+            == "float32"
         ).all()
-        assert time_series_raw.q_control.power_factor.dtype == "float64"
+        assert self.time_series_raw.q_control.power_factor.dtype == "float64"
 
         # check arguments
-        time_series_raw.reduce_memory(
+        self.time_series_raw.reduce_memory(
             to_type="float16",
             attr_to_reduce=["conventional_loads_active_power_by_sector"],
         )
 
         assert (
-            time_series_raw.conventional_loads_active_power_by_sector.dtypes
+            self.time_series_raw.conventional_loads_active_power_by_sector.dtypes
             == "float16"
         ).all()
         assert (
-            time_series_raw.charging_points_active_power_by_use_case.dtypes == "float32"
+            self.time_series_raw.charging_points_active_power_by_use_case.dtypes
+            == "float32"
         ).all()
 
     def test_to_csv(self):
