@@ -1137,19 +1137,17 @@ class Topology:
 
         # generate generator name and check uniqueness
         if not np.isnan(bus_s.lv_grid_id) and bus_s.lv_grid_id is not None:
-            tmp = "LVGrid_" + str(int(bus_s.lv_grid_id))
+            tmp = f"LVGrid_{int(bus_s.lv_grid_id)}"
         else:
-            tmp = "MVGrid_" + str(int(bus_s.mv_grid_id))
-        tmp = tmp + "_" + generator_type
+            tmp = f"MVGrid_{int(bus_s.mv_grid_id)}"
+        tmp = f"{tmp}_{generator_type}"
         generator_id = kwargs.pop("generator_id", None)
         if generator_id is not None:
-            tmp = tmp + "_" + str(generator_id)
-        generator_name = "Generator_{}".format(tmp)
+            tmp = f"{tmp}_{generator_id}"
+        generator_name = f"Generator_{tmp}"
         while generator_name in self.generators_df.index:
             random.seed(a=generator_name)
-            generator_name = "Generator_{}_{}".format(
-                tmp, random.randint(10**8, 10**9)
-            )
+            generator_name = f"Generator_{tmp}_{random.randint(10**8, 10**9)}"
 
         # create new generator dataframe
         data = {
