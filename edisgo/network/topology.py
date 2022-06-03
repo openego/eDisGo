@@ -1205,28 +1205,26 @@ class Topology:
             bus_s = self.buses_df.loc[bus]
         except KeyError:
             raise ValueError(
-                "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus)
+                f"Specified bus {bus} is not valid as it is not defined in buses_df."
             )
 
         # generate storage name and check uniqueness
         if not np.isnan(bus_s.lv_grid_id) and bus_s.lv_grid_id is not None:
-            grid_name = "LVGrid_" + str(int(bus_s.lv_grid_id))
+            grid_name = f"LVGrid_{int(bus_s.lv_grid_id)}"
         else:
-            grid_name = "MVGrid_" + str(int(bus_s.mv_grid_id))
+            grid_name = f"MVGrid_{int(bus_s.mv_grid_id)}"
         storage_id = len(self._grids[grid_name].storage_units_df) + 1
-        storage_name = "StorageUnit_{}_{}".format(grid_name, storage_id)
+        storage_name = f"StorageUnit_{grid_name}_{storage_id}"
         if storage_name in self.storage_units_df.index:
-            storage_name = "StorageUnit_{}_{}".format(grid_name, storage_id + 1)
+            storage_name = f"StorageUnit_{grid_name}_{storage_id + 1}"
             while storage_name in self.storage_units_df.index:
                 random.seed(a=storage_name)
-                storage_name = "StorageUnit_{}_{}".format(
-                    grid_name, random.randint(10**8, 10**9)
-                )
+                storage_name = f"StorageUnit_{grid_name}_{random.randint(10**8, 10**9)}"
 
         # create new storage unit dataframe
         data = {"bus": bus, "p_nom": p_nom, "control": control}
         data.update(kwargs)
+
         new_df = (
             pd.Series(
                 data,
