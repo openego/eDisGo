@@ -3,9 +3,6 @@ import os
 import sys
 
 from setuptools import find_packages, setup
-from setuptools.command.install import install
-
-BASEPATH = ".eDisGo"
 
 if sys.version_info[:2] < (3, 7):
     error = (
@@ -31,29 +28,6 @@ def read(fname):
 
     """
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
-
-
-class InstallSetup(install):
-    """
-    Run setup installation.
-    """
-
-    def run(self):
-        self.create_edisgo_path()
-        install.run(self)
-
-    @staticmethod
-    def create_edisgo_path():
-        """
-        Create edisgo path if missing.
-        """
-        edisgo_path = os.path.join(os.path.expanduser("~"), BASEPATH)
-        data_path = os.path.join(edisgo_path, "data")
-
-        if not os.path.isdir(edisgo_path):
-            os.mkdir(edisgo_path)
-        if not os.path.isdir(data_path):
-            os.mkdir(data_path)
 
 
 requirements = [
@@ -121,7 +95,7 @@ setup(
     packages=find_packages(),
     url="https://github.com/openego/eDisGo",
     license="GNU Affero General Public License v3.0",
-    author="birgits, AnyaHe, gplssm, nesnoj, jaappedersen, Elias, boltbeard",
+    author="birgits, AnyaHe, khelfen, gplssm, nesnoj, jaappedersen, Elias, boltbeard",
     author_email="anya.heider@rl-institut.de",
     description="A python package for distribution network analysis and optimization",
     long_description=read("README.md"),
@@ -130,13 +104,8 @@ setup(
     extras_require=extras,
     package_data={
         "edisgo": [
-            os.path.join("config", "config_system"),
             os.path.join("config", "*.cfg"),
             os.path.join("equipment", "*.csv"),
         ]
-    },
-    cmdclass={"install": InstallSetup},
-    entry_points={
-        "console_scripts": ["edisgo_run = edisgo.tools.edisgo_run:edisgo_run"]
     },
 )

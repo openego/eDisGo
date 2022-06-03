@@ -174,7 +174,7 @@ def add_basemap(ax, zoom=12):
     Adds map to a plot.
 
     """
-    url = ctx.sources.ST_TONER_LITE
+    url = ctx.providers.Stamen.TonerLite
     xmin, xmax, ymin, ymax = ax.axis()
     basemap, extent = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=url)
     ax.imshow(basemap, extent=extent, interpolation="bilinear")
@@ -667,7 +667,7 @@ def mv_grid_topology(
     ax = plt.gca()
 
     # plot network district
-    if grid_district_geom:
+    if grid_district_geom and geopandas:
         try:
             projection = 3857 if contextily and background_map else 4326
             crs = {
