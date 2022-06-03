@@ -1488,7 +1488,8 @@ class TimeSeries:
         Overwrites reactive power time series in case they already exist.
         Parameters
         -----------
-        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` or \
+            None
             Sets fixed cosphi parameters for generators.
             Possible options are:
             * 'default'
@@ -1513,10 +1514,17 @@ class TimeSeries:
                         'default', in which case configuration from config section
                         `reactive_power_factor` is used.
                 Index of the dataframe is ignored.
-        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+
+            * None
+
+                No reactive power time series are set.
+
+            Default: None.
+        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` or None
             Sets fixed cosphi parameters for loads. The same options as for parameter
             `generators_parametrisation` apply.
-        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` \
+            or None
             Sets fixed cosphi parameters for storage units. The same options as for
             parameter `generators_parametrisation` apply.
         """
@@ -2104,7 +2112,7 @@ class TimeSeriesRaw:
                     pd.read_csv(path, index_col=0, parse_dates=True),
                 )
                 if timeindex is None:
-                    timeindex = getattr(self, f"_{attr}").index
+                    timeindex = getattr(self, f"{attr}").index
         if timeindex is None:
             timeindex = pd.DatetimeIndex([])
         self._timeindex = timeindex

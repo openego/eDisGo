@@ -1,4 +1,6 @@
 import logging
+import os
+import shutil
 
 from math import acos, tan
 
@@ -9,11 +11,12 @@ import pytest
 from pandas.util.testing import assert_frame_equal, assert_series_equal
 
 from edisgo import EDisGo
+from edisgo.network import timeseries
 from edisgo.tools.tools import assign_voltage_level_to_component
 
 
 class TestTimeSeries:
-    @pytest.yield_fixture(autouse=True)
+    @pytest.fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
 
@@ -1148,8 +1151,104 @@ class TestTimeSeries:
         # fmt: on
 
     def test_predefined_dispatchable_generators_by_technology(self):
-        # ToDo implement
-        pass
+
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+
+        # ############# all generators (default), with "other"
+        gens_p = pd.DataFrame(
+            data={
+                "other": [5, 6],
+            },
+            index=timeindex,
+        )
+
+        self.edisgo.timeseries.predefined_dispatchable_generators_by_technology(
+            self.edisgo, gens_p
+        )
+
+        # check shape
+        dispatchable_gens = self.edisgo.topology.generators_df[
+            ~self.edisgo.topology.generators_df.type.isin(["wind", "solar"])
+        ]
+        p_ts = self.edisgo.timeseries.generators_active_power
+        assert p_ts.shape == (2, len(dispatchable_gens))
+        # fmt: off
+        assert (
+                self.edisgo.timeseries.time_series_raw.
+                dispatchable_generators_active_power_by_technology.shape
+                == (2, 1)
+        )
+        # fmt: on
+
+        # check values
+        comp = "Generator_1"  # gas
+        p_nom = 0.775
+        exp = pd.Series(
+            data=[5.0 * p_nom, 6.0 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+
+        # ############# all generators (default), with "gas" and "other"
+        # overwrite type of generator GeneratorFluctuating_2
+        self.edisgo.topology._generators_df.at[
+            "GeneratorFluctuating_2", "type"
+        ] = "coal"
+        gens_p = pd.DataFrame(
+            data={
+                "other": [5, 6],
+                "gas": [7, 8],
+            },
+            index=timeindex,
+        )
+
+        self.edisgo.timeseries.predefined_dispatchable_generators_by_technology(
+            self.edisgo, gens_p
+        )
+
+        # check shape
+        dispatchable_gens = self.edisgo.topology.generators_df[
+            ~self.edisgo.topology.generators_df.type.isin(["wind", "solar"])
+        ]
+        p_ts = self.edisgo.timeseries.generators_active_power
+        assert p_ts.shape == (2, len(dispatchable_gens))
+        # fmt: off
+        assert (
+                self.edisgo.timeseries.time_series_raw.
+                dispatchable_generators_active_power_by_technology.shape
+                == (2, 2)
+        )
+        # fmt: on
+
+        # check values
+        comp = "Generator_1"  # gas
+        p_nom = 0.775
+        exp = pd.Series(
+            data=[7.0 * p_nom, 8.0 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+        comp = "GeneratorFluctuating_2"  # coal (other)
+        p_nom = 2.3
+        exp = pd.Series(
+            data=[5.0 * p_nom, 6.0 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+        # fmt: off
+        assert_series_equal(
+            self.edisgo.timeseries.time_series_raw.
+            dispatchable_generators_active_power_by_technology.loc[
+                :, "other"
+            ],
+            gens_p.loc[:, "other"],
+            check_dtype=False,
+        )
+        # fmt: on
 
     def test_predefined_conventional_loads_by_sector(self, caplog):
         index = pd.date_range("1/1/2018", periods=3, freq="H")
@@ -1503,169 +1602,505 @@ class TestTimeSeries:
         # fmt: on
 
     def test_fixed_cosphi(self):
-        # ToDo implement
-        pass
+        # set active power time series for fixed cosphi
+        timeindex = pd.date_range("1/1/1970", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+        ts_solar = np.array([0.1, 0.2, 0.3])
+        ts_wind = [0.4, 0.5, 0.6]
+        self.edisgo.set_time_series_active_power_predefined(
+            fluctuating_generators_ts=pd.DataFrame(
+                {"solar": ts_solar, "wind": ts_wind}, index=timeindex
+            ),
+            dispatchable_generators_ts=pd.DataFrame(
+                {"other": ts_solar}, index=timeindex
+            ),
+            conventional_loads_ts="demandlib",
+        )
+        self.edisgo.set_time_series_manual(
+            storage_units_p=pd.DataFrame({"Storage_1": ts_wind}, index=timeindex)
+        )
+
+        # test different options (default, Dataframe with default, Dataframe with
+        # different settings) - None is already tested in eDisGo class tests
+        gen = "GeneratorFluctuating_14"  # solar LV generator
+        load_1 = "Load_agricultural_LVGrid_3_1"
+        load_2 = "Load_residential_LVGrid_7_3"
+        load_3 = "Load_residential_LVGrid_8_12"
+        self.edisgo.set_time_series_reactive_power_control(
+            generators_parametrisation=pd.DataFrame(
+                {
+                    "components": [[gen]],
+                    "mode": ["default"],
+                    "power_factor": ["default"],
+                },
+                index=[1],
+            ),
+            loads_parametrisation=pd.DataFrame(
+                {
+                    "components": [[load_1], [load_2, load_3]],
+                    "mode": ["default", "capacitive"],
+                    "power_factor": ["default", 0.98],
+                },
+                index=[1, 2],
+            ),
+            storage_units_parametrisation="default",
+        )
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (3, 1)
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (3, 3)
+        assert self.edisgo.timeseries.storage_units_reactive_power.shape == (3, 1)
+        assert (
+            np.isclose(
+                self.edisgo.timeseries.generators_reactive_power.loc[:, gen],
+                ts_solar * -np.tan(np.arccos(0.95)) * 0.005,
+            )
+        ).all()
+        assert (
+            np.isclose(
+                self.edisgo.timeseries.loads_reactive_power.loc[:, load_1],
+                self.edisgo.timeseries.loads_active_power.loc[:, load_1]
+                * np.tan(np.arccos(0.95)),
+            )
+        ).all()
+        assert (
+            (
+                np.isclose(
+                    self.edisgo.timeseries.loads_reactive_power.loc[
+                        :, [load_2, load_3]
+                    ],
+                    self.edisgo.timeseries.loads_active_power.loc[:, [load_2, load_3]]
+                    * -np.tan(np.arccos(0.98)),
+                )
+            )
+            .all()
+            .all()
+        )
+        assert (
+            np.isclose(
+                self.edisgo.timeseries.storage_units_reactive_power.loc[:, "Storage_1"],
+                self.edisgo.timeseries.storage_units_active_power.loc[:, "Storage_1"]
+                * -np.tan(np.arccos(0.9)),
+            )
+        ).all()
 
     def test_residual_load(self):
-        # ToDo implement
-        pass
+        self.edisgo.set_time_series_worst_case_analysis()
+        time_steps_load_case = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
+        ].values
+        peak_load = (
+            self.edisgo.topology.loads_df.p_set.sum()
+            + self.edisgo.topology.storage_units_df.p_nom.sum()
+        )
+        assert np.isclose(
+            self.edisgo.timeseries.residual_load.loc[time_steps_load_case], peak_load
+        ).all()
+        time_steps_feedin_case = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
+        ].values
+        assert (
+            self.edisgo.timeseries.residual_load.loc[time_steps_feedin_case] < 0
+        ).all()
 
     def test_timesteps_load_feedin_case(self):
-        # ToDo implement
-        pass
+        self.edisgo.set_time_series_worst_case_analysis()
+        time_steps_load_case = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
+        ].values
+        assert (
+            self.edisgo.timeseries.timesteps_load_feedin_case.loc[time_steps_load_case]
+            == "load_case"
+        ).all()
+        time_steps_feedin_case = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
+        ].values
+        assert (
+            self.edisgo.timeseries.timesteps_load_feedin_case.loc[
+                time_steps_feedin_case
+            ]
+            == "feed-in_case"
+        ).all()
 
     def test_reduce_memory(self):
-        # ToDo implement
-        pass
+
+        self.edisgo.set_time_series_worst_case_analysis()
+        # fmt: off
+        self.edisgo.timeseries.time_series_raw.\
+            fluctuating_generators_active_power_by_technology = pd.DataFrame(
+                data={
+                    "wind": [1.23, 2.0, 5.0, 6.0],
+                    "solar": [3.0, 4.0, 7.0, 8.0],
+                },
+                index=self.edisgo.timeseries.timeindex,
+            )
+        # fmt: on
+
+        # check with default value
+        assert (self.edisgo.timeseries.loads_active_power.dtypes == "float64").all()
+        # fmt: off
+        assert (
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology.dtypes
+            == "float64"
+        ).all()
+        # fmt: on
+        self.edisgo.timeseries.reduce_memory()
+        assert (self.edisgo.timeseries.loads_active_power.dtypes == "float32").all()
+        assert (self.edisgo.timeseries.loads_reactive_power.dtypes == "float32").all()
+        # fmt: off
+        assert (
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology.dtypes
+            == "float32"
+        ).all()
+        # fmt: on
+
+        # check arguments
+        self.edisgo.timeseries.reduce_memory(
+            to_type="float16",
+            attr_to_reduce=["loads_reactive_power"],
+            time_series_raw=False,
+        )
+
+        assert (self.edisgo.timeseries.loads_active_power.dtypes == "float32").all()
+        assert (self.edisgo.timeseries.loads_reactive_power.dtypes == "float16").all()
+        # fmt: off
+        assert (
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology.dtypes
+            == "float32"
+        ).all()
+        # fmt: on
 
     def test_to_csv(self):
-        # ToDo implement
-        pass
-        # timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
-        # timeseries_obj = timeseries.TimeSeries(timeindex=timeindex)
-        #
-        # # create dummy time series
-        # loads_active_power = pd.DataFrame(
-        #     {"load1": [1.4, 2.3], "load2": [2.4, 1.3]}, index=timeindex
-        # )
-        # timeseries_obj.loads_active_power = loads_active_power
-        # generators_reactive_power = pd.DataFrame(
-        #     {"gen1": [1.4, 2.3], "gen2": [2.4, 1.3]}, index=timeindex
-        # )
-        # timeseries_obj.generators_reactive_power = generators_reactive_power
-        #
-        # # test with default values
-        # dir = os.path.join(os.getcwd(), "timeseries_csv")
-        # timeseries_obj.to_csv(dir)
-        #
-        # files_in_timeseries_dir = os.listdir(dir)
-        # assert len(files_in_timeseries_dir) == 2
-        # assert "loads_active_power.csv" in files_in_timeseries_dir
-        # assert "generators_reactive_power.csv" in files_in_timeseries_dir
-        #
-        # shutil.rmtree(dir)
-        #
-        # # test with reduce memory True
-        # timeseries_obj.to_csv(dir, reduce_memory=True)
-        #
-        # assert timeseries_obj.loads_active_power.load1.dtype == "float32"
-        #
-        # shutil.rmtree(dir, ignore_errors=True)
+
+        timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+
+        # create dummy time series
+        loads_active_power = pd.DataFrame(
+            {"load1": [1.4, 2.3], "load2": [2.4, 1.3]}, index=timeindex
+        )
+        self.edisgo.timeseries.loads_active_power = loads_active_power
+        generators_reactive_power = pd.DataFrame(
+            {"gen1": [1.4, 2.3], "gen2": [2.4, 1.3]}, index=timeindex
+        )
+        self.edisgo.timeseries.generators_reactive_power = generators_reactive_power
+        # fmt: off
+        self.edisgo.timeseries.time_series_raw. \
+            fluctuating_generators_active_power_by_technology = pd.DataFrame(
+                data={
+                    "wind": [1.23, 2.0],
+                    "solar": [3.0, 4.0],
+                },
+                index=self.edisgo.timeseries.timeindex,
+            )
+        # fmt: on
+
+        # test with default values
+        save_dir = os.path.join(os.getcwd(), "timeseries_csv")
+        self.edisgo.timeseries.to_csv(save_dir)
+
+        files_in_timeseries_dir = os.listdir(save_dir)
+        assert len(files_in_timeseries_dir) == 2
+        assert "loads_active_power.csv" in files_in_timeseries_dir
+        assert "generators_reactive_power.csv" in files_in_timeseries_dir
+
+        shutil.rmtree(save_dir)
+
+        # test with reduce memory True, to_type = float16 and saving TimeSeriesRaw
+        self.edisgo.timeseries.to_csv(
+            save_dir, reduce_memory=True, to_type="float16", time_series_raw=True
+        )
+
+        assert (
+            self.edisgo.timeseries.generators_reactive_power.dtypes == "float16"
+        ).all()
+        files_in_timeseries_dir = os.listdir(save_dir)
+        assert len(files_in_timeseries_dir) == 3
+        files_in_timeseries_raw_dir = os.listdir(
+            os.path.join(save_dir, "time_series_raw")
+        )
+        assert len(files_in_timeseries_raw_dir) == 1
+        assert (
+            "fluctuating_generators_active_power_by_technology.csv"
+            in files_in_timeseries_raw_dir
+        )
+
+        shutil.rmtree(save_dir, ignore_errors=True)
 
     def test_from_csv(self):
-        # ToDo implement
-        pass
-        # timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
-        # timeseries_obj = timeseries.TimeSeries(timeindex=timeindex)
-        #
-        # # create dummy time series
-        # loads_active_power = pd.DataFrame(
-        #     {"load1": [1.4, 2.3], "load2": [2.4, 1.3]}, index=timeindex
-        # )
-        # timeseries_obj.loads_active_power = loads_active_power
-        # generators_reactive_power = pd.DataFrame(
-        #     {"gen1": [1.4, 2.3], "gen2": [2.4, 1.3]}, index=timeindex
-        # )
-        # timeseries_obj.generators_reactive_power = generators_reactive_power
-        #
-        # # write to csv
-        # dir = os.path.join(os.getcwd(), "timeseries_csv")
-        # timeseries_obj.to_csv(dir)
-        #
-        # # reset TimeSeries
-        # timeseries_obj = timeseries.TimeSeries()
-        #
-        # timeseries_obj.from_csv(dir)
-        #
-        # pd.testing.assert_frame_equal(
-        #     timeseries_obj.loads_active_power,
-        #     loads_active_power,
-        #     check_freq=False,
-        # )
-        # pd.testing.assert_frame_equal(
-        #     timeseries_obj.generators_reactive_power,
-        #     generators_reactive_power,
-        #     check_freq=False,
-        # )
-        #
-        # shutil.rmtree(dir)
+
+        timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+
+        # create dummy time series
+        loads_reactive_power = pd.DataFrame(
+            {"load1": [1.4, 2.3], "load2": [2.4, 1.3]}, index=timeindex
+        )
+        self.edisgo.timeseries.loads_reactive_power = loads_reactive_power
+        generators_active_power = pd.DataFrame(
+            {"gen1": [1.4, 2.3], "gen2": [2.4, 1.3]}, index=timeindex
+        )
+        self.edisgo.timeseries.generators_active_power = generators_active_power
+        fluc_gen = pd.DataFrame(
+            data={
+                "wind": [1.23, 2.0],
+                "solar": [3.0, 4.0],
+            },
+            index=self.edisgo.timeseries.timeindex,
+        )
+        # fmt: off
+        self.edisgo.timeseries.time_series_raw. \
+            fluctuating_generators_active_power_by_technology = fluc_gen
+        # fmt: on
+
+        # write to csv
+        save_dir = os.path.join(os.getcwd(), "timeseries_csv")
+        self.edisgo.timeseries.to_csv(save_dir, time_series_raw=True)
+
+        # reset TimeSeries
+        self.edisgo.timeseries.reset()
+
+        self.edisgo.timeseries.from_csv(save_dir)
+
+        pd.testing.assert_frame_equal(
+            self.edisgo.timeseries.loads_reactive_power,
+            loads_reactive_power,
+            check_freq=False,
+        )
+        pd.testing.assert_frame_equal(
+            self.edisgo.timeseries.generators_active_power,
+            generators_active_power,
+            check_freq=False,
+        )
+        # fmt: off
+        assert (
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology.empty
+        )
+        # fmt: on
+
+        self.edisgo.timeseries.from_csv(save_dir, time_series_raw=True)
+
+        # fmt: off
+        pd.testing.assert_frame_equal(
+            self.edisgo.timeseries.time_series_raw.
+            fluctuating_generators_active_power_by_technology,
+            fluc_gen,
+            check_freq=False,
+        )
+        # fmt: on
+
+        shutil.rmtree(save_dir)
 
 
 class TestTimeSeriesRaw:
+    @pytest.fixture(autouse=True)
+    def setup_class(self):
+        # add dummy time series
+        self.time_series_raw = timeseries.TimeSeriesRaw()
+        timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
+        self.df = pd.DataFrame(
+            data={
+                "residential": [1.23, 2.0, 5.0, 6.0],
+                "industrial": [3.0, 4.0, 7.0, 8.0],
+            },
+            index=timeindex,
+        )
+        self.time_series_raw.conventional_loads_active_power_by_sector = self.df
+        self.time_series_raw.charging_points_active_power_by_use_case = self.df
+        self.q_control = pd.DataFrame(
+            {
+                "type": ["fixed_cosphi", "fixed_cosphi"],
+                "q_sign": [1, -1],
+                "power_factor": [1.0, 0.98],
+                "parametrisation": [np.nan, np.nan],
+            },
+            index=["gen_1", "laod_2"],
+        )
+        self.time_series_raw.q_control = self.q_control
+
     def test_reduce_memory(self):
-        # ToDo implement
-        pass
+
+        # check with default value
+        assert (
+            self.time_series_raw.conventional_loads_active_power_by_sector.dtypes
+            == "float64"
+        ).all()
+        assert self.time_series_raw.q_control.power_factor.dtype == "float64"
+        self.time_series_raw.reduce_memory()
+        assert (
+            self.time_series_raw.conventional_loads_active_power_by_sector.dtypes
+            == "float32"
+        ).all()
+        assert (
+            self.time_series_raw.charging_points_active_power_by_use_case.dtypes
+            == "float32"
+        ).all()
+        assert self.time_series_raw.q_control.power_factor.dtype == "float64"
+
+        # check arguments
+        self.time_series_raw.reduce_memory(
+            to_type="float16",
+            attr_to_reduce=["conventional_loads_active_power_by_sector"],
+        )
+
+        assert (
+            self.time_series_raw.conventional_loads_active_power_by_sector.dtypes
+            == "float16"
+        ).all()
+        assert (
+            self.time_series_raw.charging_points_active_power_by_use_case.dtypes
+            == "float32"
+        ).all()
 
     def test_to_csv(self):
-        # ToDo implement
-        pass
+
+        # test with default values
+        save_dir = os.path.join(os.getcwd(), "timeseries_csv")
+        self.time_series_raw.to_csv(save_dir)
+
+        files_in_timeseries_dir = os.listdir(save_dir)
+        assert len(files_in_timeseries_dir) == 3
+        assert (
+            "conventional_loads_active_power_by_sector.csv" in files_in_timeseries_dir
+        )
+        assert "charging_points_active_power_by_use_case.csv" in files_in_timeseries_dir
+        assert "q_control.csv" in files_in_timeseries_dir
+
+        shutil.rmtree(save_dir)
+
+        # test with reduce memory True, to_type = float16 and saving TimeSeriesRaw
+        self.time_series_raw.to_csv(save_dir, reduce_memory=True, to_type="float16")
+
+        assert (
+            self.time_series_raw.conventional_loads_active_power_by_sector.dtypes
+            == "float16"
+        ).all()
+        files_in_timeseries_dir = os.listdir(save_dir)
+        assert len(files_in_timeseries_dir) == 3
+
+        shutil.rmtree(save_dir, ignore_errors=True)
 
     def test_from_csv(self):
-        # ToDo implement
-        pass
+
+        # write to csv
+        save_dir = os.path.join(os.getcwd(), "timeseries_csv")
+        self.time_series_raw.to_csv(save_dir, time_series_raw=True)
+
+        # reset TimeSeriesRaw
+        self.time_series_raw = timeseries.TimeSeriesRaw()
+
+        self.time_series_raw.from_csv(save_dir)
+
+        pd.testing.assert_frame_equal(
+            self.time_series_raw.conventional_loads_active_power_by_sector,
+            self.df,
+            check_freq=False,
+        )
+        pd.testing.assert_frame_equal(
+            self.time_series_raw.charging_points_active_power_by_use_case,
+            self.df,
+            check_freq=False,
+        )
+        pd.testing.assert_frame_equal(
+            self.time_series_raw.q_control,
+            self.q_control,
+            check_freq=False,
+        )
+
+        shutil.rmtree(save_dir)
 
 
 class TestTimeSeriesHelperFunctions:
     def test_drop_component_time_series(self):
-        # ToDo implement
-        pass
-        # """Test for _drop_existing_timseries_method"""
-        # storage_1 = self.topology.add_storage_unit("Bus_MVStation_1", 0.3)
-        # timeindex = pd.date_range("1/1/1970", periods=2, freq="H")
-        # timeseries.get_component_timeseries(edisgo_obj=self, mode="worst-case")
-        # # test drop load timeseries
-        # assert hasattr(
-        #     self.timeseries.loads_active_power, "Load_agricultural_LVGrid_1_1"
-        # )
-        # assert hasattr(
-        #     self.timeseries.loads_reactive_power,
-        #     "Load_agricultural_LVGrid_1_1",
-        # )
-        # timeseries._drop_existing_component_timeseries(
-        #     self, "loads", ["Load_agricultural_LVGrid_1_1"]
-        # )
-        # with pytest.raises(KeyError):
-        #     self.timeseries.loads_active_power.loc[
-        #         timeindex, "Load_agricultural_LVGrid_1_1"
-        #     ]
-        # with pytest.raises(KeyError):
-        #     self.timeseries.loads_reactive_power.loc[
-        #         timeindex, "Load_agricultural_LVGrid_1_1"
-        #     ]
-        # # test drop generators timeseries
-        # assert hasattr(
-        #     self.timeseries.generators_active_power, "GeneratorFluctuating_7"
-        # )
-        # assert hasattr(
-        #     self.timeseries.generators_reactive_power, "GeneratorFluctuating_7"
-        # )
-        # timeseries._drop_existing_component_timeseries(
-        #     self, "generators", "GeneratorFluctuating_7"
-        # )
-        # with pytest.raises(KeyError):
-        #     self.timeseries.generators_active_power.loc[
-        #         timeindex, "GeneratorFluctuating_7"
-        #     ]
-        # with pytest.raises(KeyError):
-        #     self.timeseries.generators_reactive_power.loc[
-        #         timeindex, "GeneratorFluctuating_7"
-        #     ]
-        # # test drop storage units timeseries
-        # assert hasattr(self.timeseries.storage_units_active_power, storage_1)
-        # assert hasattr(self.timeseries.storage_units_reactive_power, storage_1)
-        # timeseries._drop_existing_component_timeseries(
-        # self, "storage_units", storage_1
-        # )
-        # with pytest.raises(KeyError):
-        #     self.timeseries.storage_units_active_power.loc[timeindex, storage_1]
-        # with pytest.raises(KeyError):
-        #     self.timeseries.storage_units_reactive_power.loc[timeindex, storage_1]
-        # self.topology.remove_storage_unit(storage_1)
+
+        time_series_obj = timeseries.TimeSeries()
+
+        # check that no error is raised in case of empty dataframe
+        timeseries.drop_component_time_series(
+            time_series_obj, "loads_active_power", "Load1"
+        )
+
+        # add dummy time series
+        time_series_obj.timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
+        df = pd.DataFrame(
+            data={
+                "load_1": [1.23, 2.0, 5.0, 6.0],
+                "load_2": [3.0, 4.0, 7.0, 8.0],
+            },
+            index=time_series_obj.timeindex,
+        )
+        time_series_obj.loads_active_power = df
+
+        # check with dropping one existing load and one non-existing load
+        timeseries.drop_component_time_series(
+            time_series_obj, "loads_active_power", ["Load1", "load_1"]
+        )
+        assert time_series_obj.loads_active_power.shape == (4, 1)
+        assert "load_1" not in time_series_obj.loads_active_power.columns
+
+        # check with dropping all existing loads
+        timeseries.drop_component_time_series(
+            time_series_obj, "loads_active_power", ["load_2"]
+        )
+        assert time_series_obj.loads_active_power.empty
 
     def test_add_component_time_series(self):
-        # ToDo implement
-        pass
+
+        time_series_obj = timeseries.TimeSeries()
+        time_series_obj.timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
+
+        df = pd.DataFrame(
+            data={
+                "load_1": [1.23, 2.0, 5.0, 6.0],
+                "load_2": [3.0, 4.0, 7.0, 8.0],
+            },
+            index=time_series_obj.timeindex,
+        )
+
+        # check with matching time index
+        timeseries._add_component_time_series(time_series_obj, "loads_active_power", df)
+        assert time_series_obj.loads_active_power.shape == (4, 2)
+        assert "load_1" in time_series_obj.loads_active_power.columns
+
+        # check with time indexes that do not match
+        df = pd.DataFrame(
+            data={
+                "load_3": [5.0, 6.0],
+                "load_4": [7.0, 8.0],
+            },
+            index=time_series_obj.timeindex[0:2],
+        )
+        timeseries._add_component_time_series(
+            time_series_obj, "loads_active_power", df.iloc[:2]
+        )
+        assert time_series_obj.loads_active_power.shape == (4, 4)
+        assert "load_3" in time_series_obj.loads_active_power.columns
 
     def test_check_if_components_exist(self):
-        # ToDo implement
-        pass
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+
+        # check all components exist
+        component_names = timeseries._check_if_components_exist(
+            edisgo_obj,
+            ["GeneratorFluctuating_15", "GeneratorFluctuating_24"],
+            "generators",
+        )
+        assert len(component_names) == 2
+        assert "GeneratorFluctuating_15" in component_names
+
+        # check no components exist
+        component_names = timeseries._check_if_components_exist(
+            edisgo_obj, ["Storage_3"], "storage_units"
+        )
+        assert len(component_names) == 0
+
+        # check some components exist
+        component_names = timeseries._check_if_components_exist(
+            edisgo_obj,
+            ["Load_residential_LVGrid_5_3", "Load_residential_LVGrid_5"],
+            "loads",
+        )
+        assert len(component_names) == 1
+        assert "Load_residential_LVGrid_5_3" in component_names
