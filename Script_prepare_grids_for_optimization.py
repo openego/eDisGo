@@ -9,12 +9,14 @@ from edisgo.tools.complexity_reduction import remove_1m_lines_from_edisgo, extra
 from edisgo.network.timeseries import _get_attributes_to_save
 from edisgo.network.topology import Topology
 from edisgo.network.electromobility import get_energy_bands_for_optimization
+from edisgo.opf.lopf import import_flexibility_bands
 
 # Script to prepare grids for optimisation. The necessary steps are:
 # Timeseries: Extract extreme weeks
 # Topology: Remove 1m lines, extract feeders, extract downstream nodes matrix
 
-grid_dir = r"H:\Grids"
+grid_dir = r"H:\no_HP"
+grid_dir_ladina = r"H:\Grids Ladina"
 ts_reduction_dir = r"C:\Users\aheider\Documents\Grids\simbev_nep_2035_results"
 bands_dir = r"C:\Users\aheider\Documents\Grids"
 data_dir = r"C:\Users\aheider\Documents\Grids"
@@ -23,11 +25,13 @@ use_mp = False
 remove_1m_lines = False
 extract_bands = False
 extract_extreme_weeks = False
+extract_extreme_weeks_no_hp = False
 reduce_timeseries_to_extreme_weeks = False
+reduce_timeseries_to_extreme_weeks_no_hp = True
 reduce_bands_to_extreme_weeks = False
 extract_feeders = False
 get_downstream_node_matrix = False
-cpu_count = 6#int(mp.cpu_count()/2)
+cpu_count = 1#int(mp.cpu_count()/2)
 
 
 def remove_1m_lines_from_edisgo_parallel(grid_id):
@@ -67,6 +71,33 @@ def save_extreme_weeks_timeindex(grid_id):
                      parse_dates=True)
     timeindex = pd.DataFrame(index=ts.index)
     timeindex.to_csv(os.path.join(grid_dir, str(grid_id), "timeindex_extreme_weeks.csv"))
+
+
+def save_extreme_weeks_timeindex_no_hp(grid_id):
+    # get extreme week generation
+    ts = pd.read_csv(os.path.join(grid_dir, str(grid_id),
+                                  "timeseries", "generators_active_power.csv"), index_col=0,
+                     parse_dates=True).sum(axis=1)
+    max_gen = ts[ts == ts.max()]
+    week = max_gen.index.isocalendar().week[0]
+    # adapt week if timestep is within the first seven hours
+    extreme_week = ts[ts.index.isocalendar().week == week].reset_index()
+    if extreme_week.loc[extreme_week.snapshot == max_gen.index[0]].index[0] < 7:
+        week = week-1
+        extreme_week = ts[ts.index.isocalendar().week == week].reset_index()
+    week_max_gen = pd.date_range(extreme_week.loc[7, "snapshot"], periods=7*24,
+                                 freq="1h")
+    # extreme week with highest demand from heat: 8
+    week_max_heat_demand = pd.date_range("2011-02-21 07:00:00", periods=7*24,
+                                         freq="1h")
+    if week < 8:
+        index = week_max_gen.append(week_max_heat_demand)
+    elif week == 8:
+        raise NotImplementedError("Weeks of highest demand and generation are the same.")
+    else:
+        index = week_max_heat_demand.append(week_max_gen)
+    timeindex = pd.DataFrame(index=index)
+    timeindex.to_csv(os.path.join(grid_dir, str(grid_id), "timeindex_extreme_weeks.csv"))
     
     
 def extract_extreme_weeks_parallel(grid_id):
@@ -74,12 +105,12 @@ def extract_extreme_weeks_parallel(grid_id):
     Method to get extreme weeks from previous run and reduce new objects to these weeks.
     """
     # load extreme weeks
-    ts = pd.read_csv(os.path.join(grid_dir, str(grid_id), "timeindex_extreme_weeks.csv"), index_col=0,
-                     parse_dates=True)
+    ts = pd.read_csv(os.path.join(grid_dir, str(grid_id), "timeindex_extreme_weeks.csv"),
+                     index_col=0, parse_dates=True)
     timeindex = ts.index
     # load original edisgo object
-    edisgo = import_edisgo_from_files(os.path.join(grid_dir, str(grid_id), strategy), import_topology=False,
-                                      import_timeseries=True)
+    edisgo = import_edisgo_from_files(os.path.join(grid_dir, str(grid_id), strategy),
+                                      import_topology=False, import_timeseries=True)
     if not (timeindex.isin(edisgo.timeseries.timeindex)).all():
         raise ValueError("Edisgo object does not contain the given extreme weeks")
     # adapt timeseries
@@ -94,12 +125,51 @@ def extract_extreme_weeks_parallel(grid_id):
     # Todo: adapt flexibility bands
 
 
+def extract_extreme_weeks_ladina(grid_id, adapt_edisgo=False, adapt_bands=True):
+    """
+    Method to get extreme weeks from previous run and reduce new objects to these weeks.
+    """
+    # load extreme weeks
+    ts = pd.read_csv(os.path.join(grid_dir, str(grid_id), "timeindex_extreme_weeks.csv"),
+                     index_col=0, parse_dates=True)
+    timeindex = ts.index
+    if adapt_edisgo:
+        # load original edisgo object
+        edisgo = import_edisgo_from_files(os.path.join(grid_dir, str(grid_id)),
+                                          import_topology=True, import_timeseries=True)
+        if not (timeindex.isin(edisgo.timeseries.timeindex)).all():
+            raise ValueError("Edisgo object does not contain the given extreme weeks")
+        # adapt timeseries
+        attributes = _get_attributes_to_save()
+        edisgo.timeseries.timeindex = timeindex
+        for attr in attributes:
+            if not getattr(edisgo.timeseries, attr).empty:
+                setattr(edisgo.timeseries, attr,
+                        getattr(edisgo.timeseries, attr).loc[timeindex])
+        # save adapted timeseries object
+        edisgo.save(os.path.join(grid_dir_ladina, str(grid_id)))
+    if adapt_bands:
+        # adapt flexibility bands
+        bands = import_flexibility_bands(os.path.join(data_dir, str(grid_id)),
+                                         use_cases=["home", "work"])
+        for name, band in bands.items():
+            if name == "upper_power":
+                band.resample("1h").mean().loc[timeindex].to_csv(
+                    os.path.join(grid_dir_ladina, str(grid_id), name+".csv"))
+            else:
+                band.resample("1h").max().loc[timeindex].to_csv(
+                    os.path.join(grid_dir_ladina, str(grid_id), name + ".csv"))
+            # elif name == "lower_energy":
+            #     band.resample("1h").min().loc[timeindex].to_csv(
+            #         os.path.join(grid_dir_ladina, str(grid_id), name + ".csv"))
+
+
 def extract_extreme_weeks_from_bands(grid_id):
     """
     Method to reduce energy bands to extreme weeks and save them
     """
-    ts = pd.read_csv(os.path.join(grid_dir, str(grid_id), "timeindex_extreme_weeks.csv"), index_col=0,
-                     parse_dates=True)
+    ts = pd.read_csv(os.path.join(grid_dir, str(grid_id), "timeindex_extreme_weeks.csv"),
+                     index_col=0, parse_dates=True)
     timeindex = ts.index
     bands = ["upper_power", "upper_energy", "lower_energy"]
     bands_dict = {}
@@ -126,12 +196,15 @@ def get_downstream_node_matrix_feeders_parallel_server(grid_id_feeder_tuple):
     grid_id = grid_id_feeder_tuple[0]
     feeder_id = grid_id_feeder_tuple[1]
     edisgo_dir = os.path.join(grid_dir, str(grid_id), "feeder", str(feeder_id))
-    if os.path.isfile(edisgo_dir+'/downstream_node_matrix_{}_{}.csv'.format(grid_id, feeder_id)):
+    if os.path.isfile(edisgo_dir+'/downstream_node_matrix_{}_{}.csv'.format(grid_id,
+                                                                            feeder_id)):
         return
     try:
         edisgo_obj = import_edisgo_from_files(edisgo_dir)
-        downstream_node_matrix = get_downstream_nodes_matrix_iterative(edisgo_obj.topology)
-        downstream_node_matrix.to_csv(edisgo_dir+'/downstream_node_matrix_{}_{}.csv'.format(grid_id, feeder_id))
+        downstream_node_matrix = \
+            get_downstream_nodes_matrix_iterative(edisgo_obj.topology)
+        downstream_node_matrix.to_csv(
+            edisgo_dir+'/downstream_node_matrix_{}_{}.csv'.format(grid_id, feeder_id))
     except Exception as e:
         print('Problem in feeder {} of grid {}.'.format(feeder_id, grid_id))
         print(e.args)
@@ -212,9 +285,15 @@ if __name__ == '__main__':
         if extract_extreme_weeks:
             print("Extracting extreme weeks.")
             pool.map_async(save_extreme_weeks_timeindex,grid_ids).get()
+        if extract_extreme_weeks_no_hp:
+            print("Extracting extreme weeks no hp.")
+            pool.map_async(save_extreme_weeks_timeindex_no_hp,grid_ids).get()
         if reduce_timeseries_to_extreme_weeks:
             print("Reducing timeseries.")
             pool.map_async(extract_extreme_weeks_parallel, grid_ids).get()
+        if reduce_timeseries_to_extreme_weeks_no_hp:
+            print("Reducing timeseries and bands no hp.")
+            pool.map_async(extract_extreme_weeks_ladina, grid_ids).get()
         if reduce_bands_to_extreme_weeks:
             print("Reducing bands.")
             pool.map_async(extract_extreme_weeks_from_bands, grid_ids).get()
@@ -243,12 +322,18 @@ if __name__ == '__main__':
             if extract_extreme_weeks:
                 print("Extracting extreme weeks.")
                 save_extreme_weeks_timeindex(grid_id)
+            if extract_extreme_weeks_no_hp:
+                print("Extracting extreme weeks no hp.")
+                save_extreme_weeks_timeindex_no_hp(grid_id)
             if reduce_bands_to_extreme_weeks:
                 print("Reducing bands.")
                 extract_extreme_weeks_from_bands(grid_id)
             if reduce_timeseries_to_extreme_weeks:
                 print("Reducing timeseries.")
                 extract_extreme_weeks_parallel(grid_id)
+            if reduce_timeseries_to_extreme_weeks_no_hp:
+                print("Reducing timeseries and bands no hp.")
+                extract_extreme_weeks_ladina(grid_id)
             if extract_feeders:
                 print("Extracting feeders.")
                 extract_feeders_parallel(grid_id)
