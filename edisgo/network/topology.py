@@ -1,53 +1,59 @@
 import logging
-import random
-import pandas as pd
-import numpy as np
 import os
+import random
 import warnings
+from pathlib import Path
+from zipfile import ZipFile
+
 import networkx as nx
+import numpy as np
+import pandas as pd
 from sklearn import preprocessing
 
 import edisgo
-
-from pathlib import Path
-from zipfile import ZipFile
-from edisgo.network.grids import MVGrid, LVGrid
-from edisgo.network.components import Switch
-from edisgo.tools.tools import (
-    calculate_line_resistance,
-    calculate_line_reactance,
-    calculate_apparent_power,
-    select_cable
-)
-from edisgo.tools import networkx_helper
-from edisgo.tools import geo
 from edisgo.io.ding0_import import _validate_ding0_grid_import
+from edisgo.network.components import Switch
+from edisgo.network.grids import LVGrid, MVGrid
+from edisgo.tools import geo, networkx_helper
+from edisgo.tools.tools import (calculate_apparent_power,
+                                calculate_line_reactance,
+                                calculate_line_resistance, select_cable)
 
 if "READTHEDOCS" not in os.environ:
-    from shapely.wkt import loads as wkt_loads
-    from shapely.geometry import Point, LineString
+    from shapely.geometry import LineString, Point
     from shapely.ops import transform
+    from shapely.wkt import loads as wkt_loads
 
 logger = logging.getLogger("edisgo")
 
 COLUMNS = {
-    "loads_df": [
-        "bus", "peak_load", "annual_consumption", "sector"],
-    "generators_df": [
-            "bus", "p_nom", "type", "control", "weather_cell_id", "subtype"],
+    "loads_df": ["bus", "peak_load", "annual_consumption", "sector"],
+    "generators_df": ["bus", "p_nom", "type", "control", "weather_cell_id", "subtype"],
     "charging_points_df": ["bus", "p_nom", "use_case"],
     "storage_units_df": ["bus", "control", "p_nom"],
     "transformers_df": ["bus0", "bus1", "x_pu", "r_pu", "s_nom", "type_info"],
     "lines_df": [
-        "bus0", "bus1", "length", "x", "r", "s_nom", "num_parallel",
-        "type_info", "kind",
-
+        "bus0",
+        "bus1",
+        "length",
+        "x",
+        "r",
+        "s_nom",
+        "num_parallel",
+        "type_info",
+        "kind",
     ],
     "buses_df": ["v_nom", "x", "y", "mv_grid_id", "lv_grid_id", "in_building"],
     "switches_df": ["bus_open", "bus_closed", "branch", "type_info"],
-    "lv_grids_df": ["peak_generation_capacity", "peak_load", "installed_charging_point_capacity",
-                    "substation_capacity", "generators_weight", "loads_weight",
-                    "installed_charging_point_weight"],
+    "lv_grids_df": [
+        "peak_generation_capacity",
+        "peak_load",
+        "installed_charging_point_capacity",
+        "substation_capacity",
+        "generators_weight",
+        "loads_weight",
+        "installed_charging_point_weight",
+    ],
 }
 
 
@@ -77,9 +83,7 @@ class Topology:
     def __init__(self, **kwargs):
 
         # load technical data of equipment
-        self._equipment_data = self._load_equipment_data(
-            kwargs.get("config", None)
-        )
+        self._equipment_data = self._load_equipment_data(kwargs.get("config", None))
 
     @staticmethod
     def _load_equipment_data(config=None):
@@ -115,7 +119,7 @@ class Topology:
 
         with
 
-        .. math:: Z = \frac{u_{kr}}{100} \cdot \frac{U_n^2}{S_{nom}}
+        .. math:: Z = \frac{u_{kr}}{100} \\cdot \frac{U_n^2}{S_{nom}}
 
         and
 
@@ -131,11 +135,11 @@ class Topology:
 
         with
 
-        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \cdot \frac{U_{nom}^2}{S_{nom}^2}
+        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \\cdot \frac{U_{nom}^2}{S_{nom}^2}
 
         $x_{pu}$ is calculated as follows:
 
-        .. math::  x_{pu} = \sqrt(z_{pu}^2-r_{pu}^2)
+        .. math::  x_{pu} = \\sqrt(z_{pu}^2-r_{pu}^2)
 
         """
 
@@ -168,9 +172,7 @@ class Topology:
                     "equipment_{}_parameters_{}".format(voltage_level, i)
                 ]
                 data["{}_{}".format(voltage_level, i)] = pd.read_csv(
-                    os.path.join(
-                        package_path, equipment_dir, equipment_parameters
-                    ),
+                    os.path.join(package_path, equipment_dir, equipment_parameters),
                     comment="#",
                     index_col="name",
                     delimiter=",",
@@ -182,12 +184,9 @@ class Topology:
                 if voltage_level == "lv" and i == "transformers":
                     data["{}_{}".format(voltage_level, i)]["r_pu"] = data[
                         "{}_{}".format(voltage_level, i)
-                    ]["P_k"] / (
-                        data["{}_{}".format(voltage_level, i)]["S_nom"]
-                    )
+                    ]["P_k"] / (data["{}_{}".format(voltage_level, i)]["S_nom"])
                     data["{}_{}".format(voltage_level, i)]["x_pu"] = np.sqrt(
-                        (data["{}_{}".format(voltage_level, i)]["u_kr"] / 100)
-                        ** 2
+                        (data["{}_{}".format(voltage_level, i)]["u_kr"] / 100) ** 2
                         - data["{}_{}".format(voltage_level, i)]["r_pu"] ** 2
                     )
         return data
@@ -557,8 +556,7 @@ class Topology:
         df = df.copy()
 
         df.loc[buses_in_building, "in_building"] = True
-        df.loc[
-            ~df.index.isin(buses_in_building), "in_building"] = False
+        df.loc[~df.index.isin(buses_in_building), "in_building"] = False
         self._buses_df = df
 
     @property
@@ -652,37 +650,53 @@ class Topology:
 
     @property
     def lv_grids_df(self):
-        lv_grids_df = pd.DataFrame(index=[_._id for _ in self.mv_grid.lv_grids], columns=COLUMNS["lv_grids_df"])
+        lv_grids_df = pd.DataFrame(
+            index=[_._id for _ in self.mv_grid.lv_grids], columns=COLUMNS["lv_grids_df"]
+        )
 
         lv_grids = list(self.mv_grid.lv_grids)
 
-        lv_grids_df.peak_generation_capacity = [_.peak_generation_capacity for _ in lv_grids]
+        lv_grids_df.peak_generation_capacity = [
+            _.peak_generation_capacity for _ in lv_grids
+        ]
 
         lv_grids_df.peak_load = [_.peak_load for _ in lv_grids]
 
-        lv_grids_df.installed_charging_point_capacity = [_.charging_points_df.p_nom.sum() for _ in lv_grids]
+        lv_grids_df.installed_charging_point_capacity = [
+            _.charging_points_df.p_nom.sum() for _ in lv_grids
+        ]
 
-        lv_grids_df.substation_capacity = [_.transformers_df.s_nom.sum() for _ in lv_grids]
+        lv_grids_df.substation_capacity = [
+            _.transformers_df.s_nom.sum() for _ in lv_grids
+        ]
 
         min_max_scaler = preprocessing.MinMaxScaler()
 
         lv_grids_df.generators_weight = lv_grids_df.peak_generation_capacity.divide(
-            lv_grids_df.substation_capacity)
+            lv_grids_df.substation_capacity
+        )
 
         lv_grids_df.generators_weight = min_max_scaler.fit_transform(
-            lv_grids_df.generators_weight.values.reshape(-1, 1))
+            lv_grids_df.generators_weight.values.reshape(-1, 1)
+        )
 
         lv_grids_df.loads_weight = lv_grids_df.peak_load.divide(
-            lv_grids_df.substation_capacity)
+            lv_grids_df.substation_capacity
+        )
 
         lv_grids_df.loads_weight = 1 - min_max_scaler.fit_transform(
-            lv_grids_df.loads_weight.values.reshape(-1, 1))
+            lv_grids_df.loads_weight.values.reshape(-1, 1)
+        )
 
-        lv_grids_df.installed_charging_point_weight = lv_grids_df.installed_charging_point_capacity.divide(
-            lv_grids_df.substation_capacity)
+        lv_grids_df.installed_charging_point_weight = (
+            lv_grids_df.installed_charging_point_capacity.divide(
+                lv_grids_df.substation_capacity
+            )
+        )
 
         lv_grids_df.installed_charging_point_weight = 1 - min_max_scaler.fit_transform(
-            lv_grids_df.installed_charging_point_weight.values.reshape(-1, 1))
+            lv_grids_df.installed_charging_point_weight.values.reshape(-1, 1)
+        )
 
         return lv_grids_df
 
@@ -730,12 +744,11 @@ class Topology:
             buses within that ring.
 
         """
-        if hasattr(self, '_rings'):
+        if hasattr(self, "_rings"):
             return self._rings
         else:
             # close switches
-            switches = [Switch(id=_, topology=self)
-                        for _ in self.switches_df.index]
+            switches = [Switch(id=_, topology=self) for _ in self.switches_df.index]
             switch_status = {}
             for switch in switches:
                 switch_status[switch] = switch.state
@@ -745,7 +758,7 @@ class Topology:
             self.rings = nx.cycle_basis(graph)
             # reopen switches
             for switch in switches:
-                if switch_status[switch] == 'open':
+                if switch_status[switch] == "open":
                     switch.open()
             return self.rings
 
@@ -845,19 +858,15 @@ class Topology:
         ]
         components["storage_units"] = self.storage_units_df.loc[
             self.storage_units_df.bus == bus_name
-            ]
+        ]
         components["lines"] = self.get_connected_lines_from_bus(bus_name)
         components["transformers"] = self.transformers_df.loc[
             self.transformers_df.bus0 == bus_name
-        ].append(
-            self.transformers_df.loc[self.transformers_df.bus1 == bus_name]
-        )
+        ].append(self.transformers_df.loc[self.transformers_df.bus1 == bus_name])
         components["transformers_hvmv"] = self.transformers_hvmv_df.loc[
             self.transformers_hvmv_df.bus0 == bus_name
         ].append(
-            self.transformers_hvmv_df.loc[
-                self.transformers_hvmv_df.bus1 == bus_name
-            ]
+            self.transformers_hvmv_df.loc[self.transformers_hvmv_df.bus1 == bus_name]
         )
         components["switches"] = self.switches_df.loc[
             self.switches_df.bus_closed == bus_name
@@ -909,8 +918,7 @@ class Topology:
         # check if bus is part of topology
         if bus_name not in self.buses_df.index:
             warnings.warn(
-                "Bus of name {} not in Topology. Cannot be "
-                "removed.".format(bus_name)
+                "Bus of name {} not in Topology. Cannot be " "removed.".format(bus_name)
             )
             return False
 
@@ -961,8 +969,7 @@ class Topology:
         bus1 = self.lines_df.loc[line_name, "bus1"]
         # if one of the buses can be removed as well, line can be removed
         # safely
-        if self._check_bus_for_removal(bus0) or \
-                self._check_bus_for_removal(bus1):
+        if self._check_bus_for_removal(bus0) or self._check_bus_for_removal(bus1):
             return True
         # otherwise both buses have to be in the same ring
         # find rings in topology
@@ -1030,9 +1037,7 @@ class Topology:
             load_name = "Load_{}_{}".format(tmp, nr_loads)
             while load_name in self.loads_df.index:
                 random.seed(a=load_name)
-                load_name = "Load_{}_{}".format(
-                    tmp, random.randint(10 ** 8, 10 ** 9)
-                )
+                load_name = "Load_{}_{}".format(tmp, random.randint(10**8, 10**9))
 
         # create new load dataframe
         data = {
@@ -1041,16 +1046,18 @@ class Topology:
             "annual_consumption": annual_consumption,
         }
         data.update(kwargs)
-        new_df = pd.Series(
-            data,
-            name=load_name,
-        ).to_frame().T
+        new_df = (
+            pd.Series(
+                data,
+                name=load_name,
+            )
+            .to_frame()
+            .T
+        )
         self._loads_df = self.loads_df.append(new_df)
         return load_name
 
-    def add_generator(
-        self, bus, p_nom, generator_type, control="PQ", **kwargs
-    ):
+    def add_generator(self, bus, p_nom, generator_type, control="PQ", **kwargs):
         """
         Adds generator to topology.
 
@@ -1107,21 +1114,20 @@ class Topology:
         while generator_name in self.generators_df.index:
             random.seed(a=generator_name)
             generator_name = "Generator_{}_{}".format(
-                tmp, random.randint(10 ** 8, 10 ** 9)
+                tmp, random.randint(10**8, 10**9)
             )
 
         # create new generator dataframe
-        data = {
-            "bus": bus,
-            "p_nom": p_nom,
-            "type": generator_type,
-            "control": control
-        }
+        data = {"bus": bus, "p_nom": p_nom, "type": generator_type, "control": control}
         data.update(kwargs)
-        new_df = pd.Series(
-            data,
-            name=generator_name,
-        ).to_frame().T
+        new_df = (
+            pd.Series(
+                data,
+                name=generator_name,
+            )
+            .to_frame()
+            .T
+        )
 
         self.generators_df = self.generators_df.append(new_df)
         return generator_name
@@ -1163,25 +1169,23 @@ class Topology:
         id = len(self._grids[grid_name].charging_points_df)
         name = "ChargingPoint_{}_{}".format(grid_name, id)
         if name in self.charging_points_df.index:
-            name = "ChargingPoint_{}_{}".format(
-                grid_name, id + 1
-            )
+            name = "ChargingPoint_{}_{}".format(grid_name, id + 1)
             while name in self.charging_points_df.index:
                 random.seed(a=name)
                 name = "ChargingPoint_{}_{}".format(
-                    grid_name, random.randint(10 ** 8, 10 ** 9)
+                    grid_name, random.randint(10**8, 10**9)
                 )
 
-        data = {
-                "bus": bus,
-                "p_nom": p_nom,
-                "use_case": use_case
-            }
+        data = {"bus": bus, "p_nom": p_nom, "use_case": use_case}
         data.update(kwargs)
-        new_df = pd.Series(
-            data,
-            name=name,
-        ).to_frame().T
+        new_df = (
+            pd.Series(
+                data,
+                name=name,
+            )
+            .to_frame()
+            .T
+        )
         self.charging_points_df = self.charging_points_df.append(new_df, sort=True)
         return name
 
@@ -1223,26 +1227,24 @@ class Topology:
         storage_id = len(self._grids[grid_name].storage_units_df)
         storage_name = "StorageUnit_{}_{}".format(grid_name, storage_id)
         if storage_name in self.storage_units_df.index:
-            storage_name = "StorageUnit_{}_{}".format(
-                grid_name, storage_id + 1
-            )
+            storage_name = "StorageUnit_{}_{}".format(grid_name, storage_id + 1)
             while storage_name in self.storage_units_df.index:
                 random.seed(a=storage_name)
                 storage_name = "StorageUnit_{}_{}".format(
-                    grid_name, random.randint(10 ** 8, 10 ** 9)
+                    grid_name, random.randint(10**8, 10**9)
                 )
 
         # create new storage unit dataframe
-        data = {
-            "bus": bus,
-            "p_nom": p_nom,
-            "control": control
-        }
+        data = {"bus": bus, "p_nom": p_nom, "control": control}
         data.update(kwargs)
-        new_df = pd.Series(
-            data,
-            name=storage_name,
-        ).to_frame().T
+        new_df = (
+            pd.Series(
+                data,
+                name=storage_name,
+            )
+            .to_frame()
+            .T
+        )
         self.storage_units_df = self.storage_units_df.append(new_df)
         return storage_name
 
@@ -1290,9 +1292,9 @@ class Topology:
 
             # try to get cable data
             try:
-                line_data = self.equipment_data[
-                    "{}_cables".format(voltage_level)
-                ].loc[type_info, :]
+                line_data = self.equipment_data["{}_cables".format(voltage_level)].loc[
+                    type_info, :
+                ]
             except KeyError:
                 try:
                     line_data = self.equipment_data[
@@ -1346,23 +1348,20 @@ class Topology:
             line_data = _get_line_data()
             if isinstance(line_data, pd.DataFrame) and len(line_data) > 1:
                 line_data = (
-                    line_data[
-                        line_data.U_n == self.buses_df.loc[bus0, "v_nom"]
-                    ]
+                    line_data[line_data.U_n == self.buses_df.loc[bus0, "v_nom"]]
                 ).iloc[0, :]
-            x = calculate_line_reactance(
-                line_data.L_per_km, length, num_parallel)
-            r = calculate_line_resistance(
-                line_data.R_per_km, length, num_parallel)
+            x = calculate_line_reactance(line_data.L_per_km, length, num_parallel)
+            r = calculate_line_resistance(line_data.R_per_km, length, num_parallel)
             s_nom = calculate_apparent_power(
-                line_data.U_n, line_data.I_max_th, num_parallel)
+                line_data.U_n, line_data.I_max_th, num_parallel
+            )
 
         # generate line name and check uniqueness
         line_name = "Line_{}_{}".format(bus0, bus1)
         while line_name in self.lines_df.index:
             random.seed(a=line_name)
             line_name = "Line_{}_{}_{}".format(
-                bus0, bus1, random.randint(10 ** 8, 10 ** 9)
+                bus0, bus1, random.randint(10**8, 10**9)
             )
 
         # check if all necessary data is now available
@@ -1371,9 +1370,7 @@ class Topology:
                 "Newly added line has no line resistance and/or reactance."
             )
         if s_nom is None:
-            warnings.warn(
-                "Newly added line has no nominal power."
-            )
+            warnings.warn("Newly added line has no nominal power.")
 
         new_line_df = pd.DataFrame(
             data={
@@ -1426,9 +1423,7 @@ class Topology:
         # check uniqueness of provided bus name and otherwise change bus name
         while bus_name in self.buses_df.index:
             random.seed(a=bus_name)
-            bus_name = "Bus_{}".format(
-                random.randint(10 ** 8, 10 ** 9)
-            )
+            bus_name = "Bus_{}".format(random.randint(10**8, 10**9))
 
         x = kwargs.get("x", None)
         y = kwargs.get("y", None)
@@ -1436,9 +1431,7 @@ class Topology:
         in_building = kwargs.get("in_building", False)
         # check lv_grid_id
         if v_nom < 1 and lv_grid_id is None:
-            raise ValueError(
-                "You need to specify an lv_grid_id for low-voltage buses."
-            )
+            raise ValueError("You need to specify an lv_grid_id for low-voltage buses.")
         new_bus_df = pd.DataFrame(
             data={
                 "v_nom": v_nom,
@@ -1472,9 +1465,7 @@ class Topology:
                 line_name = self.get_connected_lines_from_bus(bus).index[0]
                 self.remove_line(line_name)
                 logger.debug(
-                    "Line {} removed together with load {}.".format(
-                        line_name, name
-                    )
+                    "Line {} removed together with load {}.".format(line_name, name)
                 )
 
     def remove_generator(self, name):
@@ -1565,16 +1556,6 @@ class Topology:
         force_remove=True, can force a bus or line to be removed even
             though resulting topology has isolated buses or components.
         """
-        force_remove = kwargs.get('force_remove', False)
-        if not force_remove:
-            raise AssertionError(
-                "Removal of line {} would create isolated "
-                "node.".format(name)
-            )
-        else:
-            print('Line {} is forced to be removed even though it creates isolated buses.'
-                  'The resulting topology cannot be fully utilised. Try to remove connected '
-                  'components and isolated bus first to avoid this warning.'.format(name))
 
         # backup buses of line and check if buses can be removed as well
         bus0 = self.lines_df.at[name, "bus0"]
@@ -1582,20 +1563,29 @@ class Topology:
         bus1 = self.lines_df.at[name, "bus1"]
         remove_bus1 = self._check_bus_for_removal(bus1)
 
+        force_remove = kwargs.get("force_remove", False)
+        if not force_remove:
+            if not (remove_bus1 or remove_bus0):
+                raise AssertionError(
+                    "Removal of line {} would create isolated " "node.".format(name)
+                )
+        else:
+            print(
+                "Line {} is forced to be removed even though it creates isolated buses."
+                "The resulting topology cannot be fully utilised. Try to remove connected "
+                "components and isolated bus first to avoid this warning.".format(name)
+            )
+
         # drop line
         self._lines_df.drop(name, inplace=True)
 
         # drop buses if no other elements are connected
         if remove_bus0:
             self.remove_bus(bus0)
-            logger.debug(
-                "Bus {} removed together with line {}".format(bus0, name)
-            )
+            logger.debug("Bus {} removed together with line {}".format(bus0, name))
         if remove_bus1:
             self.remove_bus(bus1)
-            logger.debug(
-                "Bus {} removed together with line {}".format(bus1, name)
-            )
+            logger.debug("Bus {} removed together with line {}".format(bus1, name))
 
     def remove_bus(self, name, **kwargs):
         """
@@ -1618,20 +1608,23 @@ class Topology:
         to get all connected components.
 
         """
-        force_remove = kwargs.get('force_remove', False)
+        force_remove = kwargs.get("force_remove", False)
         conn_comp = self.get_connected_components_from_bus(name)
         conn_comp_types = [k for k, v in conn_comp.items() if not v.empty]
         if len(conn_comp_types) > 0 and not force_remove:
             warnings.warn(
                 "Bus {} is not isolated and therefore not removed. Remove all "
                 "connected elements ({}) first to remove bus.".format(
-                    name, conn_comp_types)
+                    name, conn_comp_types
+                )
             )
         else:
             if force_remove:
-                print('Bus {} is connected to elements, but forced to be removed. The resulting topology '
-                      'cannot be used to calculate power flows. Make sure to remove the connected '
-                      'elements as well.'.format(name))
+                print(
+                    "Bus {} is connected to elements, but forced to be removed. The resulting topology "
+                    "cannot be used to calculate power flows. Make sure to remove the connected "
+                    "elements as well.".format(name)
+                )
             self._buses_df.drop(name, inplace=True)
 
     def update_number_of_parallel_lines(self, lines_num_parallel):
@@ -1651,19 +1644,19 @@ class Topology:
         """
         # update x, r and s_nom
         self._lines_df.loc[lines_num_parallel.index, "x"] = (
-                self._lines_df.loc[lines_num_parallel.index, "x"]
-                * self._lines_df.loc[lines_num_parallel.index, "num_parallel"]
-                / lines_num_parallel
+            self._lines_df.loc[lines_num_parallel.index, "x"]
+            * self._lines_df.loc[lines_num_parallel.index, "num_parallel"]
+            / lines_num_parallel
         )
         self._lines_df.loc[lines_num_parallel.index, "r"] = (
-                self._lines_df.loc[lines_num_parallel.index, "r"]
-                * self._lines_df.loc[lines_num_parallel.index, "num_parallel"]
-                / lines_num_parallel
+            self._lines_df.loc[lines_num_parallel.index, "r"]
+            * self._lines_df.loc[lines_num_parallel.index, "num_parallel"]
+            / lines_num_parallel
         )
         self._lines_df.loc[lines_num_parallel.index, "s_nom"] = (
-                self._lines_df.loc[lines_num_parallel.index, "s_nom"]
-                / self._lines_df.loc[lines_num_parallel.index, "num_parallel"]
-                * lines_num_parallel
+            self._lines_df.loc[lines_num_parallel.index, "s_nom"]
+            / self._lines_df.loc[lines_num_parallel.index, "num_parallel"]
+            * lines_num_parallel
         )
 
         # update number parallel lines
@@ -1692,17 +1685,14 @@ class Topology:
 
         """
         try:
-            data_new_line = self.equipment_data[
-                "lv_cables"
-            ].loc[new_line_type]
+            data_new_line = self.equipment_data["lv_cables"].loc[new_line_type]
         except KeyError:
             try:
-                data_new_line = self.equipment_data[
-                    "mv_cables"
-                ].loc[new_line_type]
+                data_new_line = self.equipment_data["mv_cables"].loc[new_line_type]
                 # in case of MV cable adapt nominal voltage to MV voltage
                 grid_voltage = self.buses_df.at[
-                    self.lines_df.at[lines[0], "bus0"], "v_nom"]
+                    self.lines_df.at[lines[0], "bus0"], "v_nom"
+                ]
                 if grid_voltage != data_new_line.U_n:
                     logging.debug(
                         "The line type of lines {} is changed to a type with "
@@ -1711,13 +1701,16 @@ class Topology:
                         "medium voltage grid is {} kV). The nominal voltage "
                         "of the new line type is therefore set to the grids "
                         "nominal voltage.".format(
-                            lines, data_new_line.U_n, grid_voltage))
+                            lines, data_new_line.U_n, grid_voltage
+                        )
+                    )
                     data_new_line.U_n = grid_voltage
             except KeyError:
                 raise KeyError(
                     "Given new line type is not in equipment data. Please "
                     "make sure to use line type with technical data provided "
-                    "in equipment_data 'mv_cables' or 'lv_cables'.")
+                    "in equipment_data 'mv_cables' or 'lv_cables'."
+                )
 
         self._lines_df.loc[lines, "type_info"] = data_new_line.name
         self._lines_df.loc[lines, "num_parallel"] = 1
@@ -1727,7 +1720,11 @@ class Topology:
             data_new_line.R_per_km * self.lines_df.loc[lines, "length"]
         )
         self._lines_df.loc[lines, "x"] = (
-            data_new_line.L_per_km * 2 * np.pi * 50 / 1e3
+            data_new_line.L_per_km
+            * 2
+            * np.pi
+            * 50
+            / 1e3
             * self.lines_df.loc[lines, "length"]
         )
         self._lines_df.loc[lines, "s_nom"] = (
@@ -1788,13 +1785,11 @@ class Topology:
             if comp_data["generator_id"] is not None:
                 bus = "Bus_Generator_{}".format(comp_data["generator_id"])
             else:
-                bus = "Bus_Generator_{}".format(
-                    len(self.generators_df))
+                bus = "Bus_Generator_{}".format(len(self.generators_df))
         else:
-            bus = "Bus_ChargingPoint_{}".format(
-                len(self.charging_points_df))
+            bus = "Bus_ChargingPoint_{}".format(len(self.charging_points_df))
 
-        self.add_bus(
+        bus = self.add_bus(
             bus_name=bus,
             v_nom=self.mv_grid.nominal_voltage,
             x=geom.x,
@@ -1803,15 +1798,9 @@ class Topology:
 
         # add component to newly created bus
         if comp_type == "Generator":
-            comp_name = self.add_generator(
-                bus=bus,
-                **comp_data
-            )
+            comp_name = self.add_generator(bus=bus, **comp_data)
         else:
-            comp_name = self.add_charging_point(
-                bus=bus,
-                **comp_data
-            )
+            comp_name = self.add_charging_point(bus=bus, **comp_data)
 
         # ===== voltage level 4: component is connected to MV station =====
         if comp_data["voltage_level"] == 4:
@@ -1823,14 +1812,15 @@ class Topology:
                 bus_target=self.mv_grid.station.index[0],
                 branch_detour_factor=edisgo_object.config["grid_connection"][
                     "branch_detour_factor"
-                ]
+                ],
             )
             # avoid very short lines by limiting line length to at least 1m
             if line_length < 0.001:
                 line_length = 0.001
 
             line_type, num_parallel = select_cable(
-                edisgo_object, "mv", comp_data["p_nom"])
+                edisgo_object, "mv", comp_data["p_nom"]
+            )
 
             line_name = self.add_line(
                 bus0=self.mv_grid.station.index[0],
@@ -1838,7 +1828,7 @@ class Topology:
                 length=line_length,
                 kind="cable",
                 type_info=line_type.name,
-                num_parallel=num_parallel
+                num_parallel=num_parallel,
             )
 
             # add line to equipment changes to track costs
@@ -1856,11 +1846,11 @@ class Topology:
                 bus=self.buses_df.loc[bus, :],
                 grid=self.mv_grid,
                 buffer_radius=int(
-                    edisgo_object.config["grid_connection"][
-                        "conn_buffer_radius"]),
+                    edisgo_object.config["grid_connection"]["conn_buffer_radius"]
+                ),
                 buffer_radius_inc=int(
-                    edisgo_object.config["grid_connection"][
-                        "conn_buffer_radius_inc"])
+                    edisgo_object.config["grid_connection"]["conn_buffer_radius_inc"]
+                ),
             )
 
             # calc distance between component and grid's lines -> find nearest
@@ -1869,8 +1859,9 @@ class Topology:
                 grid_topology=self,
                 bus=self.buses_df.loc[bus, :],
                 lines=lines,
-                conn_diff_tolerance=edisgo_object.config[
-                    "grid_connection"]["conn_diff_tolerance"]
+                conn_diff_tolerance=edisgo_object.config["grid_connection"][
+                    "conn_diff_tolerance"
+                ],
             )
 
             # connect
@@ -1881,13 +1872,14 @@ class Topology:
                 # do not allow connection to virtual busses
                 if "virtual" not in dist_min_obj["repr"]:
                     line_type, num_parallel = select_cable(
-                        edisgo_object, "mv", comp_data["p_nom"])
+                        edisgo_object, "mv", comp_data["p_nom"]
+                    )
                     target_obj_result = self._connect_mv_bus_to_target_object(
                         edisgo_object=edisgo_object,
                         bus=self.buses_df.loc[bus, :],
                         target_obj=dist_min_obj,
                         line_type=line_type.name,
-                        number_parallel_lines=num_parallel
+                        number_parallel_lines=num_parallel,
                     )
 
                     if target_obj_result is not None:
@@ -1903,8 +1895,13 @@ class Topology:
                 )
         return comp_name
 
-    def connect_to_lv(self, edisgo_object, comp_data, comp_type="Generator",
-                      allowed_number_of_comp_per_bus=2):
+    def connect_to_lv(
+        self,
+        edisgo_object,
+        comp_data,
+        comp_type="Generator",
+        allowed_number_of_comp_per_bus=2,
+    ):
         """
         Add and connect new generator or charging point to LV grid topology.
 
@@ -2003,18 +2000,16 @@ class Topology:
                 if comp_data["generator_id"] is not None:
                     b = "Bus_Generator_{}".format(comp_data["generator_id"])
                 else:
-                    b = "Bus_Generator_{}".format(
-                        len(self.generators_df))
+                    b = "Bus_Generator_{}".format(len(self.generators_df))
             else:
-                b = "Bus_ChargingPoint_{}".format(
-                    len(self.charging_points_df))
+                b = "Bus_ChargingPoint_{}".format(len(self.charging_points_df))
 
             if not type(comp_data["geom"]) is Point:
                 geom = wkt_loads(comp_data["geom"])
             else:
                 geom = comp_data["geom"]
 
-            self.add_bus(
+            b = self.add_bus(
                 bus_name=b,
                 v_nom=lv_grid.nominal_voltage,
                 x=geom.x,
@@ -2030,21 +2025,22 @@ class Topology:
                 bus_target=station_bus,
                 branch_detour_factor=edisgo_object.config["grid_connection"][
                     "branch_detour_factor"
-                ]
+                ],
             )
             # avoid very short lines by limiting line length to at least 1m
             if line_length < 0.001:
                 line_length = 0.001
             # get suitable line type
             line_type, num_parallel = select_cable(
-                edisgo_object, "lv", comp_data["p_nom"])
+                edisgo_object, "lv", comp_data["p_nom"]
+            )
             line_name = self.add_line(
                 bus0=station_bus,
                 bus1=b,
                 length=line_length,
                 kind="cable",
                 type_info=line_type.name,
-                num_parallel=num_parallel
+                num_parallel=num_parallel,
             )
 
             # add line to equipment changes to track costs
@@ -2053,9 +2049,7 @@ class Topology:
             )
 
             # add new component
-            return add_func(
-                bus=b, **comp_data
-            )
+            return add_func(bus=b, **comp_data)
 
         def _choose_random_substation_id():
             """
@@ -2080,9 +2074,7 @@ class Topology:
         elif comp_type == "ChargingPoint":
             add_func = self.add_charging_point
         else:
-            logger.error(
-                "Component type {} is not a valid option.".format(comp_type)
-            )
+            logger.error("Component type {} is not a valid option.".format(comp_type))
 
         if comp_data["mvlv_subst_id"]:
 
@@ -2108,10 +2100,7 @@ class Topology:
                 #         lv_grid.id
                 #     )
                 # )
-                comp_name = add_func(
-                    bus=self.mv_grid.station.index[0],
-                    **comp_data
-                )
+                comp_name = add_func(bus=self.mv_grid.station.index[0], **comp_data)
                 return comp_name
 
         # if no MV/LV substation ID is given, choose random LV grid
@@ -2119,9 +2108,7 @@ class Topology:
             lv_grid = _choose_random_substation_id()
             warnings.warn(
                 "Component has no mvlv_subst_id. It is therefore allocated "
-                "to a random LV Grid ({}).".format(
-                    lv_grid.id
-                )
+                "to a random LV Grid ({}).".format(lv_grid.id)
             )
 
         # v_level 6 -> connect to grid's LV station
@@ -2129,11 +2116,10 @@ class Topology:
             # if no geom is given, connect directly to LV grid's station, as
             # connecting via separate bus will otherwise throw an error (see
             # _connect_to_station function)
-            if ("geom" not in comp_data.keys()) or \
-                    ("geom" in comp_data.keys() and not comp_data["geom"]):
-                comp_name = add_func(
-                    bus=lv_grid.station.index[0], **comp_data
-                )
+            if ("geom" not in comp_data.keys()) or (
+                "geom" in comp_data.keys() and not comp_data["geom"]
+            ):
+                comp_name = add_func(bus=lv_grid.station.index[0], **comp_data)
                 logger.debug(
                     "Component {} has no geom entry and will be connected "
                     "to grid's LV station.".format(comp_name)
@@ -2153,15 +2139,15 @@ class Topology:
                     target_buses = tmp.bus.values
                 else:
                     tmp = lv_loads[
-                        lv_loads.sector.isin(
-                            ["industrial", "agricultural", "retail"]
-                        )
+                        lv_loads.sector.isin(["industrial", "agricultural", "retail"])
                     ]
                     target_buses = tmp.bus.values
             else:
-                warning = "Sector declaration for LV loads is missing. "\
-                           "Using any LV loads as fallback to determine "\
-                           f"grid connection for {comp_type}."
+                warning = (
+                    "Sector declaration for LV loads is missing. "
+                    "Using any LV loads as fallback to determine "
+                    f"grid connection for {comp_type}."
+                )
 
                 if comp_data["use_case"] == "home":
                     try:
@@ -2183,7 +2169,8 @@ class Topology:
                     target_buses = tmp.bus.values
                 else:
                     target_buses = lv_grid.buses_df[
-                        ~lv_grid.buses_df.in_building.astype(bool)].index
+                        ~lv_grid.buses_df.in_building.astype(bool)
+                    ].index
 
             # generate random list (unique elements) of possible target buses
             # to connect components to
@@ -2194,26 +2181,23 @@ class Topology:
                     a="{}_{}_{}".format(
                         comp_data["use_case"],
                         comp_data["p_nom"],
-                        len(lv_grid.charging_points_df)
+                        len(lv_grid.charging_points_df),
                     )
                 )
 
             if len(target_buses) > 0:
                 lv_buses_rnd = random.sample(
-                    sorted(list(target_buses)),
-                    len(target_buses))
+                    sorted(list(target_buses)), len(target_buses)
+                )
             else:
                 logger.debug(
                     "No valid bus to connect new LV component to. The "
                     "component is therefore connected to random LV bus."
                 )
                 bus = random.choice(
-                    lv_grid.buses_df[
-                        ~lv_grid.buses_df.in_building.astype(bool)].index
+                    lv_grid.buses_df[~lv_grid.buses_df.in_building.astype(bool)].index
                 )
-                comp_name = add_func(
-                    bus=bus, **comp_data
-                )
+                comp_name = add_func(bus=bus, **comp_data)
                 return comp_name
 
             # search through list of target buses for bus with less
@@ -2227,9 +2211,7 @@ class Topology:
 
                 # determine number of components of the same type at LV bus
                 if comp_type == "Generator":
-                    comps_at_bus = self.generators_df[
-                        self.generators_df.bus == lv_bus
-                    ]
+                    comps_at_bus = self.generators_df[self.generators_df.bus == lv_bus]
                 else:
                     comps_at_bus = self.charging_points_df[
                         self.charging_points_df.bus == lv_bus
@@ -2248,13 +2230,12 @@ class Topology:
                 )
                 comp_name = _connect_to_station()
             else:
-                comp_name = add_func(
-                    bus=lv_conn_target, **comp_data
-                )
+                comp_name = add_func(bus=lv_conn_target, **comp_data)
             return comp_name
 
-    def _connect_mv_bus_to_target_object(self, edisgo_object, bus, target_obj,
-                                         line_type, number_parallel_lines):
+    def _connect_mv_bus_to_target_object(
+        self, edisgo_object, bus, target_obj, line_type, number_parallel_lines
+    ):
         """
         Connects given MV bus to given target object (MV line or bus).
 
@@ -2302,23 +2283,21 @@ class Topology:
         # (delete old line and create 2 new ones)
         if isinstance(target_obj["shp"], LineString):
 
-            line_data = self.lines_df.loc[
-                            target_obj["repr"], :
-                        ]
+            line_data = self.lines_df.loc[target_obj["repr"], :]
 
             # if line that is split is connected to switch, the line name needs
             # to be adapted in the switch information
             if line_data.name in self.switches_df.branch.values:
                 # get switch
                 switch_data = self.switches_df[
-                    self.switches_df.branch ==
-                    line_data.name].iloc[0]
+                    self.switches_df.branch == line_data.name
+                ].iloc[0]
                 # get bus to which the new line will be connected
-                switch_bus = (switch_data.bus_open
-                              if switch_data.bus_open
-                                 in line_data.loc[["bus0", "bus1"]].values
-                              else switch_data.bus_closed
-                              )
+                switch_bus = (
+                    switch_data.bus_open
+                    if switch_data.bus_open in line_data.loc[["bus0", "bus1"]].values
+                    else switch_data.bus_closed
+                )
             else:
                 switch_bus = None
 
@@ -2346,7 +2325,7 @@ class Topology:
                 bus_target=branch_tee_repr,
                 branch_detour_factor=edisgo_object.config["grid_connection"][
                     "branch_detour_factor"
-                ]
+                ],
             )
             # avoid very short lines by limiting line length to at least 1m
             if line_length < 0.001:
@@ -2361,8 +2340,7 @@ class Topology:
             # if line connected to switch was split, write new line name to
             # switch data
             if switch_bus and switch_bus == line_data.bus0:
-                self.switches_df.loc[
-                    switch_data.name, "branch"] = line_name_bus0
+                self.switches_df.loc[switch_data.name, "branch"] = line_name_bus0
             # add line to equipment changes
             edisgo_object.results._add_line_to_equipment_changes(
                 line=self.lines_df.loc[line_name_bus0, :],
@@ -2375,7 +2353,7 @@ class Topology:
                 bus_target=branch_tee_repr,
                 branch_detour_factor=edisgo_object.config["grid_connection"][
                     "branch_detour_factor"
-                ]
+                ],
             )
             # avoid very short lines by limiting line length to at least 1m
             if line_length < 0.001:
@@ -2390,8 +2368,7 @@ class Topology:
             # if line connected to switch was split, write new line name to
             # switch data
             if switch_bus and switch_bus == line_data.bus1:
-                self.switches_df.loc[
-                    switch_data.name, "branch"] = line_name_bus1
+                self.switches_df.loc[switch_data.name, "branch"] = line_name_bus1
             # add line to equipment changes
             edisgo_object.results._add_line_to_equipment_changes(
                 line=self.lines_df.loc[line_name_bus1, :],
@@ -2404,7 +2381,7 @@ class Topology:
                 bus_target=branch_tee_repr,
                 branch_detour_factor=edisgo_object.config["grid_connection"][
                     "branch_detour_factor"
-                ]
+                ],
             )
             # avoid very short lines by limiting line length to at least 1m
             if line_length < 0.001:
@@ -2415,7 +2392,7 @@ class Topology:
                 length=line_length,
                 kind="cable",
                 type_info=line_type,
-                num_parallel=number_parallel_lines
+                num_parallel=number_parallel_lines,
             )
             # add line to equipment changes
             edisgo_object.results._add_line_to_equipment_changes(
@@ -2423,7 +2400,7 @@ class Topology:
             )
 
             # remove old line from topology and equipment changes
-            self.remove_line(line_data.name)
+            self.remove_line(line_data.name, force_remove=True)
             edisgo_object.results._del_line_from_equipment_changes(
                 line_repr=line_data.name
             )
@@ -2440,7 +2417,7 @@ class Topology:
                 bus_target=target_obj["repr"],
                 branch_detour_factor=edisgo_object.config["grid_connection"][
                     "branch_detour_factor"
-                ]
+                ],
             )
             # avoid very short lines by limiting line length to at least 1m
             if line_length < 0.001:
@@ -2452,7 +2429,7 @@ class Topology:
                 length=line_length,
                 kind="cable",
                 type_info=line_type,
-                num_parallel=number_parallel_lines
+                num_parallel=number_parallel_lines,
             )
 
             # add line to equipment changes
@@ -2521,25 +2498,21 @@ class Topology:
         if not self.loads_df.empty:
             self.loads_df.to_csv(os.path.join(directory, "loads.csv"))
         if not self.generators_df.empty:
-            self.generators_df.to_csv(
-                os.path.join(directory, "generators.csv")
-            )
+            self.generators_df.to_csv(os.path.join(directory, "generators.csv"))
         if not self.charging_points_df.empty:
             self.charging_points_df.to_csv(
                 os.path.join(directory, "charging_points.csv")
             )
         if not self.storage_units_df.empty:
-            self.storage_units_df.to_csv(
-                os.path.join(directory, "storage_units.csv")
-            )
+            self.storage_units_df.to_csv(os.path.join(directory, "storage_units.csv"))
         if not self.transformers_df.empty:
-            self.transformers_df.rename(
-                {"x_pu": "x", "r_pu": "r"}, axis=1
-            ).to_csv(os.path.join(directory, "transformers.csv"))
+            self.transformers_df.rename({"x_pu": "x", "r_pu": "r"}, axis=1).to_csv(
+                os.path.join(directory, "transformers.csv")
+            )
         if not self.transformers_hvmv_df.empty:
-            self.transformers_hvmv_df.rename(
-                {"x_pu": "x", "r_pu": "r"}, axis=1
-            ).to_csv(os.path.join(directory, "transformers_hvmv.csv"))
+            self.transformers_hvmv_df.rename({"x_pu": "x", "r_pu": "r"}, axis=1).to_csv(
+                os.path.join(directory, "transformers_hvmv.csv")
+            )
         self.lines_df.to_csv(os.path.join(directory, "lines.csv"))
         self.buses_df.to_csv(os.path.join(directory, "buses.csv"))
         if not self.switches_df.empty:
@@ -2587,8 +2560,7 @@ class Topology:
             # check files within the directory
             files = os.listdir(data_path)
 
-        attrs_to_read = {k: v for k, v in attrs.items()
-                         if v in files}
+        attrs_to_read = {k: v for k, v in attrs.items() if v in files}
 
         for attr, file in attrs_to_read.items():
             if from_zip_archive:
@@ -2604,46 +2576,38 @@ class Topology:
                 df = df.loc[df.control != "Slack"]
             elif "transformers" in attr:
                 # rename columns to match convention
-                df = df.rename(
-                    columns={"x": "x_pu",
-                             "r": "r_pu"})
+                df = df.rename(columns={"x": "x_pu", "r": "r_pu"})
             elif attr == "network":
                 # rename columns to match convention
-                df = df.rename(columns={
-                    "mv_grid_district_geom": "geom",
-                    "mv_grid_district_population": "population"})
+                df = df.rename(
+                    columns={
+                        "mv_grid_district_geom": "geom",
+                        "mv_grid_district_population": "population",
+                    }
+                )
 
                 # set grid district information
                 setattr(
-                    self, "grid_district",
+                    self,
+                    "grid_district",
                     {
                         "population": df.population.iat[0],
                         "geom": wkt_loads(df.geom.iat[0]),
                         "srid": df.srid.iat[0],
-                    }
+                    },
                 )
 
                 # set up medium voltage grid
-                setattr(
-                    self, "mv_grid",
-                    MVGrid(
-                        edisgo_obj=edisgo_obj,
-                        id=df.index[0]
-                    )
-                )
+                setattr(self, "mv_grid", MVGrid(edisgo_obj=edisgo_obj, id=df.index[0]))
 
                 self._grids = {}
-                self._grids[
-                    str(self.mv_grid)
-                ] = self.mv_grid
+                self._grids[str(self.mv_grid)] = self.mv_grid
 
                 # set up low voltage grids
-                lv_grid_ids = self.buses_df.lv_grid_id.dropna().\
-                    sort_values().unique()
+                lv_grid_ids = self.buses_df.lv_grid_id.dropna().sort_values().unique()
 
                 for lv_grid_id in lv_grid_ids:
-                    lv_grid = LVGrid(id=lv_grid_id,
-                                     edisgo_obj=edisgo_obj)
+                    lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=edisgo_obj)
 
                     self.mv_grid._lv_grids.append(lv_grid)
                     self._grids[str(lv_grid)] = lv_grid
@@ -2651,8 +2615,7 @@ class Topology:
                 continue
 
             # set attribute
-            setattr(
-                self, attr, df)
+            setattr(self, attr, df)
 
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections
@@ -2690,7 +2653,7 @@ def _get_matching_dict_of_attributes_and_file_names():
         "transformers_df": "transformers.csv",
         "transformers_hvmv_df": "transformers_hvmv.csv",
         "switches_df": "switches.csv",
-        "network": "network.csv"
+        "network": "network.csv",
     }
 
     return topo_dict
