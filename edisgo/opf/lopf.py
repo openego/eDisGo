@@ -295,6 +295,7 @@ def setup_model(
         model.time_end = [model.time_set.at(-overlap_interations)]
     else:
         model.time_final = [model.time_set.at(-1)]
+        model.time_end = [model.time_set.at(-1)]
     model.time_non_zero = model.time_set - [model.time_set.at(1)]
     model.times_fixed_soc = pm.Set(
         initialize=[model.time_set.at(1), model.time_set.at(-1)]

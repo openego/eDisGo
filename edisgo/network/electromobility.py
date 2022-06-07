@@ -1,14 +1,13 @@
-import os
 import logging
-import pandas as pd
-import numpy as np
-import geopandas as gpd
-
+import os
 from zipfile import ZipFile
+
+import geopandas as gpd
+import numpy as np
+import pandas as pd
 from sklearn import preprocessing
 
 from edisgo.network.components import PotentialChargingParks
-
 
 logger = logging.getLogger("edisgo")
 
@@ -23,12 +22,7 @@ COLUMNS = {
         "park_start",
         "park_end",
     ],
-    "grid_connections_gdf": [
-        "id",
-        "use_case",
-        "user_centric_weight",
-        "geometry"
-    ],
+    "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
     "simbev_config_df": ["value"],
     "potential_charging_parks_df": [
         "lv_grid_id",
@@ -145,8 +139,7 @@ class Electromobility:
         try:
             return self._integrated_charging_parks_df
         except Exception:
-            return pd.DataFrame(
-                columns=COLUMNS["integrated_charging_parks_df"])
+            return pd.DataFrame(columns=COLUMNS["integrated_charging_parks_df"])
 
     @integrated_charging_parks_df.setter
     def integrated_charging_parks_df(self, df):
@@ -236,8 +229,7 @@ class Electromobility:
                 path = os.path.join(directory, file)
                 df.to_csv(path)
 
-    def from_csv(
-            self, data_path, edisgo_obj, from_zip_archive=False):
+    def from_csv(self, data_path, edisgo_obj, from_zip_archive=False):
         """
         Restores electromobility from csv files.
 
@@ -274,33 +266,32 @@ class Electromobility:
             if from_zip_archive:
                 # open zip file to make it readable for pandas
                 with zip.open(file) as f:
-                    df = pd.read_csv(
-                        f, index_col=0)
+                    df = pd.read_csv(f, index_col=0)
             else:
                 path = os.path.join(data_path, file)
-                df = pd.read_csv(
-                    path, index_col=0)
+                df = pd.read_csv(path, index_col=0)
 
             if attr == "grid_connections_gdf":
                 epsg = edisgo_obj.topology.grid_district["srid"]
 
-                df = df.assign(
-                    geometry=gpd.GeoSeries.from_wkt(df["geometry"]))
+                df = df.assign(geometry=gpd.GeoSeries.from_wkt(df["geometry"]))
 
                 try:
                     df = gpd.GeoDataFrame(
-                        df, geometry="geometry", crs={"init": f"epsg:{epsg}"})
+                        df, geometry="geometry", crs={"init": f"epsg:{epsg}"}
+                    )
 
                 except Exception as _:
                     logging.warning(
                         f"Grid connections could not be loaded with "
-                        f"EPSG {epsg}. Trying with EPSG 4326 as fallback.")
+                        f"EPSG {epsg}. Trying with EPSG 4326 as fallback."
+                    )
 
                     df = gpd.GeoDataFrame(
-                        df, geometry="geometry", crs={"init": "epsg:4326"})
+                        df, geometry="geometry", crs={"init": "epsg:4326"}
+                    )
 
-            setattr(
-                self, attr, df)
+            setattr(self, attr, df)
 
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections
@@ -328,34 +319,31 @@ class Electromobility:
             potential_charging_parks = list(self.potential_charging_parks)
 
             potential_charging_parks_df.lv_grid_id = [
-                _.nearest_substation["lv_grid_id"]
-                for _ in potential_charging_parks
+                _.nearest_substation["lv_grid_id"] for _ in potential_charging_parks
             ]
 
             potential_charging_parks_df.distance_to_nearest_substation = [
-                _.nearest_substation["distance"]
-                for _ in potential_charging_parks
+                _.nearest_substation["distance"] for _ in potential_charging_parks
             ]
 
             min_max_scaler = preprocessing.MinMaxScaler()
 
-            potential_charging_parks_df.distance_weight = (
-                1 - min_max_scaler.fit_transform(
-                    potential_charging_parks_df.
-                    distance_to_nearest_substation.values.reshape(-1, 1)
+            potential_charging_parks_df.distance_weight = 1 - min_max_scaler.fit_transform(
+                potential_charging_parks_df.distance_to_nearest_substation.values.reshape(
+                    -1, 1
                 )
             )
 
             potential_charging_parks_df.charging_point_capacity = [
-                _.designated_charging_point_capacity
-                for _ in potential_charging_parks
+                _.designated_charging_point_capacity for _ in potential_charging_parks
             ]
 
             potential_charging_parks_df.charging_point_weight = (
                 1
                 - min_max_scaler.fit_transform(
-                    potential_charging_parks_df.charging_point_capacity.
-                    values.reshape(-1, 1)
+                    potential_charging_parks_df.charging_point_capacity.values.reshape(
+                        -1, 1
+                    )
                 )
             )
 
@@ -389,16 +377,17 @@ def _get_matching_dict_of_attributes_and_file_names():
     return emob_dict
 
 
-def get_energy_bands_for_optimization(edisgo_obj, use_case, t_max=372*4*24):
+def get_energy_bands_for_optimization(edisgo_obj, use_case, t_max=372 * 4 * 24):
     """
     Method to extract flexibility bands for linear optimisation.
     """
+
     def _shorten_and_set_index(band):
         """
         Method to adjust bands to timeindex of edisgo_obj
         #Todo: change such that first day is replaced by (365+1)th day
         """
-        band = band.iloc[:len(edisgo_obj.timeseries.timeindex)]
+        band = band.iloc[: len(edisgo_obj.timeseries.timeindex)]
         band.index = edisgo_obj.timeseries.timeindex
         return band
 
@@ -408,12 +397,9 @@ def get_energy_bands_for_optimization(edisgo_obj, use_case, t_max=372*4*24):
     ]
     # set up bands
     tmp_idx = range(t_max)
-    upper_power = pd.DataFrame(index=tmp_idx,
-                               columns=cps.index, data=0)
-    upper_energy = pd.DataFrame(index=tmp_idx,
-                                columns=cps.index, data=0)
-    lower_energy = pd.DataFrame(index=tmp_idx,
-                                columns=cps.index, data=0)
+    upper_power = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
+    upper_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
+    lower_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
     hourly_steps = 60 / edisgo_obj.electromobility.stepsize
     for cp in cps.index:
         # get index of charging park used in charging processes
@@ -422,7 +408,9 @@ def get_energy_bands_for_optimization(edisgo_obj, use_case, t_max=372*4*24):
         ].index
         # get relevant charging processes
         charging_processes = edisgo_obj.electromobility.charging_processes_df.loc[
-            edisgo_obj.electromobility.charging_processes_df.charging_park_id.isin(charging_park_id)
+            edisgo_obj.electromobility.charging_processes_df.charging_park_id.isin(
+                charging_park_id
+            )
         ]
         # iterate through charging processes and fill matrices
         for idx, charging_process in charging_processes.iterrows():
@@ -430,37 +418,85 @@ def get_energy_bands_for_optimization(edisgo_obj, use_case, t_max=372*4*24):
             if charging_process.park_end == t_max:
                 continue
             # get brutto charging capacity
-            brutto_charging_capacity = charging_process.netto_charging_capacity/\
-                                       edisgo_obj.electromobility.eta_charging_points
+            brutto_charging_capacity = (
+                charging_process.netto_charging_capacity
+                / edisgo_obj.electromobility.eta_charging_points
+            )
             # charging power
-            upper_power.loc[charging_process.park_start-1:charging_process.park_end-1, cp] += \
-                brutto_charging_capacity
+            upper_power.loc[
+                charging_process.park_start - 1 : charging_process.park_end - 1, cp
+            ] += brutto_charging_capacity
             # energy bands
-            charging_time = \
-                charging_process.chargingdemand / charging_process.netto_charging_capacity * \
-                hourly_steps
-            if charging_time - (charging_process.park_end - charging_process.park_start + 1) > 1e-6:
-                raise ValueError("Charging demand cannot be fulfilled for charging process {}. "
-                                 "Please check.".format(idx))
+            charging_time = (
+                charging_process.chargingdemand
+                / charging_process.netto_charging_capacity
+                * hourly_steps
+            )
+            if (
+                charging_time
+                - (charging_process.park_end - charging_process.park_start + 1)
+                > 1e-6
+            ):
+                raise ValueError(
+                    "Charging demand cannot be fulfilled for charging process {}. "
+                    "Please check.".format(idx)
+                )
             full_charging_steps = int(charging_time)
-            part_time_step = charging_time-full_charging_steps
+            part_time_step = charging_time - full_charging_steps
             # lower band
-            lower_energy.loc[charging_process.park_end-full_charging_steps:charging_process.park_end-1, cp] += \
-                charging_process.netto_charging_capacity
-            lower_energy.loc[charging_process.park_end - full_charging_steps-1, cp] += \
-                part_time_step * charging_process.netto_charging_capacity
+            lower_energy.loc[
+                charging_process.park_end
+                - full_charging_steps : charging_process.park_end
+                - 1,
+                cp,
+            ] += charging_process.netto_charging_capacity
+            lower_energy.loc[
+                charging_process.park_end - full_charging_steps - 1, cp
+            ] += (part_time_step * charging_process.netto_charging_capacity)
             # upper band
-            upper_energy.loc[charging_process.park_start-1: charging_process.park_start+full_charging_steps-2, cp] += \
-                charging_process.netto_charging_capacity
-            upper_energy.loc[charging_process.park_start+full_charging_steps-1, cp] += \
-                part_time_step * charging_process.netto_charging_capacity
+            upper_energy.loc[
+                charging_process.park_start
+                - 1 : charging_process.park_start
+                + full_charging_steps
+                - 2,
+                cp,
+            ] += charging_process.netto_charging_capacity
+            upper_energy.loc[
+                charging_process.park_start + full_charging_steps - 1, cp
+            ] += (part_time_step * charging_process.netto_charging_capacity)
     # sanity check
-    if ((lower_energy-upper_power * edisgo_obj.electromobility.eta_charging_points) > 1e-6).any().any():
-        raise ValueError("Lower energy has power values higher than nominal power. Please check.")
-    if ((upper_energy-upper_power * edisgo_obj.electromobility.eta_charging_points) > 1e-6).any().any():
-        raise ValueError("Upper energy has power values higher than nominal power. Please check.")
+    if (
+        (
+            (
+                lower_energy
+                - upper_power * edisgo_obj.electromobility.eta_charging_points
+            )
+            > 1e-6
+        )
+        .any()
+        .any()
+    ):
+        raise ValueError(
+            "Lower energy has power values higher than nominal power. Please check."
+        )
+    if (
+        (
+            (
+                upper_energy
+                - upper_power * edisgo_obj.electromobility.eta_charging_points
+            )
+            > 1e-6
+        )
+        .any()
+        .any()
+    ):
+        raise ValueError(
+            "Upper energy has power values higher than nominal power. Please check."
+        )
     if ((upper_energy.cumsum() - lower_energy.cumsum()) < -1e-6).any().any():
-        raise ValueError("Lower energy is higher than upper energy bound. Please check.")
+        raise ValueError(
+            "Lower energy is higher than upper energy bound. Please check."
+        )
     # Convert to MW and cumulate energy
     upper_power = upper_power / 1e3
     lower_energy = lower_energy.cumsum() / hourly_steps / 1e3
@@ -469,4 +505,8 @@ def get_energy_bands_for_optimization(edisgo_obj, use_case, t_max=372*4*24):
     upper_power = _shorten_and_set_index(upper_power)
     lower_energy = _shorten_and_set_index(lower_energy)
     upper_energy = _shorten_and_set_index(upper_energy)
-    return upper_power, lower_energy, upper_energy
+    return {
+        "upper_power": upper_power,
+        "lower_energy": lower_energy,
+        "upper_energy": upper_energy,
+    }
