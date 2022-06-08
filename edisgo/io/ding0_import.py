@@ -56,12 +56,15 @@ def import_ding0_grid(path, edisgo_obj):
         """
         for transformer in transformers_df.index:
             if (
-                not transformers_df.loc[transformer, "bus1"]
+                transformers_df.at[transformer, "bus1"]
                 in edisgo_obj.topology.buses_df.index
             ):
-                transformers_df.loc[
-                    transformer, ["bus0", "bus1"]
-                ] = transformers_df.loc[transformer, ["bus1", "bus0"]].values
+                continue
+
+            transformers_df.loc[transformer, ["bus0", "bus1"]] = transformers_df.loc[
+                transformer, ["bus1", "bus0"]
+            ].values
+
         return transformers_df
 
     grid = PyPSANetwork()
