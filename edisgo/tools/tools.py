@@ -20,13 +20,7 @@ if "READTHEDOCS" not in os.environ:
     from shapely.geometry.multipolygon import MultiPolygon
     from shapely.wkt import loads as wkt_loads
 
-    geopandas = True
-    try:
-        import geopandas as gpd
-    except Exception:
-        geopandas = False
 
-        
 def select_worstcase_snapshots(edisgo_obj):
     """
     Select two worst-case snapshots from time series
