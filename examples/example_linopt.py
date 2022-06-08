@@ -15,6 +15,8 @@ grid_dir = "minimum_working"
 opt_ev = True
 opt_stor = False
 
+ts_pre = pd.read_csv("x_charge_ev_pre.csv", index_col=0, parse_dates=True)
+
 timeindex = pd.date_range("2011-01-01", periods=8760, freq="h")
 storage_ts = pd.DataFrame({"Storage 1": 8760 * [0]}, index=timeindex)
 
@@ -62,5 +64,7 @@ model = opt.setup_model(
 results = opt.optimize(model, "gurobi")
 results["x_charge_ev"].plot()
 plt.show()
-results["x_charge_ev"].to_csv("x_charge_ev_pre.csv")
+ts_pre.plot()
+plt.show()
+pd.testing.assert_frame_equal(ts_pre, results["x_charge_ev"])
 print("SUCCESS")
