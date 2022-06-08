@@ -47,7 +47,7 @@ def prepare_time_invariant_parameters(
     pu=True,
     optimize_storage=True,
     optimize_ev_charging=True,
-    **kwargs
+    **kwargs,
 ):
     """
     Prepare parameters that do not change within the iterations of the rolling horizon
@@ -191,7 +191,7 @@ def setup_model(
     optimize_storage=True,
     optimize_ev_charging=True,
     objective="curtailment",
-    **kwargs
+    **kwargs,
 ):
     """
     Method to set up pyomo model for optimisation of storage procurement
@@ -208,53 +208,7 @@ def setup_model(
     :return:
     """
 
-    def init_active_nodal_power(model, bus, time):
-        return (
-            timeinvariant_parameters["nodal_active_power"]
-            .T.loc[model.timeindex[time]]
-            .loc[bus]
-        )
-
-    def init_reactive_nodal_power(model, bus, time):
-        return (
-            timeinvariant_parameters["nodal_reactive_power"]
-            .T.loc[model.timeindex[time]]
-            .loc[bus]
-        )
-
-    def init_active_nodal_load(model, bus, time):
-        return (
-            timeinvariant_parameters["nodal_active_load"]
-            .T.loc[model.timeindex[time]]
-            .loc[bus]
-        )
-
-    def init_reactive_nodal_load(model, bus, time):
-        return (
-            timeinvariant_parameters["nodal_reactive_load"]
-            .T.loc[model.timeindex[time]]
-            .loc[bus]
-        )
-
-    def init_active_nodal_feedin(model, bus, time):
-        return (
-            timeinvariant_parameters["nodal_active_feedin"]
-            .T.loc[model.timeindex[time]]
-            .loc[bus]
-        )
-
-    def init_reactive_nodal_feedin(model, bus, time):
-        return (
-            timeinvariant_parameters["nodal_reactive_feedin"]
-            .T.loc[model.timeindex[time]]
-            .loc[bus]
-        )
-
-    def init_power_factors(model, branch, time):
-        return timeinvariant_parameters["power_factors"].loc[
-            branch, model.timeindex[time]
-        ]
-
+    # Todo: Extract kwargs values from cfg?
     t1 = perf_counter()
     model = pm.ConcreteModel()
     # check if correct value of objective is inserted
@@ -267,25 +221,15 @@ def setup_model(
         "minimize_loading",
     ]:
         raise ValueError("The objective you inserted is not implemented yet.")
-
+    # Todo: unnecessary?
     edisgo_object, grid_object, slack = (
         timeinvariant_parameters["edisgo_object"],
         timeinvariant_parameters["grid_object"],
         timeinvariant_parameters["slack"],
     )
-    # check if multiple voltage levels are present
-    if len(grid_object.buses_df.v_nom.unique()) > 1:
-        print(
-            "More than one voltage level included. Please make sure to "
-            "adapt all impedance values to one reference system."
-        )
-
-    # Todo: Extract kwargs values from cfg?
 
     # DEFINE SETS AND FIX PARAMETERS
     print("Setup model: Defining sets and parameters.")
-    model.bus_set = pm.Set(initialize=grid_object.buses_df.index)
-    model.slack_bus = pm.Set(initialize=slack)
     model.time_set = pm.RangeSet(0, len(timesteps) - 1)
     model.time_zero = [model.time_set.at(1)]
     overlap_interations = kwargs.get("overlap_interations", None)
@@ -316,54 +260,11 @@ def setup_model(
         model.fixed_storage_set = model.storage_set - model.optimized_storage_set
         model.fix_relative_soc = kwargs.get("fix_relative_soc", 0.5)
 
-    model.v_min = kwargs.get("v_min", 0.9)
-    model.v_max = kwargs.get("v_max", 1.1)
-    model.v_nom = timeinvariant_parameters["v_nom"]
-    model.thermal_limit = kwargs.get("thermal_limit", 1.0)
-    model.pars = timeinvariant_parameters["pars"]
     res_load = {
         i: timeinvariant_parameters["res_load_inflexible_units"][model.timeindex[i]]
         for i in model.time_set
     }
     model.residual_load = pm.Param(model.time_set, initialize=res_load, mutable=True)
-    model.grid = grid_object
-    model.downstream_nodes_matrix = timeinvariant_parameters["downstream_nodes_matrix"]
-
-    model.nodal_active_power = pm.Param(
-        model.bus_set, model.time_set, initialize=init_active_nodal_power, mutable=True
-    )
-    model.nodal_reactive_power = pm.Param(
-        model.bus_set,
-        model.time_set,
-        initialize=init_reactive_nodal_power,
-        mutable=True,
-    )
-    model.nodal_active_load = pm.Param(
-        model.bus_set, model.time_set, initialize=init_active_nodal_load, mutable=True
-    )
-    model.nodal_reactive_load = pm.Param(
-        model.bus_set, model.time_set, initialize=init_reactive_nodal_load, mutable=True
-    )
-    model.nodal_active_feedin = pm.Param(
-        model.bus_set, model.time_set, initialize=init_active_nodal_feedin, mutable=True
-    )
-    model.nodal_reactive_feedin = pm.Param(
-        model.bus_set,
-        model.time_set,
-        initialize=init_reactive_nodal_feedin,
-        mutable=True,
-    )
-    model.tan_phi_load = timeinvariant_parameters["tan_phi_load"]
-    model.tan_phi_feedin = timeinvariant_parameters["tan_phi_feedin"]
-    model.v_slack = kwargs.get("v_slack", model.v_nom)
-    model.branches = timeinvariant_parameters["branches"]
-    model.branch_set = pm.Set(initialize=model.branches.index)
-    model.underlying_branch_elements = timeinvariant_parameters[
-        "underlying_branch_elements"
-    ]
-    model.power_factors = pm.Param(
-        model.branch_set, model.time_set, initialize=init_power_factors, mutable=True
-    )
 
     if objective == "peak_load":
         model.delta_min = kwargs.get("delta_min", 0.9)
@@ -373,53 +274,8 @@ def setup_model(
     elif objective == "minimize_energy_level" or objective == "maximize_energy_level":
         model.grid_power_flexible = pm.Var(model.time_set)
 
-    # add n-1 security
-    # adapt i_lines_allowed for radial feeders
-    buses_in_cycles = list(
-        set(itertools.chain.from_iterable(edisgo_object.topology.rings))
-    )
-
-    # Find lines in cycles
-    lines_in_cycles = list(
-        grid_object.lines_df.loc[
-            grid_object.lines_df[["bus0", "bus1"]].isin(buses_in_cycles).all(axis=1)
-        ].index.values
-    )
-
-    model.branches_load_factors = pd.DataFrame(
-        index=model.time_set, columns=model.branch_set
-    )
-    model.branches_load_factors.loc[:, :] = 1
-    tmp_residual_load = edisgo_object.timeseries.residual_load.loc[timesteps]
-    indices = pd.DataFrame(index=timesteps, columns=["index"])
-    indices["index"] = [i for i in range(len(timesteps))]
-    model.branches_load_factors.loc[
-        indices.loc[tmp_residual_load.loc[timesteps] < 0].values.T[0], lines_in_cycles
-    ] = kwargs.get(
-        "load_factor_rings", 1.0
-    )  # 0.5
-
     # DEFINE VARIABLES
-    print("Setup model: Defining variables.")
-    model.p_cum = pm.Var(model.branch_set, model.time_set)
-    model.slack_p_cum_pos = pm.Var(model.branch_set, model.time_set, bounds=(0, None))
-    model.slack_p_cum_neg = pm.Var(model.branch_set, model.time_set, bounds=(0, None))
-    model.q_cum = pm.Var(model.branch_set, model.time_set)
-    model.v = pm.Var(model.bus_set, model.time_set)
-    model.slack_v_pos = pm.Var(model.bus_set, model.time_set, bounds=(0, None))
-    model.slack_v_neg = pm.Var(model.bus_set, model.time_set, bounds=(0, None))
-    # if not objective == 'minimize_energy_level' and \
-    #         not objective == 'maximize_energy_level':
-    model.curtailment_load = pm.Var(
-        model.bus_set,
-        model.time_set,
-        bounds=lambda m, b, t: (0, m.nodal_active_load[b, t]),
-    )
-    model.curtailment_feedin = pm.Var(
-        model.bus_set,
-        model.time_set,
-        bounds=lambda m, b, t: (0, m.nodal_active_feedin[b, t]),
-    )
+
     if optimize_storage:
         model.soc = pm.Var(
             model.optimized_storage_set,
@@ -439,6 +295,7 @@ def setup_model(
         )
 
     if optimize_ev_charging:
+        print("Setup model: Adding EV model.")
         model = add_ev_model_bands(
             model=model,
             timeinvariant_parameters=timeinvariant_parameters,
@@ -450,33 +307,26 @@ def setup_model(
             charging_start=kwargs.get("charging_start", None),
         )
 
+    if not objective == "minimize_energy_level" or objective == "maximize_energy_level":
+        print("Setup model: Adding grid model.")
+        model = add_grid_model_lopf(
+            model=model,
+            timeinvariant_parameters=timeinvariant_parameters,
+            timesteps=timesteps,
+            edisgo_object=edisgo_object,
+            grid_object=grid_object,
+            slack=slack,
+            v_min=kwargs.get("v_min", 0.9),
+            v_max=kwargs.get("v_max", 1.1),
+            thermal_limits=kwargs.get("thermal_limit", 1.0),
+            v_slack=kwargs.get("v_slack", timeinvariant_parameters["v_nom"]),
+            load_factor_rings=kwargs.get("load_factor_rings", 1.0),
+            # 0.5 Todo: change to edisgo.config["grid_expansion_load_factors"]
+            #  ["mv_load_case_line"]?
+        )
+
     # DEFINE CONSTRAINTS
-    print("Setup model: Setting constraints.")
-    model.ActivePower = pm.Constraint(
-        model.branch_set, model.time_set, rule=active_power
-    )
-    model.UpperActive = pm.Constraint(
-        model.branch_set, model.time_set, rule=upper_active_power
-    )
-    model.LowerActive = pm.Constraint(
-        model.branch_set, model.time_set, rule=lower_active_power
-    )
-    # model.ReactivePower = pm.Constraint(model.branch_set, model.time_set,
-    #                                     rule=reactive_power)
-    model.SlackVoltage = pm.Constraint(
-        model.slack_bus, model.time_set, rule=slack_voltage
-    )
-    model.VoltageDrop = pm.Constraint(
-        model.branch_set, model.time_set, rule=voltage_drop
-    )
-    model.UpperVoltage = pm.Constraint(
-        model.bus_set, model.time_set, rule=upper_voltage
-    )
-    model.LowerVoltage = pm.Constraint(
-        model.bus_set, model.time_set, rule=lower_voltage
-    )
-    # model.UpperCurtLoad = pm.Constraint(model.bus_set, model.time_set,
-    #                                     rule=upper_bound_curtailment_load)
+
     if optimize_storage:
         model.BatteryCharging = pm.Constraint(
             model.storage_set, model.time_non_zero, rule=soc
@@ -534,7 +384,203 @@ def setup_model(
     if kwargs.get("print_model", False):
         model.pprint()
     print("Successfully set up optimisation model.")
-    print("It took {} seconds to set up model.".format(perf_counter() - t1))
+    print(f"It took {perf_counter() - t1} seconds to set up model.")
+    return model
+
+
+def add_grid_model_lopf(
+    model,
+    timeinvariant_parameters,
+    timesteps,
+    edisgo_object,
+    grid_object,
+    slack,
+    v_min,
+    v_max,
+    thermal_limits,
+    v_slack,
+    load_factor_rings,
+):
+    """
+    Method to add sets variables and constraints for including a representation of the
+    grid with a linearised power flow under omission of losses. Only applicable to
+    radial networks.
+    # Todo: add docstrings
+    """
+
+    def init_active_nodal_power(model, bus, time):
+        return (
+            timeinvariant_parameters["nodal_active_power"]
+            .T.loc[model.timeindex[time]]
+            .loc[bus]
+        )
+
+    def init_reactive_nodal_power(model, bus, time):
+        return (
+            timeinvariant_parameters["nodal_reactive_power"]
+            .T.loc[model.timeindex[time]]
+            .loc[bus]
+        )
+
+    def init_active_nodal_load(model, bus, time):
+        return (
+            timeinvariant_parameters["nodal_active_load"]
+            .T.loc[model.timeindex[time]]
+            .loc[bus]
+        )
+
+    def init_reactive_nodal_load(model, bus, time):
+        return (
+            timeinvariant_parameters["nodal_reactive_load"]
+            .T.loc[model.timeindex[time]]
+            .loc[bus]
+        )
+
+    def init_active_nodal_feedin(model, bus, time):
+        return (
+            timeinvariant_parameters["nodal_active_feedin"]
+            .T.loc[model.timeindex[time]]
+            .loc[bus]
+        )
+
+    def init_reactive_nodal_feedin(model, bus, time):
+        return (
+            timeinvariant_parameters["nodal_reactive_feedin"]
+            .T.loc[model.timeindex[time]]
+            .loc[bus]
+        )
+
+    def init_power_factors(model, branch, time):
+        return timeinvariant_parameters["power_factors"].loc[
+            branch, model.timeindex[time]
+        ]
+
+    # check if multiple voltage levels are present
+    if len(grid_object.buses_df.v_nom.unique()) > 1:
+        print(
+            "More than one voltage level included. Please make sure to "
+            "adapt all impedance values to one reference system."
+        )
+    # Sets and parameters
+    model.bus_set = pm.Set(initialize=grid_object.buses_df.index)
+    model.slack_bus = pm.Set(initialize=slack)
+    model.v_min = v_min
+    model.v_max = v_max
+    model.v_nom = timeinvariant_parameters["v_nom"]
+    model.thermal_limit = thermal_limits
+    model.pars = timeinvariant_parameters["pars"]
+    model.grid = grid_object
+    model.downstream_nodes_matrix = timeinvariant_parameters["downstream_nodes_matrix"]
+    model.nodal_active_power = pm.Param(
+        model.bus_set, model.time_set, initialize=init_active_nodal_power, mutable=True
+    )
+    model.nodal_reactive_power = pm.Param(
+        model.bus_set,
+        model.time_set,
+        initialize=init_reactive_nodal_power,
+        mutable=True,
+    )
+    model.nodal_active_load = pm.Param(
+        model.bus_set, model.time_set, initialize=init_active_nodal_load, mutable=True
+    )
+    model.nodal_reactive_load = pm.Param(
+        model.bus_set, model.time_set, initialize=init_reactive_nodal_load, mutable=True
+    )
+    model.nodal_active_feedin = pm.Param(
+        model.bus_set, model.time_set, initialize=init_active_nodal_feedin, mutable=True
+    )
+    model.nodal_reactive_feedin = pm.Param(
+        model.bus_set,
+        model.time_set,
+        initialize=init_reactive_nodal_feedin,
+        mutable=True,
+    )
+    model.tan_phi_load = timeinvariant_parameters["tan_phi_load"]
+    model.tan_phi_feedin = timeinvariant_parameters["tan_phi_feedin"]
+    model.v_slack = v_slack
+    model.branches = timeinvariant_parameters["branches"]
+    model.branch_set = pm.Set(initialize=model.branches.index)
+    model.underlying_branch_elements = timeinvariant_parameters[
+        "underlying_branch_elements"
+    ]
+    model.power_factors = pm.Param(
+        model.branch_set, model.time_set, initialize=init_power_factors, mutable=True
+    )
+    # add n-1 security # Todo: make optional?
+    # adapt i_lines_allowed for radial feeders
+    buses_in_cycles = list(
+        set(itertools.chain.from_iterable(edisgo_object.topology.rings))
+    )
+
+    # Find lines in cycles
+    lines_in_cycles = list(
+        grid_object.lines_df.loc[
+            grid_object.lines_df[["bus0", "bus1"]].isin(buses_in_cycles).all(axis=1)
+        ].index.values
+    )
+
+    model.branches_load_factors = pd.DataFrame(
+        index=model.time_set, columns=model.branch_set
+    )
+    model.branches_load_factors.loc[:, :] = 1
+    tmp_residual_load = edisgo_object.timeseries.residual_load.loc[timesteps]
+    indices = pd.DataFrame(index=timesteps, columns=["index"])
+    indices["index"] = [i for i in range(len(timesteps))]
+    model.branches_load_factors.loc[
+        indices.loc[tmp_residual_load.loc[timesteps] < 0].values.T[0], lines_in_cycles
+    ] = load_factor_rings  # Todo: distinction of mv and lv?
+    # Note: So far LV does not contain rings
+    # Variables
+    model.p_cum = pm.Var(model.branch_set, model.time_set)
+    model.slack_p_cum_pos = pm.Var(model.branch_set, model.time_set, bounds=(0, None))
+    model.slack_p_cum_neg = pm.Var(model.branch_set, model.time_set, bounds=(0, None))
+    model.q_cum = pm.Var(model.branch_set, model.time_set)
+    model.v = pm.Var(model.bus_set, model.time_set)
+    model.slack_v_pos = pm.Var(model.bus_set, model.time_set, bounds=(0, None))
+    model.slack_v_neg = pm.Var(model.bus_set, model.time_set, bounds=(0, None))
+    model.curtailment_load = pm.Var(
+        model.bus_set,
+        model.time_set,
+        bounds=lambda m, b, t: (0, m.nodal_active_load[b, t]),
+    )
+    model.curtailment_feedin = pm.Var(
+        model.bus_set,
+        model.time_set,
+        bounds=lambda m, b, t: (0, m.nodal_active_feedin[b, t]),
+    )
+    # add curtailment of flexible units if present
+    if hasattr(model, "flexible_charging_points_set"):
+        model.curtailment_ev = pm.Var(model.bus_set, model.time_set, bounds=(0, None))
+
+        model.UpperCurtEV = pm.Constraint(
+            model.bus_set, model.time_set, rule=upper_bound_curtailment_ev
+        )
+    # Constraints
+    model.ActivePower = pm.Constraint(
+        model.branch_set, model.time_set, rule=active_power
+    )
+    model.UpperActive = pm.Constraint(
+        model.branch_set, model.time_set, rule=upper_active_power
+    )
+    model.LowerActive = pm.Constraint(
+        model.branch_set, model.time_set, rule=lower_active_power
+    )
+    # model.ReactivePower = pm.Constraint(model.branch_set, model.time_set,
+    #                                     rule=reactive_power)
+    model.SlackVoltage = pm.Constraint(
+        model.slack_bus, model.time_set, rule=slack_voltage
+    )
+    model.VoltageDrop = pm.Constraint(
+        model.branch_set, model.time_set, rule=voltage_drop
+    )
+    model.UpperVoltage = pm.Constraint(
+        model.bus_set, model.time_set, rule=upper_voltage
+    )
+    model.LowerVoltage = pm.Constraint(
+        model.bus_set, model.time_set, rule=lower_voltage
+    )
+    # model.UpperCurtLoad = pm.Constraint(model.bus_set, model.time_set,
+    #                                     rule=upper_bound_curtailment_load)
     return model
 
 
@@ -590,8 +636,6 @@ def add_ev_model_bands(
         bounds=lambda m, b, t: (0, m.power_bound_ev[b, t]),
     )
 
-    model.curtailment_ev = pm.Var(model.bus_set, model.time_set, bounds=(0, None))
-
     model.energy_level_ev = pm.Var(
         model.flexible_charging_points_set,
         model.time_set,
@@ -600,9 +644,6 @@ def add_ev_model_bands(
     # Constraints
     model.EVCharging = pm.Constraint(
         model.flexible_charging_points_set, model.time_non_zero, rule=charging_ev
-    )
-    model.UpperCurtEV = pm.Constraint(
-        model.bus_set, model.time_set, rule=upper_bound_curtailment_ev
     )
     # set initial energy level, Todo: possibly add own method for rolling horizon
     model.energy_level_start = pm.Param(
