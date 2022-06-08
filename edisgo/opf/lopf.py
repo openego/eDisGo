@@ -1,5 +1,3 @@
-# fmt: off
-
 # Methods to perform linearised DistFlow
 import itertools
 from copy import deepcopy
@@ -449,7 +447,8 @@ def setup_model(
             energy_level_start=kwargs.get("energy_level_start", None),
             energy_level_end=kwargs.get("energy_level_end", None),
             energy_level_beginning=kwargs.get("energy_level_beginning", None),
-            charging_start=kwargs.get("charging_start", None))
+            charging_start=kwargs.get("charging_start", None),
+        )
 
     # DEFINE CONSTRAINTS
     print("Setup model: Setting constraints.")
@@ -539,32 +538,32 @@ def setup_model(
     return model
 
 
-def add_ev_model_bands(model, timeinvariant_parameters, grid_object,
-                       charging_efficiency, energy_level_start=None,
-                       energy_level_end=None, energy_level_beginning=None,
-                       charging_start=None):
+def add_ev_model_bands(
+    model,
+    timeinvariant_parameters,
+    grid_object,
+    charging_efficiency,
+    energy_level_start=None,
+    energy_level_end=None,
+    energy_level_beginning=None,
+    charging_start=None,
+):
     """
     Method to add sets, variables and constraints for including EV flexibility in terms
     of energy bands.
     Todo: add docstrings
     """
     # Sets and parameters
-    model.charging_points_set = pm.Set(
-        initialize=grid_object.charging_points_df.index
-    )
+    model.charging_points_set = pm.Set(initialize=grid_object.charging_points_df.index)
     model.flexible_charging_points_set = pm.Set(
         initialize=timeinvariant_parameters["optimized_charging_points"]
     )
     model.inflexible_charging_points_set = (
-            model.charging_points_set - model.flexible_charging_points_set
+        model.charging_points_set - model.flexible_charging_points_set
     )
     model.upper_ev_power = timeinvariant_parameters["ev_flex_bands"]["upper_power"]
-    model.upper_ev_energy = timeinvariant_parameters["ev_flex_bands"][
-        "upper_energy"
-    ]
-    model.lower_ev_energy = timeinvariant_parameters["ev_flex_bands"][
-        "lower_energy"
-    ]
+    model.upper_ev_energy = timeinvariant_parameters["ev_flex_bands"]["upper_energy"]
+    model.lower_ev_energy = timeinvariant_parameters["ev_flex_bands"]["lower_energy"]
     model.charging_efficiency = charging_efficiency
     model.lower_bound_ev = pm.Param(
         model.flexible_charging_points_set,
@@ -610,7 +609,7 @@ def add_ev_model_bands(model, timeinvariant_parameters, grid_object,
         model.flexible_charging_points_set,
         initialize=energy_level_start,
         mutable=True,
-        within=pm.Any
+        within=pm.Any,
     )
     model.slack_initial_energy_pos = pm.Var(
         model.flexible_charging_points_set, bounds=(0, None)
@@ -635,7 +634,7 @@ def add_ev_model_bands(model, timeinvariant_parameters, grid_object,
         model.flexible_charging_points_set,
         initialize=energy_level_end,
         mutable=True,
-        within=pm.Any
+        within=pm.Any,
     )
     model.FinalEVEnergyLevelFix = pm.Constraint(
         model.flexible_charging_points_set, model.time_end, rule=fixed_energy_level
@@ -1869,5 +1868,3 @@ def combine_results_for_grid(feeders, grid_id, res_dir, res_name):
             print("Feeder {} not added".format(feeder_id))
     res_grid = res_grid.loc[~res_grid.index.duplicated(keep="last")]
     return res_grid
-
-# fmt: on
