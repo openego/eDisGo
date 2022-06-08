@@ -2054,7 +2054,7 @@ class Topology:
 
             # if substation ID (= LV grid ID) is given and it matches an
             # existing LV grid ID (i.e. it is no aggregated LV grid), set grid
-            # to connect component to to specified grid (in case the component
+            # to connect component to specified grid (in case the component
             # has no geometry it is connected to the grid's station)
             if comp_data["mvlv_subst_id"] in lv_grid_ids:
 
@@ -2409,12 +2409,11 @@ class Topology:
             transformers are represented by nodes.
 
         """
-        graph = networkx_helper.translate_df_to_graph(
+        return networkx_helper.translate_df_to_graph(
             self.buses_df,
             self.lines_df,
             self.transformers_df,
         )
-        return graph
 
     def to_geopandas(self, mode: str = "mv"):
         """
@@ -2629,7 +2628,7 @@ class Topology:
             "lines",
             "switches",
         ]:
-            df = getattr(self, comp + "_df")
+            df = getattr(self, f"{comp}_df")
             if any(df.index.duplicated()):
                 duplicated_comps.append(comp)
                 duplicated_labels.append(df.index[df.index.duplicated()].values)
@@ -2653,7 +2652,7 @@ class Topology:
             "generators",
             "storage_units",
         ]:
-            df = getattr(self, nodal_component + "_df")
+            df = getattr(self, f"{nodal_component}_df")
             missing = df.index[~df.bus.isin(self.buses_df.index)]
             buses.append(df.bus.values)
 
@@ -2664,7 +2663,7 @@ class Topology:
                 )
 
         for branch_component in ["lines", "transformers"]:
-            df = getattr(self, branch_component + "_df")
+            df = getattr(self, f"{branch_component}_df")
 
             for attr in ["bus0", "bus1"]:
                 buses.append(df[attr].values)
@@ -2714,7 +2713,7 @@ def _get_matching_dict_of_attributes_and_file_names():
         names as keys and corresponding file names as values.
 
     """
-    topo_dict = {
+    return {
         "buses_df": "buses.csv",
         "lines_df": "lines.csv",
         "loads_df": "loads.csv",
@@ -2726,5 +2725,3 @@ def _get_matching_dict_of_attributes_and_file_names():
         "switches_df": "switches.csv",
         "network": "network.csv",
     }
-
-    return topo_dict
