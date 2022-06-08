@@ -732,16 +732,19 @@ class Results:
             contain `type_info`. Line representative is the series name.
 
         """
-        self.equipment_changes = self.equipment_changes.append(
-            pd.DataFrame(
-                {
-                    "iteration_step": [0],
-                    "change": ["added"],
-                    "equipment": [line.type_info],
-                    "quantity": [1],
-                },
-                index=[line.name],
-            )
+        self.equipment_changes = pd.concat(
+            [
+                self.equipment_changes,
+                pd.DataFrame(
+                    {
+                        "iteration_step": [0],
+                        "change": ["added"],
+                        "equipment": [line.type_info],
+                        "quantity": [1],
+                    },
+                    index=[line.name],
+                ),
+            ]
         )
 
     def _del_line_from_equipment_changes(self, line_repr):

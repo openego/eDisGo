@@ -7,12 +7,12 @@ from edisgo.tools.config import Config
 
 class TestQControl:
     def test_get_q_sign_generator(self):
-        # ToDo implement
-        pass
+        assert q_control.get_q_sign_generator("Inductive") == -1
+        assert q_control.get_q_sign_generator("capacitive") == 1
 
     def test_get_q_sign_load(self):
-        # ToDo implement
-        pass
+        assert q_control.get_q_sign_load("inductive") == 1
+        assert q_control.get_q_sign_load("Capacitive") == -1
 
     def test_fixed_cosphi(self):
 

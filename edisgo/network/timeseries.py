@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 import logging
 import os
@@ -45,6 +47,25 @@ class TimeSeries:
 
         self._timeindex = kwargs.get("timeindex", pd.DatetimeIndex([]))
         self.time_series_raw = TimeSeriesRaw()
+
+    @property
+    def is_worst_case(self) -> bool:
+        """
+        Time series mode.
+
+        Is used to distinguish between normal time series analysis and worst-case
+        analysis. Is determined by checking if the timindex starts before 1971 as the
+        default for worst-case is 1970. Be mindful when creating your own worst-cases.
+
+        Returns
+        -------
+        bool
+            Indicates if current time series is worst-case time series with different
+            assumptions for mv and lv simultaneities.
+        """
+        if len(self.timeindex) > 0:
+            return self.timeindex[0] < pd.Timestamp("1971-01-01")
+        return False
 
     @property
     def timeindex(self):
@@ -761,7 +782,7 @@ class TimeSeries:
         # get worst case configurations
         worst_case_scale_factors = configs["worst_case_scale_factor"]
         # get power scaling factors for different voltage levels and feed-in/load case
-        power_scaling = pd.Series()
+        power_scaling = pd.Series(dtype=float)
         for case in cases:
             for voltage_level in ["mv", "lv"]:
                 power_scaling.at[f"{case}_{voltage_level}"] = worst_case_scale_factors[
@@ -1119,11 +1140,6 @@ class TimeSeries:
                 "'ts_generators' must either be a pandas DataFrame or 'oedb'."
             )
 
-        # write to TimeSeriesRaw
-        self.time_series_raw.fluctuating_generators_active_power_by_technology = (
-            ts_generators
-        )
-
         # set generator_names if None
         if generator_names is None:
             if isinstance(ts_generators.columns, pd.MultiIndex):
@@ -1170,6 +1186,24 @@ class TimeSeries:
                 sort=False,
             )
 
+        # write to TimeSeriesRaw
+        if not isinstance(ts_generators.columns, pd.MultiIndex):
+            # make columns a multiindex, otherwise columns are not a multiindex anymore
+            # after concatenation and duplicates not correctly identified
+            ts_generators = ts_generators.copy()
+            ts_generators.columns = pd.MultiIndex.from_product(
+                [ts_generators.columns, [None]]
+            )
+        tmp = pd.concat(
+            [
+                self.time_series_raw.fluctuating_generators_active_power_by_technology,
+                ts_generators,
+            ],
+            axis=1,
+        )
+        tmp = tmp.loc[:, ~tmp.columns.duplicated(keep="last")]
+        self.time_series_raw.fluctuating_generators_active_power_by_technology = tmp
+
     def predefined_dispatchable_generators_by_technology(
         self, edisgo_object, ts_generators, generator_names=None
     ):
@@ -1200,9 +1234,10 @@ class TimeSeries:
             raise ValueError("'ts_generators' must be a pandas DataFrame.")
 
         # write to TimeSeriesRaw
-        self.time_series_raw.dispatchable_generators_active_power_by_technology = (
-            ts_generators
-        )
+        for col in ts_generators:
+            self.time_series_raw.dispatchable_generators_active_power_by_technology[
+                col
+            ] = ts_generators[col]
 
         # set generator_names if None
         if generator_names is None:
@@ -1292,19 +1327,14 @@ class TimeSeries:
                 "'ts_loads' must either be a pandas DataFrame or 'demandlib'."
             )
         elif ts_loads.empty:
-            raise Warning("The profile you entered is empty. Method is skipped.")
+            logger.warning("The profile you entered is empty. Method is skipped.")
             return
 
         # write to TimeSeriesRaw
-        if self.time_series_raw.conventional_loads_active_power_by_sector is not None:
-            for col in ts_loads:
-                self.time_series_raw.conventional_loads_active_power_by_sector[
-                    col
-                ] = ts_loads[col]
-        else:
-            self.time_series_raw.conventional_loads_active_power_by_sector = (
-                ts_loads.copy()
-            )
+        for col in ts_loads:
+            self.time_series_raw.conventional_loads_active_power_by_sector[
+                col
+            ] = ts_loads[col]
 
         # set load_names if None
         if load_names is None:
@@ -1360,19 +1390,14 @@ class TimeSeries:
         if not isinstance(ts_loads, pd.DataFrame):
             raise ValueError("'ts_loads' must be a pandas DataFrame.")
         elif ts_loads.empty:
-            raise Warning("The profile you entered is empty. Method is skipped.")
+            logger.warning("The profile you entered is empty. Method is skipped.")
             return
 
         # write to TimeSeriesRaw
-        if self.time_series_raw.charging_points_active_power_by_use_case is not None:
-            for col in ts_loads:
-                self.time_series_raw.charging_points_active_power_by_use_case[
-                    col
-                ] = ts_loads[col]
-        else:
-            self.time_series_raw.charging_points_active_power_by_use_case = (
-                ts_loads.copy()
-            )
+        for col in ts_loads:
+            self.time_series_raw.charging_points_active_power_by_use_case[
+                col
+            ] = ts_loads[col]
 
         # set load_names if None
         if load_names is None:
@@ -1421,7 +1446,8 @@ class TimeSeries:
 
         Parameters
         -----------
-        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` or \
+            None
             Sets fixed cosphi parameters for generators.
             Possible options are:
 
@@ -1454,10 +1480,17 @@ class TimeSeries:
                         `reactive_power_factor` is used.
 
                 Index of the dataframe is ignored.
-        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+
+            * None
+
+                No reactive power time series are set.
+
+            Default: None.
+        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` or None
             Sets fixed cosphi parameters for loads. The same options as for parameter
             `generators_parametrisation` apply.
-        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` \
+            or None
             Sets fixed cosphi parameters for storage units. The same options as for
             parameter `generators_parametrisation` apply.
 
@@ -1500,14 +1533,20 @@ class TimeSeries:
                                 components_df.loc[comps, :],
                                 edisgo_object.topology.buses_df,
                             )
-                            q_sign = q_sign.append(
-                                q_control._fixed_cosphi_default_reactive_power_sign(
-                                    df, type, edisgo_object.config
-                                )
+                            q_sign = pd.concat(
+                                [
+                                    q_sign,
+                                    q_control._fixed_cosphi_default_reactive_power_sign(
+                                        df, type, edisgo_object.config
+                                    ),
+                                ]
                             )
                         else:
-                            q_sign = q_sign.append(
-                                pd.Series(q_sign_func(row["mode"]), index=comps)
+                            q_sign = pd.concat(
+                                [
+                                    q_sign,
+                                    pd.Series(q_sign_func(row["mode"]), index=comps),
+                                ]
                             )
                         # get power factor (default or given)
                         if row["power_factor"] == "default":
@@ -1515,14 +1554,20 @@ class TimeSeries:
                                 components_df.loc[comps, :],
                                 edisgo_object.topology.buses_df,
                             )
-                            power_factor = power_factor.append(
-                                q_control._fixed_cosphi_default_power_factor(
-                                    df, type, edisgo_object.config
-                                )
+                            power_factor = pd.concat(
+                                [
+                                    power_factor,
+                                    q_control._fixed_cosphi_default_power_factor(
+                                        df, type, edisgo_object.config
+                                    ),
+                                ]
                             )
                         else:
-                            power_factor = power_factor.append(
-                                pd.Series(row["power_factor"], index=comps)
+                            power_factor = pd.concat(
+                                [
+                                    power_factor,
+                                    pd.Series(row["power_factor"], index=comps),
+                                ]
                             )
             else:
                 raise ValueError(
@@ -1572,7 +1617,7 @@ class TimeSeries:
             )
             # calculate reactive power
             reactive_power = q_control.fixed_cosphi(
-                self.generators_active_power, q_sign, power_factor
+                self.generators_active_power.loc[:, q_sign.index], q_sign, power_factor
             )
             self.generators_reactive_power = pd.concat(
                 [self.generators_reactive_power, reactive_power], axis=1
@@ -1589,7 +1634,7 @@ class TimeSeries:
             )
             # calculate reactive power
             reactive_power = q_control.fixed_cosphi(
-                self.loads_active_power, q_sign, power_factor
+                self.loads_active_power.loc[:, q_sign.index], q_sign, power_factor
             )
             self.loads_reactive_power = pd.concat(
                 [self.loads_reactive_power, reactive_power], axis=1
@@ -1606,7 +1651,9 @@ class TimeSeries:
             )
             # calculate reactive power
             reactive_power = q_control.fixed_cosphi(
-                self.storage_units_active_power, q_sign, power_factor
+                self.storage_units_active_power.loc[:, q_sign.index],
+                q_sign,
+                power_factor,
             )
             self.storage_units_reactive_power = pd.concat(
                 [self.storage_units_reactive_power, reactive_power], axis=1
@@ -1810,7 +1857,7 @@ class TimeSeries:
                     pd.read_csv(path, index_col=0, parse_dates=True),
                 )
                 if timeindex is None:
-                    timeindex = getattr(self, "f_{attr}").index
+                    timeindex = getattr(self, f"_{attr}").index
         if timeindex is None:
             timeindex = pd.DatetimeIndex([])
         self._timeindex = timeindex
@@ -1909,10 +1956,14 @@ class TimeSeriesRaw:
         self.q_control = pd.DataFrame(
             columns=["type", "q_sign", "power_factor", "parametrisation"]
         )
-        self.fluctuating_generators_active_power_by_technology = None
-        self.dispatchable_generators_active_power_by_technology = None
-        self.conventional_loads_active_power_by_sector = None
-        self.charging_points_active_power_by_use_case = None
+        self.fluctuating_generators_active_power_by_technology = pd.DataFrame(
+            dtype=float
+        )
+        self.dispatchable_generators_active_power_by_technology = pd.DataFrame(
+            dtype=float
+        )
+        self.conventional_loads_active_power_by_sector = pd.DataFrame(dtype=float)
+        self.charging_points_active_power_by_use_case = pd.DataFrame(dtype=float)
 
     @property
     def _attributes(self):
@@ -2010,7 +2061,7 @@ class TimeSeriesRaw:
                     pd.read_csv(path, index_col=0, parse_dates=True),
                 )
                 if timeindex is None:
-                    timeindex = getattr(self, f"_{attr}").index
+                    timeindex = getattr(self, f"{attr}").index
         if timeindex is None:
             timeindex = pd.DatetimeIndex([])
         self._timeindex = timeindex

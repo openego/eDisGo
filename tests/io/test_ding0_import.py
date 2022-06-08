@@ -1,3 +1,4 @@
+import pandas as pd
 import pytest
 import shapely
 
@@ -41,6 +42,123 @@ class TestImportFromDing0:
         msg = "Directory wrong_directory does not exist."
         with pytest.raises(AssertionError, match=msg):
             ding0_import.import_ding0_grid("wrong_directory", self.topology)
+
+    def test_validate_ding0_grid_import(self):
+        """Test of validation of grids."""
+        comps_dict = {
+            "buses": "BusBar_MVGrid_1_LVGrid_2_MV",
+            "generators": "GeneratorFluctuating_14",
+            "loads": "Load_residential_LVGrid_3_2",
+            "transformers": "LVStation_5_transformer_1",
+            "lines": "Line_10014",
+            "switches": "circuit_breaker_1",
+        }
+        # check duplicate node
+        for comp, name in comps_dict.items():
+            new_comp = getattr(self.topology, f"_{comp}_df").loc[[name]]
+            comps = getattr(self.topology, f"_{comp}_df")
+            setattr(self.topology, f"_{comp}_df", pd.concat([comps, new_comp]))
+            try:
+                ding0_import._validate_ding0_grid_import(self.topology)
+                raise Exception(
+                    f"Appending components {comp} in check duplicate did not work "
+                    "properly."
+                )
+            except ValueError as e:
+                assert e.args[0] == (
+                    f"{name} have duplicate entry in one of the components "
+                    f"dataframes."
+                )
+
+            # reset dataframe
+            setattr(self.topology, f"_{comp}_df", comps)
+            ding0_import._validate_ding0_grid_import(self.topology)
+
+        # check not connected generator and load
+        for nodal_component in ["loads", "generators"]:
+            comps = getattr(self.topology, f"_{nodal_component}_df")
+            new_comp = comps.loc[comps_dict[nodal_component]]
+            new_comp.name = "new_nodal_component"
+            new_comp.bus = "Non_existent_bus_" + nodal_component
+            setattr(
+                self.topology,
+                f"_{nodal_component}_df",
+                pd.concat([comps, new_comp.to_frame().T]),
+            )
+
+            try:
+                ding0_import._validate_ding0_grid_import(self.topology)
+                raise Exception(
+                    f"Appending components {nodal_component} did not work properly."
+                )
+            except ValueError as e:
+                assert e.args[0] == (
+                    f"The following {nodal_component} have buses which are not defined:"
+                    f" {new_comp.name}."
+                )
+            # reset dataframe
+            setattr(self.topology, f"_{nodal_component}_df", comps)
+            ding0_import._validate_ding0_grid_import(self.topology)
+
+        # check branch components
+        i = 0
+        for branch_component in ["lines", "transformers"]:
+            comps = getattr(self.topology, f"_{branch_component}_df")
+            new_comp = comps.loc[comps_dict[branch_component]]
+            new_comp.name = "new_branch_component"
+            setattr(
+                new_comp,
+                "bus" + str(i),
+                "Non_existent_bus_" + branch_component,
+            )
+            setattr(
+                self.topology,
+                f"_{branch_component}_df",
+                pd.concat([comps, new_comp.to_frame().T]),
+            )
+            try:
+                ding0_import._validate_ding0_grid_import(self.topology)
+                raise Exception(
+                    f"Appending components {branch_component} did not work properly."
+                )
+            except ValueError as e:
+                assert e.args[0] == (
+                    f"The following {branch_component} have bus{i} which are not "
+                    f"defined: {new_comp.name}."
+                )
+            # reset dataframe
+            setattr(self.topology, f"_{branch_component}_df", comps)
+            ding0_import._validate_ding0_grid_import(self.topology)
+            i += 1
+
+        # check switches
+        comps = self.topology.switches_df
+        for attr in ["bus_open", "bus_closed"]:
+            new_comp = comps.loc[comps_dict["switches"]]
+            new_comp.name = "new_switch"
+            new_comps = pd.concat([comps, new_comp.to_frame().T])
+            new_comps.at[new_comp.name, attr] = "Non_existent_" + attr
+            self.topology.switches_df = new_comps
+            try:
+                ding0_import._validate_ding0_grid_import(self.topology)
+                raise Exception("Appending components switches did not work properly.")
+            except ValueError as e:
+                assert e.args[0] == (
+                    f"The following switches have {attr} which are not defined: "
+                    f"{new_comp.name}."
+                )
+            self.topology.switches_df = comps
+            ding0_import._validate_ding0_grid_import(self.topology)
+
+        # check isolated node
+        bus = self.topology.buses_df.loc[comps_dict["buses"]]
+        bus.name = "New_bus"
+        self.topology.buses_df = pd.concat([self.topology.buses_df, bus.to_frame().T])
+        try:
+            ding0_import._validate_ding0_grid_import(self.topology)
+            raise Exception("Appending components buses did not work properly.")
+        except ValueError as e:
+            assert e.args[0] == f"The following buses are isolated: {bus.name}."
 
     def test_transformer_buses(self):
         assert (

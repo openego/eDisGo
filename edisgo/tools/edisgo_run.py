@@ -146,12 +146,12 @@ def run_edisgo_basic(
     except MaximumIterationError:
         grid_issues["network"] = edisgo_grid.network.id
         grid_issues["msg"] = str(edisgo_grid.network.results.unresolved_issues)
-        costs = pd.DataFrame()
+        costs = pd.DataFrame(dtype=float)
         logging.warning("Unresolved issues left after network expansion.")
     except Exception as e:
         grid_issues["network"] = edisgo_grid.network.id
         grid_issues["msg"] = repr(e)
-        costs = pd.DataFrame()
+        costs = pd.DataFrame(dtype=float)
         logging.exception()
 
     return edisgo_grid, costs, grid_issues

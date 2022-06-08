@@ -301,7 +301,12 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
         generators_conv_mv = _import_conv_generators(session)
         generators_res_mv, generators_res_lv = _import_res_generators(session)
 
-    generators_mv = generators_conv_mv.append(generators_res_mv)
+    generators_mv = pd.concat(
+        [
+            generators_conv_mv,
+            generators_res_mv,
+        ]
+    )
 
     # validate that imported generators are located inside the grid district
     _validate_sample_geno_location()

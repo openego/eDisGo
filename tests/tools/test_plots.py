@@ -6,10 +6,10 @@ from edisgo.tools.plots import dash_plot
 
 class TestPlots:
     @classmethod
-    def setup_class(self):
-        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        self.edisgo.set_time_series_worst_case_analysis()
-        self.edisgo.reinforce()
+    def setup_class(cls):
+        cls.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        cls.edisgo.set_time_series_worst_case_analysis()
+        cls.edisgo.reinforce()
 
     def test_dash_plot(self):
         # TODO: at the moment this doesn't really test anything. Add meaningful tests.

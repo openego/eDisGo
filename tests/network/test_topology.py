@@ -519,14 +519,17 @@ class TestTopology:
 
         # test line in ring
         # add line to create ring
-        self.topology.lines_df = self.topology.lines_df.append(
-            pd.DataFrame(
-                data={
-                    "bus0": "Bus_BranchTee_LVGrid_2_2",
-                    "bus1": "Bus_BranchTee_LVGrid_2_3",
-                },
-                index=["TestLine"],
-            )
+        self.topology.lines_df = pd.concat(
+            [
+                self.topology.lines_df,
+                pd.DataFrame(
+                    data={
+                        "bus0": "Bus_BranchTee_LVGrid_2_2",
+                        "bus1": "Bus_BranchTee_LVGrid_2_3",
+                    },
+                    index=["TestLine"],
+                ),
+            ]
         )
         return_value = self.topology._check_line_for_removal("TestLine")
         assert return_value
@@ -645,14 +648,17 @@ class TestTopology:
         # test remove line in cycle (no bus is removed)
         # add line to create ring
         line_name = "TestLine_LVGrid_3"
-        self.topology.lines_df = self.topology.lines_df.append(
-            pd.DataFrame(
-                data={
-                    "bus0": "Bus_BranchTee_LVGrid_3_2",
-                    "bus1": "Bus_BranchTee_LVGrid_3_5",
-                },
-                index=[line_name],
-            )
+        self.topology.lines_df = pd.concat(
+            [
+                self.topology.lines_df,
+                pd.DataFrame(
+                    data={
+                        "bus0": "Bus_BranchTee_LVGrid_3_2",
+                        "bus1": "Bus_BranchTee_LVGrid_3_5",
+                    },
+                    index=[line_name],
+                ),
+            ]
         )
 
         len_df_before = len(self.topology.lines_df)
@@ -687,11 +693,14 @@ class TestTopology:
         # test bus can be removed
         # create isolated bus
         bus_name = "TestBusIsolated"
-        self.topology.buses_df = self.topology.buses_df.append(
-            pd.DataFrame(
-                data={"v_nom": 20},
-                index=[bus_name],
-            )
+        self.topology.buses_df = pd.concat(
+            [
+                self.topology.buses_df,
+                pd.DataFrame(
+                    data={"v_nom": 20},
+                    index=[bus_name],
+                ),
+            ]
         )
         len_df_before = len(self.topology.buses_df)
         self.topology.remove_bus(bus_name)
