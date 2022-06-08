@@ -14,8 +14,12 @@ from Script_prepare_grids_for_optimization import \
 grid_dir = "minimum_working"
 opt_ev = True
 opt_stor = False
+save_res = False
 
-ts_pre = pd.read_csv("x_charge_ev_pre.csv", index_col=0, parse_dates=True)
+if os.path.isfile("x_charge_ev_pre.csv"):
+    ts_pre = pd.read_csv("x_charge_ev_pre.csv", index_col=0, parse_dates=True)
+else:
+    ts_pre = pd.DataFrame()
 
 timeindex = pd.date_range("2011-01-01", periods=8760, freq="h")
 storage_ts = pd.DataFrame({"Storage 1": 8760 * [0]}, index=timeindex)
@@ -64,7 +68,10 @@ model = opt.setup_model(
 results = opt.optimize(model, "gurobi")
 results["x_charge_ev"].plot()
 plt.show()
-ts_pre.plot()
-plt.show()
-pd.testing.assert_frame_equal(ts_pre, results["x_charge_ev"])
+if not ts_pre.empty:
+    ts_pre.plot()
+    plt.show()
+    pd.testing.assert_frame_equal(ts_pre, results["x_charge_ev"])
+if save_res:
+    results["x_charge_ev"].to_csv("x_charge_ev_pre.csv")
 print("SUCCESS")
