@@ -317,42 +317,7 @@ def setup_model(
         )
         model.fixed_storage_set = model.storage_set - model.optimized_storage_set
         model.fix_relative_soc = kwargs.get("fix_relative_soc", 0.5)
-    if optimize_ev_charging:
-        model.charging_points_set = pm.Set(
-            initialize=grid_object.charging_points_df.index
-        )
-        model.flexible_charging_points_set = pm.Set(
-            initialize=timeinvariant_parameters["optimized_charging_points"]
-        )
-        model.inflexible_charging_points_set = (
-            model.charging_points_set - model.flexible_charging_points_set
-        )
-        model.upper_ev_power = timeinvariant_parameters["ev_flex_bands"]["upper_power"]
-        model.upper_ev_energy = timeinvariant_parameters["ev_flex_bands"][
-            "upper_energy"
-        ]
-        model.lower_ev_energy = timeinvariant_parameters["ev_flex_bands"][
-            "lower_energy"
-        ]
-        model.charging_efficiency = kwargs.get("charging_efficiency", 0.9)
-        model.lower_bound_ev = pm.Param(
-            model.flexible_charging_points_set,
-            model.time_set,
-            initialize=set_lower_band_ev,
-            mutable=True,
-        )
-        model.upper_bound_ev = pm.Param(
-            model.flexible_charging_points_set,
-            model.time_set,
-            initialize=set_upper_band_ev,
-            mutable=True,
-        )
-        model.power_bound_ev = pm.Param(
-            model.flexible_charging_points_set,
-            model.time_set,
-            initialize=set_power_band_ev,
-            mutable=True,
-        )
+
     model.v_min = kwargs.get("v_min", 0.9)
     model.v_max = kwargs.get("v_max", 1.1)
     model.v_nom = timeinvariant_parameters["v_nom"]
@@ -474,23 +439,17 @@ def setup_model(
                 m.grid.storage_units_df.loc[b, model.pars["p_nom"]],
             ),
         )
+
     if optimize_ev_charging:
-
-        model.charging_ev = pm.Var(
-            model.flexible_charging_points_set,
-            model.time_set,
-            bounds=lambda m, b, t: (0, m.power_bound_ev[b, t]),
-        )
-
-        model.curtailment_ev = pm.Var(model.bus_set, model.time_set, bounds=(0, None))
-        if not (
-            objective == "minimize_energy_level" or objective == "maximize_energy_level"
-        ):
-            model.energy_level_ev = pm.Var(
-                model.flexible_charging_points_set,
-                model.time_set,
-                bounds=lambda m, b, t: (m.lower_bound_ev[b, t], m.upper_bound_ev[b, t]),
-            )
+        model = add_ev_model_bands(
+            model=model,
+            timeinvariant_parameters=timeinvariant_parameters,
+            grid_object=grid_object,
+            charging_efficiency=kwargs.get("charging_efficiency", 0.9),
+            energy_level_start=kwargs.get("energy_level_start", None),
+            energy_level_end=kwargs.get("energy_level_end", None),
+            energy_level_beginning=kwargs.get("energy_level_beginning", None),
+            charging_start=kwargs.get("charging_start", None))
 
     # DEFINE CONSTRAINTS
     print("Setup model: Setting constraints.")
@@ -526,99 +485,6 @@ def setup_model(
         model.FixedSOC = pm.Constraint(
             model.storage_set, model.times_fixed_soc, rule=fix_soc
         )
-    if optimize_ev_charging and not (
-        objective == "minimize_energy_level" or objective == "maximize_energy_level"
-    ):
-        model.EVCharging = pm.Constraint(
-            model.flexible_charging_points_set, model.time_non_zero, rule=charging_ev
-        )
-        model.UpperCurtEV = pm.Constraint(
-            model.bus_set, model.time_set, rule=upper_bound_curtailment_ev
-        )
-        # set initial energy level
-        energy_level_start = kwargs.get("energy_level_start", None)
-        model.energy_level_start = pm.Param(
-            model.flexible_charging_points_set,
-            initialize=energy_level_start,
-            mutable=True,
-        )
-        model.slack_initial_energy_pos = pm.Var(
-            model.flexible_charging_points_set, bounds=(0, None)
-        )
-        model.slack_initial_energy_neg = pm.Var(
-            model.flexible_charging_points_set, bounds=(0, None)
-        )
-        model.InitialEVEnergyLevel = pm.Constraint(
-            model.flexible_charging_points_set,
-            model.time_zero,
-            rule=initial_energy_level,
-        )
-        model.InitialEVEnergyLevelStart = pm.Constraint(
-            model.flexible_charging_points_set, model.time_zero, rule=fixed_energy_level
-        )
-        if energy_level_start is None:
-            model.InitialEVEnergyLevel.deactivate()
-        else:
-            model.InitialEVEnergyLevelStart.deactivate()
-        # set final energy level and if necessary charging power
-        energy_level_end = kwargs.get("energy_level_end", None)
-        model.energy_level_end = pm.Param(
-            model.flexible_charging_points_set,
-            initialize=energy_level_end,
-            mutable=True,
-        )
-        model.FinalEVEnergyLevelFix = pm.Constraint(
-            model.flexible_charging_points_set, model.time_end, rule=fixed_energy_level
-        )
-
-        energy_level_beginning = kwargs.get("energy_level_beginning", None)
-        if energy_level_beginning is None:
-            model.energy_level_beginning = pm.Param(
-                model.flexible_charging_points_set, initialize=0, mutable=True
-            )
-        else:
-            model.energy_level_beginning = pm.Param(
-                model.flexible_charging_points_set,
-                initialize=energy_level_beginning,
-                mutable=True,
-            )
-        model.FinalEVEnergyLevelEnd = pm.Constraint(
-            model.flexible_charging_points_set, model.time_end, rule=final_energy_level
-        )
-        model.FinalEVChargingPower = pm.Constraint(
-            model.flexible_charging_points_set,
-            model.time_end,
-            rule=final_charging_power,
-        )
-        if energy_level_end is None:
-            model.FinalEVEnergyLevelFix.deactivate()
-            model.FinalEVEnergyLevelEnd.deactivate()
-            model.FinalEVChargingPower.deactivate()
-        else:
-            if type(energy_level_end) != bool:
-                model.FinalEVEnergyLevelFix.deactivate()
-            elif type(energy_level_end) == bool:
-                model.FinalEVEnergyLevelEnd.deactivate()
-        # set initial charging power
-        charging_initial = kwargs.get("charging_start", None)
-        model.charging_initial = pm.Param(
-            model.flexible_charging_points_set,
-            initialize=charging_initial,
-            mutable=True,
-        )
-        model.slack_initial_charging_pos = pm.Var(
-            model.flexible_charging_points_set, bounds=(0, None)
-        )
-        model.slack_initial_charging_neg = pm.Var(
-            model.flexible_charging_points_set, bounds=(0, None)
-        )
-        model.InitialEVChargingPower = pm.Constraint(
-            model.flexible_charging_points_set,
-            model.time_zero,
-            rule=initial_charging_power,
-        )
-        if charging_initial is None:
-            model.InitialEVChargingPower.deactivate()
 
     if objective == "minimize_energy_level" or objective == "maximize_energy_level":
         model.AggrGrid = pm.Constraint(model.time_set, rule=aggregated_power)
@@ -670,6 +536,158 @@ def setup_model(
         model.pprint()
     print("Successfully set up optimisation model.")
     print("It took {} seconds to set up model.".format(perf_counter() - t1))
+    return model
+
+
+def add_ev_model_bands(model, timeinvariant_parameters, grid_object,
+                       charging_efficiency, energy_level_start=None,
+                       energy_level_end=None, energy_level_beginning=None,
+                       charging_start=None):
+    """
+    Method to add sets, variables and constraints for including EV flexibility in terms
+    of energy bands.
+    Todo: add docstrings
+    """
+    # Sets and parameters
+    model.charging_points_set = pm.Set(
+        initialize=grid_object.charging_points_df.index
+    )
+    model.flexible_charging_points_set = pm.Set(
+        initialize=timeinvariant_parameters["optimized_charging_points"]
+    )
+    model.inflexible_charging_points_set = (
+            model.charging_points_set - model.flexible_charging_points_set
+    )
+    model.upper_ev_power = timeinvariant_parameters["ev_flex_bands"]["upper_power"]
+    model.upper_ev_energy = timeinvariant_parameters["ev_flex_bands"][
+        "upper_energy"
+    ]
+    model.lower_ev_energy = timeinvariant_parameters["ev_flex_bands"][
+        "lower_energy"
+    ]
+    model.charging_efficiency = charging_efficiency
+    model.lower_bound_ev = pm.Param(
+        model.flexible_charging_points_set,
+        model.time_set,
+        initialize=set_lower_band_ev,
+        mutable=True,
+    )
+    model.upper_bound_ev = pm.Param(
+        model.flexible_charging_points_set,
+        model.time_set,
+        initialize=set_upper_band_ev,
+        mutable=True,
+    )
+    model.power_bound_ev = pm.Param(
+        model.flexible_charging_points_set,
+        model.time_set,
+        initialize=set_power_band_ev,
+        mutable=True,
+    )
+    # Variables
+    model.charging_ev = pm.Var(
+        model.flexible_charging_points_set,
+        model.time_set,
+        bounds=lambda m, b, t: (0, m.power_bound_ev[b, t]),
+    )
+
+    model.curtailment_ev = pm.Var(model.bus_set, model.time_set, bounds=(0, None))
+
+    model.energy_level_ev = pm.Var(
+        model.flexible_charging_points_set,
+        model.time_set,
+        bounds=lambda m, b, t: (m.lower_bound_ev[b, t], m.upper_bound_ev[b, t]),
+    )
+    # Constraints
+    model.EVCharging = pm.Constraint(
+        model.flexible_charging_points_set, model.time_non_zero, rule=charging_ev
+    )
+    model.UpperCurtEV = pm.Constraint(
+        model.bus_set, model.time_set, rule=upper_bound_curtailment_ev
+    )
+    # set initial energy level, Todo: possibly add own method for rolling horizon
+    model.energy_level_start = pm.Param(
+        model.flexible_charging_points_set,
+        initialize=energy_level_start,
+        mutable=True,
+        within=pm.Any
+    )
+    model.slack_initial_energy_pos = pm.Var(
+        model.flexible_charging_points_set, bounds=(0, None)
+    )
+    model.slack_initial_energy_neg = pm.Var(
+        model.flexible_charging_points_set, bounds=(0, None)
+    )
+    model.InitialEVEnergyLevel = pm.Constraint(
+        model.flexible_charging_points_set,
+        model.time_zero,
+        rule=initial_energy_level,
+    )
+    model.InitialEVEnergyLevelStart = pm.Constraint(
+        model.flexible_charging_points_set, model.time_zero, rule=fixed_energy_level
+    )
+    if energy_level_start is None:
+        model.InitialEVEnergyLevel.deactivate()
+    else:
+        model.InitialEVEnergyLevelStart.deactivate()
+    # set final energy level and if necessary charging power
+    model.energy_level_end = pm.Param(
+        model.flexible_charging_points_set,
+        initialize=energy_level_end,
+        mutable=True,
+        within=pm.Any
+    )
+    model.FinalEVEnergyLevelFix = pm.Constraint(
+        model.flexible_charging_points_set, model.time_end, rule=fixed_energy_level
+    )
+
+    if energy_level_beginning is None:
+        model.energy_level_beginning = pm.Param(
+            model.flexible_charging_points_set, initialize=0, mutable=True
+        )
+    else:
+        model.energy_level_beginning = pm.Param(
+            model.flexible_charging_points_set,
+            initialize=energy_level_beginning,
+            mutable=True,
+        )
+    model.FinalEVEnergyLevelEnd = pm.Constraint(
+        model.flexible_charging_points_set, model.time_end, rule=final_energy_level
+    )
+    model.FinalEVChargingPower = pm.Constraint(
+        model.flexible_charging_points_set,
+        model.time_end,
+        rule=final_charging_power,
+    )
+    if energy_level_end is None:
+        model.FinalEVEnergyLevelFix.deactivate()
+        model.FinalEVEnergyLevelEnd.deactivate()
+        model.FinalEVChargingPower.deactivate()
+    else:
+        if type(energy_level_end) != bool:
+            model.FinalEVEnergyLevelFix.deactivate()
+        elif type(energy_level_end) == bool:
+            model.FinalEVEnergyLevelEnd.deactivate()
+    # set initial charging power
+    model.charging_initial = pm.Param(
+        model.flexible_charging_points_set,
+        initialize=charging_start,
+        mutable=True,
+    )
+    model.slack_initial_charging_pos = pm.Var(
+        model.flexible_charging_points_set, bounds=(0, None)
+    )
+    model.slack_initial_charging_neg = pm.Var(
+        model.flexible_charging_points_set, bounds=(0, None)
+    )
+    model.InitialEVChargingPower = pm.Constraint(
+        model.flexible_charging_points_set,
+        model.time_zero,
+        rule=initial_charging_power,
+    )
+    if charging_start is None:
+        model.InitialEVChargingPower.deactivate()
+
     return model
 
 
