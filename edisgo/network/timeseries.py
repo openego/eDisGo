@@ -1830,27 +1830,24 @@ class TimeSeries:
             logger.warning("No timeindex set. Empty timeseries will be returned.")
         else:
             for attr in self._attributes:
-                if getattr(self, attr).isnull().any().any():
-                    logger.warning("There are null values in {}".format(attr))
-                if getattr(self, attr).empty:  # Todo: keep this or check in edisgo?
-                    logger.warning("{} is empty".format(attr))
-                if any(getattr(self, attr).index.duplicated()):
-                    duplicated_labels = (
-                        getattr(self, attr)
-                        .index[getattr(self, attr).index.duplicated()]
-                        .values
-                    )
+                df = getattr(self, attr)
+
+                if df.isnull().any().any():
+                    logger.warning(f"There are null values in {attr}")
+
+                if df.empty:  # Todo: keep this or check in edisgo?
+                    logger.warning(f"{attr} is empty")
+
+                if any(df.index.duplicated()):
+                    duplicated_labels = df.index[df.index.duplicated()].values
                     logger.warning(
-                        "{} has duplicated indices: {}".format(attr, duplicated_labels)
+                        f"{attr} has duplicated indices: {duplicated_labels}"
                     )
-                if any(getattr(self, attr).columns.duplicated()):
-                    duplicated_labels = (
-                        getattr(self, attr)
-                        .columns[getattr(self, attr).columns.duplicated()]
-                        .values
-                    )
+
+                if any(df.columns.duplicated()):
+                    duplicated_labels = df.columns[df.columns.duplicated()].values
                     logger.warning(
-                        "{} has duplicated columns: {}".format(attr, duplicated_labels)
+                        f"{attr} has duplicated columns: {duplicated_labels}"
                     )
 
 

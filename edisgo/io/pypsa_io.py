@@ -909,10 +909,9 @@ def _check_integrity_of_pypsa(pypsa_network):
         )
         if not z.empty and (z < 1e-6).any():
             logger.warning(
-                "Very small values for impedance of {}: {}. This might "
-                "cause problems in the power flow.".format(
-                    comp, z[z < 1e-6].index.values
-                )
+                f"Very small values for impedance of {comp}: "
+                f"{z[z < 1e-6].index.values}. This might cause problems in the power "
+                f"flow."
             )
 
 
