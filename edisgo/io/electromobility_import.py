@@ -631,7 +631,7 @@ def normalize(weights_df):
 
     """
     if weights_df.sum().sum() == 0:
-        return np.array(1 / len(weights_df) for _ in range(len(weights_df)))
+        return np.array([1 / len(weights_df) for _ in range(len(weights_df))])
     else:
         return weights_df.divide(weights_df.sum().sum()).T.to_numpy().flatten()
 
