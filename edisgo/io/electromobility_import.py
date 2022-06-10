@@ -925,7 +925,9 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
             grid_connections_indices = matching_charging_points_df.index
 
             weights = normalize(
-                grid_and_user_centric_weights_df.loc[grid_connections_indices]
+                grid_and_user_centric_weights_df.loc[
+                    matching_charging_points_df.charging_park_id
+                ]
             )
 
             charging_point_s = matching_charging_points_df.loc[
