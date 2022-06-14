@@ -47,6 +47,7 @@ def prepare_time_invariant_parameters(
     pu=True,
     optimize_storage=True,
     optimize_ev_charging=True,
+    optimize_hp=True,
     **kwargs,
 ):
     """
@@ -80,6 +81,14 @@ def prepare_time_invariant_parameters(
         parameters["inflexible_charging_points"] = parameters[
             "grid_object"
         ].charging_points_df.index.drop(parameters["optimized_charging_points"])
+    if optimize_hp:
+        parameters["optimized_heat_pumps"] = kwargs.get(
+            "optimized_heat_pumps", parameters["grid_object"].heat_pumps_df.index
+        )
+        # Todo: change to loads_df.loc[parameters["grid_object"].loads_df.sector ==
+        #  "heat_pump"].index
+        parameters["cop"] = kwargs.get("cop")
+        parameters["heat_demand"] = kwargs.get("heat_demand")
     # extract residual load of non optimised components
     parameters[
         "res_load_inflexible_units"
@@ -93,9 +102,11 @@ def prepare_time_invariant_parameters(
             "inflexible_charging_points",
             parameters["grid_object"].charging_points_df.index,
         ),
+        relevant_loads=parameters["grid_object"].loads_df.index
+        # Todo: when HPs become normal loads add .drop(parameters["flexible_hps"])
     )
     # get nodal active and reactive powers of non optimised components
-    # Todo: add handling of storage once become relevant
+    # Todo: add handling of storage and hp once become relevant
     (
         nodal_active_power,
         nodal_reactive_power,
@@ -190,6 +201,7 @@ def setup_model(
     timesteps,
     optimize_storage=True,
     optimize_ev_charging=True,
+    optimize_hp=True,
     objective="curtailment",
     **kwargs,
 ):
@@ -305,6 +317,16 @@ def setup_model(
             energy_level_end=kwargs.get("energy_level_end", None),
             energy_level_beginning=kwargs.get("energy_level_beginning", None),
             charging_start=kwargs.get("charging_start", None),
+        )
+
+    if optimize_hp:
+        print("Setup model: Adding HP model.")
+        model = add_heat_pump_model(
+            model=model,
+            timeinvariant_parameters=timeinvariant_parameters,
+            grid_object=grid_object,
+            cop=kwargs.get("cop"),
+            heat_demand=kwargs.get("heat_demand"),
         )
 
     if not objective == "minimize_energy_level" or objective == "maximize_energy_level":
@@ -555,6 +577,12 @@ def add_grid_model_lopf(
         model.UpperCurtEV = pm.Constraint(
             model.bus_set, model.time_set, rule=upper_bound_curtailment_ev
         )
+    if hasattr(model, "flexible_heat_pumps_set"):
+        model.curtailment_hp = pm.Var(model.bus_set, model.time_set, bounds=(0, None))
+
+        model.UpperCurtHP = pm.Constraint(
+            model.bus_set, model.time_set, rule=upper_bound_curtailment_hp
+        )
     # Constraints
     model.ActivePower = pm.Constraint(
         model.branch_set, model.time_set, rule=active_power
@@ -728,6 +756,62 @@ def add_ev_model_bands(
     if charging_start is None:
         model.InitialEVChargingPower.deactivate()
 
+    return model
+
+
+def add_heat_pump_model(model, timeinvariant_parameters, grid_object, cop, heat_demand):
+    def energy_balance_hp_tes(model, hp, time):
+        return (
+            model.charging_hp_el[hp, time] * cop.loc[model.timeindex[time], "COP 2011"]
+            == model.heat_demand.loc[model.timeindex[time], hp]
+            + model.charging_tes[hp, time]
+        )
+
+    def fixed_energy_level_tes(model, hp, time):
+        return (
+            model.energy_tes[hp, time]
+            == model.tech_data_hps.loc[hp, "capacity_tes"] / 2
+        )
+
+    def charging_tes(model, hp, time):
+        return model.energy_tes[hp, time] == model.energy_tes[
+            hp, time - 1
+        ] + model.charging_tes[hp, time] * (
+            pd.to_timedelta(model.time_increment) / pd.to_timedelta("1h")
+        )
+
+    # add set of hps
+    model.flexible_heat_pumps_set = pm.Set(
+        initialize=timeinvariant_parameters["optimized_heat_pumps"]
+    )
+    # save fix parameters
+    model.tech_data_hps = grid_object.heat_pumps_df
+    model.cop = cop
+    model.heat_demand = heat_demand
+    # set up variables
+    model.energy_tes = pm.Var(
+        model.flexible_heat_pumps_set,
+        model.time_set,
+        bounds=lambda m, hp, t: (0, m.tech_data_hps.loc[hp, "capacity_tes"]),
+    )
+    model.charging_tes = pm.Var(model.flexible_heat_pumps_set, model.time_set)
+    model.charging_hp_el = pm.Var(
+        model.flexible_heat_pumps_set,
+        model.time_set,
+        bounds=lambda m, hp, t: (0, m.tech_data_hps.loc[hp, "p_nom"]),
+    )
+    # add constraints
+    model.EnergyBalanceHPTES = pm.Constraint(
+        model.flexible_heat_pumps_set, model.time_set, rule=energy_balance_hp_tes
+    )
+    model.FixedEnergyTES = pm.Constraint(
+        model.flexible_heat_pumps_set,
+        model.times_fixed_soc,
+        rule=fixed_energy_level_tes,
+    )
+    model.ChargingTES = pm.Constraint(
+        model.flexible_heat_pumps_set, model.time_non_zero, rule=charging_tes
+    )
     return model
 
 
@@ -916,9 +1000,9 @@ def optimize(model, solver, load_solutions=True, mode=None):
             ) + pd.Series(model.slack_initial_energy_neg.extract_values())
             result_dict["curtailment_ev"] = (
                 pd.Series(model.curtailment_ev.extract_values())
-                    .unstack()
-                    .rename(columns=time_dict)
-                    .T
+                .unstack()
+                .rename(columns=time_dict)
+                .T
             )
         result_dict["curtailment_load"] = (
             pd.Series(model.curtailment_load.extract_values())
@@ -1148,11 +1232,24 @@ def get_underlying_elements(parameters):
             )
         else:
             downstream_elements.loc[branch, "flexible_ev"] = []
+        if "optimized_heat_pumps" in parameters:
+            downstream_elements.loc[branch, "flexible_hp"] = (
+                parameters["grid_object"]
+                .heat_pumps_df.loc[
+                    parameters["grid_object"].heat_pumps_df.index.isin(
+                        parameters["optimized_heat_pumps"]
+                    )
+                    & parameters["grid_object"].heat_pumps_df.bus.isin(relevant_buses)
+                ]
+                .index.values
+            )
+        else:
+            downstream_elements.loc[branch, "flexible_hp"] = []
         return downstream_elements, power_factors
 
     downstream_elements = pd.DataFrame(
         index=parameters["branches"].index,
-        columns=["buses", "flexible_storage", "flexible_ev"],
+        columns=["buses", "flexible_storage", "flexible_ev", "flexible_hp"],
     )
     power_factors = pd.DataFrame(
         index=parameters["branches"].index,
@@ -1205,6 +1302,7 @@ def get_residual_load_of_not_optimized_components(
         relevant_storage_units = grid.storage_units_df.index
     if relevant_charging_points is None:
         relevant_charging_points = grid.charging_points_df.index
+    # Todo: add hps once integrated to eDisGo
 
     if edisgo.timeseries.charging_points_active_power.empty:
         return (
@@ -1254,25 +1352,31 @@ def active_power(model, branch, time):
     relevant_charging_points = model.underlying_branch_elements.loc[
         branch, "flexible_ev"
     ]
+    relevant_heat_pumps = model.underlying_branch_elements.loc[branch, "flexible_hp"]
     load_flow_on_line = sum(
         model.nodal_active_power[bus, time] for bus in relevant_buses
     )
     if hasattr(model, "flexible_charging_points_set"):
-        return model.p_cum[branch, time] == load_flow_on_line + sum(
-            model.charging[storage, time] for storage in relevant_storage_units
-        ) - sum(model.charging_ev[cp, time] for cp in relevant_charging_points) + sum(
-            model.curtailment_load[bus, time]
-            + model.curtailment_ev[bus, time]
-            - model.curtailment_feedin[bus, time]
-            for bus in relevant_buses
-        )
+        ev_curtailment = sum(model.curtailment_ev[bus, time] for bus in relevant_buses)
     else:
-        return model.p_cum[branch, time] == load_flow_on_line + sum(
-            model.charging[storage, time] for storage in relevant_storage_units
-        ) + sum(
+        ev_curtailment = 0
+    if hasattr(model, "flexible_heat_pumps_set"):
+        hp_curtailment = sum(model.curtailment_hp[bus, time] for bus in relevant_buses)
+    else:
+        hp_curtailment = 0
+    return (
+        model.p_cum[branch, time]
+        == load_flow_on_line
+        + sum(model.charging[storage, time] for storage in relevant_storage_units)
+        - sum(model.charging_ev[cp, time] for cp in relevant_charging_points)
+        - sum(model.charging_hp_el[cp, time] for cp in relevant_heat_pumps)
+        + sum(
             model.curtailment_load[bus, time] - model.curtailment_feedin[bus, time]
             for bus in relevant_buses
         )
+        + ev_curtailment
+        + hp_curtailment
+    )
 
 
 def upper_active_power(model, branch, time):
@@ -1474,6 +1578,32 @@ def upper_bound_curtailment_ev(model, bus, time):
     else:
         return model.curtailment_ev[bus, time] <= sum(
             model.charging_ev[cp, time] for cp in relevant_charging_points
+        )
+
+
+def upper_bound_curtailment_hp(model, bus, time):
+    """
+    Upper bound for the curtailment of flexible EVs.
+
+    Parameters
+    ----------
+    model
+    bus
+    time
+
+    Returns
+    -------
+    Constraint for optimisation
+    """
+    relevant_heat_pumps = model.grid.heat_pumps_df.loc[
+        model.grid.heat_pumps_df.index.isin(model.flexible_heat_pumps_set)
+        & model.grid.heat_pumps_df.bus.isin([bus])
+    ].index.values
+    if len(relevant_heat_pumps) < 1:
+        return model.curtailment_hp[bus, time] <= 0
+    else:
+        return model.curtailment_hp[bus, time] <= sum(
+            model.charging_hp_el[hp, time] for hp in relevant_heat_pumps
         )
 
 
@@ -1802,6 +1932,7 @@ def minimize_loading(model):
     :param model:
     :return:
     """
+    # TODO: add hps curtailment
     if hasattr(model, "slack_initial_charging_pos"):
         slack_charging = sum(
             model.slack_initial_charging_pos[cp] + model.slack_initial_charging_neg[cp]
