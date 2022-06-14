@@ -914,6 +914,12 @@ def optimize(model, solver, load_solutions=True, mode=None):
             result_dict["slack_energy"] = pd.Series(
                 model.slack_initial_energy_pos.extract_values()
             ) + pd.Series(model.slack_initial_energy_neg.extract_values())
+            result_dict["curtailment_ev"] = (
+                pd.Series(model.curtailment_ev.extract_values())
+                    .unstack()
+                    .rename(columns=time_dict)
+                    .T
+            )
         result_dict["curtailment_load"] = (
             pd.Series(model.curtailment_load.extract_values())
             .unstack()
@@ -926,12 +932,7 @@ def optimize(model, solver, load_solutions=True, mode=None):
             .rename(columns=time_dict)
             .T
         )
-        result_dict["curtailment_ev"] = (
-            pd.Series(model.curtailment_ev.extract_values())
-            .unstack()
-            .rename(columns=time_dict)
-            .T
-        )
+
         result_dict["p_line"] = (
             pd.Series(model.p_cum.extract_values())
             .unstack()
