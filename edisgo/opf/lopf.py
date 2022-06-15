@@ -760,6 +760,7 @@ def add_ev_model_bands(
 
 
 def add_heat_pump_model(model, timeinvariant_parameters, grid_object, cop, heat_demand):
+    # Todo: make update possible
     def energy_balance_hp_tes(model, hp, time):
         return (
             model.charging_hp_el[hp, time] * cop.loc[model.timeindex[time], "COP 2011"]
@@ -1750,28 +1751,20 @@ def minimize_max_residual_load(model):
     :param model:
     :return:
     """
-    if hasattr(model, "flexible_charging_points_set"):
-        return (
-            -model.delta_min * model.min_load_factor
-            + model.delta_max * model.max_load_factor
-            + sum(
-                model.curtailment_load[bus, time]
-                + model.curtailment_feedin[bus, time]
-                + 0.5 * model.curtailment_ev[bus, time]
-                for bus in model.bus_set
-                for time in model.time_set
-            )
+    slack_charging, slack_energy = extract_slack_charging(model)
+    ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
+    return (
+        -model.delta_min * model.min_load_factor
+        + model.delta_max * model.max_load_factor
+        + sum(
+            model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time]
+            for bus in model.bus_set
+            for time in model.time_set
         )
-    else:
-        return (
-            -model.delta_min * model.min_load_factor
-            + model.delta_max * model.max_load_factor
-            + sum(
-                model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time]
-                for bus in model.bus_set
-                for time in model.time_set
-            )
-        )
+        + 0.5 * ev_curtailment
+        + hp_curtailment
+        + 1000 * (slack_charging + slack_energy)
+    )
 
 
 def minimize_curtailment(model):
@@ -1780,19 +1773,20 @@ def minimize_curtailment(model):
     :param model:
     :return:
     """
+    slack_charging, slack_energy = extract_slack_charging(model)
+    ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
     if hasattr(model, "charging_points_set"):
-        return sum(
-            model.curtailment_load[bus, time]
-            + model.curtailment_feedin[bus, time]
-            + 0.5 * model.curtailment_ev[bus, time]
-            for bus in model.bus_set
-            for time in model.time_set
-        )
-    else:
-        return sum(
-            model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time]
-            for bus in model.bus_set
-            for time in model.time_set
+        return (
+            sum(
+                model.curtailment_load[bus, time]
+                + model.curtailment_feedin[bus, time]
+                + 0.5 * model.curtailment_ev[bus, time]
+                for bus in model.bus_set
+                for time in model.time_set
+            )
+            + 0.5 * ev_curtailment
+            + hp_curtailment
+            + 1000 * (slack_charging + slack_energy)
         )
 
 
@@ -1803,20 +1797,24 @@ def minimize_energy_level(model):
     :param model:
     :return:
     """
-    if hasattr(model, "charging_points_set"):
-        return sum(
-            model.curtailment_load[bus, time]
-            + model.curtailment_feedin[bus, time]
-            + 0.5 * model.curtailment_ev[bus, time]
-            for bus in model.bus_set
-            for time in model.time_set
-        ) * 1e6 + sum(model.grid_power_flexible[time] for time in model.time_set)
-    else:
-        return sum(
-            model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time]
-            for bus in model.bus_set
-            for time in model.time_set
-        ) * 1e6 + sum(model.grid_power_flexible[time] for time in model.time_set)
+    slack_charging, slack_energy = extract_slack_charging(model)
+    ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
+    return (
+        (
+            sum(
+                model.curtailment_load[bus, time]
+                + model.curtailment_feedin[bus, time]
+                + 0.5 * model.curtailment_ev[bus, time]
+                for bus in model.bus_set
+                for time in model.time_set
+            )
+            + 0.5 * ev_curtailment
+            + hp_curtailment
+        )
+        * 1e6
+        + sum(model.grid_power_flexible[time] for time in model.time_set)
+        + 1000 * (slack_charging + slack_energy)
+    )
 
 
 def maximize_energy_level(model):
@@ -1826,20 +1824,24 @@ def maximize_energy_level(model):
     :param model:
     :return:
     """
-    if hasattr(model, "charging_points_set"):
-        return sum(
-            model.curtailment_load[bus, time]
-            + model.curtailment_feedin[bus, time]
-            + 0.5 * model.curtailment_ev[bus, time]
-            for bus in model.bus_set
-            for time in model.time_set
-        ) * 1e6 - sum(model.grid_power_flexible[time] for time in model.time_set)
-    else:
-        return sum(
-            model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time]
-            for bus in model.bus_set
-            for time in model.time_set
-        ) * 1e6 - sum(model.grid_power_flexible[time] for time in model.time_set)
+    slack_charging, slack_energy = extract_slack_charging(model)
+    ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
+    return (
+        (
+            sum(
+                model.curtailment_load[bus, time]
+                + model.curtailment_feedin[bus, time]
+                + 0.5 * model.curtailment_ev[bus, time]
+                for bus in model.bus_set
+                for time in model.time_set
+            )
+            + 0.5 * ev_curtailment
+            + hp_curtailment
+        )
+        * 1e6
+        - sum(model.grid_power_flexible[time] for time in model.time_set)
+        + 1000 * (slack_charging + slack_energy)
+    )
 
 
 def grid_residual_load(model, time):
@@ -1851,10 +1853,14 @@ def grid_residual_load(model, time):
         relevant_charging_points = model.flexible_charging_points_set
     else:
         relevant_charging_points = []
+    if hasattr(model, "heat_pumps_set"):
+        relevant_heat_pumps = model.flexible_heat_pumps_set
+    else:
+        relevant_heat_pumps = []
     return model.grid_residual_load[time] == model.residual_load[time] + sum(
         model.charging[storage, time] for storage in relevant_storage_units
-    ) - sum(
-        model.charging_ev[cp, time] for cp in relevant_charging_points
+    ) - sum(model.charging_ev[cp, time] for cp in relevant_charging_points) - sum(
+        model.charging_hp_el[hp, time] for hp in relevant_heat_pumps
     )  # + \
     # sum(model.curtailment_load[bus, time] -
     #     model.curtailment_feedin[bus, time] for bus in model.bus_set)
@@ -1866,64 +1872,26 @@ def minimize_residual_load(model):
     :param model:
     :return:
     """
-    if hasattr(model, "slack_initial_charging_pos"):
-        slack_charging = sum(
-            model.slack_initial_charging_pos[cp] + model.slack_initial_charging_neg[cp]
-            for cp in model.flexible_charging_points_set
+    slack_charging, slack_energy = extract_slack_charging(model)
+    ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
+    return (
+        1e-5 * sum(model.grid_residual_load[time] ** 2 for time in model.time_set)
+        + sum(
+            1e-2
+            * (model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time])
+            + 1000 * (model.slack_v_pos[bus, time] + model.slack_v_neg[bus, time])
+            for bus in model.bus_set
+            for time in model.time_set
         )
-    else:
-        slack_charging = 0
-    if hasattr(model, "slack_initial_energy_pos"):
-        slack_energy = sum(
-            model.slack_initial_energy_pos[cp] + model.slack_initial_energy_neg[cp]
-            for cp in model.flexible_charging_points_set
+        + 1e-2 * (0.5 * ev_curtailment + hp_curtailment)
+        + 1000 * (slack_charging + slack_energy)
+        + 1000
+        * sum(
+            model.slack_p_cum_pos[branch, time] + model.slack_p_cum_neg[branch, time]
+            for branch in model.branch_set
+            for time in model.time_set
         )
-    else:
-        slack_energy = 0
-    if hasattr(model, "charging_points_set"):
-        return (
-            1e-5 * sum(model.grid_residual_load[time] ** 2 for time in model.time_set)
-            + sum(
-                1e-2
-                * (
-                    model.curtailment_load[bus, time]
-                    + model.curtailment_feedin[bus, time]
-                    + 0.5 * model.curtailment_ev[bus, time]
-                )
-                + 1000 * (model.slack_v_pos[bus, time] + model.slack_v_neg[bus, time])
-                for bus in model.bus_set
-                for time in model.time_set
-            )
-            + 1000 * (slack_charging + slack_energy)
-            + 1000
-            * sum(
-                model.slack_p_cum_pos[branch, time]
-                + model.slack_p_cum_neg[branch, time]
-                for branch in model.branch_set
-                for time in model.time_set
-            )
-        )
-    else:
-        return (
-            1e-5 * sum(model.grid_residual_load[time] ** 2 for time in model.time_set)
-            + sum(
-                1e-2
-                * (
-                    model.curtailment_load[bus, time]
-                    + model.curtailment_feedin[bus, time]
-                )
-                + 1000 * (model.slack_v_pos[bus, time] + model.slack_v_neg[bus, time])
-                for bus in model.bus_set
-                for time in model.time_set
-            )
-            + 1000
-            * sum(
-                model.slack_p_cum_pos[branch, time]
-                + model.slack_p_cum_neg[branch, time]
-                for branch in model.branch_set
-                for time in model.time_set
-            )
-        )
+    )
 
 
 def minimize_loading(model):
@@ -1932,7 +1900,61 @@ def minimize_loading(model):
     :param model:
     :return:
     """
-    # TODO: add hps curtailment
+    slack_charging, slack_energy = extract_slack_charging(model)
+    ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
+    return (
+        1e-5
+        * sum(
+            (
+                model.p_cum[branch, time]
+                / (
+                    model.power_factors[branch, time]
+                    * model.branches.loc[branch, model.pars["s_nom"]]
+                )
+            )
+            ** 2
+            for branch in model.branch_set
+            for time in model.time_set
+        )
+        + sum(
+            1e-2
+            * (model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time])
+            + 1000 * (model.slack_v_pos[bus, time] + model.slack_v_neg[bus, time])
+            for bus in model.bus_set
+            for time in model.time_set
+        )
+        + 1e-2 * (0.5 * ev_curtailment + hp_curtailment)
+        + 1000 * (slack_charging + slack_energy)
+        + 1000
+        * sum(
+            model.slack_p_cum_pos[branch, time] + model.slack_p_cum_neg[branch, time]
+            for branch in model.branch_set
+            for time in model.time_set
+        )
+    )
+
+
+def extract_curtailment_of_flexible_components(model):
+    if hasattr(model, "flexible_charging_points_set"):
+        ev_curtailment = sum(
+            model.curtailment_ev[bus, time]
+            for bus in model.bus_set
+            for time in model.time_set
+        )
+    else:
+        ev_curtailment = 0
+    if hasattr(model, "flexible_heat_pumps_set"):
+        hp_curtailment = sum(
+            model.curtailment_hp[bus, time]
+            for bus in model.bus_set
+            for time in model.time_set
+        )
+    else:
+        hp_curtailment = 0
+    return ev_curtailment, hp_curtailment
+
+
+def extract_slack_charging(model):
     if hasattr(model, "slack_initial_charging_pos"):
         slack_charging = sum(
             model.slack_initial_charging_pos[cp] + model.slack_initial_charging_neg[cp]
@@ -1947,71 +1969,7 @@ def minimize_loading(model):
         )
     else:
         slack_energy = 0
-    if hasattr(model, "charging_points_set"):
-        return (
-            1e-5
-            * sum(
-                (
-                    model.p_cum[branch, time]
-                    / (
-                        model.power_factors[branch, time]
-                        * model.branches.loc[branch, model.pars["s_nom"]]
-                    )
-                )
-                ** 2
-                for branch in model.branch_set
-                for time in model.time_set
-            )
-            + sum(
-                1e-2
-                * (
-                    model.curtailment_load[bus, time]
-                    + model.curtailment_feedin[bus, time]
-                    + 0.5 * model.curtailment_ev[bus, time]
-                )
-                + 1000 * (model.slack_v_pos[bus, time] + model.slack_v_neg[bus, time])
-                for bus in model.bus_set
-                for time in model.time_set
-            )
-            + 1000 * (slack_charging + slack_energy)
-            + 1000
-            * sum(
-                model.slack_p_cum_pos[branch, time]
-                + model.slack_p_cum_neg[branch, time]
-                for branch in model.branch_set
-                for time in model.time_set
-            )
-        )
-    else:
-        return (
-            1e-5
-            * sum(
-                model.p_cum[branch, time].divide(
-                    model.power_factors[branch, time]
-                    * model.branches.loc[branch, model.pars["s_nom"]]
-                )
-                ** 2
-                for branch in model.branch_set
-                for time in model.time_set
-            )
-            + sum(
-                1e-2
-                * (
-                    model.curtailment_load[bus, time]
-                    + model.curtailment_feedin[bus, time]
-                )
-                + 1000 * (model.slack_v_pos[bus, time] + model.slack_v_neg[bus, time])
-                for bus in model.bus_set
-                for time in model.time_set
-            )
-            + 1000
-            * sum(
-                model.slack_p_cum_pos[branch, time]
-                + model.slack_p_cum_neg[branch, time]
-                for branch in model.branch_set
-                for time in model.time_set
-            )
-        )
+    return slack_charging, slack_energy
 
 
 def combine_results_for_grid(feeders, grid_id, res_dir, res_name):
