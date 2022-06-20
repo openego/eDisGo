@@ -845,3 +845,130 @@ class TestEDisGo:
             mem_res_with_default_2,
             self.edisgo.results.i_res.memory_usage(deep=True).sum(),
         )
+
+    def test_check_integrity(self, caplog):
+        self.edisgo.check_integrity()
+        assert (
+            "The following generators are missing in generators_active_power: "
+            "{}".format(self.edisgo.topology.generators_df.index.values) in caplog.text
+        )
+        assert (
+            "The following generators are missing in generators_reactive_power: "
+            "{}".format(self.edisgo.topology.generators_df.index.values) in caplog.text
+        )
+        assert (
+            "The following loads are missing in loads_active_power: "
+            "{}".format(self.edisgo.topology.loads_df.index.values) in caplog.text
+        )
+        assert (
+            "The following loads are missing in loads_reactive_power: "
+            "{}".format(self.edisgo.topology.loads_df.index.values) in caplog.text
+        )
+        assert (
+            "The following storage_units are missing in storage_units_active_power"
+            ": {}".format(self.edisgo.topology.storage_units_df.index.values)
+            in caplog.text
+        )
+        assert (
+            "The following storage_units are missing in storage_units_reactive_power"
+            ": {}".format(self.edisgo.topology.storage_units_df.index.values)
+            in caplog.text
+        )
+        caplog.clear()
+        # set timeseries
+        index = pd.date_range("1/1/2018", periods=3, freq="H")
+        ts_gens = pd.DataFrame(
+            index=index, columns=self.edisgo.topology.generators_df.index, data=0
+        )
+        ts_loads = pd.DataFrame(
+            index=index, columns=self.edisgo.topology.loads_df.index, data=0
+        )
+        ts_stor = pd.DataFrame(
+            index=index, columns=self.edisgo.topology.storage_units_df.index, data=0
+        )
+        self.edisgo.timeseries.timeindex = index
+        self.edisgo.timeseries.generators_active_power = ts_gens
+        self.edisgo.timeseries.generators_reactive_power = ts_gens
+        self.edisgo.timeseries.loads_active_power = ts_loads
+        self.edisgo.timeseries.loads_reactive_power = ts_loads
+        self.edisgo.timeseries.storage_units_active_power = ts_stor
+        self.edisgo.timeseries.storage_units_reactive_power = ts_stor
+        # check that no warning is raised
+        self.edisgo.check_integrity()
+        assert not caplog.text
+        manipulated_comps = {
+            "generators": ["Generator_1", "GeneratorFluctuating_4"],
+            "loads": ["Load_agricultural_LVGrid_1_3"],
+            "storage_units": ["Storage_1"],
+        }
+        for comp_type, comp_names in manipulated_comps.items():
+            comps = getattr(self.edisgo.topology, comp_type + "_df")
+            # remove timeseries of single components and check for warning
+            for ts_type in ["active_power", "reactive_power"]:
+                comp_ts_tmp = getattr(
+                    self.edisgo.timeseries, "_".join([comp_type, ts_type])
+                )
+                setattr(
+                    self.edisgo.timeseries,
+                    "_".join([comp_type, ts_type]),
+                    comp_ts_tmp.drop(columns=comp_names),
+                )
+                self.edisgo.check_integrity()
+                assert (
+                    "The following {type} are missing in {ts}: {comps}".format(
+                        type=comp_type,
+                        ts="_".join([comp_type, ts_type]),
+                        comps=str(comp_names).replace(",", ""),
+                    )
+                    in caplog.text
+                )
+                setattr(
+                    self.edisgo.timeseries, "_".join([comp_type, ts_type]), comp_ts_tmp
+                )
+                caplog.clear()
+            # remove topology entries for single components and check for warning
+            setattr(self.edisgo.topology, comp_type + "_df", comps.drop(comp_names))
+            self.edisgo.check_integrity()
+            for ts_type in ["active_power", "reactive_power"]:
+                assert (
+                    "The following {type} have entries in {type}_{ts_type}, but not "
+                    "in {top}: {comps}".format(
+                        type=comp_type,
+                        top=comp_type + "_df",
+                        comps=str(comp_names).replace(",", ""),
+                        ts_type=ts_type,
+                    )
+                    in caplog.text
+                )
+            caplog.clear()
+            setattr(self.edisgo.topology, comp_type + "_df", comps)
+            # set values higher than nominal power for single components and check for
+            # warning
+            comp_ts_tmp = getattr(
+                self.edisgo.timeseries, "_".join([comp_type, "active_power"])
+            )
+            comp_ts_tmp_adapted = comp_ts_tmp.copy()
+            comp_ts_tmp_adapted.loc[index[2], comp_names] = 100
+            setattr(
+                self.edisgo.timeseries,
+                "_".join([comp_type, "active_power"]),
+                comp_ts_tmp_adapted,
+            )
+            self.edisgo.check_integrity()
+            if comp_type in ["generators", "storage_units"]:
+                attr = "p_nom"
+            else:
+                attr = "p_set"
+            assert (
+                "Values of active power in the timeseries object exceed {} for "
+                "the following {}: {}".format(
+                    attr, comp_type, str(comp_names).replace(",", "")
+                )
+                in caplog.text
+            )
+            setattr(
+                self.edisgo.timeseries,
+                "_".join([comp_type, "active_power"]),
+                comp_ts_tmp,
+            )
+            caplog.clear()

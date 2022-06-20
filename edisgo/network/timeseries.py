@@ -1463,7 +1463,8 @@ class TimeSeries:
 
         Parameters
         -----------
-        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` or \
+            None
             Sets fixed cosphi parameters for generators.
             Possible options are:
 
@@ -1496,10 +1497,17 @@ class TimeSeries:
                         `reactive_power_factor` is used.
 
                 Index of the dataframe is ignored.
-        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+
+            * None
+
+                No reactive power time series are set.
+
+            Default: None.
+        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` or None
             Sets fixed cosphi parameters for loads. The same options as for parameter
             `generators_parametrisation` apply.
-        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` \
+            or None
             Sets fixed cosphi parameters for storage units. The same options as for
             parameter `generators_parametrisation` apply.
 
@@ -1878,6 +1886,34 @@ class TimeSeries:
                 )
             )
 
+    def check_integrity(self):
+        """
+        Check for NaN, duplicated indices or columns and if timeseries is empty.
+        """
+        if len(self.timeindex) == 0:
+            logger.warning("No timeindex set. Empty timeseries will be returned.")
+        else:
+            for attr in self._attributes:
+                df = getattr(self, attr)
+
+                if df.isnull().any().any():
+                    logger.warning(f"There are null values in {attr}")
+
+                if df.empty:  # Todo: keep this or check in edisgo?
+                    logger.warning(f"{attr} is empty")
+
+                if any(df.index.duplicated()):
+                    duplicated_labels = df.index[df.index.duplicated()].values
+                    logger.warning(
+                        f"{attr} has duplicated indices: {duplicated_labels}"
+                    )
+
+                if any(df.columns.duplicated()):
+                    duplicated_labels = df.columns[df.columns.duplicated()].values
+                    logger.warning(
+                        f"{attr} has duplicated columns: {duplicated_labels}"
+                    )
+
 
 class TimeSeriesRaw:
     """
@@ -2042,7 +2078,7 @@ class TimeSeriesRaw:
                     pd.read_csv(path, index_col=0, parse_dates=True),
                 )
                 if timeindex is None:
-                    timeindex = getattr(self, f"_{attr}").index
+                    timeindex = getattr(self, f"{attr}").index
         if timeindex is None:
             timeindex = pd.DatetimeIndex([])
         self._timeindex = timeindex
