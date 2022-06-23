@@ -80,8 +80,9 @@ def to_pypsa(grid_object, timesteps, **kwargs):
           and generation from underlying LV network aggregated at respective LV
           station's secondary side.
           TODO: change name of this mode or use kwarg to define where to aggregate lv
-           loads and generation
+          loads and generation
         * 'lv' to export specified LV network only.
+
     timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
         :pandas:`pandas.Timestamp<Timestamp>`
         Timesteps specifies which time steps to export to pypsa representation

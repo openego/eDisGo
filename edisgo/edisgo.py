@@ -5,6 +5,8 @@ import os
 import pickle
 import shutil
 
+from pathlib import PurePath
+
 import pandas as pd
 
 from edisgo.flex_opt.charging_strategies import charging_strategy
@@ -1227,14 +1229,21 @@ class EDisGo:
                 "loads_reactive_power", loads_groupby.groups, naming
             )
 
-    def import_electromobility(self, directory=None, **kwargs):
+    def import_electromobility(
+        self,
+        simbev_directory: PurePath | str,
+        tracbev_directory: PurePath | str,
+        **kwargs,
+    ):
         """
         Import electromobility data from SimBEV and TracBEV.
 
         Parameters
         ----------
-        directory : str
-            Main directory holding electromobility data.
+        simbev_directory : str
+            SimBEV directory holding SimBEV data.
+        tracbev_directory : str
+            TracBEV directory holding TracBEV data.
         kwargs :
             Kwargs may contain any further attributes you want to specify.
 
@@ -1265,8 +1274,7 @@ class EDisGo:
                 Possible grid Connections sub-directory.
                 Default "grid_connections".
         """
-        if directory is not None:
-            import_electromobility(self, directory, **kwargs)
+        import_electromobility(self, simbev_directory, tracbev_directory, **kwargs)
 
     def distribute_charging_demand(self, **kwargs):
         """
@@ -1324,15 +1332,15 @@ class EDisGo:
             processes at "home" or at "work" can be flexibilized. "public" charging
             processes will always be "dumb". For now the following charging
             strategies are valid:
-                "dumb": The cars are charged directly after arrival with the
-                maximum possible charging capacity.
-                "reduced": The cars are charged directly after arrival with the
-                minimum possible charging capacity. The minimum possible charging
-                capacity is determined by the parking time and the
-                minimum_charging_capacity_factor.
-                "residual": The cars are charged when the residual load in the MV
-                grid is at it's lowest (high generation and low consumption).
-                Charging processes with a low flexibility band are given priority.
+            * "dumb": The cars are charged directly after arrival with the
+            maximum possible charging capacity.
+            * "reduced": The cars are charged directly after arrival with the
+            minimum possible charging capacity. The minimum possible charging
+            capacity is determined by the parking time and the
+            minimum_charging_capacity_factor.
+            * "residual": The cars are charged when the residual load in the MV
+            grid is at it's lowest (high generation and low consumption).
+            Charging processes with a low flexibility band are given priority.
         kwargs :
             timestamp_share_threshold : float
                 Percental threshold of the time required at a time step for charging

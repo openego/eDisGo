@@ -56,15 +56,15 @@ def charging_strategy(
         processes at "home" or at "work" can be flexibilized. "public" charging
         processes will always be "dumb". For now the following charging
         strategies are valid:
-            "dumb": The cars are charged directly after arrival with the
-            maximum possible charging capacity.
-            "reduced": The cars are charged directly after arrival with the
-            minimum possible charging capacity. The minimum possible charging
-            capacity is determined by the parking time and the
-            minimum_charging_capacity_factor.
-            "residual": The cars are charged when the residual load in the MV
-            grid is at it's lowest (high generation and low consumption).
-            Charging processes with a low flexibility band are given priority.
+        * "dumb": The cars are charged directly after arrival with the
+        maximum possible charging capacity.
+        * "reduced": The cars are charged directly after arrival with the
+        minimum possible charging capacity. The minimum possible charging
+        capacity is determined by the parking time and the
+        minimum_charging_capacity_factor.
+        * "residual": The cars are charged when the residual load in the MV
+        grid is at it's lowest (high generation and low consumption).
+        Charging processes with a low flexibility band are given priority.
     timestamp_share_threshold : float
         Percental threshold of the time required at a time step for charging
         the vehicle. If the time requirement is below this limit, then the
