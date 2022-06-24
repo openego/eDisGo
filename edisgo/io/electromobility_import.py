@@ -458,7 +458,7 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
     # and set crs to match edisgo object
     return grid_connections_gdf.assign(
         geometry=grid_connections_gdf.geometry.representative_point()
-    ).to_crs(edisgo_obj.topology.grid_district["srid"])
+    ).to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
 
 
 def distribute_charging_demand(edisgo_obj, **kwargs):
