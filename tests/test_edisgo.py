@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 
@@ -6,6 +7,7 @@ import pandas as pd
 import pytest
 
 from matplotlib import pyplot as plt
+from pandas.util.testing import assert_frame_equal
 from shapely.geometry import Point
 
 from edisgo import EDisGo
@@ -26,12 +28,101 @@ class TestEDisGo:
     def setup_worst_case_time_series(self):
         self.edisgo.set_time_series_worst_case_analysis()
 
-    def test_set_time_series_manual(self):
-        # bus_name = self.edisgo.add_component(
-        #     comp_type="bus", bus_name="Testbus", v_nom=20
-        # )
-        # Todo: implement test
-        pass
+    def test_set_time_series_manual(self, caplog):
+
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        gens_ts = pd.DataFrame(
+            data={
+                "GeneratorFluctuating_15": [2.0, 5.0, 6.0],
+                "GeneratorFluctuating_24": [4.0, 7.0, 8.0],
+            },
+            index=timeindex,
+        )
+        loads_ts = pd.DataFrame(
+            data={
+                "Load_residential_LVGrid_5_3": [2.0, 5.0, 6.0],
+            },
+            index=timeindex,
+        )
+        storage_units_ts = pd.DataFrame(
+            data={
+                "Storage_1": [4.0, 7.0, 8.0],
+            },
+            index=timeindex,
+        )
+
+        # test setting some time series and with no time index being previously set
+        with caplog.at_level(logging.WARNING):
+            self.edisgo.set_time_series_manual(
+                generators_p=gens_ts,
+                generators_q=gens_ts,
+                loads_p=loads_ts,
+                storage_units_q=storage_units_ts,
+            )
+        assert (
+            "When setting time series manually a time index is not automatically "
+            "set" in caplog.text
+        )
+        assert self.edisgo.timeseries.generators_active_power.shape == (0, 2)
+        self.edisgo.set_timeindex(timeindex)
+        assert_frame_equal(gens_ts, self.edisgo.timeseries.generators_active_power)
+        assert_frame_equal(gens_ts, self.edisgo.timeseries.generators_reactive_power)
+        assert_frame_equal(loads_ts, self.edisgo.timeseries.loads_active_power)
+        assert self.edisgo.timeseries.loads_reactive_power.empty
+        assert self.edisgo.timeseries.storage_units_active_power.empty
+        assert_frame_equal(
+            storage_units_ts, self.edisgo.timeseries.storage_units_reactive_power
+        )
+
+        # test overwriting time series and with some components that do not exist
+        timeindex2 = pd.date_range("1/1/2018", periods=4, freq="H")
+        gens_ts2 = pd.DataFrame(
+            data={
+                "GeneratorFluctuating_15": [1.0, 2.0, 5.0, 6.0],
+                "GeneratorFluctuating_14": [5.0, 2.0, 5.0, 6.0],
+                "GeneratorFluctuating_x": [8.0, 4.0, 7.0, 8.0],
+            },
+            index=timeindex2,
+        )
+        loads_ts2 = pd.DataFrame(
+            data={
+                "Load_residential_LVGrid_5_3": [2.0, 5.0, 6.0],
+                "Load_residential_LVGrid_x": [2.0, 5.0, 6.0],
+            },
+            index=timeindex,
+        )
+        self.edisgo.set_time_series_manual(
+            generators_p=gens_ts2, loads_p=loads_ts2, storage_units_p=storage_units_ts
+        )
+        assert self.edisgo.timeseries.generators_active_power.shape == (3, 3)
+        assert_frame_equal(
+            gens_ts2.loc[
+                timeindex, ["GeneratorFluctuating_15", "GeneratorFluctuating_14"]
+            ],
+            self.edisgo.timeseries.generators_active_power.loc[
+                :, ["GeneratorFluctuating_15", "GeneratorFluctuating_14"]
+            ],
+        )
+        assert_frame_equal(
+            gens_ts.loc[:, ["GeneratorFluctuating_24"]],
+            self.edisgo.timeseries.generators_active_power.loc[
+                :, ["GeneratorFluctuating_24"]
+            ],
+        )
+        assert_frame_equal(gens_ts, self.edisgo.timeseries.generators_reactive_power)
+        assert_frame_equal(
+            loads_ts2.loc[:, ["Load_residential_LVGrid_5_3"]],
+            self.edisgo.timeseries.loads_active_power.loc[
+                :, ["Load_residential_LVGrid_5_3"]
+            ],
+        )
+        assert self.edisgo.timeseries.loads_reactive_power.empty
+        assert_frame_equal(
+            storage_units_ts, self.edisgo.timeseries.storage_units_active_power
+        )
+        assert_frame_equal(
+            storage_units_ts, self.edisgo.timeseries.storage_units_reactive_power
+        )
 
     def test_set_time_series_worst_case_analysis(self):
         # Todo: implement test
