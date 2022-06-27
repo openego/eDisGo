@@ -125,8 +125,15 @@ class TestEDisGo:
         )
 
     def test_set_time_series_worst_case_analysis(self):
-        # Todo: implement test
-        pass
+        self.edisgo.set_time_series_worst_case_analysis(
+            cases="load_case", generators_names=["Generator_1"], loads_names=[]
+        )
+        assert self.edisgo.timeseries.generators_active_power.shape == (2, 1)
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (2, 1)
+        assert self.edisgo.timeseries.loads_active_power.shape == (2, 0)
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (2, 0)
+        assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 1)
+        assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 1)
 
     def test_set_time_series_active_power_predefined(self):
         # Todo: implement test
