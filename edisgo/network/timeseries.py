@@ -269,6 +269,9 @@ class TimeSeries:
         self.generators_active_power = None
         self.loads_active_power = None
         self.storage_units_active_power = None
+        self.generators_reactive_power = None
+        self.loads_reactive_power = None
+        self.storage_units_reactive_power = None
         self.time_series_raw = TimeSeriesRaw()
 
     def set_active_power_manual(
