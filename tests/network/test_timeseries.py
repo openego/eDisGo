@@ -2150,6 +2150,84 @@ class TestTimeSeries:
 
         shutil.rmtree(save_dir)
 
+    def test_integrity_check(self, caplog):
+        attrs = [
+            "loads_active_power",
+            "loads_reactive_power",
+            "generators_active_power",
+            "generators_reactive_power",
+            "storage_units_active_power",
+            "storage_units_reactive_power",
+        ]
+        # check warning empty timeindex
+        self.edisgo.timeseries.check_integrity()
+        assert "No timeindex set. Empty timeseries will be returned." in caplog.text
+        caplog.clear()
+        # check warning empty timeseries
+        index = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.timeseries.timeindex = index
+        self.edisgo.timeseries.check_integrity()
+        for attr in attrs:
+            assert "{} is empty".format(attr) in caplog.text
+        caplog.clear()
+        # add timeseries
+        for attr in attrs:
+            tmp = attr.split("_")
+            if len(tmp) == 3:
+                comp_type = tmp[0]
+            elif len(tmp) == 4:
+                comp_type = "_".join(tmp[0:2])
+            comps = getattr(self.edisgo.topology, comp_type + "_df").index
+            setattr(
+                self.edisgo.timeseries,
+                comp_type + "_active_power",
+                pd.DataFrame(index=index, columns=comps, data=0),
+            )
+            setattr(
+                self.edisgo.timeseries,
+                comp_type + "_reactive_power",
+                pd.DataFrame(index=index, columns=comps, data=0),
+            )
+        # check warning for null values
+        for attr in attrs:
+            ts_tmp = getattr(self.edisgo.timeseries, attr)
+            if not ts_tmp.empty:
+                ts_tmp.iloc[0, 0] = np.NaN
+                setattr(self.edisgo.timeseries, attr, ts_tmp)
+                self.edisgo.timeseries.check_integrity()
+                assert "There are null values in {}".format(attr) in caplog.text
+                caplog.clear()
+                ts_tmp.iloc[0, 0] = 0
+                setattr(self.edisgo.timeseries, attr, ts_tmp)
+        # check warning for duplicated indices and columns
+        for attr in attrs:
+            ts_tmp = getattr(self.edisgo.timeseries, attr)
+            if not ts_tmp.empty:
+                # check for duplicated indices
+                ts_tmp_duplicated = pd.concat([ts_tmp, ts_tmp.iloc[0:2]])
+                setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
+                self.edisgo.timeseries.check_integrity()
+                assert (
+                    "{} has duplicated indices: {}".format(
+                        attr, ts_tmp.iloc[0:2].index.values
+                    )
+                    in caplog.text
+                )
+                caplog.clear()
+                setattr(self.edisgo.timeseries, attr, ts_tmp)
+                # check for duplicated columns
+                ts_tmp_duplicated = pd.concat([ts_tmp, ts_tmp.iloc[:, 0:2]], axis=1)
+                setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
+                self.edisgo.timeseries.check_integrity()
+                assert (
+                    "{} has duplicated columns: {}".format(
+                        attr, ts_tmp.iloc[:, 0:2].columns.values
+                    )
+                    in caplog.text
+                )
+                caplog.clear()
+                setattr(self.edisgo.timeseries, attr, ts_tmp)
+
 
 class TestTimeSeriesRaw:
     @pytest.fixture(autouse=True)

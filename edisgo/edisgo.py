@@ -485,6 +485,10 @@ class EDisGo:
               and generation from underlying LV network aggregated at respective LV
               station's secondary side.
             * 'lv' to export specified LV network only.
+        check_edisgo_integrity: bool
+            Check integrity of edisgo object before translating to pypsa. This option is
+            meant to help the identification of possible sources of errors in the
+            object if the power flow calculations fail.
 
         Returns
         -------
@@ -500,6 +504,11 @@ class EDisGo:
         # check if timesteps is array-like, otherwise convert to list
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
+        # possibly execute consistency check
+        if kwargs.get("check_edisgo_integrity", False) or (
+            logger.level == logging.DEBUG
+        ):
+            self.check_integrity()
         # export grid
         # ToDo: Move to pypsa_io.to_pypsa
         if not mode:
@@ -1612,6 +1621,63 @@ class EDisGo:
             to_type=kwargs.get("to_type", "float32"),
             attr_to_reduce=kwargs.get("results_attr_to_reduce", None),
         )
+
+    def check_integrity(self):
+        """
+        Method to check the integrity of the eDisGo-object. Checks for consistency of
+        topology (see :func:`edisgo.topology.check_integrity`), timeseries (see
+        :func:`edisgo.timeseries.check_integrity`) and the interplay of both.
+        """
+        self.topology.check_integrity()
+        self.timeseries.check_integrity()
+
+        # check consistency of topology and timeseries
+        comp_types = ["generators", "loads", "storage_units"]
+
+        for comp_type in comp_types:
+            comps = getattr(self.topology, comp_type + "_df")
+
+            for ts in ["active_power", "reactive_power"]:
+                comp_ts_name = f"{comp_type}_{ts}"
+                comp_ts = getattr(self.timeseries, comp_ts_name)
+
+                # check whether all components in topology have an entry in the
+                # respective active and reactive power timeseries
+                missing = comps.index[~comps.index.isin(comp_ts.columns)]
+                if len(missing) > 0:
+                    logger.warning(
+                        f"The following {comp_type} are missing in {comp_ts_name}: "
+                        f"{missing.values}"
+                    )
+
+                # check whether all elements in timeseries have an entry in the topology
+                missing_ts = comp_ts.columns[~comp_ts.columns.isin(comps.index)]
+                if len(missing_ts) > 0:
+                    logger.warning(
+                        f"The following {comp_type} have entries in {comp_ts_name}, but"
+                        f" not in {comp_type}_df: {missing_ts.values}"
+                    )
+
+            # check if the active powers inside the timeseries exceed the given nominal
+            # or peak power of the component
+            if comp_type in ["generators", "storage_units"]:
+                attr = "p_nom"
+            else:
+                attr = "p_set"
+
+            active_power = getattr(self.timeseries, f"{comp_type}_active_power")
+            comps_complete = comps.index[comps.index.isin(active_power.columns)]
+            exceeding = comps_complete[
+                (active_power[comps_complete].max() > comps.loc[comps_complete, attr])
+            ]
+
+            if len(exceeding) > 0:
+                logger.warning(
+                    f"Values of active power in the timeseries object exceed {attr} for"
+                    f" the following {comp_type}: {exceeding.values}"
+                )
+
+            logging.info("Integrity check finished. Please pay attention to warnings.")
 
 
 def import_edisgo_from_pickle(filename, path=""):

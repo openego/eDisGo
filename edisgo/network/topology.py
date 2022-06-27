@@ -11,7 +11,6 @@ import pandas as pd
 
 import edisgo
 
-from edisgo.io.ding0_import import _validate_ding0_grid_import
 from edisgo.network.components import Switch
 from edisgo.network.grids import LVGrid, MVGrid
 from edisgo.tools import geo, networkx_helper
@@ -2514,7 +2513,96 @@ class Topology:
             self._grids[str(lv_grid)] = lv_grid
 
         # Check data integrity
-        _validate_ding0_grid_import(edisgo_obj.topology)
+        self.check_integrity()
+
+    def check_integrity(self):
+        """
+        Check imported data integrity. Checks for duplicated labels and not
+        connected components.
+
+        Parameters
+        ----------
+        self: class:`~.network.topology.Topology`
+            topology class containing mv and lv grids
+
+        """
+        # check for duplicate labels (of components)
+        duplicated_labels = []
+        duplicated_comps = []
+
+        for comp in [
+            "buses",
+            "generators",
+            "loads",
+            "transformers",
+            "lines",
+            "switches",
+        ]:
+            df = getattr(self, comp + "_df")
+            if any(df.index.duplicated()):
+                duplicated_comps.append(comp)
+                duplicated_labels.append(df.index[df.index.duplicated()].values)
+
+        if duplicated_labels:
+            logger.warning(
+                "{labels} have duplicate entry in one of the following components' "
+                "dataframes: {comps}.".format(
+                    labels=", ".join(
+                        np.concatenate([list.tolist() for list in duplicated_labels])
+                    ),
+                    comps=", ".join(duplicated_comps),
+                )
+            )
+
+        # check for isolated or not defined buses
+        buses = []
+
+        for nodal_component in [
+            "loads",
+            "generators",
+            "storage_units",
+        ]:
+            df = getattr(self, nodal_component + "_df")
+            missing = df.index[~df.bus.isin(self.buses_df.index)]
+            buses.append(df.bus.values)
+
+            if len(missing) > 0:
+                logger.warning(
+                    f"The following {nodal_component} have buses which are not defined:"
+                    f" {', '.join(missing.values)}."
+                )
+
+        for branch_component in ["lines", "transformers"]:
+            df = getattr(self, branch_component + "_df")
+
+            for attr in ["bus0", "bus1"]:
+                buses.append(df[attr].values)
+                missing = df.index[~df[attr].isin(self.buses_df.index)]
+
+                if len(missing) > 0:
+                    logger.warning(
+                        f"The following {branch_component} have {attr} which are not "
+                        f"defined: {', '.join(missing.values)}."
+                    )
+
+        for attr in ["bus_open", "bus_closed"]:
+            missing = self.switches_df.index[
+                ~self.switches_df[attr].isin(self.buses_df.index)
+            ]
+            buses.append(self.switches_df[attr].values)
+
+            if len(missing) > 0:
+                logger.warning(
+                    f"The following switches have {attr} which are not defined: "
+                    f"{', '.join(missing.values)}."
+                )
+
+        all_buses = np.unique(np.concatenate(buses, axis=None))
+        missing = self.buses_df.index[~self.buses_df.index.isin(all_buses)]
+        if len(missing) > 0:
+            logger.warning(
+                f"The following buses are isolated: {', '.join(missing.values)}."
+            )
 
     def __repr__(self):
-        return "Network topology " + str(self.id)
+        return f"Network topology {self.id}"
