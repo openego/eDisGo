@@ -356,6 +356,7 @@ class EDisGo:
                 "EDisGo object by providing the input parameter 'timeindex' or using "
                 "the function EDisGo.set_timeindex()."
             )
+            return
         if fluctuating_generators_ts is not None:
             self.timeseries.predefined_fluctuating_generators_by_technology(
                 self, fluctuating_generators_ts, fluctuating_generators_names
