@@ -135,9 +135,88 @@ class TestEDisGo:
         assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 1)
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 1)
 
-    def test_set_time_series_active_power_predefined(self):
-        # Todo: implement test
-        pass
+        self.edisgo.set_time_series_worst_case_analysis()
+        assert self.edisgo.timeseries.generators_active_power.shape == (
+            4,
+            len(self.edisgo.topology.generators_df),
+        )
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (
+            4,
+            len(self.edisgo.topology.generators_df),
+        )
+        assert self.edisgo.timeseries.loads_active_power.shape == (
+            4,
+            len(self.edisgo.topology.loads_df),
+        )
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (
+            4,
+            len(self.edisgo.topology.loads_df),
+        )
+        assert self.edisgo.timeseries.storage_units_active_power.shape == (
+            4,
+            len(self.edisgo.topology.storage_units_df),
+        )
+        assert self.edisgo.timeseries.storage_units_reactive_power.shape == (
+            4,
+            len(self.edisgo.topology.storage_units_df),
+        )
+
+    def test_set_time_series_active_power_predefined(self, caplog):
+
+        # check warning
+        self.edisgo.set_time_series_active_power_predefined(
+            fluctuating_generators_ts="oedb"
+        )
+        assert (
+            "When setting time series using predefined profiles a time index is"
+            in caplog.text
+        )
+
+        # check if right functions are called
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+        ts_fluc = pd.DataFrame(
+            data={
+                "wind": [5, 6],
+            },
+            index=timeindex,
+        )
+        ts_disp = pd.DataFrame(
+            data={
+                "other": [5, 6],
+            },
+            index=timeindex,
+        )
+        ts_cp = pd.DataFrame(
+            data={
+                "hpc": [5, 6],
+            },
+            index=timeindex,
+        )
+        self.edisgo.topology._loads_df.loc[
+            "Load_residential_LVGrid_1_4", ["type", "sector"]
+        ] = ("charging_point", "hpc")
+
+        self.edisgo.set_time_series_active_power_predefined(
+            fluctuating_generators_ts=ts_fluc,
+            fluctuating_generators_names=["GeneratorFluctuating_8"],
+            dispatchable_generators_ts=ts_disp,
+            dispatchable_generators_names=["Generator_1"],
+            conventional_loads_ts="demandlib",
+            conventional_loads_names=[
+                "Load_residential_LVGrid_3_2",
+                "Load_residential_LVGrid_3_3",
+            ],
+            charging_points_ts=ts_cp,
+            charging_points_names=None,
+        )
+
+        assert self.edisgo.timeseries.generators_active_power.shape == (2, 2)
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (2, 0)
+        assert self.edisgo.timeseries.loads_active_power.shape == (2, 3)
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (2, 0)
+        assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 0)
+        assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 0)
 
     def test_set_time_series_reactive_power_control(self):
 
