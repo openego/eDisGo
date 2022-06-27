@@ -633,32 +633,32 @@ class TimeSeries:
                 )
                 self.timeindex = self.timeindex.append(time_stamps)
 
+        if generators_names is None:
+            generators_df = edisgo_object.topology.generators_df
+        else:
+            generators_names = _check_if_components_exist(
+                edisgo_object, generators_names, "generators"
+            )
+            generators_df = edisgo_object.topology.generators_df.loc[
+                generators_names, :
+            ]
         if not edisgo_object.topology.generators_df.empty:
             # assign voltage level for reactive power
-            if generators_names is None:
-                generators_df = edisgo_object.topology.generators_df
-            else:
-                generators_names = _check_if_components_exist(
-                    edisgo_object, generators_names, "generators"
-                )
-                generators_df = edisgo_object.topology.generators_df.loc[
-                    generators_names, :
-                ]
             df = assign_voltage_level_to_component(
                 generators_df, edisgo_object.topology.buses_df
             )
             p, q = self._worst_case_generators(cases, df, edisgo_object.config)
             _overwrite_time_series(p, q, "generators")
 
-        if not edisgo_object.topology.loads_df.empty:
+        if loads_names is None:
+            loads_df = edisgo_object.topology.loads_df
+        else:
+            loads_names = _check_if_components_exist(
+                edisgo_object, loads_names, "loads"
+            )
+            loads_df = edisgo_object.topology.loads_df.loc[loads_names, :]
+        if not loads_df.empty:
             # assign voltage level for reactive power
-            if loads_names is None:
-                loads_df = edisgo_object.topology.loads_df
-            else:
-                loads_names = _check_if_components_exist(
-                    edisgo_object, loads_names, "loads"
-                )
-                loads_df = edisgo_object.topology.loads_df.loc[loads_names, :]
             df = assign_voltage_level_to_component(
                 loads_df, edisgo_object.topology.buses_df
             )
@@ -700,17 +700,17 @@ class TimeSeries:
                 )
                 _overwrite_time_series(p, q, "loads")
 
+        if storage_units_names is None:
+            storage_units_df = edisgo_object.topology.storage_units_df
+        else:
+            storage_units_names = _check_if_components_exist(
+                edisgo_object, storage_units_names, "storage_units"
+            )
+            storage_units_df = edisgo_object.topology.storage_units_df.loc[
+                storage_units_names, :
+            ]
         if not edisgo_object.topology.storage_units_df.empty:
             # assign voltage level for reactive power
-            if storage_units_names is None:
-                storage_units_df = edisgo_object.topology.storage_units_df
-            else:
-                storage_units_names = _check_if_components_exist(
-                    edisgo_object, storage_units_names, "storage_units"
-                )
-                storage_units_df = edisgo_object.topology.storage_units_df.loc[
-                    storage_units_names, :
-                ]
             df = assign_voltage_level_to_component(
                 storage_units_df, edisgo_object.topology.buses_df
             )
