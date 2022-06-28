@@ -246,7 +246,13 @@ class EDisGo:
             ts_storage_units=storage_units_q,
         )
 
-    def set_time_series_worst_case_analysis(self, cases=None):
+    def set_time_series_worst_case_analysis(
+        self,
+        cases=None,
+        generators_names=None,
+        loads_names=None,
+        storage_units_names=None,
+    ):
         """
         Sets demand and feed-in of all loads, generators and storage units for the
         specified worst cases.
@@ -259,6 +265,15 @@ class EDisGo:
             List with worst-cases to generate time series for. Can be
             'feed-in_case', 'load_case' or both. Defaults to None in which case both
             'feed-in_case' and 'load_case' are set up.
+        generators_names : list(str)
+            Defines for which generators to set worst case time series. If None,
+            time series are set for all generators. Default: None.
+        loads_names : list(str)
+            Defines for which loads to set worst case time series. If None,
+            time series are set for all loads. Default: None.
+        storage_units_names : list(str)
+            Defines for which storage units to set worst case time series. If None,
+            time series are set for all storage units. Default: None.
 
         """
         if cases is None:
@@ -266,7 +281,9 @@ class EDisGo:
         if isinstance(cases, str):
             cases = [cases]
 
-        self.timeseries.set_worst_case(self, cases)
+        self.timeseries.set_worst_case(
+            self, cases, generators_names, loads_names, storage_units_names
+        )
 
     def set_time_series_active_power_predefined(
         self,
@@ -352,6 +369,7 @@ class EDisGo:
                 "EDisGo object by providing the input parameter 'timeindex' or using "
                 "the function EDisGo.set_timeindex()."
             )
+            return
         if fluctuating_generators_ts is not None:
             self.timeseries.predefined_fluctuating_generators_by_technology(
                 self, fluctuating_generators_ts, fluctuating_generators_names

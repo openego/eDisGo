@@ -313,6 +313,9 @@ class TimeSeries:
         self.generators_active_power = None
         self.loads_active_power = None
         self.storage_units_active_power = None
+        self.generators_reactive_power = None
+        self.loads_reactive_power = None
+        self.storage_units_reactive_power = None
         self.time_series_raw = TimeSeriesRaw()
 
     def set_active_power_manual(
@@ -467,10 +470,20 @@ class TimeSeries:
                 obj=self, df_name=df_name, ts_new=ts_storage_units
             )
 
-    def set_worst_case(self, edisgo_object, cases):
+    def set_worst_case(
+        self,
+        edisgo_object,
+        cases,
+        generators_names=None,
+        loads_names=None,
+        storage_units_names=None,
+    ):
         """
-        Sets demand and feed-in of all loads, generators and storage units for the
+        Sets demand and feed-in of loads, generators and storage units for the
         specified worst cases.
+
+        Per default time series are set for all loads, generators and storage units
+        in the network.
 
         Possible worst cases are 'load_case' (heavy load flow case) and 'feed-in_case'
         (reverse power flow case). Each case is set up once for dimensioning of the MV
@@ -582,37 +595,116 @@ class TimeSeries:
         cases : list(str)
             List with worst-cases to generate time series for. Can be
             'feed-in_case', 'load_case' or both.
+        generators_names : list(str)
+            Defines for which generators to set worst case time series. If None,
+            time series are set for all generators. Default: None.
+        loads_names : list(str)
+            Defines for which loads to set worst case time series. If None,
+            time series are set for all loads. Default: None.
+        storage_units_names : list(str)
+            Defines for which storage units to set worst case time series. If None,
+            time series are set for all storage units. Default: None.
 
         Notes
         -----
-        Loads for which type information is not set are handled as conventional loads.
+        Be careful, this function overwrites all previously set time series in the case
+        that these are not worst case time series. If previously set time series are
+        worst case time series is checked using :attr:`is_worst_case`.
+
+        Further, if this function is called for a component whose worst-case time series
+        are already set, they are overwritten, even if previously set time series
+        were set for a different worst-case.
+
+        Also be aware that loads for which type information is not set are handled
+        as conventional loads.
 
         """
-        # reset all time series
-        self.reset()
 
-        # create a mapping from worst case cases to time stamps needed for pypsa
-        worst_cases = [
-            "_".join(case) for case in itertools.product(cases, ["mv", "lv"])
-        ]
-        time_stamps = pd.date_range("1/1/1970", periods=len(worst_cases), freq="H")
-        self.timeindex_worst_cases = pd.Series(time_stamps, index=worst_cases)
-        self.timeindex = time_stamps
+        def _overwrite_time_series(p, q, comp_type):
+            ts_dict = {f"{comp_type}_active_power": p, f"{comp_type}_reactive_power": q}
+            for k, v in ts_dict.items():
+                # drop previously set time series
+                drop_component_time_series(obj=self, df_name=k, comp_names=v.columns)
+                # set time series
+                _add_component_time_series(
+                    obj=self,
+                    df_name=k,
+                    ts_new=v.rename(index=self.timeindex_worst_cases),
+                )
 
+        if self.is_worst_case is False:
+            # reset all time series
+            self.reset()
+
+            # create a mapping from worst case cases to time stamps needed for pypsa
+            worst_cases = [
+                "_".join(case) for case in itertools.product(cases, ["mv", "lv"])
+            ]
+            time_stamps = pd.date_range("1/1/1970", periods=len(worst_cases), freq="H")
+            self.timeindex_worst_cases = pd.Series(time_stamps, index=worst_cases)
+            self.timeindex = time_stamps
+        else:
+            # check if cases previously set are the same as set now or if additional
+            # cases are set
+            if not hasattr(self, "timeindex_worst_cases"):
+                logger.warning(
+                    "Worst case time series were previously set but attribute "
+                    "'TimeSeries.timeindex_worst_cases' was not set, so it is not "
+                    "known which time step corresponds to which case. Additional worst "
+                    "case time series can therefore not be set. Please either set "
+                    "'TimeSeries.timeindex_worst_cases' or use 'TimeSeries.reset()' "
+                    "to reset all time series and set new ones."
+                )
+                return
+            set_cases = [
+                _
+                for _ in ["feed-in_case", "load_case"]
+                if any(_ in element for element in self.timeindex_worst_cases.index)
+            ]
+            new_cases = [_ for _ in cases if _ not in set_cases]
+            if len(new_cases) > 0:
+                worst_cases = [
+                    "_".join(case)
+                    for case in itertools.product(new_cases, ["mv", "lv"])
+                ]
+                time_stamps = pd.date_range(
+                    self.timeindex.max() + pd.Timedelta(1, unit="hours"),
+                    periods=len(worst_cases),
+                    freq="H",
+                )
+                self.timeindex_worst_cases = self.timeindex_worst_cases.append(
+                    pd.Series(time_stamps, index=worst_cases)
+                )
+                self.timeindex = self.timeindex.append(time_stamps)
+
+        if generators_names is None:
+            generators_df = edisgo_object.topology.generators_df
+        else:
+            generators_names = _check_if_components_exist(
+                edisgo_object, generators_names, "generators"
+            )
+            generators_df = edisgo_object.topology.generators_df.loc[
+                generators_names, :
+            ]
         if not edisgo_object.topology.generators_df.empty:
             # assign voltage level for reactive power
             df = assign_voltage_level_to_component(
-                edisgo_object.topology.generators_df, edisgo_object.topology.buses_df
+                generators_df, edisgo_object.topology.buses_df
             )
             p, q = self._worst_case_generators(cases, df, edisgo_object.config)
-            # change index and set p and q
-            self.generators_active_power = p.rename(index=self.timeindex_worst_cases)
-            self.generators_reactive_power = q.rename(index=self.timeindex_worst_cases)
+            _overwrite_time_series(p, q, "generators")
 
-        if not edisgo_object.topology.loads_df.empty:
+        if loads_names is None:
+            loads_df = edisgo_object.topology.loads_df
+        else:
+            loads_names = _check_if_components_exist(
+                edisgo_object, loads_names, "loads"
+            )
+            loads_df = edisgo_object.topology.loads_df.loc[loads_names, :]
+        if not loads_df.empty:
             # assign voltage level for reactive power
             df = assign_voltage_level_to_component(
-                edisgo_object.topology.loads_df, edisgo_object.topology.buses_df
+                loads_df, edisgo_object.topology.buses_df
             )
             # conventional loads
             df_tmp = df[df.type == "conventional_load"]
@@ -620,37 +712,19 @@ class TimeSeries:
                 p, q = self._worst_case_conventional_load(
                     cases, df_tmp, edisgo_object.config
                 )
-                # change index and set p and q
-                self.loads_active_power = p.rename(index=self.timeindex_worst_cases)
-                self.loads_reactive_power = q.rename(index=self.timeindex_worst_cases)
+                _overwrite_time_series(p, q, "loads")
             # charging points
             df_tmp = df[df.type == "charging_point"]
             if not df_tmp.empty:
                 p, q = self._worst_case_charging_points(
                     cases, df_tmp, edisgo_object.config
                 )
-                # change index and set p and q
-                p = p.rename(index=self.timeindex_worst_cases)
-                q = q.rename(index=self.timeindex_worst_cases)
-                self.loads_active_power = pd.concat(
-                    [self.loads_active_power, p], axis=1
-                )
-                self.loads_reactive_power = pd.concat(
-                    [self.loads_reactive_power, q], axis=1
-                )
+                _overwrite_time_series(p, q, "loads")
             # heat pumps
             df_tmp = df[df.type == "heat_pump"]
             if not df_tmp.empty:
                 p, q = self._worst_case_heat_pumps(cases, df_tmp, edisgo_object.config)
-                # change index and set p and q
-                p = p.rename(index=self.timeindex_worst_cases)
-                q = q.rename(index=self.timeindex_worst_cases)
-                self.loads_active_power = pd.concat(
-                    [self.loads_active_power, p], axis=1
-                )
-                self.loads_reactive_power = pd.concat(
-                    [self.loads_reactive_power, q], axis=1
-                )
+                _overwrite_time_series(p, q, "loads")
             # check if there are loads without time series remaining and if so, handle
             # them as conventional loads
             loads_without_ts = list(
@@ -668,27 +742,24 @@ class TimeSeries:
                 p, q = self._worst_case_conventional_load(
                     cases, df.loc[loads_without_ts, :], edisgo_object.config
                 )
+                _overwrite_time_series(p, q, "loads")
 
-                # change index and set p and q
-                p = p.rename(index=self.timeindex_worst_cases)
-                q = q.rename(index=self.timeindex_worst_cases)
-                self.loads_active_power = pd.concat(
-                    [self.loads_active_power, p], axis=1
-                )
-                self.loads_reactive_power = pd.concat(
-                    [self.loads_reactive_power, q], axis=1
-                )
+        if storage_units_names is None:
+            storage_units_df = edisgo_object.topology.storage_units_df
+        else:
+            storage_units_names = _check_if_components_exist(
+                edisgo_object, storage_units_names, "storage_units"
+            )
+            storage_units_df = edisgo_object.topology.storage_units_df.loc[
+                storage_units_names, :
+            ]
         if not edisgo_object.topology.storage_units_df.empty:
             # assign voltage level for reactive power
             df = assign_voltage_level_to_component(
-                edisgo_object.topology.storage_units_df, edisgo_object.topology.buses_df
+                storage_units_df, edisgo_object.topology.buses_df
             )
             p, q = self._worst_case_storage_units(cases, df, edisgo_object.config)
-            # change index and set p and q
-            self.storage_units_active_power = p.rename(index=self.timeindex_worst_cases)
-            self.storage_units_reactive_power = q.rename(
-                index=self.timeindex_worst_cases
-            )
+            _overwrite_time_series(p, q, "storage_units")
 
     def _worst_case_generators(self, cases, df, configs):
         """
@@ -1168,7 +1239,7 @@ class TimeSeries:
             Defines for which fluctuating generators to use technology-specific time
             series. If None, all generators technology (and weather cell) specific time
             series are provided for are used. In case the time series are retrieved from
-            the oedb, all solar and wind generators are used.
+            the oedb, all solar and wind generators are used. Default: None.
 
         """
         # in case time series from oedb are used, retrieve oedb time series

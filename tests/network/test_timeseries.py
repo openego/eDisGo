@@ -345,6 +345,263 @@ class TestTimeSeries:
             not in self.edisgo.timeseries.storage_units_reactive_power.columns
         )
 
+    def test_set_worst_case(self):
+
+        # test - check if right functions are called for all components
+
+        # change load types to have charging point, heat pump and load without set
+        # type in the network
+        self.edisgo.topology._loads_df.loc[
+            "Load_residential_LVGrid_1_4", ["type", "sector"]
+        ] = ("charging_point", "hpc")
+        self.edisgo.topology._loads_df.at[
+            "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1", "type"
+        ] = "heat_pump"
+        self.edisgo.topology._loads_df.at["Load_agricultural_LVGrid_8_1", "type"] = None
+
+        self.edisgo.timeseries.set_worst_case(
+            self.edisgo, cases=["feed-in_case", "load_case"]
+        )
+
+        timeindex = pd.date_range("1/1/1970", periods=4, freq="H")
+        # check generator
+        comp = "Generator_1"  # gas, mv
+        p_nom = 0.775
+        exp = pd.Series(
+            data=[1.0 * p_nom, 1.0 * p_nom, 0.0, 0.0],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(
+            self.edisgo.timeseries.generators_active_power.loc[:, comp],
+            exp,
+            check_dtype=False,
+        )
+        pf = -tan(acos(0.9))
+        assert_series_equal(
+            self.edisgo.timeseries.generators_reactive_power.loc[:, comp],
+            exp * pf,
+            check_dtype=False,
+        )
+        # check conventional load
+        comp = "Load_agricultural_LVGrid_1_1"  # lv
+        p_set = 0.0523
+        exp = pd.Series(
+            data=[0.15 * p_set, 0.1 * p_set, 1.0 * p_set, 1.0 * p_set],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(
+            self.edisgo.timeseries.loads_active_power.loc[:, comp],
+            exp,
+            check_dtype=False,
+        )
+        pf = tan(acos(0.95))
+        assert_series_equal(
+            self.edisgo.timeseries.loads_reactive_power.loc[:, comp],
+            exp * pf,
+            check_dtype=False,
+        )
+        # check charging point
+        comp = "Load_residential_LVGrid_1_4"  # lv, hpc
+        p_set = 0.001397
+        exp = pd.Series(
+            data=[0.15 * p_set, 0.1 * p_set, 1.0 * p_set, 1.0 * p_set],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(
+            self.edisgo.timeseries.loads_active_power.loc[:, comp],
+            exp,
+            check_dtype=False,
+        )
+        pf = tan(acos(1.0))
+        assert_series_equal(
+            self.edisgo.timeseries.loads_reactive_power.loc[:, comp],
+            exp * pf,
+            check_dtype=False,
+        )
+        # check heat pump
+        comp = "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"  # mv
+        p_set = 0.31
+        exp = pd.Series(
+            data=[0.15 * p_set, 0.1 * p_set, 0.9 * p_set, 1.0 * p_set],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(
+            self.edisgo.timeseries.loads_active_power.loc[:, comp],
+            exp,
+            check_dtype=False,
+        )
+        pf = -tan(acos(0.98))
+        assert_series_equal(
+            self.edisgo.timeseries.loads_reactive_power.loc[:, comp],
+            exp * pf,
+            check_dtype=False,
+        )
+        # check load without type specification
+        comp = "Load_agricultural_LVGrid_8_1"  # lv
+        p_set = 0.0478
+        exp = pd.Series(
+            data=[0.15 * p_set, 0.1 * p_set, 1.0 * p_set, 1.0 * p_set],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(
+            self.edisgo.timeseries.loads_active_power.loc[:, comp],
+            exp,
+            check_dtype=False,
+        )
+        pf = tan(acos(0.95))
+        assert_series_equal(
+            self.edisgo.timeseries.loads_reactive_power.loc[:, comp],
+            exp * pf,
+            check_dtype=False,
+        )
+        # check storage
+        comp = "Storage_1"
+        p_nom = 0.4
+        exp = pd.Series(
+            data=[1.0 * p_nom, 1.0 * p_nom, -1.0 * p_nom, -1.0 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(
+            self.edisgo.timeseries.storage_units_active_power.loc[:, comp],
+            exp,
+            check_dtype=False,
+        )
+        pf = -tan(acos(0.9))
+        assert_series_equal(
+            self.edisgo.timeseries.storage_units_reactive_power.loc[:, comp],
+            exp * pf,
+            check_dtype=False,
+        )
+
+        assert self.edisgo.timeseries.generators_active_power.shape == (
+            4,
+            len(self.edisgo.topology.generators_df),
+        )
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (
+            4,
+            len(self.edisgo.topology.generators_df),
+        )
+        assert self.edisgo.timeseries.loads_active_power.shape == (
+            4,
+            len(self.edisgo.topology.loads_df),
+        )
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (
+            4,
+            len(self.edisgo.topology.loads_df),
+        )
+        assert self.edisgo.timeseries.storage_units_active_power.shape == (
+            4,
+            len(self.edisgo.topology.storage_units_df),
+        )
+        assert self.edisgo.timeseries.storage_units_reactive_power.shape == (
+            4,
+            len(self.edisgo.topology.storage_units_df),
+        )
+
+        # #############################################################################
+        # test with components that do not exist and setting only one case
+        self.edisgo.timeseries.set_worst_case(
+            self.edisgo,
+            cases=["load_case"],
+            generators_names=["genX", "GeneratorFluctuating_8"],
+            loads_names=[],
+            storage_units_names=[],
+        )
+
+        comp = "GeneratorFluctuating_8"
+        exp = pd.Series(
+            data=[np.nan, np.nan, 0.0, 0.0],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(
+            self.edisgo.timeseries.generators_active_power.loc[:, comp],
+            exp,
+            check_dtype=False,
+        )
+        pf = -tan(acos(0.9))
+        assert_series_equal(
+            self.edisgo.timeseries.generators_reactive_power.loc[:, comp],
+            exp * pf,
+            check_dtype=False,
+        )
+        assert self.edisgo.timeseries.generators_active_power.shape == (
+            4,
+            len(self.edisgo.topology.generators_df),
+        )
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (
+            4,
+            len(self.edisgo.topology.generators_df),
+        )
+        assert self.edisgo.timeseries.loads_active_power.shape == (
+            4,
+            len(self.edisgo.topology.loads_df),
+        )
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (
+            4,
+            len(self.edisgo.topology.loads_df),
+        )
+        assert self.edisgo.timeseries.storage_units_active_power.shape == (
+            4,
+            len(self.edisgo.topology.storage_units_df),
+        )
+        assert self.edisgo.timeseries.storage_units_reactive_power.shape == (
+            4,
+            len(self.edisgo.topology.storage_units_df),
+        )
+
+        # #############################################################################
+        # test reset of time series - set other time series before and only set
+        # worst case time series for other components
+        timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+        self.edisgo.timeseries._generators_active_power = pd.DataFrame(
+            {"Generator_1": [1.4, 2.3]}, index=timeindex
+        )
+        self.edisgo.timeseries.set_worst_case(
+            self.edisgo,
+            cases=["load_case"],
+            generators_names=["GeneratorFluctuating_8"],
+        )
+        assert (
+            "GeneratorFluctuating_8"
+            in self.edisgo.timeseries.generators_active_power.columns
+        )
+        assert self.edisgo.timeseries.generators_active_power.shape == (2, 1)
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (2, 1)
+
+        # #############################################################################
+        # test setting other case now to see if time index is set correctly
+        self.edisgo.timeseries.set_worst_case(
+            self.edisgo,
+            cases=["feed-in_case"],
+            generators_names=["GeneratorFluctuating_8"],
+        )
+        assert self.edisgo.timeseries.generators_active_power.shape == (4, 1)
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (4, 1)
+        exp = pd.Series(
+            data=pd.date_range("1/1/1970", periods=4, freq="H"),
+            index=[
+                "load_case_mv",
+                "load_case_lv",
+                "feed-in_case_mv",
+                "feed-in_case_lv",
+            ],
+        )
+        assert_series_equal(
+            self.edisgo.timeseries.timeindex_worst_cases, exp, check_dtype=False
+        )
+        assert (
+            self.edisgo.timeseries.timeindex
+            == self.edisgo.timeseries.timeindex_worst_cases.values
+        ).all()
+
     def test_worst_case_generators(self):
 
         # ######### check both feed-in and load case
