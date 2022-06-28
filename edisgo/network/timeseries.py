@@ -686,7 +686,7 @@ class TimeSeries:
             generators_df = edisgo_object.topology.generators_df.loc[
                 generators_names, :
             ]
-        if not edisgo_object.topology.generators_df.empty:
+        if not generators_df.empty:
             # assign voltage level for reactive power
             df = assign_voltage_level_to_component(
                 generators_df, edisgo_object.topology.buses_df
@@ -753,7 +753,7 @@ class TimeSeries:
             storage_units_df = edisgo_object.topology.storage_units_df.loc[
                 storage_units_names, :
             ]
-        if not edisgo_object.topology.storage_units_df.empty:
+        if not storage_units_df.empty:
             # assign voltage level for reactive power
             df = assign_voltage_level_to_component(
                 storage_units_df, edisgo_object.topology.buses_df
