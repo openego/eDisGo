@@ -52,17 +52,17 @@ def charging_strategy(
     ----------
     edisgo_obj : :class:`~.EDisGo`
     strategy : str
-        The charging strategy. Default "dumb". Only "private" charging
-        processes at "home" or at "work" can be flexibilized. "public" charging
-        processes will always be "dumb". For now the following charging
+        The charging strategy. Default 'dumb'. Only 'private' charging
+        processes at 'home' or at 'work' can be flexibilized. 'public' charging
+        processes will always be 'dumb'. For now the following charging
         strategies are valid:
-        * "dumb": The cars are charged directly after arrival with the
+        * 'dumb': The cars are charged directly after arrival with the
         maximum possible charging capacity.
-        * "reduced": The cars are charged directly after arrival with the
+        * 'reduced': The cars are charged directly after arrival with the
         minimum possible charging capacity. The minimum possible charging
         capacity is determined by the parking time and the
         minimum_charging_capacity_factor.
-        * "residual": The cars are charged when the residual load in the MV
+        * 'residual': The cars are charged when the residual load in the MV
         grid is at it's lowest (high generation and low consumption).
         Charging processes with a low flexibility band are given priority.
     timestamp_share_threshold : float
@@ -313,7 +313,7 @@ def harmonize_charging_processes_df(
     timestamp_share_threshold : float
         See description in the main function. Default 0.2
     strategy : str
-        See description in the main function. Default "dumb"
+        See description in the main function. Default 'dumb'
     minimum_charging_capacity_factor : float
         See description in the main function. Default 0.1
     eta_cp : float
