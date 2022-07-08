@@ -673,93 +673,108 @@ def add_ev_model_bands(
     model.EVCharging = pm.Constraint(
         model.flexible_charging_points_set, model.time_non_zero, rule=charging_ev
     )
-    # set initial energy level, Todo: possibly add own method for rolling horizon
-    model.energy_level_start = pm.Param(
+    model = add_rolling_horizon("ev", charging_start, energy_level_beginning, energy_level_end,
+                                energy_level_start, model)
+
+    return model
+
+
+def add_rolling_horizon(type, charging_start, energy_level_beginning, energy_level_end, energy_level_start, model):
+    # set initial energy level
+    model.energy_level_start_ev = pm.Param(
         model.flexible_charging_points_set,
         initialize=energy_level_start,
         mutable=True,
         within=pm.Any,
     )
-    model.slack_initial_energy_pos = pm.Var(
+    model.slack_initial_energy_pos_ev = pm.Var(
         model.flexible_charging_points_set, bounds=(0, None)
     )
-    model.slack_initial_energy_neg = pm.Var(
+    model.slack_initial_energy_neg_ev = pm.Var(
         model.flexible_charging_points_set, bounds=(0, None)
     )
-    model.InitialEVEnergyLevel = pm.Constraint(
+    model.InitialEnergyLevelEV = pm.Constraint(
         model.flexible_charging_points_set,
         model.time_zero,
-        rule=initial_energy_level,
+        rule=initial_energy_level_ev,
     )
-    model.InitialEVEnergyLevelStart = pm.Constraint(
-        model.flexible_charging_points_set, model.time_zero, rule=fixed_energy_level
+    model.InitialEnergyLevelEVStart = pm.Constraint(
+        model.flexible_charging_points_set, model.time_zero, rule=fixed_energy_level_ev
     )
     if energy_level_start is None:
-        model.InitialEVEnergyLevel.deactivate()
+        model.InitialEnergyLevelEV.deactivate()
     else:
-        model.InitialEVEnergyLevelStart.deactivate()
+        model.InitialEnergyLevelEVStart.deactivate()
+    # set initial charging power
+    model.charging_initial_ev = pm.Param(
+        model.flexible_charging_points_set,
+        initialize=charging_start,
+        mutable=True,
+    )
+    model.slack_initial_charging_pos_ev = pm.Var(
+        model.flexible_charging_points_set, bounds=(0, None)
+    )
+    model.slack_initial_charging_neg_ev = pm.Var(
+        model.flexible_charging_points_set, bounds=(0, None)
+    )
+    model.InitialChargingPowerEV = pm.Constraint(
+        model.flexible_charging_points_set,
+        model.time_zero,
+        rule=initial_charging_power_ev,
+    )
+    if charging_start is None:
+        model.InitialChargingPowerEV.deactivate()
     # set final energy level and if necessary charging power
-    model.energy_level_end = pm.Param(
+    model.energy_level_end_ev = pm.Param(
         model.flexible_charging_points_set,
         initialize=energy_level_end,
         mutable=True,
         within=pm.Any,
     )
-    model.FinalEVEnergyLevelFix = pm.Constraint(
-        model.flexible_charging_points_set, model.time_end, rule=fixed_energy_level
+    model.FinalEnergyLevelFixEV = pm.Constraint(
+        model.flexible_charging_points_set, model.time_end, rule=fixed_energy_level_ev
     )
-
     if energy_level_beginning is None:
-        model.energy_level_beginning = pm.Param(
+        model.energy_level_beginning_ev = pm.Param(
             model.flexible_charging_points_set, initialize=0, mutable=True
         )
     else:
-        model.energy_level_beginning = pm.Param(
+        model.energy_level_beginning_ev = pm.Param(
             model.flexible_charging_points_set,
             initialize=energy_level_beginning,
             mutable=True,
         )
-    model.FinalEVEnergyLevelEnd = pm.Constraint(
-        model.flexible_charging_points_set, model.time_end, rule=final_energy_level
+    model.FinalEnergyLevelEndEV = pm.Constraint(
+        model.flexible_charging_points_set, model.time_end, rule=final_energy_level_ev
     )
-    model.FinalEVChargingPower = pm.Constraint(
+    model.FinalChargingPowerEV = pm.Constraint(
         model.flexible_charging_points_set,
         model.time_end,
-        rule=final_charging_power,
+        rule=final_charging_power_ev,
     )
     if energy_level_end is None:
-        model.FinalEVEnergyLevelFix.deactivate()
-        model.FinalEVEnergyLevelEnd.deactivate()
-        model.FinalEVChargingPower.deactivate()
+        model.FinalEnergyLevelFixEV.deactivate()
+        model.FinalEnergyLevelEndEV.deactivate()
+        model.FinalChargingPowerEV.deactivate()
     else:
         if type(energy_level_end) != bool:
-            model.FinalEVEnergyLevelFix.deactivate()
+            model.FinalEnergyLevelFixEV.deactivate()
         elif type(energy_level_end) == bool:
-            model.FinalEVEnergyLevelEnd.deactivate()
-    # set initial charging power
-    model.charging_initial = pm.Param(
-        model.flexible_charging_points_set,
-        initialize=charging_start,
-        mutable=True,
-    )
-    model.slack_initial_charging_pos = pm.Var(
-        model.flexible_charging_points_set, bounds=(0, None)
-    )
-    model.slack_initial_charging_neg = pm.Var(
-        model.flexible_charging_points_set, bounds=(0, None)
-    )
-    model.InitialEVChargingPower = pm.Constraint(
-        model.flexible_charging_points_set,
-        model.time_zero,
-        rule=initial_charging_power,
-    )
-    if charging_start is None:
-        model.InitialEVChargingPower.deactivate()
-
+            model.FinalEnergyLevelEndEV.deactivate()
     return model
 
 
-def add_heat_pump_model(model, timeinvariant_parameters, grid_object, cop, heat_demand):
+def add_heat_pump_model(
+        model,
+        timeinvariant_parameters,
+        grid_object,
+        cop,
+        heat_demand,
+        energy_level_start=None,
+        energy_level_end=None,
+        energy_level_beginning=None,
+        charging_start=None,
+):
     # Todo: make update possible
     def energy_balance_hp_tes(model, hp, time):
         return (
@@ -898,41 +913,41 @@ def update_model(
         # if run is new start of era deactivate initial energy level,
         # otherwise activate initial energy and charging
         if energy_level_start is None:
-            model.InitialEVEnergyLevel.deactivate()
-            model.InitialEVEnergyLevelStart.activate()
+            model.InitialEnergyLevelEV.deactivate()
+            model.InitialEnergyLevelEVStart.activate()
         else:
             for cp in model.flexible_charging_points_set:
-                model.energy_level_start[cp].set_value(energy_level_start[cp])
-            model.InitialEVEnergyLevel.activate()
-            model.InitialEVEnergyLevelStart.deactivate()
+                model.energy_level_start_ev[cp].set_value(energy_level_start[cp])
+            model.InitialEnergyLevelEV.activate()
+            model.InitialEnergyLevelEVStart.deactivate()
         # set initial charging
         if charging_initial is not None:
             for cp in model.flexible_charging_points_set:
-                model.charging_initial[cp].set_value(charging_initial[cp])
-            model.InitialEVChargingPower.activate()
+                model.charging_initial_ev[cp].set_value(charging_initial[cp])
+            model.InitialChargingPowerEV.activate()
         # set energy level beginning if necessary
 
         energy_level_beginning = kwargs.get("energy_level_beginning", None)
         if energy_level_beginning is not None:
             for cp in model.flexible_charging_points_set:
-                model.energy_level_beginning[cp].set_value(energy_level_beginning[cp])
+                model.energy_level_beginning_ev[cp].set_value(energy_level_beginning[cp])
 
         # set final energy level and if necessary charging power
         energy_level_end = kwargs.get("energy_level_end", None)
         if energy_level_end is None:
-            model.FinalEVEnergyLevelFix.deactivate()
-            model.FinalEVEnergyLevelEnd.deactivate()
-            model.FinalEVChargingPower.deactivate()
+            model.FinalEnergyLevelFixEV.deactivate()
+            model.FinalEnergyLevelEndEV.deactivate()
+            model.FinalChargingPowerEV.deactivate()
         elif type(energy_level_end) == bool:
-            model.FinalEVEnergyLevelFix.activate()
-            model.FinalEVEnergyLevelEnd.deactivate()
-            model.FinalEVChargingPower.activate()
+            model.FinalEnergyLevelFixEV.activate()
+            model.FinalEnergyLevelEndEV.deactivate()
+            model.FinalChargingPowerEV.activate()
         else:
             for cp in model.flexible_charging_points_set:
-                model.energy_level_end[cp].set_value(energy_level_end[cp])
-            model.FinalEVEnergyLevelEnd.activate()
-            model.FinalEVChargingPower.activate()
-            model.FinalEVEnergyLevelFix.deactivate()
+                model.energy_level_end_ev[cp].set_value(energy_level_end[cp])
+            model.FinalEnergyLevelEndEV.activate()
+            model.FinalChargingPowerEV.activate()
+            model.FinalEnergyLevelFixEV.deactivate()
 
     if optimize_storage:
         raise NotImplementedError
@@ -994,16 +1009,35 @@ def optimize(model, solver, load_solutions=True, mode=None):
                 .T
             )
             result_dict["slack_charging"] = pd.Series(
-                model.slack_initial_charging_pos.extract_values()
-            ) + pd.Series(model.slack_initial_charging_neg.extract_values())
+                model.slack_initial_charging_pos_ev.extract_values()
+            ) + pd.Series(model.slack_initial_charging_neg_ev.extract_values())
             result_dict["slack_energy"] = pd.Series(
-                model.slack_initial_energy_pos.extract_values()
-            ) + pd.Series(model.slack_initial_energy_neg.extract_values())
+                model.slack_initial_energy_pos_ev.extract_values()
+            ) + pd.Series(model.slack_initial_energy_neg_ev.extract_values())
             result_dict["curtailment_ev"] = (
                 pd.Series(model.curtailment_ev.extract_values())
                 .unstack()
                 .rename(columns=time_dict)
                 .T
+            )
+        if hasattr(model, "flexible_heat_pumps_set"):
+            result_dict["charging_hp_el"] = (
+                pd.Series(model.charging_hp_el.extract_values())
+                    .unstack()
+                    .rename(columns=time_dict)
+                    .T
+            )
+            result_dict["charging_tes"] = (
+                pd.Series(model.charging_tes.extract_values())
+                    .unstack()
+                    .rename(columns=time_dict)
+                    .T
+            )
+            result_dict["energy_tes"] = (
+                pd.Series(model.energy_tes.extract_values())
+                    .unstack()
+                    .rename(columns=time_dict)
+                    .T
             )
         result_dict["curtailment_load"] = (
             pd.Series(model.curtailment_load.extract_values())
@@ -1608,7 +1642,7 @@ def upper_bound_curtailment_hp(model, bus, time):
         )
 
 
-def initial_energy_level(model, charging_point, time):
+def initial_energy_level_ev(model, charging_point, time):
     """
     Constraint for initial value of energy
     :param model:
@@ -1618,13 +1652,13 @@ def initial_energy_level(model, charging_point, time):
     """
     return (
         model.energy_level_ev[charging_point, time]
-        == model.energy_level_start[charging_point]
-        + model.slack_initial_energy_pos[charging_point]
-        - model.slack_initial_energy_neg[charging_point]
+        == model.energy_level_start_ev[charging_point]
+        + model.slack_initial_energy_pos_ev[charging_point]
+        - model.slack_initial_energy_neg_ev[charging_point]
     )
 
 
-def fixed_energy_level(model, charging_point, time):
+def fixed_energy_level_ev(model, charging_point, time):
     """
     Constraint for initial value of energy
     :param model:
@@ -1640,7 +1674,7 @@ def fixed_energy_level(model, charging_point, time):
     )
 
 
-def final_energy_level(model, charging_point, time):
+def final_energy_level_ev(model, charging_point, time):
     """
     Constraint for final value of energy in last iteration
     :param model:
@@ -1650,12 +1684,12 @@ def final_energy_level(model, charging_point, time):
     """
     return (
         model.energy_level_ev[charging_point, time]
-        == model.energy_level_beginning[charging_point]
-        + model.energy_level_end[charging_point]
+        == model.energy_level_beginning_ev[charging_point]
+        + model.energy_level_end_ev[charging_point]
     )
 
 
-def final_charging_power(model, charging_point, time):
+def final_charging_power_ev(model, charging_point, time):
     """
     Constraint for final value of charging power, setting it to 0
     :param model:
@@ -1666,7 +1700,7 @@ def final_charging_power(model, charging_point, time):
     return model.charging_ev[charging_point, time] == 0
 
 
-def initial_charging_power(model, charging_point, time):
+def initial_charging_power_ev(model, charging_point, time):
     """
     Constraint for initial value of charging power
     :param model:
@@ -1676,9 +1710,9 @@ def initial_charging_power(model, charging_point, time):
     """
     return (
         model.charging_ev[charging_point, time]
-        == model.charging_initial[charging_point]
-        + model.slack_initial_charging_pos[charging_point]
-        - model.slack_initial_charging_neg[charging_point]
+        == model.charging_initial_ev[charging_point]
+        + model.slack_initial_charging_pos_ev[charging_point]
+        - model.slack_initial_charging_neg_ev[charging_point]
     )
 
 
@@ -1957,14 +1991,14 @@ def extract_curtailment_of_flexible_components(model):
 def extract_slack_charging(model):
     if hasattr(model, "slack_initial_charging_pos"):
         slack_charging = sum(
-            model.slack_initial_charging_pos[cp] + model.slack_initial_charging_neg[cp]
+            model.slack_initial_charging_pos_ev[cp] + model.slack_initial_charging_neg_ev[cp]
             for cp in model.flexible_charging_points_set
         )
     else:
         slack_charging = 0
     if hasattr(model, "slack_initial_energy_pos"):
         slack_energy = sum(
-            model.slack_initial_energy_pos[cp] + model.slack_initial_energy_neg[cp]
+            model.slack_initial_energy_pos_ev[cp] + model.slack_initial_energy_neg_ev[cp]
             for cp in model.flexible_charging_points_set
         )
     else:
