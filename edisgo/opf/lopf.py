@@ -679,88 +679,105 @@ def add_ev_model_bands(
     return model
 
 
-def add_rolling_horizon(type, charging_start, energy_level_beginning, energy_level_end, energy_level_start, model):
+def add_rolling_horizon(comp_type, charging_start, energy_level_beginning, energy_level_end, energy_level_start, model):
+    sets = {"ev": "charging_points", "hp": "heat_pumps"}
+    flex_set = getattr(model, f"flexible_{sets[comp_type.lower()]}_set")
     # set initial energy level
-    model.energy_level_start_ev = pm.Param(
-        model.flexible_charging_points_set,
-        initialize=energy_level_start,
-        mutable=True,
-        within=pm.Any,
-    )
-    model.slack_initial_energy_pos_ev = pm.Var(
-        model.flexible_charging_points_set, bounds=(0, None)
-    )
-    model.slack_initial_energy_neg_ev = pm.Var(
-        model.flexible_charging_points_set, bounds=(0, None)
-    )
-    model.InitialEnergyLevelEV = pm.Constraint(
-        model.flexible_charging_points_set,
-        model.time_zero,
-        rule=initial_energy_level_ev,
-    )
-    model.InitialEnergyLevelEVStart = pm.Constraint(
-        model.flexible_charging_points_set, model.time_zero, rule=fixed_energy_level_ev
-    )
+    setattr(model, f"energy_level_start_{comp_type.lower()}",
+            pm.Param(
+                flex_set,
+                initialize=energy_level_start,
+                mutable=True,
+                within=pm.Any,
+            ))
+    setattr(model, f"slack_initial_energy_pos_{comp_type.lower()}",
+            pm.Var(
+                flex_set, bounds=(0, None)
+            ))
+    setattr(model, f"slack_initial_energy_neg_{comp_type.lower()}",
+            pm.Var(
+                flex_set, bounds=(0, None)
+            ))
+    setattr(model, f"InitialEnergyLevel{comp_type.upper()}",
+            pm.Constraint(
+                flex_set,
+                model.time_zero,
+                rule=globals()[f"initial_energy_level_{comp_type.lower()}"],
+            ))
+    setattr(model, f"InitialEnergyLevelStart{comp_type.upper()}",
+            pm.Constraint(
+                flex_set,
+                model.time_zero,
+                rule=globals()[f"fixed_energy_level_{comp_type.lower()}"]
+            ))
     if energy_level_start is None:
-        model.InitialEnergyLevelEV.deactivate()
+        getattr(model, f"InitialEnergyLevel{comp_type.upper()}").deactivate()
     else:
-        model.InitialEnergyLevelEVStart.deactivate()
+        getattr(model, f"InitialEnergyLevelStart{comp_type.upper()}").deactivate()
     # set initial charging power
-    model.charging_initial_ev = pm.Param(
-        model.flexible_charging_points_set,
-        initialize=charging_start,
-        mutable=True,
-    )
-    model.slack_initial_charging_pos_ev = pm.Var(
-        model.flexible_charging_points_set, bounds=(0, None)
-    )
-    model.slack_initial_charging_neg_ev = pm.Var(
-        model.flexible_charging_points_set, bounds=(0, None)
-    )
-    model.InitialChargingPowerEV = pm.Constraint(
-        model.flexible_charging_points_set,
-        model.time_zero,
-        rule=initial_charging_power_ev,
-    )
+    setattr(model, f"charging_initial_{comp_type.lower()}",
+            pm.Param(
+                flex_set,
+                initialize=charging_start,
+                mutable=True,
+            ))
+    setattr(model, f"slack_initial_charging_pos_{comp_type.lower()}",
+            pm.Var(
+                flex_set, bounds=(0, None)
+            ))
+    setattr(model, f"slack_initial_charging_neg_{comp_type.lower()}",
+            pm.Var(
+                flex_set, bounds=(0, None)
+            ))
+    setattr(model, f"InitialChargingPower{comp_type.upper()}",
+            pm.Constraint(
+                flex_set,
+                model.time_zero,
+                rule=globals()[f"initial_charging_power_{comp_type.lower()}"],
+            ))
     if charging_start is None:
-        model.InitialChargingPowerEV.deactivate()
+        getattr(model, f"InitialChargingPower{comp_type.upper()}").deactivate()
     # set final energy level and if necessary charging power
-    model.energy_level_end_ev = pm.Param(
-        model.flexible_charging_points_set,
-        initialize=energy_level_end,
-        mutable=True,
-        within=pm.Any,
-    )
-    model.FinalEnergyLevelFixEV = pm.Constraint(
-        model.flexible_charging_points_set, model.time_end, rule=fixed_energy_level_ev
-    )
+    setattr(model, f"energy_level_end_{comp_type.lower()}",
+            pm.Param(
+                model.flexible_charging_points_set,
+                initialize=energy_level_end,
+                mutable=True,
+                within=pm.Any,
+            ))
+    setattr(model, f"FinalEnergyLevelFix{comp_type.upper()}",
+            pm.Constraint(
+                flex_set, model.time_end, rule=globals()[f"fixed_energy_level_{comp_type.lower()}"]
+            ))
     if energy_level_beginning is None:
-        model.energy_level_beginning_ev = pm.Param(
-            model.flexible_charging_points_set, initialize=0, mutable=True
-        )
+        setattr(model, f"energy_level_beginning_{comp_type.lower()}",
+                pm.Param(
+                    flex_set, initialize=0, mutable=True
+                ))
     else:
-        model.energy_level_beginning_ev = pm.Param(
-            model.flexible_charging_points_set,
-            initialize=energy_level_beginning,
-            mutable=True,
-        )
-    model.FinalEnergyLevelEndEV = pm.Constraint(
-        model.flexible_charging_points_set, model.time_end, rule=final_energy_level_ev
-    )
-    model.FinalChargingPowerEV = pm.Constraint(
-        model.flexible_charging_points_set,
-        model.time_end,
-        rule=final_charging_power_ev,
-    )
+        setattr(model, f"energy_level_beginning_{comp_type.lower()}",
+                pm.Param(
+                    flex_set, initialize=energy_level_beginning, mutable=True
+                ))
+    setattr(model, f"FinalEnergyLevelEnd{comp_type.upper()}",
+            pm.Constraint(
+                flex_set, model.time_end, rule=globals()[f"final_energy_level_{comp_type.lower()}"]
+            ))
+    setattr(model, f"FinalChargingPower{comp_type.upper()}",
+            pm.Constraint(
+                flex_set,
+                model.time_end,
+                rule=globals()[f"final_charging_power_{comp_type.lower()}"],
+            ))
     if energy_level_end is None:
-        model.FinalEnergyLevelFixEV.deactivate()
-        model.FinalEnergyLevelEndEV.deactivate()
-        model.FinalChargingPowerEV.deactivate()
+        getattr(model, f"FinalEnergyLevelFix{comp_type.upper()}").deactivate()
+        getattr(model, f"FinalEnergyLevelEnd{comp_type.upper()}").deactivate()
+        getattr(model, f"FinalChargingPower{comp_type.upper()}").deactivate()
     else:
-        if type(energy_level_end) != bool:
-            model.FinalEnergyLevelFixEV.deactivate()
-        elif type(energy_level_end) == bool:
-            model.FinalEnergyLevelEndEV.deactivate()
+        if comp_type(energy_level_end) != bool:
+            getattr(model, f"FinalEnergyLevelFix{comp_type.upper()}").deactivate()
+        elif comp_type(energy_level_end) == bool:
+            getattr(model, f"FinalEnergyLevelEnd{comp_type.upper()}").deactivate()
     return model
 
 
@@ -914,12 +931,12 @@ def update_model(
         # otherwise activate initial energy and charging
         if energy_level_start is None:
             model.InitialEnergyLevelEV.deactivate()
-            model.InitialEnergyLevelEVStart.activate()
+            model.InitialEnergyLevelStartEV.activate()
         else:
             for cp in model.flexible_charging_points_set:
                 model.energy_level_start_ev[cp].set_value(energy_level_start[cp])
             model.InitialEnergyLevelEV.activate()
-            model.InitialEnergyLevelEVStart.deactivate()
+            model.InitialEnergyLevelStartEV.deactivate()
         # set initial charging
         if charging_initial is not None:
             for cp in model.flexible_charging_points_set:
