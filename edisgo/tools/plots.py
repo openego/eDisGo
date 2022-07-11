@@ -438,7 +438,7 @@ def mv_grid_topology(
             bus_colors[bus], bus_sizes[bus] = get_color_and_size(
                 connected_components, colors_dict, sizes_dict
             )
-        return bus_sizes, bus_colors
+        return bus_sizes, bus_colors, colors_dict
 
     def nodes_charging_park(buses, edisgo_obj):
         bus_sizes = {}
@@ -599,7 +599,9 @@ def mv_grid_topology(
 
     # bus colors and sizes
     if node_color == "technology":
-        bus_sizes, bus_colors = nodes_by_technology(pypsa_plot.buses.index, edisgo_obj)
+        bus_sizes, bus_colors, colors_dict_technology = nodes_by_technology(
+            pypsa_plot.buses.index, edisgo_obj
+        )
         bus_cmap = None
     elif node_color == "voltage":
         bus_sizes, bus_colors = nodes_by_voltage(pypsa_plot.buses.index, voltage)
@@ -778,6 +780,19 @@ def mv_grid_topology(
             s=200,
             label="$\\equiv$ 10% share of curtailment",
         )
+    elif node_color == "technology":
+        tech_handle = [
+            plt.scatter(
+                [],
+                [],
+                c=i_color,
+                s=200,
+                label=i_tech,
+            )
+            for i_tech, i_color in colors_dict_technology.items()
+        ]
+        plt.legend(handles=tech_handle, bbox_to_anchor=(1, 1), loc="upper left")
+        scatter_handle = None
     else:
         scatter_handle = None
     if scaling_factor_line_width is not None:
@@ -1457,6 +1472,7 @@ def make_pseudo_coordinates(edisgo_obj):
         edisgo object include pseudo coordinates for lv-grids
 
     """
+
     def make_coordinates(graph_root):
         def coordinate_source(pos_start, length, node_numerator, node_total_numerator):
             length = length / 1.3
