@@ -285,11 +285,10 @@ class TimeSeries:
         """
         for attr in self._attributes:
             if not getattr(self, attr).empty:
-                setattr(self, attr, getattr(self, attr).resample(freq).mean())
-
-        self.timeindex = pd.date_range(self.timeindex.min(),
-                                       self.timeindex.max(),
-                                       freq=freq)
+                df_resampled = getattr(self, attr).resample(freq).mean()
+                setattr(self, attr, df_resampled)
+                self._timeindex = df_resampled.index
+                logger.info(f"Resampled {attr} to freq:{freq}")
 
     def set_active_power_manual(
         self, edisgo_object, ts_generators=None, ts_loads=None, ts_storage_units=None
