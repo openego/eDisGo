@@ -1945,6 +1945,23 @@ class TimeSeries:
                 )
                 if timeindex is None:
                     timeindex = getattr(self, f"_{attr}").index
+
+        # # Add EV charching points to loads if in extra files
+        charging_points = {"charging_points_active_power": "loads_active_power",
+                           "charging_points_reactive_power": "loads_reactive_power"}
+        for attr in charging_points.keys():
+            path = os.path.join(directory, f"{attr}.csv")
+            if os.path.exists(path):
+                setattr(
+                    self,
+                    charging_points[attr],
+                    pd.concat([
+                        pd.read_csv(path, index_col=0, parse_dates=True),
+                        getattr(self, charging_points[attr])],
+                        axis=1
+                    )
+                )
+
         if timeindex is None:
             timeindex = pd.DatetimeIndex([])
         self._timeindex = timeindex
