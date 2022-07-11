@@ -32,6 +32,7 @@ COLUMNS = {
     "loads_df": ["bus", "p_set", "type", "annual_consumption", "sector",
                  'use_case',  # EV
                  ],
+    "charging_points": ["bus", "p_set", "type", "use_case"],
     "generators_df": [
         "bus",
         "p_nom",
@@ -587,9 +588,9 @@ class Topology:
 
         """
         if "charging_point" in self.loads_df.type.unique():
-            return self.loads_df.loc[self.loads_df.type == "charging_point"]
+            return self.loads_df.loc[self.loads_df.type == "charging_point", COLUMNS["charging_points"]]
         else:
-            return pd.DataFrame(columns=COLUMNS["loads_df"])
+            return pd.DataFrame(columns=COLUMNS["charging_points"])
 
     @property
     def id(self):
