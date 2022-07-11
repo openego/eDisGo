@@ -1461,7 +1461,9 @@ def dash_plot(
 # Pseudo coordinates
 def make_pseudo_coordinates(edisgo_obj):
     """
-    Creates pseudo coordinates for the existing lv-grids to make plotly plotting possible.
+    Creates pseudo coordinates for the existing lv-grids to make plotly plotting
+    possible.
+
     Parameters
     ----------
     edisgo_obj : :class:`~edisgo.EDisGo`
@@ -1537,7 +1539,7 @@ def make_pseudo_coordinates(edisgo_obj):
             for node in graph_copy.nodes():
                 try:
                     paths = list(nx.shortest_simple_paths(graph_copy, start_node, node))
-                except:
+                except Exception:
                     paths = [[]]
                 path_length_to_transformer.append(len(paths[0]))
             index = path_length_to_transformer.index(max(path_length_to_transformer))
@@ -1632,7 +1634,7 @@ def make_pseudo_coordinates(edisgo_obj):
         G = lv_grid.graph
         try:
             x0, y0 = G.nodes[list(nx.nodes(G))[0]]["pos"]
-        except:
+        except Exception:
             x0, y0 = (0, 0)
         G = make_coordinates(G)
         x0, y0 = coor_transform.transform(x0, y0)
