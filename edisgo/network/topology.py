@@ -29,9 +29,14 @@ if "READTHEDOCS" not in os.environ:
 logger = logging.getLogger(__name__)
 
 COLUMNS = {
-    "loads_df": ["bus", "p_set", "type", "annual_consumption", "sector",
-                 'use_case',  # EV
-                 ],
+    "loads_df": [
+        "bus",
+        "p_set",
+        "type",
+        "annual_consumption",
+        "sector",
+        "use_case",  # EV
+    ],
     "charging_points": ["bus", "p_set", "type", "use_case"],
     "generators_df": [
         "bus",
@@ -588,7 +593,9 @@ class Topology:
 
         """
         if "charging_point" in self.loads_df.type.unique():
-            return self.loads_df.loc[self.loads_df.type == "charging_point", COLUMNS["charging_points"]]
+            return self.loads_df.loc[
+                self.loads_df.type == "charging_point", COLUMNS["charging_points"]
+            ]
         else:
             return pd.DataFrame(columns=COLUMNS["charging_points"])
 
@@ -2468,7 +2475,7 @@ class Topology:
         if os.path.exists(os.path.join(directory, "loads.csv")):
             rename_loads = {
                 "peak_load": "p_set",  # in v.0.1.1
-                            }
+            }
             loads_df = pd.read_csv(
                 os.path.join(directory, "loads.csv"), index_col=0
             ).rename(columns=rename_loads)
@@ -2477,12 +2484,14 @@ class Topology:
         if os.path.exists(os.path.join(directory, "charging_points.csv")):
             rename_charging_points = {
                 "p_nom": "p_set",  # in v.0.1.1
-                            }
+            }
             charging_points_df = pd.read_csv(
                 os.path.join(directory, "charging_points.csv"), index_col=0
             ).rename(columns=rename_charging_points)
             charging_points_df["type"] = "charging_point"
-            charging_points_df = charging_points_df[["bus", "p_set", "type", "use_case"]]
+            charging_points_df = charging_points_df[
+                ["bus", "p_set", "type", "use_case"]
+            ]
             self.loads_df = pd.concat([self.loads_df, charging_points_df], axis=0)
         if os.path.exists(os.path.join(directory, "generators.csv")):
             generators_df = pd.read_csv(
