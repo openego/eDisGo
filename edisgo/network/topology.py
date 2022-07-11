@@ -29,7 +29,9 @@ if "READTHEDOCS" not in os.environ:
 logger = logging.getLogger(__name__)
 
 COLUMNS = {
-    "loads_df": ["bus", "p_set", "type", "annual_consumption", "sector"],
+    "loads_df": ["bus", "p_set", "type", "annual_consumption", "sector",
+                 'use_case',  # EV
+                 ],
     "generators_df": [
         "bus",
         "p_nom",
@@ -2457,6 +2459,7 @@ class Topology:
         ----------
         directory : str
             Path to topology csv files.
+        edisgo_obj : :class:`~.EDisGo`
 
         """
         self.buses_df = pd.read_csv(os.path.join(directory, "buses.csv"), index_col=0)
@@ -2468,7 +2471,18 @@ class Topology:
             loads_df = pd.read_csv(
                 os.path.join(directory, "loads.csv"), index_col=0
             ).rename(columns=rename_loads)
+            loads_df["type"] = "loads"
             self.loads_df = loads_df
+        if os.path.exists(os.path.join(directory, "charging_points.csv")):
+            rename_charging_points = {
+                "p_nom": "p_set",  # in v.0.1.1
+                            }
+            charging_points_df = pd.read_csv(
+                os.path.join(directory, "charging_points.csv"), index_col=0
+            ).rename(columns=rename_charging_points)
+            charging_points_df["type"] = "charging_point"
+            charging_points_df = charging_points_df[["bus", "p_set", "type", "use_case"]]
+            self.loads_df = pd.concat([self.loads_df, charging_points_df], axis=0)
         if os.path.exists(os.path.join(directory, "generators.csv")):
             generators_df = pd.read_csv(
                 os.path.join(directory, "generators.csv"), index_col=0
