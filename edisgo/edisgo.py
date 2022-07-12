@@ -6,6 +6,7 @@ import pickle
 import shutil
 
 from numbers import Number
+from pathlib import PurePath
 
 import numpy as np
 import pandas as pd
@@ -247,7 +248,13 @@ class EDisGo:
             ts_storage_units=storage_units_q,
         )
 
-    def set_time_series_worst_case_analysis(self, cases=None):
+    def set_time_series_worst_case_analysis(
+        self,
+        cases=None,
+        generators_names=None,
+        loads_names=None,
+        storage_units_names=None,
+    ):
         """
         Sets demand and feed-in of all loads, generators and storage units for the
         specified worst cases.
@@ -260,6 +267,15 @@ class EDisGo:
             List with worst-cases to generate time series for. Can be
             'feed-in_case', 'load_case' or both. Defaults to None in which case both
             'feed-in_case' and 'load_case' are set up.
+        generators_names : list(str)
+            Defines for which generators to set worst case time series. If None,
+            time series are set for all generators. Default: None.
+        loads_names : list(str)
+            Defines for which loads to set worst case time series. If None,
+            time series are set for all loads. Default: None.
+        storage_units_names : list(str)
+            Defines for which storage units to set worst case time series. If None,
+            time series are set for all storage units. Default: None.
 
         """
         if cases is None:
@@ -267,7 +283,9 @@ class EDisGo:
         if isinstance(cases, str):
             cases = [cases]
 
-        self.timeseries.set_worst_case(self, cases)
+        self.timeseries.set_worst_case(
+            self, cases, generators_names, loads_names, storage_units_names
+        )
 
     def set_time_series_active_power_predefined(
         self,
@@ -353,6 +371,7 @@ class EDisGo:
                 "EDisGo object by providing the input parameter 'timeindex' or using "
                 "the function EDisGo.set_timeindex()."
             )
+            return
         if fluctuating_generators_ts is not None:
             self.timeseries.predefined_fluctuating_generators_by_technology(
                 self, fluctuating_generators_ts, fluctuating_generators_names
@@ -481,6 +500,10 @@ class EDisGo:
               and generation from underlying LV network aggregated at respective LV
               station's secondary side.
             * 'lv' to export specified LV network only.
+        check_edisgo_integrity: bool
+            Check integrity of edisgo object before translating to pypsa. This option is
+            meant to help the identification of possible sources of errors in the
+            object if the power flow calculations fail.
 
         Returns
         -------
@@ -496,6 +519,11 @@ class EDisGo:
         # check if timesteps is array-like, otherwise convert to list
         if not hasattr(timesteps, "__len__"):
             timesteps = [timesteps]
+        # possibly execute consistency check
+        if kwargs.get("check_edisgo_integrity", False) or (
+            logger.level == logging.DEBUG
+        ):
+            self.check_integrity()
         # export grid
         # ToDo: Move to pypsa_io.to_pypsa
         if not mode:
@@ -1273,14 +1301,21 @@ class EDisGo:
                 "loads_reactive_power", loads_groupby.groups, naming
             )
 
-    def import_electromobility(self, directory=None, **kwargs):
+    def import_electromobility(
+        self,
+        simbev_directory: PurePath | str,
+        tracbev_directory: PurePath | str,
+        **kwargs,
+    ):
         """
         Import electromobility data from SimBEV and TracBEV.
 
         Parameters
         ----------
-        directory : str
-            Main directory holding electromobility data.
+        simbev_directory : str
+            SimBEV directory holding SimBEV data.
+        tracbev_directory : str
+            TracBEV directory holding TracBEV data.
         kwargs :
             Kwargs may contain any further attributes you want to specify.
 
@@ -1311,8 +1346,7 @@ class EDisGo:
                 Possible grid Connections sub-directory.
                 Default "grid_connections".
         """
-        if directory is not None:
-            import_electromobility(self, directory, **kwargs)
+        import_electromobility(self, simbev_directory, tracbev_directory, **kwargs)
 
     def distribute_charging_demand(self, **kwargs):
         """
@@ -1370,15 +1404,15 @@ class EDisGo:
             processes at "home" or at "work" can be flexibilized. "public" charging
             processes will always be "dumb". For now the following charging
             strategies are valid:
-                "dumb": The cars are charged directly after arrival with the
-                maximum possible charging capacity.
-                "reduced": The cars are charged directly after arrival with the
-                minimum possible charging capacity. The minimum possible charging
-                capacity is determined by the parking time and the
-                minimum_charging_capacity_factor.
-                "residual": The cars are charged when the residual load in the MV
-                grid is at it's lowest (high generation and low consumption).
-                Charging processes with a low flexibility band are given priority.
+            * "dumb": The cars are charged directly after arrival with the
+            maximum possible charging capacity.
+            * "reduced": The cars are charged directly after arrival with the
+            minimum possible charging capacity. The minimum possible charging
+            capacity is determined by the parking time and the
+            minimum_charging_capacity_factor.
+            * "residual": The cars are charged when the residual load in the MV
+            grid is at it's lowest (high generation and low consumption).
+            Charging processes with a low flexibility band are given priority.
         kwargs :
             timestamp_share_threshold : float
                 Percental threshold of the time required at a time step for charging
@@ -1823,6 +1857,63 @@ class EDisGo:
             to_type=kwargs.get("to_type", "float32"),
             attr_to_reduce=kwargs.get("results_attr_to_reduce", None),
         )
+
+    def check_integrity(self):
+        """
+        Method to check the integrity of the eDisGo-object. Checks for consistency of
+        topology (see :func:`edisgo.topology.check_integrity`), timeseries (see
+        :func:`edisgo.timeseries.check_integrity`) and the interplay of both.
+        """
+        self.topology.check_integrity()
+        self.timeseries.check_integrity()
+
+        # check consistency of topology and timeseries
+        comp_types = ["generators", "loads", "storage_units"]
+
+        for comp_type in comp_types:
+            comps = getattr(self.topology, comp_type + "_df")
+
+            for ts in ["active_power", "reactive_power"]:
+                comp_ts_name = f"{comp_type}_{ts}"
+                comp_ts = getattr(self.timeseries, comp_ts_name)
+
+                # check whether all components in topology have an entry in the
+                # respective active and reactive power timeseries
+                missing = comps.index[~comps.index.isin(comp_ts.columns)]
+                if len(missing) > 0:
+                    logger.warning(
+                        f"The following {comp_type} are missing in {comp_ts_name}: "
+                        f"{missing.values}"
+                    )
+
+                # check whether all elements in timeseries have an entry in the topology
+                missing_ts = comp_ts.columns[~comp_ts.columns.isin(comps.index)]
+                if len(missing_ts) > 0:
+                    logger.warning(
+                        f"The following {comp_type} have entries in {comp_ts_name}, but"
+                        f" not in {comp_type}_df: {missing_ts.values}"
+                    )
+
+            # check if the active powers inside the timeseries exceed the given nominal
+            # or peak power of the component
+            if comp_type in ["generators", "storage_units"]:
+                attr = "p_nom"
+            else:
+                attr = "p_set"
+
+            active_power = getattr(self.timeseries, f"{comp_type}_active_power")
+            comps_complete = comps.index[comps.index.isin(active_power.columns)]
+            exceeding = comps_complete[
+                (active_power[comps_complete].max() > comps.loc[comps_complete, attr])
+            ]
+
+            if len(exceeding) > 0:
+                logger.warning(
+                    f"Values of active power in the timeseries object exceed {attr} for"
+                    f" the following {comp_type}: {exceeding.values}"
+                )
+
+            logging.info("Integrity check finished. Please pay attention to warnings.")
 
 
 def import_edisgo_from_pickle(filename, path=""):

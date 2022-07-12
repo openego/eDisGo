@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import json
 import logging
 import os
 
-from pathlib import Path
+from pathlib import Path, PurePath
+from typing import TYPE_CHECKING
 
 import geopandas as gpd
 import numpy as np
@@ -10,6 +13,9 @@ import pandas as pd
 
 from numpy.random import default_rng
 from sklearn import preprocessing
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger("edisgo")
 
@@ -77,12 +83,9 @@ DTYPES = {
     },
 }
 
-USECASES = {
-    "uc1": "hpc",
-    "uc2": "public",
-    "uc3": "home",
-    "uc4": "work",
-}
+KEEP_COLS = {"grid_connections_gdf": ["user_centric_weight", "geometry"]}
+
+USECASES = ["hpc", "public", "home", "work"]
 
 PRIVATE_DESTINATIONS = {
     "0_work": "work",
@@ -90,15 +93,22 @@ PRIVATE_DESTINATIONS = {
 }
 
 
-def import_electromobility(edisgo_obj, directory, **kwargs):
+def import_electromobility(
+    edisgo_obj: EDisGo,
+    simbev_directory: PurePath | str,
+    tracbev_directory: PurePath | str,
+    **kwargs,
+):
     """
     Import electromobility data from SimBEV and TracBEV.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    directory : str
-        Main directory holding electromobility data.
+    simbev_directory : str or pathlib.PurePath
+            SimBEV directory holding SimBEV data.
+    tracbev_directory : str or pathlib.PurePath
+        TracBEV directory holding TracBEV data.
     kwargs :
         Kwargs may contain any further attributes you want to specify.
 
@@ -125,41 +135,25 @@ def import_electromobility(edisgo_obj, directory, **kwargs):
             Charging processes sub-directory. Default "simbev_run".
         simbev_config_file : str
             Name of the simbev config file. Default "metadata_simbev_run.json".
-        grid_connections_dir : str
-            Possible grid Connections sub-directory.
-            Default "grid_connections".
 
     """
     # TODO: SimBEV is in development and this import will need constant
     #  updating for now
     edisgo_obj.electromobility.charging_processes_df = read_csvs_charging_processes(
-        directory,
+        simbev_directory,
         mode=kwargs.pop("mode_parking_times", "frugal"),
         csv_dir=kwargs.pop("charging_processes_dir", "simbev_run"),
     )
 
-    public_df = edisgo_obj.electromobility.charging_processes_df.loc[
-        edisgo_obj.electromobility.charging_processes_df.use_case.isin(
-            ["public", "hpc"]
-        )
-    ]
-
-    public_df = public_df.assign(
-        car_id=public_df.car_id
-        + edisgo_obj.electromobility.charging_processes_df.car_id.max()
-        + 1
-    )
-
     edisgo_obj.electromobility.simbev_config_df = read_simbev_config_df(
-        directory,
+        simbev_directory,
         edisgo_obj,
         simbev_config_file=kwargs.pop("simbev_config_file", "metadata_simbev_run.json"),
     )
 
-    edisgo_obj.electromobility.grid_connections_gdf = read_geojsons_grid_connections(
-        directory,
+    edisgo_obj.electromobility.grid_connections_gdf = read_gpkg_grid_connections(
+        tracbev_directory,
         edisgo_obj,
-        dir=kwargs.pop("grid_connections_dir", "grid_connections"),
         **kwargs,
     )
 
@@ -304,7 +298,7 @@ def read_simbev_config_df(
         return pd.DataFrame(data=data, index=index, columns=["value"])
 
 
-def read_geojsons_grid_connections(path, edisgo_obj, dir=None, **kwargs):
+def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
     """
     Get GeoDataFrame with all
     `SimBEV <https://github.com/rl-institut/simbev>`_ grid connections.
@@ -314,9 +308,6 @@ def read_geojsons_grid_connections(path, edisgo_obj, dir=None, **kwargs):
     path : str
         Main path holding SimBEV output data
     edisgo_obj : :class:`~.EDisGo`
-    dir : str
-        Optional sub-directory holding potential grid connection GEOJSONs
-        under path
 
     Returns
     -------
@@ -325,54 +316,34 @@ def read_geojsons_grid_connections(path, edisgo_obj, dir=None, **kwargs):
         hpc), user centric weight and geometry.
 
     """
-    if dir is not None:
-        path = os.path.join(path, dir)
+    files = [f for f in os.listdir(path) if f.endswith(".gpkg")]
 
-    files = [f for f in os.listdir(path) if f.endswith(".geojson")]
+    grid_connections_gdf_list = []
 
-    epsg = edisgo_obj.topology.grid_district["srid"]
-
-    grid_connections_gdf_list = [
-        gpd.GeoDataFrame(
-            pd.DataFrame(columns=COLUMNS["grid_connections_gdf"]),
-            crs=f"epsg:{epsg}",
-        ).astype(DTYPES["grid_connections_gdf"])
-    ]
+    if isinstance(path, str):
+        path = Path(path)
 
     for f in files:
-        gdf = gpd.read_file(os.path.join(path, f))
+        gdf = gpd.read_file(path / f)
+
+        if "potential" in gdf.columns:
+            gdf = gdf.rename(columns={"potential": "user_centric_weight"})
+        elif "charge_spots" in gdf.columns:
+            gdf = gdf.rename(columns={"charge_spots": "user_centric_weight"})
 
         # drop unnecessary columns
-        if len(gdf) > 0:
-            if "name" in gdf.columns:
-                gdf = gdf.drop(["name"], axis="columns")
+        gdf = gdf[KEEP_COLS["grid_connections_gdf"]]
 
-            if "landuse" in gdf.columns:
-                gdf = gdf.drop(["landuse"], axis="columns")
+        # add ags and use case info as well as normalize weights 0..1
+        gdf = gdf.assign(
+            user_centric_weight=min_max_scaler.fit_transform(
+                gdf.user_centric_weight.values.reshape(-1, 1)
+            ),
+            ags=int(f.split(".")[0].split("_")[-1]),
+            use_case=f.split(".")[0].split("_")[-2],
+        )
 
-            if "area" in gdf.columns:
-                gdf = gdf.drop(["area"], axis="columns")
-
-            # levelize all GeoDataFrames to the same format
-            if len(gdf.columns) == 2:
-                columns = [col for col in gdf.columns if col != "geometry"]
-
-                for col in columns:
-                    gdf = gdf.rename(columns={col: "user_centric_weight"})
-
-            elif len(gdf.columns) == 1:
-                gdf = gdf.assign(user_centric_weight=0)
-
-            else:
-                raise ValueError(f"GEOJSON {f} contains unknown properties.")
-
-            gdf = gdf.assign(use_case=USECASES[f[:3]], ags=int(f.split("_")[-2]))
-
-            gdf = gdf[COLUMNS["grid_connections_gdf"]].astype(
-                DTYPES["grid_connections_gdf"]
-            )
-
-            grid_connections_gdf_list.append(gdf)
+        grid_connections_gdf_list.append(gdf)
 
     grid_connections_gdf = gpd.GeoDataFrame(
         pd.concat(
@@ -380,12 +351,12 @@ def read_geojsons_grid_connections(path, edisgo_obj, dir=None, **kwargs):
             ignore_index=True,
         ),
         crs=grid_connections_gdf_list[0].crs,
-    )
+    ).astype(DTYPES["grid_connections_gdf"])
 
     # ensure minimum number of grid connections per car
     num_cars = len(edisgo_obj.electromobility.charging_processes_df.car_id.unique())
 
-    for _, use_case in USECASES.items():
+    for use_case in USECASES:
         if use_case == "home":
             gc_to_car_rate = kwargs.get("gc_to_car_rate_home", 0.5)
         elif use_case == "work":
@@ -405,10 +376,9 @@ def read_geojsons_grid_connections(path, edisgo_obj, dir=None, **kwargs):
         # random public grid connections and duplicate
         if num_gcs == 0:
             logger.warning(
-                "There are no possible grid connections for use case"
-                f" {use_case}. Therefore 10% of public grid connections"
-                " are duplicated randomly and assigned to use case"
-                f" {use_case}."
+                f"There are no possible grid connections for use case {use_case}. "
+                f"Therefore 10 % of public grid connections are duplicated randomly and"
+                f" assigned to use case {use_case}."
             )
 
             public_gcs = grid_connections_gdf.loc[
@@ -432,7 +402,16 @@ def read_geojsons_grid_connections(path, edisgo_obj, dir=None, **kwargs):
         actual_gc_to_car_rate = np.Infinity if num_cars == 0 else num_gcs / num_cars
 
         # duplicate grid connections until desired quantity is ensured
-        while actual_gc_to_car_rate < gc_to_car_rate:
+        max_it = 50
+        n = 0
+
+        while actual_gc_to_car_rate < gc_to_car_rate and n < max_it:
+            logger.info(
+                f"Duplicating potential grid connections to meet the desired grid "
+                f"connections to cars rate of {gc_to_car_rate*100:.2f} %. Iteration: "
+                f"{n+1}."
+            )
+
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:
                 grid_connections_gdf = pd.concat(
                     [
@@ -468,27 +447,18 @@ def read_geojsons_grid_connections(path, edisgo_obj, dir=None, **kwargs):
 
             actual_gc_to_car_rate = num_gcs / num_cars
 
-    # sort GeoDataFrame and normalize weights 0..1
+            n += 1
+
+    # sort GeoDataFrame
     grid_connections_gdf = grid_connections_gdf.sort_values(
         by=["use_case", "ags", "user_centric_weight"], ascending=[True, True, False]
     ).reset_index(drop=True)
 
-    normalized_weight = []
-
-    for use_case in grid_connections_gdf.use_case.unique():
-        use_case_weights = grid_connections_gdf.loc[
-            grid_connections_gdf.use_case == use_case
-        ].user_centric_weight.values.reshape(-1, 1)
-
-        normalized_weight.extend(
-            min_max_scaler.fit_transform(use_case_weights).reshape(1, -1).tolist()[0]
-        )
-
-    grid_connections_gdf = grid_connections_gdf.assign(
-        user_centric_weight=normalized_weight
-    )
-
-    return grid_connections_gdf
+    # in case of polygons use the centroid as grid connection point
+    # and set crs to match edisgo object
+    return grid_connections_gdf.assign(
+        geometry=grid_connections_gdf.geometry.representative_point()
+    ).to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
 
 
 def distribute_charging_demand(edisgo_obj, **kwargs):
@@ -631,7 +601,7 @@ def normalize(weights_df):
 
     """
     if weights_df.sum().sum() == 0:
-        return np.array(1 / len(weights_df) for _ in range(len(weights_df)))
+        return np.array([1 / len(weights_df) for _ in range(len(weights_df))])
     else:
         return weights_df.divide(weights_df.sum().sum()).T.to_numpy().flatten()
 
@@ -925,7 +895,9 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
             grid_connections_indices = matching_charging_points_df.index
 
             weights = normalize(
-                grid_and_user_centric_weights_df.loc[grid_connections_indices]
+                grid_and_user_centric_weights_df.loc[
+                    matching_charging_points_df.charging_park_id
+                ]
             )
 
             charging_point_s = matching_charging_points_df.loc[

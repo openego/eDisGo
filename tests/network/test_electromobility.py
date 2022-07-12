@@ -15,7 +15,8 @@ class TestElectromobility:
     @classmethod
     def setup_class(self):
         self.ding0_path = pytest.ding0_test_network_3_path
-        self.simbev_path = pytest.simbev_test_results_path
+        self.simbev_path = pytest.simbev_example_scenario_path
+        self.tracbev_path = pytest.tracbev_example_scenario_path
         self.standing_times_path = os.path.join(self.simbev_path, "simbev_run")
         self.charging_strategies = ["dumb", "reduced", "residual"]
 
@@ -25,7 +26,7 @@ class TestElectromobility:
 
     def test_import_simbev_electromobility(self):
 
-        import_electromobility(self.edisgo_obj, pytest.simbev_test_results_path)
+        import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
 
         electromobility = self.edisgo_obj.electromobility
 
