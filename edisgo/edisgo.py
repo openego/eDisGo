@@ -615,24 +615,17 @@ class EDisGo:
             the MV or one LV grid. Possible options are:
 
             * None (default)
-
                 Power flow analysis is conducted for the whole network including MV and
                 LV level.
-
             * 'mv'
-
                 Power flow analysis is conducted for the MV level only. LV loads and
                 generators are aggregated at the respective MV/LV stations' primary
                 side.
-
             * 'mvlv'
-
                 Power flow analysis is conducted for the MV level only. In contrast to
                 mode 'mv' LV loads and generators are in this case aggregated at the
                 respective MV/LV stations' secondary side.
-
             * 'lv'
-
                 Power flow analysis is conducted for one LV grid only. Name of the LV
                 grid to conduct power flow analysis for needs to be provided through
                 keyword argument 'lv_grid_name' as string.
@@ -652,16 +645,11 @@ class EDisGo:
             power flow (cf. [1])
 
             * None (default)
-
                 Power flow analysis is conducted using nonlinear power flow method.
-
             * 'lpf'
-
                 Non-linear power flow initial guess is seeded with the voltage angles
                 from the linear power flow.
-
             * 'iteration'
-
                 Power flow analysis is conducted by reducing all power values of
                 generators and loads to a fraction, e.g. 10%, solve the load flow and
                 use it as a seed for the power at 20%, iteratively up to 100%.
@@ -704,7 +692,7 @@ class EDisGo:
             # run linear power flow analysis
             pypsa_network.lpf()
             # run power flow analysis
-            pf_results = pypsa_network.pf(use_seed=True)
+            pf_results = pypsa_network.pf(timesteps, use_seed=True)
         elif troubleshooting_mode == "iteration":
             pypsa_network_copy = pypsa_network.copy()
             for fraction in np.linspace(range_start, 1, range_num):
@@ -718,7 +706,7 @@ class EDisGo:
                     for attr in ["p_set", "q_set"]:
                         setattr(obj1, attr, getattr(obj2, attr) * fraction)
                 # run power flow analysis
-                pf_results = pypsa_network.pf(use_seed=True)
+                pf_results = pypsa_network.pf(timesteps, use_seed=True)
         else:
             # run power flow analysis
             pf_results = pypsa_network.pf(
