@@ -807,6 +807,45 @@ class Results:
         for attr in attr_to_reduce:
             setattr(self, attr, getattr(self, attr).astype(to_type))
 
+    # ToDo : Method to check if results dataframes are similar
+    def similarity_check(self, results_analyze):
+        """
+        Checks if results of analyze function in troubleshooting mode (either 'lpf'
+        or 'iteration') are equal to results of analyze function when not in
+        troubleshooting mode.
+
+        Parameters
+        ----------
+        results_analyze : :class:~.network.results.Results
+        Contains the results of analyze function with default settings.
+
+        Returns
+        -------
+        bool: True if similarity check is successful, False otherwise.
+
+        """
+
+        attr_to_check = [
+            "pfa_p",
+            "pfa_q",
+            "pfa_v_ang_seed",
+            "pfa_v_mag_pu_seed",
+            "v_res",
+            "i_res",
+        ]
+        try:
+            for attr in attr_to_check:
+                pd.testing.assert_frame_equal(
+                    getattr(self, attr),
+                    getattr(results_analyze, attr),
+                    check_freq=False,
+                )
+            result = True
+        except AssertionError:
+            result = False
+
+        return result
+
     def to_csv(
         self, directory, parameters=None, reduce_memory=False, save_seed=False, **kwargs
     ):

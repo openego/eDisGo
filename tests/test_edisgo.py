@@ -1,6 +1,8 @@
 import os
 import shutil
 
+from copy import deepcopy
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -42,7 +44,6 @@ class TestEDisGo:
         pass
 
     def test_set_time_series_reactive_power_control(self):
-
         # set active power time series for fixed cosphi
         timeindex = pd.date_range("1/1/1970", periods=3, freq="H")
         self.edisgo.set_timeindex(timeindex)
@@ -109,7 +110,6 @@ class TestEDisGo:
         ).all()
 
     def test_to_pypsa(self):
-
         self.setup_worst_case_time_series()
 
         # test mode None and timesteps None (default)
@@ -144,11 +144,11 @@ class TestEDisGo:
         assert len(edisgo.topology.generators_df) == 1636
 
     def test_analyze(self):
-
         self.setup_worst_case_time_series()
 
         # test mode None and timesteps None (default)
         self.edisgo.analyze()
+        results_analyze = deepcopy(self.edisgo.results)
         assert self.edisgo.results.v_res.shape == (4, 140)
 
         # test mode "mv" and timesteps given
@@ -158,6 +158,16 @@ class TestEDisGo:
         # test mode "lv"
         self.edisgo.analyze(mode="lv", lv_grid_name="LVGrid_1")
         assert self.edisgo.results.v_res.shape == (4, 15)
+
+        # test troubleshooting_mode "lpf"
+        self.edisgo.analyze(troubleshooting_mode="lpf")
+        assert self.edisgo.results.v_res.shape == (4, 140)
+        assert self.edisgo.results.similarity_check(results_analyze)
+
+        # test mode None and troubleshooting_mode "iteration"
+        self.edisgo.analyze(troubleshooting_mode="iteration")
+        assert self.edisgo.results.v_res.shape == (4, 140)
+        assert self.edisgo.results.similarity_check(results_analyze)
 
         # ToDo: test non convergence
 
@@ -170,7 +180,6 @@ class TestEDisGo:
         # Todo: test other relevant values
 
     def test_add_component(self, caplog):
-
         self.setup_worst_case_time_series()
         index = self.edisgo.timeseries.timeindex
         dummy_ts = pd.Series(data=[0.1, 0.2, 0.1, 0.2], index=index)
@@ -312,7 +321,6 @@ class TestEDisGo:
         assert self.edisgo.topology.storage_units_df.loc[storage_name, "p_nom"] == 3.1
 
     def test_integrate_component(self):
-
         self.setup_worst_case_time_series()
 
         num_gens = len(self.edisgo.topology.generators_df)
@@ -427,7 +435,6 @@ class TestEDisGo:
         ).all()
 
     def test_remove_component(self):
-
         self.setup_worst_case_time_series()
 
         # Test remove bus (where bus cannot be removed, because load is still connected)
@@ -471,7 +478,6 @@ class TestEDisGo:
         assert load_name not in self.edisgo.timeseries.loads_reactive_power.columns
 
     def test_aggregate_components(self):
-
         self.setup_worst_case_time_series()
 
         # ##### test without any aggregation
@@ -794,7 +800,6 @@ class TestEDisGo:
         shutil.rmtree(os.path.join(save_dir, "electromobility"))
 
     def test_reduce_memory(self):
-
         self.setup_worst_case_time_series()
         self.edisgo.analyze()
 
