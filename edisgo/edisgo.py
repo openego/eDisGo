@@ -5,6 +5,8 @@ import os
 import pickle
 import shutil
 
+from numbers import Number
+
 import numpy as np
 import pandas as pd
 
@@ -589,12 +591,12 @@ class EDisGo:
 
     def analyze(
         self,
-        mode=None,
-        timesteps=None,
-        raise_not_converged=True,
-        troubleshooting_mode=None,
-        range_start=0.1,
-        range_num=10,
+        mode: str | None = None,
+        timesteps: pd.Timestamp | pd.DatetimeIndex | None = None,
+        raise_not_converged: bool = True,
+        troubleshooting_mode: str | None = None,
+        range_start: Number = 0.1,
+        range_num: int = 10,
         **kwargs,
     ):
         """
