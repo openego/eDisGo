@@ -339,12 +339,12 @@ class TestEDisGo:
         # test troubleshooting_mode "lpf"
         self.edisgo.analyze(troubleshooting_mode="lpf")
         assert self.edisgo.results.v_res.shape == (4, 140)
-        assert self.edisgo.results.similarity_check(results_analyze)
+        assert self.edisgo.results.equality_check(results_analyze)
 
         # test mode None and troubleshooting_mode "iteration"
         self.edisgo.analyze(troubleshooting_mode="iteration")
         assert self.edisgo.results.v_res.shape == (4, 140)
-        assert self.edisgo.results.similarity_check(results_analyze)
+        assert self.edisgo.results.equality_check(results_analyze)
 
         # ToDo: test non convergence
 

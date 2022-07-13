@@ -13,15 +13,17 @@ from edisgo.io.electromobility_import import (
 
 class TestElectromobility:
     @classmethod
-    def setup_class(self):
-        self.ding0_path = pytest.ding0_test_network_3_path
-        self.simbev_path = pytest.simbev_example_scenario_path
-        self.tracbev_path = pytest.tracbev_example_scenario_path
-        self.standing_times_path = os.path.join(self.simbev_path, "simbev_run")
-        self.charging_strategies = ["dumb", "reduced", "residual"]
+    def setup_class(cls):
+        cls.ding0_path = pytest.ding0_test_network_3_path
+        cls.simbev_path = pytest.simbev_example_scenario_path
+        cls.tracbev_path = pytest.tracbev_example_scenario_path
+        cls.standing_times_path = os.path.join(cls.simbev_path, "simbev_run")
+        cls.charging_strategies = ["dumb", "reduced", "residual"]
 
-        self.edisgo_obj = import_edisgo_from_files(
-            self.ding0_path, import_topology=True, import_timeseries=True
+        cls.edisgo_obj = import_edisgo_from_files(
+            cls.ding0_path,
+            import_topology=True,
+            import_timeseries=True,
         )
 
     def test_import_simbev_electromobility(self):
@@ -112,7 +114,7 @@ class TestElectromobility:
     def test_charging_strategy(self):
         charging_demand_lst = []
 
-        for count, strategy in enumerate(self.charging_strategies):
+        for strategy in self.charging_strategies:
             charging_strategy(self.edisgo_obj, strategy=strategy)
 
             ts = self.edisgo_obj.timeseries
