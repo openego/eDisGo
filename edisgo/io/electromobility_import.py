@@ -325,7 +325,9 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
         path = Path(path)
 
     for f in files:
-        gdf = gpd.read_file(path / f)
+        gdf = gpd.read_file(path / f).to_crs(
+            epsg=edisgo_obj.topology.grid_district["srid"]
+        )
 
         if "potential" in gdf.columns:
             gdf = gdf.rename(columns={"potential": "user_centric_weight"})
@@ -391,12 +393,15 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
                 random_state=edisgo_obj.topology.mv_grid.id,
             ).assign(use_case=use_case)
 
-            grid_connections_gdf = pd.concat(
-                [
-                    grid_connections_gdf,
-                    random_gcs,
-                ],
-                ignore_index=True,
+            grid_connections_gdf = gpd.GeoDataFrame(
+                pd.concat(
+                    [
+                        grid_connections_gdf,
+                        random_gcs,
+                    ],
+                    ignore_index=True,
+                ),
+                crs=grid_connections_gdf.crs,
             )
 
         # escape zero division
@@ -414,12 +419,15 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
             )
 
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:
-                grid_connections_gdf = pd.concat(
-                    [
-                        grid_connections_gdf,
-                        use_case_gdf,
-                    ],
-                    ignore_index=True,
+                grid_connections_gdf = gpd.GeoDataFrame(
+                    pd.concat(
+                        [
+                            grid_connections_gdf,
+                            use_case_gdf,
+                        ],
+                        ignore_index=True,
+                    ),
+                    crs=grid_connections_gdf.crs,
                 )
 
             else:
@@ -432,12 +440,15 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
                     n=extra_gcs, random_state=edisgo_obj.topology.mv_grid.id
                 )
 
-                grid_connections_gdf = pd.concat(
-                    [
-                        grid_connections_gdf,
-                        extra_gdf,
-                    ],
-                    ignore_index=True,
+                grid_connections_gdf = gpd.GeoDataFrame(
+                    pd.concat(
+                        [
+                            grid_connections_gdf,
+                            extra_gdf,
+                        ],
+                        ignore_index=True,
+                    ),
+                    crs=grid_connections_gdf.crs,
                 )
 
             use_case_gdf = grid_connections_gdf.loc[

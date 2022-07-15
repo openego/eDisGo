@@ -1,5 +1,6 @@
 import logging
 import math
+import warnings
 
 from abc import ABC, abstractmethod
 from math import acos, tan
@@ -1139,6 +1140,10 @@ class PotentialChargingParks(BasicComponent):
         Deetermines if the potential charging park lays within the grid
         district.
         """
+        warnings.warn(
+            f"{self._edisgo_obj.topology.grid_district['geom'].contains(self.geometry)}",
+            Warning,
+        )
         return self._edisgo_obj.topology.grid_district["geom"].contains(self.geometry)
 
     @property

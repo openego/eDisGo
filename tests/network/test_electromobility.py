@@ -84,7 +84,7 @@ class TestElectromobility:
             [
                 cp
                 for cp in list(electromobility.potential_charging_parks)
-                if cp.designated_charging_point_capacity > 0
+                if cp.designated_charging_point_capacity > 0 and cp.within_grid
             ]
         )
 
