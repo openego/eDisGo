@@ -997,12 +997,12 @@ def integrate_charging_parks(edisgo_obj):
     """
     warnings.warn("Entered function.", Warning)
 
-    charging_parks = edisgo_obj.electromobility.potential_charging_parks
+    charging_parks = list(edisgo_obj.electromobility.potential_charging_parks)
 
     charging_parks_within_grid = [cp for cp in charging_parks if cp.within_grid]
 
     warnings.warn(
-        f"{len(charging_parks_within_grid)}/{len(list(charging_parks))} within grid",
+        f"{len(charging_parks_within_grid)}/{len(charging_parks)} within grid",
         Warning,
     )
 
