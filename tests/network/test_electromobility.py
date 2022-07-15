@@ -1,5 +1,4 @@
 import os
-import warnings
 
 import pytest
 
@@ -69,8 +68,6 @@ class TestElectromobility:
         )
 
     def test_integrate_charging_parks(self):
-
-        warnings.warn("Starting critical test.", Warning)
 
         integrate_charging_parks(self.edisgo_obj)
 
