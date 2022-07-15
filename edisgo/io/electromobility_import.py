@@ -999,6 +999,13 @@ def integrate_charging_parks(edisgo_obj):
 
     charging_parks = edisgo_obj.electromobility.potential_charging_parks
 
+    charging_parks_within_grid = [cp for cp in charging_parks if cp.within_grid]
+
+    warnings.warn(
+        f"{len(charging_parks_within_grid)}/{len(list(charging_parks))} within grid",
+        Warning,
+    )
+
     # Only integrate charging parks with designated charging points
     designated_charging_parks = [
         cp
