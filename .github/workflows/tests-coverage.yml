@@ -24,7 +24,7 @@ jobs:
         pip3 install coveralls
     - name: Run coverage
       run: |
-        coverage run --source=edisgo -m pytest --runslow -vv
+        coverage run --source=edisgo -m pytest --runslow -vv tests/network/test_electromobility.py
       #continue-on-error: true
     - name: Run coveralls
       run: |
