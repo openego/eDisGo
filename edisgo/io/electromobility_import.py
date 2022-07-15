@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import warnings
 
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING
@@ -325,7 +324,9 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
         path = Path(path)
 
     for f in files:
-        gdf = gpd.read_file(path / f)
+        gdf = gpd.read_file(path / f).to_crs(
+            epsg=edisgo_obj.topology.grid_district["srid"]
+        )
 
         if "potential" in gdf.columns:
             gdf = gdf.rename(columns={"potential": "user_centric_weight"})
@@ -391,12 +392,15 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
                 random_state=edisgo_obj.topology.mv_grid.id,
             ).assign(use_case=use_case)
 
-            grid_connections_gdf = pd.concat(
-                [
-                    grid_connections_gdf,
-                    random_gcs,
-                ],
-                ignore_index=True,
+            grid_connections_gdf = gpd.GeoDataFrame(
+                pd.concat(
+                    [
+                        grid_connections_gdf,
+                        random_gcs,
+                    ],
+                    ignore_index=True,
+                ),
+                crs=grid_connections_gdf.crs,
             )
 
         # escape zero division
@@ -414,12 +418,15 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
             )
 
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:
-                grid_connections_gdf = pd.concat(
-                    [
-                        grid_connections_gdf,
-                        use_case_gdf,
-                    ],
-                    ignore_index=True,
+                grid_connections_gdf = gpd.GeoDataFrame(
+                    pd.concat(
+                        [
+                            grid_connections_gdf,
+                            use_case_gdf,
+                        ],
+                        ignore_index=True,
+                    ),
+                    crs=grid_connections_gdf.crs,
                 )
 
             else:
@@ -432,12 +439,15 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
                     n=extra_gcs, random_state=edisgo_obj.topology.mv_grid.id
                 )
 
-                grid_connections_gdf = pd.concat(
-                    [
-                        grid_connections_gdf,
-                        extra_gdf,
-                    ],
-                    ignore_index=True,
+                grid_connections_gdf = gpd.GeoDataFrame(
+                    pd.concat(
+                        [
+                            grid_connections_gdf,
+                            extra_gdf,
+                        ],
+                        ignore_index=True,
+                    ),
+                    crs=grid_connections_gdf.crs,
                 )
 
             use_case_gdf = grid_connections_gdf.loc[
@@ -995,9 +1005,7 @@ def integrate_charging_parks(edisgo_obj):
     edisgo_obj : :class:`~.EDisGo`
 
     """
-    warnings.warn("Entered function.", Warning)
-
-    charging_parks = edisgo_obj.electromobility.potential_charging_parks
+    charging_parks = list(edisgo_obj.electromobility.potential_charging_parks)
 
     # Only integrate charging parks with designated charging points
     designated_charging_parks = [
@@ -1005,10 +1013,6 @@ def integrate_charging_parks(edisgo_obj):
         for cp in charging_parks
         if (cp.designated_charging_point_capacity > 0) and cp.within_grid
     ]
-
-    warnings.warn(
-        f"{len(designated_charging_parks)} charging parks to integrate.", Warning
-    )
 
     charging_park_ids = [_.id for _ in designated_charging_parks]
 
@@ -1032,8 +1036,6 @@ def integrate_charging_parks(edisgo_obj):
         )
         for cp in designated_charging_parks
     ]
-
-    warnings.warn(f"{len(edisgo_ids)} charging parks integrated.", Warning)
 
     edisgo_obj.electromobility.integrated_charging_parks_df = pd.DataFrame(
         columns=COLUMNS["integrated_charging_parks_df"],

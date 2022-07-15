@@ -1,5 +1,4 @@
 import os
-import warnings
 
 import pytest
 
@@ -70,8 +69,6 @@ class TestElectromobility:
 
     def test_integrate_charging_parks(self):
 
-        warnings.warn("Starting critical test.", Warning)
-
         integrate_charging_parks(self.edisgo_obj)
 
         electromobility = self.edisgo_obj.electromobility
@@ -84,7 +81,7 @@ class TestElectromobility:
             [
                 cp
                 for cp in list(electromobility.potential_charging_parks)
-                if cp.designated_charging_point_capacity > 0
+                if cp.designated_charging_point_capacity > 0 and cp.within_grid
             ]
         )
 
@@ -94,12 +91,10 @@ class TestElectromobility:
             if cp.grid is not None
         ]
 
-        len_df = len(electromobility.integrated_charging_parks_df)
-
         assert (
             designated_charging_parks_with_charging_points
             == len(integrated_charging_parks)
-            == len_df
+            == len(electromobility.integrated_charging_parks_df)
         )
         assert len(integrated_charging_parks) == len(
             ts.charging_points_active_power(self.edisgo_obj).columns
