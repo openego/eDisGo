@@ -1239,6 +1239,7 @@ class TestTimeSeries:
                 cases=["load_case"], df=df, configs=self.edisgo.config
             )
 
+    @pytest.mark.slow
     def test_predefined_fluctuating_generators_by_technology(self):
 
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
