@@ -15,7 +15,8 @@ if "READTHEDOCS" not in os.environ:
 
 def feedin_oedb(config_data, weather_cell_ids, timeindex):
     """
-    Import feed-in time series data for wind and solar power plants from oedb.
+    Import feed-in time series data for wind and solar power plants from the
+    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
 
     Parameters
     ----------
