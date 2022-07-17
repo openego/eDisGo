@@ -1565,6 +1565,10 @@ class TimeSeries:
             Sets fixed cosphi parameters for storage units. The same options as for
             parameter `generators_parametrisation` apply.
 
+        Notes
+        ------
+        This function requires active power time series to be previously set.
+
         """
 
         def _get_q_sign_and_power_factor_per_component(

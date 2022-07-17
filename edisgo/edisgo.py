@@ -211,6 +211,15 @@ class EDisGo:
             is a datetime index. Columns contain storage unit names of storage units to
             set time series for. Default: None.
 
+        Notes
+        ------
+        This function raises a warning in case a time index was not previously set.
+        You can set the time index upon initialisation of the EDisGo object by
+        providing the input parameter 'timeindex' or using the function
+        :attr:`~.edisgo.EDisGo.set_timeindex`.
+        Also make sure that the time steps for which time series are provided include
+        the set time index.
+
         """
         # check if time index is already set, otherwise raise warning
         if self.timeseries.timeindex.empty:
@@ -345,6 +354,15 @@ class EDisGo:
             series. See parameter `load_names` in
             :func:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
             for more information. Default: None.
+
+        Notes
+        ------
+        This function raises a warning in case a time index was not previously set.
+        You can set the time index upon initialisation of the EDisGo object by
+        providing the input parameter 'timeindex' or using the function
+        :attr:`~.edisgo.EDisGo.set_timeindex`.
+        Also make sure that the time steps for which time series are provided include
+        the set time index.
 
         """
         if self.timeseries.timeindex.empty:
