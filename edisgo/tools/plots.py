@@ -970,6 +970,23 @@ def draw_plotly(
         always_xy=True,
     )
 
+    line_color_options = ["loading", "relative_loading", "reinforce"]
+    if line_color not in line_color_options:
+        raise KeyError(f"Line colors need to be one of {line_color_options}")
+
+    fig = go.Figure(
+        # data=data,
+        layout=go.Layout(
+            height=500,
+            titlefont_size=16,
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            xaxis=dict(showgrid=True, zeroline=True, showticklabels=True),
+            yaxis=dict(showgrid=True, zeroline=True, showticklabels=True),
+        ),
+    )
+
     if G is None:
         G = edisgo_obj.topology.mv_grid.graph
 
@@ -1025,28 +1042,44 @@ def draw_plotly(
 
         middle_node_text.append(text)
 
-    middle_node_trace = go.Scatter(
-        x=middle_node_x,
-        y=middle_node_y,
-        text=middle_node_text,
-        mode="markers",
-        hoverinfo="text",
-        marker=dict(opacity=0.0, size=10, color="white"),
-    )
+    middle_node_scatter = go.Scattergl()
 
-    data = [middle_node_trace]
+    middle_node_scatter.mode = "markers"
+    middle_node_scatter.x = middle_node_x
+    middle_node_scatter.y = middle_node_y
+    middle_node_scatter.text = middle_node_text
+    middle_node_scatter.hoverinfo = "text"
+
+    middle_node_scatter.marker.opacity = 0.0
+    middle_node_scatter.marker.size = 10
+    middle_node_scatter.marker.color = "white"
+
+    middle_node_scatter.showlegend = False
+
+    fig.add_trace(middle_node_scatter)
 
     # line plot
+    showscale = True
+    # edge_colors = []
     if line_color == "loading":
         s_res_view = edisgo_obj.results.s_res.T.index.isin(
             [edge[2]["branch_name"] for edge in G.edges.data()]
         )
         color_min = edisgo_obj.results.s_res.T.loc[s_res_view].T.min().max()
         color_max = edisgo_obj.results.s_res.T.loc[s_res_view].T.max().max()
+        colorscale = "YlOrRd"
 
     elif line_color == "relative_loading":
         color_min = 0
         color_max = 1
+        colorscale = "YlOrRd"
+
+    elif line_color == "reinforce":
+        color_min = 0
+        color_max = 1
+        colorscale = [[0, "green"], [1, "red"]]
+    else:
+        showscale = False
 
     for edge in G.edges(data=True):
         x0, y0 = G.nodes[edge[0]]["pos"]
@@ -1061,7 +1094,22 @@ def draw_plotly(
             if edisgo_obj.results.grid_expansion_costs.index.isin(
                 [edge[2]["branch_name"]]
             ).any():
-                color = "lightgreen"
+                color = "green"
+
+            # # Possible distinction between added parallel lines and changed lines
+            # if (
+            #     edisgo_obj.results.equipment_changes.index[
+            #         edisgo_obj.results.equipment_changes["change"] == "added"
+            #     ]
+            #     .isin([edge[2]["branch_name"]])
+            #     .any()
+            # ):
+            # Changed lines
+            # elif edisgo_obj.results.equipment_changes.index[
+            #         edisgo_obj.results.equipment_changes["change"] == "changed"].isin(
+            #     [edge[2]["branch_name"]]).any():
+            #
+            #     color = "red"
             else:
                 color = "black"
 
@@ -1071,6 +1119,7 @@ def draw_plotly(
                 loading,
                 vmin=color_min,
                 vmax=color_max,
+                cmap_name=colorscale,
             )
 
         elif line_color == "relative_loading":
@@ -1080,21 +1129,51 @@ def draw_plotly(
                 loading / s_nom,
                 vmin=color_min,
                 vmax=color_max,
+                cmap_name=colorscale,
             )
             if loading > s_nom:
                 color = "green"
         else:
             color = "black"
 
-        edge_trace = go.Scatter(
-            x=edge_x,
-            y=edge_y,
-            hoverinfo="none",
-            opacity=0.4,
-            mode="lines",
-            line=dict(width=2, color=color),
-        )
-        data.append(edge_trace)
+        edge_scatter = go.Scattergl()
+
+        edge_scatter.mode = "lines"
+        edge_scatter.line.width = 2
+        edge_scatter.line.color = color
+        edge_scatter.x = edge_x
+        edge_scatter.y = edge_y
+
+        edge_scatter.hoverinfo = "none"
+
+        edge_scatter.opacity = 0.4
+        edge_scatter.showlegend = False
+
+        fig.add_trace(edge_scatter)
+
+    colorbar_edge_scatter = go.Scattergl()
+    colorbar_edge_scatter.mode = "markers"
+    colorbar_edge_scatter.x = [None]
+    colorbar_edge_scatter.y = [None]
+
+    colorbar_edge_scatter.marker.colorbar.title = "Lines"
+    colorbar_edge_scatter.marker.colorscale = colorscale
+    colorbar_edge_scatter.marker.cmax = color_max
+    colorbar_edge_scatter.marker.cmin = color_min
+    colorbar_edge_scatter.marker.colorbar.thickness = 15
+    colorbar_edge_scatter.marker.colorbar.xanchor = "left"
+    colorbar_edge_scatter.marker.colorbar.titleside = "right"
+    colorbar_edge_scatter.marker.colorbar.x = 1.15  # Here
+    colorbar_edge_scatter.marker.showscale = showscale
+
+    if line_color == "reinforce":
+
+        colorbar_edge_scatter.marker.colorbar.tickmode = "array"
+        colorbar_edge_scatter.marker.colorbar.ticktext = ["added", "changed"]
+        colorbar_edge_scatter.marker.colorbar.tickvals = [0, 1]
+        # colorbar_edge_scatter.marker.colorscale = colorscale
+
+    fig.add_trace(colorbar_edge_scatter)
 
     # node plot
     node_x = []
@@ -1107,7 +1186,7 @@ def draw_plotly(
         node_y.append(y - y_root)
 
     if node_color == "voltage_deviation":
-        colors = []
+        node_colors = []
 
         for node in G.nodes():
             v_res = edisgo_obj.results.v_res.T.loc[node]
@@ -1119,7 +1198,7 @@ def draw_plotly(
             else:
                 color = v_max - 1
 
-            colors.append(color)
+            node_colors.append(color)
 
         colorbar = dict(
             thickness=15,
@@ -1131,7 +1210,7 @@ def draw_plotly(
         cmid = 0
 
     else:
-        colors = [len(adjacencies[1]) for adjacencies in G.adjacency()]
+        node_colors = [len(adjacencies[1]) for adjacencies in G.adjacency()]
         colorscale = "YlGnBu"
         cmid = None
 
@@ -1181,40 +1260,27 @@ def draw_plotly(
 
         node_text.append(text)
 
-    node_trace = go.Scatter(
-        x=node_x,
-        y=node_y,
-        mode="markers",
-        hoverinfo="text",
-        text=node_text,
-        marker=dict(
-            showscale=True,
-            colorscale=colorscale,
-            reversescale=True,
-            color=colors,
-            size=8,
-            cmid=cmid,
-            line_width=2,
-            colorbar=colorbar,
-        ),
-    )
+    # # Second
+    node_scatter = go.Scattergl()
+    #
+    node_scatter.mode = "markers"
+    node_scatter.x = node_x
+    node_scatter.y = node_y
+    node_scatter.hoverinfo = "text"
+    node_scatter.text = node_text
 
-    data.append(node_trace)
+    node_scatter.marker.colorscale = colorscale
+    node_scatter.marker.color = node_colors
+    node_scatter.marker.size = 8
+    node_scatter.marker.showscale = True
+    node_scatter.marker.colorbar = colorbar
+    node_scatter.marker.cmid = cmid
+    node_scatter.marker.line.width = 2
 
-    fig = go.Figure(
-        data=data,
-        layout=go.Layout(
-            height=500,
-            titlefont_size=16,
-            showlegend=False,
-            hovermode="closest",
-            margin=dict(b=20, l=5, r=5, t=40),
-            xaxis=dict(showgrid=True, zeroline=True, showticklabels=True),
-            yaxis=dict(showgrid=True, zeroline=True, showticklabels=True),
-        ),
-    )
+    fig.add_trace(node_scatter)
 
-    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    fig.update_yaxes(scaleanchor="x", scaleratio=1, ticktext=[""], tickvals=[0, 1])
+    fig.update_xaxes(ticktext=[""], tickvals=[0, 1])
 
     return fig
 
