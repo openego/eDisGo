@@ -1288,7 +1288,6 @@ def draw_plotly(
 def chosen_graph(
     edisgo_obj: EDisGo,
     selected_grid: str,
-    lv_grid_name_list: list[str],
 ) -> tuple[Graph, bool | Grid]:
     """
     Get the matching networkx graph from a chosen grid.
@@ -1300,8 +1299,6 @@ def chosen_graph(
         Grid name. Can be either 'Grid' to select the mv grid with all lv grids or
         the name of the mv grid to select only the mv grid or the name of one of the
         lv grids of the eDisGo object to select a specific lv grid.
-    lv_grid_name_list : list(str)
-        List of the names of the lv grids within the mv grid of the eDisGo object.
 
     Returns
     -------
@@ -1313,6 +1310,7 @@ def chosen_graph(
 
     """
     mv_grid = edisgo_obj.topology.mv_grid
+    lv_grid_name_list = list(map(str, edisgo_obj.topology.mv_grid.lv_grids))
 
     if selected_grid == "Grid":
         G = edisgo_obj.to_graph()
@@ -1451,7 +1449,7 @@ def dash_plot(
             selected_node_plot_mode,
         ):
             edisgo_obj = edisgo_objects[selected_edisgo_object_1]
-            (G, grid) = chosen_graph(edisgo_obj, selected_grid, lv_grid_name_list)
+            (G, grid) = chosen_graph(edisgo_obj, selected_grid)
             fig_1 = draw_plotly(
                 edisgo_obj,
                 G,
@@ -1461,7 +1459,7 @@ def dash_plot(
             )
 
             edisgo_obj = edisgo_objects[selected_edisgo_object_2]
-            (G, grid) = chosen_graph(edisgo_obj, selected_grid, lv_grid_name_list)
+            (G, grid) = chosen_graph(edisgo_obj, selected_grid)
             fig_2 = draw_plotly(
                 edisgo_obj,
                 G,
@@ -1511,7 +1509,7 @@ def dash_plot(
         def update_figure(
             selected_grid, selected_line_plot_mode, selected_node_plot_mode
         ):
-            (G, grid) = chosen_graph(edisgo_obj_1, selected_grid, lv_grid_name_list)
+            (G, grid) = chosen_graph(edisgo_obj_1, selected_grid)
             fig = draw_plotly(
                 edisgo_obj_1,
                 G,
@@ -1525,7 +1523,7 @@ def dash_plot(
 
 
 # Pseudo coordinates
-def make_pseudo_coordinates(edisgo_obj):
+def make_pseudo_coordinates(edisgo_obj, grids=None):
     """
     Creates pseudo coordinates for the existing lv-grids to make plotly plotting
     possible.
@@ -1533,6 +1531,9 @@ def make_pseudo_coordinates(edisgo_obj):
     Parameters
     ----------
     edisgo_obj : :class:`~edisgo.EDisGo`
+
+    grids:  :class: str or list(str)
+        ID of lv-grids, if None all lv grids will be handled
 
     Returns
     -------
@@ -1684,13 +1685,22 @@ def make_pseudo_coordinates(edisgo_obj):
 
     logger = logging.getLogger("edisgo.cr_make_pseudo_coor")
     start_time = time()
-    logger.info(
-        "Start - Making pseudo coordinates for grid: {}".format(
-            str(edisgo_obj.topology.mv_grid)
-        )
-    )
+
     edisgo_obj_pseudo = copy.deepcopy(edisgo_obj)
-    lv_grids = list(edisgo_obj_pseudo.topology.mv_grid.lv_grids)
+    if grids:
+        if isinstance(grids, list):
+            lv_grids = [edisgo_obj.topology._grids[f"LVGrid_{grid}"] for grid in grids]
+        else:
+            lv_grids = list(edisgo_obj.topology._grids[f"LVGrid_{grids}"])
+
+        logger.info(f"Start - Making pseudo coordinates for LV Grid {grids}")
+    else:
+        lv_grids = list(edisgo_obj_pseudo.topology.mv_grid.lv_grids)
+        logger.info(
+            f"Start - Making pseudo coordinates for all {len(lv_grids)} lv grids"
+            f" connected to {edisgo_obj.topology.mv_grid}"
+        )
+
     # Functions for other functions
     coor_transform = Transformer.from_crs("EPSG:4326", "EPSG:3035", always_xy=True)
     coor_transform_back = Transformer.from_crs("EPSG:3035", "EPSG:4326", always_xy=True)
