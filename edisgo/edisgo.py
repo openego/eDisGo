@@ -479,73 +479,102 @@ class EDisGo:
         else:
             raise ValueError("'control' must be 'fixed_cosphi'.")
 
-    def to_pypsa(self, **kwargs):
+    def to_pypsa(
+        self, mode=None, timesteps=None, check_edisgo_integrity=False, **kwargs
+    ):
         """
-        Convert to PyPSA :pypsa:`pypsa.Network<network>` representation.
+        Convert grid to :pypsa:`PyPSA.Network<network>` representation.
+
+        You can choose between translation of the MV and all underlying LV grids
+        (mode=None (default)), the MV network only (mode='mv' or mode='mvlv') or a
+        single LV network (mode='lv').
 
         Parameters
-        ----------
-        kwargs :
-            See :func:`~.io.pypsa_io.to_pypsa` for further information.
-
-        Other Parameters
-        -----------------
+        -----------
         mode : str
             Determines network levels that are translated to
-            `PyPSA network representation
-            <https://www.pypsa.org/doc/components.html#network>`_. Specify
+            :pypsa:`PyPSA.Network<network>`.
+            Possible options are:
 
-            * None to export MV and LV network levels. None is the default.
-            * 'mv' to export MV network level only. This includes cumulative load
-              and generation from underlying LV network aggregated at respective LV
-              station's primary side.
-            * 'mvlv' to export MV network level only. This includes cumulative load
-              and generation from underlying LV network aggregated at respective LV
-              station's secondary side.
-            * 'lv' to export specified LV network only.
-        check_edisgo_integrity: bool
+            * None
+
+                MV and underlying LV networks are exported. This is the default.
+
+            * 'mv'
+
+                Only MV network is exported. MV/LV transformers are not exported in
+                this mode. Loads, generators and storage units in underlying LV grids
+                are connected to the respective MV/LV station's primary side. Per
+                default, they are all connected separately, but you can also choose to
+                aggregate them. See parameters `aggregate_loads`, `aggregate_generators`
+                and `aggregate_storages` for more information.
+
+            * 'mvlv'
+
+                This mode works similar as mode 'mv', with the difference that MV/LV
+                transformers are as well exported and LV components connected to the
+                respective MV/LV station's secondary side. Per default, all components
+                are connected separately, but you can also choose to aggregate them.
+                See parameters `aggregate_loads`, `aggregate_generators`
+                and `aggregate_storages` for more information.
+
+            * 'lv'
+
+                Single LV network topology including the MV/LV transformer is exported.
+                The LV grid to export is specified through the parameter `lv_grid_name`.
+                The slack is positioned at the secondary side of the MV/LV station.
+
+        timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+            :pandas:`pandas.Timestamp<Timestamp>`
+            Specifies which time steps to export to pypsa representation to e.g.
+            later on use in power flow analysis. It defaults to None in which case
+            all time steps in :attr:`~.network.timeseries.TimeSeries.timeindex`
+            are used.
+            Default: None.
+        check_edisgo_integrity : bool
             Check integrity of edisgo object before translating to pypsa. This option is
-            meant to help the identification of possible sources of errors in the
-            object if the power flow calculations fail.
+            meant to help the identification of possible sources of errors if the power
+            flow calculations fail. See :attr:`~.edisgo.EDisGo.check_integrity` for
+            more information.
+
+        Other Parameters
+        -------------------
+        use_seed : bool
+            Use a seed for the initial guess for the Newton-Raphson algorithm.
+            Only available when MV level is included in the power flow analysis.
+            If True, uses voltage magnitude results of previous power flow
+            analyses as initial guess in case of PQ buses. PV buses currently do
+            not occur and are therefore currently not supported.
+            Default: False.
+        lv_grid_name : str
+            String representative of LV grid to export in case mode is 'lv'.
+        aggregate_loads : str
+            Mode for load aggregation in LV grids in case mode is 'mv' or 'mvlv'.
+            Can be 'sectoral' aggregating the loads sector-wise, 'all' aggregating all
+            loads into one or None, not aggregating loads but appending them to the
+            station one by one. Default: None.
+        aggregate_generators : str
+            Mode for generator aggregation in LV grids in case mode is 'mv' or 'mvlv'.
+            Can be 'type' aggregating generators per generator type, 'curtailable'
+            aggregating 'solar' and 'wind' generators into one and all other generators
+            into another one, or None, where no aggregation is undertaken
+            and generators are added to the station one by one. Default: None.
+        aggregate_storages : str
+            Mode for storage unit aggregation in LV grids in case mode is 'mv' or
+            'mvlv'. Can be 'all' where all storage units in an LV grid are aggregated to
+            one storage unit or None, in which case no aggregation is conducted and
+            storage units are added to the station. Default: None.
 
         Returns
         -------
-        :pypsa:`pypsa.Network<network>`
-            PyPSA network representation.
+        :pypsa:`PyPSA.Network<network>`
+            :pypsa:`PyPSA.Network<network>` representation.
 
         """
-        timesteps = kwargs.pop("timesteps", None)
-        mode = kwargs.get("mode", None)
-
-        if timesteps is None:
-            timesteps = self.timeseries.timeindex
-        # check if timesteps is array-like, otherwise convert to list
-        if not hasattr(timesteps, "__len__"):
-            timesteps = [timesteps]
         # possibly execute consistency check
-        if kwargs.get("check_edisgo_integrity", False) or (
-            logger.level == logging.DEBUG
-        ):
+        if check_edisgo_integrity or logger.level == logging.DEBUG:
             self.check_integrity()
-        # export grid
-        # ToDo: Move to pypsa_io.to_pypsa
-        if not mode:
-            return pypsa_io.to_pypsa(self, timesteps, **kwargs)
-        elif "mv" in mode:
-            return pypsa_io.to_pypsa(self.topology.mv_grid, timesteps, **kwargs)
-        elif mode == "lv":
-            lv_grid_name = kwargs.get("lv_grid_name", None)
-            if not lv_grid_name:
-                raise ValueError(
-                    "For exporting lv grids, name of lv_grid has to be provided."
-                )
-            return pypsa_io.to_pypsa(
-                self.topology._grids[lv_grid_name],
-                mode=mode,
-                timesteps=timesteps,
-            )
-        else:
-            raise ValueError("The entered mode is not a valid option.")
+        return pypsa_io.to_pypsa(self, mode, timesteps, **kwargs)
 
     def to_graph(self):
         """
@@ -625,7 +654,8 @@ class EDisGo:
         Conducts a static, non-linear power flow analysis.
 
         Conducts a static, non-linear power flow analysis using
-        `PyPSA <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_
+        `PyPSA <https://pypsa.readthedocs.io/en/latest/power_flow.html#\
+        full-non-linear-power-flow>`_
         and writes results (active, reactive and apparent power as well as
         current on lines and voltages at buses) to :class:`~.network.results.Results`
         (e.g. :attr:`~.network.results.Results.v_res` for voltages).
@@ -638,26 +668,34 @@ class EDisGo:
 
             * None (default)
 
-                Power flow analysis is conducted for the whole network including MV and
-                LV level.
+                Power flow analysis is conducted for the whole network including MV grid
+                and underlying LV grids.
 
             * 'mv'
 
-                Power flow analysis is conducted for the MV level only. LV loads and
-                generators are aggregated at the respective MV/LV stations' primary
-                side.
+                Power flow analysis is conducted for the MV level only. LV loads,
+                generators and storage units are aggregated at the respective MV/LV
+                stations' primary side. Per default, they are all connected separately,
+                but you can also choose to aggregate them. See parameters
+                `aggregate_loads`, `aggregate_generators` and `aggregate_storages`
+                in :attr:`~.edisgo.EDisGo.to_pypsa` for more information.
 
             * 'mvlv'
 
                 Power flow analysis is conducted for the MV level only. In contrast to
-                mode 'mv' LV loads and generators are in this case aggregated at the
-                respective MV/LV stations' secondary side.
+                mode 'mv' LV loads, generators and storage units are in this case
+                aggregated at the respective MV/LV stations' secondary side. Per
+                default, they are all connected separately, but you can also choose to
+                aggregate them. See parameters `aggregate_loads`, `aggregate_generators`
+                and `aggregate_storages` in :attr:`~.edisgo.EDisGo.to_pypsa` for more
+                information.
 
             * 'lv'
 
                 Power flow analysis is conducted for one LV grid only. Name of the LV
                 grid to conduct power flow analysis for needs to be provided through
                 keyword argument 'lv_grid_name' as string.
+                The slack is positioned at the secondary side of the MV/LV station.
 
         timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
             :pandas:`pandas.Timestamp<Timestamp>`
@@ -1642,9 +1680,12 @@ class EDisGo:
 
     def check_integrity(self):
         """
-        Method to check the integrity of the eDisGo-object. Checks for consistency of
-        topology (see :func:`edisgo.topology.check_integrity`), timeseries (see
+        Method to check the integrity of the EDisGo object.
+
+        Checks for consistency of topology (see
+        :func:`edisgo.topology.check_integrity`), timeseries (see
         :func:`edisgo.timeseries.check_integrity`) and the interplay of both.
+
         """
         self.topology.check_integrity()
         self.timeseries.check_integrity()
