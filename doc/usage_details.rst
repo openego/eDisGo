@@ -259,17 +259,18 @@ Reactive power time series
 There are so far two options how to set reactive power time series:
 
 * "manual": providing your own time series
-* "fixed cosphi": using a fixed power factor
+* "fixed :math:`cos\varphi`": using a fixed power factor
 
-It is perspectively planned to also provide reactive power controls Q(U) and cosphi(P).
+It is perspectively planned to also provide reactive power controls Q(U) and
+:math:`cos\varphi(P)`.
 
 Manual
 .......
 
 See active power :ref:`active_power_manual` mode documentation.
 
-Fixed cosphi
-.............
+Fixed :math:`cos\varphi`
+................................
 
 Use this mode to set reactive power time series using fixed power factors.
 It can be invoked as follows:

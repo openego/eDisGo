@@ -302,7 +302,7 @@ class TestEDisGo:
         assert len(pypsa_network.buses_t.v_mag_pu_set) == 1
 
         # test exception
-        msg = "The entered mode is not a valid option."
+        msg = "Provide proper mode or leave it empty to export entire network topology."
         with pytest.raises(ValueError, match=msg):
             self.edisgo.to_pypsa(mode="unknown")
 
