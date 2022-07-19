@@ -1,10 +1,12 @@
 import logging
 import math
+import os
 
 from abc import ABC, abstractmethod
 from math import acos, tan
 
-from shapely.geometry import Point
+if "READTHEDOCS" not in os.environ:
+    from shapely.geometry import Point
 
 from edisgo.io.electromobility_import import determine_grid_connection_capacity
 from edisgo.tools.geo import find_nearest_bus
