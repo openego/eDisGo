@@ -151,8 +151,140 @@ of the whole topology or each single grid can be retrieved as follows:
 The returned graph is a :networkx:`networkx.Graph<network.Graph>`, where lines are represented
 by edges in the graph, and buses and transformers are represented by nodes.
 
-Identify grid issues
---------------------
+Component time series
+------------------------
+
+There are various options how to set active and reactive power time series. First, options
+for setting active power time series are explained, followed by options for setting
+reactive power time series.
+You can also check out the :ref:`edisgo-mwe` section to get a quick start.
+
+Active power time series
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There are various options how to set active time series:
+
+* "manual": providing your own time series
+* "worst-case": using simultaneity factors from config files
+* "predefined": using predefined profiles, e.g. standard load profiles
+* "optimised": using the LOPF to optimise e.g. vehicle charging
+* "heuristic": using heuristics
+
+.. _active_power_manual:
+
+Manual
+.......
+
+Use this mode to provide your own time series for specific components.
+It can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.set_time_series_manual()
+
+See :attr:`~.edisgo.EDisGo.set_time_series_manual` for more information.
+
+When using this mode make sure to previously set the time index. This can either be done
+upon initialisation of the EDisGo object by providing the input parameter 'timeindex' or
+by using the function :attr:`~.edisgo.EDisGo.set_timeindex`.
+
+Worst-case
+...........
+
+Use this mode to set feed-in and load in heavy load flow case (here called "load_case")
+and/or reverse power flow case (here called "feed-in_case") using simultaneity factors
+used in conventional grid planning.
+It can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.set_time_series_worst_case_analysis()
+
+See :attr:`~.edisgo.EDisGo.set_time_series_worst_case_analysis` for more information.
+
+When using this mode a fictitious time index starting 1/1/1970 00:00 is automatically set.
+This is done because pypsa needs time indeces. To find out which time index corresponds
+to which case check out:
+
+.. code-block:: python
+
+    edisgo.timeseries.timeindex_worst_cases
+
+Predefined
+.............
+
+Use this mode if you want to set time series by component type.
+You may either provide your own time series or use ones provided through the
+OpenEnergy DataBase or other python tools.
+This mode can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.set_time_series_active_power_predefined()
+
+For the following components you can use existing time series:
+
+* Fluctuating generators: Feed-in time series for solar and wind power plants can be
+  retrieved from the `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+* Conventional loads: Standard load profiles for the different sectors residential,
+  commercial, agricultural and industrial are generated using the oemof
+  `demandlib <https://github.com/oemof/demandlib/>`_.
+
+For all other components you need to provide your own time series. Time series for
+heat pumps cannot be set using this mode.
+See :attr:`~.edisgo.EDisGo.set_time_series_active_power_predefined` for more information.
+
+When using this mode make sure to previously set the time index. This can either be done
+upon initialisation of the EDisGo object by providing the input parameter 'timeindex' or
+by using the function :attr:`~.edisgo.EDisGo.set_timeindex`.
+
+Optimised
+..........
+
+Use this mode to optimise flexibilities, e.g. charging of electric vehicles.
+
+.. todo:: Add more details once the optimisation is merged.
+
+Heuristic
+..........
+
+Use this mode to use heuristics to set time series. So far, only heuristics for
+electric vehicle charging are implemented.
+
+.. todo:: Add more details once the charging strategies are merged.
+
+Reactive power time series
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There are so far two options how to set reactive power time series:
+
+* "manual": providing your own time series
+* "fixed :math:`cos\varphi`": using a fixed power factor
+
+It is perspectively planned to also provide reactive power controls Q(U) and
+:math:`cos\varphi(P)`.
+
+Manual
+.......
+
+See active power :ref:`active_power_manual` mode documentation.
+
+Fixed :math:`cos\varphi`
+................................
+
+Use this mode to set reactive power time series using fixed power factors.
+It can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.set_time_series_reactive_power_control()
+
+See :attr:`~.edisgo.EDisGo.set_time_series_reactive_power_control` for more information.
+
+When using this mode make sure to previously set active power time series.
+
+Identifying grid issues
+-------------------------
 
 As detailed in :ref:`edisgo-mwe`, once you set up your scenario by instantiating an
 :class:`~.EDisGo` object, you are ready for a grid analysis and identifying grid

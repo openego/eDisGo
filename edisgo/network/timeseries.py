@@ -1180,7 +1180,10 @@ class TimeSeries:
             * 'oedb'
 
                 Technology and weather cell specific hourly feed-in time series are
-                obtained from the OpenEnergy DataBase for the weather year 2011. See
+                obtained from the
+                `OpenEnergy DataBase
+                <https://openenergy-platform.org/dataedit/schemas>`_
+                for the weather year 2011. See
                 :func:`edisgo.io.timeseries_import.import_feedin_timeseries` for more
                 information.
 
@@ -1580,6 +1583,10 @@ class TimeSeries:
             or None
             Sets fixed cosphi parameters for storage units. The same options as for
             parameter `generators_parametrisation` apply.
+
+        Notes
+        ------
+        This function requires active power time series to be previously set.
 
         """
 

@@ -302,7 +302,7 @@ class TestEDisGo:
         assert len(pypsa_network.buses_t.v_mag_pu_set) == 1
 
         # test exception
-        msg = "The entered mode is not a valid option."
+        msg = "Provide proper mode or leave it empty to export entire network topology."
         with pytest.raises(ValueError, match=msg):
             self.edisgo.to_pypsa(mode="unknown")
 
@@ -920,6 +920,16 @@ class TestEDisGo:
         plt.close("all")
 
     def test_plot_mv_grid_expansion_costs(self):
+        # test with storage
+        self.setup_worst_case_time_series()
+        plt.ion()
+        self.edisgo.reinforce()
+        self.edisgo.plot_mv_grid_expansion_costs()
+        plt.close("all")
+
+        # test without storage
+        self.setup_edisgo_object()
+        self.edisgo.remove_component("storage_unit", "Storage_1", False)
         self.setup_worst_case_time_series()
         plt.ion()
         self.edisgo.reinforce()

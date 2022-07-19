@@ -14,7 +14,7 @@ class TestPypsaIO:
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
         timeindex = self.edisgo.timeseries.timeindex
-        pypsa_network = pypsa_io.to_pypsa(self.edisgo, timeindex)
+        pypsa_network = pypsa_io.to_pypsa(self.edisgo, timesteps=timeindex)
         slack_df = pypsa_network.generators[pypsa_network.generators.control == "Slack"]
         assert len(slack_df) == 1
         assert slack_df.bus.values[0] == "Bus_MVStation_1"
