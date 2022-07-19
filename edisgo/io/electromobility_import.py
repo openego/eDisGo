@@ -7,12 +7,14 @@ import os
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING
 
-import geopandas as gpd
 import numpy as np
 import pandas as pd
 
 from numpy.random import default_rng
 from sklearn import preprocessing
+
+if "READTHEDOCS" not in os.environ:
+    import geopandas as gpd
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
