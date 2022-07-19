@@ -11,6 +11,7 @@ egoio >= 0.4.7
 matplotlib >= 3.3.0
 plotly
 dash == 2.0.0
+werkzeug==2.0.3
 pypower
 sklearn
 sphinx_rtd_theme
