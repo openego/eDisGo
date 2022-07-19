@@ -1684,7 +1684,7 @@ def make_pseudo_coordinates(edisgo_obj, grids=None):
 
         return graph_root
 
-    logger = logging.getLogger("edisgo.cr_make_pseudo_coor")
+    pseudo_logger = logging.getLogger("edisgo.cr_make_pseudo_coor")
     start_time = time()
 
     edisgo_obj_pseudo = copy.deepcopy(edisgo_obj)
@@ -1694,10 +1694,10 @@ def make_pseudo_coordinates(edisgo_obj, grids=None):
         else:
             lv_grids = list(edisgo_obj.topology._grids[f"LVGrid_{grids}"])
 
-        logger.info(f"Start - Making pseudo coordinates for LV Grid {grids}")
+        pseudo_logger.info(f"Start - Making pseudo coordinates for LV Grid {grids}")
     else:
         lv_grids = list(edisgo_obj_pseudo.topology.mv_grid.lv_grids)
-        logger.info(
+        pseudo_logger.info(
             f"Start - Making pseudo coordinates for all {len(lv_grids)} lv grids"
             f" connected to {edisgo_obj.topology.mv_grid}"
         )
@@ -1707,7 +1707,7 @@ def make_pseudo_coordinates(edisgo_obj, grids=None):
     coor_transform_back = Transformer.from_crs("EPSG:3035", "EPSG:4326", always_xy=True)
 
     for lv_grid in lv_grids:
-        logger.debug("Make pseudo coordinates for: {}".format(lv_grid))
+        pseudo_logger.debug("Make pseudo coordinates for: {}".format(lv_grid))
         G = lv_grid.graph
         try:
             x0, y0 = G.nodes[list(nx.nodes(G))[0]]["pos"]
@@ -1721,5 +1721,5 @@ def make_pseudo_coordinates(edisgo_obj, grids=None):
             edisgo_obj_pseudo.topology.buses_df.loc[node, "x"] = x
             edisgo_obj_pseudo.topology.buses_df.loc[node, "y"] = y
 
-    logger.info("Finished in {}s".format(time() - start_time))
+    pseudo_logger.info("Finished in {}s".format(time() - start_time))
     return edisgo_obj_pseudo
