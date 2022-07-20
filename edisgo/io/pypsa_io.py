@@ -73,7 +73,6 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
             index=["Generator_slack"],
         )
 
-    mode = kwargs.get("mode", None)
     aggregate_loads = kwargs.get("aggregate_loads", None)
     aggregate_generators = kwargs.get("aggregate_generators", None)
     aggregate_storages = kwargs.get("aggregate_storages", None)
