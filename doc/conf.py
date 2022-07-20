@@ -54,6 +54,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",  # enable Napoleon Sphinx v>1.3
     "sphinx.ext.extlinks",  # enables external links with a key
+    "sphinx_rtd_theme",
     "sphinx_autodoc_typehints",
 ]
 

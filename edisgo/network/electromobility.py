@@ -79,7 +79,8 @@ class Electromobility:
     @property
     def grid_connections_gdf(self):
         """
-        GeoDataFrame with all `SimBEV <https://github.com/rl-institut/simbev>`_
+        GeoDataFrame with all
+        `SimBEV <https://github.com/rl-institut/simbev>`_
         grid connections.
 
         Returns
@@ -115,7 +116,9 @@ class Electromobility:
     @property
     def simbev_config_df(self):
         """
-        Dict with all `SimBEV <https://github.com/rl-institut/simbev>`_ config data.
+        Dict with all
+        `SimBEV <https://github.com/rl-institut/simbev>`_
+        config data.
 
         Returns
         -------
@@ -183,8 +186,8 @@ class Electromobility:
     @property
     def eta_charging_points(self):
         """
-        `SimBEV <https://github.com/rl-institut/simbev>`_ charging point
-        efficiency.
+        `SimBEV <https://github.com/rl-institut/simbev>`_
+        charging point efficiency.
 
         Returns
         -------
