@@ -3,7 +3,8 @@ import os
 
 from zipfile import ZipFile
 
-import geopandas as gpd
+if "READTHEDOCS" not in os.environ:
+    import geopandas as gpd
 import pandas as pd
 
 from sklearn import preprocessing
