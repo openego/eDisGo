@@ -34,20 +34,12 @@ edisgo.flex\_opt.exceptions module
    :show-inheritance:
 
 edisgo.flex\_opt.q\_control module
-----------------------------------
+-----------------------------------
 
 .. automodule:: edisgo.flex_opt.q_control
    :members:
    :undoc-members:
    :show-inheritance:
-
-edisgo.flex\_opt.q\_control module
-----------------------------------
-
-.. automodule:: edisgo.flex_opt.exceptions
-    :members:
-    :undoc-members:
-    :show-inheritance:
 
 edisgo.flex\_opt.reinforce\_grid module
 ---------------------------------------
